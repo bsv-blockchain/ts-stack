@@ -1,4 +1,11 @@
-import { canonicalOutputJSON, PrivateKey, signOutputPacket, Transaction, Utils } from '@bsv/sdk'
+import {
+  canonicalOutputJSON,
+  outputPacketDigest,
+  PrivateKey,
+  signOutputPacket,
+  Transaction,
+  Utils
+} from '@bsv/sdk'
 import { OverlayProposalAdmission } from '../ProposalAdmission.js'
 import { admissionSemanticDigest, type RetainedAdmission } from '../storage/AdmissionStorage.js'
 import {
@@ -14,6 +21,11 @@ import {
   transaction
 } from './ProposalAdmissionFixture.js'
 
+const protocolFailure = {
+  code: expect.stringMatching(/^(invalid|unauthorized|unsupported|context-changed)$/),
+  message: expect.stringMatching(/\S/)
+}
+
 test('requires actual retained-history capability and an installed topic', () => {
   const f = fixture()
   const options = { engine: f.engine, identity, rulesDigest, service, topic }
@@ -24,13 +36,21 @@ test('requires actual retained-history capability and an installed topic', () =>
   ).toBeDefined()
   for (const value of [127, 1048577, 128.5, NaN])
     expect(() => new OverlayProposalAdmission({ ...options, maximumOutcomeBytes: value })).toThrow(
-      'capacity'
+      expect.objectContaining({ code: 'invalid', message: expect.stringMatching(/capacity/) })
     )
   expect(() => new OverlayProposalAdmission({ ...options, topic: 'missing' })).toThrow(
-    'not installed'
+    expect.objectContaining({
+      code: 'unsupported',
+      message: expect.stringMatching(/not installed/)
+    })
   )
   delete (f.engine.storage.admission as { history?: unknown }).history
-  expect(() => new OverlayProposalAdmission(options)).toThrow('history is required')
+  expect(() => new OverlayProposalAdmission(options)).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: expect.stringMatching(/history is required/)
+    })
+  )
 })
 
 test('recovers only the requested topic and preserves the original assessment across new reservations', async () => {
@@ -44,6 +64,8 @@ test('recovers only the requested topic and preserves the original assessment ac
     status: 'admitted',
     steak: { [topic]: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [] } }
   })
+  if (first.status === 'admitted')
+    expect(first.assessmentContextId).toMatch(/^overlay-topic-admission-v1:[a-f0-9]{64}$/)
   expect(JSON.stringify(first)).not.toMatch(/private|duplicate|historical|original-reservation/)
   expect(f.read).toHaveBeenCalledWith({
     scope,
@@ -105,12 +127,14 @@ test('failed history access is not absence and cannot trigger a new submission',
 test('bounds a complete valid result before effects and also bounds retained results', async () => {
   const f = fixture(128)
   await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'limited'
+    code: 'limited',
+    message: expect.stringMatching(/\S/)
   })
   expect(f.submit).not.toHaveBeenCalled()
   f.read.mockResolvedValue({ state: 'committed', admission: retained() })
   await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'limited'
+    code: 'limited',
+    message: expect.stringMatching(/\S/)
   })
 })
 
@@ -241,7 +265,9 @@ test.each<[string, (f: ReturnType<typeof fixture>) => void]>([
 ])('rejects %s before history or effects', async (_, change) => {
   const f = fixture()
   change(f)
-  await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toThrow()
+  await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject(
+    protocolFailure
+  )
   expect(f.read).not.toHaveBeenCalled()
   expect(f.submit).not.toHaveBeenCalled()
 })
@@ -249,7 +275,8 @@ test.each<[string, (f: ReturnType<typeof fixture>) => void]>([
 test('requires original evidence context rather than synthesizing one', async () => {
   const f = fixture()
   await expect(f.bridge.recover(f.job, f.proposal, f.selection)).rejects.toMatchObject({
-    code: 'unavailable'
+    code: 'unavailable',
+    message: expect.stringMatching(/\S/)
   })
   expect(f.submit).not.toHaveBeenCalled()
 })
@@ -259,7 +286,10 @@ test('holds physical work capacity until stalled admission settles, then release
   const options = { engine: f.engine, identity, rulesDigest, service, topic }
   for (const maximumConcurrentAdmissions of [0, 65, 1.5, NaN])
     expect(() => new OverlayProposalAdmission({ ...options, maximumConcurrentAdmissions })).toThrow(
-      'concurrency capacity'
+      expect.objectContaining({
+        code: 'invalid',
+        message: expect.stringMatching(/concurrency capacity/)
+      })
     )
   const bridge = new OverlayProposalAdmission({ ...options, maximumConcurrentAdmissions: 1 })
   let release!: () => void
@@ -277,6 +307,7 @@ test('holds physical work capacity until stalled admission settles, then release
   try {
     await expect(bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
       code: 'limited',
+      message: expect.stringMatching(/\S/),
       retryable: true
     })
     expect(f.read).toHaveBeenCalledTimes(1)
@@ -377,7 +408,9 @@ test.each<[string, (value: RetainedAdmission) => void]>([
   if (original.receipt.semanticDigest !== '05'.repeat(32))
     original.receipt.semanticDigest = admissionSemanticDigest(original.identity)
   f.read.mockResolvedValue({ state: 'committed', admission: original })
-  await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toThrow()
+  await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject(
+    protocolFailure
+  )
   expect(f.submit).not.toHaveBeenCalled()
 })
 
@@ -402,7 +435,8 @@ test('owns caller inputs across asynchronous history reads and detects installat
     return { state: 'committed', admission: retained() }
   })
   await expect(g.bridge.recover(g.job, g.proposal, g.selection, g.context)).rejects.toMatchObject({
-    code: 'context-changed'
+    code: 'context-changed',
+    message: expect.stringMatching(/\S/)
   })
   expect(g.submit).not.toHaveBeenCalled()
 })
@@ -449,7 +483,8 @@ test('accepts the exact canonical outcome bound and refuses one byte less', asyn
   expect(await exact.recover(f.job, f.proposal, f.selection, f.context)).toEqual(result)
   const short = new OverlayProposalAdmission({ ...options, maximumOutcomeBytes: size - 1 })
   await expect(short.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'limited'
+    code: 'limited',
+    message: expect.stringMatching(/\S/)
   })
   expect(f.submit).not.toHaveBeenCalled()
 })
@@ -480,7 +515,8 @@ test('never treats an unknown history state as committed', async () => {
   const f = fixture()
   f.read.mockResolvedValue({ state: 'pending' } as never)
   await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'invalid'
+    code: 'invalid',
+    message: expect.stringMatching(/\S/)
   })
   expect(f.submit).not.toHaveBeenCalled()
 })
@@ -499,7 +535,8 @@ test('owns explicitly installed extension support and rejects uninstalled critic
   )
   f.read.mockResolvedValue({ state: 'committed', admission: retained() })
   await expect(f.bridge.recover(f.job, proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'unsupported'
+    code: 'unsupported',
+    message: expect.stringMatching(/\S/)
   })
   const supportedExtensions = [extension]
   const installed = new OverlayProposalAdmission({
@@ -524,7 +561,8 @@ test('verifies the retained manifest signature independently of its correctly bo
     new PrivateKey(12)
   )
   await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'unauthorized'
+    code: 'unauthorized',
+    message: expect.stringMatching(/\S/)
   })
   expect(f.read).not.toHaveBeenCalled()
   expect(f.submit).not.toHaveBeenCalled()
@@ -552,7 +590,8 @@ test('requires the configured service-rules digest independently of signed manif
     topic
   })
   await expect(bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
-    code: 'unauthorized'
+    code: 'unauthorized',
+    message: expect.stringMatching(/\S/)
   })
   expect(f.read).not.toHaveBeenCalled()
   expect(f.submit).not.toHaveBeenCalled()
@@ -573,3 +612,100 @@ test.each(['service', 'profile'] as const)(
     expect(f.submit).not.toHaveBeenCalled()
   }
 )
+
+function replaceManifest(f: ReturnType<typeof fixture>, body: typeof f.selection.manifest.body) {
+  f.selection.manifest = signOutputPacket('capabilities', body, key)
+  f.selection.digest = outputPacketDigest('capabilities', body)
+  f.selection.headers['x-bsv-overlay-capability'] = f.selection.digest
+}
+
+test.each(['identity', 'chain', 'confidential-base'] as const)(
+  'independently binds the signed manifest %s after digest selection is correct',
+  async field => {
+    const f = fixture()
+    const body = structuredClone(f.selection.manifest.body)
+    if (field === 'identity') body.identity = new PrivateKey(12).toPublicKey().toString()
+    else if (field === 'chain') body.chain.network = 'other'
+    else body.baseURL = 'http://provider.example/api'
+    replaceManifest(f, body)
+    await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject(
+      protocolFailure
+    )
+    expect(f.read).not.toHaveBeenCalled()
+    expect(f.submit).not.toHaveBeenCalled()
+  }
+)
+
+test.each(['id', 'digest'] as const)(
+  'requires both policy identity and digest (%s differs)',
+  async field => {
+    const f = fixture()
+    const body = structuredClone(f.proposal.body)
+    if (field === 'id') body.policy.id = 'urn:another-policy'
+    else body.policy.digest = '77'.repeat(32)
+    f.proposal = signOutputPacket('proposal', body, key)
+    await expect(f.bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject(
+      {
+        code: 'unsupported',
+        message: expect.stringMatching(/\S/)
+      }
+    )
+    expect(f.submit).not.toHaveBeenCalled()
+  }
+)
+
+test('selects its exact service, profile and policy when other valid choices precede them', async () => {
+  const f = fixture()
+  const body = structuredClone(f.selection.manifest.body)
+  const selected = body.services[0]
+  const policy = { id: 'urn:another-policy', parameters: {} }
+  const parameters = selected.profiles[0].parameters as {
+    policies: Array<typeof policy & { digest: string }>
+  }
+  parameters.policies.unshift({ ...policy, digest: outputPacketDigest('proposal-policy', policy) })
+  selected.profiles.unshift({
+    ...structuredClone(selected.profiles[0]),
+    id: 'urn:another-profile',
+    parameters: {}
+  })
+  body.services.unshift({ ...structuredClone(selected), name: 'another-service' })
+  body.services.unshift({
+    ...structuredClone(selected),
+    kind: 'lookup',
+    profiles: [
+      {
+        ...structuredClone(selected.profiles[0]),
+        id: 'urn:another-profile',
+        parameters: {}
+      }
+    ]
+  })
+  replaceManifest(f, body)
+  f.selection.service = structuredClone(selected)
+  f.selection.profile = structuredClone(selected.profiles[1])
+  f.read.mockResolvedValue({ state: 'committed', admission: retained() })
+  expect(await f.bridge.recover(f.job, f.proposal, f.selection, f.context)).toMatchObject({
+    status: 'admitted'
+  })
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test('reserves instruction capacity before submitting even when a smaller retained outcome could fit', async () => {
+  const f = fixture()
+  f.read.mockResolvedValueOnce({ state: 'committed', admission: retained() })
+  const outcome = await f.bridge.recover(f.job, f.proposal, f.selection, f.context)
+  const bridge = new OverlayProposalAdmission({
+    engine: f.engine,
+    identity,
+    rulesDigest,
+    service,
+    topic,
+    maximumOutcomeBytes: Buffer.byteLength(canonicalOutputJSON(outcome))
+  })
+  f.read.mockResolvedValue({ state: 'unresolved' })
+  await expect(bridge.recover(f.job, f.proposal, f.selection, f.context)).rejects.toMatchObject({
+    code: 'limited',
+    message: expect.stringMatching(/\S/)
+  })
+  expect(f.submit).not.toHaveBeenCalled()
+})
