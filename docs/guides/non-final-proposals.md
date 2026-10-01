@@ -108,6 +108,65 @@ may have delivered even if a later acknowledgement fails. Never send a replaceme
 or create a new transaction to repair that uncertainty: recover the original
 operation and its durable admission result.
 
+## Explicit startup and bounded recovery
+
+Use `SQLiteProposalJournal.create` during an intentional installation and
+`SQLiteProposalJournal.open` for subsequent starts. Creation rejects an existing
+namespace. Opening requires the file, namespace, service identity, lifecycle
+configuration, capacity seal and retained history to agree; it does not initialize
+missing service state or repair a missing seal. The existing constructor preserves
+its create-or-open behavior for compatibility. A failed startup is an operational
+failure requiring investigation, never a reason to delete or replace the journal.
+
+`ProposalJournalMaintenance` adapts the private durable journal to the portable
+`ProposalMaintenanceSource` interface. Each bounded page contains current channel
+and proposal identifiers and an active/finalizing state hint. It does not expose
+the signed proposal, private context or transaction. Its local continuation binds
+the namespace and service identity and captures the journal's high-water revision
+so concurrent appends cannot extend a pass forever. Updates discovered during a
+pass are re-read through the current indexes; a changed index is retried on a
+later pass. Missing retained history or required indexes fails explicitly. These
+identifiers remain private operational metadata and must not be published as an
+unauthenticated inventory API.
+
+The optional `ProposalScheduler` takes that source and the existing service's
+`expire` and `reconcile` ports. It has no method for creating a finalization,
+signing a transaction or funding a wallet action. Constructing it starts no work.
+`runOnce` processes one bounded page; `start` performs startup and periodic passes,
+and `wake` is only a coalesced hint. Lost hints are recovered by the next scan.
+Each service call independently reads and validates the retained state. Inventory
+entries and cursors never grant authority to perform a new action.
+
+Defaults are 64 journal entries per page, four outstanding recovery calls and a
+one-second interval. Hosts can configure up to 256 entries, 64 recovery calls and
+a 60-second interval. The scheduler deduplicates each physically outstanding
+proposal recovery and keeps its slot until the call actually settles. Pending
+recovery calls do not block expiry scans. Reports distinguish expiry checks,
+newly owned recovery jobs, settled calls, still-retained jobs and individual failures;
+a settled recovery call does not by itself prove admission or Bitcoin finality.
+Inspect the service's durable state for the actual result.
+
+Observe the `start` promise. An inventory or observer failure stops intake rather
+than manufacturing an empty successful pass. An expiry failure is reported while
+other independent items continue. Recovery failures remain queued until a valid
+pass or shutdown report can return them, including if the next inventory read
+fails. A host observer must not await `stop` from within its own callback.
+
+Shutdown calls `stop`, observes its final report, and only then closes the service's
+journal and admission dependencies. The returned promise drains the real scan and
+recovery calls; there is no pretend cancellation of an admission that might
+already have committed. A dependency that never settles keeps shutdown pending,
+so hosts must supply bounded I/O and an operational shutdown policy without
+releasing its ownership early. Multiple workers may observe the same reservation;
+the journal's compare-and-swap and the admission adapter's idempotent recovery
+remain responsible for safety across processes.
+
+The reference journal continues retaining its full history, terminal channel
+fences and operation identities. This scheduler does not implement compaction,
+configuration migration, a remotely resumable private subscription, or a new
+protocol profile. Reaching capacity must remain explicit until a qualified
+retention/compaction adapter preserves those contracts.
+
 ## Validation and remaining integration
 
 The reference tests use actual authenticated local HTTP, the durable SQLite

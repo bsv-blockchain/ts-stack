@@ -150,7 +150,9 @@ acquisition, mining or decryption. Their [guide](../../docs/guides/private-overl
 keeps the remaining service obligations explicit.
 
 - Finish proposal contract configuration evolution, compaction preserving terminal
-  fences, full service/admission composition and restart-aware expiry scheduling.
+  fences and full service/admission/projection composition. Explicit restart-aware
+  inventory, expiry and recovery scheduling is implemented below; full qualification
+  remains required.
 - Finish provider qualification and connect live lookup to actual admission/projection
   producers and the reference application. Generic index publication requires all
   relevant producers and privacy writers to honor its atomic mutation/guard contracts;
@@ -1290,3 +1292,55 @@ The new complete client/shared-finite-HTTP mutation target preserves every prior
 target and brings the registry to 99. Both client and updated HTTP mutation
 qualification remain pending, as do whole-branch hosted checks and the remaining
 storage lifecycle, projection and full Engine-backed composition work.
+
+## Explicit proposal startup, inventory and recovery
+
+At source cc9ad06c6, the strengthened complete 416-site HTTP campaign passed at
+91.35%: 371 killed, 36 survived and nine timeout detections, zero uncovered or
+invalid, in 27 minutes 39 seconds. The earlier failed report remains retained.
+All 9324 tracked and compiled inputs were verified unchanged before lifting the
+freeze. The complete 319-site SDK client campaign failed at 86.83% (270 killed,
+42 survived, seven timeout detections). Seventeen meaningful follow-up cases now
+bring its focused selection to 43 passing tests with strict test compilation;
+requalification is still required.
+
+The additive SQLite `create` and `open` factories separate intentional namespace
+installation from ordinary restart while preserving the original constructor.
+Existing-state open validates retained identity, configuration, capacity and
+history and never initializes absent service state. `ProposalJournalMaintenance`
+provides a finite high-water inventory of current active/finalizing identifiers,
+with bounded pages and explicit missing-history failures. It preserves the full
+journal and terminal fences. Its hints are private and confer no service authority.
+
+`ProposalScheduler` owns bounded physical recovery calls, deduplicates outstanding
+proposal identities and allows independent expiry scans. Startup, periodic scans
+and coalesced wake hints compose the existing service's `expire` and `reconcile`
+ports. It never initiates a new finalization. Shutdown drains actual outstanding
+calls before dependencies may close, and returns late failures even when inventory
+was temporarily unavailable. A hung dependency remains owned; there is no inferred
+rollback or pretend cancellation.
+
+Native tests reopen real SQLite state after an uncertain admission, recover the
+exact reserved operation with discovery/evidence unavailable and access revoked,
+expire an independent unreserved proposal, and verify retained terminal identity
+after another reopen. Evidence/admission results in this scheduler test remain
+injected ports. The full SDK Script/SPV-to-Engine-to-HTTP path is a separate open
+integration obligation. Generated cases exercise 300 native inventory/restart
+schedules and 300 bounded physical-recovery/drain schedules. Additional timer tests
+exercise periodic scans, wake-up, coalesced start and stop before queued dispatch.
+
+The complete new modules are registered as `proposal-maintenance` under the same
+90%/zero-uncovered/zero-invalid gates. Existing targets and selections remain;
+create/open and recovery cases extend the entire SQLite journal target. The
+registry now contains 100 targets. Mutation execution of the changed journal and
+new maintenance pair remains pending. Packed exports, strict consumers, all 38
+compiled examples against 22 tarballs, root health/lint/format/type checks and the
+147-page documentation build pass. These local component results do not establish
+whole-branch hosted qualification or checkpoint-two completion.
+
+The subsequent complete output-knowledge package run passes 1401 tests across
+109 suites in 493.884 seconds. Both new maintenance modules have 100% statements,
+branches, functions and lines; the focused native/lifecycle selection passes 50
+cases. The SDK's full shared finite/proposal selection passes 136 tests across
+five suites. Whole-workspace strict types and the final root lint pass. The
+canonical mutation runs below still need to qualify these current inputs.

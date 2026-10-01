@@ -36,7 +36,13 @@ function decimal(value: unknown): string {
   return BigInt('0x' + value).toString()
 }
 
-/** Node-only WAL/FULL reference journal. The event, head, operation claim and job are one commit. */
+export type SQLiteProposalJournalMode = 'create-or-open' | 'create' | 'open'
+
+/**
+ * Node-only WAL/FULL reference journal. The event, head, operation claim and job
+ * are one commit. The constructor preserves its legacy create-or-open behavior.
+ * Production startup should use open(), which never initializes absent state.
+ */
 export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJournalSend {
   readonly durability = 'durable' as const
   readonly contextRetention = 'proposal-journal-context/1' as const
@@ -52,8 +58,11 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
     readonly namespace: string,
     readonly identity: string,
     lifecycle: ProposalTransitions,
-    limits: Partial<ProposalJournalLimits> = {}
+    limits: Partial<ProposalJournalLimits> = {},
+    mode: SQLiteProposalJournalMode = 'create-or-open'
   ) {
+    if (!['create-or-open', 'create', 'open'].includes(mode))
+      throw new OutputProtocolError('invalid', 'Invalid proposal journal open mode')
     outputString(namespace)
     if (path === ':memory:' || path.startsWith('file:'))
       throw new OutputProtocolError(
@@ -61,10 +70,13 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
         'Durable proposal journal requires an ordinary file path'
       )
     this.state = new ProposalJournalState(lifecycle, identity, limits)
-    try {
-      closeSync(openSync(path, 'ax', 0o600))
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    if (mode === 'open') closeSync(openSync(path, 'r+'))
+    else {
+      try {
+        closeSync(openSync(path, 'ax', 0o600))
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      }
     }
     this.database = new DatabaseSync(path, {
       enableForeignKeyConstraints: true,
@@ -74,7 +86,8 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
       this.database.exec(
         'PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=1000;'
       )
-      this.database.exec(`
+      if (mode !== 'open')
+        this.database.exec(`
         CREATE TABLE IF NOT EXISTS proposal_journal_meta (
           namespace TEXT PRIMARY KEY, service_identity TEXT NOT NULL UNIQUE, configuration TEXT NOT NULL,
           revision TEXT NOT NULL, retained_bytes INTEGER NOT NULL, entries INTEGER NOT NULL
@@ -91,16 +104,25 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
         ) STRICT;
       `)
       this.database.exec('BEGIN IMMEDIATE')
-      this.database
-        .prepare('INSERT OR IGNORE INTO proposal_journal_meta VALUES (?, ?, ?, ?, 0, 0)')
-        .run(namespace, this.state.serviceIdentity, this.state.configuration, position('0'))
-      // A legacy database gains its capacity seal without rewriting its entries.
-      // All writers must use this version before relying on held completion space.
-      this.database
-        .prepare(
-          'INSERT OR IGNORE INTO proposal_journal_capacity SELECT namespace, ? FROM proposal_journal_meta WHERE namespace=?'
-        )
-        .run(canonicalOutputJSON(this.state.limits), namespace)
+      if (
+        mode === 'create' &&
+        this.database
+          .prepare('SELECT 1 FROM proposal_journal_meta WHERE namespace=?')
+          .get(namespace) !== undefined
+      )
+        throw new OutputProtocolError('conflict', 'Proposal journal namespace already exists')
+      if (mode !== 'open') {
+        this.database
+          .prepare('INSERT OR IGNORE INTO proposal_journal_meta VALUES (?, ?, ?, ?, 0, 0)')
+          .run(namespace, this.state.serviceIdentity, this.state.configuration, position('0'))
+        // A legacy database gains its capacity seal without rewriting its entries.
+        // All writers must use this version before relying on held completion space.
+        this.database
+          .prepare(
+            'INSERT OR IGNORE INTO proposal_journal_capacity SELECT namespace, ? FROM proposal_journal_meta WHERE namespace=?'
+          )
+          .run(canonicalOutputJSON(this.state.limits), namespace)
+      }
       this.refresh()
       this.database.exec('COMMIT')
     } catch (error) {
@@ -108,6 +130,28 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
       this.database.close()
       throw error
     }
+  }
+
+  /** Deliberate new namespace installation; rejects an existing namespace. */
+  static create(
+    path: string,
+    namespace: string,
+    identity: string,
+    lifecycle: ProposalTransitions,
+    limits: Partial<ProposalJournalLimits> = {}
+  ): SQLiteProposalJournal {
+    return new SQLiteProposalJournal(path, namespace, identity, lifecycle, limits, 'create')
+  }
+
+  /** Existing sealed state only: missing files/tables/namespaces/capacity seals fail closed. */
+  static open(
+    path: string,
+    namespace: string,
+    identity: string,
+    lifecycle: ProposalTransitions,
+    limits: Partial<ProposalJournalLimits> = {}
+  ): SQLiteProposalJournal {
+    return new SQLiteProposalJournal(path, namespace, identity, lifecycle, limits, 'open')
   }
 
   head(): Promise<ProposalJournalHead> {

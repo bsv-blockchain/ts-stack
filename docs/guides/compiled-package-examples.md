@@ -1213,3 +1213,32 @@ export async function recoverSavedFinalization(options: SavedProposalOptions<'fi
   }
 }
 ```
+
+## Maintain retained proposal work
+
+The host opens an existing journal, constructs its trusted service, and supplies
+its lifecycle observer. Observe the returned lifetime and shutdown report before
+closing storage. No new finalization is exposed by the worker ports.
+
+```typescript compile
+// example-id: proposal-maintenance
+import {
+  ProposalJournalMaintenance as RetainedProposalInventory,
+  ProposalScheduler as RetainedProposalScheduler,
+  type ProposalJournalStorage as RetainedProposalJournal,
+  type ProposalMaintenanceService as RetainedProposalService,
+  type ProposalScheduleReport as RetainedProposalReport
+} from '@bsv/output-knowledge/proposals'
+
+export function maintainRetainedProposals(
+  storage: RetainedProposalJournal,
+  service: RetainedProposalService,
+  onPass: (report: RetainedProposalReport) => void | Promise<void>
+) {
+  const worker = new RetainedProposalScheduler({
+    source: new RetainedProposalInventory(storage),
+    service
+  })
+  return { worker, lifetime: worker.start(onPass) }
+}
+```

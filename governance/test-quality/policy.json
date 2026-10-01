@@ -1238,6 +1238,18 @@
           "Publication acknowledgements bind the original signed proposal; get binds its selected policy and channel and rejects active expiry.",
           "A pre-existing finalization is explicitly distinguished from the requested operation and transaction."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-maintenance.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Private bounded retained-proposal inventory, explicit existing-state startup, expiry and physically owned recovery scheduling",
+        "target": "Generated native journal update/expiry/reservation/reopen schedules retain a finite eligible inventory; generated recovery schedules bound actual outstanding calls and preserve late failures.",
+        "invariants": [
+          "A captured high-water pass completes despite concurrent appends and returns only current active or reserved heads.",
+          "Existing-state open preserves namespace, identity, configuration, capacity and terminal operation fences.",
+          "Pending recovery calls are deduplicated and keep physical slots until settlement; shutdown returns every late failure."
+        ]
       }
     ],
     "exclusions": [

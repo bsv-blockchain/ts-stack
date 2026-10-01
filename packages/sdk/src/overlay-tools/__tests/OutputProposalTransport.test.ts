@@ -1,5 +1,11 @@
 import { jest } from '@jest/globals'
-import { AuthFetch, OUTPUT_PROFILES, outputPacketDigest, signOutputPacket } from '../../../mod.js'
+import {
+  AuthFetch,
+  SimplifiedFetchTransport,
+  OUTPUT_PROFILES,
+  outputPacketDigest,
+  signOutputPacket
+} from '../../../mod.js'
 import { OutputProposalTransport, OutputProposalServiceError } from '../OutputProposalTransport.js'
 import {
   proposalTransportFixture,
@@ -282,4 +288,137 @@ it('preserves an authenticated error packet by value', () => {
   expect(error.name).toBe('OutputProposalServiceError')
   expect(error.message).toBe('Capacity')
   expect(error.packet.error).toEqual({ code: 'limited', message: 'Capacity', retryable: true })
+})
+
+it('rejects an unsupported operation even when the request is a valid finalization', () => {
+  const f = proposalTransportFixture('finalize')
+  expect(
+    () => new OutputProposalTransport({ ...f.options, operation: 'unsupported' as never })
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: 'Unknown proposal transport operation'
+    })
+  )
+})
+
+it('owns installed critical extension support for returned author data', async () => {
+  const f = proposalTransportFixture('get')
+  const supportedExtensions = ['urn:test:proposal-extension:1']
+  const proposal = transportProposal({
+    extensions: { 'urn:test:proposal-extension:1': { format: 1 } },
+    critical: [...supportedExtensions]
+  })
+  const client = new OutputProposalTransport({
+    ...f.options,
+    trust: { ...f.options.trust, supportedExtensions }
+  })
+  supportedExtensions.length = 0
+  jest
+    .spyOn(AuthFetch.prototype, 'fetch')
+    .mockImplementation(async () => f.response({ ...f.results.get, proposal }))
+  expect((await client.send()).proposal).toEqual(proposal)
+  await expect(f.client.send()).rejects.toMatchObject({
+    code: 'unsupported',
+    message: 'Unsupported critical extension'
+  })
+})
+
+it('accepts the selected lifetime exactly and rejects one second beyond it', () => {
+  const f = proposalTransportFixture('put')
+  for (const [expiresAt, accepted] of [
+    ['199', true],
+    ['200', false]
+  ] as const) {
+    const request = { version: 1, proposal: transportProposal({ expiresAt }) }
+    const create = () => new OutputProposalTransport({ ...f.options, request })
+    if (accepted) expect(create).not.toThrow()
+    else
+      expect(create).toThrow(
+        expect.objectContaining({ code: 'limited', message: 'Proposal exceeds selected lifetime' })
+      )
+  }
+})
+
+it.each(['finalized', 'finalization-failed'] as const)(
+  'reports terminal %s without implying Bitcoin finality',
+  async status => {
+    const f = proposalTransportFixture('finalize')
+    const state = {
+      ...f.results.finalize.state,
+      status,
+      ...(status === 'finalized'
+        ? { steak: {}, assessmentContextId: 'original-view' }
+        : { reason: 'not-admitted', globalOutcome: 'unknown' })
+    }
+    const value = { ...f.results.finalize, state }
+    jest.spyOn(AuthFetch.prototype, 'fetch').mockImplementation(async () => f.response(value))
+    expect(await f.client.send()).toEqual({ response: value, matchesRequest: true })
+  }
+)
+
+it.each([0, -1, 30001, 1.5, NaN])('rejects an invalid proposal deadline %s', requestTimeoutMs => {
+  expect(() => proposalTransportFixture('get', { requestTimeoutMs })).toThrow(
+    'Invalid proposal request deadline'
+  )
+})
+
+it('requires a callable fetch transport', () => {
+  expect(() => proposalTransportFixture('get', { fetch: 42 as never })).toThrow(
+    'Proposal transport requires a fetch implementation'
+  )
+})
+
+it.each(['endpoint', 'redirect', 'headers', 'encoding', 'body'] as const)(
+  'bounds the actual proposal authentication exchange: %s',
+  async kind => {
+    const f = proposalTransportFixture('get', {}, manifest => {
+      manifest.services[0].profiles[0].maxResponseBytes = 128
+    })
+    const endpoint = 'https://provider.example.test/api/overlay/v1/proposals/get'
+    const response = f.response(kind === 'body' ? 'x'.repeat(129) : '{}')
+    if (kind === 'redirect')
+      Object.defineProperty(response, 'url', { value: 'https://other.example' })
+    if (kind === 'headers') response.headers.set('x-padding', 'x'.repeat(16385))
+    if (kind === 'encoding') response.headers.set('content-encoding', 'gzip')
+    f.fetchClient.mockResolvedValue(response)
+    const sent = jest
+      .spyOn(SimplifiedFetchTransport.prototype, 'send')
+      .mockImplementation(async function (this: SimplifiedFetchTransport) {
+        await this.fetchClient(kind === 'endpoint' ? 'https://other.example' : endpoint, {
+          method: 'POST'
+        })
+        throw new Error('Fixture expected the bounded exchange to reject')
+      })
+    const expected = {
+      endpoint: 'Proposal transport changed endpoint',
+      redirect: 'Proposal response changed endpoint',
+      headers: 'Proposal HTTP header limit',
+      encoding: 'Proposals require identity encoding',
+      body: 'Proposal HTTP body limit'
+    }
+    await expect(f.client.send()).rejects.toThrow(expected[kind])
+    expect(sent).toHaveBeenCalledTimes(1)
+    if (kind === 'endpoint') expect(f.fetchClient).not.toHaveBeenCalled()
+    else
+      expect(f.fetchClient).toHaveBeenCalledWith(
+        endpoint,
+        expect.objectContaining({ redirect: 'error', cache: 'no-store', credentials: 'omit' })
+      )
+  }
+)
+
+it('retains a timed-out physical request until it settles', async () => {
+  const f = proposalTransportFixture('put', { requestTimeoutMs: 5 })
+  let settle!: (value: Response) => void
+  jest.spyOn(AuthFetch.prototype, 'fetch').mockImplementation(
+    () =>
+      new Promise(resolve => {
+        settle = resolve
+      })
+  )
+  await expect(f.client.send()).rejects.toThrow('Proposal request deadline')
+  await expect(f.client.send()).rejects.toThrow('Proposal request or earlier I/O is still active')
+  settle(f.response())
+  await new Promise<void>(resolve => setImmediate(resolve))
 })

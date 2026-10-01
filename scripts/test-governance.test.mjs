@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 99)
+  assert.equal(result.summary.propertySuites, 100)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 99)
+  assert.equal(result.summary.mutationTargets, 100)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -646,7 +646,9 @@ test('proposal send qualification retains the entire SQLite journal and all jour
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/proposal-journal*.test.ts',
     '<rootDir>/test/proposal-service*.test.ts',
-    '<rootDir>/test/proposal-send*.test.ts'
+    '<rootDir>/test/proposal-send*.test.ts',
+    '<rootDir>/test/proposal-open.test.ts',
+    '<rootDir>/test/proposal-recovery.test.ts'
   ])
   assert.equal(target.runnerOptions.buildCommand, 'pnpm build')
   assert.deepEqual(target.runnerOptions.testRunnerNodeArgs, ['--experimental-vm-modules'])
@@ -712,6 +714,27 @@ test('proposal client retains complete operation and shared finite HTTP qualific
   const registration = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   ).targets.find(value => value.id === 'output-proposal-http')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('proposal maintenance qualifies whole inventory and scheduler modules with native and generated recovery', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['proposal-maintenance']
+  assert.deepEqual(target.mutate, [
+    'src/proposals/ProposalMaintenance.ts',
+    'src/proposals/ProposalScheduler.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/proposal-maintenance*.test.ts',
+    '<rootDir>/test/proposal-scheduler*.test.ts',
+    '<rootDir>/test/proposal-recovery.test.ts',
+    '<rootDir>/test/proposal-open.test.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, ['src/proposals/**', 'test/proposal-*.ts'])
+  const registration = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  ).targets.find(value => value.id === 'proposal-maintenance')
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)

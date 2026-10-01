@@ -916,13 +916,27 @@ contract's interval after expiry or completion. Full retained history and termin
 fences remain in this bounded reference journal; reaching capacity never resets
 the namespace.
 
-Authenticated HTTP, concrete ordinary-admission adapters, scheduling and end-to-end
-qualification are still being connected. Service orchestration tests use explicit
+Authenticated HTTP, the concrete ordinary-admission adapter and bounded recovery
+scheduler are available as optional components. Full end-to-end qualification is
+still being connected. Service orchestration tests use explicit
 injected port outcomes. Separate evidence integration tests run actual SDK Script
 and Merkle checks on a signed PRP1 transaction against pinned synthetic header
 ancestry, then reserve its verified raw bytes in SQLite. They deliberately leave
 ordinary admission unresolved and do not substitute for HTTP or topic integration.
 Do not advertise the complete BRC-194 profile based on these components alone.
+
+### Explicit startup and recovery work
+
+Use `SQLiteProposalJournal.create` for intentional installation and `open` for
+ordinary restart. The constructor preserves create-or-open compatibility; strict
+open requires existing sealed state and never repairs missing service metadata.
+`ProposalJournalMaintenance` provides bounded private work hints over that journal.
+`ProposalScheduler` composes them with the service's existing `expire` and
+`reconcile` methods, deduplicates physically pending recoveries and scans expiry
+independently. Construction starts no work; observe `start`, and await `stop` and
+its final failure report before closing dependencies. A hung dependency remains
+physically owned. See the [startup and recovery guide](../../../docs/guides/non-final-proposals.md#explicit-startup-and-bounded-recovery)
+for bounds, reports, current-state authority and operational limitations.
 
 ## Compatibility boundary
 

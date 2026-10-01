@@ -1006,6 +1006,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-maintenance",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-maintenance.property.test.ts",
+      "risk": "critical",
+      "boundary": "Private bounded retained-proposal inventory, explicit existing-state startup, expiry and physically owned recovery scheduling",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

@@ -628,6 +628,24 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'proposal-maintenance': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/proposal-maintenance.property.test.ts',
+      additionalInputs: ['src/proposals/**', 'test/proposal-*.ts'],
+      mutate: ['src/proposals/ProposalMaintenance.ts', 'src/proposals/ProposalScheduler.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/proposal-maintenance*.test.ts',
+          '<rootDir>/test/proposal-scheduler*.test.ts',
+          '<rootDir>/test/proposal-recovery.test.ts',
+          '<rootDir>/test/proposal-open.test.ts'
+        ],
+        { esm: true }
+      )
+    },
     'proposal-journal-send': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -639,7 +657,9 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/test/proposal-journal*.test.ts',
           '<rootDir>/test/proposal-service*.test.ts',
-          '<rootDir>/test/proposal-send*.test.ts'
+          '<rootDir>/test/proposal-send*.test.ts',
+          '<rootDir>/test/proposal-open.test.ts',
+          '<rootDir>/test/proposal-recovery.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build' }
       )
