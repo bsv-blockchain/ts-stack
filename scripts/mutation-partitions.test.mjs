@@ -260,7 +260,7 @@ test('HTTP execution preserves every canonical range, full configuration and fut
 for (const [id, expected, fallback] of [
   [
     'wallet-retained-snapshot',
-    ['lifecycle', 'reader', 'profile-index', 'relation-index', 'storage'],
+    ['lifecycle', 'reader', 'profile-index', 'relation-index', 'certificate-index', 'storage'],
     'lifecycle'
   ],
   ['wallet-snapshot-archive', ['store', 'capture', 'source'], 'capture'],

@@ -312,6 +312,50 @@ qualification. Certificate fields, proof requests/proofs, source commit ordering
 nonblocking IndexedDB, streaming and staged restore remain required. Reader
 advertisement stays disabled and #569 remains open.
 
+### Auxiliary certificate-field indexes (unpublished candidate)
+
+Migration `2026-10-01-005 add snapshot certificate field key indexes` adds
+`snapshot_certificate_field_keys` and `snapshot_certificate_index_progress`.
+Each field retains direct-user and parent-certificate membership independently,
+including orphan fields and inconsistent ownership that the existing closure
+checks must reject. Field/user/key changes, parent moves and physical deletion
+update only the affected membership. Case-only and collation-equivalent renames
+preserve the exact source field text.
+
+The auxiliary text key preserves the source field's ordering. MySQL copies its
+`varchar(100)` character set and collation and requires transactional InnoDB
+source and auxiliary tables. SQLite verifies the source's complete ascending
+unique key and built-in BINARY, NOCASE or RTRIM collation. A differently collated
+secondary index cannot redefine the cursor. Unsupported or inconsistent schema
+metadata refuses migration instead of silently changing source ordering.
+Standard tables, indexes, legacy OFFSET order and BRC-38/cursor encodings are
+unchanged. Auxiliary tables remain excluded from portable archives.
+
+All removal observers precede producers. Bootstrap commits at most 256 source
+fields and its text/composite position together; a separate started bit keeps an
+empty field name valid. MySQL locks current source fields and parent ownership
+through commit, including when an independent writer has an older consistent
+read view. Parent maintenance uses the auxiliary certificate prefix and exact
+source key rather than scanning all source fields.
+
+The migration has `transaction: false` and resumes partial owned DDL and committed
+bootstrap positions. The migration journal and complete progress must both exist
+inside the retained read view before ordinary pages, archive pages or closure
+checks adopt the index. Missing journal entries retain the previous path;
+journaled incomplete state refuses opening. Exclude other migrators before
+recovering a verified stopped migrator's lock. Drain retained readers before
+down; validate owned objects, remove producers before observers, and preserve all
+standard rows and indexes. Keep verified backups and the candidate's other
+binary-downgrade restrictions.
+
+The repository includes generated text/ownership schedules, independent MySQL
+writer-lock checks, malformed metadata refusals and actual migration-process
+termination at seven DDL/bootstrap boundaries on both databases. Native reader
+fixtures measure first and late pages before and after optimizer statistics refresh. These
+are synthetic source qualification fixtures, not deployed or physical mobile
+acceptance. Proof/request indexes, commit ordering, nonblocking IndexedDB and
+the remaining sync/portability program remain open.
+
 ## Durable local SQL sync and ordinary backup
 
 With the version-one migration applied, supported local SQL providers use these

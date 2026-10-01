@@ -128,7 +128,8 @@ export async function assertKnexSnapshotArchiveClosure(
   k: Knex,
   userId: number,
   profileIndexes = false,
-  relationIndexes = false
+  relationIndexes = false,
+  certificateIndexes = false
 ): Promise<void> {
   if (!Number.isSafeInteger(userId) || userId < 1) throw new WERR_INVALID_PARAMETER('userId', 'a positive safe ID')
   await runInSeries(references, async reference => {
@@ -137,7 +138,14 @@ export async function assertKnexSnapshotArchiveClosure(
       .select(k.raw('1'))
       .whereRaw('?? = ??', [`${reference.target}.${reference.key}`, column])
     if (reference.profile) void target.where(`${reference.target}.userId`, userId)
-    const invalid = walletSnapshotSourceQuery(k, reference.table, userId, profileIndexes, relationIndexes)
+    const invalid = walletSnapshotSourceQuery(
+      k,
+      reference.table,
+      userId,
+      profileIndexes,
+      relationIndexes,
+      certificateIndexes
+    )
       .select(k.raw('1 AS invalid'))
       .whereNotExists(target)
     if (reference.optional === true) void invalid.whereNotNull(column)

@@ -115,6 +115,11 @@ It preserves composite cursor and legacy OFFSET order, resumes bounded bootstrap
 after interruption, and bounds MySQL paging before and after statistics refresh
 with the auxiliary primary index and indexed source lookups. See its
 [migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-numeric-relation-indexes-unpublished-candidate).
+The certificate-field migration adds collation-preserving composite keys and
+independent direct/parent ownership. Empty text keys, interrupted bootstrap and
+case-only renames retain their source meaning. It leaves standard indexes and
+legacy cursor order intact; readers require the complete migration in their
+pinned view. See the [certificate migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-certificate-field-indexes-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results
@@ -142,7 +147,7 @@ Timing compares successive candidates, not a controlled comparison against upstr
 
 SQLite migration handling introduced in 2.13.2 runs transactional migration DDL
 and the migration journal update together. The unpublished profile-index and
-numeric relation migrations are explicit resumable exceptions: auxiliary keys and progress commit
+numeric relation and certificate-field migrations are explicit resumable exceptions: auxiliary keys and progress commit
 in bounded batches before its final migration journal entry. Foreign-key enforcement is disabled before the
 migration transaction for table rebuilds and restored after success or failure.
 Failed transactional migrations can be retried after reopening the database

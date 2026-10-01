@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { knex } from 'knex'
 import { StorageKnex } from '../../StorageKnex'
 import { StorageProvider } from '../../StorageProvider'
-import { SNAPSHOT_RELATION_INDEX_MIGRATION } from '../../schema/KnexMigrations'
+import { SNAPSHOT_CERTIFICATE_INDEX_MIGRATION } from '../../schema/KnexMigrations'
 import { decodeSyncTransfer } from '../../remoting/SyncTransfer'
 import * as Transfer from '../../remoting/SyncTransfer'
 import * as ArchiveSource from './KnexSnapshotArchiveSource'
@@ -72,7 +72,7 @@ test('captures all thirteen tables with original metadata, packed bytes and prof
   const manifest = await captureKnexSnapshotArchive(reader, writer.knex, identity, 'test', {
     onProgress: p => progress.push(p)
   })
-  expect(manifest.binding.sourceSchema).toBe(SNAPSHOT_RELATION_INDEX_MIGRATION)
+  expect(manifest.binding.sourceSchema).toBe(SNAPSHOT_CERTIFICATE_INDEX_MIGRATION)
   expect(manifest.binding.sourceStorage.storageName).toBe('original source')
   expect(manifest.binding.sourceStorage.storageIdentityKey).toBe('original-source')
   expect(manifest.binding.user).toMatchObject({ userId, identityKey: identity })
@@ -84,7 +84,7 @@ test('captures all thirteen tables with original metadata, packed bytes and prof
     sourceStorageIdentityKey: 'original-source',
     archiveId: manifest.archiveId,
     digest: manifest.digest,
-    sourceSchema: SNAPSHOT_RELATION_INDEX_MIGRATION
+    sourceSchema: SNAPSHOT_CERTIFICATE_INDEX_MIGRATION
   })
   expect(verified.manifest).toEqual(manifest)
   const captured: Record<string, Array<Record<string, unknown>>> = {}
@@ -153,7 +153,7 @@ test('source schema, primary history and closure stay pinned while an independen
   await writer.knex('users').where({ identityKey: identity }).update({ activeStorage: 'replacement' })
   await writer.knex('knex_migrations').insert({ name: 'future-schema', batch: 99, migration_time: new Date() })
   await writer.knex('outputs').where({ outputId: 1 }).update({ basketId: 2 })
-  expect(source.sourceSchema).toBe(SNAPSHOT_RELATION_INDEX_MIGRATION)
+  expect(source.sourceSchema).toBe(SNAPSHOT_CERTIFICATE_INDEX_MIGRATION)
   expect(source.user.activeStorage).toBe(originalPrimary)
   await expect(source.validateClosure()).resolves.toBeUndefined()
   expect((await source.readPage('outputs')).rows[0].basketId).toBe(1)

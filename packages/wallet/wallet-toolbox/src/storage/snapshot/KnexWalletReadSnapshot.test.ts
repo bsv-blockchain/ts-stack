@@ -1,3 +1,7 @@
+import {
+  removeSnapshotCertificateIndexes,
+  SNAPSHOT_CERTIFICATE_INDEX_MIGRATION
+} from '../schema/snapshotCertificateIndexMigration'
 import { removeSnapshotProfileIndexes, SNAPSHOT_PROFILE_INDEX_MIGRATION } from '../schema/snapshotProfileIndexMigration'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -563,13 +567,17 @@ test('concurrent reads refuse instead of queueing and expiry invalidates cursors
 })
 
 test.each([
-  [false, false],
-  [false, true],
-  [true, false],
-  [true, true]
+  [false, false, false],
+  [false, false, true],
+  [false, true, false],
+  [false, true, true],
+  [true, false, false],
+  [true, false, true],
+  [true, true, false],
+  [true, true, true]
 ])(
-  'SQL keys support forward seeks without OFFSET or counts (profileIndexes=%s, relationIndexes=%s)',
-  async (profileIndexes, relationIndexes) => {
+  'SQL keys support forward seeks without OFFSET or counts (profile=%s, relation=%s, certificate=%s)',
+  async (profileIndexes, relationIndexes, certificateIndexes) => {
     const { source, userId, otherId } = await fixture()
     if (!profileIndexes) {
       await removeSnapshotProfileIndexes(source.knex)
@@ -578,6 +586,10 @@ test.each([
     if (!relationIndexes) {
       await removeSnapshotRelationIndexes(source.knex)
       await source.knex('knex_migrations').where('name', SNAPSHOT_RELATION_INDEX_MIGRATION).delete()
+    }
+    if (!certificateIndexes) {
+      await removeSnapshotCertificateIndexes(source.knex)
+      await source.knex('knex_migrations').where('name', SNAPSHOT_CERTIFICATE_INDEX_MIGRATION).delete()
     }
     await seedClosure(source, userId, otherId)
     const view = await source.openWalletReadSnapshot(identity)
@@ -598,6 +610,9 @@ test.each([
     expect(subsequent.filter(query => query.sql.includes('snapshot_relation_keys'))).toHaveLength(
       relationIndexes ? 2 : 0
     )
+    expect(subsequent.filter(query => query.sql.includes('snapshot_certificate_field_keys'))).toHaveLength(
+      certificateIndexes ? 2 : 0
+    )
     for (const query of subsequent) {
       expect(query.sql).not.toMatch(/offset|count\(/i)
       const plan = await source.knex.raw('EXPLAIN QUERY PLAN ' + query.sql, query.bindings)
@@ -612,6 +627,12 @@ test.each([
         expect(details).toMatch(
           /SEARCH snapshot_relation_keys USING COVERING INDEX .*snapshotTableId=\? AND snapshotUserId=\? AND \(snapshotLeftId,snapshotRightId\)>\(\?,\?\)/
         )
+        expect(details).not.toMatch(/SCAN |TEMP B-TREE/)
+      } else if (query.sql.includes('snapshot_certificate_field_keys')) {
+        expect(details).toMatch(
+          /SEARCH snapshot_certificate_field_keys USING COVERING INDEX .*snapshotUserId=\? AND \(snapshotFieldName,snapshotCertificateId\)>\(\?,\?\)/
+        )
+        expect(details).toMatch(/SEARCH certificate_fields USING INDEX .*fieldName=\? AND certificateId=\?/)
         expect(details).not.toMatch(/SCAN |TEMP B-TREE/)
       } else {
         expect(details).toMatch(/SEARCH (tx_labels|tx_labels_map|certificate_fields) USING .*\(.*>\(?\?/)

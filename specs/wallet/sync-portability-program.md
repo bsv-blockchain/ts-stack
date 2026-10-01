@@ -14,8 +14,12 @@ Native fixtures cover seven migrator process-loss boundaries, independent writer
 locks under both MySQL isolation levels and late-page range/read-count evidence
 both before and after native optimizer statistics refresh.
 Repository and exact-head qualification must still complete for this checkpoint.
-The other three indirect tables, commit ordering, nonblocking IndexedDB and the
-remaining program below remain open; this does not complete S2.
+The subsequent certificate-field checkpoint preserves text collation and exact
+field names while indexing both direct and parent ownership. Its resumable
+migration and retained-view adoption include ordinary and archive paths; native
+process-loss, concurrent-writer and bounded-page qualification remain mandatory.
+The two global proof/request tables, commit ordering, nonblocking IndexedDB and
+the remaining program below remain open; this does not complete S2.
 
 ## Baseline and immediate defect
 

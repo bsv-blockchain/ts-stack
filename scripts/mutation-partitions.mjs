@@ -20,6 +20,7 @@ const plans = new Map([
         ['src/storage/snapshot/KnexWalletReadSnapshot.ts', 'reader'],
         ['src/storage/schema/snapshotProfileIndexMigration.ts', 'profile-index'],
         ['src/storage/schema/snapshotRelationIndexMigration.ts', 'relation-index'],
+        ['src/storage/schema/snapshotCertificateIndexMigration.ts', 'certificate-index'],
         ['src/storage/StorageKnex.ts', 'storage'],
         ['src/storage/StorageProvider.ts', 'storage']
       ])

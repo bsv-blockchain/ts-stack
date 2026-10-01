@@ -231,7 +231,9 @@ The [next complete run](https://github.com/bsv-blockchain/ts-stack/actions/runs/
 also reached the 90-minute limit for retained reader/lifecycle, archive, remote
 reader and service guard execution. Retained profile and relation migrations now
 each execute as a whole-file part, alongside reader, storage and the lifecycle
-fallback. Archive groups store/migration, source/closure and the capture fallback.
+fallback. The subsequent certificate-field migration is registered as another
+complete source and whole-file part with the same full retained test selection;
+its independently defined fixture is included in the input digest. Archive groups store/migration, source/closure and the capture fallback.
 Remote reader groups lease, rows, page/open/cursor and the admission fallback.
 These partitions retain every original source specification and full test
 configuration. The single-file retained reader remains one complete part;

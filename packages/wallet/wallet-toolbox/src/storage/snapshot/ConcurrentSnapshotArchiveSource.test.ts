@@ -67,7 +67,7 @@ test('a ready request waits for owned reader destruction while foreground storag
   const source = (await storage.openSnapshotArchiveSource(identity))!
   expect(source.user.identityKey).toBe(identity)
   expect(source.sourceStorage.storageIdentityKey).toBe('original-source')
-  expect(source.sourceSchema).toBe('2026-10-01-004 add snapshot relation key indexes')
+  expect(source.sourceSchema).toBe('2026-10-01-005 add snapshot certificate field key indexes')
   const reader = Reflect.get(storage, 'snapshotSyncSource') as StorageKnex
   expect(reader.knex).not.toBe(storage.knex)
   expect(reader.knex.client.config.pool).toMatchObject({ min: 0, max: 1 })

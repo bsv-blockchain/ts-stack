@@ -1,3 +1,4 @@
+import { readSnapshotCertificateIndexState } from '../schema/snapshotCertificateIndexMigration'
 import { readSnapshotRelationIndexState } from '../schema/snapshotRelationIndexMigration'
 import { readSnapshotProfileIndexState } from '../schema/snapshotProfileIndexMigration'
 import { SnapshotResourceLimitError } from './SnapshotResourceLimitError'
@@ -135,7 +136,8 @@ export function walletSnapshotSourceQuery(
   table: WalletSnapshotTable,
   userId: number,
   profileIndexes = false,
-  relationIndexes = false
+  relationIndexes = false,
+  certificateIndexes = false
 ): Knex.QueryBuilder {
   const { name } = definitions[table]
   const tableId = auxiliaryTableIds[table]
@@ -162,6 +164,26 @@ export function walletSnapshotSourceQuery(
     // InnoDB has refreshed cardinality statistics after bootstrap or bulk writes.
     if (String(k.client.config.client).includes('mysql'))
       void query.whereBetween('snapshotMembership', [1, 3]).hintComment(['JOIN_FIXED_ORDER()', `JOIN_INDEX(${name})`])
+    return query
+  }
+  if (certificateIndexes && table === 'certificateFields') {
+    const mysql = String(k.client.config.client).includes('mysql')
+    const keys = mysql
+      ? k.raw('?? FORCE INDEX (??)', ['snapshot_certificate_field_keys', 'PRIMARY'])
+      : 'snapshot_certificate_field_keys'
+    const query = k(keys)
+      .crossJoin(name, function () {
+        void this.on('snapshotFieldName', '=', `${name}.fieldName`).andOn(
+          'snapshotCertificateId',
+          '=',
+          `${name}.certificateId`
+        )
+      })
+      .where('snapshotUserId', userId)
+    if (mysql)
+      void query
+        .whereBetween('snapshotMembership', [1, 3])
+        .hintComment(['JOIN_FIXED_ORDER()', 'JOIN_INDEX(certificate_fields)'])
     return query
   }
   const query = k(name)
@@ -272,6 +294,7 @@ interface SnapshotContext {
   snapshotId: string
   profileIndexes: boolean
   relationIndexes: boolean
+  certificateIndexes: boolean
   columns: Map<WalletSnapshotTable, string[]>
 }
 
@@ -306,7 +329,7 @@ async function readPage<T extends WalletSnapshotTable>(
   after: Array<number | string> | undefined,
   limits: { maxRows: number; maxBytes: number }
 ): Promise<WalletSnapshotPage<T>> {
-  const { storage, userId, columns, snapshotId, profileIndexes, relationIndexes } = context
+  const { storage, userId, columns, snapshotId, profileIndexes, relationIndexes, certificateIndexes } = context
   const k = storage.toDb(trx)
   const schema = definitions[table]
   let fields = columns.get(table)
@@ -319,8 +342,9 @@ async function readPage<T extends WalletSnapshotTable>(
   if (profileIndexes && auxiliaryTableIds[table] !== undefined) orderKeys = ['snapshotRowId']
   if (relationIndexes && auxiliaryRelationTableIds[table] !== undefined)
     orderKeys = ['snapshotLeftId', 'snapshotRightId']
+  if (certificateIndexes && table === 'certificateFields') orderKeys = ['snapshotFieldName', 'snapshotCertificateId']
   const base = (): Knex.QueryBuilder => {
-    const q = walletSnapshotSourceQuery(k, table, userId, profileIndexes, relationIndexes)
+    const q = walletSnapshotSourceQuery(k, table, userId, profileIndexes, relationIndexes, certificateIndexes)
     if (after !== undefined) seek(q, orderKeys, after, false, storage.dbtype === 'MySQL')
     for (const key of orderKeys) void q.orderBy(key)
     return q
@@ -354,9 +378,18 @@ export function createKnexWalletSnapshotPageReader(
   snapshotId: string,
   view: RetainedReadSnapshot,
   profileIndexes = false,
-  relationIndexes = false
+  relationIndexes = false,
+  certificateIndexes = false
 ): WalletReadSnapshot['readPage'] {
-  const context: SnapshotContext = { storage, userId, snapshotId, profileIndexes, relationIndexes, columns: new Map() }
+  const context: SnapshotContext = {
+    storage,
+    userId,
+    snapshotId,
+    profileIndexes,
+    relationIndexes,
+    certificateIndexes,
+    columns: new Map()
+  }
   return async <T extends WalletSnapshotTable>(
     table: T,
     cursor?: WalletSnapshotCursor,
@@ -381,14 +414,18 @@ export async function openKnexWalletReadSnapshot(
   }
   const view = await storage.openReadSnapshot(options)
   try {
-    const { header, profileIndexes, relationIndexes } = await view.read(async trx => {
+    const { header, profileIndexes, relationIndexes, certificateIndexes } = await view.read(async trx => {
       const sourceStorage = await storage.readSettings(trx)
       const user = await storage.findUserByIdentityKey(identityKey, trx)
       if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
       return {
         header: { sourceStorage, user },
         profileIndexes: await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
-        relationIndexes: await readSnapshotRelationIndexState(storage.toDb(trx), storage.knex.client.config.migrations)
+        relationIndexes: await readSnapshotRelationIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
+        certificateIndexes: await readSnapshotCertificateIndexState(
+          storage.toDb(trx),
+          storage.knex.client.config.migrations
+        )
       }
     })
     const userId = header.user.userId
@@ -403,7 +440,15 @@ export async function openKnexWalletReadSnapshot(
       },
       closed: view.closed,
       close: view.close,
-      readPage: createKnexWalletSnapshotPageReader(storage, userId, snapshotId, view, profileIndexes, relationIndexes)
+      readPage: createKnexWalletSnapshotPageReader(
+        storage,
+        userId,
+        snapshotId,
+        view,
+        profileIndexes,
+        relationIndexes,
+        certificateIndexes
+      )
     }
   } catch (error) {
     // Keep the opening error authoritative while still awaiting physical cleanup.

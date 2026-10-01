@@ -1,4 +1,9 @@
 import {
+  addSnapshotCertificateIndexes,
+  removeSnapshotCertificateIndexes,
+  SNAPSHOT_CERTIFICATE_INDEX_MIGRATION
+} from './snapshotCertificateIndexMigration'
+import {
   addSnapshotRelationIndexes,
   removeSnapshotRelationIndexes,
   SNAPSHOT_RELATION_INDEX_MIGRATION
@@ -42,6 +47,7 @@ import {
   LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
 } from '../methods/managedChangePolicy'
 
+export { SNAPSHOT_CERTIFICATE_INDEX_MIGRATION } from './snapshotCertificateIndexMigration'
 export { SNAPSHOT_RELATION_INDEX_MIGRATION } from './snapshotRelationIndexMigration'
 export { SNAPSHOT_PROFILE_INDEX_MIGRATION } from './snapshotProfileIndexMigration'
 export { SNAPSHOT_ARCHIVE_OWNER_MIGRATION } from './snapshotArchiveOwnerMigration'
@@ -134,6 +140,12 @@ export class KnexMigrations implements MigrationSource<string> {
 
     // DDL may commit independently on MySQL. Bootstrap pages retain their own
     // durable positions on both backends and resume before journal publication.
+    migrations[SNAPSHOT_CERTIFICATE_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: addSnapshotCertificateIndexes,
+      down: removeSnapshotCertificateIndexes
+    }
+
     migrations[SNAPSHOT_RELATION_INDEX_MIGRATION] = {
       config: { transaction: false },
       up: addSnapshotRelationIndexes,

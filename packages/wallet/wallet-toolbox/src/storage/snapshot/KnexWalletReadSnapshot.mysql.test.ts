@@ -208,3 +208,22 @@ test.each([-1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
     }
   }
 )
+
+test('MySQL certificate pages preserve the collation-aware auxiliary key and indexed source lookup', () => {
+  const k = knex({ client: 'mysql2' })
+  const q = walletSnapshotSourceQuery(k, 'certificateFields', 41, true, true, true)
+    .select('certificate_fields.*')
+    .toSQL()
+  expect(q.sql).toContain('/*+ JOIN_FIXED_ORDER() JOIN_INDEX(certificate_fields) */')
+  expect(q.sql).toContain(
+    'from `snapshot_certificate_field_keys` FORCE INDEX (`PRIMARY`) cross join `certificate_fields`'
+  )
+  expect(q.sql).toContain(
+    '`snapshotFieldName` = `certificate_fields`.`fieldName` and `snapshotCertificateId` = `certificate_fields`.`certificateId`'
+  )
+  expect(q.sql).toContain('`snapshotMembership` between ? and ?')
+  expect(q.bindings).toEqual([41, 1, 3])
+  const legacy = walletSnapshotSourceQuery(k, 'certificateFields', 41, true, true).toSQL()
+  expect(legacy.sql).not.toContain('snapshot_certificate_field_keys')
+  expect(legacy.sql).toContain('or exists')
+})
