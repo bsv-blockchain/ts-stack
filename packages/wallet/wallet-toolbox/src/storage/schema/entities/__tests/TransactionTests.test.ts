@@ -15,6 +15,10 @@ describe('Transaction class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('transactionTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('transactionTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('transactionTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('transactionTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('transactionTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('transactionTests2'))
   })

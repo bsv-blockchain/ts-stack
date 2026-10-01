@@ -17,6 +17,10 @@ describe('TxLabelMap Class Tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('txLabelMapTests_db1'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('txLabelMapTests_db2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('txLabelMapTests_db1'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('txLabelMapTests_db2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('txLabelMapTests_db1'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('txLabelMapTests_db2'))
   })

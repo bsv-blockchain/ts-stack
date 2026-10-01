@@ -14,6 +14,10 @@ describe('User class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('userTests_db1'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('userTests_db2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('userTests_db1'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('userTests_db2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('userTests_db1'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('userTests_db2'))
   })

@@ -13,6 +13,9 @@ describe('SyncState class method tests', () => {
     if (env.runMySQL) {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('SyncStateTests'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('SyncStateTests'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('SyncStateTests'))
   })
 

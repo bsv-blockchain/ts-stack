@@ -14,6 +14,10 @@ describe('Certificate class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('CertificateTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('CertificateTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('CertificateTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('CertificateTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('CertificateTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('CertificateTests2'))
   })

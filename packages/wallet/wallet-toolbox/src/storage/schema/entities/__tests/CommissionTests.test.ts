@@ -14,6 +14,10 @@ describe('Commission class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('CommissionTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('CommissionTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('CommissionTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('CommissionTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('CommissionTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('CommissionTests2'))
   })

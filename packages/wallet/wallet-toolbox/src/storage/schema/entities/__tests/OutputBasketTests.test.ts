@@ -14,6 +14,10 @@ describe('OutputBasket class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('OutputBasketTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('OutputBasketTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('OutputBasketTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('OutputBasketTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('OutputBasketTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('OutputBasketTests2'))
   })

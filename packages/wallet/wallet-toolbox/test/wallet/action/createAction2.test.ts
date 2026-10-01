@@ -39,6 +39,9 @@ describe('createAction2 nosend transactions', () => {
     if (env.runMySQL) {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy(testName()))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy(testName()))
+    }
 
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy(testName()))
   })
