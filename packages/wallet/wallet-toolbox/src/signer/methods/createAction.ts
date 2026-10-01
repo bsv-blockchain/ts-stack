@@ -125,7 +125,7 @@ async function createActionCore(
     setResultBeef(r, beef)
     if (!vargs.options.returnTXIDOnly) {
       r.tx = await traceActionStep(wallet, 'wallet.create_action.serialize_result_beef', parent, () =>
-        beef.toBinaryAtomic(r.txid!)
+        serializeResultBeef(beef, r.txid!, vargs.options.knownTxids)
       )
     }
   }
@@ -188,6 +188,50 @@ async function createNewTx(
   const prior: PendingSignAction = { reference, dcr, args: vargs, amount, tx, pdi }
 
   return prior
+}
+
+/**
+ * Serialize the result BEEF, re-applying `options.knownTxids` on the way out.
+ *
+ * THE INVARIANT THIS PROTECTS: a declared ancestor may be omitted, but it must never be carried
+ * in full with its own ancestry missing. A recipient can skip an absent or txid-only ancestor and
+ * restore it from its own records; it can verify one carried complete. It can do neither with a
+ * transaction that is present, unproven, and whose input sources are gone -- that is neither
+ * provable nor marked as omitted.
+ *
+ * That third shape is reachable because the result BEEF is rebuilt after storage has already
+ * trimmed it: `result.mergeBeef(inputBeef)` then `result.mergeTransaction(prior.tx)`.
+ * `Beef.mergeTransactionGraph` merges every node it walks as a FULL entry, so wherever an input's
+ * `sourceTransaction` is populated, a trimmed ancestor is re-materialized whole -- and the walk
+ * then stops, because that source transaction does not carry its own sources.
+ *
+ * `verifyReturnedTxidOnlyAtomicBEEF` does not catch it: it asserts that every txid-only entry WAS
+ * declared, not that every declared entry IS omitted.
+ *
+ * Trimming a CLONE is deliberate. `Wallet.createAction` merges the result BEEF into the wallet's
+ * own retained BEEF (`this.beef.mergeBeefFromParty(...)`), which must keep the full ancestry for
+ * later actions. `Beef.clone` is shallow, but `makeTxidOnly` replaces the array slot rather than
+ * mutating the shared `BeefTx`, so the original is unaffected.
+ *
+ * Parameters:
+ *  - `beef`: assembled result BEEF; left untouched
+ *  - `txid`: subject transaction, the atomic root
+ *  - `knownTxids`: ancestors the recipient has said it already holds
+ *
+ * Returns: AtomicBEEF with each declared ancestor reduced to a txid-only entry.
+ */
+export function serializeResultBeef(beef: Beef, txid: TXIDHexString, knownTxids?: string[]): AtomicBEEF {
+  const known = knownTxids ?? []
+  if (known.length === 0) return beef.toBinaryAtomic(txid)
+
+  const trimmed = beef.clone()
+  trimmed.atomicTxid = beef.atomicTxid
+  for (const knownTxid of known) {
+    // Never the subject: it is the transaction the recipient is being asked to verify.
+    if (knownTxid === txid) continue
+    if (trimmed.findTxid(knownTxid) != null) trimmed.makeTxidOnly(knownTxid)
+  }
+  return trimmed.toBinaryAtomic(txid)
 }
 
 function makeSignableTransactionResult(
