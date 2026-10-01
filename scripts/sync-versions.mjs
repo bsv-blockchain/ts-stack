@@ -19,7 +19,7 @@
  * Safe to run repeatedly (idempotent). Does not touch non-workspace deps.
  */
 
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, realpathSync, existsSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
@@ -206,7 +206,11 @@ export function syncVersions({
   )
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] !== undefined &&
+  existsSync(process.argv[1]) &&
+  realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   syncVersions({
     dryRun: process.argv.includes('--dry-run'),
     workspaceOnly: process.argv.includes('--workspace-only')

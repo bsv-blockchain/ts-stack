@@ -21,7 +21,7 @@ test('release sync covers the separately deployed notifier without traversing ar
   const ignored = 'infra/uhrp-server-cloud-bucket/examples/package.json'
   try {
     mkdirSync(join(root, 'scripts'))
-    for (const file of ['sync-versions.mjs', 'file-system.mjs']) {
+    for (const file of ['sync-versions.mjs', 'file-system.mjs', 'peer-version-range.mjs']) {
       copyFileSync(join(scriptDirectory, file), join(root, 'scripts', file))
     }
     writeJson('package.json', { name: 'release-sync-fixture', private: true })
