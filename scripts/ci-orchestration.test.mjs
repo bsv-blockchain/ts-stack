@@ -375,69 +375,80 @@ test('every HTTP latency scenario retains its own required coverage execution', 
   assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
 })
 
-test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', async () => {
-  const { parse } = await import('yaml')
-  const wallet = parse(readFileSync(CI_PATH, 'utf8')).jobs['coverage-wallet']
-  const fixtures = wallet.steps.filter(
-    step => step.run === 'node test/storage/snapshotArchiveCrash.cjs'
+function nativeWalletFixtureSteps() {
+  const wallet = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    job => job.name === 'coverage-wallet'
+  ).source
+  const matches = [...wallet.matchAll(/^      - /gm)]
+  const steps = matches.map((match, index) =>
+    wallet.slice(match.index, matches[index + 1]?.index ?? wallet.length)
   )
-  assert.equal(fixtures.length, 1)
-  const fixture = fixtures[0]
-  assert.equal(fixture.if, "matrix.id == 'shard-1'")
-  assert.equal(fixture['working-directory'], 'packages/wallet/wallet-toolbox')
-  assert.equal(fixture['continue-on-error'], undefined)
-  assert.equal(wallet['continue-on-error'], undefined)
-  assert.equal(wallet.strategy.matrix.include.filter(entry => entry.id === 'shard-1').length, 1)
-  const restored = wallet.steps.findIndex(
-    step => step.run === 'tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz'
+  return { wallet, steps }
+}
+
+function onlyFixtureStep(steps, command) {
+  const matches = steps.filter(step => step.split('\n').includes(`        run: ${command}`))
+  assert.equal(matches.length, 1)
+  const step = matches[0]
+  assert.match(step, /^        if: matrix.id == 'shard-1'$/m)
+  assert.match(step, /^        working-directory: packages\/wallet\/wallet-toolbox$/m)
+  assert.doesNotMatch(step, /continue-on-error/)
+  return steps.indexOf(step)
+}
+
+function assertNativeWalletJob(wallet) {
+  assert.match(wallet, /^    needs: prepare$/m)
+  assert.match(wallet, /^    timeout-minutes: 40$/m)
+  assert.match(wallet, /^    permissions:\n      contents: read\n    strategy:/m)
+  assert.doesNotMatch(wallet, /continue-on-error/)
+  const matrix = /        include:\n([\s\S]*?)\n    steps:/.exec(wallet)?.[1]
+  assert.ok(matrix)
+  assert.deepEqual(
+    matrix.split('\n').map(line => line.trim()),
+    [
+      '- { id: shard-1, shard: 1 }',
+      '- { id: shard-2, shard: 2 }',
+      '- { id: shard-3, shard: 3 }',
+      '- { id: shard-4, shard: 4 }',
+      '- { id: sync-http-0, latency: 0 }',
+      '- { id: sync-http-1000, latency: 1000 }'
+    ]
   )
-  const proof = wallet.steps.indexOf(fixture)
-  const coverage = wallet.steps.findIndex(
-    step => step.name === 'Generate wallet-toolbox coverage shard'
+}
+
+test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const proof = onlyFixtureStep(steps, 'node test/storage/snapshotArchiveCrash.cjs')
+  const restored = steps.findIndex(step =>
+    step.includes('run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz')
+  )
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
   )
   assert.ok(restored >= 0 && restored < proof && proof < coverage)
-  assert.equal(wallet.needs, 'prepare')
-  assert.equal(wallet['timeout-minutes'], 40)
-  assert.deepEqual(wallet.permissions, { contents: 'read' })
+  assertNativeWalletJob(wallet)
 })
 
-test('native MySQL uses a bounded pinned fixture in the existing required wallet shard', async () => {
-  const { parse } = await import('yaml')
-  const wallet = parse(readFileSync(CI_PATH, 'utf8')).jobs['coverage-wallet']
-  const provisionCommand = 'node test/storage/snapshotArchiveDocker.cjs provision-hosted-image'
-  const proofCommand = 'node test/storage/runSnapshotArchiveMysql.cjs'
-  const selected = [provisionCommand, proofCommand].map(command => {
-    const steps = wallet.steps.filter(step => step.run === command)
-    assert.equal(steps.length, 1)
-    const step = steps[0]
-    assert.equal(step.if, "matrix.id == 'shard-1'")
-    assert.equal(step['working-directory'], 'packages/wallet/wallet-toolbox')
-    assert.equal(step['timeout-minutes'], 5)
-    assert.deepEqual(step.env, { TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1' })
-    assert.equal(step['continue-on-error'], undefined)
-    return wallet.steps.indexOf(step)
-  })
-  const sqlite = wallet.steps.findIndex(
-    step => step.run === 'node test/storage/snapshotArchiveCrash.cjs'
+test('native MySQL uses a bounded pinned fixture in the existing required wallet shard', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const provision = onlyFixtureStep(
+    steps,
+    'node test/storage/snapshotArchiveDocker.cjs provision-hosted-image'
   )
-  const coverage = wallet.steps.findIndex(
-    step => step.name === 'Generate wallet-toolbox coverage shard'
+  const proof = onlyFixtureStep(steps, 'node test/storage/runSnapshotArchiveMysql.cjs')
+  for (const index of [provision, proof]) {
+    assert.match(steps[index], /^        timeout-minutes: 5$/m)
+    assert.match(
+      steps[index],
+      /^        env:\n          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'\n        run:/m
+    )
+  }
+  const sqlite = onlyFixtureStep(steps, 'node test/storage/snapshotArchiveCrash.cjs')
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
   )
-  assert.ok(
-    sqlite >= 0 && sqlite < selected[0] && selected[0] < selected[1] && selected[1] < coverage
-  )
-  assert.deepEqual(wallet.strategy.matrix.include, [
-    { id: 'shard-1', shard: 1 },
-    { id: 'shard-2', shard: 2 },
-    { id: 'shard-3', shard: 3 },
-    { id: 'shard-4', shard: 4 },
-    { id: 'sync-http-0', latency: 0 },
-    { id: 'sync-http-1000', latency: 1000 }
-  ])
-  assert.equal(wallet.needs, 'prepare')
-  assert.equal(wallet['timeout-minutes'], 40)
-  assert.deepEqual(wallet.permissions, { contents: 'read' })
-  assert.equal(wallet['continue-on-error'], undefined)
+  assert.ok(sqlite < provision && provision < proof && proof < coverage)
+  assertNativeWalletJob(wallet)
 })
 
 test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {

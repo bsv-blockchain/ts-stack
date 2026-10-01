@@ -40,8 +40,7 @@ export async function assertSnapshotArchiveGuardOwner(k: Knex, expected: Snapsho
   const actual = await ownerGuard(k, expected.owner)
   const request: RequestState | undefined = await k('snapshot_archive_requests').where(expected.owner).first()
   if (
-    actual === undefined ||
-    actual.slot !== expected.slot ||
+    actual?.slot !== expected.slot ||
     actual.bindingJson !== expected.bindingJson ||
     request === undefined ||
     request.released ||
@@ -77,7 +76,7 @@ export async function bindSnapshotArchiveOwnerGuard(
     await lockSnapshotArchiveCapacity(trx)
     await verifyBackend(trx)
     const current = await ownerGuard(trx, context.owner)
-    if (current === undefined || current.slot !== context.slot) unavailable()
+    if (current?.slot !== context.slot) unavailable()
     await assertSnapshotArchiveGuardOwner(trx, current)
     if (current.bindingJson !== null && current.bindingJson !== bindingJson) unavailable()
     await trx('snapshot_archive_owner_slots').where({ slot: current.slot }).update({ bindingJson })
@@ -114,7 +113,7 @@ export async function fenceSnapshotArchiveOwnerGuard(
 ): Promise<boolean> {
   await lockSnapshotArchiveCapacity(k)
   const actual = await ownerGuard(k, context.owner)
-  if (actual === undefined || actual.slot !== context.slot || actual.bindingJson !== context.bindingJson) return false
+  if (actual?.slot !== context.slot || actual.bindingJson !== context.bindingJson) return false
   const request: RequestState | undefined = await k('snapshot_archive_requests').where(context.owner).first()
   if (request === undefined || request.released) unavailable()
   const expired = Number(request.expiresAt) <= (await snapshotArchiveDatabaseNow(k))

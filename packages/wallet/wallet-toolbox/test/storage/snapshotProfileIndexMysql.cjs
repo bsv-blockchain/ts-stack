@@ -2,16 +2,21 @@
 const assert = require('node:assert/strict')
 const { randomUUID } = require('node:crypto')
 const { knex } = require('knex')
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 const { StorageKnex } = require('../../out/src/storage/StorageKnex.js')
 const { StorageProvider } = require('../../out/src/storage/StorageProvider.js')
 const { addSnapshotProfileIndexes } = require('../../out/src/storage/schema/snapshotProfileIndexMigration.js')
 
 async function waitFor(check) {
-  for (let attempt = 0; attempt < 1000; attempt++) {
-    if (await check()) return
-    await new Promise(resolve => setTimeout(resolve, 5))
+  let complete = false
+  function* pendingAttempts() {
+    for (let attempt = 0; attempt < 1000 && !complete; attempt++) yield undefined
   }
-  throw new Error('Synthetic MySQL lock observation deadline')
+  await runInSeries(pendingAttempts(), async () => {
+    complete = await check()
+    if (!complete) await new Promise(resolve => setTimeout(resolve, 5))
+  })
+  if (!complete) throw new Error('Synthetic MySQL lock observation deadline')
 }
 
 async function qualifyMysqlProfileIndexLocks(control, connection) {

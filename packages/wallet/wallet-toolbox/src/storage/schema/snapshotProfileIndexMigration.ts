@@ -1,5 +1,6 @@
 import type { Knex } from 'knex'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import { runInSeries } from '../../utility/runInSeries'
 
 export const SNAPSHOT_PROFILE_INDEX_MIGRATION = '2026-10-01-003 add snapshot profile key indexes'
 
@@ -23,10 +24,89 @@ function isMySQL(k: Knex): boolean {
 }
 
 function normalized(sql: string): string {
-  return sql
-    .replace(/\s+/g, ' ')
-    .replace(/ IF NOT EXISTS /g, ' ')
-    .trim()
+  return sql.replaceAll(/\s+/g, ' ').replaceAll(' IF NOT EXISTS ', ' ').trim()
+}
+
+async function validateMysqlTable(k: Knex, table: string, keys: boolean, names: string[]): Promise<boolean> {
+  const primary = keys ? names : ['snapshotTableId']
+  const [columns]: Array<
+    Array<{ name: string; type: string; nullable: string; defaultValue: unknown; extra: string }>
+  > = await k.raw(
+    'SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS defaultValue, EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
+    [table]
+  )
+  const [indexes]: Array<
+    Array<{ name: string; columnName: string; nonUnique: number; direction: string; prefix: unknown }>
+  > = await k.raw(
+    'SELECT INDEX_NAME AS name, COLUMN_NAME AS columnName, NON_UNIQUE AS nonUnique, COLLATION AS direction, SUB_PART AS prefix FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX',
+    [table]
+  )
+  const types = keys ? ['int', 'int unsigned', 'int unsigned'] : ['int', 'int unsigned', 'tinyint']
+  return (
+    Array.isArray(columns) &&
+    columns.length === names.length &&
+    columns.every(
+      (column, i) =>
+        column.name === names[i] &&
+        column.type.replaceAll(/\(\d+\)/g, '') === types[i] &&
+        column.nullable === 'NO' &&
+        column.defaultValue === null &&
+        column.extra === ''
+    ) &&
+    Array.isArray(indexes) &&
+    indexes.every(index =>
+      index.name === 'PRIMARY' ? index.direction === 'A' && index.prefix === null : Number(index.nonUnique) === 1
+    ) &&
+    JSON.stringify(indexes.filter(index => index.name === 'PRIMARY').map(index => index.columnName)) ===
+      JSON.stringify(primary)
+  )
+}
+
+async function validateSqlitePrimaryIndex(k: Knex, name: string | undefined, names: string[]): Promise<boolean> {
+  if (name === undefined) return false
+  const parts: Array<{ name: string; desc: number; coll: string; key: number }> = await k.raw(
+    'PRAGMA index_xinfo(??)',
+    [name]
+  )
+  const indexed = parts.filter(part => part.key === 1)
+  return (
+    indexed.length === names.length &&
+    indexed.every((part, i) => part.name === names[i] && part.desc === 0 && part.coll === 'BINARY')
+  )
+}
+
+async function validateSqliteTable(k: Knex, table: string, keys: boolean, names: string[]): Promise<boolean> {
+  const columns: Array<{
+    name: string
+    type: string
+    notnull: number
+    dflt_value: unknown
+    pk: number
+    hidden: number
+  }> = await k.raw('PRAGMA table_xinfo(??)', [table])
+  const indexes: Array<{ name: string; unique: number; origin: string; partial: number }> = await k.raw(
+    'PRAGMA index_list(??)',
+    [table]
+  )
+  const expectedPk = keys ? [1, 2, 3] : [1, 0, 0]
+  const nullable = keys ? [1, 1, 1] : [0, 1, 1]
+  const types = keys ? ['integer', 'integer', 'integer'] : ['integer', 'integer', 'boolean']
+  const valid =
+    Array.isArray(columns) &&
+    columns.length === names.length &&
+    columns.every(
+      (column, i) =>
+        column.name === names[i] &&
+        column.type.toLowerCase() === types[i] &&
+        column.notnull === nullable[i] &&
+        column.dflt_value === null &&
+        column.pk === expectedPk[i] &&
+        column.hidden === 0
+    ) &&
+    Array.isArray(indexes) &&
+    indexes.every(index => index.unique === 0 || (index.origin === 'pk' && index.partial === 0))
+  if (!valid || !keys) return valid
+  return await validateSqlitePrimaryIndex(k, indexes.find(index => index.origin === 'pk')?.name, names)
 }
 
 async function validateTable(k: Knex, table: string): Promise<void> {
@@ -34,85 +114,61 @@ async function validateTable(k: Knex, table: string): Promise<void> {
   const names = keys
     ? ['snapshotTableId', 'snapshotUserId', 'snapshotRowId']
     : ['snapshotTableId', 'afterRowId', 'complete']
-  const primary = keys ? names : ['snapshotTableId']
-  let valid: boolean
-  if (isMySQL(k)) {
-    const [columns]: Array<
-      Array<{ name: string; type: string; nullable: string; defaultValue: unknown; extra: string }>
-    > = await k.raw(
-      'SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS defaultValue, EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
-      [table]
-    )
-    const [indexes]: Array<
-      Array<{ name: string; columnName: string; nonUnique: number; direction: string; prefix: unknown }>
-    > = await k.raw(
-      'SELECT INDEX_NAME AS name, COLUMN_NAME AS columnName, NON_UNIQUE AS nonUnique, COLLATION AS direction, SUB_PART AS prefix FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX',
-      [table]
-    )
-    const types = keys ? ['int', 'int unsigned', 'int unsigned'] : ['int', 'int unsigned', 'tinyint']
-    valid =
-      Array.isArray(columns) &&
-      columns.length === names.length &&
-      columns.every(
-        (column, i) =>
-          column.name === names[i] &&
-          column.type.replace(/\(\d+\)/g, '') === types[i] &&
-          column.nullable === 'NO' &&
-          column.defaultValue === null &&
-          column.extra === ''
-      ) &&
-      Array.isArray(indexes) &&
-      indexes.every(index =>
-        index.name === 'PRIMARY' ? index.direction === 'A' && index.prefix === null : Number(index.nonUnique) === 1
-      ) &&
-      JSON.stringify(indexes.filter(index => index.name === 'PRIMARY').map(index => index.columnName)) ===
-        JSON.stringify(primary)
-  } else {
-    const columns: Array<{
-      name: string
-      type: string
-      notnull: number
-      dflt_value: unknown
-      pk: number
-      hidden: number
-    }> = await k.raw('PRAGMA table_xinfo(??)', [table])
-    const indexes: Array<{ name: string; unique: number; origin: string; partial: number }> = await k.raw(
-      'PRAGMA index_list(??)',
-      [table]
-    )
-    const expectedPk = keys ? [1, 2, 3] : [1, 0, 0]
-    const nullable = keys ? [1, 1, 1] : [0, 1, 1]
-    const types = keys ? ['integer', 'integer', 'integer'] : ['integer', 'integer', 'boolean']
-    valid =
-      Array.isArray(columns) &&
-      columns.length === names.length &&
-      columns.every(
-        (column, i) =>
-          column.name === names[i] &&
-          column.type.toLowerCase() === types[i] &&
-          column.notnull === nullable[i] &&
-          column.dflt_value === null &&
-          column.pk === expectedPk[i] &&
-          column.hidden === 0
-      ) &&
-      Array.isArray(indexes) &&
-      indexes.every(index => index.unique === 0 || (index.origin === 'pk' && index.partial === 0))
-    const pk = indexes.find(index => index.origin === 'pk')
-    if (valid && keys) {
-      if (pk === undefined) valid = false
-      else {
-        const parts: Array<{ name: string; desc: number; coll: string; key: number }> = await k.raw(
-          'PRAGMA index_xinfo(??)',
-          [pk.name]
-        )
-        const indexed = parts.filter(part => part.key === 1)
-        valid =
-          indexed.length === names.length &&
-          indexed.every((part, i) => part.name === names[i] && part.desc === 0 && part.coll === 'BINARY')
-      }
-    }
-  }
+  const valid = isMySQL(k)
+    ? await validateMysqlTable(k, table, keys, names)
+    : await validateSqliteTable(k, table, keys, names)
   if (!valid) throw new WERR_INVALID_OPERATION('Snapshot profile table definition mismatch')
+}
+
+type TriggerEvent = 'DELETE' | 'UPDATE' | 'INSERT'
+
+function triggerDefinition(mysql: boolean, table: string, key: string, tableId: number, event: TriggerEvent) {
+  const name = `snapshot_profile_${tableId}_${event.toLowerCase()}`
+  const remove = `DELETE FROM ${KEYS} WHERE snapshotTableId = ${tableId} AND snapshotUserId = OLD.userId AND snapshotRowId = OLD.${key};`
+  const add = `INSERT INTO ${KEYS} (snapshotTableId, snapshotUserId, snapshotRowId) VALUES (${tableId}, NEW.userId, NEW.${key});`
+  const changed = mysql
+    ? `NOT (OLD.userId <=> NEW.userId) OR NOT (OLD.${key} <=> NEW.${key})`
+    : `OLD.userId IS NOT NEW.userId OR OLD.${key} IS NOT NEW.${key}`
+  const statements = { DELETE: remove, INSERT: add, UPDATE: remove + ' ' + add }[event]
+  const body =
+    mysql && event === 'UPDATE' ? `BEGIN IF ${changed} THEN ${statements} END IF; END` : `BEGIN ${statements} END`
+  let qualifier = ''
+  if (mysql) qualifier = ' FOR EACH ROW'
+  else if (event === 'UPDATE') qualifier = ` WHEN ${changed}`
+  return { name, body, sql: `CREATE TRIGGER ${name} AFTER ${event} ON ${table}${qualifier} ${body}` }
+}
+
+async function mysqlTriggerExists(
+  k: Knex,
+  name: string,
+  table: string,
+  event: TriggerEvent,
+  body: string
+): Promise<boolean> {
+  const [rows]: Array<Array<{ event: string; timing: string; tableName: string; body: string }>> = await k.raw(
+    'SELECT EVENT_MANIPULATION AS event, ACTION_TIMING AS timing, EVENT_OBJECT_TABLE AS tableName, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME = ?',
+    [name]
+  )
+  if (!Array.isArray(rows)) throw new WERR_INVALID_OPERATION('Invalid snapshot profile trigger metadata')
+  if (rows.length === 0) return false
+  const row = rows[0]
+  if (
+    rows.length !== 1 ||
+    row?.event !== event ||
+    row.timing !== 'AFTER' ||
+    row.tableName !== table ||
+    normalized(row.body) !== normalized(body)
+  )
+    throw new WERR_INVALID_OPERATION('Snapshot profile trigger definition mismatch')
+  return true
+}
+
+async function sqliteTriggerExists(k: Knex, name: string, sql: string): Promise<boolean> {
+  const row: { sql: string } | undefined = await k('sqlite_master').where({ type: 'trigger', name }).first('sql')
+  if (row === undefined) return false
+  if (normalized(row.sql) !== normalized(sql))
+    throw new WERR_INVALID_OPERATION('Snapshot profile trigger definition mismatch')
+  return true
 }
 
 async function installTrigger(
@@ -120,50 +176,13 @@ async function installTrigger(
   table: string,
   key: string,
   tableId: number,
-  event: 'DELETE' | 'UPDATE' | 'INSERT',
+  event: TriggerEvent,
   create = true
 ): Promise<void> {
-  const name = `snapshot_profile_${tableId}_${event.toLowerCase()}`
-  const remove = `DELETE FROM ${KEYS} WHERE snapshotTableId = ${tableId} AND snapshotUserId = OLD.userId AND snapshotRowId = OLD.${key};`
-  const add = `INSERT INTO ${KEYS} (snapshotTableId, snapshotUserId, snapshotRowId) VALUES (${tableId}, NEW.userId, NEW.${key});`
   const mysql = isMySQL(k)
-  const changed = mysql
-    ? `NOT (OLD.userId <=> NEW.userId) OR NOT (OLD.${key} <=> NEW.${key})`
-    : `OLD.userId IS NOT NEW.userId OR OLD.${key} IS NOT NEW.${key}`
-  const statements = event === 'DELETE' ? remove : event === 'INSERT' ? add : remove + ' ' + add
-  const body =
-    mysql && event === 'UPDATE' ? `BEGIN IF ${changed} THEN ${statements} END IF; END` : `BEGIN ${statements} END`
-  const qualifier = mysql ? ' FOR EACH ROW' : event === 'UPDATE' ? ` WHEN ${changed}` : ''
-  const sql = `CREATE TRIGGER ${name} AFTER ${event} ON ${table}${qualifier} ${body}`
-  if (mysql) {
-    const [rows]: Array<Array<{ event: string; timing: string; tableName: string; body: string }>> = await k.raw(
-      'SELECT EVENT_MANIPULATION AS event, ACTION_TIMING AS timing, EVENT_OBJECT_TABLE AS tableName, ACTION_STATEMENT AS body FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME = ?',
-      [name]
-    )
-    if (!Array.isArray(rows)) throw new WERR_INVALID_OPERATION('Invalid snapshot profile trigger metadata')
-    if (rows.length !== 0) {
-      const row = rows[0]
-      if (
-        rows.length !== 1 ||
-        row === undefined ||
-        row.event !== event ||
-        row.timing !== 'AFTER' ||
-        row.tableName !== table ||
-        normalized(row.body) !== normalized(body)
-      ) {
-        throw new WERR_INVALID_OPERATION('Snapshot profile trigger definition mismatch')
-      }
-      return
-    }
-  } else {
-    const row: { sql: string } | undefined = await k('sqlite_master').where({ type: 'trigger', name }).first('sql')
-    if (row !== undefined) {
-      if (normalized(row.sql) !== normalized(sql))
-        throw new WERR_INVALID_OPERATION('Snapshot profile trigger definition mismatch')
-      return
-    }
-  }
-  if (create) await k.raw(sql)
+  const { name, body, sql } = triggerDefinition(mysql, table, key, tableId, event)
+  const exists = mysql ? await mysqlTriggerExists(k, name, table, event, body) : await sqliteTriggerExists(k, name, sql)
+  if (!exists && create) await k.raw(sql)
 }
 
 async function bootstrapTable(k: Knex, table: string, key: string, tableId: number): Promise<void> {
@@ -172,7 +191,10 @@ async function bootstrapTable(k: Knex, table: string, key: string, tableId: numb
     .onConflict('snapshotTableId')
     .ignore()
   let complete = false
-  while (!complete) {
+  function* unfinishedPages() {
+    while (!complete) yield undefined
+  }
+  await runInSeries(unfinishedPages(), async () => {
     complete = await k.transaction(async trx => {
       // SQLite must acquire its writer lock before reading a resumable position.
       // MySQL takes a current row lock without loading an older read-view value.
@@ -218,7 +240,7 @@ async function bootstrapTable(k: Knex, table: string, key: string, tableId: numb
         .update({ afterRowId: keys.at(-1)?.snapshotRowId ?? state.afterRowId, complete: finished })
       return finished
     })
-  }
+  })
 }
 
 /** Add auxiliary keys without altering any standard-table index or OFFSET plan. */
@@ -242,13 +264,13 @@ export async function addSnapshotProfileIndexes(k: Knex): Promise<void> {
     })
   }
   await validateTable(k, PROGRESS)
-  for (const [tableId, { table, key }] of snapshotProfileTables.entries()) {
+  await runInSeries(snapshotProfileTables.entries(), async ([tableId, { table, key }]) => {
     // Deletion must be observed before any partial installation can add keys.
     await installTrigger(k, table, key, tableId, 'DELETE')
     await installTrigger(k, table, key, tableId, 'UPDATE')
     await installTrigger(k, table, key, tableId, 'INSERT')
     await bootstrapTable(k, table, key, tableId)
-  }
+  })
 }
 
 /** Call only after snapshot readers are drained; standard rows remain intact. */
@@ -257,15 +279,17 @@ export async function removeSnapshotProfileIndexes(k: Knex): Promise<void> {
     throw new WERR_INVALID_OPERATION('Snapshot profile migration requires independent DDL and bootstrap transactions')
   if (await k.schema.hasTable(KEYS)) await validateTable(k, KEYS)
   if (await k.schema.hasTable(PROGRESS)) await validateTable(k, PROGRESS)
-  for (const [tableId, { table, key }] of snapshotProfileTables.entries()) {
-    for (const event of ['INSERT', 'UPDATE', 'DELETE'] as const)
+  await runInSeries(snapshotProfileTables.entries(), async ([tableId, { table, key }]) => {
+    await runInSeries(['INSERT', 'UPDATE', 'DELETE'] as const, async event => {
       await installTrigger(k, table, key, tableId, event, false)
-  }
-  for (const [tableId] of snapshotProfileTables.entries()) {
+    })
+  })
+  await runInSeries(snapshotProfileTables.entries(), async ([tableId]) => {
     // Stop every producer before removing the last deletion observer.
-    for (const event of ['insert', 'update', 'delete'])
+    await runInSeries(['insert', 'update', 'delete'], async event => {
       await k.raw(`DROP TRIGGER IF EXISTS snapshot_profile_${tableId}_${event}`)
-  }
+    })
+  })
   await k.schema.dropTableIfExists(PROGRESS)
   await k.schema.dropTableIfExists(KEYS)
 }
