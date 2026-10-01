@@ -41,7 +41,7 @@ const DEPENDENCY_FIELDS = [
   'peerDependencies',
   'optionalDependencies'
 ]
-const PNPM_NAMES = ['pnpm', 'pnpm.cjs', 'pnpm.js']
+const PNPM_NAMES = new Set(['pnpm', 'pnpm.cjs', 'pnpm.js'])
 
 function nodePnpmLauncher(executable) {
   const prefix = readFileSync(executable).subarray(0, 128).toString('utf8')
@@ -135,7 +135,7 @@ function configuredPnpmLauncher(root, configured, platform) {
   const name = basename(executable)
   if (platform === 'win32' && ['pnpm.cmd', 'pnpm.ps1'].includes(name))
     return existsSync(executable) ? windowsShimLauncher(dirname(executable), name) : undefined
-  if (!PNPM_NAMES.includes(name) || !existsSync(executable)) return undefined
+  if (!PNPM_NAMES.has(name) || !existsSync(executable)) return undefined
   const qualified = realpathSync(executable)
   return { executable: qualified, nodeLauncher: nodePnpmLauncher(qualified) }
 }
