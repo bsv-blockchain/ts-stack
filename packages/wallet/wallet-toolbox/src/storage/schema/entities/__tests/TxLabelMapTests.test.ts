@@ -334,10 +334,17 @@ describe('TxLabelMap Class Tests', () => {
     const ctx1 = ctxs[0]
     const ctx2 = ctxs2[0]
 
+    // A new transaction and label in each database, so the maps cannot collide
+    // with rows already present in the copied wallet.
+    const { tx: tx1, user: user1 } = await _tu.insertTestTransaction(ctx1.activeStorage)
+    const label1 = await _tu.insertTestTxLabel(ctx1.activeStorage, user1)
+    const { tx: tx2, user: user2 } = await _tu.insertTestTransaction(ctx2.activeStorage)
+    const label2 = await _tu.insertTestTxLabel(ctx2.activeStorage, user2)
+
     // Insert a TxLabelMap into the first database
     const txLabelMap1 = new EntityTxLabelMap({
-      transactionId: 103,
-      txLabelId: 1,
+      transactionId: tx1.transactionId,
+      txLabelId: label1.txLabelId,
       isDeleted: false,
       created_at: new Date('2023-01-01'),
       updated_at: new Date('2023-01-02')
@@ -347,8 +354,8 @@ describe('TxLabelMap Class Tests', () => {
 
     // Insert a non-matching TxLabelMap into the second database
     const txLabelMap2 = new EntityTxLabelMap({
-      transactionId: 104, // Different transaction ID not mapped in syncMap
-      txLabelId: 1, // Different label ID not mapped in syncMap
+      transactionId: tx2.transactionId,
+      txLabelId: label2.txLabelId,
       isDeleted: true, // Different isDeleted value
       created_at: new Date('2023-01-01'),
       updated_at: new Date('2023-01-02')
