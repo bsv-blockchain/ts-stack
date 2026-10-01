@@ -960,3 +960,16 @@ This supplies reusable recovery lifecycle, not a complete deployed root profile.
 Installed evidence/currentness policy, broader local-rule coverage, all serving
 and admission/GASP fences, host lifecycle demonstration and clean final database
 and exact-head hosted qualification remain outstanding.
+
+## Independent lineage partition qualification
+
+The exhaustive layout/graph and traversal partitions now both pass against the
+exact current full source and identical original test selection. The layout/graph
+partition passes 97.97% across 246 mutations (241 killed, five surviving, no
+timeouts); the traversal partition passes 90.54% across 74 (66 killed, seven
+surviving and one detected timeout). Both have zero uncovered or invalid sites.
+Each ran all 99 dry-run tests. The graph campaign recovered worker failures and
+finished in 30m28s; traversal finished in 7m21s. These are local qualification
+results, not controlled performance claims or exact-head hosted results. The
+previous unpartitioned hosted timeout remains recorded; no source, test or gate
+was excluded to obtain the separate results.
