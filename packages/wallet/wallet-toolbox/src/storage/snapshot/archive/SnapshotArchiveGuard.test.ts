@@ -16,6 +16,8 @@ import { readGuardedSnapshotArchive, recoverSnapshotArchiveGuards } from './Snap
 import { SnapshotArchiveSourceCleanupError } from './KnexSnapshotArchiveSource'
 import * as Backend from './SnapshotArchiveGuardBackend'
 import * as Registry from './SnapshotArchiveGuardRegistry'
+import * as ArchiveSql from './SnapshotArchiveSql'
+import { reserveSnapshotArchiveOwner } from './SnapshotArchiveOwner'
 
 const stores: Knex[] = []
 const directories: string[] = []
@@ -119,6 +121,7 @@ test('recovery waits through physical connection close while foreground WAL writ
     await stop.promise
     expect((await trx('fixture_values').first()).value).toBe('before')
   })
+  void work.catch(() => undefined)
   try {
     await opened.promise
     await f.requests.markCancellation(identity(), input)
@@ -485,3 +488,86 @@ test('a concurrent exact acknowledgement makes an old recovery proof harmless', 
   expect(await f.control('snapshot_archive_owners')).toHaveLength(0)
   expect(Number((await f.control('snapshot_archive_capacity').first()).archives)).toBe(0)
 })
+
+test('omitting the guard flag preserves compatibility with the earlier owner schema', async () => {
+  const f = await fixture(false)
+  const owner = { identityKey: identity(), requestId: 'a'.repeat(64), claimToken: 'b'.repeat(64) }
+  await f.control.transaction(async trx => {
+    await ArchiveSql.lockSnapshotArchiveCapacity(trx)
+    await reserveSnapshotArchiveOwner(trx, owner)
+  })
+  expect(await f.control('snapshot_archive_owners').first()).toEqual({ ...owner, slot: 0, archiveId: null })
+  await addSnapshotArchiveGuardTable(f.control)
+  expect(await f.control('snapshot_archive_owners').first()).toMatchObject({ ...owner, guardVersion: 0 })
+})
+
+test.each([-1, 8, Number.MAX_SAFE_INTEGER + 1])(
+  'invalid owner slot %s is refused even if matching slot metadata exists',
+  async slot => {
+    const f = await fixture()
+    const { owner } = await f.requests.claim(identity(), request())
+    await f.control('snapshot_archive_owners').where(owner!).update({ slot })
+    await f.control('snapshot_archive_owner_slots').insert({ slot, bindingJson: null })
+    await expect(Registry.readSnapshotArchiveOwnerGuard(f.control, owner!)).rejects.toThrow('unavailable')
+  }
+)
+
+test.each([0.5, Number.NaN])('a driver returning noninteger owner slot %s is refused', async slot => {
+  const f = await fixture()
+  const { owner } = await f.requests.claim(identity(), request())
+  f.control.client.config.postProcessResponse = (value: unknown) =>
+    value !== null && typeof value === 'object' && Object.keys(value).length === 1 && 'slot' in value ? { slot } : value
+  await expect(Registry.readSnapshotArchiveOwnerGuard(f.control, owner!)).rejects.toThrow('unavailable')
+})
+
+test.each(['closed', 'failed', 'resource-limited'] as const)(
+  'a %s owner is enumerated and fenced without rewriting its terminal outcome or acknowledging a live peer',
+  async state => {
+    const f = await fixture()
+    const { owner } = await f.requests.claim(identity(), request())
+    const { owner: peer } = await f.requests.claim(identity(2), request(2))
+    const context = await Registry.readSnapshotArchiveOwnerGuard(f.control, owner!)
+    await expect(Registry.assertSnapshotArchiveGuardOwner(f.control, { ...context, slot: 1 })).rejects.toThrow(
+      'unavailable'
+    )
+    await f.control('snapshot_archive_requests').where(owner!).update({ state })
+    expect(await Registry.expiredSnapshotArchiveOwnerGuards(f.control)).toEqual([context])
+    expect(
+      await f.control.transaction(trx => Registry.fenceSnapshotArchiveOwnerGuard(trx, { ...context, slot: 1 }))
+    ).toBe(false)
+    expect(await f.control.transaction(trx => Registry.fenceSnapshotArchiveOwnerGuard(trx, context))).toBe(true)
+    expect((await f.control('snapshot_archive_requests').where(owner!).first()).state).toBe(state)
+    expect(await f.control('snapshot_archive_owners')).toHaveLength(2)
+    expect(await f.control.transaction(trx => Registry.fenceSnapshotArchiveOwnerGuard(trx, context, true))).toBe(true)
+    expect(await f.control('snapshot_archive_owners')).toEqual([expect.objectContaining(peer!)])
+  }
+)
+
+test('the immutable deadline itself closes guard admission and permits expiry fencing', async () => {
+  const f = await fixture()
+  const input = request()
+  const { owner } = await f.requests.claim(identity(), input)
+  const context = await Registry.readSnapshotArchiveOwnerGuard(f.control, owner!)
+  jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(input.notAfter)
+  await expect(Registry.assertSnapshotArchiveGuardOwner(f.control, context)).rejects.toThrow('unavailable')
+  expect(await Registry.expiredSnapshotArchiveOwnerGuards(f.control)).toEqual([context])
+  expect(await f.control.transaction(trx => Registry.fenceSnapshotArchiveOwnerGuard(trx, context))).toBe(true)
+  expect((await f.control('snapshot_archive_requests').where(owner!).first()).state).toBe('expired')
+  expect(await f.control('snapshot_archive_owners')).toHaveLength(1)
+})
+
+test.each(['g'.repeat(64), 'a'.repeat(63), 'a'.repeat(65), 'z' + 'a'.repeat(64), 'a'.repeat(64) + 'z'])(
+  'an invalid initial guard marker %s cannot be accepted before the slot is bound',
+  async marker => {
+    const f = await fixture()
+    await Backend.prepareSnapshotArchiveGuardBackend(f.control, 0, null)
+    const metadata = knex({ ...f.config, connection: { filename: `${f.filename}.snapshot-owner-0.sqlite` } })
+    try {
+      await metadata('snapshot_owner_guard').where({ id: 1 }).update({ marker })
+    } finally {
+      await metadata.destroy()
+    }
+    await expect(Backend.prepareSnapshotArchiveGuardBackend(f.control, 0, null)).rejects.toThrow('identity changed')
+    expect((await f.control('snapshot_archive_owner_slots').where({ slot: 0 }).first()).bindingJson).toBeNull()
+  }
+)

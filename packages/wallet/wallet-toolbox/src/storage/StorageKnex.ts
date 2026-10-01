@@ -139,7 +139,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   private snapshotSyncOpening?: Promise<WalletReadSnapshot | undefined>
   private snapshotSyncBusy = false
   private snapshotArchiveRecovery?: Promise<void>
-  private guardedSnapshotReadFailure?: { error: unknown }
+  private guardedSnapshotFailure?: { error: unknown }
   private retainedReadSnapshot?: RetainedReadSnapshotLifetime
   private retainedReadSnapshotsStopped = false
   readonly preparedBeefPolicy: PreparedBeefPolicy
@@ -360,7 +360,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
               await reader.makeAvailable()
               await readGuardedSnapshotArchive(this.knex, reader.knex, claim, read)
             } catch (error) {
-              if (!(error instanceof SnapshotArchiveSourceCleanupError)) reader.guardedSnapshotReadFailure = { error }
+              reader.guardedSnapshotFailure = { error }
               throw error
             }
           })
@@ -1986,9 +1986,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     try {
       await this.stopRetainedReadSnapshots()
     } catch (error) {
-      // The retained API preserves its read failure. That same failure does
-      // not mean the private pool's subsequent physical destruction failed.
-      if (this.guardedSnapshotReadFailure === undefined || this.guardedSnapshotReadFailure.error !== error) throw error
+      // Preserve an ordinary read failure for its read consumer. A typed
+      // cleanup failure remains observable after the pool destruction below.
+      if (this.guardedSnapshotFailure === undefined || this.guardedSnapshotFailure.error !== error) throw error
     } finally {
       await this.stopPreparedBeefTasks()
       this.knex.off('query', this.onQuery)
@@ -1998,6 +1998,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       this.querySpans.clear()
       await this.knex?.destroy()
     }
+    // The lifetime may have settled and cleared its slot before destroy runs.
+    // A settled pool alone cannot prove that a failed native close succeeded.
+    const failure = this.guardedSnapshotFailure?.error
+    if (failure instanceof SnapshotArchiveSourceCleanupError) throw failure
   }
 
   override async migrate(storageName: string, storageIdentityKey: string): Promise<string> {

@@ -508,6 +508,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.test.ts',
           '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts',
           '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveGuard*.test.ts',
+          '<rootDir>/src/storage/snapshot/ConcurrentSnapshotArchiveSource.test.ts',
           '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts'
         ],
         {

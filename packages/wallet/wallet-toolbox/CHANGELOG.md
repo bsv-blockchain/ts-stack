@@ -15,6 +15,9 @@ attention to changes that materially alter behavior or extend functionality.
   exact-owner recovery only after physical connection closure. Preserve old
   unguarded reservations and refuse changed backend identities. Reader
   advertisement stays disabled pending complete qualification.
+  Keep the provider's source slot fenced after unproved native cleanup, including
+  an already-settled read promise; preserve retry after an ordinary read failure
+  whose physical cleanup succeeds.
 
 - Add the unadvertised remote row-reader foundation: immutable server-issued
   offers, exact-request retry, fixed leases, verified packed rows and durable

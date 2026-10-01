@@ -68,6 +68,8 @@ test.each([
   undefined,
   { serverUuid: null, databaseName: 'fixture' },
   { serverUuid: 'not-a-server', databaseName: 'fixture' },
+  { serverUuid: 'a' + uuid, databaseName: 'fixture' },
+  { serverUuid: uuid + 'a', databaseName: 'fixture' },
   { serverUuid: uuid, databaseName: undefined },
   { serverUuid: uuid, databaseName: '' },
   { serverUuid: uuid, databaseName: 'x'.repeat(65) }
@@ -82,9 +84,11 @@ test.each(['server', 'database'] as const)(
   async field => {
     const f = fixture()
     const binding = await prepareSnapshotArchiveGuardBackend(f.k, 0, null)
-    f.reply.mockReturnValue([
-      [field === 'server' ? { ...identity, serverUuid: 'a'.repeat(36) } : { ...identity, databaseName: 'other' }]
-    ])
+    f.reply.mockImplementation(sql =>
+      sql.startsWith('SELECT @@')
+        ? [[field === 'server' ? { ...identity, serverUuid: 'a'.repeat(36) } : { ...identity, databaseName: 'other' }]]
+        : [[{ acquired: 1 }]]
+    )
     const read = jest.fn()
     await expect(withSnapshotArchiveBackendGuard(f.k, binding, read)).rejects.toThrow('identity changed')
     expect(read).not.toHaveBeenCalled()
@@ -126,23 +130,29 @@ test('a graceful quit and a destroyed socket still wait for physical close befor
   }).finally(() => {
     settled = true
   })
-  await quitting
-  await new Promise<void>(resolve => setImmediate(resolve))
-  expect(settled).toBe(false)
-  expect(f.trx.rollback).not.toHaveBeenCalled()
-  expect(f.stream.listenerCount('close')).toBe(1)
-  expect(f.queries.slice(1).map(query => query.sql)).toEqual([
-    'SELECT @@server_uuid AS serverUuid, DATABASE() AS databaseName',
-    'SELECT GET_LOCK(?, 0) AS acquired',
-    'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY'
-  ])
-  expect(f.queries.slice(1).every(query => query.connection === f.connection)).toBe(true)
-  expect(f.queries[2].values).toEqual([(binding as Extract<SnapshotArchiveGuardBinding, { kind: 'mysql' }>).lock])
-  expect(f.transaction).toHaveBeenCalledWith({ connection: f.connection })
-  f.close()
-  await expect(work).resolves.toBe(42)
-  expect(f.trx.rollback).toHaveBeenCalledTimes(1)
-  expect(f.stream.listenerCount('close')).toBe(0)
+  void work.catch(() => undefined)
+  try {
+    await quitting
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(settled).toBe(false)
+    expect(f.trx.rollback).not.toHaveBeenCalled()
+    expect(f.stream.listenerCount('close')).toBe(1)
+    expect(f.queries.slice(1).map(query => query.sql)).toEqual([
+      'SELECT @@server_uuid AS serverUuid, DATABASE() AS databaseName',
+      'SELECT GET_LOCK(?, 0) AS acquired',
+      'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY'
+    ])
+    expect(f.queries.slice(1).every(query => query.connection === f.connection)).toBe(true)
+    expect(f.queries[2].values).toEqual([(binding as Extract<SnapshotArchiveGuardBinding, { kind: 'mysql' }>).lock])
+    expect(f.transaction).toHaveBeenCalledWith({ connection: f.connection })
+    f.close()
+    await expect(work).resolves.toBe(42)
+    expect(f.trx.rollback).toHaveBeenCalledTimes(1)
+    expect(f.stream.listenerCount('close')).toBe(0)
+  } finally {
+    if (!f.stream.closed) f.close()
+    await work.catch(() => undefined)
+  }
 })
 
 test('a socket destroyed before cleanup still waits for its pending close event', async () => {
@@ -159,11 +169,17 @@ test('a socket destroyed before cleanup still waits for its pending close event'
     f.stream.destroyed = true
     return 'read'
   })
-  await started
-  expect(f.stream.listenerCount('close')).toBe(1)
-  expect(f.trx.rollback).not.toHaveBeenCalled()
-  f.close()
-  await expect(work).resolves.toBe('read')
+  void work.catch(() => undefined)
+  try {
+    await started
+    expect(f.stream.listenerCount('close')).toBe(1)
+    expect(f.trx.rollback).not.toHaveBeenCalled()
+    f.close()
+    await expect(work).resolves.toBe('read')
+  } finally {
+    if (!f.stream.closed) f.close()
+    await work.catch(() => undefined)
+  }
 })
 
 test.each([new Error('read failed'), undefined])(
@@ -225,3 +241,37 @@ test('unsupported backend refuses before acquiring a source', async () => {
   await expect(prepareSnapshotArchiveGuardBackend(f.k, 0, null)).rejects.toThrow('require better-sqlite3 WAL or MySQL')
   expect(f.client.acquireConnection).not.toHaveBeenCalled()
 })
+
+test.each([1, 64])('MySQL accepts a valid database name of exactly %s characters', async length => {
+  const f = fixture()
+  const databaseName = 'd'.repeat(length)
+  f.reply.mockReturnValue([[{ serverUuid: uuid.toUpperCase(), databaseName }]])
+  expect(await prepareSnapshotArchiveGuardBackend(f.k, 0, null)).toMatchObject({
+    kind: 'mysql',
+    serverUuid: uuid.toUpperCase(),
+    database: databaseName
+  })
+})
+
+test.each(['missing-stream', 'unproved-event'] as const)(
+  'MySQL cleanup refuses %s without treating the read transaction as released',
+  async kind => {
+    const f = fixture()
+    const binding = await prepareSnapshotArchiveGuardBackend(f.k, 0, null)
+    if (kind === 'missing-stream') Reflect.deleteProperty(f.connection, 'stream')
+    else
+      f.destroy.mockImplementation(async () => {
+        f.stream.emit('close')
+      })
+    try {
+      await expect(withSnapshotArchiveBackendGuard(f.k, binding, async () => 1)).rejects.toMatchObject({
+        name: 'SnapshotArchiveSourceCleanupError',
+        cause: { message: 'Snapshot archive source connection did not close' }
+      })
+      expect(f.trx.rollback).not.toHaveBeenCalled()
+      expect(f.stream.listenerCount('close')).toBe(0)
+    } finally {
+      f.close()
+    }
+  }
+)

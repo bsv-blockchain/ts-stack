@@ -77,6 +77,9 @@ pending-cleanup polling, preserving independent failures. The additive guard
 migration now permits exact-owner recovery after physical source closure, using
 stable local SQLite WAL guard files or a same-server MySQL connection lock.
 Older unguarded owners remain reserved, and changed backend identities fail closed.
+An unproved native close also fences further snapshot sources on that provider,
+even after its read promise settles. Ordinary read failures remain retryable
+after physical cleanup succeeds.
 Keep the guard files and bindings intact and drain captures before downgrade.
 The server reader capability remains unadvertised pending complete qualification.
 The complete sync/streaming/restore program remains in progress on #569.

@@ -762,6 +762,12 @@ pending. A still-unbound claim can be fenced under the capacity lock before a la
 binder enters. Independent backend and cleanup errors remain observable. Provider
 and service shutdown await an already-started recovery flight.
 
+An unproved native close keeps the provider's source slot fenced even after its
+read promise settles. Further snapshot sources and recovery on that provider
+refuse, and destruction preserves the cleanup error. An ordinary read failure
+still permits a later source after physical cleanup succeeds. Keep the failed
+owner reserved until backend recovery independently proves closure.
+
 Run migrations before capture, keep candidate binaries uniform, and drain all
 captures before downgrade. Guard files are persistent coordination state: do not
 unlink, replace or recreate a bound file to clear a reservation. Missing files,

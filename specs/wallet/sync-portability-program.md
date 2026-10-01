@@ -207,3 +207,11 @@ an owned synthetic process and recover its claim. This advances S3 orphan
 recovery but does not qualify distributed filesystems, PXC, global physical-pool
 limits, remote destinations or complete lifecycle/performance behavior. Reader
 advertisement remains disabled and the full program remains incomplete.
+
+Provider lifecycle qualification also preserves an unproved cleanup failure
+after the retained read promise settles. The provider keeps its source slot
+fenced and destruction exposes that error; an ordinary read failure remains
+retryable after proved physical cleanup. Regression tests cover both opening
+and closing failures, shared recovery admission, shutdown drainage, immutable
+request bindings and exact cancellation outcomes. These checks do not replace
+the complete mutation campaign or exact-head hosted qualification.

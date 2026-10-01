@@ -795,3 +795,114 @@ test('source-owner schema creation and removal are idempotent without discarding
   await removeSnapshotArchiveOwnerTable(db)
   expect(await db.schema.hasTable('snapshot_archive_owners')).toBe(false)
 })
+
+test('a ready request with no bound archive refuses its receipt without releasing capacity', async () => {
+  const { db, requests } = await fixture()
+  const input = request()
+  await requests.claim(identity, input)
+  await db('snapshot_archive_requests').update({ state: 'ready' })
+  await expect(requests.status(identity, input.requestId)).rejects.toThrow('Snapshot archive request is unavailable')
+  expect((await db('snapshot_archive_capacity').first()).archives).toBe(1)
+  expect((await db('snapshot_archive_requests').first()).released).toBe(0)
+})
+
+test.each(['claim', 'cancel', 'reader-cancel'] as const)(
+  '%s rejects an altered persisted immutable request tuple without changing its reservation',
+  async operation => {
+    const { db, requests } = await fixture()
+    const input =
+      operation === 'reader-cancel'
+        ? (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!.request
+        : request()
+    if (operation === 'reader-cancel') await requests.claimReader(identity, input)
+    else await requests.claim(identity, input)
+    await db('snapshot_archive_requests').update({ requestJson: JSON.stringify({ ...input, maxBytes: 32769 }) })
+    const action =
+      operation === 'claim'
+        ? requests.claim(identity, input)
+        : operation === 'cancel'
+          ? requests.markCancellation(identity, input)
+          : requests.markReaderCancellation(identity, input)
+    await expect(action).rejects.toThrow('Snapshot archive request is unavailable')
+    expect((await db('snapshot_archive_requests').first()).state).toBe('claimed')
+    expect((await db('snapshot_archive_capacity').first()).archives).toBe(1)
+  }
+)
+
+test.each(['request-id', 'deadline'] as const)(
+  'reader collection compares a valid decoded tuple against its persisted %s and rolls back release',
+  async field => {
+    const { db, requests } = await fixture()
+    const issued = (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+    await requests.claimReader(identity, issued.request)
+    const fields = { ...issued.request, nonce: 'c'.repeat(64) }
+    const different = { ...fields, requestId: snapshotArchiveReaderRequestId(fields) }
+    await db('snapshot_archive_requests').update(
+      field === 'request-id' ? { requestJson: JSON.stringify(different) } : { expiresAt: issued.request.notAfter + 1 }
+    )
+    await expect(requests.close(identity, issued.request.requestId)).rejects.toThrow(
+      'Snapshot archive request is unavailable'
+    )
+    expect(await db('snapshot_archive_requests').first()).toMatchObject({ state: 'closed', released: 0 })
+    expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
+    await db('snapshot_archive_requests').update({
+      requestJson: JSON.stringify(issued.request),
+      expiresAt: issued.request.notAfter
+    })
+    await requests.close(identity, issued.request.requestId)
+    expect(await db('snapshot_archive_requests')).toHaveLength(0)
+    expect((await db('snapshot_archive_capacity').first()).archives).toBe(0)
+  }
+)
+
+test.each(['null', '0', '[]', '{}'])(
+  'legacy terminal metadata %s is retained rather than collected as a version-two reader',
+  async requestJson => {
+    const { db, requests } = await fixture()
+    const input = request()
+    await requests.claim(identity, input)
+    await db('snapshot_archive_requests').update({ requestJson })
+    await requests.close(identity, input.requestId)
+    expect(await db('snapshot_archive_requests').first()).toMatchObject({ state: 'closed', released: 1, requestJson })
+    expect((await db('snapshot_archive_capacity').first()).archives).toBe(0)
+  }
+)
+
+test('independent reader closers tolerate receipt collection between archive and request cleanup', async () => {
+  const { db, requests, second, archives } = await fixture()
+  const issued = (await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  const { owner } = await requests.claimReader(identity, issued.request)
+  const writer = await requests.begin(owner!, binding)
+  await append(archives, writer)
+  await requests.seal(owner!, writer)
+  const close = KnexSnapshotArchiveStore.prototype.close
+  jest.spyOn(KnexSnapshotArchiveStore.prototype, 'close').mockImplementationOnce(async function (
+    this: KnexSnapshotArchiveStore,
+    ...args
+  ) {
+    await close.apply(this, args)
+    await second.close(identity, issued.request.requestId)
+    expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  })
+  await requests.close(identity, issued.request.requestId)
+  expect(await db('snapshot_archive_requests')).toHaveLength(0)
+  expect(await db('snapshot_archive_pages')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test('reaping exposes an independent database failure and permits a later successful cleanup', async () => {
+  const { db, requests } = await fixture()
+  const input = request()
+  await requests.claim(identity, input)
+  await requests.markCancellation(identity, input)
+  await db.raw(
+    "CREATE TRIGGER fail_reap_release BEFORE UPDATE OF released ON snapshot_archive_requests WHEN NEW.released = 1 BEGIN SELECT RAISE(ABORT, 'synthetic reaper failure'); END"
+  )
+  await expect(requests.reap()).rejects.toThrow('synthetic reaper failure')
+  expect((await db('snapshot_archive_requests').first()).released).toBe(0)
+  expect((await db('snapshot_archive_capacity').first()).archives).toBe(1)
+  await db.raw('DROP TRIGGER fail_reap_release')
+  await requests.reap()
+  expect((await db('snapshot_archive_requests').first()).released).toBe(1)
+  expect((await db('snapshot_archive_capacity').first()).archives).toBe(0)
+})

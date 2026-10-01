@@ -664,3 +664,238 @@ test('cancellation through another controller retains quota until the capturing 
     await capture.catch(() => undefined)
   }
 })
+
+test('admission envelopes distinguish acceptance, transient busy capacity and an active reader offer', async () => {
+  const { storage, controller } = await fixture()
+  const offered = (await controller.offerReader(other, { lifetimeMs: 300000, maxBytes: 32768 }))!
+  const input = request()
+  const alternative = request('c'.repeat(64))
+  const entered = gate()
+  const resume = gate()
+  const original = storage.openSnapshotArchiveSource.bind(storage)
+  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (...args) => {
+    entered.resolve()
+    await resume.promise
+    return await original(...args)
+  })
+  const capture = controller.create(identity, input)
+  void capture.catch(() => undefined)
+  try {
+    expect(await controller.admitRequest(identity, input)).toEqual({
+      version: 1,
+      outcome: 'accepted',
+      receipt: { version: 1, requestId: input.requestId, state: 'building', expiresAt: input.notAfter }
+    })
+    await entered.promise
+    expect(await controller.offerReader(other, { lifetimeMs: 300000, maxBytes: 32768 })).toBeUndefined()
+    expect(await controller.admitRequest(other, alternative)).toEqual({
+      version: 1,
+      outcome: 'resource-limited',
+      requestId: alternative.requestId,
+      expiresAt: alternative.notAfter
+    })
+    expect(await controller.admitReader(other, offered.request)).toEqual({
+      version: 1,
+      outcome: 'resource-limited',
+      requestId: offered.request.requestId,
+      expiresAt: offered.request.notAfter
+    })
+    resume.resolve()
+    expect((await capture).state).toBe('ready')
+    await controller.cancel(identity, input.requestId)
+    await controller.cancelReader(other, offered.request)
+  } finally {
+    resume.resolve()
+    await capture.catch(() => undefined)
+  }
+})
+
+test('admission never converts an independent recovery error or invalid input into capacity refusal', async () => {
+  const { storage, controller } = await fixture()
+  const failure = new Error('synthetic independent recovery failure')
+  jest.spyOn(storage, 'recoverSnapshotArchiveSources').mockRejectedValueOnce(failure)
+  await expect(controller.admitRequest(identity, request())).rejects.toBe(failure)
+  await expect(controller.admitRequest(identity, { ...request(), maxBytes: 0 })).rejects.toThrow('Invalid')
+  expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(0)
+})
+
+test.each([true, false])('shutdown drains the result of a delayed offer, available=%s', async available => {
+  const { storage, controller } = await fixture()
+  const entered = gate()
+  const resume = gate()
+  const original = KnexSnapshotArchiveRequestStore.prototype.offer
+  jest.spyOn(KnexSnapshotArchiveRequestStore.prototype, 'offer').mockImplementationOnce(async function (
+    this: KnexSnapshotArchiveRequestStore,
+    ...args
+  ) {
+    const offer = available ? await original.apply(this, args) : undefined
+    entered.resolve()
+    await resume.promise
+    return offer
+  })
+  const pending = controller.offerReader(identity, { lifetimeMs: 300000, maxBytes: 32768 })
+  void pending.catch(() => undefined)
+  try {
+    await entered.promise
+    await controller.close()
+    resume.resolve()
+    await expect(pending).rejects.toThrow('service is closed')
+    expect(await storage.knex('snapshot_archive_requests')).toHaveLength(0)
+    expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(0)
+  } finally {
+    resume.resolve()
+    await pending.catch(() => undefined)
+  }
+})
+
+test.each(['creation', 'reader'] as const)(
+  'exact %s cancellation drains its active capture without cancelling a different request',
+  async kind => {
+    const { storage, controller } = await fixture()
+    const offered =
+      kind === 'reader' ? (await controller.offerReader(identity, { lifetimeMs: 300000, maxBytes: 32768 }))! : undefined
+    const alternative =
+      kind === 'reader' ? (await controller.offerReader(identity, { lifetimeMs: 300000, maxBytes: 32768 }))! : undefined
+    const input = offered?.request ?? request()
+    const otherInput = alternative?.request ?? request('c'.repeat(64))
+    const reading = gate()
+    const resume = gate()
+    const aborted = gate()
+    let signal: AbortSignal | undefined
+    const original = storage.openSnapshotArchiveSource.bind(storage)
+    jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options, owner) => {
+      signal = options?.signal
+      signal!.addEventListener('abort', aborted.resolve, { once: true })
+      const source = (await original(key, options, owner))!
+      return {
+        ...source,
+        readPage: async (...args) => {
+          reading.resolve()
+          await resume.promise
+          return await source.readPage(...args)
+        }
+      }
+    })
+    const cancel = (value: unknown) =>
+      kind === 'reader' ? controller.cancelReader(identity, value) : controller.cancelRequest(identity, value)
+    let cancellation: Promise<void> | undefined
+    try {
+      if (kind === 'reader') await controller.admitReader(identity, input)
+      else await controller.start(identity, input)
+      await reading.promise
+      await cancel(otherInput)
+      expect(signal?.aborted).toBe(false)
+      expect(await storage.knex('snapshot_archive_owners')).toHaveLength(1)
+      let settled = false
+      cancellation = cancel(input).finally(() => {
+        settled = true
+      })
+      void cancellation.catch(() => undefined)
+      await aborted.promise
+      expect(settled).toBe(false)
+      expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(1)
+      resume.resolve()
+      await cancellation
+      expect(await storage.knex('snapshot_archive_owners')).toHaveLength(0)
+      expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(0)
+      if (kind === 'reader') expect(await storage.knex('snapshot_archive_requests')).toHaveLength(0)
+      else expect((await controller.status(identity, input.requestId)).state).toBe('closed')
+    } finally {
+      resume.resolve()
+      await cancellation?.catch(() => undefined)
+    }
+  }
+)
+
+test('idle service shutdown waits for an already admitted provider recovery without destroying foreground storage', async () => {
+  const { storage, controller } = await fixture()
+  const entered = gate()
+  const resume = gate()
+  const original = ArchiveGuard.recoverSnapshotArchiveGuards
+  jest.spyOn(ArchiveGuard, 'recoverSnapshotArchiveGuards').mockImplementationOnce(async (...args) => {
+    entered.resolve()
+    await resume.promise
+    await original(...args)
+  })
+  const recovery = storage.recoverSnapshotArchiveSources()
+  void recovery.catch(() => undefined)
+  let closing: Promise<void> | undefined
+  try {
+    await entered.promise
+    let settled = false
+    closing = controller.close().finally(() => {
+      settled = true
+    })
+    void closing.catch(() => undefined)
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(settled).toBe(false)
+    resume.resolve()
+    await Promise.all([recovery, closing])
+    expect((await storage.findUsers({ partial: { identityKey: identity } }))[0].identityKey).toBe(identity)
+  } finally {
+    resume.resolve()
+    await Promise.allSettled([recovery, closing])
+  }
+})
+
+test.each([1, 1234, 600000])('source lifetime respects exactly %s remaining database milliseconds', async remaining => {
+  const { storage, controller } = await fixture()
+  const input = request()
+  jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(input.notAfter - remaining)
+  const opening = jest.spyOn(storage, 'openSnapshotArchiveSource').mockResolvedValueOnce(undefined)
+  await expect(controller.create(identity, input)).rejects.toThrow('requires SQLite WAL or MySQL')
+  expect(opening).toHaveBeenCalledWith(
+    identity,
+    {
+      signal: expect.any(AbortSignal),
+      lifetimeMs: Math.min(300000, remaining)
+    },
+    expect.objectContaining({ identityKey: identity, requestId: input.requestId })
+  )
+  expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(0)
+})
+
+test('cancelling an active capture reports its cleanup failure and retains the reservation', async () => {
+  const { storage, controller } = await fixture()
+  const input = request()
+  const reading = gate()
+  const resume = gate()
+  const aborted = gate()
+  const failure = new Error('synthetic capture cleanup failure')
+  const original = storage.openSnapshotArchiveSource.bind(storage)
+  let source: Awaited<ReturnType<typeof original>>
+  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options, owner) => {
+    options!.signal!.addEventListener('abort', aborted.resolve, { once: true })
+    source = (await original(key, options, owner))!
+    return {
+      ...source,
+      readPage: async (...args) => {
+        reading.resolve()
+        await resume.promise
+        return await source!.readPage(...args)
+      },
+      close: async () => {
+        throw failure
+      }
+    }
+  })
+  const capture = controller.create(identity, input)
+  void capture.catch(() => undefined)
+  let cancellation: Promise<void> | undefined
+  try {
+    await reading.promise
+    cancellation = controller.cancelRequest(identity, input)
+    void cancellation.catch(() => undefined)
+    await aborted.promise
+    resume.resolve()
+    await expect(capture).rejects.toBe(failure)
+    await expect(cancellation).rejects.toBe(failure)
+    expect((await storage.knex('snapshot_archive_capacity').first()).archives).toBe(1)
+    await expect(controller.close()).rejects.toBe(failure)
+  } finally {
+    resume.resolve()
+    await Promise.allSettled([capture, cancellation])
+    await source?.close()
+    await closeRepairedSource(storage, input.requestId)
+  }
+})
