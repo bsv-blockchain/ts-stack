@@ -527,7 +527,8 @@
           "Closing, cancellation and expiry reject later admission and discard late successful results.",
           "Capacity remains occupied until physical reads and transaction cleanup settle.",
           "Every completed lifecycle removes its expiry timer and rejects further reads.",
-          "Pinned keyset traversal returns every original owned row and tombstone exactly once under independent writes, within both page limits; cursor retries repeat the same page."
+          "Pinned keyset traversal returns every original owned row and tombstone exactly once under independent writes, within both page limits; cursor retries repeat the same page.",
+          "Auxiliary profile membership equals committed source ownership through generated insert, update, move, delete, rollback, repeated migration and rebuild schedules."
         ]
       },
       {

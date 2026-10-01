@@ -403,6 +403,7 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [
         'src/storage/snapshot/RetainedReadSnapshot.ts',
         'src/storage/snapshot/KnexWalletReadSnapshot.ts',
+        'src/storage/schema/snapshotProfileIndexMigration.ts',
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',
