@@ -161,7 +161,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
     if (job.name === 'mutation-tests') {
-      const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records"]'), matrix.target) && 90 || 45 }}`
+      const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}`
       assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
       const dedicated = readFileSync(
         join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'),
@@ -400,7 +400,7 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     candidate => candidate.name === 'mutation-quality'
   ).source
   assert.match(job, /MUTATION_TARGETS: \$\{\{ needs\.prepare\.outputs\.mutation-targets \}\}/)
-  const script = /        run: \|\n([\s\S]*)$/
+  const script = /        run: \|\n([\s\S]*?)(?=\n      -|$)/
     .exec(job)[1]
     .split('\n')
     .map(line => line.replace(/^          /, ''))
@@ -408,7 +408,17 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
   for (const targets of ['[]', '["selected"]', '']) {
     for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
       const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
-        env: { PREPARE_RESULT: 'success', MUTATION_TARGETS: targets, MUTATION_RESULT: result },
+        env: {
+          NODE_EXECUTABLE: process.execPath,
+          MUTATION_MATRIX: '{"include":[]}',
+          PARTITION_TARGETS: '[]',
+          PREPARE_RESULT: 'success',
+          MUTATION_TARGETS: targets,
+          MUTATION_RESULT: result,
+          MUTATION_CLASSIFICATION: '{"deferred":[]}',
+          GITHUB_STEP_SUMMARY: '/dev/null',
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
+        },
         encoding: 'utf8'
       })
       assert.equal(execution.error, undefined)

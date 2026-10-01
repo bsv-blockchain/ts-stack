@@ -2,10 +2,12 @@
 
 import { execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { selectedMutationPartition } from './mutation-partitions.mjs'
 import { changedLockfileImporters } from './ci-affected-scope.mjs'
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -20,7 +22,8 @@ const REGEXP_META = new Set('.*+?^$(){}|[]\\')
 const OPTION_REQUIREMENTS = new Map([
   ['--target', 'an exact target ID'],
   ['--base', 'an exact revision'],
-  ['--affected-file', 'a path']
+  ['--affected-file', 'a path'],
+  ['--partition', 'an exact execution partition ID']
 ])
 
 function normalized(value) {
@@ -166,8 +169,14 @@ function gitShow(revision, file) {
   })
 }
 
-function readReport(targetName) {
-  const reportPath = path.join(REPOSITORY_ROOT, 'artifacts/mutation', targetName, 'mutation.json')
+function readReport(targetName, partition = 'whole') {
+  const reportPath = path.join(
+    REPOSITORY_ROOT,
+    'artifacts/mutation',
+    targetName,
+    ...(partition === 'whole' ? [] : [partition]),
+    'mutation.json'
+  )
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'))
   const mutants = Object.values(report.files).flatMap(file => file.mutants)
   return { metrics: calculateMutationMetrics(mutants), reportPath }
@@ -177,14 +186,14 @@ function policyTarget(policy, targetName) {
   return policy?.targets?.find(target => target.id === targetName)
 }
 
-export function evaluateMutationReport(targetName, metrics, policy) {
+export function evaluateMutationReport(targetName, metrics, policy, { requireScore = true } = {}) {
   const targetPolicy = policyTarget(policy, targetName)
   if (targetPolicy === undefined) {
     return [`mutation target ${targetName} is absent from the governed policy`]
   }
 
   const errors = []
-  if (metrics.score + Number.EPSILON < targetPolicy.minimumScore) {
+  if (requireScore && metrics.score + Number.EPSILON < targetPolicy.minimumScore) {
     errors.push(
       `${targetName} mutation score ${metrics.score.toFixed(2)} is below ${targetPolicy.minimumScore}`
     )
@@ -215,30 +224,68 @@ function runCommand(command, arguments_, options) {
   })
 }
 
-async function runTarget(targetName, target, policy) {
+async function runTarget(targetName, target, policy, partition = 'whole') {
+  selectedMutationPartition(targetName, target, partition)
+  const directory = path.join(
+    REPOSITORY_ROOT,
+    'artifacts/mutation',
+    targetName,
+    ...(partition === 'whole' ? [] : [partition])
+  )
+  // A successful invocation must never stamp a report left by an earlier run.
+  fs.rmSync(directory, {
+    recursive: true,
+    force: true
+  })
   const stryker = path.join(REPOSITORY_ROOT, 'node_modules/.bin/stryker')
   const reporters = process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'json'
+  const propertyEnvironment = {
+    FAST_CHECK_NUM_RUNS: process.env.FAST_CHECK_NUM_RUNS ?? String(policy.tool.propertyRuns),
+    FAST_CHECK_SEED: process.env.FAST_CHECK_SEED ?? String(policy.tool.propertySeed),
+    FAST_CHECK_PATH: process.env.FAST_CHECK_PATH ?? ''
+  }
   const exitCode = await runCommand(stryker, ['run', CONFIG_PATH, '--reporters', reporters], {
     cwd: path.join(REPOSITORY_ROOT, target.packageDirectory),
     env: {
       ...process.env,
-      FAST_CHECK_NUM_RUNS: process.env.FAST_CHECK_NUM_RUNS ?? String(policy.tool.propertyRuns),
-      FAST_CHECK_SEED: process.env.FAST_CHECK_SEED ?? String(policy.tool.propertySeed),
-      FAST_CHECK_PATH: process.env.FAST_CHECK_PATH ?? '',
-      TS_STACK_MUTATION_TARGET: targetName
+      ...propertyEnvironment,
+      TS_STACK_MUTATION_TARGET: targetName,
+      TS_STACK_MUTATION_PARTITION: partition
     }
   })
   if (exitCode !== 0) throw new Error(`${targetName} mutation process exited ${exitCode}`)
 
-  const { metrics, reportPath } = readReport(targetName)
+  const { metrics, reportPath } = readReport(targetName, partition)
   const counts = Object.entries(metrics.counts)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([status, count]) => `${status}=${count}`)
     .join(', ')
   console.log(`${targetName}: ${metrics.score.toFixed(2)}% (${counts})`)
   console.log(`  report: ${path.relative(REPOSITORY_ROOT, reportPath)}`)
-  const errors = evaluateMutationReport(targetName, metrics, policy)
+  const errors = evaluateMutationReport(targetName, metrics, policy, {
+    requireScore: partition === 'whole'
+  })
   if (errors.length > 0) throw new Error(errors.join('\n'))
+  fs.writeFileSync(
+    path.join(path.dirname(reportPath), 'execution.json'),
+    `${JSON.stringify(
+      {
+        targetId: targetName,
+        partitionId: partition,
+        sourceSha: execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
+          cwd: REPOSITORY_ROOT,
+          encoding: 'utf8'
+        }).trim(),
+        runId: process.env.GITHUB_RUN_ID ?? '',
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? '',
+        nodeVersion: process.version,
+        propertyEnvironment,
+        reportDigest: createHash('sha256').update(fs.readFileSync(reportPath)).digest('hex')
+      },
+      null,
+      2
+    )}\n`
+  )
 }
 
 function requiredArgument(arguments_, index, option) {
@@ -249,6 +296,12 @@ function requiredArgument(arguments_, index, option) {
   return value
 }
 
+function assignMutationArgument(result, argument, value) {
+  if (argument === '--target') result.targets.push(value)
+  else if (argument === '--partition') result.partition = value
+  else result[argument === '--base' ? 'base' : 'affectedFile'] = value
+}
+
 export function parseArguments(arguments_) {
   const result = { all: false, list: false, targets: [], affectedFile: undefined, base: undefined }
   for (let index = 0; index < arguments_.length; index++) {
@@ -257,13 +310,12 @@ export function parseArguments(arguments_) {
       result[argument.slice(2)] = true
       continue
     }
-    if (!['--target', '--affected-file', '--base'].includes(argument)) {
+    if (!['--target', '--affected-file', '--base', '--partition'].includes(argument)) {
       throw new Error(`Unknown argument ${argument}`)
     }
     const value = requiredArgument(arguments_, index, argument)
     index += 1
-    if (argument === '--target') result.targets.push(value)
-    else result[argument === '--base' ? 'base' : 'affectedFile'] = value
+    assignMutationArgument(result, argument, value)
   }
   const modes = [
     result.all,
@@ -275,6 +327,8 @@ export function parseArguments(arguments_) {
   if (result.base !== undefined && result.affectedFile === undefined) {
     throw new Error('--base is valid only with --affected-file')
   }
+  if (result.partition && result.targets.length !== 1)
+    throw new Error('--partition requires one exact canonical target')
   return result
 }
 
@@ -322,11 +376,15 @@ async function main() {
 
   const policy = readPolicy()
   if (policy === undefined) throw new Error('Mutation policy is missing')
-  for (const targetName of selected) {
+  async function runSelection(index = 0) {
+    if (index === selected.length) return
+    const targetName = selected[index]
     const target = targets[targetName]
     if (target === undefined) throw new Error(`Unknown mutation target ${targetName}`)
-    await runTarget(targetName, target, policy)
+    await runTarget(targetName, target, policy, options.partition)
+    return runSelection(index + 1)
   }
+  await runSelection()
 }
 
 const isMain =
