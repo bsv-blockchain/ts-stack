@@ -73,9 +73,9 @@
     {
       "id": "brace-expansion-jest-override",
       "category": "override",
-      "target": "pnpm-workspace.yaml and four standalone Jest service manifests overriding brace-expansion <=5.0.7",
+      "target": "pnpm-workspace.yaml brace-expansion@<5.0.11 and four standalone Jest service manifests pinning brace-expansion 5.0.9",
       "owner": "ts-stack-maintainers",
-      "reason": "Jest 30.4.2 still constrains reporting and coverage paths to minimatch releases that require older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8, and the follow-up GHSA-rgw5-rvv9-x895 requires 5.0.9, so the governed substitution selects the current patched release.",
+      "reason": "Jest 30.4.2 and Stryker still constrain reporting and coverage paths to minimatch releases that admit older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8 and GHSA-rgw5-rvv9-x895 required 5.0.9. GHSA-6j4f-fj2g-mc7p requires 5.0.10 and GHSA-qhr7-859c-m2p7 requires 5.0.11, so the workspace substitution selects 5.0.11. The four standalone Jest service manifests still pin 5.0.9 until those independent npm locks are regenerated.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
@@ -86,11 +86,29 @@
         "infra/wab/package.json#overrides",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+        "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+        "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-09-25",
-      "removeWhen": "Remove after the supported Jest dependency graph natively resolves brace-expansion 5.0.9 or newer across every coverage and reporting path."
+      "reviewBy": "2026-10-31",
+      "removeWhen": "Remove after the supported Jest and Stryker dependency graphs natively resolve brace-expansion 5.0.11 or newer across every coverage and reporting path, and the standalone service locks no longer need their own pin."
+    },
+    {
+      "id": "engine-io-socket-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override for engine.io releases below 6.6.10",
+      "owner": "ts-stack-maintainers",
+      "reason": "socket.io in @bsv/authsocket still admits engine.io releases below 6.6.10. Those releases are affected by GHSA-2gc4-cqfq-p2gv, a protocol-revision mismatch that can crash the Node process during a transport upgrade. Selecting 6.6.10 is the first patched release and keeps the public Engine.IO API that authsocket consumes.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "pnpm-lock.yaml#overrides",
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "https://github.com/advisories/GHSA-2gc4-cqfq-p2gv"
+      ],
+      "created": "2026-10-01",
+      "reviewBy": "2026-10-31",
+      "removeWhen": "Remove when the supported socket.io release natively resolves engine.io 6.6.10 or newer and the authsocket tests plus the frozen high-severity audit remain green without the substitution."
     },
     {
       "id": "standalone-gaxios-advisory-override",
