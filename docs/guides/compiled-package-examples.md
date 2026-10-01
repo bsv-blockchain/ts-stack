@@ -697,6 +697,33 @@ export async function verifySelectedAdvertisement(
 }
 ```
 
+## Local advertisement evidence
+
+Admission and local-rule reassessment can verify the original advertisement
+without constructing a peer coordination request. The returned facts still need
+an independently installed currentness and serving-policy assessment.
+
+```typescript compile
+// example-id: local-root-advertisement-evidence
+import type {
+  ChainViewResolver as LocalAdvertisementChainResolver,
+  VerificationContext as LocalAdvertisementVerificationContext
+} from '@bsv/output-knowledge'
+import {
+  SDKRootAdvertisementEvidence,
+  type RootAdvertisementEvidenceInput
+} from '@bsv/output-knowledge/root-eviction/evidence'
+
+export async function verifyLocalRootAdvertisement(
+  chains: LocalAdvertisementChainResolver,
+  input: RootAdvertisementEvidenceInput,
+  installedContext: LocalAdvertisementVerificationContext,
+  signal: AbortSignal
+) {
+  return new SDKRootAdvertisementEvidence(chains).verify(input, installedContext, signal)
+}
+```
+
 ## Atomic root coordination intake
 
 The host supplies an authenticated requester and selection, installed capability

@@ -130,6 +130,26 @@ locking-script digest. Owner withdrawal also requires the advertiser's identity
 and independently verifies both supplied proof variants against the same raw
 transaction. Spent evidence must verify and consume the exact advertised output.
 
+For local admission and reassessment, the same entry exports
+`SDKRootAdvertisementEvidence`. Its `verify({ target, advertisement }, context,
+signal)` method accepts a closed serving target (service, outpoint and advertisement
+digest) plus the exact original `OutputEvidence`. It verifies the same Bitcoin
+and current SHIP/SLAP authentication without requiring a peer-request envelope.
+Both adapters share the transaction and advertisement checks. The peer adapter
+still independently verifies its request signature, withdrawal authority and
+consuming evidence. Local callers must not fabricate a signed eviction request
+merely to obtain advertisement facts.
+
+The local adapter owns its target, proof and verification context before awaiting
+a chain dependency, applies the 1 MiB input bound and configured SDK evidence
+limits, and preserves unavailable, limited, context-changed and cancelled outcomes.
+It performs no discovery, signing, payment, journal mutation or currentness query.
+A verified advertisement can already be spent; neither a valid Script nor a mined
+placement proves that an output remains usable. Feed these verified immutable
+facts into the separately installed currentness, topic and complete local-rule
+assessment before staging membership, then recheck current authority and context
+at the final serving gate.
+
 The returned owned context, raw transactions and optional mined placements are
 facts for the installed policy. They do not grant requester access, prove current
 unspentness, authorize lifting a basis or establish a root's acceptance threshold.

@@ -1,25 +1,30 @@
 import {
   decodeOutputBytes,
-  Hash,
   outputAssert,
   outputPacketDigest,
-  outputRootAdvertisementDigest,
-  OverlayAdminTokenTemplate,
   OutputProtocolError,
   parseOutputRootEvictionRequest,
   Transaction,
-  Utils,
   verifyOutputPacket,
-  type OutputEvidence,
   type OutputRootEvictionTarget,
   type OverlayDiscoveryAdvertisement,
   type TransactionEvidenceLimits
 } from '@bsv/sdk'
 import { SDKEvidenceVerifier, type ChainViewResolver } from '../SDKEvidenceVerifier.js'
-import type { VerificationContext, VerificationResult } from '../ports.js'
+import type { VerificationContext } from '../ports.js'
 import { parseVerificationContext } from '../validation.js'
 
-type VerifiedTransaction = Extract<VerificationResult, { status: 'verified' }>
+import {
+  verifyRootAdvertisement,
+  verifyRootEvidenceTransaction,
+  type RootVerifiedAdvertisement
+} from './SDKRootAdvertisementEvidence.js'
+
+export { SDKRootAdvertisementEvidence } from './SDKRootAdvertisementEvidence.js'
+export type {
+  RootAdvertisementEvidenceInput,
+  RootVerifiedAdvertisement
+} from './SDKRootAdvertisementEvidence.js'
 
 /** Verified facts are inputs to installed root policy, never an automatic serving decision. */
 export interface RootEvictionVerifiedEvidence {
@@ -70,27 +75,23 @@ export class SDKRootEvictionEvidence {
     )
     const snapshot = parseVerificationContext(context)
     const target = request.body.targets[targetIndex]
-    const original = await this.transaction(target.advertisement, target, snapshot, signal)
-    const transaction = Transaction.fromBinary(decodeOutputBytes(original.fact.rawTransaction))
-    const script = transaction.outputs[target.outpoint.outputIndex].lockingScript
-    const advertisement = await OverlayAdminTokenTemplate.decodeAndVerify(
-      script,
-      target.service === 'ls_ship' ? 'SHIP' : 'SLAP'
-    ).catch(() => {
-      throw new OutputProtocolError('invalid', 'Root advertisement authentication failed')
-    })
-    outputAssert(
-      outputRootAdvertisementDigest({
-        service: target.service,
-        outpoint: target.outpoint,
-        lockingScript: Utils.toBase64(script.toBinary())
-      }) === target.advertisementDigest,
-      'Root advertisement digest differs from verified output'
+    const original = await verifyRootAdvertisement(
+      this.verifier,
+      {
+        target: {
+          service: target.service,
+          outpoint: target.outpoint,
+          advertisementDigest: target.advertisementDigest
+        },
+        advertisement: target.advertisement
+      },
+      snapshot,
+      signal
     )
     const proof = await this.proof(
       target,
       request.body.requester,
-      advertisement.identityKey,
+      original.advertisement.identityKey,
       original,
       snapshot,
       signal
@@ -101,10 +102,12 @@ export class SDKRootEvictionEvidence {
       requestDigest: outputPacketDigest('root-eviction-request', request.body),
       targetIndex,
       target,
-      advertisement,
-      rawAdvertisementTransaction: original.fact.rawTransaction,
+      advertisement: original.advertisement,
+      rawAdvertisementTransaction: original.rawAdvertisementTransaction,
       verificationContext: snapshot,
-      ...(original.placement ? { advertisementPlacement: original.placement } : {}),
+      ...(original.advertisementPlacement
+        ? { advertisementPlacement: original.advertisementPlacement }
+        : {}),
       proof
     }
   }
@@ -113,7 +116,7 @@ export class SDKRootEvictionEvidence {
     target: OutputRootEvictionTarget,
     requester: string,
     advertiser: string,
-    original: VerifiedTransaction,
+    original: RootVerifiedAdvertisement,
     context: VerificationContext,
     signal: AbortSignal
   ): Promise<RootEvictionVerifiedEvidence['proof']> {
@@ -125,16 +128,23 @@ export class SDKRootEvictionEvidence {
         'Withdrawal requester is not the advertiser',
         'unauthorized'
       )
-      const owner = await this.transaction(evidence.advertisement, target, context, signal)
+      const owner = await verifyRootEvidenceTransaction(
+        this.verifier,
+        evidence.advertisement,
+        target.outpoint.chain,
+        context,
+        signal
+      )
       outputAssert(
-        owner.fact.rawTransaction === original.fact.rawTransaction,
+        owner.fact.rawTransaction === original.rawAdvertisementTransaction,
         'Owner withdrawal differs from the original advertisement transaction'
       )
       return { kind: 'owner-withdrawal', advertiser }
     }
-    const spent = await this.transaction(
+    const spent = await verifyRootEvidenceTransaction(
+      this.verifier,
       { txid: evidence.txid, outputIndex: 0, beef: evidence.beef },
-      target,
+      target.outpoint.chain,
       context,
       signal
     )
@@ -152,31 +162,5 @@ export class SDKRootEvictionEvidence {
       rawTransaction: spent.fact.rawTransaction,
       ...(spent.placement ? { placement: spent.placement } : {})
     }
-  }
-
-  private async transaction(
-    evidence: OutputEvidence,
-    target: OutputRootEvictionTarget,
-    context: VerificationContext,
-    signal: AbortSignal
-  ): Promise<VerifiedTransaction> {
-    const result = await this.verifier.verify(
-      {
-        chain: target.outpoint.chain,
-        evidence,
-        variantId: Utils.toHex(Hash.sha256(decodeOutputBytes(evidence.beef)))
-      },
-      context,
-      signal
-    )
-    if (result.status !== 'verified') {
-      const code = result.status === 'unresolved' ? 'unavailable' : result.status
-      throw new OutputProtocolError(
-        code,
-        `Root evidence verification ${result.status}`,
-        ['unavailable', 'limited', 'cancelled', 'context-changed'].includes(code)
-      )
-    }
-    return result
   }
 }

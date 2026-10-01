@@ -1,7 +1,10 @@
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { outputPacketDigest, Utils } from '@bsv/sdk'
-import { SDKRootEvictionEvidence } from '../src/root-eviction/SDKRootEvictionEvidence.js'
+import {
+  SDKRootAdvertisementEvidence,
+  SDKRootEvictionEvidence
+} from '../src/root-eviction/SDKRootEvictionEvidence.js'
 import { context, resolver } from './evidence-fixture.js'
 import { rootAdvertisementFixture, signRootEvidence } from './root-advertisement-fixture.js'
 
@@ -26,6 +29,7 @@ it(
       rootAdvertisementFixture('SLAP')
     ])
     const verifier = new SDKRootEvictionEvidence(resolver)
+    const local = new SDKRootAdvertisementEvidence(resolver)
     await fc.assert(
       fc.asyncProperty(
         fc.record({
@@ -58,6 +62,22 @@ it(
             Utils.toBase64(fixture.transaction.toBinary())
           )
           expect(result.proof.kind).toBe(step.spent ? 'spent' : 'owner-withdrawal')
+          const localResult = await local.verify(
+            {
+              target: {
+                service: body.targets[0].service,
+                outpoint: body.targets[0].outpoint,
+                advertisementDigest: body.targets[0].advertisementDigest
+              },
+              advertisement: body.targets[0].advertisement
+            },
+            result.verificationContext
+          )
+          expect(localResult.advertisement).toEqual(result.advertisement)
+          expect(localResult.rawAdvertisementTransaction).toBe(result.rawAdvertisementTransaction)
+          expect(localResult.verificationContext).toEqual(result.verificationContext)
+          expect(localResult).not.toHaveProperty('eligible')
+          expect(localResult).not.toHaveProperty('requestDigest')
           // A valid signed restoration still supplies no assertion that this root's
           // named suppression may be lifted or that the advertisement is unspent.
           expect(result).not.toHaveProperty('eligible')

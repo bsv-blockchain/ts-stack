@@ -993,3 +993,11 @@ and projection. Formats1/2 retain their behavior; use the explicit format2-to3
 attribution, installed matchers and verified currentness remain application ports.
 See the [root coordination guide](../../../docs/guides/root-eviction-coordination.md)
 for migration, bounds, retries and serving obligations.
+
+The evidence entry also exports `SDKRootAdvertisementEvidence` for direct local
+admission and reassessment. It verifies the exact SHIP/SLAP output, script digest,
+advertiser authentication and Bitcoin evidence in the installed immutable chain
+view without a peer-request envelope. Its owned facts do not establish unspentness,
+local-policy approval or permission to serve. `SDKRootEvictionEvidence` retains
+its existing request-signature and withdrawal/consumption checks using the same
+underlying verifier.

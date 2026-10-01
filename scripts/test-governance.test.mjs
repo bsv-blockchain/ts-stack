@@ -597,3 +597,22 @@ test('root local rules retain complete new sources and every prior root storage 
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)
 })
+
+test('local advertisement verification retains the full signed-request source and test union', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['root-eviction-evidence']
+  assert.deepEqual(target.mutate, [
+    'src/root-eviction/SDKRootEvictionEvidence.ts',
+    'src/root-eviction/SDKRootAdvertisementEvidence.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/root-advertisement-evidence*.test.ts'
+  ])
+  assert.ok(target.additionalInputs.includes('src/SDKEvidenceVerifier.ts'))
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = policy.targets.find(value => value.id === 'root-eviction-evidence')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})

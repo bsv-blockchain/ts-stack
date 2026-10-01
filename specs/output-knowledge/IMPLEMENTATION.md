@@ -1021,3 +1021,33 @@ obligations. Installed advertisement/currentness evaluation, coherent host conte
 transitions, all serving/admission/GASP paths and exact-head hosted CI are still
 unfinished. This component result does not establish complete root-profile or
 second-checkpoint readiness.
+
+## Direct local advertisement evidence
+
+The existing evidence entry now additionally exports
+`SDKRootAdvertisementEvidence` for local admission and reassessment. Its closed,
+bounded input is an exact serving target and original advertisement evidence.
+It checks current SHIP/SLAP authentication, the exact output and script digest,
+and Bitcoin evidence against an owned immutable verification context. It returns
+raw advertisement facts and optional placement without manufacturing a peer
+request, currentness assertion or serving decision.
+
+`SDKRootEvictionEvidence` composes those same checks with its existing signed
+request, withdrawal-authority and exact consuming-transaction checks. One bounded
+transaction verifier remains shared across each complete peer evaluation. The
+existing critical mutation target includes both complete production modules and
+retains its full original test selection and unchanged 90%/zero-uncovered/
+zero-invalid gates. Its fresh mutation campaign remains to be run; the former
+single-module result is not qualification of this changed implementation.
+
+All 22 focused tests pass, including 300 generated local/peer equivalence
+schedules. Tests cover closed nested fields, exact service/output/digest binding,
+caller mutation during a blocked chain dependency, mined ancestry, missing
+history, resource limits, wrong context and cancellation during authentication.
+The full output runtime now passes 1,294 tests across 98 suites, including the
+eight strengthened local-rule cases added after its preceding full run. Strict
+package type checks, lint, 25 governance regressions, packed exports and all
+31 compiled examples against 22 tarballs pass. Root health, lint, formatting and
+the 145-page documentation build pass. Browser qualification and remaining
+component mutation campaigns are tracked separately; complete root-host context,
+currentness, admission/serving integration and exact-head CI remain outstanding.

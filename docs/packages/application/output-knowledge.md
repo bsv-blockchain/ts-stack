@@ -245,3 +245,11 @@ projection before membership. Existing formats1/2 remain unchanged. The explicit
 ordinary open never repairs missing history. See the
 [root coordination guide](../../guides/root-eviction-coordination.md) and its
 compiled complete-inventory example for the trusted evaluator boundary.
+
+The evidence entry also exports `SDKRootAdvertisementEvidence` for direct local
+admission and reassessment. It verifies the exact SHIP/SLAP output, script digest,
+advertiser authentication and Bitcoin evidence in the installed immutable chain
+view without a peer-request envelope. Its owned facts do not establish unspentness,
+local-policy approval or permission to serve. `SDKRootEvictionEvidence` retains
+its existing request-signature and withdrawal/consumption checks using the same
+underlying verifier.

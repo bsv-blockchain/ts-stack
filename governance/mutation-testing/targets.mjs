@@ -438,7 +438,10 @@ export function buildMutationTargets(repositoryRoot) {
         'test/root-advertisement-fixture.ts',
         'test/fixtures/reconciliation-vectors.json'
       ],
-      mutate: ['src/root-eviction/SDKRootEvictionEvidence.ts'],
+      mutate: [
+        'src/root-eviction/SDKRootEvictionEvidence.ts',
+        'src/root-eviction/SDKRootAdvertisementEvidence.ts'
+      ],
       ...jestTarget('jest.config.js', ['<rootDir>/test/root-advertisement-evidence*.test.ts'], {
         esm: true,
         buildCommand: 'pnpm build'
