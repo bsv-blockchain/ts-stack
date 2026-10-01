@@ -8,6 +8,7 @@ import {
   Utils
 } from '@bsv/sdk'
 import { SDKRootEvictionEvidence } from '../src/root-eviction/SDKRootEvictionEvidence.js'
+import { SDKEvidenceVerifier } from '../src/SDKEvidenceVerifier.js'
 import { context, resolver, transactions } from './evidence-fixture.js'
 import {
   advertiser,
@@ -347,4 +348,33 @@ it('preserves cancellation, missing evidence, deadline and chain-view failures w
     retryable: true,
     message: expect.stringMatching(/\S/)
   })
+})
+
+it('does not publish a peer result when cancellation arrives after its second independent proof verification', async () => {
+  const { body } = await rootAdvertisementFixture()
+  const controller = new AbortController()
+  const verify = SDKEvidenceVerifier.prototype.verify
+  let completed = 0
+  jest.spyOn(SDKEvidenceVerifier.prototype, 'verify').mockImplementation(async function (
+    this: SDKEvidenceVerifier,
+    ...args
+  ) {
+    const result = await verify.apply(this, args)
+    completed++
+    if (completed === 2) controller.abort()
+    return result
+  })
+  await expect(
+    new SDKRootEvictionEvidence(resolver).verify(
+      signRootEvidence(body),
+      0,
+      context(),
+      controller.signal
+    )
+  ).rejects.toMatchObject({
+    code: 'cancelled',
+    retryable: true,
+    message: 'Root evidence verification cancelled'
+  })
+  expect(completed).toBe(2)
 })

@@ -1048,6 +1048,11 @@ The full output runtime now passes 1,294 tests across 98 suites, including the
 eight strengthened local-rule cases added after its preceding full run. Strict
 package type checks, lint, 25 governance regressions, packed exports and all
 31 compiled examples against 22 tarballs pass. Root health, lint, formatting and
-the 145-page documentation build pass. Browser qualification and remaining
-component mutation campaigns are tracked separately; complete root-host context,
-currentness, admission/serving integration and exact-head CI remain outstanding.
+the 145-page documentation build pass. Exact-tarball browser checks also pass,
+including strict CSP, native IndexedDB, browser/page restart, receipt-before-cursor,
+cross-tab compare-and-swap, missing-store recovery and the lost-core fence.
+A subsequent test-only addition brings the focused selection to 23 passing cases:
+it verifies cancellation after the second independent peer proof check, before
+publishing the result. The full 1,294-test run preceded this additional test.
+Remaining component mutation campaigns, complete root-host context, currentness,
+admission/serving integration and exact-head CI remain outstanding.
