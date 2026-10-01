@@ -154,9 +154,55 @@ function closure(seed, neighbors) {
   return selected
 }
 
+function workspaceEdges(projects) {
+  const projectNames = new Set(projects.map(project => project.name))
+  const forward = new Map()
+  const reverse = new Map()
+  for (const project of projects) {
+    const dependencies = internalDependencies(project, projectNames)
+    forward.set(project.name, dependencies)
+    for (const dependency of dependencies) {
+      const dependents = reverse.get(dependency) ?? new Set()
+      dependents.add(project.name)
+      reverse.set(dependency, dependents)
+    }
+  }
+  return { forward, reverse }
+}
+
+function sortedNames(values) {
+  return [...values].sort((left, right) => left.localeCompare(right))
+}
+
+export function dependencyClosure(projects, names) {
+  const { forward } = workspaceEdges(projects)
+  const known = new Set(projects.map(project => project.name))
+  const selected = closure(
+    [...names].filter(name => known.has(name)),
+    forward
+  )
+  selected.delete('@bsv/ts-stack')
+  return sortedNames(selected)
+}
+
+export function mutationTargetProjectNames(projects, targets, ids) {
+  const byManifest = new Map(
+    projects
+      .filter(project => project.path !== '.')
+      .map(project => [`${normalized(project.path)}/package.json`, project.name])
+  )
+  const names = new Set()
+  for (const id of ids) {
+    const manifest = targets[id]?.manifest
+    if (typeof manifest !== 'string') continue
+    const name = byManifest.get(normalized(manifest))
+    if (name) names.add(name)
+  }
+  return sortedNames(names)
+}
+
 export function selectWorkspaceScope(projects, changedFiles, changedImporters = []) {
   const files = changedFiles.map(normalized).filter(Boolean)
-  const projectNames = new Set(projects.map(project => project.name))
   const nonRootProjects = projects.filter(project => project.path !== '.')
   const full =
     files.some(file => FULL_PACKAGE_CONTROL_PATHS.has(file)) || changedImporters.includes('.')
@@ -178,28 +224,17 @@ export function selectWorkspaceScope(projects, changedFiles, changedImporters = 
     }
   }
 
-  const forward = new Map()
-  const reverse = new Map()
-  for (const project of projects) {
-    const dependencies = internalDependencies(project, projectNames)
-    forward.set(project.name, dependencies)
-    for (const dependency of dependencies) {
-      const dependents = reverse.get(dependency) ?? new Set()
-      dependents.add(project.name)
-      reverse.set(dependency, dependents)
-    }
-  }
+  const { forward, reverse } = workspaceEdges(projects)
 
   const affected = closure(direct, reverse)
   affected.delete('@bsv/ts-stack')
   const build = closure(affected, forward)
   build.delete('@bsv/ts-stack')
 
-  const sorted = values => [...values].sort((left, right) => left.localeCompare(right))
   return {
-    direct: sorted(direct),
-    affected: sorted(affected),
-    build: sorted(build)
+    direct: sortedNames(direct),
+    affected: sortedNames(affected),
+    build: sortedNames(build)
   }
 }
 
@@ -289,6 +324,15 @@ function loadProjects() {
   })
 }
 
+async function requiredMutationPackages(projects, base, head) {
+  const { mutationScope } = await import('./ci-mutation-scope.mjs')
+  const { buildMutationTargets } = await import('../governance/mutation-testing/targets.mjs')
+  const policy = JSON.parse(gitText(['show', `${head}:governance/mutation-testing/policy.json`]))
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const mutation = mutationScope(REPOSITORY_ROOT, { base, head, targets, policy })
+  return mutationTargetProjectNames(projects, targets, mutation.required)
+}
+
 function projectRecords(projects, names) {
   const selected = new Set(names)
   return projects
@@ -297,7 +341,7 @@ function projectRecords(projects, names) {
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
-function main(arguments_) {
+async function main(arguments_) {
   const { all, base, head } = parseArguments(arguments_)
   const changedFiles = all
     ? gitText(['ls-files']).split(/\r?\n/).filter(Boolean)
@@ -315,6 +359,12 @@ function main(arguments_) {
   const workspace = all
     ? selectWorkspaceScope(projects, ['tsconfig.base.json'])
     : selectWorkspaceScope(projects, changedFiles, importers)
+  const buildNames = all
+    ? workspace.build
+    : dependencyClosure(projects, [
+        ...workspace.build,
+        ...(await requiredMutationPackages(projects, base, head))
+      ])
   const infrastructure = all ? INFRA_COMPONENTS : selectInfraComponents(changedFiles)
   const runtimeComponents = all ? RUNTIME_COMPONENTS : selectRuntimeComponents(changedFiles)
   const infraEntries = infrastructure.map(entry => ({
@@ -329,7 +379,7 @@ function main(arguments_) {
       changedImporters: importers,
       directProjects: projectRecords(projects, workspace.direct),
       affectedProjects: projectRecords(projects, workspace.affected),
-      buildProjects: projectRecords(projects, workspace.build),
+      buildProjects: projectRecords(projects, buildNames),
       infraMatrix: { include: infraEntries },
       runtimeMatrix: {
         include: runtimeComponents.map(component => ({ component }))
@@ -341,10 +391,8 @@ function main(arguments_) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  try {
-    main(process.argv.slice(2))
-  } catch (error) {
+  main(process.argv.slice(2)).catch(error => {
     console.error(error instanceof Error ? error.message : error)
     process.exitCode = 1
-  }
+  })
 }

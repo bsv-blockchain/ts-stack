@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import {
   changedLockfileImporters,
   conformanceIsAffected,
+  dependencyClosure,
   docsAreAffected,
   lockfileImporterSections,
+  mutationTargetProjectNames,
   selectInfraComponents,
   selectRuntimeComponents,
   selectWorkspaceScope
@@ -150,4 +156,34 @@ test('shared CI execution and result gates select the complete governed workspac
     assert.equal(selectWorkspaceScope(projects, [file]).direct.length, 4)
   }
   assert.equal(selectInfraComponents(['.github/workflows/ci.yml']).length, 8)
+})
+
+test('required mutation targets add their built dependencies without widening package tests', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const registry = JSON.parse(
+    readFileSync(path.join(root, 'governance/repository-health/projects.json'), 'utf8')
+  )
+  const realProjects = registry.projects.map(project => {
+    const manifest = JSON.parse(readFileSync(path.join(root, project.path, 'package.json'), 'utf8'))
+    return {
+      ...project,
+      path: project.path.split(path.sep).join('/'),
+      manifest,
+      name: manifest.name
+    }
+  })
+  const targets = buildMutationTargets(root)
+  const names = mutationTargetProjectNames(realProjects, targets, [
+    'amount-format',
+    'btms-permission'
+  ])
+  assert.deepEqual(names, ['@bsv/amountinator', '@bsv/btms-permission-module'])
+  const scope = selectWorkspaceScope(realProjects, ['packages/helpers/ts-templates/package.json'])
+  assert.equal(scope.affected.includes('@bsv/amountinator'), false)
+  assert.equal(scope.build.includes('@bsv/wallet-toolbox-client'), false)
+  assert.equal(scope.build.includes('@bsv/btms'), false)
+  const build = dependencyClosure(realProjects, [...scope.build, ...names])
+  assert.equal(build.includes('@bsv/wallet-toolbox-client'), true)
+  assert.equal(build.includes('@bsv/btms'), true)
+  assert.equal(build.includes('@bsv/amountinator'), true)
 })
