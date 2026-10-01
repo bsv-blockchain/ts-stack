@@ -6,6 +6,17 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.14.5
 
+- Knex storage adds a unique index on `sync_states` (`userId`,
+  `storageIdentityKey`). Concurrent `findOrInsertSyncStateAuth` calls for a new
+  source could each insert a row, after which every sync with that source failed
+  with `Storage identity has conflicting sync states`. The losing insert now
+  re-reads the row that won. The migration deletes existing duplicates, keeping
+  the oldest row; when the duplicates had different storage names, the kept row
+  restarts as a new sync state because its checkpoint may belong to a different
+  source database.
+- BRC-38 import keeps one sync state per storage identity. An export holding
+  several for one identity imports the oldest under the same rule, and merge
+  updates the target's row for that identity even when its storage name differs.
 - `WalletPermissionsManager` retires no-send transaction ownership and reference
   aliases when `createAction` or `signAction` reports them as `sending` or
   `unproven`, including sendWith-only calls and successful members of an

@@ -264,6 +264,10 @@ serialized RPC response exceeds the service ceiling, remote clients retry the
 read-only request with a smaller chunk budget and remember the working limit
 for the rest of the session.
 
+Knex storage keeps one sync state per user and source storage identity, enforced
+by a unique index. Concurrent registrations of the same source return the row the
+first caller inserted.
+
 Output synchronization requires a local mapping for every non-null source basket
 ID. A missing mapping rejects the page so its transaction and checkpoint can roll
 back; retry after transferring the missing basket. Newer source updates apply
