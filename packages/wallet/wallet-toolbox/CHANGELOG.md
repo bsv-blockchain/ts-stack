@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add auxiliary numeric relationship indexes for label/tag maps without changing
+  standard indexes, composite cursors, legacy OFFSET order or BRC-38 bytes.
+  Preserve both parent ownership bases through moves, rekeys, tombstones and
+  deletion; retain inconsistent relationships for explicit closure refusal.
+  Resume bounded bootstrap after interrupted DDL/transactions and use the
+  matching auxiliary primary index for MySQL page seeks. The remaining indirect
+  tables and full sync/portability program are incomplete.
+
 - Add an exact-claim source-owner fence and additive owner migration. Remote
   cancellation cannot release archive/request capacity or publish ready before
   the owning source and pool have closed. Append checks cancellation atomically;

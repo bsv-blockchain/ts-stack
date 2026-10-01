@@ -10,10 +10,10 @@ import { snapshotArchiveTables } from './archive/SnapshotArchive'
 import { openKnexSnapshotArchiveSource, type SnapshotArchiveSource } from './archive/KnexSnapshotArchiveSource'
 import type { WalletReadSnapshot, WalletSnapshotCursor } from './WalletReadSnapshot'
 import {
-  addSnapshotProfileIndexes,
-  removeSnapshotProfileIndexes,
-  SNAPSHOT_PROFILE_INDEX_MIGRATION
-} from '../schema/snapshotProfileIndexMigration'
+  addSnapshotRelationIndexes,
+  removeSnapshotRelationIndexes,
+  SNAPSHOT_RELATION_INDEX_MIGRATION
+} from '../schema/snapshotRelationIndexMigration'
 
 const identity = '02' + '11'.repeat(32)
 const stores: StorageKnex[] = []
@@ -21,7 +21,7 @@ const writers: Knex[] = []
 const directories: string[] = []
 const dates = { created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' }
 async function fixture() {
-  const directory = await mkdtemp(join(tmpdir(), 'snapshot-profile-index-'))
+  const directory = await mkdtemp(join(tmpdir(), 'snapshot-relation-index-'))
   directories.push(directory)
   const options = {
     client: 'better-sqlite3',
@@ -33,11 +33,11 @@ async function fixture() {
   const source = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: k })
   stores.push(source)
   await k.raw('PRAGMA journal_mode=WAL')
-  await source.migrate('profile index fixture', 'synthetic-profile-index')
+  await source.migrate('relation index fixture', 'synthetic-relation-index')
   await source.makeAvailable()
   // Start with the immediately preceding schema on both old and new source.
-  await removeSnapshotProfileIndexes(k)
-  await k('knex_migrations').where('name', SNAPSHOT_PROFILE_INDEX_MIGRATION).delete()
+  await removeSnapshotRelationIndexes(k)
+  await k('knex_migrations').where('name', SNAPSHOT_RELATION_INDEX_MIGRATION).delete()
   const { user } = await source.findOrInsertUser(identity)
   const { user: other } = await source.findOrInsertUser('03' + '22'.repeat(32))
   await seedArchiveClosure(source, user.userId, other.userId)
@@ -46,10 +46,10 @@ async function fixture() {
   return { source, writer, k, userId: user.userId, otherId: other.userId }
 }
 async function journal(k: Knex): Promise<void> {
-  await k('knex_migrations').insert({ name: SNAPSHOT_PROFILE_INDEX_MIGRATION, batch: 99, migration_time: new Date() })
+  await k('knex_migrations').insert({ name: SNAPSHOT_RELATION_INDEX_MIGRATION, batch: 99, migration_time: new Date() })
 }
 async function pages(view: WalletReadSnapshot | SnapshotArchiveSource) {
-  expect(Object.hasOwn(view, 'profileIndexes')).toBe(false)
+  expect(Object.hasOwn(view, 'relationIndexes')).toBe(false)
   if ('validateClosure' in view) await view.validateClosure()
   const result: Record<string, unknown[]> = {}
   await runInSeries(snapshotArchiveTables, async table => {
@@ -101,7 +101,7 @@ test('indexed ordinary/archive pages preserve all13tables and original source in
   const standard = async () =>
     await k('sqlite_master')
       .whereIn('type', ['table', 'index'])
-      .whereNotIn('tbl_name', ['snapshot_profile_keys', 'snapshot_profile_index_progress'])
+      .whereNotIn('tbl_name', ['snapshot_relation_keys', 'snapshot_relation_index_progress'])
       .select('type', 'name', 'tbl_name', 'sql')
       .orderBy('name')
   const originalIndexes = await standard()
@@ -113,7 +113,7 @@ test('indexed ordinary/archive pages preserve all13tables and original source in
   } finally {
     await old.close()
   }
-  await addSnapshotProfileIndexes(k)
+  await addSnapshotRelationIndexes(k)
   expect(await standard()).toEqual(originalIndexes)
   expect(await legacy()).toEqual(originalOffsets)
   const queries: Array<{ sql: string; bindings: Knex.RawBinding[] }> = []
@@ -121,7 +121,7 @@ test('indexed ordinary/archive pages preserve all13tables and original source in
     if (
       query.sql.startsWith('select') &&
       query.sql.includes('cross join') &&
-      query.sql.includes('snapshot_profile_keys')
+      query.sql.includes('snapshot_relation_keys')
     )
       queries.push(query)
   }
@@ -155,7 +155,7 @@ test('indexed ordinary/archive pages preserve all13tables and original source in
     queries.filter(query => query.sql.includes('__snapshotBytes') || query.sql.includes('.*')),
     async query => {
       const plan: Array<{ detail: string }> = await k.raw('EXPLAIN QUERY PLAN ' + query.sql, query.bindings)
-      expect(plan.some(row => row.detail.includes('SEARCH snapshot_profile_keys USING COVERING INDEX'))).toBe(true)
+      expect(plan.some(row => row.detail.includes('SEARCH snapshot_relation_keys USING COVERING INDEX'))).toBe(true)
       expect(plan.some(row => /SCAN |TEMP B-TREE/.test(row.detail))).toBe(false)
     }
   )
@@ -165,7 +165,7 @@ test.each(['ordinary', 'archive'] as const)(
   '%s mode and all13table pages stay bound across independent journal/profile/progress writes',
   async kind => {
     const { source, k, writer, userId, otherId } = await fixture()
-    await addSnapshotProfileIndexes(k)
+    await addSnapshotRelationIndexes(k)
     const open = async () =>
       kind === 'ordinary'
         ? await source.openWalletReadSnapshot(identity)
@@ -175,7 +175,7 @@ test.each(['ordinary', 'archive'] as const)(
       if (
         query.sql.startsWith('select') &&
         query.sql.includes('cross join') &&
-        query.sql.includes('snapshot_profile_keys')
+        query.sql.includes('snapshot_relation_keys')
       )
         queries.push(query.sql)
     }
@@ -194,7 +194,7 @@ test.each(['ordinary', 'archive'] as const)(
     const indexed = await open()
     try {
       await writer.transaction(async trx => {
-        await trx('snapshot_profile_index_progress').where('snapshotTableId', 3).update({ complete: 0 })
+        await trx('snapshot_relation_index_progress').where('snapshotTableId', 0).update({ complete: 0 })
         await trx('tx_labels').where('txLabelId', 3).update({ userId: otherId, label: 'moved' })
         await trx('tx_labels').insert({ ...dates, txLabelId: 4, userId, label: 'new after view', isDeleted: false })
       })
@@ -205,7 +205,7 @@ test.each(['ordinary', 'archive'] as const)(
       k.off('query', listen)
     }
     await expect(open()).rejects.toThrow('migration is incomplete')
-    await writer('snapshot_profile_index_progress').where('snapshotTableId', 3).update({ complete: 1 })
+    await writer('snapshot_relation_index_progress').where('snapshotTableId', 0).update({ complete: 1 })
     const fresh = await open()
     try {
       expect((await fresh.readPage('txLabels')).rows.map(row => row.txLabelId)).toEqual([1, 4])

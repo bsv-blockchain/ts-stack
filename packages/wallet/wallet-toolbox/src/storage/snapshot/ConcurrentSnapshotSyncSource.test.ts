@@ -113,6 +113,25 @@ test('dynamic connection providers and externally shared pools retain the legacy
   expect(open).not.toHaveBeenCalled()
 })
 
+test('provider shutdown completes unfinished database telemetry once with cancelled status', async () => {
+  const capture = jest.fn()
+  const source = mysql({ sink: { capture }, enabled: true })
+  source.knex.emit('query', {
+    __knexQueryUid: 'synthetic-unfinished-query',
+    method: 'select',
+    sql: 'private fixture payload'
+  })
+  expect(capture).not.toHaveBeenCalled()
+  await source.destroy()
+  stores.splice(stores.indexOf(source), 1)
+  expect(capture).toHaveBeenCalledTimes(1)
+  expect(capture.mock.calls[0][0]).toMatchObject({ name: 'wallet.storage.db.query', spanStatus: 'cancelled' })
+  expect(JSON.stringify(capture.mock.calls)).not.toContain('private fixture payload')
+  source.knex.emit('query-response', [], { __knexQueryUid: 'synthetic-unfinished-query' })
+  await source.destroy()
+  expect(capture).toHaveBeenCalledTimes(1)
+})
+
 test.each([undefined, '', ':memory:', 'file:synthetic-snapshot'])(
   'SQLite filename %s cannot open an independent retained reader',
   async filename => {

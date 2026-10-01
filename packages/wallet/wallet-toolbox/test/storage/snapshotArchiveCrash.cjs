@@ -165,6 +165,8 @@ async function main() {
     console.log(JSON.stringify({ ownerProcessLoss: await qualifySQLiteGuardProcessLoss() }))
     const { qualifySQLiteProfileIndexProcessLoss } = require('./snapshotProfileIndexCrash.cjs')
     console.log(JSON.stringify({ profileIndexProcessLoss: await qualifySQLiteProfileIndexProcessLoss() }))
+    const { qualifySQLiteRelationIndexProcessLoss } = require('./snapshotRelationIndexCrash.cjs')
+    console.log(JSON.stringify({ relationIndexProcessLoss: await qualifySQLiteRelationIndexProcessLoss() }))
   }
 }
 main().catch(error => {

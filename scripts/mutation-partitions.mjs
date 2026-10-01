@@ -22,6 +22,28 @@ const plans = new Map([
         ['src/storage/StorageProvider.ts', 'storage']
       ])
     }
+  ],
+  [
+    'wallet-snapshot-remote-http',
+    {
+      fallback: 'protocol',
+      files: new Map([
+        ['src/storage/remoting/StorageServer.ts', 'server'],
+        ['src/storage/remoting/StorageClientBase.ts', 'client']
+      ])
+    }
+  ],
+  [
+    'wallet-snapshot-remote-service',
+    {
+      fallback: 'persistence',
+      files: new Map([
+        ['src/storage/snapshot/archive/KnexSnapshotArchiveService.ts', 'controller'],
+        ['src/storage/snapshot/archive/SnapshotArchiveGuard.ts', 'guard'],
+        ['src/storage/snapshot/archive/SnapshotArchiveGuardRegistry.ts', 'guard'],
+        ['src/storage/snapshot/archive/SnapshotArchiveGuardBackend.ts', 'guard']
+      ])
+    }
   ]
 ])
 

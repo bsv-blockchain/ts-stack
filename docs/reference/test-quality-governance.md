@@ -209,10 +209,30 @@ source scope, and every group runs the complete original selected test suite.
 Each group independently requires at least 90% detection and zero uncovered or
 invalid mutants; an aggregate score cannot hide a weak group.
 
-Other targets retain their respective 45-minute PR and 20-minute standalone
-limits. Four mutation workers, six parallel jobs, individual mutant/test
-deadlines and all quality ratchets remain unchanged. A deadline cancellation is
-not a completed report or a passing score.
+The remote HTTP and service campaigns also exceeded their existing 90-minute
+allowances on `6814ed282e617a7b572899915648fe03cf3d47f2`: the
+[HTTP job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36854954813/job/110346098383)
+started 694 mutants after 550 passing dry-run tests, and the
+[service job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36854954813/job/110346098403)
+started 1,357 mutants after 266 passing dry-run tests. Neither produced a complete
+report. Their execution partitions keep every canonical specification exactly
+once. HTTP places all server ranges together, all client ranges together, and
+the whole protocol/RPC/transport sources in the protocol fallback. Service places
+the whole controller in one part, the three whole guard modules in another, and
+all other sources in the persistence fallback. Future canonical files join the
+fallback automatically. Every execution part keeps the full original tests,
+property suite, input dependencies and runner configuration. The existing
+provenance and aggregate checks require all parts from the same source and
+configuration, then evaluate the complete canonical mutant union; scores are
+not averaged. These execution parts do not create new canonical targets.
+
+Both workflows use a 45-minute default and the same explicit 90-minute target
+allowance list, including retained snapshots, snapshot sync, archive, remote
+HTTP, remote reader and remote service. The execution split does not change
+those limits, four mutation workers, six parallel jobs, individual mutant/test
+deadlines, the 300-case fixed-seed property campaign or the 90% detection and
+zero-uncovered/zero-invalid gates. A deadline cancellation is not a completed
+report or a passing score.
 
 List and run targets locally:
 

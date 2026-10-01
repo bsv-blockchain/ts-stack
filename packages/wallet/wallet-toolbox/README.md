@@ -51,6 +51,16 @@ readiness and the child proof have deadlines. Failure or cancellation drains
 owned work and attempts exact-owner cleanup before reporting its outcome;
 unproved cleanup fails qualification. Other wallet shards do not start MySQL.
 
+Both native entry points include interrupted auxiliary profile and numeric
+relation migrations through the real migrator. The numeric relation fixture
+terminates seven migration boundaries, repairs the abandoned migration lock and
+compares recovered membership with an independent source-table oracle. The MySQL
+entry point also observes relation writer/reader lock ordering under both
+supported isolation levels and checks late composite pages against 8,192
+interleaved map rows per relation. It requires bounded handler reads and the
+auxiliary primary-key range plan. These synthetic fixture results qualify the
+tested engine/configuration; deployed PXC remains a separate acceptance gate.
+
 SQL providers also expose `supportsRetainedReadSnapshot` / `openReadSnapshot`
 for a local view held across idle reads, with one view per provider, one read at
 a time, and bounded lifetime/cancellation. Await `closed`/`close()` for physical
@@ -99,6 +109,11 @@ OFFSET ordering while adding indexed snapshot selection for eight direct tables.
 Its triggers track independent writers; bounded bootstrap batches survive restart,
 and readers enable the index only from a complete migration in their retained
 view. See the [migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-profile-indexes-unpublished-candidate).
+The separate numeric relation migration indexes label/tag maps while retaining
+both parent ownership bases, tombstones and cross-profile inconsistency checks.
+It preserves composite cursor and legacy OFFSET order, resumes bounded bootstrap
+after interruption, and pins MySQL paging to the auxiliary primary index. See its
+[migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-numeric-relation-indexes-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results
@@ -125,13 +140,13 @@ Timing compares successive candidates, not a controlled comparison against upstr
 ### SQLite migration recovery
 
 SQLite migration handling introduced in 2.13.2 runs transactional migration DDL
-and the migration journal update together. The unpublished profile-index
-migration is an explicit resumable exception: auxiliary keys and progress commit
+and the migration journal update together. The unpublished profile-index and
+numeric relation migrations are explicit resumable exceptions: auxiliary keys and progress commit
 in bounded batches before its final migration journal entry. Foreign-key enforcement is disabled before the
 migration transaction for table rebuilds and restored after success or failure.
 Failed transactional migrations can be retried after reopening the database
-without partial schema objects from that attempt. The resumable profile-index
-migration instead retains its verified auxiliary objects and committed progress;
+without partial schema objects from that attempt. These resumable index
+migrations instead retain their verified auxiliary objects and committed progress;
 see its linked recovery contract before retrying an interrupted migrator. MySQL's existing transaction configuration
 is unchanged.
 

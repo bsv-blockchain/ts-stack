@@ -1,6 +1,7 @@
 import { knex } from 'knex'
 import { StorageKnex } from '../StorageKnex'
 import { StorageProvider } from '../StorageProvider'
+import { walletSnapshotSourceQuery } from './KnexWalletReadSnapshot'
 
 const identity = '02' + '11'.repeat(32)
 const when = new Date('2026-01-01T00:00:00.000Z')
@@ -44,7 +45,12 @@ function fixture(fieldCount = 6, bytes = 524, certificate = false, deleted: bool
         if (certificate) {
           expect(query.sql).toContain('case when octet_length(`fieldName`) <= 400 then `fieldName` end as `fieldName`')
           expect(query.sql).toContain('`certificate_fields`.`userId` = ?')
-          callback(null, [{ fieldName, certificateId: 1, __snapshotBytes: bytes, __snapshotOwned: 1 }], [])
+          const after = query.sql.includes('`fieldName` > ?')
+          if (after) {
+            expect(query.sql).toContain('OR (`fieldName` = ? AND `certificateId` > ?)')
+            expect(bindings.slice(-4)).toEqual([fieldName, fieldName, 1, 128])
+          }
+          callback(null, after ? [] : [{ fieldName, certificateId: 1, __snapshotBytes: bytes, __snapshotOwned: 1 }], [])
         } else {
           expect(query.sql).toContain('octet_length(`label`)')
           expect(query.sql).toContain('`tx_labels`.`userId` = ?')
@@ -110,6 +116,11 @@ test('MySQL preflights complete Unicode keys and preserves a boolean-returning p
     const page = await view.readPage('certificateFields')
     expect(page.rows[0].fieldName).toBe('😀'.repeat(100))
     expect(page.cursor?.after).toEqual(['😀'.repeat(100), 1])
+    expect(await view.readPage('certificateFields', page.cursor)).toMatchObject({
+      rows: [],
+      done: true,
+      payloadBytes: 0
+    })
     await view.close()
   } finally {
     await source.destroy()
@@ -123,6 +134,25 @@ test('MySQL preflights complete Unicode keys and preserves a boolean-returning p
     await second.source.destroy()
   }
 })
+
+test.each([
+  ['txLabelMaps', 'tx_labels_map', 'txLabelId', 'transactionId', 0],
+  ['outputTagMaps', 'output_tags_map', 'outputTagId', 'outputId', 1]
+] as const)(
+  'MySQL %s uses the cursor-order auxiliary primary key and both map keys',
+  (table, name, left, right, tableId) => {
+    const k = knex({ client: 'mysql2' })
+    const query = walletSnapshotSourceQuery(k, table, 41, true, true).select(`${name}.*`).toSQL()
+    expect(query.sql).toContain('from `snapshot_relation_keys` FORCE INDEX (`PRIMARY`) cross join `' + name + '`')
+    expect(query.sql).toContain(
+      '`snapshotLeftId` = `' + name + '`.`' + left + '` and `snapshotRightId` = `' + name + '`.`' + right + '`'
+    )
+    expect(query.bindings).toEqual([tableId, 41])
+    const legacy = walletSnapshotSourceQuery(k, table, 41).toSQL()
+    expect(legacy.sql).not.toContain('snapshot_relation_keys')
+    expect(legacy.sql).toContain('or exists')
+  }
+)
 
 test.each([6, 64])(
   'MySQL metadata resolves DATABASE() without a configured connection database and caches %s columns',

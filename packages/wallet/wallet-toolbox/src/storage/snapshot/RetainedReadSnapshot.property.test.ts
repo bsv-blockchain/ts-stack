@@ -13,6 +13,12 @@ import { StorageProvider } from '../StorageProvider'
 import type { WalletSnapshotCursor } from './WalletReadSnapshot'
 import { runInSeries } from '../../utility/runInSeries'
 import { retainReadSnapshot } from './RetainedReadSnapshot'
+import { addSnapshotRelationIndexes } from '../schema/snapshotRelationIndexMigration'
+import {
+  expectRelationMembership,
+  minimalRelationDatabase,
+  relationFixtures
+} from '../../../test/utils/snapshotRelationFixtures'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -22,6 +28,108 @@ fc.configureGlobal({
   numRuns: Number.isSafeInteger(requestedRuns) ? Math.max(MIN_PROPERTY_RUNS, requestedRuns) : MIN_PROPERTY_RUNS,
   ...(Number.isSafeInteger(requestedSeed) ? { seed: requestedSeed } : {}),
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
+})
+
+test('generated relation writes preserve OR ownership through parent moves, rekeys, tombstones, rollback and restart', async () => {
+  const k = await minimalRelationDatabase()
+  try {
+    await addSnapshotRelationIndexes(k)
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            pair: fc.integer({ min: 0, max: 1 }),
+            left: fc.integer({ min: 1, max: 5 }),
+            right: fc.integer({ min: 1, max: 5 }),
+            owner: fc.integer({ min: 1, max: 3 }),
+            kind: fc.constantFrom(
+              'left',
+              'right',
+              'map',
+              'tombstone',
+              'delete-map',
+              'delete-left',
+              'delete-right',
+              'left-key',
+              'right-key',
+              'map-key',
+              'rollback',
+              'repeat'
+            )
+          }),
+          { minLength: 1, maxLength: 25 }
+        ),
+        async schedule => {
+          await runInSeries(relationFixtures, async p => {
+            await k(p.table).delete()
+            await k(p.left).delete()
+            await k(p.right).delete()
+          })
+          await runInSeries(schedule, async op => {
+            const p = relationFixtures[op.pair]
+            if (op.kind === 'left')
+              await k(p.left)
+                .insert({ [p.leftKey]: op.left, userId: op.owner })
+                .onConflict(p.leftKey)
+                .merge()
+            else if (op.kind === 'right')
+              await k(p.right)
+                .insert({ [p.rightKey]: op.right, userId: op.owner })
+                .onConflict(p.rightKey)
+                .merge()
+            else if (op.kind === 'map')
+              await k(p.table)
+                .insert({ [p.leftKey]: op.left, [p.rightKey]: op.right, isDeleted: false })
+                .onConflict([p.leftKey, p.rightKey])
+                .ignore()
+            else if (op.kind === 'tombstone')
+              await k(p.table)
+                .where({ [p.leftKey]: op.left, [p.rightKey]: op.right })
+                .update({ isDeleted: true })
+            else if (op.kind === 'delete-map')
+              await k(p.table)
+                .where({ [p.leftKey]: op.left, [p.rightKey]: op.right })
+                .delete()
+            else if (op.kind === 'delete-left') await k(p.left).where(p.leftKey, op.left).delete()
+            else if (op.kind === 'delete-right') await k(p.right).where(p.rightKey, op.right).delete()
+            else if (op.kind === 'left-key' || op.kind === 'right-key' || op.kind === 'map-key') {
+              try {
+                if (op.kind === 'left-key')
+                  await k(p.left)
+                    .where(p.leftKey, op.left)
+                    .update({ [p.leftKey]: (op.left % 5) + 1 })
+                else if (op.kind === 'right-key')
+                  await k(p.right)
+                    .where(p.rightKey, op.right)
+                    .update({ [p.rightKey]: (op.right % 5) + 1 })
+                else
+                  await k(p.table)
+                    .where({ [p.leftKey]: op.left, [p.rightKey]: op.right })
+                    .update({ [p.leftKey]: (op.left % 5) + 1, [p.rightKey]: (op.right % 5) + 1 })
+              } catch (error) {
+                if ((error as { code?: string }).code !== 'SQLITE_CONSTRAINT_PRIMARYKEY') throw error
+              }
+            } else if (op.kind === 'repeat') await addSnapshotRelationIndexes(k)
+            else {
+              const failure = new Error('synthetic relation rollback')
+              await expect(
+                k.transaction(async trx => {
+                  await trx(p.left)
+                    .insert({ [p.leftKey]: op.left, userId: op.owner })
+                    .onConflict(p.leftKey)
+                    .merge()
+                  throw failure
+                })
+              ).rejects.toBe(failure)
+            }
+            await expectRelationMembership(k)
+          })
+        }
+      )
+    )
+  } finally {
+    await k.destroy()
+  }
 })
 
 function gate() {

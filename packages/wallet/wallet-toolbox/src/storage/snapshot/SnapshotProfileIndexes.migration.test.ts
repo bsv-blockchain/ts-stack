@@ -5,6 +5,7 @@ import { knex } from 'knex'
 import { StorageKnex } from '../StorageKnex'
 import { StorageProvider } from '../StorageProvider'
 import { KnexMigrations } from '../schema/KnexMigrations'
+import { SNAPSHOT_RELATION_INDEX_MIGRATION } from '../schema/snapshotRelationIndexMigration'
 import {
   readSnapshotProfileIndexState,
   SNAPSHOT_PROFILE_INDEX_MIGRATION
@@ -64,7 +65,7 @@ test('registered profile bootstrap survives reopening and publishes its journal 
     database = knex(options)
     source = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: database })
     await expect(source.migrate('profile migration', 'synthetic-profile-migration')).resolves.toBe(
-      SNAPSHOT_PROFILE_INDEX_MIGRATION
+      SNAPSHOT_RELATION_INDEX_MIGRATION
     )
     expect(await readSnapshotProfileIndexState(database)).toBe(true)
     expect(await database('snapshot_profile_keys').where('snapshotTableId', 3).count({ count: '*' }).first()).toEqual({

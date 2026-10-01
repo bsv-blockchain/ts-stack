@@ -14,6 +14,11 @@ import type {
   WalletSnapshotTables
 } from './WalletReadSnapshot'
 import { runInSeries } from '../../utility/runInSeries'
+import { createKnexWalletSnapshotPageReader, walletSnapshotSourceQuery } from './KnexWalletReadSnapshot'
+import {
+  removeSnapshotRelationIndexes,
+  SNAPSHOT_RELATION_INDEX_MIGRATION
+} from '../schema/snapshotRelationIndexMigration'
 
 const identity = '02' + '11'.repeat(32)
 const foreignIdentity = '03' + '22'.repeat(32)
@@ -83,6 +88,35 @@ afterEach(async () => {
   jest.restoreAllMocks()
   await runInSeries(stores.splice(0), source => source.destroy())
   await runInSeries(directories.splice(0), directory => rm(directory, { recursive: true, force: true }))
+})
+
+test('omitted auxiliary-index arguments preserve legacy profile queries and retained pages before migration', async () => {
+  const { source, userId, otherId } = await fixture()
+  await removeSnapshotProfileIndexes(source.knex)
+  await source.knex('knex_migrations').where('name', SNAPSHOT_PROFILE_INDEX_MIGRATION).delete()
+  await removeSnapshotRelationIndexes(source.knex)
+  await source.knex('knex_migrations').where('name', SNAPSHOT_RELATION_INDEX_MIGRATION).delete()
+  await labels(source, userId, 2)
+  await labels(source, otherId, 2)
+  const expected = await source.findTxLabels({ partial: { userId } })
+  const view = await source.openReadSnapshot()
+  try {
+    const selected = await view.read(trx =>
+      walletSnapshotSourceQuery(source.toDb(trx), 'txLabels', userId).select('txLabelId').orderBy('txLabelId')
+    )
+    expect(selected).toEqual(expected.map(({ txLabelId }) => ({ txLabelId })))
+    const reader = createKnexWalletSnapshotPageReader(source, userId, '12'.repeat(32), view)
+    const page = await reader('txLabels', undefined, { maxRows: 10 })
+    expect(page.rows).toEqual(expected)
+    expect(page.done).toBe(true)
+    expect(page.cursor?.after).toEqual([expected.at(-1)!.txLabelId])
+    expect(
+      await view.read(trx => walletSnapshotSourceQuery(source.toDb(trx), 'txLabelMaps', userId).select('*'))
+    ).toEqual([])
+    expect((await reader('txLabelMaps')).rows).toEqual([])
+  } finally {
+    await view.close()
+  }
 })
 
 test('keyset pages pin profile, source metadata, equal timestamps and tombstones across independent writes', async () => {
@@ -520,13 +554,22 @@ test('concurrent reads refuse instead of queueing and expiry invalidates cursors
   await view.closed
 })
 
-test.each([false, true])(
-  'SQL keys support numeric and composite forward seeks without OFFSET or full counts (profileIndexes=%s)',
-  async profileIndexes => {
+test.each([
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true]
+])(
+  'SQL keys support forward seeks without OFFSET or counts (profileIndexes=%s, relationIndexes=%s)',
+  async (profileIndexes, relationIndexes) => {
     const { source, userId, otherId } = await fixture()
     if (!profileIndexes) {
       await removeSnapshotProfileIndexes(source.knex)
       await source.knex('knex_migrations').where('name', SNAPSHOT_PROFILE_INDEX_MIGRATION).delete()
+    }
+    if (!relationIndexes) {
+      await removeSnapshotRelationIndexes(source.knex)
+      await source.knex('knex_migrations').where('name', SNAPSHOT_RELATION_INDEX_MIGRATION).delete()
     }
     await seedClosure(source, userId, otherId)
     const view = await source.openWalletReadSnapshot(identity)
@@ -544,6 +587,9 @@ test.each([false, true])(
     const subsequent = requests.filter(q => q.sql.includes(' > '))
     expect(subsequent).toHaveLength(6)
     expect(subsequent.filter(query => query.sql.includes('snapshot_profile_keys'))).toHaveLength(profileIndexes ? 2 : 0)
+    expect(subsequent.filter(query => query.sql.includes('snapshot_relation_keys'))).toHaveLength(
+      relationIndexes ? 2 : 0
+    )
     for (const query of subsequent) {
       expect(query.sql).not.toMatch(/offset|count\(/i)
       const plan = await source.knex.raw('EXPLAIN QUERY PLAN ' + query.sql, query.bindings)
@@ -553,6 +599,11 @@ test.each([false, true])(
           /SEARCH snapshot_profile_keys USING COVERING INDEX .*\(snapshotTableId=\? AND snapshotUserId=\? AND snapshotRowId>\?(?: AND snapshotRowId<\?)?\)/
         )
         expect(details).toMatch(/SEARCH tx_labels USING INTEGER PRIMARY KEY \(rowid=\?\)/)
+        expect(details).not.toMatch(/SCAN |TEMP B-TREE/)
+      } else if (query.sql.includes('snapshot_relation_keys')) {
+        expect(details).toMatch(
+          /SEARCH snapshot_relation_keys USING COVERING INDEX .*snapshotTableId=\? AND snapshotUserId=\? AND \(snapshotLeftId,snapshotRightId\)>\(\?,\?\)/
+        )
         expect(details).not.toMatch(/SCAN |TEMP B-TREE/)
       } else {
         expect(details).toMatch(/SEARCH (tx_labels|tx_labels_map|certificate_fields) USING .*\(.*>\(?\?/)

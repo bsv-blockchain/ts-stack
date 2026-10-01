@@ -217,7 +217,8 @@ mapping keys and field-name-first certificate keys, with each database's
 collation. This order differs from canonical BRC-38 array order. The auxiliary
 profile index below adds bounded profile range selection for eight direct tables
 without altering any standard-table index, legacy OFFSET order or cursor bytes.
-Relationship/global-table query work, commit-order incremental high-water
+The separate numeric relation migration extends that selection to label and tag
+maps. Certificate-field/global-table query work, commit-order incremental high-water
 positions, IndexedDB retention and large-value streaming remain required by the
 active program. The local sync integration below consumes these pages.
 
@@ -265,6 +266,47 @@ journal entry. Standard wallet rows and indexes remain unchanged. Older binaries
 may read and write the unchanged standard schema while the forward migration's
 triggers remain installed; binary downgrade procedures still apply to the
 candidate's other migrations.
+
+### Auxiliary numeric relation indexes (unpublished candidate)
+
+Migration `2026-10-01-004 add snapshot relation key indexes` adds
+`snapshot_relation_keys` and `snapshot_relation_index_progress` for
+`tx_labels_map` and `output_tags_map`. Keys preserve label/tag-first composite
+cursor order. Each key records the independent left and right ownership bases:
+a mapping belongs to either parent's profile, including tombstones and inconsistent
+cross-profile mappings. Such inconsistencies remain visible to the existing
+page/closure refusal; the index must not filter them out and silently export less
+data. Parent moves, key updates and physical deletion remove only the affected
+ownership basis.
+
+All removal observers across both relationship graphs are installed before any
+producer. Bootstrap starts after the complete trigger set exists and commits at
+most 256 mapping rows with its composite progress position. MySQL locks current
+mapping rows and parent owners through commit. Trigger producers use current
+locking reads even if their writer transaction has an older consistent read view.
+SQLite uses its writer lock. Standard tables and their indexes are unchanged.
+MySQL page queries explicitly select the auxiliary primary index: a maintenance
+index can otherwise scan and sort an entire profile before applying the page limit.
+
+The same migration-journal, retained-view, interrupted-migrator recovery and
+reader-drain requirements described above apply. The migration has
+`transaction: false`; preserve partial owned objects and committed progress, then
+retry only after excluding another migrator. MySQL index DDL can stop between
+table and index creation. Compatible missing indexes resume; mismatched table,
+index or trigger definitions refuse adoption or removal. Down validates all
+objects before removing producers, observers and auxiliary tables. Drain readers
+before down; standard rows, legacy OFFSET order and portable/cursor bytes remain
+unchanged. These auxiliary tables are excluded from BRC-38.
+
+Repository fixtures compare all thirteen ordinary/archive tables and legacy
+offsets before and after indexing, generate ownership/rekey schedules, and kill
+the real migrator at seven DDL/bootstrap boundaries on SQLite and MySQL. The
+native MySQL fixture observes independent locks under READ COMMITTED and
+REPEATABLE READ and checks late-page row-read counts with interleaved profiles.
+These are isolated synthetic fixtures, not deployed PXC or physical mobile
+qualification. Certificate fields, proof requests/proofs, source commit ordering,
+nonblocking IndexedDB, streaming and staged restore remain required. Reader
+advertisement stays disabled and #569 remains open.
 
 ## Durable local SQL sync and ordinary backup
 

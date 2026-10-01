@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 
 import {
   calculateMutationMetrics,
   evaluateMutationReport,
   parseArguments,
+  REPOSITORY_ROOT,
   selectAffectedMutationTargets,
   targetsForUnresolvedMutationRange
 } from './mutation-testing.mjs'
@@ -146,4 +148,75 @@ test('mutation report evaluation ratchets score, coverage, and invalid outcomes'
       'one has 1 invalid mutants; maximum is 0'
     ]
   )
+})
+
+test('additional package-relative fixture inputs select their target without replacing existing inputs', () => {
+  const target = {
+    packageDirectory: 'packages/one',
+    propertyTest: 'packages/one/test/value.property.test.ts',
+    mutate: ['src/value.ts:10-20'],
+    additionalInputs: ['./test/fixtures/source.ts'],
+    runnerOptions: {
+      jest: {
+        configFile: 'jest.config.cjs',
+        config: { testMatch: ['<rootDir>/test/value*.test.ts'] }
+      }
+    }
+  }
+  const precise = {
+    one: target,
+    two: {
+      ...target,
+      packageDirectory: 'packages/two',
+      propertyTest: 'packages/two/test/value.property.test.ts'
+    }
+  }
+  for (const input of [
+    'src/value.ts',
+    'test/value.property.test.ts',
+    'jest.config.cjs',
+    'test/value.test.ts',
+    'test/fixtures/source.ts'
+  ]) {
+    assert.deepEqual(selectAffectedMutationTargets(precise, [`packages/one/${input}`]), ['one'])
+    assert.deepEqual(selectAffectedMutationTargets(precise, [`packages/two/${input}`]), ['two'])
+  }
+  for (const input of [
+    'test/fixtures/other.ts',
+    'test/fixtures/source.ts.extra',
+    'src/other.ts',
+    'packages/one/test/fixtures/source.ts'
+  ]) {
+    assert.deepEqual(selectAffectedMutationTargets(precise, [`packages/one/${input}`]), [])
+  }
+  assert.deepEqual(selectAffectedMutationTargets(precise, ['test/fixtures/source.ts']), [])
+  assert.deepEqual(
+    selectAffectedMutationTargets(precise, ['packages/one/test/fixtures/source.ts'], {
+      changedTargetIds: ['two']
+    }),
+    ['one', 'two']
+  )
+
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)
+  assert.equal(Object.keys(canonical).length, 46)
+  assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
+    'test/utils/snapshotRelationFixtures.ts'
+  ])
+  assert.deepEqual(
+    selectAffectedMutationTargets(canonical, [
+      'packages/wallet/wallet-toolbox/test/utils/snapshotRelationFixtures.ts'
+    ]),
+    ['wallet-retained-snapshot']
+  )
+  for (const input of [
+    'src/storage/schema/snapshotRelationIndexMigration.ts',
+    'src/storage/schema/snapshotProfileIndexMigration.ts',
+    'src/storage/snapshot/RetainedReadSnapshot.property.test.ts'
+  ]) {
+    assert.ok(
+      selectAffectedMutationTargets(canonical, [
+        `packages/wallet/wallet-toolbox/${input}`
+      ]).includes('wallet-retained-snapshot')
+    )
+  }
 })

@@ -67,7 +67,7 @@ test('a ready request waits for owned reader destruction while foreground storag
   const source = (await storage.openSnapshotArchiveSource(identity))!
   expect(source.user.identityKey).toBe(identity)
   expect(source.sourceStorage.storageIdentityKey).toBe('original-source')
-  expect(source.sourceSchema).toBe('2026-10-01-003 add snapshot profile key indexes')
+  expect(source.sourceSchema).toBe('2026-10-01-004 add snapshot relation key indexes')
   const reader = Reflect.get(storage, 'snapshotSyncSource') as StorageKnex
   expect(reader.knex).not.toBe(storage.knex)
   expect(reader.knex.client.config.pool).toMatchObject({ min: 0, max: 1 })
@@ -350,3 +350,24 @@ test.each([new Error('synthetic guarded read failure'), undefined])(
     expect(await storage.knex('snapshot_archive_owners')).toHaveLength(0)
   }
 )
+
+test('destroying an active guarded reader preserves its ordinary read error for the consumer after proved cleanup', async () => {
+  const storage = await fixture()
+  const requests = new KnexSnapshotArchiveRequestStore(storage.knex, true, true)
+  const offered = await requests.offer(identity, { lifetimeMs: 300000, maxBytes: 32768 })
+  const { owner } = await requests.claimReader(identity, offered.request)
+  const failure = new Error('synthetic read completion failure after native closure')
+  const read = ArchiveGuard.readGuardedSnapshotArchive
+  jest.spyOn(ArchiveGuard, 'readGuardedSnapshotArchive').mockImplementationOnce(async (...args) => {
+    await read(...args)
+    throw failure
+  })
+  const source = (await storage.openSnapshotArchiveSource(identity, {}, owner))!
+  const reader = Reflect.get(storage, 'snapshotSyncSource') as StorageKnex
+  const consumer = source.closed.catch(error => error)
+  await expect(reader.destroy()).resolves.toBeUndefined()
+  expect(await consumer).toBe(failure)
+  await expect(reader.knex.raw('SELECT 1')).rejects.toThrow('Unable to acquire a connection')
+  await requests.sourceClosed(owner!)
+  expect(await storage.knex('snapshot_archive_owners')).toHaveLength(0)
+})

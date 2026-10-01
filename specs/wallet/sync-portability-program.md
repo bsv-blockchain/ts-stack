@@ -5,6 +5,17 @@ contract for this program on [#569](https://github.com/bsv-blockchain/ts-stack/p
 The PR remains open, unmerged and draft while implementation or qualification is
 incomplete. A green intermediate source revision does not complete this program.
 
+The numeric relation checkpoint extends auxiliary indexed selection to
+`tx_labels_map` and `output_tags_map`. It preserves composite order and both parent
+ownership bases, retains inconsistent mappings for closure refusal, and resumes
+256-row bootstrap batches after interrupted DDL or transaction commits. Retained
+ordinary/archive readers choose the complete migration inside their pinned view.
+Native fixtures cover seven migrator process-loss boundaries, independent writer
+locks under both MySQL isolation levels and late-page range/read-count evidence.
+Repository and exact-head qualification must still complete for this checkpoint.
+The other three indirect tables, commit ordering, nonblocking IndexedDB and the
+remaining program below remain open; this does not complete S2.
+
 ## Baseline and immediate defect
 
 At `ec12ee79deb69d2019b3e50ee70d975752293d0b`, `syncFromReaderResumable` yields

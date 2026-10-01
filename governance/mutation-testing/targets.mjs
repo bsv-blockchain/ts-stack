@@ -398,12 +398,14 @@ export function buildMutationTargets(repositoryRoot) {
     'wallet-retained-snapshot': {
       packageDirectory: 'packages/wallet/wallet-toolbox',
       manifest: 'packages/wallet/wallet-toolbox/package.json',
+      additionalInputs: ['test/utils/snapshotRelationFixtures.ts'],
       propertyTest:
         'packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
       mutate: [
         'src/storage/snapshot/RetainedReadSnapshot.ts',
         'src/storage/snapshot/KnexWalletReadSnapshot.ts',
         'src/storage/schema/snapshotProfileIndexMigration.ts',
+        'src/storage/schema/snapshotRelationIndexMigration.ts',
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',

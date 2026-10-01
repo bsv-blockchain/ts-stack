@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseArguments } from './mutation-testing.mjs'
+import { parseArguments, REPOSITORY_ROOT } from './mutation-testing.mjs'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import {
   partitionMutationTarget,
   selectedMutationPartition,
@@ -141,4 +142,115 @@ test('retained partitions preserve complete lifecycle/reader/storage unions and 
     partitionedMutationTargets(['wallet-retained-snapshot'], { 'sdk-auth-http': target })
   )
   assert.throws(() => partitionedMutationTargets(['sdk-auth-http', 'sdk-auth-http'], targets))
+})
+
+test('service execution preserves the complete canonical union and all configuration in every part', () => {
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)['wallet-snapshot-remote-service']
+  const parts = partitionMutationTarget('wallet-snapshot-remote-service', canonical)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['persistence', 'controller', 'guard']
+  )
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+  assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
+  for (const part of parts) {
+    const { mutate: _partMutate, ...partConfig } = part.target
+    const { mutate: _canonicalMutate, ...canonicalConfig } = canonical
+    assert.deepEqual(partConfig, canonicalConfig)
+    assert.equal(part.target.runnerOptions, canonical.runnerOptions)
+  }
+  assert.deepEqual(parts[1].target.mutate, [
+    'src/storage/snapshot/archive/KnexSnapshotArchiveService.ts'
+  ])
+  assert.deepEqual(parts[2].target.mutate, [
+    'src/storage/snapshot/archive/SnapshotArchiveGuard.ts',
+    'src/storage/snapshot/archive/SnapshotArchiveGuardRegistry.ts',
+    'src/storage/snapshot/archive/SnapshotArchiveGuardBackend.ts'
+  ])
+  const future = {
+    ...canonical,
+    mutate: [...canonical.mutate, 'src/storage/snapshot/archive/FutureHelper.ts']
+  }
+  const expanded = partitionMutationTarget('wallet-snapshot-remote-service', future)
+  assert.equal(expanded[0].id, 'persistence')
+  assert.ok(expanded[0].target.mutate.includes('src/storage/snapshot/archive/FutureHelper.ts'))
+  assert.equal(selectedMutationPartition('wallet-snapshot-remote-service', canonical), canonical)
+  assert.throws(() =>
+    selectedMutationPartition('wallet-snapshot-remote-service', canonical, 'missing')
+  )
+  for (const specification of ['src/**/*.ts', '!src/helper.ts', '../outside.ts', '/outside.ts']) {
+    assert.throws(() =>
+      partitionMutationTarget('wallet-snapshot-remote-service', { mutate: [specification] })
+    )
+  }
+  const targets = { before: target, 'wallet-snapshot-remote-service': canonical, after: target }
+  assert.deepEqual(mutationExecutionMatrix(Object.keys(targets), targets).include, [
+    { target: 'before', partition: 'whole' },
+    ...['persistence', 'controller', 'guard'].map(partition => ({
+      target: 'wallet-snapshot-remote-service',
+      partition
+    })),
+    { target: 'after', partition: 'whole' }
+  ])
+})
+
+test('HTTP execution preserves every canonical range, full configuration and future fallback', () => {
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)['wallet-snapshot-remote-http']
+  const parts = partitionMutationTarget('wallet-snapshot-remote-http', canonical)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['protocol', 'client', 'server']
+  )
+  const original = [...canonical.mutate].sort()
+  const actual = parts.flatMap(part => part.target.mutate)
+  assert.deepEqual([...actual].sort(), original)
+  assert.equal(new Set(actual).size, original.length)
+  for (const part of parts) {
+    const { mutate: _partMutate, ...partConfig } = part.target
+    const { mutate: _canonicalMutate, ...canonicalConfig } = canonical
+    assert.deepEqual(partConfig, canonicalConfig)
+    assert.equal(part.target.runnerOptions, canonical.runnerOptions)
+  }
+  assert.deepEqual(parts[0].target.mutate, [
+    'src/storage/snapshot/archive/SnapshotArchiveProtocol.ts',
+    'src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts',
+    'src/storage/snapshot/archive/SnapshotArchiveTransport.ts'
+  ])
+  for (const [index, file] of [
+    [1, 'StorageClientBase.ts'],
+    [2, 'StorageServer.ts']
+  ]) {
+    assert.deepEqual(
+      parts[index].target.mutate,
+      canonical.mutate.filter(specification =>
+        specification.startsWith(`src/storage/remoting/${file}:`)
+      )
+    )
+    assert.ok(parts[index].target.mutate.length > 1)
+  }
+  const helper = 'src/storage/snapshot/archive/FutureHttpHelper.ts'
+  const expanded = partitionMutationTarget('wallet-snapshot-remote-http', {
+    ...canonical,
+    mutate: [...canonical.mutate, helper]
+  })
+  assert.equal(expanded[0].id, 'protocol')
+  assert.deepEqual(expanded[0].target.mutate, [...parts[0].target.mutate, helper])
+  assert.equal(selectedMutationPartition('wallet-snapshot-remote-http', canonical), canonical)
+  assert.throws(() =>
+    selectedMutationPartition('wallet-snapshot-remote-http', canonical, 'missing')
+  )
+  for (const specification of ['src/**/*.ts', '!src/helper.ts', '../outside.ts', '/outside.ts']) {
+    assert.throws(() =>
+      partitionMutationTarget('wallet-snapshot-remote-http', { mutate: [specification] })
+    )
+  }
+  const targets = { before: target, 'wallet-snapshot-remote-http': canonical, after: target }
+  assert.deepEqual(mutationExecutionMatrix(Object.keys(targets), targets).include, [
+    { target: 'before', partition: 'whole' },
+    ...['protocol', 'client', 'server'].map(partition => ({
+      target: 'wallet-snapshot-remote-http',
+      partition
+    })),
+    { target: 'after', partition: 'whole' }
+  ])
 })

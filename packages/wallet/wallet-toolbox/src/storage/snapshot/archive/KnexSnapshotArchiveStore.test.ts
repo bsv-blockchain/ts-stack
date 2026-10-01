@@ -5,6 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { knex, type Knex } from 'knex'
 import { addSnapshotArchiveTables, removeSnapshotArchiveTables } from '../../schema/snapshotArchiveMigration'
+import { addSnapshotArchiveOwnerTable } from '../../schema/snapshotArchiveOwnerMigration'
+import { lockSnapshotArchiveCapacity } from './SnapshotArchiveSql'
+import {
+  assignSnapshotArchiveOwner,
+  releaseSnapshotArchiveOwner,
+  reserveSnapshotArchiveOwner,
+  SnapshotArchiveCleanupPendingError
+} from './SnapshotArchiveOwner'
 import { verifySnapshotArchiveDirectory, verifySnapshotArchivePage } from './SnapshotArchiveDirectory'
 import {
   KnexSnapshotArchiveStore,
@@ -117,6 +125,68 @@ test('mainnet source metadata survives sealing and cross-connection reads', asyn
   expect((await secondServer.read(identity, writer.archiveId, 12)).table).toBe('syncStates')
   await secondServer.close(identity, writer.archiveId)
   await expect(store.inspect(identity, writer.archiveId)).rejects.toThrow('unavailable')
+})
+
+test('cleanup retains live source pages and quota while reaping an unrelated expired archive', async () => {
+  const { db, peer, store } = await fixture()
+  await addSnapshotArchiveOwnerTable(db)
+  const writer = await store.begin(binding)
+  await complete(store, writer)
+  const owner = { identityKey: identity, requestId: '1'.repeat(64), claimToken: '2'.repeat(64) }
+  await db.transaction(async trx => {
+    await lockSnapshotArchiveCapacity(trx)
+    await reserveSnapshotArchiveOwner(trx, owner)
+    await assignSnapshotArchiveOwner(trx, owner, writer.archiveId)
+  })
+  const independent = await store.begin({ ...binding, user: { ...binding.user, identityKey: other } })
+  await complete(store, independent)
+  await db('snapshot_archives').update({ expiresAt: 0 })
+  await expect(store.close(identity, writer.archiveId)).rejects.toBeInstanceOf(SnapshotArchiveCleanupPendingError)
+  expect(await db('snapshot_archive_pages').where('archiveId', writer.archiveId)).toHaveLength(13)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 2 })
+  const replacement = new KnexSnapshotArchiveStore(peer)
+  await replacement.reap()
+  expect(await db('snapshot_archives').select('archiveId', 'state')).toEqual([
+    { archiveId: writer.archiveId, state: 'closing' }
+  ])
+  expect(await db('snapshot_archive_pages').where('archiveId', writer.archiveId)).toHaveLength(13)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({
+    archives: 1,
+    reservedBytes: snapshotArchiveLimits.archiveBytes
+  })
+  await releaseSnapshotArchiveOwner(peer, owner)
+  await replacement.reap()
+  expect(await db('snapshot_archives')).toHaveLength(0)
+  expect(await db('snapshot_archive_pages')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
+})
+
+test('reaping exposes storage failure and retains capacity until a later successful cleanup', async () => {
+  const { db, peer, store } = await fixture()
+  const writer = await store.begin(binding)
+  await complete(store, writer)
+  await db('snapshot_archives').where('archiveId', writer.archiveId).update({ expiresAt: 0 })
+  const failure = new Error('synthetic page deletion failure')
+  const interrupt = (query: { sql: string }): void => {
+    if (query.sql.startsWith('delete from `snapshot_archive_pages`')) throw failure
+  }
+  peer.on('query', interrupt)
+  const replacement = new KnexSnapshotArchiveStore(peer)
+  try {
+    await expect(replacement.reap()).rejects.toBe(failure)
+  } finally {
+    peer.off('query', interrupt)
+  }
+  expect(await db('snapshot_archives').first('state')).toEqual({ state: 'closing' })
+  expect(await db('snapshot_archive_pages')).toHaveLength(13)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({
+    archives: 1,
+    reservedBytes: snapshotArchiveLimits.archiveBytes
+  })
+  await replacement.reap()
+  expect(await db('snapshot_archives')).toHaveLength(0)
+  expect(await db('snapshot_archive_pages')).toHaveLength(0)
+  expect(await db('snapshot_archive_capacity').first()).toMatchObject({ archives: 0, reservedBytes: 0 })
 })
 
 test('a replacement server returns verified inclusion metadata without selecting payloads or writer credentials', async () => {
@@ -631,7 +701,7 @@ test('only acknowledged sequence positions are readable, even if an unacknowledg
 
 test('the auxiliary migration is registered after the durable sync schema', async () => {
   const migrations = new KnexMigrations('test', 'source', 'source', 1024)
-  expect(await migrations.getLatestMigration()).toBe('2026-10-01-003 add snapshot profile key indexes')
+  expect(await migrations.getLatestMigration()).toBe('2026-10-01-004 add snapshot relation key indexes')
 })
 
 test('MySQL DDL accommodates the declared metadata and page byte ceilings', async () => {
