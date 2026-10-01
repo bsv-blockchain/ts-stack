@@ -120,8 +120,36 @@ registries and removal conditions.
 
 ## Local validation
 
-Run checks locally before opening or updating a pull request whenever feasible.
-Start with the invariant repository controls:
+Use a short edit loop, then qualify a coherent batch before pushing. While
+editing, run the regression/negative test for the changed behavior and lint and
+format the changed files. Use your package runner's focused test selector; do
+not restart every workspace suite after each small edit.
+
+Preview a dependency-aware local plan without starting expensive campaigns:
+
+```sh
+node scripts/ci-local-feedback.mjs --base origin/main
+# Machine-readable planning for an agent or editor:
+node scripts/ci-local-feedback.mjs --base origin/main --json
+```
+
+Choose the actual intended PR baseline. The plan includes the full committed
+branch diff plus staged, unstaged and authored untracked changes, excludes
+ignored build/sandbox output, and preserves both paths of moves.
+The commands validate working-tree bytes; align the index and working tree before
+treating their results as evidence for the next push. Directly
+changed packages run coverage; affected dependents run regressions and their
+declared consumer/platform checks; prerequisites build without duplicate tests.
+Critical boundaries retain property/mutation and compatibility requirements.
+The printed commands are advisory: review the changed contract and applicable
+service/platform profile, especially for new or unknown boundaries. The plan
+does not grant a remote scope skip or qualification.
+
+Reuse a frozen install and exact-input build outputs during the edit loop. On a
+cold checkout, install with `pnpm install --frozen-lockfile --ignore-scripts`,
+rebuild only audited tools as documented by CI, and build the package graph
+before typechecking consumers that require workspace declarations. Invariant
+checks run once for the completed batch before opening/updating the PR:
 
 ```sh
 pnpm health:check
@@ -162,6 +190,17 @@ do not substitute a macOS image build for hosted Linux/amd64 validation.
 
 Local checks are necessary evidence, not authority to bypass remote checks.
 Record the exact commands and results in the pull request.
+
+Batch related fixes after local feedback and self-review before the next push.
+Run affected deep checks locally where the platform supports them, with source,
+configuration and property seed fixed. Measure comparable wall time and worker
+contention rather than assuming every developer machine is faster. Avoid
+nested worker pools or concurrent heavy campaigns that starve another agent.
+Hosted CI verifies the resulting exact head and platform-specific requirements;
+retain its complete required gate and investigate failures without automatic
+rerun loops. Full workspace/campaign checks belong at shared-control changes,
+affected critical boundaries and the existing scheduled/release qualification,
+rather than every edit. Do not use stale local reports as current-head evidence.
 
 ## Dependencies and automation
 

@@ -132,3 +132,27 @@ test('successful diagnostic mutation never bypasses a failed required PR gate', 
     assert.ok(errors.some(error => error.startsWith('sonar-zero-findings:')))
   }
 })
+
+test('deferred results form an honest complete partition and never impersonate required success', async () => {
+  const { validateMutationClassification } = await import('./ci-result-gate.mjs')
+  const targets = { changed: {}, unaffected: {}, cosmetic: {} }
+  const policy = {
+    targets: [
+      { id: 'changed', risk: 'critical' },
+      { id: 'unaffected', risk: 'critical' },
+      { id: 'cosmetic', risk: 'high' }
+    ]
+  }
+  const classification = { required: ['changed'], deferred: ['cosmetic'], outside: ['unaffected'] }
+  assert.deepEqual(validateMutationClassification(classification, ['changed'], targets, policy), [])
+  for (const value of [
+    undefined,
+    { ...classification, required: [] },
+    { ...classification, outside: [] },
+    { ...classification, deferred: ['cosmetic', 'changed'] },
+    { ...classification, deferred: ['unaffected'], outside: ['cosmetic'] },
+    { ...classification, outside: ['unknown'] }
+  ]) {
+    assert.ok(validateMutationClassification(value, ['changed'], targets, policy).length)
+  }
+})

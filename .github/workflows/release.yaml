@@ -177,9 +177,17 @@ jobs:
   # This job receives the protected npm-production environment. It runs no
   # package build or lifecycle code: it verifies, scans, attests, and publishes
   # only the immutable bytes uploaded by prepare.
-  publish:
-    if: needs.prepare.outputs.count != '0'
+  full-mutation:
+    name: Qualify exact source before publication
     needs: prepare
+    if: needs.prepare.outputs.count != '0'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mutation-tests.yml
+
+  publish:
+    if: needs.prepare.outputs.count != '0' && needs.full-mutation.result == 'success' && needs.full-mutation.outputs.qualified-sha == github.sha
+    needs: [prepare, full-mutation]
     runs-on: ubuntu-24.04
     environment: npm-production
     timeout-minutes: 90
