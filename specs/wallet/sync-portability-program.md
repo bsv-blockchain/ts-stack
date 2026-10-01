@@ -215,3 +215,14 @@ retryable after proved physical cleanup. Regression tests cover both opening
 and closing failures, shared recovery admission, shutdown drainage, immutable
 request bindings and exact cancellation outcomes. These checks do not replace
 the complete mutation campaign or exact-head hosted qualification.
+
+The auxiliary profile-index checkpoint adds separate `(table, user, row)` keys
+for eight directly owned SQL tables. Source triggers preserve independent-writer
+changes and a 256-row bootstrap resumes from atomic key/progress commits. The
+standard schema indexes and legacy OFFSET order remain intact. Ordinary readers,
+archive pages and closure checks select the complete migration in the same
+retained view, preserving all thirteen table values and cursor representations.
+Incomplete journaled state refuses new views. This advances indexed profile
+selection only: the remaining relationship/global-table work, immutable
+commit-order high-water positions, complete tombstone propagation, nonblocking
+IndexedDB and the rest of the implementation program remain required.

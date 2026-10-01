@@ -1,3 +1,4 @@
+import { readSnapshotProfileIndexState } from '../../schema/snapshotProfileIndexMigration'
 import { Random, Utils } from '@bsv/sdk'
 import type { Knex } from 'knex'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
@@ -50,11 +51,18 @@ export async function openKnexSnapshotArchiveSource(
   }
   const view = await openView()
   try {
-    const header = await view.read(async trx => {
+    const { header, profileIndexes } = await view.read(async trx => {
       const sourceStorage = await storage.readSettings(trx)
       const user = await storage.findUserByIdentityKey(identityKey, trx)
       if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
-      return { sourceStorage, user, sourceSchema: await readSnapshotArchiveSourceSchema(storage, storage.toDb(trx)) }
+      return {
+        header: {
+          sourceStorage,
+          user,
+          sourceSchema: await readSnapshotArchiveSourceSchema(storage, storage.toDb(trx))
+        },
+        profileIndexes: await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations)
+      }
     })
     const userId = header.user.userId
     const snapshotId = Utils.toHex(Random(32))
@@ -68,9 +76,9 @@ export async function openKnexSnapshotArchiveSource(
       },
       closed: view.closed,
       close: view.close,
-      readPage: createKnexWalletSnapshotPageReader(storage, userId, snapshotId, view),
+      readPage: createKnexWalletSnapshotPageReader(storage, userId, snapshotId, view, profileIndexes),
       validateClosure: async () => {
-        await view.read(trx => assertKnexSnapshotArchiveClosure(storage.toDb(trx), userId))
+        await view.read(trx => assertKnexSnapshotArchiveClosure(storage.toDb(trx), userId, profileIndexes))
       }
     }
   } catch (error) {

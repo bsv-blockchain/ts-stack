@@ -1,3 +1,4 @@
+import { removeSnapshotProfileIndexes, SNAPSHOT_PROFILE_INDEX_MIGRATION } from '../schema/snapshotProfileIndexMigration'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -519,31 +520,46 @@ test('concurrent reads refuse instead of queueing and expiry invalidates cursors
   await view.closed
 })
 
-test('existing SQL keys support forward seeks for numeric and composite pages without OFFSET or full counts', async () => {
-  const { source, userId, otherId } = await fixture()
-  await seedClosure(source, userId, otherId)
-  const view = await source.openWalletReadSnapshot(identity)
-  const requests: Array<{ sql: string; bindings: Knex.RawBinding[] }> = []
-  const collect = (q: { sql: string; bindings: Knex.RawBinding[] }) => {
-    if (q.sql.startsWith('select')) requests.push(q)
+test.each([false, true])(
+  'SQL keys support numeric and composite forward seeks without OFFSET or full counts (profileIndexes=%s)',
+  async profileIndexes => {
+    const { source, userId, otherId } = await fixture()
+    if (!profileIndexes) {
+      await removeSnapshotProfileIndexes(source.knex)
+      await source.knex('knex_migrations').where('name', SNAPSHOT_PROFILE_INDEX_MIGRATION).delete()
+    }
+    await seedClosure(source, userId, otherId)
+    const view = await source.openWalletReadSnapshot(identity)
+    const requests: Array<{ sql: string; bindings: Knex.RawBinding[] }> = []
+    const collect = (q: { sql: string; bindings: Knex.RawBinding[] }) => {
+      if (q.sql.startsWith('select')) requests.push(q)
+    }
+    source.knex.on('query', collect)
+    for (const table of ['txLabels', 'txLabelMaps', 'certificateFields'] as const) {
+      const first = await view.readPage(table, undefined, { maxRows: 1 })
+      await view.readPage(table, first.cursor, { maxRows: 1 })
+    }
+    source.knex.removeListener('query', collect)
+    await view.close()
+    const subsequent = requests.filter(q => q.sql.includes(' > '))
+    expect(subsequent).toHaveLength(6)
+    expect(subsequent.filter(query => query.sql.includes('snapshot_profile_keys'))).toHaveLength(profileIndexes ? 2 : 0)
+    for (const query of subsequent) {
+      expect(query.sql).not.toMatch(/offset|count\(/i)
+      const plan = await source.knex.raw('EXPLAIN QUERY PLAN ' + query.sql, query.bindings)
+      const details = plan.map((row: { detail: string }) => row.detail).join('\n')
+      if (query.sql.includes('snapshot_profile_keys')) {
+        expect(details).toMatch(
+          /SEARCH snapshot_profile_keys USING COVERING INDEX .*\(snapshotTableId=\? AND snapshotUserId=\? AND snapshotRowId>\?(?: AND snapshotRowId<\?)?\)/
+        )
+        expect(details).toMatch(/SEARCH tx_labels USING INTEGER PRIMARY KEY \(rowid=\?\)/)
+        expect(details).not.toMatch(/SCAN |TEMP B-TREE/)
+      } else {
+        expect(details).toMatch(/SEARCH (tx_labels|tx_labels_map|certificate_fields) USING .*\(.*>\(?\?/)
+      }
+    }
   }
-  source.knex.on('query', collect)
-  for (const table of ['txLabels', 'txLabelMaps', 'certificateFields'] as const) {
-    const first = await view.readPage(table, undefined, { maxRows: 1 })
-    await view.readPage(table, first.cursor, { maxRows: 1 })
-  }
-  source.knex.removeListener('query', collect)
-  await view.close()
-  const subsequent = requests.filter(q => q.sql.includes(' > '))
-  expect(subsequent).toHaveLength(6)
-  for (const query of subsequent) {
-    expect(query.sql).not.toMatch(/offset|count\(/i)
-    const plan = await source.knex.raw('EXPLAIN QUERY PLAN ' + query.sql, query.bindings)
-    expect(plan.map((row: { detail: string }) => row.detail).join('\n')).toMatch(
-      /SEARCH (tx_labels|tx_labels_map|certificate_fields) USING .*\(.*>\(?\?/
-    )
-  }
-})
+)
 
 test('an owned certificate with a foreign-user field rejects without returning that field', async () => {
   const { source, userId, otherId } = await fixture()

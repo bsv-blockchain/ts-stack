@@ -401,6 +401,45 @@ test('native snapshot process-loss proof uses the same-head build in exactly one
   assert.deepEqual(wallet.permissions, { contents: 'read' })
 })
 
+test('native MySQL uses a bounded pinned fixture in the existing required wallet shard', async () => {
+  const { parse } = await import('yaml')
+  const wallet = parse(readFileSync(CI_PATH, 'utf8')).jobs['coverage-wallet']
+  const provisionCommand = 'node test/storage/snapshotArchiveDocker.cjs provision-hosted-image'
+  const proofCommand = 'node test/storage/runSnapshotArchiveMysql.cjs'
+  const selected = [provisionCommand, proofCommand].map(command => {
+    const steps = wallet.steps.filter(step => step.run === command)
+    assert.equal(steps.length, 1)
+    const step = steps[0]
+    assert.equal(step.if, "matrix.id == 'shard-1'")
+    assert.equal(step['working-directory'], 'packages/wallet/wallet-toolbox')
+    assert.equal(step['timeout-minutes'], 5)
+    assert.deepEqual(step.env, { TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1' })
+    assert.equal(step['continue-on-error'], undefined)
+    return wallet.steps.indexOf(step)
+  })
+  const sqlite = wallet.steps.findIndex(
+    step => step.run === 'node test/storage/snapshotArchiveCrash.cjs'
+  )
+  const coverage = wallet.steps.findIndex(
+    step => step.name === 'Generate wallet-toolbox coverage shard'
+  )
+  assert.ok(
+    sqlite >= 0 && sqlite < selected[0] && selected[0] < selected[1] && selected[1] < coverage
+  )
+  assert.deepEqual(wallet.strategy.matrix.include, [
+    { id: 'shard-1', shard: 1 },
+    { id: 'shard-2', shard: 2 },
+    { id: 'shard-3', shard: 3 },
+    { id: 'shard-4', shard: 4 },
+    { id: 'sync-http-0', latency: 0 },
+    { id: 'sync-http-1000', latency: 1000 }
+  ])
+  assert.equal(wallet.needs, 'prepare')
+  assert.equal(wallet['timeout-minutes'], 40)
+  assert.deepEqual(wallet.permissions, { contents: 'read' })
+  assert.equal(wallet['continue-on-error'], undefined)
+})
+
 test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {
   const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
     candidate => candidate.name === 'mutation-quality'

@@ -3,23 +3,18 @@ const { execFileSync } = require('node:child_process')
 const { knex } = require('knex')
 const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 const { SnapshotArchiveCleanupPendingError } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveOwner.js')
-const executable = require('./snapshotArchiveDocker.cjs')
+const { executable, context, validateContext, validateContainer } = require('./snapshotArchiveDocker.cjs')
 const container = process.env.TS_STACK_SNAPSHOT_CONTAINER
 const expectedId = process.env.TS_STACK_SNAPSHOT_CONTAINER_ID
+const owner = process.env.TS_STACK_SNAPSHOT_CONTAINER_OWNER
 const secret = process.env.TS_STACK_SNAPSHOT_MYSQL_SECRET
-if (!container || !expectedId || !secret) throw new Error('Use the bounded local fixture launcher')
-const actual = JSON.parse(
-  execFileSync(executable, ['--context', 'desktop-linux', 'inspect', container], { encoding: 'utf8' })
-)[0]
-assert.equal(actual.Id, expectedId)
-assert.equal(actual.Config.Labels['network-ops.fixture'], 'ts-stack-544-durable')
-assert.equal(actual.Config.Image, 'mysql@sha256:0744ee5ef89ce6ccfa13de3e579fe6b9e27f93dd70da9c06d2c908b1b193fb8d')
-const port = Number(
-  execFileSync(executable, ['--context', 'desktop-linux', 'port', expectedId, '3306/tcp'], { encoding: 'utf8' })
-    .trim()
-    .split(':')
-    .at(-1)
-)
+if (!container || !expectedId || !owner || !secret) throw new Error('Use the bounded fixture launcher')
+const docker = (...args) =>
+  execFileSync(executable, ['--context', context, ...args], { encoding: 'utf8', timeout: 15000 })
+validateContext(JSON.parse(docker('context', 'inspect', context)))
+const actual = JSON.parse(docker('inspect', container))[0]
+validateContainer(actual, { name: container, owner, id: expectedId })
+const port = Number(docker('port', expectedId, '3306/tcp').trim().split(':').at(-1))
 const connection = {
   host: '127.0.0.1',
   port,
@@ -150,7 +145,7 @@ async function captureFixture() {
     assert.equal(manifest.pages, 14)
     assert.equal(manifest.binding.sourceStorage.storageIdentityKey, 'native-source')
     assert.equal(manifest.binding.user.activeStorage, 'historical selection')
-    assert.equal(manifest.binding.sourceSchema, '2026-10-01-002 add snapshot archive source guards')
+    assert.equal(manifest.binding.sourceSchema, '2026-10-01-003 add snapshot profile key indexes')
     const store = new KnexSnapshotArchiveStore(writer.knex)
     const first = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 8)).bytes)
     const second = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 9)).bytes)
@@ -438,7 +433,7 @@ async function requestFixture(writer, reader) {
       sourceStorageIdentityKey: 'native-source',
       digest: ready.digest
     })
-    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-002 add snapshot archive source guards')
+    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-003 add snapshot profile key indexes')
     const page = await replacement.read(identity, ready.archiveId, 8)
     const decoded = decodeSyncTransfer(verifySnapshotArchivePage(page, verified.receipts[8]))
     assert.equal(decoded.rows[0].label, 'replacement')
@@ -539,6 +534,10 @@ async function main() {
     assert.equal(await database.schema.hasTable('snapshot_archive_pages'), true)
     assert.equal(Number((await database('snapshot_archive_capacity').first()).archives), 0)
     const capture = await captureFixture()
+    const { qualifyMysqlProfileIndexProcessLoss } = require('./snapshotProfileIndexCrash.cjs')
+    const profileIndexProcessLoss = await qualifyMysqlProfileIndexProcessLoss(database, connection)
+    const { qualifyMysqlProfileIndexLocks } = require('./snapshotProfileIndexMysql.cjs')
+    const profileIndexLocks = await qualifyMysqlProfileIndexLocks(database, connection)
     console.log(
       JSON.stringify({
         version,
@@ -551,6 +550,8 @@ async function main() {
         expiredPartialUnreadable: true,
         profileReservationRace: true,
         idempotentPartialDdl: true,
+        profileIndexProcessLoss,
+        profileIndexLocks,
         capture
       })
     )

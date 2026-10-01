@@ -39,6 +39,18 @@ retain their documented caller-quiesced fallback.
 Recognized optional nullable JSON fields are omitted in a detached archive copy;
 array entries and meaningful falsy values are preserved. The helpers still
 materialize the full document/file, and IndexedDB writers wait during capture.
+Run `pnpm test:snapshot-archive-crash` for native SQLite process recovery and
+`pnpm test:snapshot-archive-mysql` for the disposable MySQL fixture from this
+package. Local MySQL qualification uses Docker Desktop and requires the pinned
+image already present. Required wallet CI shard 1 provisions that same immutable
+image on its ephemeral Linux runner, then runs both native fixtures from the
+same-head build before Jest. Hosted MySQL mode accepts only the local default
+Unix socket. The fixture uses a unique ownership label, loopback port, bounded
+memory/CPU/process count and temporary data volume; individual Docker calls,
+readiness and the child proof have deadlines. Failure or cancellation drains
+owned work and attempts exact-owner cleanup before reporting its outcome;
+unproved cleanup fails qualification. Other wallet shards do not start MySQL.
+
 SQL providers also expose `supportsRetainedReadSnapshot` / `openReadSnapshot`
 for a local view held across idle reads, with one view per provider, one read at
 a time, and bounded lifetime/cancellation. Await `closed`/`close()` for physical
@@ -82,6 +94,11 @@ even after its read promise settles. Ordinary read failures remain retryable
 after physical cleanup succeeds.
 Keep the guard files and bindings intact and drain captures before downgrade.
 The server reader capability remains unadvertised pending complete qualification.
+The auxiliary profile-key migration preserves standard-table indexes and legacy
+OFFSET ordering while adding indexed snapshot selection for eight direct tables.
+Its triggers track independent writers; bounded bootstrap batches survive restart,
+and readers enable the index only from a complete migration in their retained
+view. See the [migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-profile-indexes-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results
@@ -107,14 +124,18 @@ Timing compares successive candidates, not a controlled comparison against upstr
 
 ### SQLite migration recovery
 
-SQLite migration handling introduced in 2.13.2 runs migration DDL and the migration
-journal update transactionally. Foreign-key enforcement is disabled before the
+SQLite migration handling introduced in 2.13.2 runs transactional migration DDL
+and the migration journal update together. The unpublished profile-index
+migration is an explicit resumable exception: auxiliary keys and progress commit
+in bounded batches before its final migration journal entry. Foreign-key enforcement is disabled before the
 migration transaction for table rebuilds and restored after success or failure.
-Failed migrations can be retried after reopening the database without partial
-schema objects from that attempt. MySQL's existing transaction configuration
+Failed transactional migrations can be retried after reopening the database
+without partial schema objects from that attempt. The resumable profile-index
+migration instead retains its verified auxiliary objects and committed progress;
+see its linked recovery contract before retrying an interrupted migrator. MySQL's existing transaction configuration
 is unchanged.
 
-This prevents future partial migrations. It does not automatically repair a
+Transactional migration handling prevents partial table rebuilds. It does not automatically repair a
 store already left with unjournaled schema objects by an older version. Preserve
 the database and verified backups and reconcile the exact schema and migration
 journal before recovery; do not delete journal rows or wallet data blindly.

@@ -212,14 +212,59 @@ charge bounds stored page payload, not encoded wire size or measured process
 RSS; callers must release consumed pages. Large-value streaming remains required
 for records exceeding the maximum budget, and header/schema metadata is separate.
 
-Traversal uses existing unique keys, including label/tag-first mapping keys and
-field-name-first certificate keys, with each database's collation. This order is
-not the canonical BRC-38 array order. No OFFSET, full-table count, new index or
-persistence migration is introduced. Existing legacy sync checkpoints and query
-plans are unchanged. SQLite query-plan tests verify range seeks for numeric and
-composite keys. Identity/update-key indexing, commit-order incremental high-water
-positions, remote handles, IDB retention and streaming remain part of the active
-program. The local sync integration below consumes these pages.
+Traversal preserves the original unique-key order, including label/tag-first
+mapping keys and field-name-first certificate keys, with each database's
+collation. This order differs from canonical BRC-38 array order. The auxiliary
+profile index below adds bounded profile range selection for eight direct tables
+without altering any standard-table index, legacy OFFSET order or cursor bytes.
+Relationship/global-table query work, commit-order incremental high-water
+positions, IndexedDB retention and large-value streaming remain required by the
+active program. The local sync integration below consumes these pages.
+
+### Auxiliary profile indexes (unpublished candidate)
+
+Migration `2026-10-01-003 add snapshot profile key indexes` adds
+`snapshot_profile_keys` and `snapshot_profile_index_progress`. The first table
+holds `(table, user, row)` keys for transactions, outputs, certificates, labels,
+baskets, tags, commissions and sync states. Source-table insert, key/profile
+update and delete triggers maintain the keys in the writer's transaction,
+including writes from older binaries and independent connections. The standard
+tables and indexes remain intact. These auxiliary tables are not wallet archive
+content and do not change BRC-38, legacy sync or snapshot cursor encodings.
+
+Use the normal provider migration entry point. This migration intentionally
+uses `transaction: false`: MySQL DDL commits independently, and each bootstrap
+batch commits its keys and progress together in a separate transaction on both
+backends. A batch reads at most 256 source rows. SQLite takes its writer lock
+before reading progress; MySQL locks the current progress and source rows until
+commit. Triggers precede bootstrap, so independent profile moves, deletes and
+inserts behind a committed cursor remain visible to resumed indexing. No
+standard table is rebuilt and no wallet row is rewritten.
+
+An interruption can leave auxiliary tables, triggers or committed bootstrap
+batches before the migration journal entry. Retain them and retry the migration;
+matching objects and committed positions are reused. Mismatched definitions or
+malformed progress refuse completion. An abruptly terminated migrator may also
+leave Knex's migration lock claimed. Before recovering that lock, independently
+verify that its migrator has stopped and exclude every other migrator; this
+implementation does not automatically break a migration lock. Keep a verified
+backup and use the existing migration recovery procedure.
+
+A retained reader chooses its mode from the exact migration journal entry and
+complete progress in the same view as its header and pages. Missing journal
+entries retain the previous traversal. A journaled but incomplete or mismatched
+auxiliary schema refuses the new view. Existing views keep their original mode
+across later migration or writer commits. Ordinary pages, archive pages and
+archive closure checks share that choice; no private mode flag is added to
+public metadata.
+
+Drain snapshot readers and exclude concurrent migrators before rollback. The
+migration's down operation validates owned objects, stops insert/update producers
+before deleting their observers, then removes only the auxiliary tables and its
+journal entry. Standard wallet rows and indexes remain unchanged. Older binaries
+may read and write the unchanged standard schema while the forward migration's
+triggers remain installed; binary downgrade procedures still apply to the
+candidate's other migrations.
 
 ## Durable local SQL sync and ordinary backup
 

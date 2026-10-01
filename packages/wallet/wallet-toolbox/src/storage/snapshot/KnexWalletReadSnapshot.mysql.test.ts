@@ -23,7 +23,14 @@ function fixture(fieldCount = 6, bytes = 524, certificate = false, deleted: bool
       callback: (error: Error | null, rows?: unknown[], fields?: unknown[]) => void
     ) {
       queries.push({ sql: query.sql, bindings })
-      if (query.sql.startsWith('SELECT COLUMN_NAME')) {
+      if (query.sql.startsWith('select * from information_schema.tables')) {
+        // This fixture represents an unmigrated externally supplied pool.
+        expect(query.sql).toBe(
+          'select * from information_schema.tables where table_name = ? and table_schema = database()'
+        )
+        expect(bindings).toEqual(['knex_migrations'])
+        callback(null, [], [])
+      } else if (query.sql.startsWith('SELECT COLUMN_NAME')) {
         expect(query.sql).toBe(
           'SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION LIMIT 65'
         )

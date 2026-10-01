@@ -1,4 +1,9 @@
 import {
+  addSnapshotProfileIndexes,
+  removeSnapshotProfileIndexes,
+  SNAPSHOT_PROFILE_INDEX_MIGRATION
+} from './snapshotProfileIndexMigration'
+import {
   addSnapshotArchiveGuardTable,
   removeSnapshotArchiveGuardTable,
   SNAPSHOT_ARCHIVE_GUARD_MIGRATION
@@ -32,6 +37,7 @@ import {
   LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
 } from '../methods/managedChangePolicy'
 
+export { SNAPSHOT_PROFILE_INDEX_MIGRATION } from './snapshotProfileIndexMigration'
 export { SNAPSHOT_ARCHIVE_OWNER_MIGRATION } from './snapshotArchiveOwnerMigration'
 export { SNAPSHOT_ARCHIVE_GUARD_MIGRATION } from './snapshotArchiveGuardMigration'
 export { SNAPSHOT_ARCHIVE_REQUEST_MIGRATION } from './snapshotArchiveRequestMigration'
@@ -118,6 +124,14 @@ export class KnexMigrations implements MigrationSource<string> {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
         table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
       }
+    }
+
+    // DDL may commit independently on MySQL. Bootstrap pages retain their own
+    // durable positions on both backends and resume before journal publication.
+    migrations[SNAPSHOT_PROFILE_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: addSnapshotProfileIndexes,
+      down: removeSnapshotProfileIndexes
     }
 
     migrations[SNAPSHOT_ARCHIVE_GUARD_MIGRATION] = {

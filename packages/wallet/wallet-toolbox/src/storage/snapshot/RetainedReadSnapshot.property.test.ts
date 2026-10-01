@@ -1,3 +1,8 @@
+import {
+  addSnapshotProfileIndexes,
+  removeSnapshotProfileIndexes,
+  snapshotProfileTables
+} from '../schema/snapshotProfileIndexMigration'
 import fc from 'fast-check'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -248,4 +253,80 @@ test('random schedules preserve single-read admission, late-result rejection and
       expect(jest.getTimerCount()).toBe(0)
     })
   )
+})
+
+test('generated source writes, profile moves, rollback and restart preserve exact auxiliary membership', async () => {
+  const k = knex({
+    client: 'better-sqlite3',
+    connection: { filename: ':memory:' },
+    useNullAsDefault: true,
+    pool: { min: 1, max: 1 }
+  })
+  try {
+    await runInSeries(snapshotProfileTables, async ({ table, key }) => {
+      await k.schema.createTable(table, columns => {
+        columns.integer(key).primary()
+        columns.integer('userId').notNullable()
+        columns.text('value')
+      })
+    })
+    await addSnapshotProfileIndexes(k)
+    const verify = async (): Promise<void> => {
+      const expected: Array<{ snapshotTableId: number; snapshotUserId: number; snapshotRowId: number }> = []
+      await runInSeries(snapshotProfileTables.entries(), async ([snapshotTableId, { table, key }]) => {
+        const rows: Array<Record<string, number>> = await k(table).select(key, 'userId')
+        expected.push(...rows.map(row => ({ snapshotTableId, snapshotUserId: row.userId, snapshotRowId: row[key] })))
+      })
+      expected.sort(
+        (a, b) =>
+          a.snapshotTableId - b.snapshotTableId ||
+          a.snapshotUserId - b.snapshotUserId ||
+          a.snapshotRowId - b.snapshotRowId
+      )
+      expect(await k('snapshot_profile_keys').orderBy(['snapshotTableId', 'snapshotUserId', 'snapshotRowId'])).toEqual(
+        expected
+      )
+    }
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            tableId: fc.integer({ min: 0, max: 7 }),
+            rowId: fc.integer({ min: 1, max: 20 }),
+            owner: fc.integer({ min: 1, max: 4 }),
+            kind: fc.constantFrom('insert-or-update', 'delete', 'rollback', 'rebuild', 'repeat'),
+            value: fc.string({ maxLength: 12 })
+          }),
+          { minLength: 1, maxLength: 12 }
+        ),
+        async schedule => {
+          await runInSeries(snapshotProfileTables, async ({ table }) => {
+            await k(table).delete()
+          })
+          await verify()
+          await runInSeries(schedule, async operation => {
+            const { table, key } = snapshotProfileTables[operation.tableId]
+            const row = { [key]: operation.rowId, userId: operation.owner, value: operation.value }
+            if (operation.kind === 'insert-or-update') await k(table).insert(row).onConflict(key).merge()
+            else if (operation.kind === 'delete') await k(table).where(key, operation.rowId).delete()
+            else if (operation.kind === 'rollback') {
+              const rollback = new Error('synthetic rollback')
+              await expect(
+                k.transaction(async trx => {
+                  await trx(table).insert(row).onConflict(key).merge()
+                  throw rollback
+                })
+              ).rejects.toBe(rollback)
+            } else if (operation.kind === 'rebuild') {
+              await removeSnapshotProfileIndexes(k)
+              await addSnapshotProfileIndexes(k)
+            } else await addSnapshotProfileIndexes(k)
+            await verify()
+          })
+        }
+      )
+    )
+  } finally {
+    await k.destroy()
+  }
 })

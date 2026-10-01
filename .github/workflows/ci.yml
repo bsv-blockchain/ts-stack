@@ -994,6 +994,20 @@ jobs:
         if: matrix.id == 'shard-1'
         working-directory: packages/wallet/wallet-toolbox
         run: node test/storage/snapshotArchiveCrash.cjs
+      - name: Provision pinned native snapshot MySQL fixture
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 5
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/snapshotArchiveDocker.cjs provision-hosted-image
+      - name: Verify native snapshot MySQL recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 5
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/runSnapshotArchiveMysql.cjs
       - name: Generate wallet-toolbox coverage shard
         env:
           WALLET_SHARD: ${{ matrix.shard }}

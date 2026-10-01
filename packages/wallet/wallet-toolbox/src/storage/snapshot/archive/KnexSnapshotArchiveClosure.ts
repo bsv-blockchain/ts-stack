@@ -124,7 +124,7 @@ const references: readonly Reference[] = [
  * constant marker is returned for an invalid relation; blobs and full ID maps
  * are never loaded. This does not parse or authenticate BRC-38/39 documents.
  */
-export async function assertKnexSnapshotArchiveClosure(k: Knex, userId: number): Promise<void> {
+export async function assertKnexSnapshotArchiveClosure(k: Knex, userId: number, profileIndexes = false): Promise<void> {
   if (!Number.isSafeInteger(userId) || userId < 1) throw new WERR_INVALID_PARAMETER('userId', 'a positive safe ID')
   await runInSeries(references, async reference => {
     const column = `${reference.source}.${reference.field}`
@@ -132,7 +132,7 @@ export async function assertKnexSnapshotArchiveClosure(k: Knex, userId: number):
       .select(k.raw('1'))
       .whereRaw('?? = ??', [`${reference.target}.${reference.key}`, column])
     if (reference.profile) void target.where(`${reference.target}.userId`, userId)
-    const invalid = walletSnapshotSourceQuery(k, reference.table, userId)
+    const invalid = walletSnapshotSourceQuery(k, reference.table, userId, profileIndexes)
       .select(k.raw('1 AS invalid'))
       .whereNotExists(target)
     if (reference.optional === true) void invalid.whereNotNull(column)
