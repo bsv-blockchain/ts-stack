@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.3.4'
+version: '1.3.5'
 last_updated: '2026-10-01'
 last_verified: '2026-10-01'
 review_cadence_days: 30
@@ -326,3 +326,24 @@ billing estimate. Record comparable exact-source elapsed time, total execution,
 dry-run and aggregate overhead before claiming a reduction. Wallet retained
 snapshot partition adoption is independently owned and is not implemented by
 this SDKAuth change.
+
+### Retained snapshot partition adoption
+
+The same required canonical aggregation supports an actually registered
+`wallet-retained-snapshot`: whole retained lifecycle, whole Knex reader, and
+all original StorageKnex/StorageProvider ranges. Future canonical sources join
+lifecycle; every part keeps the complete original tests and property/config
+settings. Selection creates no target absent from the current registry. PR and
+full qualification require every selected partitioned target's original global
+gate and full publication independently reconstructs its raw evidence.
+
+Historical source `7539b7109de2c2cffa220b7a9df622ab807ab269` has exactly
+110 lifecycle + 455 reader + 39 storage = 604 distinct canonical mutants. Its
+hosted job ran 89m53s before a 90-minute timeout without a final report. The
+reader contains 75% of these sites, so file splitting can leave a substantial
+tail. Counts do not predict runtime; repeated complete dry runs, verifier setup
+and six-slot contention add compute. No measured improvement is established.
+This source proof cannot qualify a newer wallet head: its owner must compare
+the full pinned inventory/configuration on the final source before adoption.
+Registry, runtime, assertions, workers, deadlines and thresholds remain owned
+and unchanged by the partition facility.

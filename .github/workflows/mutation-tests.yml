@@ -32,6 +32,7 @@ jobs:
       targets: ${{ steps.targets.outputs.targets }}
       mode: ${{ steps.targets.outputs.mode }}
       mutation-matrix: ${{ steps.targets.outputs.mutation-matrix }}
+      partition-targets: ${{ steps.targets.outputs.partition-targets }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -62,8 +63,10 @@ jobs:
             TARGETS=$(jq -R -s -c 'split("\n") | map(select(length > 0))' <<<"$GOVERNED_TARGETS")
           fi
           echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
-          echo "mutation-matrix=$(node scripts/mutation-partition-evidence.mjs matrix --selected \
-            "$TARGETS")" >> "$GITHUB_OUTPUT"
+          MUTATION_MATRIX=$(node scripts/mutation-partition-evidence.mjs matrix --selected "$TARGETS")
+          PARTITION_TARGETS=$(node scripts/mutation-partition-evidence.mjs targets --selected "$TARGETS")
+          echo "mutation-matrix=$MUTATION_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "partition-targets=$PARTITION_TARGETS" >> "$GITHUB_OUTPUT"
           if [ -n "$REQUESTED_TARGET" ]; then
             echo "mode=diagnostic" >> "$GITHUB_OUTPUT"
           else
@@ -141,7 +144,7 @@ jobs:
             --mode "$CAMPAIGN_MODE" --target "$TARGET" \
             --directory "artifacts/mutation/$TARGET"
 
-      - name: Capture complete SDKAuth partition evidence
+      - name: Capture complete execution-partition evidence
         if: matrix.partition != 'whole'
         env:
           CAMPAIGN_MODE: ${{ needs.prepare.outputs.mode }}
@@ -158,10 +161,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  sdk-auth-aggregate:
-    name: Canonical SDKAuth global gate
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.mutation-tests.result == 'success' && contains(fromJSON(needs.prepare.outputs.targets || '[]'), 'sdk-auth-http')
+  partition-aggregate:
+    name: Canonical global gate / ${{ matrix.target }}
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.mutation-tests.result == 'success' && needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
     needs: [prepare, mutation-tests]
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        target: ${{ fromJSON(needs.prepare.outputs.partition-targets) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -179,20 +187,20 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: mutation-partition-${{ github.run_id }}-${{ github.run_attempt }}-sdk-auth-http-*
-          path: .sdk-auth-parts
+          pattern: mutation-partition-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.target }}-*
+          path: .mutation-parts
       - name: Require the original global score and exhaustive canonical inventory
         env:
           CAMPAIGN_MODE: ${{ needs.prepare.outputs.mode }}
         run: |
           node scripts/mutation-partition-evidence.mjs verify --mode "$CAMPAIGN_MODE" \
-            --target sdk-auth-http --directory .sdk-auth-parts \
-            --output artifacts/mutation/sdk-auth-http
+            --target "${{ matrix.target }}" --directory .mutation-parts \
+            --output "artifacts/mutation/${{ matrix.target }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
-          name: mutation-receipt-${{ github.run_id }}-${{ github.run_attempt }}-sdk-auth-http
-          path: artifacts/mutation/sdk-auth-http
+          name: mutation-receipt-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.target }}
+          path: artifacts/mutation/${{ matrix.target }}
           if-no-files-found: ignore
           retention-days: 30
 
@@ -202,7 +210,7 @@ jobs:
     needs:
       - prepare
       - mutation-tests
-      - sdk-auth-aggregate
+      - partition-aggregate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -214,15 +222,16 @@ jobs:
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           MUTATION_RESULT: ${{ needs.mutation-tests.result }}
-          SDK_AUTH_RESULT: ${{ needs.sdk-auth-aggregate.result }}
-          SDK_AUTH_REQUIRED: ${{ contains(fromJSON(needs.prepare.outputs.targets || '[]'), 'sdk-auth-http') }}
+          PARTITION_RESULT: ${{ needs.partition-aggregate.result }}
+          PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" || "$MUTATION_RESULT" != "success" ]]; then
             echo "::error::Mutation campaign failed: prepare=$PREPARE_RESULT mutation=$MUTATION_RESULT"
             exit 1
           fi
-          if [[ "$SDK_AUTH_REQUIRED" == "true" && "$SDK_AUTH_RESULT" != "success" ]]; then
-            echo "::error::Complete SDKAuth global gate failed: $SDK_AUTH_RESULT"
+          jq -e 'type == "array" and all(.[]; type == "string")' <<<"$PARTITION_TARGETS" > /dev/null
+          if [[ "$PARTITION_TARGETS" != "[]" && "$PARTITION_RESULT" != "success" ]]; then
+            echo "::error::Complete canonical partition gate failed: $PARTITION_RESULT"
             exit 1
           fi
 
@@ -241,13 +250,17 @@ jobs:
         with:
           pattern: mutation-receipt-${{ github.run_id }}-${{ github.run_attempt }}-*
           path: .mutation-receipts
-      - name: Independently recheck all raw SDKAuth partitions before full qualification
-        if: contains(fromJSON(needs.prepare.outputs.targets || '[]'), 'sdk-auth-http')
+      - name: Independently recheck every selected canonical partition before full qualification
+        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
           CAMPAIGN_MODE: ${{ needs.prepare.outputs.mode }}
+          PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
         run: |
-          node scripts/mutation-partition-evidence.mjs recheck --mode "$CAMPAIGN_MODE" \
-            --target sdk-auth-http --directory .mutation-receipts
+          TARGET_LINES=$(jq -er '.[]' <<<"$PARTITION_TARGETS")
+          while IFS= read -r target; do
+            node scripts/mutation-partition-evidence.mjs recheck --mode "$CAMPAIGN_MODE" \
+              --target "$target" --directory .mutation-receipts
+          done <<<"$TARGET_LINES"
       - name: Issue full qualification only for every exact-source canonical target
         id: qualification
         env:

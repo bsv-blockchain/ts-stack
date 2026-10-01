@@ -88,12 +88,18 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
     /mode=diagnostic/
   )
   const gate = workflow.jobs['mutation-quality']
-  assert.deepEqual(gate.needs, ['prepare', 'mutation-tests', 'sdk-auth-aggregate'])
+  assert.deepEqual(gate.needs, ['prepare', 'mutation-tests', 'partition-aggregate'])
   const script = gate.steps.find(step => step.name === 'Verify the campaign').run
   for (const prepare of ['success', 'failure', 'cancelled', 'skipped', '']) {
     for (const mutation of ['success', 'failure', 'cancelled', 'skipped', '']) {
       const run = spawnSync('/bin/bash', ['-e', '-c', script], {
-        env: { PREPARE_RESULT: prepare, MUTATION_RESULT: mutation, SDK_AUTH_REQUIRED: 'false' },
+        env: {
+          PREPARE_RESULT: prepare,
+          MUTATION_RESULT: mutation,
+          PARTITION_TARGETS: '[]',
+          PARTITION_RESULT: 'skipped',
+          PATH: process.env.PATH
+        },
         encoding: 'utf8'
       })
       assert.equal(run.status === 0, prepare === 'success' && mutation === 'success')
@@ -114,6 +120,18 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
     /mutation-final-qualification\.mjs verify/
   )
   const ci = parse(readFileSync(CI_PATH, 'utf8'))
+  assert.equal(
+    ci.jobs.prepare.outputs['partition-targets'],
+    '${{ needs.scope.outputs.partition-targets }}'
+  )
+  assert.equal(
+    ci.jobs.scope.outputs['partition-targets'],
+    '${{ steps.scope.outputs.partition-targets }}'
+  )
+  assert.equal(
+    workflow.jobs.prepare.outputs['partition-targets'],
+    '${{ steps.targets.outputs.partition-targets }}'
+  )
   const deadline = workflow.jobs['mutation-tests']['timeout-minutes']
   assert.equal(ci.jobs['mutation-tests']['timeout-minutes'], deadline)
   const allowance = JSON.parse(/fromJSON\('([^']+)'\)/.exec(deadline)[1])
@@ -129,7 +147,7 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
   assert.match(deadline, /&& 90 \|\| 45/)
 })
 
-test('SDKAuth partial jobs cannot replace the original canonical global gate or the final raw-part recheck', async () => {
+test('partition jobs cannot replace each original canonical global gate or the final raw-part recheck', async () => {
   const { parse } = await import('yaml')
   const full = parse(
     readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
@@ -150,25 +168,98 @@ test('SDKAuth partial jobs cannot replace the original canonical global gate or 
   for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
     const run = spawnSync('/bin/bash', ['-e', '-c', script], {
       env: {
+        PATH: process.env.PATH,
         PREPARE_RESULT: 'success',
         MUTATION_RESULT: 'success',
-        SDK_AUTH_REQUIRED: 'true',
-        SDK_AUTH_RESULT: result
+        PARTITION_TARGETS: JSON.stringify(['sdk-auth-http', 'wallet-retained-snapshot']),
+        PARTITION_RESULT: result
       }
     })
     assert.equal(run.status === 0, result === 'success')
   }
   const recheck = gate.steps.findIndex(
     step =>
-      step.name === 'Independently recheck all raw SDKAuth partitions before full qualification'
+      step.name ===
+      'Independently recheck every selected canonical partition before full qualification'
   )
   assert.ok(recheck >= 0 && recheck < gate.steps.findIndex(step => step.id === 'qualification'))
   assert.match(gate.steps[recheck].run, /mutation-partition-evidence\.mjs recheck/)
   assert.match(
     ci.jobs['mutation-quality'].steps.find(
-      step => step.name === 'Require the unchanged global SDKAuth target gate'
+      step => step.name === 'Require every selected canonical partition target gate'
     ).run,
     /mutation-partition-evidence\.mjs verify/
   )
-  assert.deepEqual(full.jobs['sdk-auth-aggregate'].needs, ['prepare', 'mutation-tests'])
+  assert.deepEqual(full.jobs['partition-aggregate'].needs, ['prepare', 'mutation-tests'])
+  assert.match(full.jobs['partition-aggregate'].strategy.matrix.target, /partition-targets/)
+  for (const id of ['sdk-auth-http', 'wallet-retained-snapshot']) {
+    const download = ci.jobs['mutation-quality'].steps.find(
+      step => step.with?.pattern === `mutation-${id}-*`
+    )
+    assert.ok(download)
+    assert.match(download.if, /partition-targets/)
+    assert.equal(download.with.path, `.mutation-parts/${id}`)
+  }
+  for (const targets of ['[]', '', 'null']) {
+    const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: {
+        PREPARE_RESULT: 'success',
+        MUTATION_RESULT: 'success',
+        PARTITION_TARGETS: targets,
+        PARTITION_RESULT: 'skipped',
+        PATH: process.env.PATH
+      }
+    })
+    assert.equal(run.status === 0, targets === '[]')
+  }
+})
+
+test('PR partial execution cannot qualify when canonical aggregate selection is absent, empty or incomplete', async () => {
+  const { parse } = await import('yaml')
+  const ci = parse(readFileSync(CI_PATH, 'utf8'))
+  const script = ci.jobs['mutation-quality'].steps.find(
+    step => step.name === 'Verify the affected mutation targets'
+  ).run
+  const targets = ['sdk-auth-http', 'wallet-retained-snapshot']
+  const matrix = {
+    include: targets.flatMap(target =>
+      ['first', 'second'].map(partition => ({ target, partition }))
+    )
+  }
+  for (const selection of [
+    '',
+    '[]',
+    'null',
+    '["sdk-auth-http"]',
+    '["sdk-auth-http","sdk-auth-http"]',
+    JSON.stringify(targets)
+  ]) {
+    const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: {
+        PATH: process.env.PATH,
+        PREPARE_RESULT: 'success',
+        MUTATION_RESULT: 'success',
+        MUTATION_TARGETS: JSON.stringify(targets),
+        MUTATION_CLASSIFICATION: '{"deferred":[]}',
+        MUTATION_MATRIX: JSON.stringify(matrix),
+        PARTITION_TARGETS: selection,
+        GITHUB_STEP_SUMMARY: '/dev/null'
+      }
+    })
+    assert.equal(run.status === 0, selection === JSON.stringify(targets))
+  }
+  const empty = spawnSync('/bin/bash', ['-e', '-c', script], {
+    env: {
+      PATH: process.env.PATH,
+      NODE_EXECUTABLE: process.execPath,
+      PREPARE_RESULT: 'success',
+      MUTATION_RESULT: 'skipped',
+      MUTATION_TARGETS: '[]',
+      MUTATION_CLASSIFICATION: '{"deferred":[]}',
+      MUTATION_MATRIX: '{"include":[]}',
+      PARTITION_TARGETS: '[]',
+      GITHUB_STEP_SUMMARY: '/dev/null'
+    }
+  })
+  assert.equal(empty.status, 0)
 })

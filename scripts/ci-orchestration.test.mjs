@@ -365,6 +365,9 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
       const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
         env: {
+          NODE_EXECUTABLE: process.execPath,
+          MUTATION_MATRIX: '{"include":[]}',
+          PARTITION_TARGETS: '[]',
           PREPARE_RESULT: 'success',
           MUTATION_TARGETS: targets,
           MUTATION_RESULT: result,
