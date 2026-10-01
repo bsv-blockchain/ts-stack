@@ -327,9 +327,7 @@ describe('createAction2 nosend transactions', () => {
       })
       const rl1 = toLogString(spendingResult.tx!, spendingActionsResult)
       expect(rl1.log).toMatch(/'reference \n\s+[0-9a-f]+'/)
-      const stableLog = rl1.log
-        .replace(/,'reference \n\s+[0-9a-f]+'/, '')
-        .replace(/[ \t]+$/gm, '')
+      const stableLog = rl1.log.replace(/,'reference \n\s+[0-9a-f]+'/, '').replace(/[ \t]+$/gm, '')
       expect(stableLog).toBe(`transactions:2
   txid:d6e2d06ad92ba812da1bc89e493f620f95234d4947997b396cd4a50ba9ef4c1b version:1 lockTime:0 sats:-5 status:nosend
      outgoing:true desc:'Check knownTxids and returnTXIDOnly' labels:['custom options test']
@@ -341,6 +339,87 @@ describe('createAction2 nosend transactions', () => {
     0: sats:4 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true desc:'returnTXIDOnly
        false test'
     1: sats:996 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
+    }
+  })
+
+  // THE INVARIANT: every transaction a result BEEF carries in full must be verifiable.
+  //
+  // A recipient can handle an ancestor that is absent or txid-only -- it skips it and restores it
+  // from its own records. It can handle one carried complete. It can do NEITHER with one that is
+  // present, unproven, and whose input sources are missing: that is not provable and not marked
+  // as omitted. Under BRC-105 the payer has already broadcast by the time a recipient rejects it,
+  // so that shape costs the payer real satoshis.
+  //
+  // This asserts the invariant rather than a specific encoding, deliberately. Omitting a declared
+  // ancestor entirely and marking it txid-only are BOTH correct, and which one a given funding
+  // path produces varies. Asserting "it must be txid-only" would over-specify and fail on paths
+  // that are already fine.
+  //
+  // verifyReturnedTxidOnlyAtomicBEEF does NOT cover this: it asserts every txid-only entry WAS
+  // declared, not that every declared entry IS omitted.
+  test('6_declared knownTxids never leave an unverifiable ancestor in the result BEEF', async () => {
+    // Mirrors the recipient's own rule: an unproven transaction carried in full must have every
+    // input source present, or the recipient cannot verify it and was given no way to restore it.
+    const unverifiableInFull = (beef: Beef, declared: string[]): string[] => {
+      // A source counts as resolvable if it is carried in full, or if it was declared -- the
+      // recipient restores a declared one from its own records. Anything else is a dead end.
+      const carriedInFull = new Set(beef.txs.filter(btx => !btx.isTxidOnly).map(btx => btx.txid))
+      const broken: string[] = []
+      for (const btx of beef.txs) {
+        if (btx.isTxidOnly || btx.bumpIndex !== undefined) continue
+        for (const sourceTxid of btx.tx?.inputs.map(i => i.sourceTXID) ?? []) {
+          if (sourceTxid == null) continue
+          if (carriedInFull.has(sourceTxid) || declared.includes(sourceTxid)) continue
+          broken.push(`${btx.txid} is carried in full but its source ${sourceTxid} is neither present nor declared`)
+        }
+      }
+      return broken
+    }
+
+    for (const { wallet } of ctxs) {
+      const fundAndSpend = async (declare: boolean): Promise<{ beef: Beef; declared: string[] }> => {
+        const fundingResult: CreateActionResult = await wallet.createAction({
+          outputs: [
+            {
+              satoshis: 4,
+              lockingScript: '76a914abcdef0123456789abcdef0123456789abcdef88ac',
+              outputDescription: 'Funding output'
+            }
+          ],
+          description: 'Funding transaction',
+          options: { noSend: true, randomizeOutputs: false }
+        })
+        expect(fundingResult.tx).toBeDefined()
+
+        // Spending the funding action's own change is what puts it in this BEEF's ancestry,
+        // unproven -- exactly the case a declaration is meant to collapse.
+        const spendingResult: CreateActionResult = await wallet.createAction({
+          outputs: [
+            {
+              satoshis: 2,
+              lockingScript: '76a914abcdef0123456789abcdef0123456789abcdef88ac',
+              outputDescription: 'spending output'
+            }
+          ],
+          description: declare ? 'declared ancestor' : 'control, nothing declared',
+          options: {
+            ...(declare ? { knownTxids: [fundingResult.txid!] } : {}),
+            noSend: true,
+            randomizeOutputs: false,
+            noSendChange: fundingResult.noSendChange
+          }
+        })
+        expect(spendingResult.tx).toBeDefined()
+        return { beef: Beef.fromBinary(spendingResult.tx!), declared: declare ? [fundingResult.txid!] : [] }
+      }
+
+      // The control must be self-consistent, or the test proves nothing about the declared case.
+      const control = await fundAndSpend(false)
+      expect(unverifiableInFull(control.beef, control.declared)).toEqual([])
+
+      // Declaring may omit ancestry, but must never leave it half-carried.
+      const declared = await fundAndSpend(true)
+      expect(unverifiableInFull(declared.beef, declared.declared)).toEqual([])
     }
   })
 
