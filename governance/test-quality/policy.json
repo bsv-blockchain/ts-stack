@@ -1226,6 +1226,18 @@
         ],
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputProposalTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Retained proposal operation, signed author and original capability binding, exact acknowledgement and explicit prior-finalization identity",
+        "target": "Generated publication, retrieval and finalization responses retain original operation identity and distinguish changed channel, expiry and reservation.",
+        "invariants": [
+          "Every retry sends the exact original request with mutual authentication and payment disabled.",
+          "Publication acknowledgements bind the original signed proposal; get binds its selected policy and channel and rejects active expiry.",
+          "A pre-existing finalization is explicitly distinguished from the requested operation and transaction."
+        ]
       }
     ],
     "exclusions": [

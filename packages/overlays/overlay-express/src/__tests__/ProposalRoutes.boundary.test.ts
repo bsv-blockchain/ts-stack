@@ -182,6 +182,9 @@ it('validates capacities, HTTPS base, native gate and synchronous control author
   expect(() =>
     createProposalRouter({ ...f.options, baseURL: 'http://provider.example/api' })
   ).toThrow()
+  expect(() =>
+    createProposalRouter({ ...f.options, authorizeControl: undefined as never })
+  ).toThrow('synchronous')
   expect(() => createProposalRouter({ ...f.options, authenticate: undefined as never })).toThrow(
     'authentication'
   )

@@ -216,6 +216,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.0.0 candidate)
 
+- Add opt-in `OutputProposalTransport` for exact saved BRC-194 put/get/finalize operations, signed author and selected policy bindings, active expiry, explicit prior-reservation identity and authenticated unpaid error handling. It never discovers, persists, funds, signs a proposal or starts automatic retries.
+
 - Add bounded BRC-199 signed request/result and status representations, direct authenticated requester/root/chain bindings, exact decision identities and restoration-basis checks. New-request clocks are separate from historical recovery. Evidence, local authority, durable decisions and all-path serving guards remain separate; existing discovery behavior is unchanged.
 - Add bounded BRC-195 payment-header parsing and exact single BRC-29 funding-output inspection with proof-independent wallet operation identifiers. Callers retain responsibility for independently derived payment keys, chain acceptance, acquisition reservation and durable idempotent wallet credit.
 

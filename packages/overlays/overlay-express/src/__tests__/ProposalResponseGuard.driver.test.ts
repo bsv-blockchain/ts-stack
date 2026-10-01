@@ -78,6 +78,8 @@ it.each(['identity', 'capability', 'profile', 'status'])(
       statusCode: mode === 'status' ? 400 : 401,
       headers: {
         'cache-control': 'private, no-store',
+        'content-type': 'application/json',
+        'x-content-type-options': 'nosniff',
         'access-control-allow-origin': '*',
         'x-bsv-overlay-capability': caller.capabilityDigest,
         'x-bsv-overlay-profile': OUTPUT_PROFILES.proposal

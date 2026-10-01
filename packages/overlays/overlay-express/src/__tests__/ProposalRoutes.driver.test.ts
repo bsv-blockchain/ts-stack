@@ -229,3 +229,208 @@ it.each(['destroyed', 'writableEnded', 'headersSent'] as const)(
     expect(result.res.end).not.toHaveBeenCalled()
   }
 )
+
+it.each(['finish', 'close'] as const)(
+  'releases a transport slot promptly on %s and removes both listeners',
+  async event => {
+    const f = fixture({ maximumRequests: 1, requestTimeoutMs: 30000, authenticate: jest.fn() })
+    const first = await f.call()
+    expect(first.res.listenerCount('finish')).toBe(1)
+    expect(first.res.listenerCount('close')).toBe(1)
+    expect((await f.call()).res.status).toHaveBeenCalledWith(413)
+    first.res.emit(event)
+    expect(first.res.listenerCount('finish')).toBe(0)
+    expect(first.res.listenerCount('close')).toBe(0)
+    const second = await f.call()
+    expect(second.res.status).not.toHaveBeenCalled()
+    const full = await f.call()
+    expect(full.res.status).toHaveBeenCalledWith(413)
+    expect(JSON.parse(Buffer.from(full.res.end.mock.calls[0][0]).toString())).toEqual({
+      version: 1,
+      error: { code: 'limited', message: 'Proposal request limited', retryable: true }
+    })
+    first.res.emit('finish')
+    first.res.emit('close')
+    expect((await f.call()).res.status).toHaveBeenCalledWith(413)
+    second.res.emit('finish')
+  }
+)
+
+it('bounds total physical work across principals, retains disconnected work and releases only settled work', async () => {
+  const f = fixture({ maximumWork: 2, maximumWorkPerPrincipal: 2 })
+  const waiting: { resolve(value: unknown): void; reject(error: unknown): void }[] = []
+  f.get.mockImplementation(
+    () =>
+      new Promise((resolve, reject) => {
+        waiting.push({ resolve, reject })
+      })
+  )
+  const first = await f.call()
+  const otherRequest = request()
+  otherRequest.auth = { identityKey: new PrivateKey(82).toPublicKey().toString() }
+  const second = await f.call(otherRequest)
+  const thirdRequest = () => {
+    const value = request()
+    value.auth = { identityKey: new PrivateKey(83).toPublicKey().toString() }
+    return value
+  }
+  const full = await f.call(thirdRequest())
+  expect(f.get).toHaveBeenCalledTimes(2)
+  expect(full.res.status).toHaveBeenCalledWith(413)
+  expect(JSON.parse(Buffer.from(full.res.end.mock.calls[0][0]).toString()).error.retryable).toBe(
+    true
+  )
+  first.res.destroy()
+  expect((await f.call(thirdRequest())).res.status).toHaveBeenCalledWith(413)
+  waiting[0].resolve({ version: 1 })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  expect(first.res.end).not.toHaveBeenCalled()
+  const admitted = await f.call(thirdRequest())
+  expect(admitted.res.status).not.toHaveBeenCalled()
+  expect(f.get).toHaveBeenCalledTimes(3)
+  expect((await f.call()).res.status).toHaveBeenCalledWith(413)
+  waiting[1].reject(new Error('internal detail'))
+  waiting[2].resolve({ version: 1 })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  expect(second.res.status).toHaveBeenCalledWith(503)
+  expect(admitted.res.status).toHaveBeenCalledWith(200)
+  f.get.mockResolvedValue({ version: 1 })
+  expect((await f.call()).res.status).toHaveBeenCalledWith(200)
+})
+
+it('counts simultaneous work for one principal until the last call settles', async () => {
+  const f = fixture({ maximumWork: 4, maximumWorkPerPrincipal: 2 })
+  const waiting: ((value: unknown) => void)[] = []
+  f.get.mockImplementation(
+    () =>
+      new Promise(resolve => {
+        waiting.push(resolve)
+      })
+  )
+  const first = await f.call()
+  const second = await f.call()
+  expect((await f.call()).res.status).toHaveBeenCalledWith(413)
+  waiting[0]({ version: 1 })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  expect(first.res.status).toHaveBeenCalledWith(200)
+  const third = await f.call()
+  expect(f.get).toHaveBeenCalledTimes(3)
+  expect((await f.call()).res.status).toHaveBeenCalledWith(413)
+  waiting[1]({ version: 1 })
+  waiting[2]({ version: 1 })
+  await new Promise<void>(resolve => setImmediate(resolve))
+  expect(second.res.status).toHaveBeenCalledWith(200)
+  expect(third.res.status).toHaveBeenCalledWith(200)
+  f.get.mockResolvedValue({ version: 1 })
+  expect((await f.call()).res.status).toHaveBeenCalledWith(200)
+})
+
+it.each(['aborted', 'destroyed', 'writableEnded'] as const)(
+  'withholds settled output after %s',
+  async state => {
+    const f = fixture()
+    let finish!: (value: unknown) => void
+    f.get.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finish = resolve
+        })
+    )
+    const first = await f.call()
+    if (state === 'aborted') first.req.aborted = true
+    else first.res[state] = true
+    finish({ version: 1 })
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(f.bind).not.toHaveBeenCalled()
+    expect(guardProposalResponse).not.toHaveBeenCalled()
+    expect(first.res.end).not.toHaveBeenCalled()
+    first.res.emit('close')
+  }
+)
+
+it.each(['aborted', 'destroyed', 'writableEnded'] as const)(
+  'does not disclose a late service error after %s',
+  async state => {
+    const f = fixture()
+    let fail!: (error: unknown) => void
+    f.get.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject
+        })
+    )
+    const first = await f.call()
+    if (state === 'aborted') first.req.aborted = true
+    else first.res[state] = true
+    fail(new Error('private detail'))
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(guardProposalResponse).not.toHaveBeenCalled()
+    expect(first.res.end).not.toHaveBeenCalled()
+    first.res.emit('close')
+  }
+)
+
+it('accepts the exact response byte ceiling and guards an oversized response as a control', async () => {
+  const f = fixture({ maximumResponseBytes: 13 })
+  // UTF-8 bytes, not character count. Each pound sign uses two bytes.
+  f.bind.mockReturnValue({
+    body: '{"a":"£££"}',
+    reference: { kind: 'channel', channelKey: 'local' },
+    validate: () => true
+  })
+  expect(Buffer.byteLength('{"a":"£££"}')).toBe(14)
+  const oversized = await f.call()
+  expect(oversized.res.status).toHaveBeenCalledWith(413)
+  expect(jest.mocked(guardProposalResponse).mock.calls.at(-1)![1].initial).toHaveProperty('error')
+  f.bind.mockReturnValue({
+    body: '{"a":"££x"}',
+    reference: { kind: 'channel', channelKey: 'local' },
+    validate: () => true
+  })
+  const exact = await f.call()
+  expect(exact.res.status).toHaveBeenCalledWith(200)
+  expect(exact.res.end).toHaveBeenCalledWith('{"a":"££x"}')
+  expect(exact.fields.get('content-type')).toBe('application/json')
+})
+
+it('supports an origin without a base path and preserves the exact decoded signed text', async () => {
+  const f = fixture({ baseURL: 'https://provider.example' })
+  const req = request()
+  req.path = req.url = '/overlay/v1/proposals/get'
+  const text = '\uFEFF{"value":"£"}'
+  f.parser(Buffer.from(text))
+  expect((await f.call(req)).res.status).toHaveBeenCalledWith(200)
+  expect(f.get.mock.calls[0][0]).toBe(text)
+})
+
+it('requires media type and canonical query-free POST before authentication', async () => {
+  const f = fixture()
+  const absent = request()
+  delete absent.headers['content-type']
+  const queried = request()
+  queried.url += '?x=1'
+  for (const req of [absent, queried]) {
+    const result = await f.call(req)
+    expect(result.res.status).toHaveBeenCalledWith(400)
+    expect(result.fields.get('content-type')).toBe('application/json')
+    expect(JSON.parse(Buffer.from(result.res.end.mock.calls[0][0]).toString())).toEqual({
+      version: 1,
+      error: { code: 'invalid', message: 'Proposal request invalid', retryable: false }
+    })
+  }
+  expect(f.options.authenticate).not.toHaveBeenCalled()
+})
+
+it.each(['aborted', 'destroyed'] as const)('stops after authentication changes %s', async state => {
+  const f = fixture({
+    authenticate: (req, res, next) => {
+      Object.defineProperty(state === 'aborted' ? req : res, state, { value: true })
+      next()
+    }
+  })
+  const result = await f.call()
+  expect(f.get).not.toHaveBeenCalled()
+  expect(guardProposalResponse).not.toHaveBeenCalled()
+  expect(result.res.end).not.toHaveBeenCalled()
+  result.res.emit('close')
+})

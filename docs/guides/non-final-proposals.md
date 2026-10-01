@@ -122,3 +122,51 @@ configuration evolution, retained-fence compaction and application projection
 integration are tracked in the [implementation record](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/IMPLEMENTATION.md).
 The endpoint adapter alone does not complete those service obligations. The
 [compiled examples](./compiled-package-examples.md) verify public package wiring.
+
+## Recover a saved operation from the SDK
+
+`OutputProposalTransport` is an optional SDK3 client for one saved `put`, `get`
+or `finalize` request. First select a fresh capability under independently
+installed provider identity, HTTPS endpoint, chain and service rules. Save its
+`retainOutputCapability` record together with the complete request before the
+first dispatch. Reconstruct the client from that integrity-protected local
+record after a restart. `send(signal)` always uses the same owned request; it
+never discovers a replacement provider, changes an operation ID, polls, signs
+a proposal or transaction, funds a wallet action, or persists a result.
+
+The client authenticates the selected provider and exact profile/contract
+headers, disables automatic BRC-105 payment, and bounds request bytes, response
+bytes, headers and total time. Cancellation releases the caller but retains
+physical I/O ownership until the underlying request settles. An uncertain send
+can have committed on the server. Retry its original request to recover that
+outcome; do not create a new operation to work around uncertainty. HTTPS provides
+confidentiality independently of BRC-103/104 message authentication.
+
+A publication acknowledgement must match the original proposal digest and signed
+expiry. Retrieval verifies the author's signature, selected service/chain/policy,
+queried channel and lifetime limit. An active result is unusable at its exclusive
+signed expiry according to the caller's trusted clock. Terminal history can remain
+available afterward. An authenticated response is still separate from application
+policy acceptance, Bitcoin verification and current authority.
+
+Finalization returns `{ response, matchesRequest }`. A provider may already have
+reserved finalization for the same proposal under another authorized operation.
+The client reports that original reservation, with `matchesRequest: false` when
+its operation ID or transaction ID differs from the saved request. Show and
+reconcile that outcome; do not treat it as fulfillment of the caller's requested
+transaction. Even a matching `finalized` response records historical topic
+admission and does not establish mining, current unspentness or entitlement to
+private delivery.
+
+A validated provider error is `OutputProposalServiceError`, carrying its bounded
+`packet`. Local framing, byte-limit, authentication, cancellation and transport
+errors remain distinguishable; for example, response-body overflow preserves
+`LookupResourceLimitError`. None are a successful empty result. Restoring an old
+selection permits original recovery only. It never authorizes a new effect under
+an expired manifest or bypasses the provider's current access and retention rules.
+
+The HTTP integration tests use this client with real mutual authentication,
+native SQLite disclosure, post-signing access changes and serialized original
+operation recovery after discovery changes. The evidence/admission ports in that
+fixture are synthetic, so this does not yet establish the complete Engine-backed
+pipeline or production deployment readiness.

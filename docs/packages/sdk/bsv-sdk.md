@@ -616,3 +616,15 @@ lookup transport behavior remains unchanged. See the [root coordination
 guide](../../guides/root-eviction-coordination.md) for durable ownership, authority
 and currentness boundaries; these helpers do not activate root policy or serving
 adapters automatically.
+
+### Retained proposal client
+
+The optional `OutputProposalTransport` owns one saved BRC-194 put/get/finalize
+request and retained capability. Each explicit `send` repeats those original
+bytes through bounded mutually authenticated HTTPS with payment disabled.
+Acknowledgements bind the original publication; retrieved author data retains
+signature, policy/channel and active-expiry checks. Finalization exposes
+`matchesRequest` to distinguish an already-reserved operation or transaction.
+`OutputProposalServiceError` represents only authenticated validated provider
+errors; local transport failures remain distinct. Follow the [proposal guide](../../guides/non-final-proposals.md)
+for persistence, freshness, recovery and independent application/evidence checks.

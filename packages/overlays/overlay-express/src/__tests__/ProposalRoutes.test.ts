@@ -1,6 +1,15 @@
-import { canonicalOutputJSON, PrivateKey } from '@bsv/sdk'
+import {
+  canonicalOutputJSON,
+  PrivateKey,
+  CompletedProtoWallet,
+  OutputProposalTransport,
+  retainOutputCapability
+} from '@bsv/sdk'
 import { proposalHTTPFixture } from './ProposalRoutes.fixture.js'
-import { signed } from '../../../../application/output-knowledge/test/proposal-fixture.js'
+import {
+  signed,
+  authorKey
+} from '../../../../application/output-knowledge/test/proposal-fixture.js'
 
 const fixtures: Awaited<ReturnType<typeof proposalHTTPFixture>>[] = []
 async function fixture(...args: Parameters<typeof proposalHTTPFixture>) {
@@ -187,4 +196,93 @@ it('preserves actual framing, rejects earlier body parsing and supports explicit
     body: before.query
   })
   expect(response.status).toBe(422)
+})
+
+it('composes the retained SDK client with actual authenticated HTTP and native journal disclosure', async () => {
+  const f = await fixture()
+  const retained = retainOutputCapability(f.manifest, { ...f.trust, now: f.state.now }).record
+  const calls: string[] = []
+  const common = {
+    contract: retained,
+    trust: f.trust,
+    wallet: new CompletedProtoWallet(authorKey),
+    now: () => f.state.now,
+    requestTimeoutMs: 3000,
+    fetch: (async (input, init) => {
+      const url = new URL(String(input))
+      expect(url.origin).toBe('https://provider.example')
+      calls.push(url.pathname)
+      const response = await fetch(f.origin + url.pathname, init)
+      return new Response(response.body, { status: response.status, headers: response.headers })
+    }) as typeof fetch
+  }
+  const put = new OutputProposalTransport({
+    ...common,
+    operation: 'put',
+    request: JSON.parse(f.publication)
+  })
+  const get = new OutputProposalTransport({
+    ...common,
+    operation: 'get',
+    request: JSON.parse(f.query)
+  })
+  const finalize = new OutputProposalTransport({
+    ...common,
+    operation: 'finalize',
+    request: f.request
+  })
+  expect(await put.send()).toEqual(f.ack)
+  expect((await get.send()).proposal).toEqual(f.proposal)
+  const reserved = await finalize.send()
+  expect(reserved.matchesRequest).toBe(true)
+  expect(reserved.response.state.status).toBe('finalizing')
+  const different = new OutputProposalTransport({
+    ...common,
+    operation: 'finalize',
+    request: { ...f.request, operationId: 'different-reservation' }
+  })
+  expect(await different.send()).toEqual({ response: reserved.response, matchesRequest: false })
+  // Reconstruct from serialized local operation storage; current discovery is invalid.
+  const saved = JSON.parse(
+    JSON.stringify({ contract: retained, request: JSON.parse(f.publication) })
+  )
+  f.manifest.body.services = []
+  f.state.now = '101'
+  const recovered = new OutputProposalTransport({ ...common, ...saved, operation: 'put' })
+  expect(await recovered.send()).toEqual(f.ack)
+  expect(calls).toContain('/.well-known/auth')
+  expect(calls.filter(path => path.endsWith('/put'))).toHaveLength(2)
+  expect((await f.storage.head()).revision).toBe('2')
+})
+
+it('delivers the guarded access-revocation result to the SDK without disclosing a signed stale proposal', async () => {
+  const f = await fixture()
+  const { record } = retainOutputCapability(f.manifest, { ...f.trust, now: f.state.now })
+  const client = new OutputProposalTransport({
+    contract: record,
+    trust: f.trust,
+    operation: 'get',
+    request: JSON.parse(f.query),
+    wallet: new CompletedProtoWallet(authorKey),
+    now: () => f.state.now,
+    requestTimeoutMs: 3000,
+    fetch: async (input, init) => {
+      const url = new URL(String(input))
+      expect(url.origin).toBe('https://provider.example')
+      const response = await fetch(f.origin + url.pathname, init)
+      return new Response(response.body, { status: response.status, headers: response.headers })
+    }
+  })
+  expect((await client.send()).proposal).toEqual(f.proposal)
+  f.onHTTPSign(() => {
+    f.state.allowed = false
+  })
+  await expect(client.send()).rejects.toMatchObject({
+    name: 'OutputProposalServiceError',
+    code: 'not-found',
+    packet: {
+      version: 1,
+      error: { code: 'not-found', message: 'Proposal request not-found', retryable: false }
+    }
+  })
 })

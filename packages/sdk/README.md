@@ -708,3 +708,11 @@ the expected root identity, prohibit payment and validate results against the
 original selection. Cancellation retains physical capacity until pending I/O
 settles. Durable storage, polling, current server authority and serving decisions
 remain separate; existing lookup transport APIs and defaults are unchanged.
+
+The SDK3 candidate also adds `OutputProposalTransport` for one durably saved
+BRC-194 put/get/finalize operation. Retries retain the original selected capability
+and request, with mutual authentication, bounded delivery and no automatic payment.
+Finalization reports whether a returned reservation matches that saved operation
+and transaction. See the [proposal guide](../../docs/guides/non-final-proposals.md)
+before adopting it; storage, current authority, domain acceptance and Bitcoin
+verification remain separate responsibilities.

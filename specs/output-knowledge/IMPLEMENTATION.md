@@ -1260,3 +1260,33 @@ require the SDK3 candidate. The new output-knowledge package has no published SD
 compatibility promise. All original mutation targets remain and the four upstream
 DID targets bring the combined registry to 98. Neither component scores nor main's
 prior qualification establish green CI for this combined source.
+
+## Retained-operation proposal client
+
+The optional SDK `OutputProposalTransport` owns one original put/get/finalize
+request and retained contract. Publication binds its exact proposal digest and
+expiry; get authenticates the author, policy/channel and active lifetime;
+finalize distinguishes a previously reserved operation using `matchesRequest`.
+No discovery, persistence, automatic polling, wallet effect or new-operation
+freshness is inferred. The provider's current authorization and native disclosure
+gate remain independent.
+
+All 26 focused client tests pass with 100% statement, branch, function and line
+coverage, including the 300-case generated property. The complete shared finite
+client selection passes 119 tests across five suites. All four new SDK files
+also pass a strict no-emit compiler check. Actual HTTP tests compose the SDK
+client with mutual authentication, SQLite service/disclosure, serialized original
+request recovery after discovery changes and post-signing access revocation.
+Their evidence/admission ports remain synthetic. The strengthened HTTP/host
+selection passes 224 tests across six suites with 100% lines/functions and
+98.72% branches. The prior failed HTTP mutation run remains open.
+
+SDK packed ESM/CJS consumers, declarations, all wildcard entries, browser
+bundlers/ESM and UMD qualification pass without a budget increase. The SDK has no
+separate mobile test command; no mobile-run success is claimed. All 37 compiled
+examples against 22 exact package tarballs and the 147-page documentation build
+pass. Root health, lint and formatting pass; SDK and Overlay Express types pass.
+The new complete client/shared-finite-HTTP mutation target preserves every prior
+target and brings the registry to 99. Both client and updated HTTP mutation
+qualification remain pending, as do whole-branch hosted checks and the remaining
+storage lifecycle, projection and full Engine-backed composition work.

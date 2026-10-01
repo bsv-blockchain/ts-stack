@@ -1191,3 +1191,25 @@ if (!exampleVerification.verified) throw new Error(exampleVerification.errors.jo
 if (parseBRC52Envelope(exampleTransport).envelope.certificateBinary !== exampleFrozenBRC52)
   throw new Error('Original signed bytes changed')
 ```
+
+## Recover an original proposal finalization
+
+The application supplies the original request and capability from trusted durable
+storage. A different reservation is an explicit result to reconcile, never an
+instruction to construct or fund a replacement transaction.
+
+```typescript compile
+// example-id: proposal-client-recovery
+import {
+  OutputProposalTransport as SavedProposalTransport,
+  type OutputProposalTransportOptions as SavedProposalOptions
+} from '@bsv/sdk'
+
+export async function recoverSavedFinalization(options: SavedProposalOptions<'finalize'>) {
+  const result = await new SavedProposalTransport(options).send()
+  return {
+    state: result.response.state,
+    belongsToSavedRequest: result.matchesRequest
+  }
+}
+```

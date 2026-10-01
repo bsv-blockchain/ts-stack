@@ -1175,6 +1175,26 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true }
       )
     },
+    'output-proposal-http': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputProposalTransport.property.test.ts',
+      mutate: [
+        'src/overlay-tools/OutputProposalTransport.ts',
+        'src/overlay-tools/internal/OutputFiniteHTTP.ts'
+      ],
+      additionalInputs: ['src/overlay-tools/**', 'src/auth/**', 'src/wallet/Wallet.interfaces.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/overlay-tools/__tests/OutputProposalTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
+        ],
+        { esm: true }
+      )
+    },
     'wallet-action-batch': {
       packageDirectory: 'packages/wallet/wallet-toolbox',
       manifest: 'packages/wallet/wallet-toolbox/package.json',

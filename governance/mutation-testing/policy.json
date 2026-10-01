@@ -996,6 +996,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "output-proposal-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputProposalTransport.property.test.ts",
+      "risk": "critical",
+      "boundary": "Retained proposal operation, signed author and original capability binding, exact acknowledgement and explicit prior-finalization identity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

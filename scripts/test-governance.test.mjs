@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 98)
+  assert.equal(result.summary.propertySuites, 99)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 98)
+  assert.equal(result.summary.mutationTargets, 99)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -693,6 +693,25 @@ test('proposal HTTP qualification retains complete transport modules and actual 
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const registration = policy.targets.find(value => value.id === 'overlay-proposal-http')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('proposal client retains complete operation and shared finite HTTP qualification', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['output-proposal-http']
+  assert.deepEqual(target.mutate, [
+    'src/overlay-tools/OutputProposalTransport.ts',
+    'src/overlay-tools/internal/OutputFiniteHTTP.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/overlay-tools/__tests/OutputProposalTransport*.test.ts',
+    '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
+    '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
+  ])
+  const registration = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  ).targets.find(value => value.id === 'output-proposal-http')
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)
