@@ -53,6 +53,28 @@ changes must use that same gate or an explicitly coherent local policy domain;
 independent databases do not become atomic merely because both adapters expose
 an asynchronous method.
 
+## SQLite composition and rollback
+
+The Node journal and lookup adapters share an internal synchronous transaction
+implementation. Each ordinary constructor still owns its own connection and
+preserves its existing namespace format. A journal and index opened separately,
+even at the same file path, are not one compound writer.
+
+Within an explicitly composed connection, SQL changes and private journal caches
+follow the same transaction and savepoint boundaries. Cache publication follows
+physical commit. Rolling back a nested session operation discards its staged
+journal state as well as its SQL, while retaining the session's observed clock.
+A failed rollback retires an uncertain connection; an acknowledged native
+transaction boundary can distinguish a lost commit acknowledgement for recovery.
+Final-send failures use the stricter connection-retirement rule because delivery
+cannot be undone. These implementation ports are internal, synchronous, and not
+an authorization mechanism or a public raw-SQL extension point.
+
+The private current-channel query companion remains under construction. The
+shared storage primitive alone does not install its writer, policy, lifecycle
+timers, retention promises, visibility guards or current-channel projector.
+Existing proposal and finite lookup routes retain their existing behavior.
+
 ## Add authenticated HTTP
 
 Import `createProposalRouter` from `@bsv/overlay-express/proposals`. Supply the

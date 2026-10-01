@@ -81,6 +81,15 @@ not today's different limits or rules. Keep every required installed query polic
 available through its promised retention period. An incompatible policy change
 needs a separate service or an explicitly managed continuity reset.
 
+The SQLite session work savepoint also coordinates the internal transaction's
+staged caches. When work is rejected, its row/log changes and staged proposal
+state roll back together; the observed session clock remains retained outside
+that savepoint. Existing index/session constructors, stored formats and opening
+behavior remain compatible, including read-only WAL recovery of an existing
+index while another connection holds a writer lock. Domain-specific compound
+writers require an explicit shared connection owner; two independent adapters
+are not a substitute for that composition.
+
 ## Publish complete domain changes
 
 A producer first performs its own admission, evidence and application checks.

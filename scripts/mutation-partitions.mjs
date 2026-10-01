@@ -20,6 +20,28 @@ const plans = new Map([
     }
   ],
   [
+    'output-knowledge-proposal-core',
+    {
+      fallback: 'worker',
+      files: new Map([
+        ['src/BitcoinKnowledgeState.ts', 'state'],
+        ['src/KnowledgeStore.ts', 'store'],
+        ['src/proposals/ProposalLocalState.ts', 'proposal'],
+        ['src/proposals/ProposalKnowledgeView.ts', 'proposal']
+      ])
+    }
+  ],
+  [
+    'proposal-journal-send',
+    {
+      fallback: 'journal',
+      files: new Map([
+        ['src/proposals/ProposalJournalState.ts', 'state'],
+        ['src/storage/SQLiteTransactionDomain.ts', 'domain']
+      ])
+    }
+  ],
+  [
     'wallet-retained-snapshot',
     {
       fallback: 'lifecycle',

@@ -56,16 +56,18 @@ function vitestTarget(configFile) {
   }
 }
 
-function lookupProviderTarget(property, files, tests) {
+function lookupProviderTarget(property, files, tests, additionalInputs = []) {
   return {
     packageDirectory: 'packages/application/output-knowledge',
     manifest: 'packages/application/output-knowledge/package.json',
     propertyTest: `packages/application/output-knowledge/test/${property}`,
     additionalInputs: [
       'src/lookup/**',
+      'src/storage/SQLiteTransactionDomain.ts',
       'src/internal/BoundedOutputWork.ts',
       'test/lookup-*-fixture.ts',
-      'test/fixtures/lookup-*.mjs'
+      'test/fixtures/lookup-*.mjs',
+      ...additionalInputs
     ],
     mutate: files.map(name => `src/lookup/${name}.ts`),
     ...jestTarget(
@@ -675,14 +677,22 @@ export function buildMutationTargets(repositoryRoot) {
         'src/internal/pendingWork.ts',
         'src/internal/synchronousPromise.ts',
         'src/proposals/**',
+        'src/lookup/**',
+        'src/storage/SQLiteTransactionDomain.ts',
         'test/proposal-*.ts',
         'test/fixtures/proposal*.mjs'
       ],
-      mutate: ['src/proposals/SQLiteProposalJournal.ts'],
+      mutate: [
+        'src/proposals/SQLiteProposalJournal.ts',
+        'src/proposals/SQLiteProposalJournalStore.ts',
+        'src/proposals/ProposalJournalState.ts',
+        'src/storage/SQLiteTransactionDomain.ts'
+      ],
       ...jestTarget(
         'jest.config.js',
         [
           '<rootDir>/test/proposal-journal*.test.ts',
+          '<rootDir>/test/sqlite-transaction-domain.test.ts',
           '<rootDir>/test/proposal-service*.test.ts',
           '<rootDir>/test/proposal-send*.test.ts',
           '<rootDir>/test/proposal-open.test.ts',
@@ -892,7 +902,7 @@ export function buildMutationTargets(repositoryRoot) {
     ),
     'output-lookup-index': lookupProviderTarget(
       'lookup-sqlite-index.test.ts',
-      ['SQLiteLookupIndex'],
+      ['SQLiteLookupIndex', 'SQLiteLookupIndexStore'],
       ['lookup-sqlite-index', 'lookup-retention', 'lookup-process', 'lookup-batch']
     ),
     'output-lookup-index-records': lookupProviderTarget(
@@ -922,8 +932,10 @@ export function buildMutationTargets(repositoryRoot) {
         'lookup-process',
         'lookup-provider',
         'lookup-native-send',
-        'lookup-send.property'
-      ]
+        'lookup-send.property',
+        'proposal-journal-composition'
+      ],
+      ['src/proposals/**', 'test/proposal-client-fixture.ts', 'test/live-lookup-fixture.ts']
     ),
     'output-lookup-codecs': {
       packageDirectory: 'packages/application/output-knowledge',

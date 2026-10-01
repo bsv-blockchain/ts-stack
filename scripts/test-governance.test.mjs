@@ -642,9 +642,15 @@ test('proposal admission retains its complete source and generated provenance te
 
 test('proposal send qualification retains the entire SQLite journal and all journal/service/send regressions', () => {
   const target = buildMutationTargets(REPOSITORY_ROOT)['proposal-journal-send']
-  assert.deepEqual(target.mutate, ['src/proposals/SQLiteProposalJournal.ts'])
+  assert.deepEqual(target.mutate, [
+    'src/proposals/SQLiteProposalJournal.ts',
+    'src/proposals/SQLiteProposalJournalStore.ts',
+    'src/proposals/ProposalJournalState.ts',
+    'src/storage/SQLiteTransactionDomain.ts'
+  ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/proposal-journal*.test.ts',
+    '<rootDir>/test/sqlite-transaction-domain.test.ts',
     '<rootDir>/test/proposal-service*.test.ts',
     '<rootDir>/test/proposal-send*.test.ts',
     '<rootDir>/test/proposal-open.test.ts',

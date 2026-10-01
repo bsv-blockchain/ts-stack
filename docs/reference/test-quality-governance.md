@@ -187,6 +187,17 @@ mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
 `FAST_CHECK_SEED`, and `FAST_CHECK_PATH` remain available for an explicit replay
 or deeper local investigation.
 
+Application mutation targets may execute as complete-file parts while retaining
+one canonical qualification gate. `output-knowledge-proposal-core` separates the
+worker, Bitcoin state, knowledge store and proposal view/state; `proposal-journal-send`
+separates the native journal, journal state and shared transaction domain. Each
+part retains the entire original test/configuration input, property budget, seed,
+worker settings and timeouts. Future files join the target's default part. The
+aggregate verifies the exact canonical mutant union and original score,
+no-coverage and invalid-mutant limits; a missing or timed-out part never passes.
+PR CI downloads every selected part before that verification. A bounded local
+campaign that times out is negative evidence, regardless of passing dry-run tests.
+
 Pull-request CI applies the same dependency graph to package regressions,
 browser/mobile consumers, infrastructure, and runtime images. Empty image and
 infrastructure matrices do not allocate build runners. The standalone

@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { partitionedMutationTargets } from './mutation-partitions.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
@@ -430,4 +432,45 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     env: { PREPARE_RESULT: 'failure', MUTATION_TARGETS: '[]', MUTATION_RESULT: 'skipped' }
   })
   assert.notEqual(failedBuild.status, 0)
+})
+
+test('every selected application execution part is downloaded before canonical aggregation', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const application = Object.keys(targets).filter(
+    id => targets[id].packageDirectory === 'packages/application/output-knowledge'
+  )
+  const selected = partitionedMutationTargets(application, targets)
+  assert.ok(selected.includes('output-knowledge-proposal-core'))
+  assert.ok(selected.includes('proposal-journal-send'))
+  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    job => job.name === 'mutation-quality'
+  ).source
+  const steps = aggregate.split(/\n      - /)
+  for (const id of selected) {
+    const downloads = steps.filter(
+      step =>
+        step.startsWith('uses: actions/download-artifact@') &&
+        step.includes(`pattern: mutation-${id}-*\n`)
+    )
+    assert.equal(downloads.length, 1, id)
+    assert.ok(
+      downloads[0].includes(
+        `if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), '${id}')\n`
+      ),
+      id
+    )
+    assert.ok(
+      downloads[0].split('\n').some(line => line.trim() === `path: .mutation-parts/${id}`),
+      id
+    )
+    assert.ok(
+      aggregate.indexOf(downloads[0]) <
+        aggregate.indexOf('name: Require every selected canonical partition target gate'),
+      id
+    )
+  }
+  assert.ok(
+    aggregate.includes('node scripts/mutation-partition-evidence.mjs verify --mode diagnostic')
+  )
+  assert.ok(aggregate.includes('--target "$target" --directory ".mutation-parts/$target"'))
 })

@@ -53,7 +53,7 @@ export class ProposalJournalState {
 
   constructor(
     readonly lifecycle: ProposalTransitions,
-    identity: string,
+    private readonly identity: string,
     limits: Partial<ProposalJournalLimits> = {}
   ) {
     this.limits = { ...defaults, ...limits }
@@ -77,6 +77,22 @@ export class ProposalJournalState {
       ...lifecycle.configuration()
     })
     this.serviceIdentity = canonicalOutputJSON({ identity, ...lifecycle.configuration().scope })
+  }
+
+  /** @internal Private staged copy; shared immutable entries are never exposed by reference. */
+  fork(): ProposalJournalState {
+    const copy = new ProposalJournalState(this.lifecycle, this.identity, this.limits)
+    if (copy.configuration !== this.configuration)
+      throw new OutputProtocolError('context-changed', 'Proposal journal configuration changed')
+    copy.entries.push(...this.entries)
+    for (const [key, value] of this.commits) copy.commits.set(key, value)
+    for (const [key, value] of this.channels) copy.channels.set(key, value)
+    for (const [key, value] of this.proposals) copy.proposals.set(key, value)
+    for (const [key, value] of this.operations) copy.operations.set(key, value)
+    for (const [key, value] of this.authors) copy.authors.set(key, value)
+    copy.retainedBytes = this.retainedBytes
+    copy.pendingAdmissions = this.pendingAdmissions
+    return copy
   }
 
   head(): ProposalJournalHead {
@@ -171,7 +187,7 @@ export class ProposalJournalState {
     return { status: 'committed', revision: incrementOutputU64(this.head().revision) }
   }
 
-  /** Apply only after a durable commit, or when replaying a verified committed prefix. */
+  /** Apply to a private staged copy, after storage commit, or to a verified committed prefix. */
   apply(prepared: PreparedProposalCommit, revision: string, replay = false): void {
     const plan = this.plan(prepared, replay)
     if (plan.status !== 'committed' || plan.revision !== revision)

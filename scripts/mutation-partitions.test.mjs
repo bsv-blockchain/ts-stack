@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { REPOSITORY_ROOT } from './repository-health.mjs'
 import { parseArguments } from './mutation-testing.mjs'
 import {
   partitionMutationTarget,
@@ -183,3 +185,50 @@ test('root records keep whole files, original tests and future sources under one
     'root-eviction-records'
   ])
 })
+
+for (const [targetId, fallback, expected] of [
+  [
+    'output-knowledge-proposal-core',
+    'worker',
+    {
+      worker: ['src/BitcoinKnowledge.ts'],
+      state: ['src/BitcoinKnowledgeState.ts'],
+      store: ['src/KnowledgeStore.ts'],
+      proposal: ['src/proposals/ProposalLocalState.ts', 'src/proposals/ProposalKnowledgeView.ts']
+    }
+  ],
+  [
+    'proposal-journal-send',
+    'journal',
+    {
+      journal: [
+        'src/proposals/SQLiteProposalJournal.ts',
+        'src/proposals/SQLiteProposalJournalStore.ts'
+      ],
+      state: ['src/proposals/ProposalJournalState.ts'],
+      domain: ['src/storage/SQLiteTransactionDomain.ts']
+    }
+  ]
+])
+  test(`${targetId} retains every complete file and original qualification input`, () => {
+    const canonical = buildMutationTargets(REPOSITORY_ROOT)[targetId]
+    const parts = partitionMutationTarget(targetId, canonical)
+    assert.deepEqual(Object.fromEntries(parts.map(part => [part.id, part.target.mutate])), expected)
+    const union = parts.flatMap(part => part.target.mutate)
+    assert.deepEqual(union.slice().sort(), canonical.mutate.slice().sort())
+    assert.equal(new Set(union).size, union.length)
+    for (const part of parts) {
+      const { mutate: _part, ...rest } = part.target
+      const { mutate: _whole, ...original } = canonical
+      assert.deepEqual(rest, original)
+      assert.equal(part.target.runnerOptions, canonical.runnerOptions)
+      assert.equal(part.target.additionalInputs, canonical.additionalInputs)
+    }
+    const future = { ...canonical, mutate: [...canonical.mutate, 'src/FutureCompanion.ts'] }
+    const next = partitionMutationTarget(targetId, future)
+    assert.ok(
+      next.find(part => part.id === fallback).target.mutate.includes('src/FutureCompanion.ts')
+    )
+    assert.equal(selectedMutationPartition(targetId, canonical), canonical)
+    assert.throws(() => selectedMutationPartition(targetId, canonical, 'absent'))
+  })

@@ -138,16 +138,7 @@ export class SQLiteLookupSessions implements LookupSessionStorage, LookupSession
         return current
       }
       const now = sample()
-      this.bridge.database.exec('SAVEPOINT lookup_session_work')
-      let outcome: { ok: true; value: T } | { ok: false; error: unknown }
-      try {
-        const value = work(now, sample)
-        this.bridge.database.exec('RELEASE lookup_session_work')
-        outcome = { ok: true, value }
-      } catch (error) {
-        this.bridge.database.exec('ROLLBACK TO lookup_session_work; RELEASE lookup_session_work')
-        outcome = { ok: false, error }
-      }
+      const outcome = this.savepoint(() => work(now, sample))
       prepareLookupStatement(
         this.bridge.database,
         'UPDATE output_lookup_session_meta SET clock=? WHERE namespace=?'
@@ -156,6 +147,27 @@ export class SQLiteLookupSessions implements LookupSessionStorage, LookupSession
     })
     if (!result.ok) throw result.error
     return result.value
+  }
+
+  private savepoint<T>(work: () => T): { ok: true; value: T } | { ok: false; error: unknown } {
+    if (this.bridge.savepoint !== undefined) {
+      try {
+        return { ok: true, value: this.bridge.savepoint(work) }
+      } catch (error) {
+        return { ok: false, error }
+      }
+    }
+    this.bridge.database.exec('SAVEPOINT lookup_session_work')
+    try {
+      const value = work()
+      this.bridge.database.exec('RELEASE lookup_session_work')
+      return { ok: true, value }
+    } catch (error) {
+      // A failed legacy rollback must escape the outer work result so its
+      // transaction cannot commit the rejected SQL alongside the observed clock.
+      this.bridge.database.exec('ROLLBACK TO lookup_session_work; RELEASE lookup_session_work')
+      return { ok: false, error }
+    }
   }
 
   createEpoch(): Promise<string> {

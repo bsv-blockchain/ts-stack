@@ -1669,3 +1669,49 @@ empty-revision rejection and cancellation during an already-waiting watch; the
 private duplicate empty-history check and post-abort wake loop are redundant
 with their callers. Actual SDK evidence tests cover spend-only currentness.
 Fresh complete core mutation and broader compatibility qualification are pending.
+
+### Shared SQLite transaction foundation
+
+The implementation now extracts the existing native journal and index code into
+internal connection-owned stores. Public constructors, exports, configurations,
+namespace formats and default behavior remain unchanged. The common transaction
+domain stages private cache copies, publishes only after physical commit and
+coordinates cache rollback with nested session SQL savepoints. Journal forks
+retain exact history, operation identities and pending completion reservations.
+Duplicate cache owners on one domain are rejected. Failed pre-commit rollback
+retires the connection before uncommitted state can become a readable prefix;
+a lost commit acknowledgement never publishes unacknowledged memory. Final native
+send retains its stricter retirement behavior.
+
+The separately compiled prototype passes 221 native composition and compatibility
+cases; the exact adopted-source run follows. Two additional journal-fork cases
+cover independently evolving successors and completion reservations. The provider
+query mapper/complete-group grammar (23 tests), source order metadata (two tests)
+and read-feed facade (20 tests) remain outside-checkout drafts, not advertised
+features. BRC amendment 295 defines the neutral private current-channel query;
+its complete JS/Python corpora and six hosted checks pass at `82136f465`.
+
+Prior component qualification at `9cbfa06c4` passes client verification (532 mutants,
+94.92%) and proposal maintenance (325 mutants, 98.77%), each with zero uncovered or
+invalid cases. The full 1,778-mutant proposal-core campaign reached its 45-minute
+local bound without a final score; it is not passing evidence. All 9,896 frozen
+inputs and HEAD remained unchanged. Its worker failures and timeout receipt are
+retained. Main `6600211e3` is reconciled at `efd15187f` while preserving this branch's
+newer brace-expansion 5.0.12 resolution. Complete current-head qualification,
+current-channel provider/client integration and the broader checkpoint-two
+requirements remain unfinished.
+
+The adopted-source selection passes 223 tests in eight suites. A subsequent legacy
+savepoint failure regression initially exposed a rollback error being wrapped as
+ordinary rejected work; the correction lets it escape so the outer transaction
+cannot commit that work. Both legacy rollback cases and all transaction-domain/
+composition tests pass (28 cases). Root health, lint, formatting and strict
+workspace types pass for the refactor, and the dependency inventory tests preserve
+complete extracted source registration. The exact full-package run remains next.
+
+The acknowledged application execution maps split whole files only: proposal core
+into worker/state/store/proposal, and native proposal storage into journal/state/
+domain. Every part retains the same canonical test/configuration inputs and
+thresholds. Source inventory, execution-union and selected-artifact-download
+regressions guard the final aggregate. These maps do not convert the earlier
+partial run into qualification or establish a score for the adopted sources.
