@@ -607,3 +607,28 @@ describe('default Bitcoin knowledge journal and worker', () => {
     ).rejects.toMatchObject({ code: 'context-changed' })
   })
 })
+
+it('derives spent currentness for an admitted spend observation from actual SDK-verified evidence', async () => {
+  const { store, worker } = open()
+  await initialize(store)
+  await receive(
+    store,
+    batch('spend-only', [
+      {
+        id: 'spend',
+        scope,
+        kind: 'spend',
+        payload: {
+          previous: { chain, txid: tx('Q'), outputIndex: 0 },
+          spendingTxid: tx('QC'),
+          beef: candidate('QC').evidence.beef
+        }
+      }
+    ])
+  )
+  await worker.advance(store, signal())
+  const accepted = await store.read()
+  expect(accepted.pendingGroups).toEqual([])
+  expect(accepted.assessments.find(row => row.outpoint.txid === tx('Q'))?.state).toBe('spent')
+  expect(accepted.facts.some(row => row.txid === tx('QC'))).toBe(true)
+})

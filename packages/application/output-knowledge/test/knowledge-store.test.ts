@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals'
+import { describe, expect, it, jest } from '@jest/globals'
 import { OutputProtocolError } from '@bsv/sdk'
 import {
   KnowledgeStore,
@@ -413,4 +413,56 @@ describe('knowledge store journal port', () => {
     await underreported.close()
     await storage.close()
   })
+})
+
+it('cancels a watch that has entered its wait and releases its polling timer on close', async () => {
+  jest.useFakeTimers()
+  const store = new KnowledgeStore(new MemoryJournal('test'), reducer(), {
+    partition,
+    pollMs: 1000
+  })
+  try {
+    await store.commit('0', initial())
+    const waiting = store.watch('1')[Symbol.asyncIterator]().next()
+    const cancelled = expect(waiting).rejects.toMatchObject({ code: 'cancelled' })
+    await jest.advanceTimersByTimeAsync(0)
+    expect(jest.getTimerCount()).toBe(1)
+    await store.close()
+    await cancelled
+    expect(jest.getTimerCount()).toBe(0)
+  } finally {
+    await store.close()
+    jest.useRealTimers()
+  }
+})
+
+it('handles a signal cancelled during listener registration without waiting for the poll interval', async () => {
+  jest.useFakeTimers()
+  const abort = new AbortController()
+  const add = abort.signal.addEventListener.bind(abort.signal)
+  let registrations = 0
+  // Model a caller-provided signal whose registration hook triggers cancellation
+  // before the native listener is installed; its already-aborted flag must win.
+  const registration = jest
+    .spyOn(abort.signal, 'addEventListener')
+    .mockImplementation((...args) => {
+      if (++registrations === 2) abort.abort()
+      add(...args)
+    })
+  const store = new KnowledgeStore(new MemoryJournal('test'), reducer(), {
+    partition,
+    pollMs: 1000
+  })
+  try {
+    await store.commit('0', initial())
+    await expect(
+      store.watch('1', abort.signal)[Symbol.asyncIterator]().next()
+    ).rejects.toMatchObject({ code: 'cancelled' })
+    expect(registrations).toBe(2)
+    expect(jest.getTimerCount()).toBe(0)
+  } finally {
+    registration.mockRestore()
+    await store.close()
+    jest.useRealTimers()
+  }
 })

@@ -656,32 +656,18 @@ export class BitcoinKnowledgeState {
   private holdIncompleteAnchorClosures(candidates: ReconciliationCandidate[]): void {
     const byId = new Map(candidates.map(candidate => [candidate.txid, candidate]))
     for (const candidate of candidates) {
-      if (candidate.placement && !this.anchorClosureComplete(candidate.txid, byId)) {
+      if (
+        candidate.placement &&
+        !verifiedAnchorClosure(candidate.txid, byId, txid =>
+          this.plan()
+            .candidates.get(txid)!
+            .raw.inputs.map(input => input.txid)
+        )
+      ) {
         delete candidate.placement
         candidate.pendingSupport = true
       }
     }
-  }
-
-  private anchorClosureComplete(
-    start: string,
-    byId: ReadonlyMap<string, ReconciliationCandidate>
-  ): boolean {
-    const seen = new Set<string>(),
-      pending = [start]
-    let work = 0
-    while (pending.length) {
-      if (++work > 16384)
-        throw new OutputProtocolError('limited', 'Chain ancestor publication bound')
-      const txid = pending.pop()!
-      if (seen.has(txid)) continue
-      seen.add(txid)
-      const known = byId.get(txid)
-      if (!known) continue
-      if (known.validation !== 'verified') return false
-      for (const input of this.plan().candidates.get(txid)!.raw.inputs) pending.push(input.txid)
-    }
-    return true
   }
 
   pendingBytes(): number {
@@ -723,4 +709,26 @@ function assessmentState(
   )
     return 'stale'
   return 'unknown'
+}
+
+/** Internal bounded publication walk; Bitcoin evidence verification happens before this step. */
+export function verifiedAnchorClosure(
+  start: string,
+  byId: ReadonlyMap<string, Pick<ReconciliationCandidate, 'validation'>>,
+  parents: (txid: string) => readonly string[]
+): boolean {
+  const seen = new Set<string>(),
+    pending = [start]
+  let work = 0
+  while (pending.length) {
+    if (++work > 16384) throw new OutputProtocolError('limited', 'Chain ancestor publication bound')
+    const txid = pending.pop()!
+    if (seen.has(txid)) continue
+    seen.add(txid)
+    const known = byId.get(txid)
+    if (!known) continue
+    if (known.validation !== 'verified') return false
+    for (const input of parents(txid)) pending.push(input)
+  }
+  return true
 }

@@ -242,11 +242,7 @@ export class KnowledgeStore {
   }
 
   private async reduce(entries: JournalEntry[], signal: AbortSignal): Promise<AcceptedInput> {
-    if (!entries.length)
-      throw new OutputProtocolError(
-        'revision-unavailable',
-        'No initial verification context has been committed'
-      )
+    // read selects an existing revision; commit always includes its prospective entry.
     const result = await this.reducer.reduce(entries.map(cloneEntry), signal)
     this.ready(signal)
     return this.checkResult(result, entries.at(-1)!.revision)
@@ -450,8 +446,8 @@ export class KnowledgeStore {
 
   /** Closes publication/work first; previously committed journal facts remain. */
   async close(): Promise<void> {
+    // Abort synchronously wakes and removes every registered wait callback.
     this.shutdown.abort()
-    for (const wake of this.wake) wake()
     await this.storage.close()
   }
 }

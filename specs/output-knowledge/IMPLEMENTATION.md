@@ -1650,3 +1650,22 @@ the complete package gate. Additional malformed-policy, quarantine and lookup
 regressions pass 63 tests in three suites. No mutation threshold, test selection,
 runtime budget or coverage requirement was lowered. The new complete mutation
 campaigns and exact-head hosted analysis remain pending.
+
+The client verification qualification at `8b60ee8f0` passes all 530 mutations
+at 94.72% (502 killed, 28 surviving, zero uncovered or invalid). The complete
+four-module target and 300-case property budget remain unchanged. All 9,896
+frozen input hashes matched after the 245-second run. Four recovered worker
+memory failures remain in the local log; this is component evidence, not an
+exact-head hosted or checkpoint-two qualification. Earlier failed reports remain
+available. Client fixtures now construct mutated policies during test execution,
+and independent envelope-digest, exact quota, negative-status, replay-header and
+error-identity assertions cover the previously missed boundaries.
+
+Core follow-up isolates the existing ancestor-publication traversal for direct
+bounded-DAG testing without changing its 16,384-work-unit limit, cryptographic
+qualification or wire formats. Shared-ancestor edges still consume work even
+when a retained vertex has already been visited. Public store tests preserve
+empty-revision rejection and cancellation during an already-waiting watch; the
+private duplicate empty-history check and post-abort wake loop are redundant
+with their callers. Actual SDK evidence tests cover spend-only currentness.
+Fresh complete core mutation and broader compatibility qualification are pending.

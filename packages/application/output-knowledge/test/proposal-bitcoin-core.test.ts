@@ -1,3 +1,5 @@
+import { BitcoinKnowledgeState, verifiedAnchorClosure } from '../src/BitcoinKnowledgeState.js'
+import type { ReconciliationCandidate } from '../src/SpendReconciler.js'
 import { OutputKnowledge } from '../src/OutputKnowledge.js'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -664,4 +666,72 @@ describe('bounded client acceptance recovery', () => {
       expect(recovered.pendingGroups).toEqual([])
     }
   )
+})
+
+describe('bounded verified ancestor publication', () => {
+  it('visits a shared retained ancestor once and leaves external proof anchors to evidence verification', () => {
+    const graph = new Map([
+      ['root', ['left', 'right']],
+      ['left', ['shared']],
+      ['right', ['shared']],
+      ['shared', ['external-anchor']]
+    ])
+    const candidates = new Map(
+      [...graph.keys()].map(id => [id, { validation: 'verified' as const }])
+    )
+    const parents = jest.fn((id: string) => graph.get(id) ?? [])
+    expect(verifiedAnchorClosure('root', candidates, parents)).toBe(true)
+    expect(parents.mock.calls.filter(([id]) => id === 'shared')).toHaveLength(1)
+    expect(parents.mock.calls.some(([id]) => id === 'external-anchor')).toBe(false)
+  })
+
+  it.each(['invalid', 'unsupported', 'unresolved', 'limited'] as const)(
+    'withholds publication when a retained ancestor is %s',
+    validation => {
+      const candidates = new Map<string, { validation: ReconciliationCandidate['validation'] }>([
+        ['root', { validation: 'verified' }],
+        ['parent', { validation }]
+      ])
+      expect(
+        verifiedAnchorClosure('root', candidates, id => (id === 'root' ? ['parent'] : []))
+      ).toBe(false)
+    }
+  )
+
+  it('charges every queued edge, including shared ancestors, and accepts exactly 16384 units of publication work', () => {
+    // 1 root + 255 children + 252 * 64 shared-ancestor edges = 16384 work units.
+    const children = Array.from({ length: 255 }, (_, n) => `child-${n}`)
+    const ancestors = Array.from({ length: 64 }, (_, n) => `anchor-${n}`)
+    const graph = new Map<string, string[]>([['root', children]])
+    children.forEach((id, n) => graph.set(id, n < 252 ? ancestors : []))
+    ancestors.forEach(id => graph.set(id, []))
+    const candidates = new Map(
+      [...graph.keys()].map(id => [id, { validation: 'verified' as const }])
+    )
+    expect(verifiedAnchorClosure('root', candidates, id => graph.get(id)!)).toBe(true)
+    graph.set(children[254], [ancestors[0]])
+    expect(() => verifiedAnchorClosure('root', candidates, id => graph.get(id)!)).toThrow(
+      expect.objectContaining({ code: 'limited' })
+    )
+  })
+})
+
+it('does not prepare an acceptance before a received group has qualified locally', async () => {
+  const { store } = open()
+  await initialize(store)
+  await receive(store, [observation()])
+  const history = await store.inspect()
+  const state = new BitcoinKnowledgeState({
+    journalId: store.journalId,
+    partition,
+    nonFinal: true,
+    proposals: policy()
+  })
+  for (const entry of history.entries) state.apply(entry)
+  const group = state.membership.groups()[0]
+  expect(() => state.transition(history.revision, group)).toThrow(
+    expect.objectContaining({ code: 'unavailable' })
+  )
+  expect(state.membership.groups()[0].status).toBe('pending')
+  expect(state.snapshot().proposals?.heads).toEqual([])
 })
