@@ -1093,7 +1093,7 @@ import {
   type ProposalResponseDisclosureOptions,
   type ProposalResponseOperation,
   type ProposalServiceCaller,
-  type ProposalJournalSend
+  type ProposalJournalSend as DisclosureSendJournal
 } from '@bsv/output-knowledge/proposals'
 
 export function bindProposalResult(
@@ -1112,7 +1112,7 @@ export function bindProposalResult(
   return {
     body: bound.body,
     enqueue: async (
-      journal: ProposalJournalSend,
+      journal: DisclosureSendJournal,
       signedBytes: Uint8Array,
       authenticatedIdentity: string,
       nativeEnqueue: (bytes: Uint8Array) => undefined
