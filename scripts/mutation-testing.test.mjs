@@ -229,3 +229,48 @@ test('HTTP mutation inputs follow its real provider dependency outside the packa
     assert.ok(selected.includes('overlay-output-lookup-http'))
   }
 })
+
+test('lookup native enqueue qualification retains whole source and actual native HTTP cases', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  const disclosure = configured['lookup-response-disclosure']
+  assert.deepEqual(disclosure.mutate, ['src/lookup/LookupResponseDisclosure.ts'])
+  assert.equal(
+    disclosure.propertyTest,
+    'packages/application/output-knowledge/test/lookup-send.property.test.ts'
+  )
+  const sessions = configured['output-lookup-sessions']
+  assert.deepEqual(sessions.mutate, ['src/lookup/SQLiteLookupSessions.ts'])
+  assert.ok(
+    sessions.runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/test/lookup-native-send.test.ts'
+    )
+  )
+  assert.ok(
+    sessions.runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/test/lookup-send.property.test.ts'
+    )
+  )
+  const http = configured['overlay-output-lookup-http']
+  assert.deepEqual(http.mutate, [
+    'src/OutputLookupRoutes.ts',
+    'src/OutputLookupHTTPPolicy.ts',
+    'src/OutputLookupResponseGuard.ts'
+  ])
+  for (const name of [
+    'OutputLookupRoutes',
+    'OutputLookupRoutes.property',
+    'OutputLookupNativeSend',
+    'OutputLookupResponseGuard.driver'
+  ])
+    assert.ok(
+      http.runnerOptions.jest.config.testMatch.includes(`<rootDir>/src/__tests__/${name}.test.ts`)
+    )
+  const input = 'packages/application/output-knowledge/src/lookup/LookupResponseDisclosure.ts'
+  const selected = selectAffectedMutationTargets(configured, [input])
+  for (const name of [
+    'lookup-response-disclosure',
+    'output-lookup-sessions',
+    'overlay-output-lookup-http'
+  ])
+    assert.ok(selected.includes(name))
+})

@@ -8,6 +8,7 @@ import {
   outputU64,
   OutputProtocolError,
   parseOutputLookupBatch,
+  parseOutputJSON,
   parseOutputLookupOpen,
   type OutputLookupBatch
 } from '@bsv/sdk'
@@ -41,6 +42,7 @@ import {
 import { SQLiteLookupDisclosure } from './SQLiteLookupDisclosure.js'
 import { prepareLookupStatement, decimal, position } from './SQLiteLookupEncoding.js'
 import { LookupCursorCodec } from './LookupCursorCodec.js'
+import type { LookupSessionSend, LookupSessionResponseReference } from './LookupSessionSend.js'
 
 function principal(value: unknown): string | null {
   return value === null ? null : outputIdentity(value)
@@ -75,8 +77,10 @@ function workBound(maximum: number): void {
  * persisted guards checked again in the final synchronous response gate.
  * Neither this private store nor an index alone advertises BRC-193.
  */
-export class SQLiteLookupSessions implements LookupSessionStorage {
+export class SQLiteLookupSessions implements LookupSessionStorage, LookupSessionSend {
   readonly durability = 'durable' as const
+  readonly responseEnqueue = 'lookup-session-send/1' as const
+  private sending = false
   readonly capacity: Readonly<LookupSessionCapacity>
   private readonly bridge: SQLiteLookupBridge
   private readonly records: SQLiteLookupSessionRecords
@@ -117,6 +121,8 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
 
   /** Failed operations roll back their work, but not a successfully observed clock. */
   private run<T>(work: (now: string, sample: () => string) => T): T {
+    if (this.sending)
+      throw new OutputProtocolError('unavailable', 'Lookup session gate is reentered')
     const result = this.bridge.transaction(() => {
       let latest = this.records.metadata().clock
       const head = this.bridge.head()
@@ -372,6 +378,61 @@ export class SQLiteLookupSessions implements LookupSessionStorage {
         // No await/callback between the durable authorization gate and complete
         // body serialization. A later Close may not retract this earlier gate.
         return canonicalOutputJSON(batch, { bytes: batch.limits.maxBytes })
+      })
+    })
+  }
+
+  enqueueResponse(
+    candidate: { reference: LookupSessionResponseReference; bytes: Uint8Array },
+    validate: (header: LookupSessionHeader | undefined, bytes: Uint8Array) => boolean,
+    enqueue: (bytes: Uint8Array) => undefined
+  ): Promise<void> {
+    return synchronousPromise(() => {
+      closedOutputObject(candidate, ['reference', 'bytes'])
+      if (!(candidate.bytes instanceof Uint8Array) || candidate.bytes.byteLength > 4194304)
+        throw new OutputProtocolError('invalid', 'Invalid lookup response byte capacity')
+      const bytes = new Uint8Array(candidate.bytes)
+      const reference = candidate.reference
+      closedOutputObject(reference, ['kind'], ['session', 'principal'])
+      if (reference.kind === 'session') {
+        closedOutputObject(reference, ['kind', 'session', 'principal'])
+        outputHex32(reference.session)
+        principal(reference.principal)
+      } else if (reference.kind === 'control') closedOutputObject(reference, ['kind'])
+      else throw new OutputProtocolError('invalid', 'Invalid lookup response reference')
+      for (const callback of [validate, enqueue])
+        if (typeof callback !== 'function' || callback.constructor.name === 'AsyncFunction')
+          throw new OutputProtocolError('invalid', 'Lookup response callbacks must be synchronous')
+      return this.run((now, sample) => {
+        const opening =
+          reference.kind === 'session'
+            ? this.readHeader(reference.session, reference.principal, now)
+            : undefined
+        if (opening) {
+          const batch = parseOutputLookupBatch(parseOutputJSON(bytes))
+          if (bytes.byteLength > batch.limits.maxBytes)
+            throw new OutputProtocolError(
+              'limited',
+              'Lookup response exceeds its declared byte limit'
+            )
+          this.checkResponse(opening, batch)
+        }
+        this.sending = true
+        try {
+          if (validate(opening && structuredClone(opening), bytes.slice()) !== true)
+            throw new OutputProtocolError('unauthorized', 'Lookup response is no longer authorized')
+          const finalTime = outputU64(sample())
+          if (
+            opening &&
+            (finalTime >= outputU64(opening.first.expiresAt) ||
+              finalTime >= outputU64(opening.first.replayUntil))
+          )
+            throw new OutputProtocolError('reset-required', 'Lookup session expired before enqueue')
+          if (enqueue(bytes) !== undefined)
+            throw new OutputProtocolError('invalid', 'Lookup response enqueue must be synchronous')
+        } finally {
+          this.sending = false
+        }
       })
     })
   }

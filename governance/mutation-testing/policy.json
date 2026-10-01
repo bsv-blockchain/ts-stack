@@ -1016,6 +1016,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "lookup-response-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-send.property.test.ts",
+      "risk": "critical",
+      "boundary": "Post-signing lookup disclosure under shared durable native-enqueue serialization",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

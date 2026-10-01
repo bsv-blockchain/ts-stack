@@ -47,6 +47,15 @@ origins inherit the host's edge policy, and byte limits cannot exceed host limit
 The injected journal and workers retain application ownership. See the root
 coordination guide for installation and remaining obligations.
 
+The optional lookup router and `configureOutputLookup` accept a structural
+`disclosure` companion for a final current-session check after HTTP signing.
+`LookupResponseDisclosure` from `@bsv/output-knowledge/lookup` composes that port
+with durable SQLite sessions. It can replace an ineligible data response once
+with a freshly authorized signed error, or close without a body when control
+access is denied. Omitting the option preserves existing behavior. See the
+[durable lookup guide](../../../docs/guides/durable-live-lookup.md#check-again-after-signing)
+for the shared writer gate, current policy, physical work and callback obligations.
+
 Overlay Express requires Node.js 22 or newer and a separately installed
 `@bsv/sdk` peer dependency.
 

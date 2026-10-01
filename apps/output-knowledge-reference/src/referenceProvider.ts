@@ -12,6 +12,9 @@ import {
   collectionOutputIndexKey,
   LookupProviderContracts,
   LookupProviderService,
+  LookupResponseDisclosure,
+  LookupProviderWork,
+  type LookupAuthorizationContext,
   LookupQueryRegistry,
   LookupSessionCodec,
   lookupServingEpochExtension,
@@ -100,21 +103,31 @@ export async function createReferenceProvider(options: {
       ),
       true
     )
+    const authorize = async (context: LookupAuthorizationContext) => ({
+      access: context.principal ?? 'unverified',
+      guards: [
+        {
+          id: 'reference-serving',
+          revision: await sessions.guard('reference-serving'),
+          failure: 'unauthorized' as const
+        }
+      ]
+    })
+    const work = new LookupProviderWork()
+    const disclosure = new LookupResponseDisclosure({
+      sessions,
+      contracts,
+      authorize,
+      work,
+      authorizeControl: principal => principal !== null
+    })
     const service = new LookupProviderService({
       index,
       sessions,
       contracts,
       now: referenceNow,
-      authorize: async context => ({
-        access: context.principal ?? 'unverified',
-        guards: [
-          {
-            id: 'reference-serving',
-            revision: await sessions.guard('reference-serving'),
-            failure: 'unauthorized'
-          }
-        ]
-      }),
+      authorize,
+      work,
       budgets: { pollMs: 50 }
     })
     const verifier = new SDKEvidenceVerifier(referenceResolver)
@@ -175,6 +188,7 @@ export async function createReferenceProvider(options: {
       index,
       sessions,
       service,
+      disclosure,
       contracts,
       trust,
       manifest: () => structuredClone(manifest),

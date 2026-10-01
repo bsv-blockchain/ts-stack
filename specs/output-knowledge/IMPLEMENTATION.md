@@ -1364,8 +1364,9 @@ failures from accidental exceptions, check byte limits with multibyte text,
 accept full bounded pages and verify one physical shutdown across repeated calls.
 The same complete five-suite selection now passes 60 tests, including both
 300-case properties, in 96.895 seconds; both modules retain 100% statements,
-branches, functions and lines. The complete mutation rerun remains required;
-no source, test, operator, deadline or threshold has been excluded or weakened.
+branches, functions and lines. The subsequent complete rerun at f75ce86f4 passed
+98.77%, as recorded below; no source, test, operator, deadline or threshold was
+excluded or weakened.
 
 The reference app's `proposalPipeline.test.ts` now uses public SDK and package
 interfaces throughout: retained authenticated proposal requests, real author
@@ -1392,3 +1393,35 @@ types, root health/lint/format, and 147-page documentation/link build pass. The 
 dependency change is the existing workspace overlay package in the private app
 and its lockfile importer; all other resolutions remain. These component results
 do not establish exact-head remote CI or completion of checkpoint two.
+
+## Maintenance qualification and lookup native enqueue follow-up
+
+The complete proposal-maintenance second campaign at `f75ce86f49ce6ce959aef873857baac8b42357bc`
+passed 98.77% over 324 mutations: 303 killed, four survived, 17 timed out,
+zero uncovered and zero invalid. Its 60-test dry run passed; the campaign took
+28 minutes 55 seconds. All 9,338 frozen tracked and compiled inputs were verified
+unchanged after termination at 2026-10-01T08:35:32Z. The original 87.04% failure
+remains part of the review evidence; no source, gate or exclusion was changed to
+remove it. This qualifies that recorded source, not a later branch head or CI.
+
+The next opt-in increment adds a portable lookup disclosure companion, a shared
+SQLite native-enqueue port and an Overlay Express post-signing guard. It owns
+response bytes and identity, restores the original contract, bounds physical
+reauthorization work and rechecks durable guards/session deadlines at actual
+enqueue. The workbench installs it on both authenticated hosts. Existing wire,
+storage and omitted-option behavior remain unchanged. Complete source is included
+in the new lookup-response-disclosure target and the existing full SQLite session
+and HTTP target selections, retaining the prior tests and gates. Qualification
+of this increment is underway; no new mutation or exact-head CI pass is claimed.
+
+Focused lookup qualification passes 27 native/service cases (including 300 generated
+SQLite schedules), with 100% statements/branches/functions/lines for the new
+portable disclosure module. The complete four-suite HTTP selection passes 66
+cases; the new response guard has 100% coverage in all four measures. All 766
+Overlay Express tests pass. Seven actual reference-app tests and the two-host
+Chrome/native IndexedDB demonstration pass with the gate installed. Both package
+artifact checks, strict ESM/CJS consumers, the unchanged SDK2.8.9 default host,
+38 compiled examples from 22 tarballs and 147 HTML documentation pages pass.
+Repository health, lint, formatting, strict workspace types and the security audit
+pass. The full output-knowledge regression and complete affected mutation campaigns
+are separately pending; these local checks do not establish exact-head hosted CI.

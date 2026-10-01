@@ -100,3 +100,10 @@ The proposal test exercises ordinary Topic Manager admission on the pinned
 synthetic chain. It does not establish mining, current unspentness, protected
 content delivery, interactive private subscriptions or native mobile OS
 qualification. Those remain separate checkpoint work.
+
+Both lookup hosts install `LookupResponseDisclosure` with the same current
+policy, durable sessions and physical work budget as their provider. Their actual
+authenticated responses therefore recheck session/guard state after signing at
+native enqueue. This workbench's public fixture identities are demonstration
+inputs; the installed port is where a deployment supplies its own data and control
+access policy. The separate proposal admission/recovery test is unchanged.

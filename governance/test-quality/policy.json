@@ -1250,6 +1250,18 @@
           "Existing-state open preserves namespace, identity, configuration, capacity and terminal operation fences.",
           "Pending recovery calls are deduplicated and keep physical slots until settlement; shutdown returns every late failure."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-send.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Post-signing lookup disclosure under shared durable native-enqueue serialization",
+        "target": "Generated actual SQLite delivery schedules bind owned bytes, current authority, original session and exclusive expiry across capability rotation.",
+        "invariants": [
+          "Only the exact original authenticated response can enter the native queue.",
+          "Revocation, blocked or advanced durable guards, cancellation and exclusive session expiry withhold data.",
+          "Retained sessions restore their original selected contract without silently adopting current discovery."
+        ]
       }
     ],
     "exclusions": [

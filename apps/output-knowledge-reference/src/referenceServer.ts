@@ -65,6 +65,7 @@ export async function startReferenceServer(options: {
     app.use(
       createOutputLookupRouter({
         companion: provider.service,
+        disclosure: provider.disclosure,
         service: REFERENCE_SERVICE,
         baseURL: host.baseURL,
         identity: host.identity,

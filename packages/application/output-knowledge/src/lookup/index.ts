@@ -23,6 +23,7 @@ export {
 export {
   LookupSessionCodec,
   type LookupSessionOpening,
+  type LookupSessionHeader,
   type LookupSessionColumns,
   type LookupDisclosureGuard
 } from './LookupSessionCodec.js'
@@ -63,3 +64,10 @@ export {
 } from './LookupServingEpoch.js'
 export { LookupLimitError } from './LookupLimitError.js'
 export type { LookupReadBudgets } from './LookupLiveReader.js'
+
+export {
+  LookupResponseDisclosure,
+  type LookupResponseDisclosureOptions,
+  type BoundLookupResponse
+} from './LookupResponseDisclosure.js'
+export type { LookupSessionSend, LookupSessionResponseReference } from './LookupSessionSend.js'

@@ -459,6 +459,8 @@ configuration as described in the [provider guide](durable-live-lookup.md).
 import {
   LookupProviderService as ExampleLookupProvider,
   LookupSessionCodec as ExampleLookupCodec,
+  LookupResponseDisclosure as ExampleLookupDisclosure,
+  type LookupResponseDisclosureOptions as ExampleDisclosureOptions,
   type LookupProviderOptions as ExampleLookupOptions
 } from '@bsv/output-knowledge/lookup'
 import {
@@ -495,6 +497,18 @@ function configureExampleLookupHost(
   return companion
 }
 
+function composeExamplePrivateLookup(
+  options: ExampleLookupOptions,
+  disclosureOptions: ExampleDisclosureOptions,
+  routes: Omit<ExampleLookupRoutes, 'companion' | 'disclosure'>
+) {
+  // Host supplies the same sessions/contracts/authorize/work to both companions.
+  const companion = new ExampleLookupProvider(options)
+  const disclosure = new ExampleLookupDisclosure(disclosureOptions)
+  return exampleLookupRouter({ ...routes, companion, disclosure })
+}
+
+void composeExamplePrivateLookup
 void reopenExampleLookupStorage
 void composeExampleLookup
 void configureExampleLookupHost

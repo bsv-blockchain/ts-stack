@@ -3,8 +3,8 @@ id: durable-live-lookup
 title: 'Durable Progressive and Live Lookup'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: experimental
 tags: [overlays, application, utxo, lookup, recovery]
@@ -169,8 +169,61 @@ make two independent databases atomic. A pure continuity invalidation can use
 Removing membership from the index alone is not a revocation of old snapshot
 access. Use the current authorization gate and relevant guard when prior data must
 stop being disclosed. A retained first response or encrypted cursor is never an
-exemption from that gate. The boundary is response serialization: already disclosed
-bytes cannot be revoked from a recipient or recalled from an outbound network buffer.
+exemption from that gate. Serialization alone precedes asynchronous HTTP signing.
+For revocable or private authenticated serving, install the native-send companion
+below so the final boundary is the actual outbound enqueue. Already disclosed
+bytes cannot be revoked from a recipient or recalled from a network buffer.
+
+## Check again after signing
+
+`LookupResponseDisclosure` is an optional companion exported by
+`@bsv/output-knowledge/lookup`. Give it the same durable sessions, contracts and
+`authorize` policy as the provider, plus a synchronous `authorizeControl` policy
+for identifier-free close/error responses. Pass the instance as `disclosure` to
+`createOutputLookupRouter` or `configureOutputLookup`. This option requires
+BRC-103 authentication and auth middleware 2.3.0. Omitting it preserves the existing
+router and serialization contract; it does not implicitly add send-time protection.
+The reference workbench installs it on both hosts.
+
+The companion owns the prepared body and verified request identity. After HTTP
+signing, it restores the session's original capability and calls current
+`authorize` again. It then delegates to `LookupSessionSend.enqueueResponse`.
+`SQLiteLookupSessions` implements that optional port under the index's shared
+SQLite writer transaction. It rereads the actual session, checks durable guards,
+history pin, scope, cursor and limits, compares the newly authorized partition,
+then samples the clock again immediately before the synchronous native enqueue.
+Exclusive session/replay expiry, a closed session, changed bytes or identity,
+revoked access, or changed guard revision prevents delivery. A discovery renewal
+alone does not discard a still-retained original contract.
+
+Signing and asynchronous authorization stay outside the database transaction.
+The companion has a `LookupProviderWork` budget; the host may supply the same
+instance to the service and disclosure companion. Defaults remain 64 physical
+operations, four per principal and a 30-second deadline. A cancelled caller keeps
+its slot until the actual authorization operation settles; a late completion
+cannot enqueue its old response. These limits are separate from socket and
+middleware capacity.
+
+The SQLite adapter copies input bytes, including Node Buffers, before entering
+its gate and supplies owned copies to the validator. Its validator and enqueue
+callbacks must be synchronous: do not await, close a shared connection, reenter
+any index/session writer, or defer the enqueue. Every relevant external privacy
+writer must still follow the durable guard protocol above. A database lock does
+not coordinate an unrelated policy store by itself.
+
+When data becomes ineligible during signing, the HTTP guard replaces the entire
+candidate with one bounded, sanitized protocol error. That replacement is signed
+and checked again against `authorizeControl` under the same native gate. If even
+the control response is no longer authorized, the connection closes without a
+body. It never retries a native enqueue that was already attempted: a later
+exception cannot prove the previous bytes were undelivered. Existing handshake,
+public capability discovery and pre-authentication framing errors remain outside
+the private session-data gate.
+
+Actual SQLite/process-lock tests, generated delivery schedules and actual
+BRC-103/104 HTTP tests cover this composition, including revocation or expiry
+between response preparation and signing. They use local synthetic fixtures;
+this is not a claim of production TLS, deployment or whole-program qualification.
 
 ## HTTP composition
 

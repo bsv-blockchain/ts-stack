@@ -1,3 +1,9 @@
+import {
+  guardOutputLookupResponse,
+  lookupResponseControl,
+  lookupResponseControlHeaders,
+  type OutputLookupDisclosure
+} from './OutputLookupResponseGuard.js'
 import express, { type Request, type RequestHandler, type Response, type Router } from 'express'
 import {
   canonicalOutputBase,
@@ -46,6 +52,8 @@ export interface OutputLookupHTTPResponse {
 }
 export interface OutputLookupRouteOptions {
   companion: OutputLookupCompanion
+  /** Optional post-signing native session/access gate. Requires BRC-103 authentication. */
+  disclosure?: OutputLookupDisclosure
   /** One service binding per concrete base path. Separate paths may host other companions. */
   service: string
   baseURL: string
@@ -107,6 +115,8 @@ class LookupHTTPHandler {
   private active = 0
 
   constructor(input: OutputLookupRouteOptions) {
+    if (input.disclosure !== undefined && input.authentication !== 'brc103')
+      throw new TypeError('Lookup native disclosure requires authenticated transport')
     this.options = { ...input, chain: { ...input.chain } }
     this.baseURL = canonicalOutputBase(input.baseURL, input.allowLocalHTTP)
     this.identity = outputIdentity(input.identity)
@@ -303,6 +313,7 @@ class LookupHTTPHandler {
       cancel = () => controller.abort()
     req.once('aborted', cancel)
     res.once('close', cancel)
+    let guarded = false
     try {
       if (req.aborted || res.destroyed) controller.abort()
       const input = parseOutputJSON(req.body, { bytes: this.requestBytes })
@@ -318,7 +329,39 @@ class LookupHTTPHandler {
           'unavailable',
           'Lookup companion violated its response contract'
         )
+      if (this.options.disclosure) {
+        guardOutputLookupResponse(res, {
+          disclosure: this.options.disclosure,
+          caller: who,
+          initial: { operation, body: response.body },
+          controlHeaders: lookupResponseControlHeaders(res)
+        })
+        guarded = true
+      }
       res.status(200).set('content-type', 'application/json').end(response.body)
+    } catch (error) {
+      if (!this.options.disclosure) throw error
+      if (res.destroyed || res.writableEnded || req.aborted) return
+      if (guarded) {
+        res.destroy()
+        return
+      }
+      try {
+        guardOutputLookupResponse(res, {
+          disclosure: this.options.disclosure,
+          caller: who,
+          initial: { error },
+          controlHeaders: lookupResponseControlHeaders(res)
+        })
+      } catch {
+        res.destroy()
+        return
+      }
+      const control = lookupResponseControl(error)
+      res
+        .status(control.statusCode)
+        .set('content-type', 'application/json')
+        .end(Buffer.from(control.body))
     } finally {
       req.removeListener('aborted', cancel)
       res.removeListener('close', cancel)
@@ -336,3 +379,8 @@ export function createOutputLookupRouter(options: OutputLookupRouteOptions): Rou
   const handler = new LookupHTTPHandler(options)
   return express.Router({ caseSensitive: true, strict: true }).use(handler.handle)
 }
+
+export type {
+  OutputLookupDisclosure,
+  OutputLookupResponseBinding
+} from './OutputLookupResponseGuard.js'

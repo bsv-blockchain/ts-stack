@@ -44,7 +44,12 @@ sessions, installed query policies, current authorization and bounded reads.
 `@bsv/output-knowledge/lookup/sqlite` supplies the Node SQLite index and session
 adapters. They preserve original Open identity, fixed history promises and whole
 change groups; notification hints reduce latency while polling recovers missed
-changes from other processes. The browser root remains unchanged.
+changes from other processes. The browser root remains unchanged. The portable `LookupResponseDisclosure`
+companion optionally reauthorizes an authenticated response after signing and
+uses the session adapter's shared native-enqueue gate. Supply the same current
+policy and durable guards, plus an explicit control-response policy; physical
+work remains bounded through cancellation. No existing wire or stored format
+changes, and existing serialization remains available.
 
 See the [provider guide](../../../docs/guides/durable-live-lookup.md) for creation,
 restart, projection, disclosure guards, HTTP mounting and retention. The optional

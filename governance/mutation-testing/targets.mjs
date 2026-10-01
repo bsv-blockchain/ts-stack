@@ -628,6 +628,11 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'lookup-response-disclosure': lookupProviderTarget(
+      'lookup-send.property.test.ts',
+      ['LookupResponseDisclosure'],
+      ['lookup-native-send']
+    ),
     'proposal-maintenance': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -796,7 +801,11 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/overlays/overlay-express/package.json',
       propertyTest:
         'packages/overlays/overlay-express/src/__tests__/OutputLookupRoutes.property.test.ts',
-      mutate: ['src/OutputLookupRoutes.ts', 'src/OutputLookupHTTPPolicy.ts'],
+      mutate: [
+        'src/OutputLookupRoutes.ts',
+        'src/OutputLookupHTTPPolicy.ts',
+        'src/OutputLookupResponseGuard.ts'
+      ],
       additionalInputs: [
         '../../application/output-knowledge/src/lookup/**',
         '../../application/output-knowledge/test/lookup-provider-fixture.ts'
@@ -805,11 +814,18 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/src/__tests__/OutputLookupRoutes.test.ts',
-          '<rootDir>/src/__tests__/OutputLookupRoutes.property.test.ts'
+          '<rootDir>/src/__tests__/OutputLookupRoutes.property.test.ts',
+          '<rootDir>/src/__tests__/OutputLookupNativeSend.test.ts',
+          '<rootDir>/src/__tests__/OutputLookupResponseGuard.driver.test.ts'
         ],
         {
           config: {
             moduleNameMapper: {
+              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/src/lookup/LookupResponseDisclosure\.js$`]:
+                resolve(
+                  repositoryRoot,
+                  'packages/application/output-knowledge/src/lookup/LookupResponseDisclosure.ts'
+                ),
               // The HTTP sandbox moves two levels deeper. Keep the real, unmutated
               // provider fixture at its repository path; only this adapter is mutated.
               [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/lookup-provider-fixture\.js$`]:
@@ -878,7 +894,14 @@ export function buildMutationTargets(repositoryRoot) {
     'output-lookup-sessions': lookupProviderTarget(
       'lookup-disclosure.property.test.ts',
       ['SQLiteLookupSessions'],
-      ['lookup-sqlite-sessions', 'lookup-session', 'lookup-process', 'lookup-provider']
+      [
+        'lookup-sqlite-sessions',
+        'lookup-session',
+        'lookup-process',
+        'lookup-provider',
+        'lookup-native-send',
+        'lookup-send.property'
+      ]
     ),
     'output-lookup-codecs': {
       packageDirectory: 'packages/application/output-knowledge',

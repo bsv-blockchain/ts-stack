@@ -797,3 +797,10 @@ it('validates raw JSON framing before invoking an independently installed compan
   expect(valid.status).toBe(200)
   expect(operation.mock.calls[0][0]).toEqual(f.open)
 })
+
+it('requires authenticated transport when a native disclosure companion is configured', async () => {
+  const f = await endpoint('none')
+  expect(() => createOutputLookupRouter({ ...f.routes, disclosure: {} as never })).toThrow(
+    'Lookup native disclosure requires authenticated transport'
+  )
+})
