@@ -71,19 +71,29 @@
         "types": "./dist/cjs/src/RootEvictionRoutes.d.ts",
         "default": "./dist/cjs/src/RootEvictionRoutes.js"
       }
+    },
+    "./proposals": {
+      "import": {
+        "types": "./dist/types/src/ProposalRoutes.d.ts",
+        "default": "./dist/esm/src/ProposalRoutes.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/ProposalRoutes.d.ts",
+        "default": "./dist/cjs/src/ProposalRoutes.js"
+      }
     }
   },
   "scripts": {
     "test": "jest --watchman=false",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/ReorgStream.property.test.ts src/__tests__/OutputLookupRoutes.property.test.ts src/__tests__/RootEvictionResponseGuard.property.test.ts src/__tests__/RootEvictionRoutes.property.test.ts",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/ReorgStream.property.test.ts src/__tests__/OutputLookupRoutes.property.test.ts src/__tests__/RootEvictionResponseGuard.property.test.ts src/__tests__/RootEvictionRoutes.property.test.ts src/__tests__/ProposalRoutes.property.test.ts",
     "test:live": "pnpm build && node ../../../scripts/run-governed-test.mjs live src/__tests__/OverlayProviders.live.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay-express/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus --entry-exports \"./output-lookup=createOutputLookupRouter;./root-eviction-response=guardRootAdvertisementResponse;./root-eviction=createRootEvictionRouter\" && node ../../../scripts/check-legacy-overlay-sdk.mjs",
-    "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
+    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus --entry-exports \"./output-lookup=createOutputLookupRouter;./root-eviction-response=guardRootAdvertisementResponse;./root-eviction=createRootEvictionRouter;./proposals=createProposalRouter\" && node ../../../scripts/check-legacy-overlay-sdk.mjs",
+    "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false && tsc --project tsconfig.proposal-tests.json",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
     "prepublishOnly": "pnpm build",
@@ -155,6 +165,9 @@
       ],
       "root-eviction": [
         "dist/types/src/RootEvictionRoutes.d.ts"
+      ],
+      "proposals": [
+        "dist/types/src/ProposalRoutes.d.ts"
       ]
     }
   }

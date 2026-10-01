@@ -476,3 +476,20 @@ lifecycle remains with the caller. See the [provider guide](../../../docs/guides
 for initialization, exact retry recovery, disclosure guards, multi-process wakeups,
 retention and standalone router ordering. The candidate is unpublished and the
 complete BRC-192–199 integration remains under qualification.
+
+## Optional authenticated proposals
+
+`configureProposals` before `start` or the separate
+`@bsv/overlay-express/proposals` router composes the durable proposal service,
+service-owned disclosure validator and shared journal/native-enqueue gate.
+This entry requires SDK 2.9 and auth middleware 2.3; legacy root peer floors and
+routes remain unchanged. A current channel read differs from recovery of a
+retained publication ACK. Both require current authorization and original
+contract bounds after response signing. One sanitized replacement error may be
+signed, with independently checked control permission before native enqueue.
+
+The host shares authentication and handshake ownership with lookup/root companions,
+keeps physical service work counted through settlement, clamps byte limits and
+inherits host CORS policy unless explicitly overridden. Storage, capability
+publication, verified recovery, expiry and admission workers remain host-owned.
+See the [proposal guide](../../../docs/guides/non-final-proposals.md) for composition and recovery contracts.

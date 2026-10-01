@@ -1158,6 +1158,18 @@
           "Current installed policy and host access intersect with the original retained contract and its exclusive recovery deadline.",
           "Active get responses stop at signed expiry, while retained publication acknowledgements remain recoverable through retention."
         ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/ProposalRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Explicit authenticated proposal endpoints and exact retained-state/current-access native response enqueue",
+        "target": "At least 300 actual authenticated HTTP signing schedules over stable, revised, revoked and expired proposal state",
+        "invariants": [
+          "Actual native enqueue discloses only the original caller and the exact selected current or retained proposal response.",
+          "Changes during response signing withhold stale private state; sanitized controls require independent current authorization.",
+          "Historical publication retries recover original obligations without rewriting newer channel state or authorizing new admission."
+        ]
       }
     ],
     "exclusions": [

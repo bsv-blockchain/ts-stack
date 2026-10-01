@@ -690,6 +690,50 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'overlay-proposal-http': {
+      packageDirectory: 'packages/overlays/overlay-express',
+      manifest: 'packages/overlays/overlay-express/package.json',
+      propertyTest:
+        'packages/overlays/overlay-express/src/__tests__/ProposalRoutes.property.test.ts',
+      mutate: [
+        'src/ProposalRoutes.ts',
+        'src/ProposalResponseGuard.ts',
+        'src/ProposalHTTPPolicy.ts',
+        'src/ProposalHTTPPorts.ts'
+      ],
+      additionalInputs: [
+        'src/__tests__/ProposalRoutes.fixture.ts',
+        'src/OverlayExpress.ts',
+        'src/RootEvictionHTTPPolicy.ts',
+        'src/OutputLookupHTTPPolicy.ts',
+        '../../application/output-knowledge/src/proposals/**',
+        '../../application/output-knowledge/test/proposal-*.ts',
+        '../../sdk/src/**',
+        '../../middleware/auth-express-middleware/src/**',
+        '../../middleware/auth-express-middleware/mod.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/__tests__/Proposal*.test.ts',
+          '<rootDir>/src/__tests__/OverlayExpress.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              ...Object.fromEntries(
+                ['proposal-disclosure-fixture', 'proposal-fixture'].map(name => [
+                  String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/${name}\.js$`,
+                  resolve(repositoryRoot, `packages/application/output-knowledge/test/${name}.ts`)
+                ])
+              ),
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+            }
+          }
+        }
+      )
+    },
     'overlay-root-eviction-http': {
       packageDirectory: 'packages/overlays/overlay-express',
       manifest: 'packages/overlays/overlay-express/package.json',

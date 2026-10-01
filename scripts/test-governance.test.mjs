@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 93)
+  assert.equal(result.summary.propertySuites, 94)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 93)
+  assert.equal(result.summary.mutationTargets, 94)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -670,6 +670,29 @@ test('proposal disclosure qualification retains its entire authority boundary an
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const registration = policy.targets.find(value => value.id === 'proposal-response-disclosure')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('proposal HTTP qualification retains complete transport modules and actual signed HTTP plus host integration cases', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['overlay-proposal-http']
+  assert.deepEqual(target.mutate, [
+    'src/ProposalRoutes.ts',
+    'src/ProposalResponseGuard.ts',
+    'src/ProposalHTTPPolicy.ts',
+    'src/ProposalHTTPPorts.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/__tests__/Proposal*.test.ts',
+    '<rootDir>/src/__tests__/OverlayExpress.test.ts'
+  ])
+  assert.ok(target.additionalInputs.includes('../../application/output-knowledge/src/proposals/**'))
+  assert.ok(target.additionalInputs.includes('src/OverlayExpress.ts'))
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = policy.targets.find(value => value.id === 'overlay-proposal-http')
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)

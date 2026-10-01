@@ -946,6 +946,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-proposal-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/ProposalRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit authenticated proposal endpoints and exact retained-state/current-access native response enqueue",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

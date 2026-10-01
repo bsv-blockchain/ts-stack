@@ -120,6 +120,34 @@ function fixture(limits: Partial<ProposalJournalLimits> = {}) {
   }
 }
 
+it('recovers an older committed publication through its retained contract without replacing the newer head', async () => {
+  const f = fixture(),
+    service = f.make()
+  const original = await service.put({ version: 1, proposal: f.proposal }, f.caller)
+  const next = signed({ revision: '1', previous: f.request.proposalId })
+  await service.put({ version: 1, proposal: next }, f.caller)
+  const head = await f.storage.head()
+  f.options.manifest = () => {
+    throw new Error('Discovery is offline')
+  }
+  f.time('101')
+  expect(await service.put({ version: 1, proposal: f.proposal }, f.caller)).toEqual(original)
+  expect(await f.storage.head()).toEqual(head)
+  expect((await f.storage.getChannel(proposalChannelKey(next.body)))?.proposal).toEqual(next)
+  expect(f.options.evidence.verify).not.toHaveBeenCalled()
+  expect(f.options.admission.recover).not.toHaveBeenCalled()
+  f.options.access = () => false
+  await expect(service.put({ version: 1, proposal: f.proposal }, f.caller)).rejects.toMatchObject({
+    code: 'unauthorized'
+  })
+  f.options.access = () => true
+  f.time('1100')
+  await expect(service.put({ version: 1, proposal: f.proposal }, f.caller)).rejects.toMatchObject({
+    code: 'expired'
+  })
+  expect(await f.storage.head()).toEqual(head)
+})
+
 it('records a private signed head, rechecks recipients, commits expiry and recovers its original contract', async () => {
   const f = fixture(),
     service = f.make()

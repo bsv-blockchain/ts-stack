@@ -1125,3 +1125,39 @@ export function bindProposalResult(
   }
 }
 ```
+
+## Compose the optional proposal HTTP router
+
+Use one durable journal and one current synchronous access policy for the service
+and final disclosure. The origin supplies its shared bounded authentication
+middleware. This function creates a router; the host owns its mounting order,
+TLS, storage and workers as described in the [proposal guide](./non-final-proposals.md).
+
+```typescript compile
+// example-id: proposal-http-composition
+import { createProposalRouter as makeProposalHTTPRouter } from '@bsv/overlay-express/proposals'
+import {
+  ProposalService as HTTPProposalService,
+  ProposalResponseDisclosure as HTTPProposalDisclosure,
+  type ProposalServiceOptions as HTTPProposalServiceOptions,
+  type ProposalResponseDisclosureOptions as HTTPProposalDisclosureOptions
+} from '@bsv/output-knowledge/proposals'
+import type { SQLiteProposalJournal as HTTPProposalJournal } from '@bsv/output-knowledge/proposals/sqlite'
+
+export function composeProposalHTTP(
+  options: HTTPProposalServiceOptions & { storage: HTTPProposalJournal },
+  currentAccess: HTTPProposalDisclosureOptions['access'],
+  authorizeControl: (identity: string) => boolean,
+  authenticate: Parameters<typeof makeProposalHTTPRouter>[0]['authenticate']
+) {
+  const shared = { ...options, access: currentAccess }
+  return makeProposalHTTPRouter({
+    service: new HTTPProposalService(shared),
+    disclosure: new HTTPProposalDisclosure(shared),
+    journal: options.storage,
+    baseURL: options.trust.baseURL,
+    authenticate,
+    authorizeControl
+  })
+}
+```

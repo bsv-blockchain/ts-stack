@@ -203,7 +203,10 @@ it('rejects reads, mutations, close and nested sends reentered from a callback',
     () => undefined
   )
   for (const result of await reentered)
-    expect(result).toMatchObject({ status: 'rejected', reason: { code: 'unavailable' } })
+    expect(result).toMatchObject({
+      status: 'rejected',
+      reason: { code: 'unavailable', message: expect.stringMatching(/\S/) }
+    })
   expect((await f.store.head()).revision).toBe('1')
   expect((await f.store.commit(f.next)).status).toBe('committed')
 })
@@ -373,6 +376,7 @@ it('checks refreshed local context together with the selected committed record a
 it('retires a connection after uncertain completion without repeating an already queued response', async () => {
   const f = await make()
   const original = DatabaseSync.prototype.exec
+  const closeConnection = jest.spyOn(DatabaseSync.prototype, 'close')
   let armed = true,
     queued = 0
   const fault = jest.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
@@ -396,8 +400,10 @@ it('retires a connection after uncertain completion without repeating an already
         }
       )
     ).rejects.toThrow('commit acknowledgement lost')
+    expect(closeConnection).toHaveBeenCalledTimes(1)
   } finally {
     fault.mockRestore()
+    closeConnection.mockRestore()
   }
   expect(queued).toBe(1)
   await expect(f.store.head()).rejects.toThrow('closed')

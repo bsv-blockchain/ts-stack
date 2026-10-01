@@ -1170,8 +1170,13 @@ journal/service selection is retained in the new whole-module mutation target.
 Strict production/test types, lint, artifact checks, 27 governance regressions
 and all 33 compiled examples against 22 exact package tarballs pass. The new
 mutation registration is additive, with unchanged 90%/zero-uncovered/zero-invalid
-gates. Its complete execution and authenticated HTTP/service composition are
-still pending; this primitive alone does not establish profile readiness.
+gates. The first complete 313-site campaign failed at 83.39%, with 261 killed,
+50 survived and two uncovered sites, in 16 minutes 35 seconds. Its failed report
+is retained. Additional integrity tests cover independent persisted metadata and
+encoding corruption, actual WAL mode, hexadecimal revisions beyond 15, native
+lock-error identities, input ownership, reentry and uncertain connection closure.
+The strengthened 36-case integrity/send selection passes; fresh whole-journal
+qualification remains required. This primitive alone does not establish profile readiness.
 
 ## Service-owned proposal response binding
 
@@ -1188,6 +1193,47 @@ All 14 focused tests pass with full statement, branch, function and line coverag
 including a 300-case property and real SQLite enqueue. Cases include original
 publication/admission selectors, changed discovery, signed expiry, unresolved
 finalization, current revocation, unrelated writes, restart, actual request/response
-budgets and byte ownership. Complete-source mutation and HTTP composition remain
-pending. This adds a public optional companion without changing existing service
-methods or persisted formats.
+budgets and byte ownership. The complete 205-site mutation campaign passes at
+91.22%: 187 killed, 18 survived and zero uncovered or invalid, in 1 minute
+48 seconds. This is local source-bound evidence, not hosted qualification of the
+whole registry. The companion adds an optional public interface without changing
+existing service methods or persisted formats.
+
+## Authenticated non-final proposal HTTP
+
+The optional `@bsv/overlay-express/proposals` entry exposes put/get/finalize
+through the existing proposal service, disclosure companion and same durable
+journal. Strict raw framing precedes authentication, with exact profile/contract
+selection, credential-free public CORS, no-store responses and bounded transport
+and physical service work. The host's lazy `configureProposals` integration
+shares one authentication instance, handshake and capacity layer; existing
+finite routes and root imports retain their defaults. A disconnected operation
+keeps its physical work slot until settlement. No automatic payment is introduced.
+
+After response signing, the guard validates exact data or sanitized control bytes
+under the journal writer lock and enters the native queue. Current authorization,
+record state and original retention are checked together. A stale candidate may
+produce one newly signed error, with independent current control permission;
+an uncertain native enqueue never authorizes another attempt. The replacement
+signer receives its own bytes, separate from the retained authorization oracle.
+
+Publication retries now recover an older retained acknowledgement after a
+successor has become the current channel head, preserving that newer head and
+the original contract. The 26-case service regression selection passes, including
+discovery outage, current revocation and exclusive retention expiry.
+
+The complete Overlay Express run passes 708 tests across 29 suites, including
+24 real authenticated HTTP cases, the generated 300-case property, native-guard
+drivers and host integration. Eighteen subsequent transport lifecycle driver
+cases also pass with strict types. Actual HTTP uses real signing and SQLite storage with
+synthetic service evidence/admission ports; separate Engine/Mongo tests do not
+yet establish the complete HTTP-to-Engine composition. Packed ESM/CJS export and
+strict consumers pass, including the existing SDK 2.8.9 default host. All 35
+compiled examples against 22 exact tarballs and the 146-page documentation build
+pass. The additive full-source HTTP target brings the local registry to 94;
+29 governance regressions pass. Its mutation execution remains pending.
+
+The [proposal guide](../../docs/guides/non-final-proposals.md) describes composition,
+recovery and lifecycle ownership. Explicit startup recovery/expiry, configuration
+evolution, retained-fence compaction, projection integration, SDK client and full
+checkpoint-two qualification remain open.

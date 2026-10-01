@@ -175,10 +175,16 @@ export class ProposalService {
     if (value.version !== 1) throw new OutputProtocolError('invalid', 'Invalid proposal version')
     const proposal = this.options.lifecycle.validate(value.proposal)
     await this.authorize('put', proposal, caller.caller)
-    const existing = await this.storage.getChannelEntry(proposalChannelKey(proposal.body))
+    const head = await this.storage.getChannelEntry(proposalChannelKey(proposal.body))
     const proposalId = outputPacketDigest('proposal', proposal.body)
+    // Recover a previously committed head even after a later revision replaced
+    // the channel projection. Its original contract/access/deadline still apply.
+    const existing =
+      head?.transition.next.proposalId === proposalId
+        ? head
+        : await this.storage.getProposalEntry(proposalId)
     let selection: OutputCapabilitySelection
-    if (existing?.transition.next.proposalId === proposalId) {
+    if (existing !== undefined) {
       selection = this.recovery(existing, caller)
     } else {
       const selected = await this.select(caller, proposal)
@@ -186,7 +192,7 @@ export class ProposalService {
       this.boundRequest(packet.bytes, selection)
       await this.authorize('put', proposal, caller.caller)
       const plan = this.options.lifecycle.put(
-        existing?.transition.next,
+        head?.transition.next,
         proposal,
         caller.caller,
         this.now()

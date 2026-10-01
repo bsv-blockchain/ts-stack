@@ -56,6 +56,7 @@ import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoverySto
 import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
 import type { OutputLookupRouteOptions } from './OutputLookupRoutes.js'
 import type { RootEvictionRouteOptions } from './RootEvictionHTTPPorts.js'
+import type { ProposalRouteOptions } from './ProposalHTTPPorts.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
@@ -599,6 +600,12 @@ export default class OverlayExpress {
 
   private outputLookup?: Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>
   private rootEviction?: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & { identity: string }
+  private proposalIdentity?: string
+  private proposalRoutes?: (
+    authenticate: express.RequestHandler,
+    handleHandshake: boolean,
+    limits: { request: number; response: number; origins?: readonly string[] | '*' }
+  ) => Promise<express.Router>
 
   // Server start time for uptime tracking
   private startTime?: Date
@@ -996,6 +1003,37 @@ export default class OverlayExpress {
     this.rootEviction = {
       ...options,
       ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: [...options.allowedOrigins] })
+    }
+  }
+
+  /**
+   * Opt-in non-final proposal routes; storage, policy and admission remain caller-owned.
+   * The closure retains the journal's record type without adding SDK types to legacy
+   * host declarations. No proposal enters ordinary admission except explicit finalize.
+   */
+  configureProposals<Entry>(
+    options: Omit<ProposalRouteOptions<Entry>, 'authenticate' | 'handleHandshake'> & { identity: string }
+  ): void {
+    if (this.isListening) throw new Error('Configure proposals before start')
+    assertSingleLineString(options.identity, 'Proposal identity', 66, false)
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Proposal origins must be an array')
+    const owned = {
+      ...options,
+      ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: [...options.allowedOrigins] })
+    }
+    this.proposalIdentity = options.identity
+    this.proposalRoutes = async (authenticate, handleHandshake, limits) => {
+      const { createProposalRouter } = await import('./ProposalRoutes.js')
+      const origins = owned.allowedOrigins ?? limits.origins
+      return createProposalRouter({
+        ...owned,
+        authenticate,
+        handleHandshake,
+        allowedOrigins: origins === '*' ? undefined : origins,
+        maximumRequestBytes: Math.min(owned.maximumRequestBytes ?? 1048576, limits.request),
+        maximumResponseBytes: Math.min(owned.maximumResponseBytes ?? 4194304, limits.response)
+      })
     }
   }
 
@@ -2362,19 +2400,22 @@ export default class OverlayExpress {
     const engine = this.ensureEngine()
     const knex = this.ensureKnex()
     const rootEviction = this.rootEviction
+    const proposalRoutes = this.proposalRoutes
     const authenticatedLookup = this.outputLookup?.authentication === 'brc103'
     let companionAuth: express.RequestHandler | undefined
-    if (authenticatedLookup || rootEviction) {
+    if (authenticatedLookup || rootEviction || proposalRoutes) {
       if (!this.serverWallet) {
         throw new Error(authenticatedLookup
           ? 'Authenticated live lookup requires a server wallet'
-          : 'Root coordination requires a server wallet')
+          : rootEviction ? 'Root coordination requires a server wallet' : 'Proposals require a server wallet')
       }
       const { publicKey } = await this.serverWallet.getPublicKey({ identityKey: true })
       if (authenticatedLookup && publicKey !== this.outputLookup!.identity)
         throw new Error('Live lookup identity must match the server authentication wallet')
       if (rootEviction && publicKey !== rootEviction.identity)
         throw new Error('Root coordination identity must match the server authentication wallet')
+      if (proposalRoutes && publicKey !== this.proposalIdentity)
+        throw new Error('Proposal identity must match the server authentication wallet')
       companionAuth = createAuthMiddleware({
         wallet: this.serverWallet,
         sessionManager: this.authSessionManager,
@@ -2519,7 +2560,7 @@ export default class OverlayExpress {
         ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
         : edgePolicy.maxConcurrentRequests
     )
-    if (this.outputLookup || rootEviction) {
+    if (this.outputLookup || rootEviction || proposalRoutes) {
       // All companions share host capacity, including long polls. Raw signed
       // requests stay before legacy parsers, transformations and payload logging.
       this.app.use(requestCapacity)
@@ -2559,6 +2600,13 @@ export default class OverlayExpress {
           })
         )
       }
+      if (proposalRoutes) {
+        this.app.use(await proposalRoutes(companionAuth!, !authenticatedLookup && !rootEviction, {
+          request: jsonBytes,
+          response: maxResponseBytes === -1 ? 4194304 : maxResponseBytes,
+          origins: edgePolicy.allowedOrigins ?? readCorsOriginSetting(edgePolicy.environmentPrefix)
+        }))
+      }
     }
     this.app.use(
       corsPolicy({
@@ -2567,7 +2615,7 @@ export default class OverlayExpress {
         methods: ['GET', 'POST', 'OPTIONS']
       })
     )
-    if (!this.outputLookup && !rootEviction) this.app.use(requestCapacity)
+    if (!this.outputLookup && !rootEviction && !proposalRoutes) this.app.use(requestCapacity)
     this.app.use(
       bodyParser.json({
         limit: readBodyLimitBytes(

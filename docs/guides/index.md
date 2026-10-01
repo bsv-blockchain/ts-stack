@@ -104,3 +104,8 @@ Overlay Express adapter, including recovery, authorization and retention boundar
 **Want to implement a protocol?** See [Conformance Testing](../conformance/).
 
 **Looking for infrastructure examples?** Check [Infrastructure Components](../infrastructure/).
+
+### [Authenticated Non-Final Proposals](./non-final-proposals.md)
+
+Compose the signed policy, durable journal, retained admission and native response
+disclosure layers behind explicitly selected BRC-194 endpoints.
