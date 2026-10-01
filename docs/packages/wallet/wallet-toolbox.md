@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.14.5'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+version: '2.15.0'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -375,7 +375,7 @@ See `packages/wallet/wallet-toolbox-examples/src/p2pkh.ts`, `brc29.ts`, `pushdro
 
 | Model          | Use                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------- |
-| SQL/Knex       | Node.js wallets and servers with SQLite, MySQL, or another Knex-supported database.                     |
+| SQL/Knex       | Node.js wallets and servers with SQLite, MySQL, or Postgres.                                            |
 | IndexedDB      | Browser and mobile wallets that keep state on-device.                                                   |
 | Remote storage | Wallet clients that delegate storage to a Wallet Infra endpoint such as `https://store-us-1.bsvb.tech`. |
 
