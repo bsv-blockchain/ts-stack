@@ -914,3 +914,14 @@ compiled lookup dependencies. The report is retained as diagnostic evidence only
 not qualification against unchanged dependencies. A clean run against the final
 fixed dependency cohort is still required. No complete root profile or second
 review checkpoint is claimed.
+
+The final SDK source now passes 8,139 tests across 247 suites, packed ESM/CommonJS
+consumers, browser budgets and 28 compiled examples against 22 exact tarballs.
+Overlay Express passes 668 tests across 25 suites, its packed consumers and the
+strict legacy SDK 2.8.9 contract. The complete existing authentication target,
+including the full extracted finite exchange, passes 86.79% across 757 mutations:
+601 killed, 100 surviving and 56 detected timeouts, with zero uncovered or invalid
+sites. All seven production sources match its saved report. Its existing 80% gate
+and complete original source/test union were preserved; the separate new root
+client retains its independently passing 90% gate. These local results do not
+replace exact-head hosted qualification.
