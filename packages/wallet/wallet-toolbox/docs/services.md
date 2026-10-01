@@ -1537,6 +1537,7 @@ Chaintracks client API excluding events and callbacks
 
 ```ts
 export interface ChaintracksClientApi extends ChainTracker {
+    readonly supportsReorgEvents?: boolean;
     getChain(): Promise<Chain>;
     getInfo(): Promise<ChaintracksInfoApi>;
     getPresentHeight(): Promise<number>;
@@ -1559,6 +1560,17 @@ export interface ChaintracksClientApi extends ChainTracker {
 ```
 
 See also: [BaseBlockHeader](./client.md#interface-baseblockheader), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [ChaintracksInfoApi](./services.md#interface-chaintracksinfoapi), [HeaderListener](./services.md#type-headerlistener), [ReorgListener](./services.md#type-reorglistener)
+
+###### Property supportsReorgEvents
+
+Additive reorg-event capability. Method presence is not capability:
+`false` means subscribe/unsubscribe are unsupported stubs and must not be
+called; `true` promises working registration whose failures must propagate.
+Omit to infer from a callable `subscribeReorgs` implementation.
+
+```ts
+readonly supportsReorgEvents?: boolean
+```
 
 ###### Method addHeader
 
@@ -2185,6 +2197,7 @@ export interface ChaintracksServiceOptions {
     http?: Partial<HttpServerPolicyDefaults>;
     maxRequestsPerMinute?: number;
     maxHeaderSubmissionsPerMinute?: number;
+    trustProxy?: boolean | number | string | string[];
     maxHeadersPerRequest?: number;
     maxWaitMsecs?: number;
     logRequests?: boolean;
@@ -2220,7 +2233,7 @@ logRequests?: boolean
 
 ###### Property maxHeaderSubmissionsPerMinute
 
-Process-global header submissions allowed per minute. Defaults to 120.
+Header submissions allowed per client address per minute. Defaults to 120.
 
 ```ts
 maxHeaderSubmissionsPerMinute?: number
@@ -2236,7 +2249,7 @@ maxHeadersPerRequest?: number
 
 ###### Property maxRequestsPerMinute
 
-Process-global request starts allowed per minute. Defaults to 3,000.
+Request starts allowed per client address per minute. Defaults to 3,000.
 
 ```ts
 maxRequestsPerMinute?: number
@@ -2256,6 +2269,14 @@ prepended to the path of each registered service endpoint
 
 ```ts
 routingPrefix: string
+```
+
+###### Property trustProxy
+
+Express trusted-proxy policy used to derive the client address. Disabled by default.
+
+```ts
+trustProxy?: boolean | number | string | string[]
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -4187,25 +4208,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [ARC](#class-arc) | [BulkIngestorChaintracks](#class-bulkingestorchaintracks) | [DurableFileBulkFileDownloadBudget](#class-durablefilebulkfiledownloadbudget) |
-| [ArcSSEClient](#class-arcsseclient) | [BulkIngestorWhatsOnChainCdn](#class-bulkingestorwhatsonchaincdn) | [FixedWindowBulkFileDownloadBudget](#class-fixedwindowbulkfiledownloadbudget) |
-| [Arcade](#class-arcade) | [BulkIngestorWhatsOnChainWs](#class-bulkingestorwhatsonchainws) | [GoChaintracksServiceClient](#class-gochaintracksserviceclient) |
-| [BHServiceClient](#class-bhserviceclient) | [BulkStorageBase](#class-bulkstoragebase) | [HeightRange](#class-heightrange) |
-| [Bitails](#class-bitails) | [Chaintracks](#class-chaintracks) | [InlineBulkFileDataValidator](#class-inlinebulkfiledatavalidator) |
-| [BulkFileDataCacheFs](#class-bulkfiledatacachefs) | [ChaintracksAppendableFile](#class-chaintracksappendablefile) | [LiveIngestorBase](#class-liveingestorbase) |
-| [BulkFileDataManager](#class-bulkfiledatamanager) | [ChaintracksChainTracker](#class-chaintrackschaintracker) | [LiveIngestorChaintracksSSE](#class-liveingestorchaintrackssse) |
-| [BulkFileDataReader](#class-bulkfiledatareader) | [ChaintracksFetch](#class-chaintracksfetch) | [LiveIngestorWhatsOnChainPoll](#class-liveingestorwhatsonchainpoll) |
-| [BulkFileDataValidationError](#class-bulkfiledatavalidationerror) | [ChaintracksFetchError](#class-chaintracksfetcherror) | [LiveIngestorWhatsOnChainWs](#class-liveingestorwhatsonchainws) |
-| [BulkFilesReader](#class-bulkfilesreader) | [ChaintracksFsStatics](#class-chaintracksfsstatics) | [LocalChainTracker](#class-localchaintracker) |
-| [BulkFilesReaderFs](#class-bulkfilesreaderfs) | [ChaintracksKnexMigrations](#class-chaintracksknexmigrations) | [NodeBulkFileDataValidator](#class-nodebulkfiledatavalidator) |
-| [BulkFilesReaderStorage](#class-bulkfilesreaderstorage) | [ChaintracksReadableFile](#class-chaintracksreadablefile) | [SdkWhatsOnChain](#class-sdkwhatsonchain) |
-| [BulkHeaderFile](#class-bulkheaderfile) | [ChaintracksService](#class-chaintracksservice) | [ServiceCollection](#class-servicecollection) |
-| [BulkHeaderFileFs](#class-bulkheaderfilefs) | [ChaintracksServiceClient](#class-chaintracksserviceclient) | [Services](#class-services) |
-| [BulkHeaderFileStorage](#class-bulkheaderfilestorage) | [ChaintracksStorageBase](#class-chaintracksstoragebase) | [SingleWriterMultiReaderLock](#class-singlewritermultireaderlock) |
-| [BulkHeaderFiles](#class-bulkheaderfiles) | [ChaintracksStorageIdb](#class-chaintracksstorageidb) | [WhatsOnChain](#class-whatsonchain) |
-| [BulkIngestorBase](#class-bulkingestorbase) | [ChaintracksStorageKnex](#class-chaintracksstorageknex) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
-| [BulkIngestorCDN](#class-bulkingestorcdn) | [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) | [WhatsOnChainServices](#class-whatsonchainservices) |
-| [BulkIngestorCDNBabbage](#class-bulkingestorcdnbabbage) | [ChaintracksWritableFile](#class-chaintrackswritablefile) |  |
+| [ARC](#class-arc) | [BulkIngestorChaintracks](#class-bulkingestorchaintracks) | [ChaintracksWritableFile](#class-chaintrackswritablefile) |
+| [ArcSSEClient](#class-arcsseclient) | [BulkIngestorWhatsOnChainCdn](#class-bulkingestorwhatsonchaincdn) | [DurableFileBulkFileDownloadBudget](#class-durablefilebulkfiledownloadbudget) |
+| [Arcade](#class-arcade) | [BulkIngestorWhatsOnChainWs](#class-bulkingestorwhatsonchainws) | [FixedWindowBulkFileDownloadBudget](#class-fixedwindowbulkfiledownloadbudget) |
+| [BHServiceClient](#class-bhserviceclient) | [BulkStorageBase](#class-bulkstoragebase) | [GoChaintracksServiceClient](#class-gochaintracksserviceclient) |
+| [Bitails](#class-bitails) | [Chaintracks](#class-chaintracks) | [HeightRange](#class-heightrange) |
+| [BulkFileDataCacheFs](#class-bulkfiledatacachefs) | [ChaintracksAppendableFile](#class-chaintracksappendablefile) | [InlineBulkFileDataValidator](#class-inlinebulkfiledatavalidator) |
+| [BulkFileDataManager](#class-bulkfiledatamanager) | [ChaintracksChainTracker](#class-chaintrackschaintracker) | [LiveIngestorBase](#class-liveingestorbase) |
+| [BulkFileDataReader](#class-bulkfiledatareader) | [ChaintracksFetch](#class-chaintracksfetch) | [LiveIngestorChaintracksSSE](#class-liveingestorchaintrackssse) |
+| [BulkFileDataValidationError](#class-bulkfiledatavalidationerror) | [ChaintracksFetchError](#class-chaintracksfetcherror) | [LiveIngestorWhatsOnChainPoll](#class-liveingestorwhatsonchainpoll) |
+| [BulkFilesReader](#class-bulkfilesreader) | [ChaintracksFsStatics](#class-chaintracksfsstatics) | [LiveIngestorWhatsOnChainWs](#class-liveingestorwhatsonchainws) |
+| [BulkFilesReaderFs](#class-bulkfilesreaderfs) | [ChaintracksKnexMigrations](#class-chaintracksknexmigrations) | [LocalChainTracker](#class-localchaintracker) |
+| [BulkFilesReaderStorage](#class-bulkfilesreaderstorage) | [ChaintracksQueueCapacityError](#class-chaintracksqueuecapacityerror) | [NodeBulkFileDataValidator](#class-nodebulkfiledatavalidator) |
+| [BulkHeaderFile](#class-bulkheaderfile) | [ChaintracksReadableFile](#class-chaintracksreadablefile) | [SdkWhatsOnChain](#class-sdkwhatsonchain) |
+| [BulkHeaderFileFs](#class-bulkheaderfilefs) | [ChaintracksService](#class-chaintracksservice) | [ServiceCollection](#class-servicecollection) |
+| [BulkHeaderFileStorage](#class-bulkheaderfilestorage) | [ChaintracksServiceClient](#class-chaintracksserviceclient) | [Services](#class-services) |
+| [BulkHeaderFiles](#class-bulkheaderfiles) | [ChaintracksStorageBase](#class-chaintracksstoragebase) | [SingleWriterMultiReaderLock](#class-singlewritermultireaderlock) |
+| [BulkIngestorBase](#class-bulkingestorbase) | [ChaintracksStorageIdb](#class-chaintracksstorageidb) | [WhatsOnChain](#class-whatsonchain) |
+| [BulkIngestorCDN](#class-bulkingestorcdn) | [ChaintracksStorageKnex](#class-chaintracksstorageknex) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
+| [BulkIngestorCDNBabbage](#class-bulkingestorcdnbabbage) | [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) | [WhatsOnChainServices](#class-whatsonchainservices) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4226,10 +4247,10 @@ export class ARC {
     readonly headers: Record<string, string> | undefined;
     constructor(URL: string, config?: ArcConfig, name?: string);
     constructor(URL: string, apiKey?: string, name?: string);
-    constructor(URL: string, config?: string | ArcConfig, name?: string)
-    async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid>
-    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult>
-    async getTxData(txid: string): Promise<ArcMinerGetTxData>
+    constructor(URL: string, config?: string | ArcConfig, name?: string) 
+    async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> 
+    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> 
+    async getTxData(txid: string): Promise<ArcMinerGetTxData> 
 }
 ```
 
@@ -4271,7 +4292,7 @@ Argument Details
 This seems to only work for recently submitted txids...but that's all we need to complete postBeef!
 
 ```ts
-async getTxData(txid: string): Promise<ArcMinerGetTxData>
+async getTxData(txid: string): Promise<ArcMinerGetTxData> 
 ```
 See also: [ArcMinerGetTxData](./services.md#interface-arcminergettxdata)
 
@@ -4283,7 +4304,7 @@ It does process multiple new transactions, however, which allows results for all
 to be collected by the `/v1/tx/${txid}` endpoint.
 
 ```ts
-async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult>
+async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> 
 ```
 See also: [PostBeefResult](./client.md#interface-postbeefresult)
 
@@ -4298,7 +4319,7 @@ The ARC '/v1/tx' endpoint, as of 2025-02-17 DOES NOT support the following hex s
   1. V2 serialized Beef
 
 ```ts
-async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid>
+async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> 
 ```
 See also: [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
 
@@ -4309,11 +4330,11 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class ArcSSEClient {
-    constructor(options: ArcSSEClientOptions)
-    get lastEventId(): string | undefined
-    connect(): void
-    close(): void
-    async fetchEvents(): Promise<number>
+    constructor(options: ArcSSEClientOptions) 
+    get lastEventId(): string | undefined 
+    connect(): void 
+    close(): void 
+    async fetchEvents(): Promise<number> 
 }
 ```
 
@@ -4324,7 +4345,7 @@ See also: [ArcSSEClientOptions](./services.md#interface-arcsseclientoptions)
 Close the connection, discard unacknowledged network events, and reset lifecycle state.
 
 ```ts
-close(): void
+close(): void 
 ```
 
 ###### Method connect
@@ -4332,7 +4353,7 @@ close(): void
 Open the SSE connection. Events are processed serially in exact arrival order.
 
 ```ts
-connect(): void
+connect(): void 
 ```
 
 ###### Method fetchEvents
@@ -4340,7 +4361,7 @@ connect(): void
 Ensure a connection is open; events still commit asynchronously in arrival order.
 
 ```ts
-async fetchEvents(): Promise<number>
+async fetchEvents(): Promise<number> 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -4359,12 +4380,12 @@ export class Arcade {
     readonly headers: Record<string, string> | undefined;
     constructor(URL: string, config?: ArcConfig, name?: string);
     constructor(URL: string, apiKey?: string, name?: string);
-    constructor(URL: string, config?: string | ArcConfig, name?: string)
-    async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid>
-    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult>
-    async getTxData(txid: string): Promise<ArcMinerGetTxData>
-    async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult>
-    async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult>
+    constructor(URL: string, config?: string | ArcConfig, name?: string) 
+    async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> 
+    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> 
+    async getTxData(txid: string): Promise<ArcMinerGetTxData> 
+    async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> 
+    async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> 
 }
 ```
 
@@ -4392,7 +4413,7 @@ states remain unknown, while MINED/IMMUTABLE are authoritative mined
 observations whose proof is validated separately.
 
 ```ts
-async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult>
+async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> 
 ```
 See also: [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult)
 
@@ -4401,7 +4422,7 @@ See also: [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresul
 Look up a transaction's current status (and merkle path once mined) via `GET /tx/{txid}`.
 
 ```ts
-async getTxData(txid: string): Promise<ArcMinerGetTxData>
+async getTxData(txid: string): Promise<ArcMinerGetTxData> 
 ```
 See also: [ArcMinerGetTxData](./services.md#interface-arcminergettxdata)
 
@@ -4413,7 +4434,7 @@ Submit a single transaction to Arcade's `POST /tx` endpoint.
 txid is taken from `txids` when supplied (Arcade derives the same txid from the parsed tx).
 
 ```ts
-async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid>
+async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> 
 ```
 See also: [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
 
@@ -4424,41 +4445,50 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BHServiceClient implements ChaintracksClientApi {
+    readonly supportsReorgEvents = false;
     bhs: BlockHeadersService;
     cache: Record<number, string>;
     chain: Chain;
     serviceUrl: string;
     options: ChaintracksServiceClientOptions;
     apiKey: string;
-    constructor(chain: Chain, url: string, apiKey: string, options: ChaintracksServiceClientOptions = {})
-    async currentHeight(): Promise<number>
-    async isValidRootForHeight(root: string, height: number): Promise<boolean>
-    async getPresentHeight(): Promise<number>
-    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined>
-    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined>
-    async getHeaders(height: number, count: number): Promise<string>
-    async findChainWorkForBlockHash(_hash: string): Promise<string | undefined>
-    async findChainTipHeader(): Promise<BlockHeader>
-    async getJsonOrUndefined<T>(path: string): Promise<T | undefined>
-    async getJson<T>(path: string): Promise<T>
-    async postJsonVoid<T>(_path: string, _params: T): Promise<void>
-    async addHeader(_header: any): Promise<void>
-    async findHeaderForMerkleRoot(_merkleRoot: string, _height?: number): Promise<undefined>
-    async startListening(): Promise<void>
-    async listening(): Promise<void>
-    async isSynchronized(): Promise<boolean>
-    async getChain(): Promise<Chain>
-    async isListening(): Promise<boolean>
-    async getChainTipHeader(): Promise<BlockHeader>
-    async findChainTipHash(): Promise<string>
-    async subscribeHeaders(_listener: HeaderListener): Promise<string>
-    async subscribeReorgs(_listener: ReorgListener): Promise<string>
-    async unsubscribe(_subscriptionId: string): Promise<boolean>
-    async getInfo(): Promise<ChaintracksInfoApi>
+    constructor(chain: Chain, url: string, apiKey: string, options: ChaintracksServiceClientOptions = {}) 
+    async currentHeight(): Promise<number> 
+    async isValidRootForHeight(root: string, height: number): Promise<boolean> 
+    async getPresentHeight(): Promise<number> 
+    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> 
+    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> 
+    async getHeaders(height: number, count: number): Promise<string> 
+    async findChainWorkForBlockHash(_hash: string): Promise<string | undefined> 
+    async findChainTipHeader(): Promise<BlockHeader> 
+    async getJsonOrUndefined<T>(path: string): Promise<T | undefined> 
+    async getJson<T>(path: string): Promise<T> 
+    async postJsonVoid<T>(_path: string, _params: T): Promise<void> 
+    async addHeader(_header: any): Promise<void> 
+    async findHeaderForMerkleRoot(_merkleRoot: string, _height?: number): Promise<undefined> 
+    async startListening(): Promise<void> 
+    async listening(): Promise<void> 
+    async isSynchronized(): Promise<boolean> 
+    async getChain(): Promise<Chain> 
+    async isListening(): Promise<boolean> 
+    async getChainTipHeader(): Promise<BlockHeader> 
+    async findChainTipHash(): Promise<string> 
+    async subscribeHeaders(_listener: HeaderListener): Promise<string> 
+    async subscribeReorgs(_listener: ReorgListener): Promise<string> 
+    async unsubscribe(_subscriptionId: string): Promise<boolean> 
+    async getInfo(): Promise<ChaintracksInfoApi> 
 }
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [ChaintracksInfoApi](./services.md#interface-chaintracksinfoapi), [ChaintracksServiceClientOptions](./services.md#interface-chaintracksserviceclientoptions), [HeaderListener](./services.md#type-headerlistener), [ReorgListener](./services.md#type-reorglistener)
+
+###### Property supportsReorgEvents
+
+HTTP polling client; callback event methods are legacy unsupported stubs.
+
+```ts
+readonly supportsReorgEvents = false
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4472,11 +4502,11 @@ export class Bitails {
     readonly URL: string;
     readonly httpClient: HttpClient;
     readonly requestTimeoutMsecs: number;
-    constructor(chain: Chain = "main", config: BitailsConfig = {})
-    getHttpHeaders(): Record<string, string>
-    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult>
-    async postRaws(raws: HexString[], txids?: string[]): Promise<PostBeefResult>
-    async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult>
+    constructor(chain: Chain = "main", config: BitailsConfig = {}) 
+    getHttpHeaders(): Record<string, string> 
+    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> 
+    async postRaws(raws: HexString[], txids?: string[]): Promise<PostBeefResult> 
+    async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> 
 }
 ```
 
@@ -4489,14 +4519,14 @@ Bitails does not natively support a postBeef end-point aware of multiple txids o
 Send rawTx in `txids` order from beef.
 
 ```ts
-async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult>
+async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> 
 ```
 See also: [PostBeefResult](./client.md#interface-postbeefresult)
 
 ###### Method postRaws
 
 ```ts
-async postRaws(raws: HexString[], txids?: string[]): Promise<PostBeefResult>
+async postRaws(raws: HexString[], txids?: string[]): Promise<PostBeefResult> 
 ```
 See also: [PostBeefResult](./client.md#interface-postbeefresult)
 
@@ -4520,12 +4550,12 @@ byte length and SHA-256 digest.
 
 ```ts
 export class BulkFileDataCacheFs implements BulkFileDataCacheApi {
-    constructor(rootFolderOrOptions: string | BulkFileDataCacheFsOptions)
-    async get(file: Readonly<BulkHeaderFileInfo>): Promise<Uint8Array | undefined>
-    async set(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void>
-    async promoteValidated(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void>
-    async quarantine(file: Readonly<BulkHeaderFileInfo>, reason: string, rejectedData?: Uint8Array): Promise<void>
-    async delete(file: Readonly<BulkHeaderFileInfo>): Promise<void>
+    constructor(rootFolderOrOptions: string | BulkFileDataCacheFsOptions) 
+    async get(file: Readonly<BulkHeaderFileInfo>): Promise<Uint8Array | undefined> 
+    async set(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void> 
+    async promoteValidated(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void> 
+    async quarantine(file: Readonly<BulkHeaderFileInfo>, reason: string, rejectedData?: Uint8Array): Promise<void> 
+    async delete(file: Readonly<BulkHeaderFileInfo>): Promise<void> 
 }
 ```
 
@@ -4546,7 +4576,7 @@ subject to the optional `maxRetained` limit.
 
 ```ts
 export class BulkFileDataManager {
-    static createDefaultOptions(chain: Chain): BulkFileDataManagerOptions
+    static createDefaultOptions(chain: Chain): BulkFileDataManagerOptions 
     readonly chain: Chain;
     readonly maxPerFile: number;
     readonly fetch?: ChaintracksFetchApi;
@@ -4556,29 +4586,29 @@ export class BulkFileDataManager {
     readonly downloadBudget?: BulkFileDownloadBudgetApi;
     readonly validator: BulkFileDataValidatorApi;
     readonly failedLoadRetryMsecs: number;
-    constructor(options: BulkFileDataManagerOptions | Chain)
-    getStats(): BulkFileDataManagerStats
-    async deleteBulkFiles(): Promise<void>
-    async setStorage(storage: ChaintracksStorageBulkFileApi, log: (...args: any[]) => void): Promise<void>
+    constructor(options: BulkFileDataManagerOptions | Chain) 
+    getStats(): BulkFileDataManagerStats 
+    async deleteBulkFiles(): Promise<void> 
+    async setStorage(storage: ChaintracksStorageBulkFileApi, log: (...args: any[]) => void): Promise<void> 
     heightRangesFromBulkFiles(files: BulkHeaderFileInfo[]): {
         all: HeightRange;
         cdn: HeightRange;
         incremental: HeightRange;
-    }
-    async createReader(range?: HeightRange, maxBufferSize?: number): Promise<BulkFileDataReader>
-    async updateFromUrl(cdnUrl: string): Promise<void>
-    async merge(files: BulkHeaderFileInfo[]): Promise<BulkFileDataManagerMergeResult>
-    toLogString(what?: BulkFileDataManagerMergeResult | BulkFileData[] | BulkHeaderFileInfo[]): string
-    async mergeIncrementalBlockHeaders(newBulkHeaders: BlockHeader[], incrementalChainWork?: string): Promise<void>
-    async getBulkFiles(keepData?: boolean): Promise<BulkHeaderFileInfo[]>
-    async getHeightRange(): Promise<HeightRange>
-    async getDataFromFile(file: BulkHeaderFileInfo, offset?: number, length?: number): Promise<Uint8Array | undefined>
-    async findHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined>
-    async getFileForHeight(height: number): Promise<BulkHeaderFileInfo | undefined>
-    async getLastFile(fromEnd = 1): Promise<BulkHeaderFileInfo | undefined>
-    async ReValidate(): Promise<void>
-    async exportHeadersToFs(toFs: ChaintracksFsApi, toHeadersPerFile: number, toFolder: string, sourceUrl?: string, maxHeight?: number): Promise<void>
-    async destroy(): Promise<void>
+    } 
+    async createReader(range?: HeightRange, maxBufferSize?: number): Promise<BulkFileDataReader> 
+    async updateFromUrl(cdnUrl: string): Promise<void> 
+    async merge(files: BulkHeaderFileInfo[]): Promise<BulkFileDataManagerMergeResult> 
+    toLogString(what?: BulkFileDataManagerMergeResult | BulkFileData[] | BulkHeaderFileInfo[]): string 
+    async mergeIncrementalBlockHeaders(newBulkHeaders: BlockHeader[], incrementalChainWork?: string): Promise<void> 
+    async getBulkFiles(keepData?: boolean): Promise<BulkHeaderFileInfo[]> 
+    async getHeightRange(): Promise<HeightRange> 
+    async getDataFromFile(file: BulkHeaderFileInfo, offset?: number, length?: number): Promise<Uint8Array | undefined> 
+    async findHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined> 
+    async getFileForHeight(height: number): Promise<BulkHeaderFileInfo | undefined> 
+    async getLastFile(fromEnd = 1): Promise<BulkHeaderFileInfo | undefined> 
+    async ReValidate(): Promise<void> 
+    async exportHeadersToFs(toFs: ChaintracksFsApi, toHeadersPerFile: number, toFolder: string, sourceUrl?: string, maxHeight?: number): Promise<void> 
+    async destroy(): Promise<void> 
 }
 ```
 
@@ -4593,7 +4623,7 @@ Synchronizes bfds and storage files, after which this manager maintains sync.
 There should be no changes to bulk files by direct access to storage bulk file methods.
 
 ```ts
-async setStorage(storage: ChaintracksStorageBulkFileApi, log: (...args: any[]) => void): Promise<void>
+async setStorage(storage: ChaintracksStorageBulkFileApi, log: (...args: any[]) => void): Promise<void> 
 ```
 See also: [ChaintracksStorageBulkFileApi](./services.md#interface-chaintracksstoragebulkfileapi)
 
@@ -4608,8 +4638,8 @@ export class BulkFileDataReader {
     readonly range: HeightRange;
     readonly maxBufferSize: number;
     nextHeight: number;
-    constructor(manager: BulkFileDataManager, range: HeightRange, maxBufferSize: number)
-    async read(): Promise<Uint8Array | undefined>
+    constructor(manager: BulkFileDataManager, range: HeightRange, maxBufferSize: number) 
+    async read(): Promise<Uint8Array | undefined> 
 }
 ```
 
@@ -4618,7 +4648,7 @@ See also: [BulkFileDataManager](./services.md#class-bulkfiledatamanager), [Heigh
 ###### Method read
 
 ```ts
-async read(): Promise<Uint8Array | undefined>
+async read(): Promise<Uint8Array | undefined> 
 ```
 
 Returns
@@ -4637,7 +4667,7 @@ a replacement that cannot be validated.
 
 ```ts
 export class BulkFileDataValidationError extends Error {
-    constructor(message: string, public readonly data?: Uint8Array)
+    constructor(message: string, public readonly data?: Uint8Array) 
 }
 ```
 
@@ -4655,18 +4685,18 @@ export class BulkFilesReader {
     range: HeightRange;
     maxBufferSize = 400 * 80;
     nextHeight: number | undefined;
-    constructor(files: BulkHeaderFile[], range?: HeightRange, maxBufferSize?: number)
-    protected setRange(range?: HeightRange)
-    setMaxBufferSize(maxBufferSize: number | undefined)
-    get heightRange(): HeightRange
-    async readBufferForHeightOrUndefined(height: number): Promise<Uint8Array | undefined>
-    async readBufferForHeight(height: number): Promise<Uint8Array>
-    async readHeaderForHeight(height: number): Promise<BaseBlockHeader>
-    async readHeaderForHeightOrUndefined(height: number): Promise<BaseBlockHeader | undefined>
-    async read(): Promise<Uint8Array | undefined>
-    resetRange(range: HeightRange, maxBufferSize?: number)
-    async validateFiles(): Promise<void>
-    async exportHeadersToFs(toFs: ChaintracksFsApi, toHeadersPerFile: number, toFolder: string): Promise<void>
+    constructor(files: BulkHeaderFile[], range?: HeightRange, maxBufferSize?: number) 
+    protected setRange(range?: HeightRange) 
+    setMaxBufferSize(maxBufferSize: number | undefined) 
+    get heightRange(): HeightRange 
+    async readBufferForHeightOrUndefined(height: number): Promise<Uint8Array | undefined> 
+    async readBufferForHeight(height: number): Promise<Uint8Array> 
+    async readHeaderForHeight(height: number): Promise<BaseBlockHeader> 
+    async readHeaderForHeightOrUndefined(height: number): Promise<BaseBlockHeader | undefined> 
+    async read(): Promise<Uint8Array | undefined> 
+    resetRange(range: HeightRange, maxBufferSize?: number) 
+    async validateFiles(): Promise<void> 
+    async exportHeadersToFs(toFs: ChaintracksFsApi, toHeadersPerFile: number, toFolder: string): Promise<void> 
 }
 ```
 
@@ -4709,7 +4739,7 @@ See also: [HeightRange](./services.md#class-heightrange)
 ###### Method read
 
 ```ts
-async read(): Promise<Uint8Array | undefined>
+async read(): Promise<Uint8Array | undefined> 
 ```
 
 Returns
@@ -4721,7 +4751,7 @@ an array containing the next `maxBufferSize` bytes of headers from the files.
 Reset the reading process and adjust the range to be read to a new subset of what's available...
 
 ```ts
-resetRange(range: HeightRange, maxBufferSize?: number)
+resetRange(range: HeightRange, maxBufferSize?: number) 
 ```
 See also: [HeightRange](./services.md#class-heightrange)
 
@@ -4739,10 +4769,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkFilesReaderFs extends BulkFilesReader {
-    constructor(public fs: ChaintracksFsApi, files: BulkHeaderFileFs[], range?: HeightRange, maxBufferSize?: number)
-    static async fromFs(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string, range?: HeightRange, maxBufferSize?: number): Promise<BulkFilesReaderFs>
-    static async writeEmptyJsonFile(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string): Promise<string>
-    static async readJsonFile(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string, failToEmptyRange: boolean = true): Promise<BulkHeaderFilesInfo>
+    constructor(public fs: ChaintracksFsApi, files: BulkHeaderFileFs[], range?: HeightRange, maxBufferSize?: number) 
+    static async fromFs(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string, range?: HeightRange, maxBufferSize?: number): Promise<BulkFilesReaderFs> 
+    static async writeEmptyJsonFile(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string): Promise<string> 
+    static async readJsonFile(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string, failToEmptyRange: boolean = true): Promise<BulkHeaderFilesInfo> 
 }
 ```
 
@@ -4753,7 +4783,7 @@ See also: [BulkFilesReader](./services.md#class-bulkfilesreader), [BulkHeaderFil
 Return a BulkFilesReader configured to access the intersection of `range` and available headers.
 
 ```ts
-static async fromFs(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string, range?: HeightRange, maxBufferSize?: number): Promise<BulkFilesReaderFs>
+static async fromFs(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string, range?: HeightRange, maxBufferSize?: number): Promise<BulkFilesReaderFs> 
 ```
 See also: [BulkFilesReaderFs](./services.md#class-bulkfilesreaderfs), [ChaintracksFsApi](./services.md#interface-chaintracksfsapi), [HeightRange](./services.md#class-heightrange)
 
@@ -4764,8 +4794,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkFilesReaderStorage extends BulkFilesReader {
-    constructor(storage: ChaintracksStorageBase, files: BulkHeaderFileStorage[], range?: HeightRange, maxBufferSize?: number)
-    static async fromStorage(storage: ChaintracksStorageBase, fetch?: ChaintracksFetchApi, range?: HeightRange, maxBufferSize?: number): Promise<BulkFilesReaderStorage>
+    constructor(storage: ChaintracksStorageBase, files: BulkHeaderFileStorage[], range?: HeightRange, maxBufferSize?: number) 
+    static async fromStorage(storage: ChaintracksStorageBase, fetch?: ChaintracksFetchApi, range?: HeightRange, maxBufferSize?: number): Promise<BulkFilesReaderStorage> 
 }
 ```
 
@@ -4791,15 +4821,15 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
     prevHash: string;
     sourceUrl?: string;
     validated?: boolean;
-    constructor(info: BulkHeaderFileInfo)
+    constructor(info: BulkHeaderFileInfo) 
     abstract readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined>;
-    protected validateReadBounds(length: number, offset: number): void
-    get heightRange(): HeightRange
-    async ensureData(): Promise<Uint8Array>
-    async computeFileHash(): Promise<string>
-    async releaseData(): Promise<void>
-    toCdnInfo(): BulkHeaderFileInfo
-    toStorageInfo(): BulkHeaderFileInfo
+    protected validateReadBounds(length: number, offset: number): void 
+    get heightRange(): HeightRange 
+    async ensureData(): Promise<Uint8Array> 
+    async computeFileHash(): Promise<string> 
+    async releaseData(): Promise<void> 
+    toCdnInfo(): BulkHeaderFileInfo 
+    toStorageInfo(): BulkHeaderFileInfo 
 }
 ```
 
@@ -4810,7 +4840,7 @@ See also: [BulkHeaderFileInfo](./services.md#interface-bulkheaderfileinfo), [Cha
 Whenever reloading data from a backing store, validated fileHash must be re-verified
 
 ```ts
-async computeFileHash(): Promise<string>
+async computeFileHash(): Promise<string> 
 ```
 
 Returns
@@ -4824,9 +4854,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkHeaderFileFs extends BulkHeaderFile {
-    constructor(info: BulkHeaderFileInfo, public fs: ChaintracksFsApi, public rootFolder: string)
-    override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined>
-    override async ensureData(): Promise<Uint8Array>
+    constructor(info: BulkHeaderFileInfo, public fs: ChaintracksFsApi, public rootFolder: string) 
+    override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined> 
+    override async ensureData(): Promise<Uint8Array> 
 }
 ```
 
@@ -4839,9 +4869,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkHeaderFileStorage extends BulkHeaderFile {
-    constructor(info: BulkHeaderFileInfo, public storage: ChaintracksStorageBase, public fetch?: ChaintracksFetchApi)
-    override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined>
-    override async ensureData(): Promise<Uint8Array>
+    constructor(info: BulkHeaderFileInfo, public storage: ChaintracksStorageBase, public fetch?: ChaintracksFetchApi) 
+    override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined> 
+    override async ensureData(): Promise<Uint8Array> 
 }
 ```
 
@@ -4854,7 +4884,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export abstract class BulkHeaderFiles implements BulkHeaderFilesInfo {
-    constructor(public rootFolder: string, public jsonFilename: string, public files: BulkHeaderFileInfo[], public headersPerFile: number)
+    constructor(public rootFolder: string, public jsonFilename: string, public files: BulkHeaderFileInfo[], public headersPerFile: number) 
 }
 ```
 
@@ -4867,19 +4897,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export abstract class BulkIngestorBase implements BulkIngestorApi {
-    static createBulkIngestorBaseOptions(chain: Chain)
+    static createBulkIngestorBaseOptions(chain: Chain) 
     chain: Chain;
     jsonFilename: string;
     log: (...args: any[]) => void = () => { };
-    constructor(options: BulkIngestorBaseOptions)
-    async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void>
-    async shutdown(): Promise<void>
-    storageOrUndefined(): ChaintracksStorageApi | undefined
-    storage(): ChaintracksStorageBase
+    constructor(options: BulkIngestorBaseOptions) 
+    async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> 
+    async shutdown(): Promise<void> 
+    storageOrUndefined(): ChaintracksStorageApi | undefined 
+    storage(): ChaintracksStorageBase 
     filesInfo: BulkHeaderFilesInfo | undefined;
-    async getPresentHeight(): Promise<number | undefined>
+    async getPresentHeight(): Promise<number | undefined> 
     abstract fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]>;
-    async synchronize(presentHeight: number, before: HeightRanges, priorLiveHeaders: BlockHeader[]): Promise<BulkSyncResult>
+    async synchronize(presentHeight: number, before: HeightRanges, priorLiveHeaders: BlockHeader[]): Promise<BulkSyncResult> 
 }
 ```
 
@@ -4897,7 +4927,7 @@ See also: [BulkHeaderFilesInfo](./services.md#interface-bulkheaderfilesinfo)
 ###### Method createBulkIngestorBaseOptions
 
 ```ts
-static createBulkIngestorBaseOptions(chain: Chain)
+static createBulkIngestorBaseOptions(chain: Chain) 
 ```
 See also: [Chain](./client.md#type-chain)
 
@@ -4939,7 +4969,7 @@ Argument Details
 At least one derived BulkIngestor must override this method to provide the current height of the active chain tip.
 
 ```ts
-async getPresentHeight(): Promise<number | undefined>
+async getPresentHeight(): Promise<number | undefined> 
 ```
 
 Returns
@@ -4953,7 +4983,7 @@ A BulkIngestor has two potential goals:
 2. To source missing live headers to be forwarded to live storage.
 
 ```ts
-async synchronize(presentHeight: number, before: HeightRanges, priorLiveHeaders: BlockHeader[]): Promise<BulkSyncResult>
+async synchronize(presentHeight: number, before: HeightRanges, priorLiveHeaders: BlockHeader[]): Promise<BulkSyncResult> 
 ```
 See also: [BlockHeader](./client.md#interface-blockheader), [BulkSyncResult](./services.md#interface-bulksyncresult), [HeightRanges](./services.md#interface-heightranges)
 
@@ -4977,7 +5007,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkIngestorCDN extends BulkIngestorBase {
-    static createBulkIngestorCDNOptions(chain: Chain, cdnUrl: string, fetch: ChaintracksFetchApi, maxPerFile?: number): BulkIngestorCDNOptions
+    static createBulkIngestorCDNOptions(chain: Chain, cdnUrl: string, fetch: ChaintracksFetchApi, maxPerFile?: number): BulkIngestorCDNOptions 
     fetch: ChaintracksFetchApi;
     jsonResource: string;
     cdnUrl: string;
@@ -4985,10 +5015,10 @@ export class BulkIngestorCDN extends BulkIngestorBase {
     availableBulkFiles: BulkHeaderFilesInfo | undefined;
     selectedFiles: BulkHeaderFileInfo[] | undefined;
     currentRange: HeightRange | undefined;
-    constructor(options: BulkIngestorCDNOptions)
-    override async getPresentHeight(): Promise<number | undefined>
-    getJsonHttpHeaders(): Record<string, string>
-    async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]>
+    constructor(options: BulkIngestorCDNOptions) 
+    override async getPresentHeight(): Promise<number | undefined> 
+    getJsonHttpHeaders(): Record<string, string> 
+    async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]> 
 }
 ```
 
@@ -4997,7 +5027,7 @@ See also: [BlockHeader](./client.md#interface-blockheader), [BulkHeaderFileInfo]
 ###### Method createBulkIngestorCDNOptions
 
 ```ts
-static createBulkIngestorCDNOptions(chain: Chain, cdnUrl: string, fetch: ChaintracksFetchApi, maxPerFile?: number): BulkIngestorCDNOptions
+static createBulkIngestorCDNOptions(chain: Chain, cdnUrl: string, fetch: ChaintracksFetchApi, maxPerFile?: number): BulkIngestorCDNOptions 
 ```
 See also: [BulkIngestorCDNOptions](./services.md#interface-bulkingestorcdnoptions), [Chain](./client.md#type-chain), [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi)
 
@@ -5032,7 +5062,7 @@ Context Replace:
 - Proceed as context Incremental.
 
 ```ts
-async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]>
+async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]> 
 ```
 See also: [BlockHeader](./client.md#interface-blockheader), [HeightRange](./services.md#class-heightrange), [HeightRanges](./services.md#interface-heightranges)
 
@@ -5052,7 +5082,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkIngestorCDNBabbage extends BulkIngestorCDN {
-    static createBulkIngestorCDNBabbageOptions(chain: Chain, fetch: ChaintracksFetchApi): BulkIngestorCDNOptions
+    static createBulkIngestorCDNBabbageOptions(chain: Chain, fetch: ChaintracksFetchApi): BulkIngestorCDNOptions 
 }
 ```
 
@@ -5061,7 +5091,7 @@ See also: [BulkIngestorCDN](./services.md#class-bulkingestorcdn), [BulkIngestorC
 ###### Method createBulkIngestorCDNBabbageOptions
 
 ```ts
-static createBulkIngestorCDNBabbageOptions(chain: Chain, fetch: ChaintracksFetchApi): BulkIngestorCDNOptions
+static createBulkIngestorCDNBabbageOptions(chain: Chain, fetch: ChaintracksFetchApi): BulkIngestorCDNOptions 
 ```
 See also: [BulkIngestorCDNOptions](./services.md#interface-bulkingestorcdnoptions), [Chain](./client.md#type-chain), [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi)
 
@@ -5081,9 +5111,9 @@ continuity, and genesis checks before storage.
 
 ```ts
 export class BulkIngestorChaintracks extends BulkIngestorBase {
-    constructor(options: BulkIngestorChaintracksOptions)
-    override async getPresentHeight(): Promise<number>
-    async fetchHeaders(_before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]>
+    constructor(options: BulkIngestorChaintracksOptions) 
+    override async getPresentHeight(): Promise<number> 
+    async fetchHeaders(_before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]> 
 }
 ```
 
@@ -5096,14 +5126,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
-    static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions
+    static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions 
     fetch: ChaintracksFetchApi;
     idleWait: number;
     woc: WhatsOnChainServices;
     stopOldListenersToken: StopListenerToken = { stop: undefined };
-    constructor(options: BulkIngestorWhatsOnChainOptions)
-    override async getPresentHeight(): Promise<number | undefined>
-    async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]>
+    constructor(options: BulkIngestorWhatsOnChainOptions) 
+    override async getPresentHeight(): Promise<number | undefined> 
+    async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]> 
 }
 ```
 
@@ -5112,7 +5142,7 @@ See also: [BlockHeader](./client.md#interface-blockheader), [BulkIngestorBase](.
 ###### Method createBulkIngestorWhatsOnChainOptions
 
 ```ts
-static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions
+static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions 
 ```
 See also: [BulkIngestorWhatsOnChainOptions](./services.md#interface-bulkingestorwhatsonchainoptions), [Chain](./client.md#type-chain)
 
@@ -5128,14 +5158,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class BulkIngestorWhatsOnChainWs extends BulkIngestorBase {
-    static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions
+    static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions 
     idleWait: number;
     maxHeadersPerRequest: number;
     woc: WhatsOnChainServices;
     stopOldListenersToken: StopListenerToken = { stop: undefined };
-    constructor(options: BulkIngestorWhatsOnChainOptions)
-    override async getPresentHeight(): Promise<number | undefined>
-    async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]>
+    constructor(options: BulkIngestorWhatsOnChainOptions) 
+    override async getPresentHeight(): Promise<number | undefined> 
+    async fetchHeaders(before: HeightRanges, fetchRange: HeightRange, bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]> 
 }
 ```
 
@@ -5144,7 +5174,7 @@ See also: [BlockHeader](./client.md#interface-blockheader), [BulkIngestorBase](.
 ###### Method createBulkIngestorWhatsOnChainOptions
 
 ```ts
-static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions
+static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions 
 ```
 See also: [BulkIngestorWhatsOnChainOptions](./services.md#interface-bulkingestorwhatsonchainoptions), [Chain](./client.md#type-chain)
 
@@ -5160,20 +5190,20 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export abstract class BulkStorageBase implements BulkStorageApi {
-    static createBulkStorageBaseOptions(chain: Chain, fs: ChaintracksFsApi): BulkStorageBaseOptions
+    static createBulkStorageBaseOptions(chain: Chain, fs: ChaintracksFsApi): BulkStorageBaseOptions 
     chain: Chain;
     fs: ChaintracksFsApi;
     log: (...args: any[]) => void = () => { };
-    constructor(options: BulkStorageBaseOptions)
-    async shutdown(): Promise<void>
+    constructor(options: BulkStorageBaseOptions) 
+    async shutdown(): Promise<void> 
     abstract appendHeaders(minHeight: number, count: number, newBulkHeaders: Uint8Array): Promise<void>;
     abstract getMaxHeight(): Promise<number>;
     abstract headersToBuffer(height: number, count: number): Promise<Uint8Array>;
     abstract findHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined>;
-    async findHeaderForHeight(height: number): Promise<BlockHeader>
-    async getHeightRange(): Promise<HeightRange>
-    async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void>
-    async exportBulkHeaders(rootFolder: string, jsonFilename: string, maxPerFile: number): Promise<void>
+    async findHeaderForHeight(height: number): Promise<BlockHeader> 
+    async getHeightRange(): Promise<HeightRange> 
+    async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> 
+    async exportBulkHeaders(rootFolder: string, jsonFilename: string, maxPerFile: number): Promise<void> 
 }
 ```
 
@@ -5186,37 +5216,37 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class Chaintracks implements ChaintracksManagementApi {
-    static createOptions(chain: Chain): ChaintracksOptions
+    static createOptions(chain: Chain): ChaintracksOptions 
     log: (...args: any[]) => void = () => { };
     readonly chain: Chain;
     readonly readonly: boolean;
-    constructor(public options: ChaintracksOptions)
-    async getChain(): Promise<Chain>
-    async getPresentHeight(): Promise<number>
-    async currentHeight(): Promise<number>
-    getAvailabilitySnapshot(): ChaintracksAvailabilitySnapshotApi
-    async subscribeHeaders(listener: HeaderListener): Promise<string>
-    async subscribeReorgs(listener: ReorgListener): Promise<string>
-    async unsubscribe(subscriptionId: string): Promise<boolean>
-    async addHeader(header: BaseBlockHeader): Promise<void>
-    async makeAvailable(): Promise<void>
-    async startPromises(): Promise<void>
-    async destroy(): Promise<void>
-    async listening(): Promise<void>
-    async isListening(): Promise<boolean>
-    async isSynchronized(): Promise<boolean>
-    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined>
-    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined>
-    async isValidRootForHeight(root: string, height: number): Promise<boolean>
-    async getInfo(): Promise<ChaintracksInfoApi>
-    async getHeaders(height: number, count: number): Promise<string>
-    async findChainTipHeader(): Promise<BlockHeader>
-    async findChainTipHash(): Promise<string>
-    async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | undefined>
-    async findChainWorkForBlockHash(hash: string): Promise<string | undefined>
-    async validate(): Promise<boolean>
-    async exportBulkHeaders(toFolder: string, toFs: ChaintracksFsApi, sourceUrl?: string, toHeadersPerFile?: number, maxHeight?: number): Promise<void>
-    async startListening(): Promise<void>
+    constructor(public options: ChaintracksOptions) 
+    async getChain(): Promise<Chain> 
+    async getPresentHeight(): Promise<number> 
+    async currentHeight(): Promise<number> 
+    getAvailabilitySnapshot(): ChaintracksAvailabilitySnapshotApi 
+    async subscribeHeaders(listener: HeaderListener): Promise<string> 
+    async subscribeReorgs(listener: ReorgListener): Promise<string> 
+    async unsubscribe(subscriptionId: string): Promise<boolean> 
+    async addHeader(header: BaseBlockHeader): Promise<void> 
+    async makeAvailable(): Promise<void> 
+    async startPromises(): Promise<void> 
+    async destroy(): Promise<void> 
+    async listening(): Promise<void> 
+    async isListening(): Promise<boolean> 
+    async isSynchronized(): Promise<boolean> 
+    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> 
+    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> 
+    async isValidRootForHeight(root: string, height: number): Promise<boolean> 
+    async getInfo(): Promise<ChaintracksInfoApi> 
+    async getHeaders(height: number, count: number): Promise<string> 
+    async findChainTipHeader(): Promise<BlockHeader> 
+    async findChainTipHash(): Promise<string> 
+    async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | undefined> 
+    async findChainWorkForBlockHash(hash: string): Promise<string | undefined> 
+    async validate(): Promise<boolean> 
+    async exportBulkHeaders(toFolder: string, toFs: ChaintracksFsApi, sourceUrl?: string, toHeadersPerFile?: number, maxHeight?: number): Promise<void> 
+    async startListening(): Promise<void> 
     private async syncBulkStorageNoLock(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
         let newLiveHeaders: BlockHeader[] = [];
         let before = initialRanges;
@@ -5294,7 +5324,7 @@ bulk ingestors will be attempted to resolve the linkage up to a depth of `addLiv
 Headers are considered in the order they were added.
 
 ```ts
-async addHeader(header: BaseBlockHeader): Promise<void>
+async addHeader(header: BaseBlockHeader): Promise<void> 
 ```
 See also: [BaseBlockHeader](./client.md#interface-baseblockheader)
 
@@ -5303,7 +5333,7 @@ See also: [BaseBlockHeader](./client.md#interface-baseblockheader)
 Returns local process state without locks, storage reads, or network I/O.
 
 ```ts
-getAvailabilitySnapshot(): ChaintracksAvailabilitySnapshotApi
+getAvailabilitySnapshot(): ChaintracksAvailabilitySnapshotApi 
 ```
 See also: [ChaintracksAvailabilitySnapshotApi](./services.md#interface-chaintracksavailabilitysnapshotapi)
 
@@ -5313,7 +5343,7 @@ Returns the last known valid height immediately and refreshes stale state
 once in the background. Cold start waits for the single shared refresh.
 
 ```ts
-async getPresentHeight(): Promise<number>
+async getPresentHeight(): Promise<number> 
 ```
 
 ###### Method makeAvailable
@@ -5325,7 +5355,7 @@ Note that the main thread continues running and takes additional write locks
 itself when already available.
 
 ```ts
-async makeAvailable(): Promise<void>
+async makeAvailable(): Promise<void> 
 ```
 
 Returns
@@ -5335,7 +5365,7 @@ when available for client requests
 ###### Method validate
 
 ```ts
-async validate(): Promise<boolean>
+async validate(): Promise<boolean> 
 ```
 
 Returns
@@ -5349,8 +5379,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class ChaintracksAppendableFile extends ChaintracksFolderAwareFile implements ChaintracksAppendableFileApi {
-    static async openAsAppendable(path: string): Promise<ChaintracksAppendableFile>
-    async append(data: Uint8Array): Promise<void>
+    static async openAsAppendable(path: string): Promise<ChaintracksAppendableFile> 
+    async append(data: Uint8Array): Promise<void> 
 }
 ```
 
@@ -5363,17 +5393,37 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class ChaintracksChainTracker implements ChainTracker {
-    chaintracks: ChaintracksClientApi;
     cache: Record<number, string>;
     options: ChaintracksChainTrackerOptions;
     readonly telemetry: Telemetry;
-    constructor(chain?: Chain, chaintracks?: ChaintracksClientApi, options?: ChaintracksChainTrackerOptions)
-    async currentHeight(): Promise<number>
-    async isValidRootForHeight(root: string, height: number): Promise<boolean>
+    constructor(chain?: Chain, chaintracks?: ChaintracksClientApi, options?: ChaintracksChainTrackerOptions) 
+    get chaintracks(): ChaintracksClientApi 
+    set chaintracks(value: ChaintracksClientApi) 
+    getVerificationContext(): string 
+    async getVerificationContextToken(signal?: AbortSignal): Promise<string> 
+    async dispose(): Promise<void> 
+    async currentHeight(signal?: AbortSignal): Promise<number> 
+    async isValidRootForHeight(root: string, height: number, signal?: AbortSignal): Promise<boolean> 
 }
 ```
 
 See also: [Chain](./client.md#type-chain), [ChaintracksChainTrackerOptions](./services.md#interface-chaintrackschaintrackeroptions), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi)
+
+###### Method getVerificationContext
+
+Local provider-generation marker for consumers that invalidate derived verdicts.
+
+```ts
+getVerificationContext(): string 
+```
+
+###### Method getVerificationContextToken
+
+Fresh provider-bound canonical tip token; unlike the stable context, normal tip advances change it.
+
+```ts
+async getVerificationContextToken(signal?: AbortSignal): Promise<string> 
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5389,10 +5439,10 @@ every materialized response has an explicit byte ceiling.
 ```ts
 export class ChaintracksFetch implements ChaintracksFetchApi {
     httpClient: HttpClient = defaultHttpClient();
-    constructor(options: ChaintracksFetchOptions = {})
-    async download(url: string, maxResponseBytes?: number, options?: ChaintracksDownloadOptions): Promise<Uint8Array>
-    async fetchJson<R>(url: string): Promise<R>
-    pathJoin(baseUrl: string, subpath: string): string
+    constructor(options: ChaintracksFetchOptions = {}) 
+    async download(url: string, maxResponseBytes?: number, options?: ChaintracksDownloadOptions): Promise<Uint8Array> 
+    async fetchJson<R>(url: string): Promise<R> 
+    pathJoin(baseUrl: string, subpath: string): string 
 }
 ```
 
@@ -5405,8 +5455,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class ChaintracksFetchError extends Error {
-    constructor(message: string, public readonly url: string, public readonly status: number, public readonly statusText: string, public readonly retryAfterMsecs?: number)
-    get retryable(): boolean
+    constructor(message: string, public readonly url: string, public readonly status: number, public readonly statusText: string, public readonly retryAfterMsecs?: number) 
+    get retryable(): boolean 
 }
 ```
 
@@ -5417,14 +5467,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export abstract class ChaintracksFsStatics {
-    static async delete(path: string): Promise<void>
-    static async writeFile(path: string, data: Uint8Array): Promise<void>
-    static async readFile(path: string): Promise<Uint8Array>
-    static async openReadableFile(path: string): Promise<ChaintracksReadableFileApi>
-    static async openWritableFile(path: string): Promise<ChaintracksWritableFileApi>
-    static async openAppendableFile(path: string): Promise<ChaintracksAppendableFileApi>
-    static async ensureFoldersExist(path: string): Promise<void>
-    static pathJoin(...parts: string[]): string
+    static async delete(path: string): Promise<void> 
+    static async writeFile(path: string, data: Uint8Array): Promise<void> 
+    static async readFile(path: string): Promise<Uint8Array> 
+    static async openReadableFile(path: string): Promise<ChaintracksReadableFileApi> 
+    static async openWritableFile(path: string): Promise<ChaintracksWritableFileApi> 
+    static async openAppendableFile(path: string): Promise<ChaintracksAppendableFileApi> 
+    static async ensureFoldersExist(path: string): Promise<void> 
+    static pathJoin(...parts: string[]): string 
 }
 ```
 
@@ -5438,17 +5488,29 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class ChaintracksKnexMigrations implements MigrationSource<string> {
     migrations: Record<string, Migration> = {};
-    constructor(public chain: Chain)
-    async getMigrations(): Promise<string[]>
-    getMigrationName(migration: string)
-    async getMigration(migration: string): Promise<Migration>
-    async getLatestMigration(): Promise<string>
-    static async latestMigration(): Promise<string>
-    setupMigrations(): Record<string, Migration>
+    constructor(public chain: Chain) 
+    async getMigrations(): Promise<string[]> 
+    getMigrationName(migration: string) 
+    async getMigration(migration: string): Promise<Migration> 
+    async getLatestMigration(): Promise<string> 
+    static async latestMigration(): Promise<string> 
+    setupMigrations(): Record<string, Migration> 
 }
 ```
 
 See also: [Chain](./client.md#type-chain)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: ChaintracksQueueCapacityError
+
+```ts
+export class ChaintracksQueueCapacityError extends Error {
+    readonly code = "ERR_CHAINTRACKS_QUEUE_CAPACITY";
+    constructor() 
+}
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5460,11 +5522,11 @@ export class ChaintracksReadableFile implements ChaintracksReadableFileApi {
     path: string;
     parsedPath: Path.ParsedPath;
     f: fs.FileHandle;
-    protected constructor(path: string, f: fs.FileHandle)
-    async close(): Promise<void>
-    async getLength(): Promise<number>
-    async read(length?: number, offset?: number): Promise<Uint8Array>
-    static async openAsReadable(path: string): Promise<ChaintracksReadableFile>
+    protected constructor(path: string, f: fs.FileHandle) 
+    async close(): Promise<void> 
+    async getLength(): Promise<number> 
+    async read(length?: number, offset?: number): Promise<Uint8Array> 
+    static async openAsReadable(path: string): Promise<ChaintracksReadableFile> 
 }
 ```
 
@@ -5477,16 +5539,16 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class ChaintracksService {
-    static createChaintracksServiceOptions(chain: Chain): ChaintracksServiceOptions
+    static createChaintracksServiceOptions(chain: Chain): ChaintracksServiceOptions 
     chain: Chain;
     options: ChaintracksServiceOptions;
     port?: number;
     chaintracks: Chaintracks;
     services: Services;
     server?: Server<typeof IncomingMessage, typeof ServerResponse>;
-    constructor(options: ChaintracksServiceOptions)
-    async stopJsonRpcServer(): Promise<void>
-    async startJsonRpcServer(port?: number): Promise<void>
+    constructor(options: ChaintracksServiceOptions) 
+    async stopJsonRpcServer(): Promise<void> 
+    async startJsonRpcServer(port?: number): Promise<void> 
 }
 ```
 
@@ -5501,35 +5563,44 @@ Connects to a ChaintracksService to implement 'ChaintracksClientApi'
 
 ```ts
 export class ChaintracksServiceClient implements ChaintracksClientApi {
-    static createChaintracksServiceClientOptions(): ChaintracksServiceClientOptions
+    readonly supportsReorgEvents = false;
+    static createChaintracksServiceClientOptions(): ChaintracksServiceClientOptions 
     options: ChaintracksServiceClientOptions;
-    constructor(public chain: Chain, serviceUrl: string, options?: ChaintracksServiceClientOptions)
+    constructor(public chain: Chain, serviceUrl: string, options?: ChaintracksServiceClientOptions) 
     readonly serviceUrl: string;
-    async subscribeHeaders(_listener: HeaderListener): Promise<string>
-    async subscribeReorgs(_listener: ReorgListener): Promise<string>
-    async unsubscribe(_subscriptionId: string): Promise<boolean>
-    async currentHeight(): Promise<number>
-    async isValidRootForHeight(root: string, height: number): Promise<boolean>
-    async getJsonOrUndefined<T>(path: string): Promise<T | undefined>
-    async getJson<T>(path: string): Promise<T>
-    async postJsonVoid<T>(path: string, params: T): Promise<void>
-    async addHeader(header: BaseBlockHeader): Promise<void>
-    async startListening(): Promise<void>
-    async listening(): Promise<void>
-    async getChain(): Promise<Chain>
-    async isListening(): Promise<boolean>
-    async isSynchronized(): Promise<boolean>
-    async getPresentHeight(): Promise<number>
-    async getInfo(): Promise<ChaintracksInfoApi>
-    async findChainTipHeader(): Promise<BlockHeader>
-    async findChainTipHash(): Promise<string>
-    async getHeaders(height: number, count: number): Promise<string>
-    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined>
-    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined>
+    async subscribeHeaders(_listener: HeaderListener): Promise<string> 
+    async subscribeReorgs(_listener: ReorgListener): Promise<string> 
+    async unsubscribe(_subscriptionId: string): Promise<boolean> 
+    async currentHeight(): Promise<number> 
+    async isValidRootForHeight(root: string, height: number): Promise<boolean> 
+    async getJsonOrUndefined<T>(path: string): Promise<T | undefined> 
+    async getJson<T>(path: string): Promise<T> 
+    async postJsonVoid<T>(path: string, params: T): Promise<void> 
+    async addHeader(header: BaseBlockHeader): Promise<void> 
+    async startListening(): Promise<void> 
+    async listening(): Promise<void> 
+    async getChain(): Promise<Chain> 
+    async isListening(): Promise<boolean> 
+    async isSynchronized(): Promise<boolean> 
+    async getPresentHeight(): Promise<number> 
+    async getInfo(): Promise<ChaintracksInfoApi> 
+    async findChainTipHeader(): Promise<BlockHeader> 
+    async findChainTipHash(): Promise<string> 
+    async getHeaders(height: number, count: number): Promise<string> 
+    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> 
+    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> 
 }
 ```
 
 See also: [BaseBlockHeader](./client.md#interface-baseblockheader), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [ChaintracksInfoApi](./services.md#interface-chaintracksinfoapi), [ChaintracksServiceClientOptions](./services.md#interface-chaintracksserviceclientoptions), [HeaderListener](./services.md#type-headerlistener), [ReorgListener](./services.md#type-reorglistener)
+
+###### Property supportsReorgEvents
+
+HTTP polling client; callback event methods are legacy unsupported stubs.
+
+```ts
+readonly supportsReorgEvents = false
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5540,7 +5611,7 @@ Required interface methods of a Chaintracks Storage Engine implementation.
 
 ```ts
 export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryApi, ChaintracksStorageIngestApi {
-    static createStorageBaseOptions(chain: Chain): ChaintracksStorageBaseOptions
+    static createStorageBaseOptions(chain: Chain): ChaintracksStorageBaseOptions 
     log: (...args: any[]) => void = () => { };
     chain: Chain;
     liveHeightThreshold: number;
@@ -5550,19 +5621,19 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     isAvailable: boolean = false;
     hasMigrated: boolean = false;
     bulkManager: BulkFileDataManager;
-    constructor(options: ChaintracksStorageBaseOptions)
-    protected validateIncomingHeader(header: BlockHeader): BlockHeader
-    protected validateLiveHeaderRecord(header: LiveBlockHeader, allowUnassignedHeaderId = false): LiveBlockHeader
-    protected validateHeight(height: number, name = "height"): void
-    protected validateHeaderId(headerId: number, name = "headerId"): void
-    protected validateHash(hash: string, name = "hash"): void
-    protected validateRange(range: HeightRange, maximumLength = MAX_PUBLIC_HEADER_RANGE): void
-    protected recordTraversalVisit(seen: Set<number>, header: LiveBlockHeader, operation: string): void
-    protected validateStoredParentLink(child: LiveBlockHeader, parent: LiveBlockHeader): void
-    async shutdown(): Promise<void>
-    async makeAvailable(): Promise<void>
-    async migrateLatest(): Promise<void>
-    async dropAllData(): Promise<void>
+    constructor(options: ChaintracksStorageBaseOptions) 
+    protected validateIncomingHeader(header: BlockHeader): BlockHeader 
+    protected validateLiveHeaderRecord(header: LiveBlockHeader, allowUnassignedHeaderId = false): LiveBlockHeader 
+    protected validateHeight(height: number, name = "height"): void 
+    protected validateHeaderId(headerId: number, name = "headerId"): void 
+    protected validateHash(hash: string, name = "hash"): void 
+    protected validateRange(range: HeightRange, maximumLength = MAX_PUBLIC_HEADER_RANGE): void 
+    protected recordTraversalVisit(seen: Set<number>, header: LiveBlockHeader, operation: string): void 
+    protected validateStoredParentLink(child: LiveBlockHeader, parent: LiveBlockHeader): void 
+    async shutdown(): Promise<void> 
+    async makeAvailable(): Promise<void> 
+    async migrateLatest(): Promise<void> 
+    async dropAllData(): Promise<void> 
     abstract deleteLiveBlockHeaders(): Promise<void>;
     abstract deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number>;
     abstract findChainTipHeader(): Promise<LiveBlockHeader>;
@@ -5577,26 +5648,26 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     abstract getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]>;
     abstract insertHeader(header: BlockHeader): Promise<InsertHeaderResult>;
     abstract destroy(): Promise<void>;
-    async getBulkHeaders(range: HeightRange): Promise<Uint8Array>
-    async getHeadersUint8Array(height: number, count: number): Promise<Uint8Array>
-    async getHeaders(height: number, count: number): Promise<BaseBlockHeader[]>
-    async deleteBulkBlockHeaders(): Promise<void>
+    async getBulkHeaders(range: HeightRange): Promise<Uint8Array> 
+    async getHeadersUint8Array(height: number, count: number): Promise<Uint8Array> 
+    async getHeaders(height: number, count: number): Promise<BaseBlockHeader[]> 
+    async deleteBulkBlockHeaders(): Promise<void> 
     async getAvailableHeightRanges(): Promise<{
         bulk: HeightRange;
         live: HeightRange;
-    }>
-    async pruneLiveBlockHeaders(activeTipHeight: number): Promise<void>
-    async findChainTipHash(): Promise<string>
-    async findChainTipWork(): Promise<string>
-    async findChainWorkForBlockHash(hash: string): Promise<string>
-    async findBulkFilesHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined>
-    async findHeaderForHeightOrUndefined(height: number): Promise<LiveBlockHeader | BlockHeader | undefined>
-    async findHeaderForHeight(height: number): Promise<LiveBlockHeader | BlockHeader>
-    async isMerkleRootActive(merkleRoot: string): Promise<boolean>
-    async findCommonAncestor(header1: LiveBlockHeader, header2: LiveBlockHeader): Promise<LiveBlockHeader>
-    async findReorgDepth(header1: LiveBlockHeader, header2: LiveBlockHeader): Promise<number>
-    async migrateLiveToBulk(count: number, ignoreLimits = false): Promise<void>
-    async addBulkHeaders(headers: BlockHeader[], bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]>
+    }> 
+    async pruneLiveBlockHeaders(activeTipHeight: number): Promise<void> 
+    async findChainTipHash(): Promise<string> 
+    async findChainTipWork(): Promise<string> 
+    async findChainWorkForBlockHash(hash: string): Promise<string> 
+    async findBulkFilesHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined> 
+    async findHeaderForHeightOrUndefined(height: number): Promise<LiveBlockHeader | BlockHeader | undefined> 
+    async findHeaderForHeight(height: number): Promise<LiveBlockHeader | BlockHeader> 
+    async isMerkleRootActive(merkleRoot: string): Promise<boolean> 
+    async findCommonAncestor(header1: LiveBlockHeader, header2: LiveBlockHeader): Promise<LiveBlockHeader> 
+    async findReorgDepth(header1: LiveBlockHeader, header2: LiveBlockHeader): Promise<number> 
+    async migrateLiveToBulk(count: number, ignoreLimits = false): Promise<void> 
+    async addBulkHeaders(headers: BlockHeader[], bulkRange: HeightRange, priorLiveHeaders: BlockHeader[]): Promise<BlockHeader[]> 
 }
 ```
 
@@ -5629,34 +5700,34 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     db?: IDBPDatabase<ChaintracksStorageIdbSchema>;
     whenLastAccess?: Date;
     allStores: string[] = ["live_headers", "bulk_headers"];
-    constructor(options: ChaintracksStorageIdbOptions)
-    override async makeAvailable(): Promise<void>
-    override async migrateLatest(): Promise<void>
-    override async destroy(): Promise<void>
-    override async deleteLiveBlockHeaders(): Promise<void>
-    override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number>
-    override async findChainTipHeader(): Promise<LiveBlockHeader>
-    override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined>
-    override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null>
-    override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader>
-    override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null>
-    override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null>
-    override async findLiveHeightRange(): Promise<HeightRange>
-    override async findMaxHeaderId(): Promise<number>
-    override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]>
-    override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]>
-    override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult>
-    async deleteBulkFile(fileId: number): Promise<number>
-    async insertBulkFile(file: BulkHeaderFileInfo): Promise<number>
-    async updateBulkFile(fileId: number, file: BulkHeaderFileInfo): Promise<number>
-    async replaceBulkFiles(files: BulkHeaderFileInfo[]): Promise<BulkHeaderFileInfo[]>
-    async getBulkFiles(): Promise<BulkHeaderFileInfo[]>
-    async getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined>
-    protected repairStoredLiveHeader(header?: LiveBlockHeader): LiveBlockHeader | undefined
-    async insertLiveHeader(header: LiveBlockHeader): Promise<LiveBlockHeader>
-    async initDB(): Promise<IDBPDatabase<ChaintracksStorageIdbSchema>>
-    toDbTrxReadOnly(stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], "readonly">
-    toDbTrxReadWrite(stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], "readwrite">
+    constructor(options: ChaintracksStorageIdbOptions) 
+    override async makeAvailable(): Promise<void> 
+    override async migrateLatest(): Promise<void> 
+    override async destroy(): Promise<void> 
+    override async deleteLiveBlockHeaders(): Promise<void> 
+    override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> 
+    override async findChainTipHeader(): Promise<LiveBlockHeader> 
+    override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> 
+    override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> 
+    override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> 
+    override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> 
+    override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> 
+    override async findLiveHeightRange(): Promise<HeightRange> 
+    override async findMaxHeaderId(): Promise<number> 
+    override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> 
+    override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> 
+    override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> 
+    async deleteBulkFile(fileId: number): Promise<number> 
+    async insertBulkFile(file: BulkHeaderFileInfo): Promise<number> 
+    async updateBulkFile(fileId: number, file: BulkHeaderFileInfo): Promise<number> 
+    async replaceBulkFiles(files: BulkHeaderFileInfo[]): Promise<BulkHeaderFileInfo[]> 
+    async getBulkFiles(): Promise<BulkHeaderFileInfo[]> 
+    async getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> 
+    protected repairStoredLiveHeader(header?: LiveBlockHeader): LiveBlockHeader | undefined 
+    async insertLiveHeader(header: LiveBlockHeader): Promise<LiveBlockHeader> 
+    async initDB(): Promise<IDBPDatabase<ChaintracksStorageIdbSchema>> 
+    toDbTrxReadOnly(stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], "readonly"> 
+    toDbTrxReadWrite(stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], "readwrite"> 
 }
 ```
 
@@ -5670,7 +5741,7 @@ Set existing headers with previousHeaderId value set to the headerId value of
 a header which is to be deleted to null.
 
 ```ts
-override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number>
+override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> 
 ```
 
 Returns
@@ -5685,7 +5756,7 @@ Argument Details
 ###### Method findChainTipHeader
 
 ```ts
-override async findChainTipHeader(): Promise<LiveBlockHeader>
+override async findChainTipHeader(): Promise<LiveBlockHeader> 
 ```
 See also: [LiveBlockHeader](./services.md#interface-liveblockheader)
 
@@ -5700,7 +5771,7 @@ an error if there is no tip.
 ###### Method findChainTipHeaderOrUndefined
 
 ```ts
-override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined>
+override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> 
 ```
 See also: [LiveBlockHeader](./services.md#interface-liveblockheader)
 
@@ -5720,7 +5791,7 @@ So true is stored as a 1, and false is stored as no property value (delete v['pr
 This function restores these property values to true and false.
 
 ```ts
-protected repairStoredLiveHeader(header?: LiveBlockHeader): LiveBlockHeader | undefined
+protected repairStoredLiveHeader(header?: LiveBlockHeader): LiveBlockHeader | undefined 
 ```
 See also: [LiveBlockHeader](./services.md#interface-liveblockheader)
 
@@ -5738,40 +5809,40 @@ Also see `chaintracksStorageMemory` which leverages Knex support for an in memor
 
 ```ts
 export class ChaintracksStorageKnex extends ChaintracksStorageBase implements ChaintracksStorageBulkFileApi {
-    static createStorageKnexOptions(chain: Chain, knex?: Knex): ChaintracksStorageKnexOptions
+    static createStorageKnexOptions(chain: Chain, knex?: Knex): ChaintracksStorageKnexOptions 
     knex: Knex;
     _dbtype?: DBType;
     bulkFilesTableName: string = "bulk_files";
     headerTableName: string = "live_headers";
     stateTableName: string = "chaintracks_state";
-    constructor(options: ChaintracksStorageKnexOptions)
-    get dbtype(): DBType
-    override async shutdown(): Promise<void>
-    override async makeAvailable(): Promise<void>
-    override async migrateLatest(): Promise<void>
-    override async dropAllData(): Promise<void>
-    override async destroy(): Promise<void>
-    override async findLiveHeightRange(): Promise<HeightRange>
-    override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader>
-    override async findChainTipHeader(): Promise<LiveBlockHeader>
-    override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined>
-    async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null>
-    async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null>
-    async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null>
-    async deleteBulkFile(fileId: number): Promise<number>
-    async insertBulkFile(file: BulkHeaderFileInfo): Promise<number>
-    async updateBulkFile(fileId: number, file: BulkHeaderFileInfo): Promise<number>
-    async replaceBulkFiles(files: BulkHeaderFileInfo[]): Promise<BulkHeaderFileInfo[]>
-    async getBulkFiles(): Promise<BulkHeaderFileInfo[]>
-    async getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined>
-    async insertHeader(header: BlockHeader): Promise<InsertHeaderResult>
-    async findMaxHeaderId(): Promise<number>
-    override async deleteLiveBlockHeaders(): Promise<void>
-    override async deleteBulkBlockHeaders(): Promise<void>
-    async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number>
-    async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]>
-    concatSerializedHeaders(bufs: number[][]): number[]
-    async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]>
+    constructor(options: ChaintracksStorageKnexOptions) 
+    get dbtype(): DBType 
+    override async shutdown(): Promise<void> 
+    override async makeAvailable(): Promise<void> 
+    override async migrateLatest(): Promise<void> 
+    override async dropAllData(): Promise<void> 
+    override async destroy(): Promise<void> 
+    override async findLiveHeightRange(): Promise<HeightRange> 
+    override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> 
+    override async findChainTipHeader(): Promise<LiveBlockHeader> 
+    override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> 
+    async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> 
+    async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> 
+    async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> 
+    async deleteBulkFile(fileId: number): Promise<number> 
+    async insertBulkFile(file: BulkHeaderFileInfo): Promise<number> 
+    async updateBulkFile(fileId: number, file: BulkHeaderFileInfo): Promise<number> 
+    async replaceBulkFiles(files: BulkHeaderFileInfo[]): Promise<BulkHeaderFileInfo[]> 
+    async getBulkFiles(): Promise<BulkHeaderFileInfo[]> 
+    async getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> 
+    async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> 
+    async findMaxHeaderId(): Promise<number> 
+    override async deleteLiveBlockHeaders(): Promise<void> 
+    override async deleteBulkBlockHeaders(): Promise<void> 
+    async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> 
+    async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> 
+    concatSerializedHeaders(bufs: number[][]): number[] 
+    async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> 
 }
 ```
 
@@ -5819,22 +5890,22 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
         tipHeaderId: 0,
         hashToHeaderId: new Map<string, number>()
     };
-    constructor(options: ChaintracksStorageNoDbOptions)
-    override async destroy(): Promise<void>
-    async getData(): Promise<ChaintracksNoDbData>
-    override async deleteLiveBlockHeaders(): Promise<void>
-    override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number>
-    override async findChainTipHeader(): Promise<LiveBlockHeader>
-    override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined>
-    override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null>
-    override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader>
-    override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null>
-    override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null>
-    override async findLiveHeightRange(): Promise<HeightRange>
-    override async findMaxHeaderId(): Promise<number>
-    override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]>
-    override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]>
-    override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult>
+    constructor(options: ChaintracksStorageNoDbOptions) 
+    override async destroy(): Promise<void> 
+    async getData(): Promise<ChaintracksNoDbData> 
+    override async deleteLiveBlockHeaders(): Promise<void> 
+    override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> 
+    override async findChainTipHeader(): Promise<LiveBlockHeader> 
+    override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> 
+    override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> 
+    override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> 
+    override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> 
+    override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> 
+    override async findLiveHeightRange(): Promise<HeightRange> 
+    override async findMaxHeaderId(): Promise<number> 
+    override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> 
+    override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> 
+    override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> 
 }
 ```
 
@@ -5845,7 +5916,7 @@ See also: [BlockHeader](./client.md#interface-blockheader), [ChaintracksStorageB
 Returns an isolated diagnostic snapshot; mutating it never changes tracker state.
 
 ```ts
-async getData(): Promise<ChaintracksNoDbData>
+async getData(): Promise<ChaintracksNoDbData> 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -5855,8 +5926,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class ChaintracksWritableFile extends ChaintracksFolderAwareFile implements ChaintracksWritableFileApi {
-    static async openAsWritable(path: string): Promise<ChaintracksWritableFile>
-    async append(data: Uint8Array): Promise<void>
+    static async openAsWritable(path: string): Promise<ChaintracksWritableFile> 
+    async append(data: Uint8Array): Promise<void> 
 }
 ```
 
@@ -5875,10 +5946,10 @@ unrecorded request. Deployments must place `stateFile` on durable storage.
 
 ```ts
 export class DurableFileBulkFileDownloadBudget implements BulkFileDownloadBudgetApi {
-    constructor(options: DurableFileBulkFileDownloadBudgetOptions)
-    async initialize(): Promise<void>
-    async consume(byteCount: number): Promise<void>
-    snapshot(): BulkFileDownloadBudgetSnapshot
+    constructor(options: DurableFileBulkFileDownloadBudgetOptions) 
+    async initialize(): Promise<void> 
+    async consume(byteCount: number): Promise<void> 
+    snapshot(): BulkFileDownloadBudgetSnapshot 
 }
 ```
 
@@ -5892,7 +5963,7 @@ Load and validate the durable ledger before the service becomes ready.
 readiness reports the persisted allowance and corrupt state fails startup.
 
 ```ts
-async initialize(): Promise<void>
+async initialize(): Promise<void> 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -5906,15 +5977,15 @@ fails, preventing a failing upstream from bypassing the bound.
 
 ```ts
 export class FixedWindowBulkFileDownloadBudget implements BulkFileDownloadBudgetApi {
-    constructor(options: FixedWindowBulkFileDownloadBudgetOptions)
-    consume(byteCount: number): void
+    constructor(options: FixedWindowBulkFileDownloadBudgetOptions) 
+    consume(byteCount: number): void 
     snapshot(): {
         maxBytes: number;
         consumedBytes: number;
         remainingBytes: number;
         windowStartedAt: number;
         windowMsecs: number;
-    }
+    } 
 }
 ```
 
@@ -5932,29 +6003,38 @@ processing without a local WhatsOnChain polling ingestor.
 
 ```ts
 export class GoChaintracksServiceClient implements ChaintracksClientApi {
-    constructor(public chain: Chain, serviceUrl: string, options: GoChaintracksServiceClientOptions = {})
-    async currentHeight(): Promise<number>
-    async isValidRootForHeight(root: string, height: number): Promise<boolean>
-    async getChain(): Promise<Chain>
-    async getInfo(): Promise<ChaintracksInfoApi>
-    async getPresentHeight(): Promise<number>
-    async getHeaders(height: number, count: number): Promise<string>
-    async findChainTipHeader(): Promise<BlockHeader>
-    async findChainTipHash(): Promise<string>
-    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined>
-    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined>
-    async addHeader(_header: BaseBlockHeader): Promise<void>
-    async startListening(): Promise<void>
-    async listening(): Promise<void>
-    async isListening(): Promise<boolean>
-    async isSynchronized(): Promise<boolean>
-    async subscribeHeaders(listener: HeaderListener): Promise<string>
-    async subscribeReorgs(listener: ReorgListener): Promise<string>
-    async unsubscribe(subscriptionId: string): Promise<boolean>
+    readonly supportsReorgEvents = true;
+    constructor(public chain: Chain, serviceUrl: string, options: GoChaintracksServiceClientOptions = {}) 
+    async currentHeight(): Promise<number> 
+    async isValidRootForHeight(root: string, height: number): Promise<boolean> 
+    async getChain(): Promise<Chain> 
+    async getInfo(): Promise<ChaintracksInfoApi> 
+    async getPresentHeight(): Promise<number> 
+    async getHeaders(height: number, count: number): Promise<string> 
+    async findChainTipHeader(): Promise<BlockHeader> 
+    async findChainTipHash(): Promise<string> 
+    async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> 
+    async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> 
+    async addHeader(_header: BaseBlockHeader): Promise<void> 
+    async startListening(): Promise<void> 
+    async listening(): Promise<void> 
+    async isListening(): Promise<boolean> 
+    async isSynchronized(): Promise<boolean> 
+    async subscribeHeaders(listener: HeaderListener): Promise<string> 
+    async subscribeReorgs(listener: ReorgListener): Promise<string> 
+    async unsubscribe(subscriptionId: string): Promise<boolean> 
 }
 ```
 
 See also: [BaseBlockHeader](./client.md#interface-baseblockheader), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [ChaintracksInfoApi](./services.md#interface-chaintracksinfoapi), [GoChaintracksServiceClientOptions](./services.md#interface-gochaintracksserviceclientoptions), [HeaderListener](./services.md#type-headerlistener), [ReorgListener](./services.md#type-reorglistener)
+
+###### Property supportsReorgEvents
+
+SSE client; reorg registration is a supported additive capability.
+
+```ts
+readonly supportsReorgEvents = true
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5967,18 +6047,18 @@ Operations support integrating contiguous batches of headers,
 
 ```ts
 export class HeightRange implements HeightRangeApi {
-    constructor(public minHeight: number, public maxHeight: number)
+    constructor(public minHeight: number, public maxHeight: number) 
     static readonly empty = new HeightRange(0, -1);
-    get isEmpty()
-    static from(headers: BlockHeader[]): HeightRange
-    get length()
-    toString(): string
-    contains(range: HeightRange | number)
-    intersect(range: HeightRange)
-    union(range: HeightRange)
-    subtract(range: HeightRange)
-    above(range: HeightRange)
-    copy(): HeightRange
+    get isEmpty() 
+    static from(headers: BlockHeader[]): HeightRange 
+    get length() 
+    toString(): string 
+    contains(range: HeightRange | number) 
+    intersect(range: HeightRange) 
+    union(range: HeightRange) 
+    subtract(range: HeightRange) 
+    above(range: HeightRange) 
+    copy(): HeightRange 
 }
 ```
 
@@ -6004,14 +6084,14 @@ Otherwise returns a copy of this range.
 This returns the portion of this range that is strictly above `range`.
 
 ```ts
-above(range: HeightRange)
+above(range: HeightRange) 
 ```
 See also: [HeightRange](./services.md#class-heightrange)
 
 ###### Method contains
 
 ```ts
-contains(range: HeightRange | number)
+contains(range: HeightRange | number) 
 ```
 See also: [HeightRange](./services.md#class-heightrange)
 
@@ -6029,14 +6109,14 @@ Argument Details
 Return a copy of this range.
 
 ```ts
-copy(): HeightRange
+copy(): HeightRange 
 ```
 See also: [HeightRange](./services.md#class-heightrange)
 
 ###### Method from
 
 ```ts
-static from(headers: BlockHeader[]): HeightRange
+static from(headers: BlockHeader[]): HeightRange 
 ```
 See also: [BlockHeader](./client.md#interface-blockheader), [HeightRange](./services.md#class-heightrange)
 
@@ -6058,7 +6138,7 @@ Intersection with an empty range is always empty.
 The result is always a single, possibly empty, range.
 
 ```ts
-intersect(range: HeightRange)
+intersect(range: HeightRange) 
 ```
 See also: [HeightRange](./services.md#class-heightrange)
 
@@ -6069,7 +6149,7 @@ Returns `range` subtracted from this range.
 Throws an error if the subtraction would create two disjoint ranges.
 
 ```ts
-subtract(range: HeightRange)
+subtract(range: HeightRange) 
 ```
 See also: [HeightRange](./services.md#class-heightrange)
 
@@ -6078,7 +6158,7 @@ See also: [HeightRange](./services.md#class-heightrange)
 function toString() { [native code] }
 
 ```ts
-toString(): string
+toString(): string 
 ```
 
 Returns
@@ -6094,7 +6174,7 @@ Only valid if the two ranges overlap or touch, or one is empty.
 Throws an error if the union would create two disjoint ranges.
 
 ```ts
-union(range: HeightRange)
+union(range: HeightRange) 
 ```
 See also: [HeightRange](./services.md#class-heightrange)
 
@@ -6109,7 +6189,7 @@ dependency-free fallback.
 
 ```ts
 export class InlineBulkFileDataValidator implements BulkFileDataValidatorApi {
-    async validate(request: BulkFileDataValidationRequest): Promise<BulkFileDataValidationResult>
+    async validate(request: BulkFileDataValidationRequest): Promise<BulkFileDataValidationResult> 
 }
 ```
 
@@ -6122,13 +6202,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export abstract class LiveIngestorBase implements LiveIngestorApi {
-    static createLiveIngestorBaseOptions(chain: Chain)
+    static createLiveIngestorBaseOptions(chain: Chain) 
     chain: Chain;
     log: (...args: any[]) => void = () => ;
-    constructor(options: LiveIngestorBaseOptions)
+    constructor(options: LiveIngestorBaseOptions) 
     async shutdown(): Promise<void> { }
-    async setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void>
-    storage(): ChaintracksStorageApi
+    async setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> 
+    storage(): ChaintracksStorageApi 
     abstract getHeaderByHash(hash: string): Promise<BlockHeader | undefined>;
     abstract startListening(liveHeaders: BlockHeader[]): Promise<void>;
     abstract stopListening(): void;
@@ -6157,7 +6237,7 @@ Argument Details
 Allocate resources.
 
 ```ts
-async setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void>
+async setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> 
 ```
 See also: [ChaintracksStorageApi](./services.md#interface-chaintracksstorageapi)
 
@@ -6172,7 +6252,7 @@ Release resources.
 Override if required.
 
 ```ts
-async shutdown(): Promise<void>
+async shutdown(): Promise<void> 
 ```
 
 ###### Method startListening
@@ -6204,7 +6284,7 @@ abstract stopListening(): void
 ###### Method storage
 
 ```ts
-storage(): ChaintracksStorageApi
+storage(): ChaintracksStorageApi 
 ```
 See also: [ChaintracksStorageApi](./services.md#interface-chaintracksstorageapi)
 
@@ -6222,12 +6302,12 @@ Adapts a remote Chaintracks event stream, such as Arcade/go-chaintracks
 
 ```ts
 export class LiveIngestorChaintracksSSE extends LiveIngestorBase {
-    static createLiveIngestorChaintracksSSEOptions(chain: Chain, chaintracks: ChaintracksClientApi): LiveIngestorChaintracksSSEOptions
-    constructor(private readonly options: LiveIngestorChaintracksSSEOptions)
-    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined>
-    async startListening(liveHeaders: BlockHeader[]): Promise<void>
-    stopListening(): void
-    override async shutdown(): Promise<void>
+    static createLiveIngestorChaintracksSSEOptions(chain: Chain, chaintracks: ChaintracksClientApi): LiveIngestorChaintracksSSEOptions 
+    constructor(private readonly options: LiveIngestorChaintracksSSEOptions) 
+    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> 
+    async startListening(liveHeaders: BlockHeader[]): Promise<void> 
+    stopListening(): void 
+    override async shutdown(): Promise<void> 
 }
 ```
 
@@ -6242,18 +6322,18 @@ Reports new headers by polling periodically.
 
 ```ts
 export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
-    static createLiveIngestorWhatsOnChainOptions(chain: Chain): LiveIngestorWhatsOnChainOptions
+    static createLiveIngestorWhatsOnChainOptions(chain: Chain): LiveIngestorWhatsOnChainOptions 
     idleWait: number;
     retryWait: number;
     retryWaitMax: number;
     maxQueuedHeaders: number;
     woc: WhatsOnChainServices;
     done: boolean = false;
-    constructor(options: LiveIngestorWhatsOnChainOptions)
-    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined>
-    async startListening(liveHeaders: BlockHeader[]): Promise<void>
-    stopListening(): void
-    override async shutdown(): Promise<void>
+    constructor(options: LiveIngestorWhatsOnChainOptions) 
+    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> 
+    async startListening(liveHeaders: BlockHeader[]): Promise<void> 
+    stopListening(): void 
+    override async shutdown(): Promise<void> 
 }
 ```
 
@@ -6266,7 +6346,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class LiveIngestorWhatsOnChainWs extends LiveIngestorBase {
-    static createLiveIngestorWhatsOnChainOptions(chain: Chain): LiveIngestorWhatsOnChainOptions
+    static createLiveIngestorWhatsOnChainOptions(chain: Chain): LiveIngestorWhatsOnChainOptions 
     idleWait: number;
     retryWait: number;
     retryWaitMax: number;
@@ -6274,11 +6354,11 @@ export class LiveIngestorWhatsOnChainWs extends LiveIngestorBase {
     woc: WhatsOnChainServices;
     stopNewListenersToken: StopListenerToken = { stop: undefined };
     done = false;
-    constructor(options: LiveIngestorWhatsOnChainOptions)
-    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined>
-    async startListening(liveHeaders: BlockHeader[]): Promise<void>
-    stopListening(): void
-    override async shutdown(): Promise<void>
+    constructor(options: LiveIngestorWhatsOnChainOptions) 
+    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> 
+    async startListening(liveHeaders: BlockHeader[]): Promise<void> 
+    stopListening(): void 
+    override async shutdown(): Promise<void> 
 }
 ```
 
@@ -6298,20 +6378,42 @@ references before accepting a fallback result.
 
 ```ts
 export class LocalChainTracker implements ChainTracker {
-    constructor(options: LocalChainTrackerOptions)
-    getMode(): LocalChainTrackerMode
-    setMode(mode: LocalChainTrackerMode): void
-    getStatus(): LocalChainTrackerStatus
-    getLocalClient(): ChaintracksClientApi
-    async currentHeight(): Promise<number>
-    async isValidRootForHeight(root: string, height: number): Promise<boolean>
-    async synchronize(): Promise<LocalChainTrackerStatus>
-    async clearLocalData(): Promise<LocalChainTrackerStatus>
-    async checkConsistency(): Promise<LocalChainTrackerStatus>
+    constructor(options: LocalChainTrackerOptions) 
+    getMode(): LocalChainTrackerMode 
+    setMode(mode: LocalChainTrackerMode): void 
+    getVerificationContext(): string 
+    async getVerificationContextToken(signal?: AbortSignal): Promise<string> 
+    async dispose(): Promise<void> 
+    getStatus(): LocalChainTrackerStatus 
+    getLocalClient(): ChaintracksClientApi 
+    async currentHeight(): Promise<number> 
+    async isValidRootForHeight(root: string, height: number): Promise<boolean> 
+    async synchronize(): Promise<LocalChainTrackerStatus> 
+    async clearLocalData(): Promise<LocalChainTrackerStatus> 
+    async checkConsistency(): Promise<LocalChainTrackerStatus> 
 }
 ```
 
 See also: [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [LocalChainTrackerMode](./services.md#type-localchaintrackermode), [LocalChainTrackerOptions](./services.md#interface-localchaintrackeroptions), [LocalChainTrackerStatus](./services.md#interface-localchaintrackerstatus)
+
+###### Method getVerificationContext
+
+Local mode/source generation marker for consumers that invalidate derived verdicts.
+
+```ts
+getVerificationContext(): string 
+```
+
+###### Method getVerificationContextToken
+
+Fresh token for providers participating in this attempt's canonical authority.
+Remote-only uses fallbacks only; local-primary uses the local client only.
+A missing participating identity fails closed. Unused providers are omitted
+and cannot stand in. This is not an atomic multi-source snapshot.
+
+```ts
+async getVerificationContextToken(signal?: AbortSignal): Promise<string> 
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -6326,10 +6428,10 @@ queue bounds prevent validation copies from consuming unbounded memory.
 
 ```ts
 export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
-    constructor(options: NodeBulkFileDataValidatorOptions = {})
-    async validate(request: BulkFileDataValidationRequest): Promise<BulkFileDataValidationResult>
-    getStats(): BulkFileDataValidatorStats
-    async destroy(): Promise<void>
+    constructor(options: NodeBulkFileDataValidatorOptions = {}) 
+    async validate(request: BulkFileDataValidationRequest): Promise<BulkFileDataValidationResult> 
+    getStats(): BulkFileDataValidatorStats 
+    async destroy(): Promise<void> 
 }
 ```
 
@@ -6349,11 +6451,11 @@ export default class SdkWhatsOnChain implements ChainTracker {
     protected readonly URL: string;
     protected readonly httpClient: HttpClient;
     protected readonly requestTimeoutMsecs: number;
-    constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" = "main", config: LocalWhatsOnChainConfig = {})
-    protected async request<T, Data = unknown>(url: string, options: HttpClientRequestOptions<Data>): Promise<HttpClientResponse<T>>
-    async isValidRootForHeight(root: string, height: number): Promise<boolean>
-    async currentHeight(): Promise<number>
-    protected getHttpHeaders(): Record<string, string>
+    constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" = "main", config: LocalWhatsOnChainConfig = {}) 
+    protected async request<T, Data = unknown>(url: string, options: HttpClientRequestOptions<Data>): Promise<HttpClientResponse<T>> 
+    async isValidRootForHeight(root: string, height: number): Promise<boolean> 
+    async currentHeight(): Promise<number> 
+    protected getHttpHeaders(): Record<string, string> 
 }
 ```
 
@@ -6362,7 +6464,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
 Constructs an instance of the WhatsOnChain ChainTracker.
 
 ```ts
-constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" = "main", config: LocalWhatsOnChainConfig = {})
+constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" = "main", config: LocalWhatsOnChainConfig = {}) 
 ```
 
 Argument Details
@@ -6389,30 +6491,30 @@ export class ServiceCollection<T> {
     constructor(public serviceName: string, services?: Array<{
         name: string;
         service: T;
-    }>)
+    }>) 
     add(s: {
         name: string;
         service: T;
-    }): this
-    remove(name: string): void
-    get name(): string
-    get service(): T
-    getServiceToCall(i: number): ServiceToCall<T>
-    get serviceToCall(): ServiceToCall<T>
-    get allServicesToCall(): Array<ServiceToCall<T>>
-    moveServiceToLast(stc: ServiceToCall<T>): void
-    get allServices(): T[]
-    get count(): number
-    get index(): number
-    reset(): void
-    next(): number
-    clone(): ServiceCollection<T>
-    _addServiceCall(providerName: string, call: ServiceCall): ProviderCallHistory
-    getDuration(since: Date | string): number
-    addServiceCallSuccess(stc: ServiceToCall<T>, result?: string): void
-    addServiceCallFailure(stc: ServiceToCall<T>, result?: string): void
-    addServiceCallError(stc: ServiceToCall<T>, error: WalletError): void
-    getServiceCallHistory(reset?: boolean): ServiceCallHistory
+    }): this 
+    remove(name: string): void 
+    get name(): string 
+    get service(): T 
+    getServiceToCall(i: number): ServiceToCall<T> 
+    get serviceToCall(): ServiceToCall<T> 
+    get allServicesToCall(): Array<ServiceToCall<T>> 
+    moveServiceToLast(stc: ServiceToCall<T>): void 
+    get allServices(): T[] 
+    get count(): number 
+    get index(): number 
+    reset(): void 
+    next(): number 
+    clone(): ServiceCollection<T> 
+    _addServiceCall(providerName: string, call: ServiceCall): ProviderCallHistory 
+    getDuration(since: Date | string): number 
+    addServiceCallSuccess(stc: ServiceToCall<T>, result?: string): void 
+    addServiceCallFailure(stc: ServiceToCall<T>, result?: string): void 
+    addServiceCallError(stc: ServiceToCall<T>, error: WalletError): void 
+    getServiceCallHistory(reset?: boolean): ServiceCallHistory 
 }
 ```
 
@@ -6429,7 +6531,7 @@ readonly since: Date
 ###### Method getServiceCallHistory
 
 ```ts
-getServiceCallHistory(reset?: boolean): ServiceCallHistory
+getServiceCallHistory(reset?: boolean): ServiceCallHistory 
 ```
 See also: [ServiceCallHistory](./client.md#interface-servicecallhistory)
 
@@ -6442,7 +6544,7 @@ A copy of current service call history
 Used to de-prioritize a service call by moving it to the end of the list.
 
 ```ts
-moveServiceToLast(stc: ServiceToCall<T>): void
+moveServiceToLast(stc: ServiceToCall<T>): void 
 ```
 See also: [ServiceToCall](./services.md#interface-servicetocall)
 
@@ -6454,7 +6556,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class Services implements WalletServices {
     static readonly getStatusForTxidsBatchLimit = 20;
-    static createDefaultOptions(chain: Chain): WalletServicesOptions
+    static createDefaultOptions(chain: Chain): WalletServicesOptions 
     options: WalletServicesOptions;
     whatsonchain: WhatsOnChain;
     arcTaal: ARC;
@@ -6470,36 +6572,36 @@ export class Services implements WalletServices {
     updateFiatExchangeRateServices!: ServiceCollection<UpdateFiatExchangeRateService>;
     chain: Chain;
     readonly telemetry: Telemetry;
-    constructor(optionsOrChain: Chain | WalletServicesOptions)
-    getServicesCallHistory(reset?: boolean): ServicesCallHistory
-    async getChainTracker(): Promise<ChainTracker>
-    async getBsvExchangeRate(): Promise<number>
-    async getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number>
-    async getFiatExchangeRates(targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates>
-    get getProofsCount(): number
-    get getRawTxsCount(): number
-    get postBeefServicesCount(): number
-    get getUtxoStatsCount(): number
-    async getStatusForTxids(txids: string[], useNext?: boolean): Promise<GetStatusForTxidsResult>
-    hashOutputScript(script: string): string
-    async isUtxo(output: TableOutput): Promise<boolean>
-    async getUtxoStatus(output: string, outputFormat?: GetUtxoStatusOutputFormat, outpoint?: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetUtxoStatusResult>
-    async getScriptHashHistory(hash: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetScriptHashHistoryResult>
+    constructor(optionsOrChain: Chain | WalletServicesOptions) 
+    getServicesCallHistory(reset?: boolean): ServicesCallHistory 
+    async getChainTracker(): Promise<ChainTracker> 
+    async getBsvExchangeRate(): Promise<number> 
+    async getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> 
+    async getFiatExchangeRates(targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> 
+    get getProofsCount(): number 
+    get getRawTxsCount(): number 
+    get postBeefServicesCount(): number 
+    get getUtxoStatsCount(): number 
+    async getStatusForTxids(txids: string[], useNext?: boolean): Promise<GetStatusForTxidsResult> 
+    hashOutputScript(script: string): string 
+    async isUtxo(output: TableOutput): Promise<boolean> 
+    async getUtxoStatus(output: string, outputFormat?: GetUtxoStatusOutputFormat, outpoint?: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetUtxoStatusResult> 
+    async getScriptHashHistory(hash: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetScriptHashHistoryResult> 
     postBeefMode: "PromiseAll" | "UntilSuccess" = "UntilSuccess";
     postBeefUntilSuccessSoftTimeoutMs = 5000;
     postBeefUntilSuccessSoftTimeoutPerKbMs = 50;
     postBeefUntilSuccessSoftTimeoutMaxMs = 30000;
-    async postBeef(beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]>
-    async getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult>
-    async invokeChaintracksWithRetry<R>(method: () => Promise<R>, operation: string = "unknown"): Promise<R>
-    async getHeaderForHeight(height: number): Promise<number[]>
-    async getHeight(): Promise<number>
-    async hashToHeader(hash: string): Promise<BlockHeader>
-    async getMerklePath(txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult>
-    async getValidatedMerklePath(txid: string, validate: (result: GetMerklePathResult) => Promise<void>): Promise<GetMerklePathResult>
-    async updateFiatExchangeRates(targetCurrencies: FiatCurrencyCode[], updateMsecs?: number): Promise<FiatExchangeRates>
-    async nLockTimeIsFinal(tx: string | number[] | BsvTransaction | number): Promise<boolean>
-    async getBeefForTxid(txid: string): Promise<Beef>
+    async postBeef(beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]> 
+    async getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult> 
+    async invokeChaintracksWithRetry<R>(method: () => Promise<R>, operation: string = "unknown"): Promise<R> 
+    async getHeaderForHeight(height: number): Promise<number[]> 
+    async getHeight(): Promise<number> 
+    async hashToHeader(hash: string): Promise<BlockHeader> 
+    async getMerklePath(txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult> 
+    async getValidatedMerklePath(txid: string, validate: (result: GetMerklePathResult) => Promise<void>): Promise<GetMerklePathResult> 
+    async updateFiatExchangeRates(targetCurrencies: FiatCurrencyCode[], updateMsecs?: number): Promise<FiatExchangeRates> 
+    async nLockTimeIsFinal(tx: string | number[] | BsvTransaction | number): Promise<boolean> 
+    async getBeefForTxid(txid: string): Promise<Beef> 
 }
 ```
 
@@ -6543,7 +6645,7 @@ postBeefUntilSuccessSoftTimeoutPerKbMs = 50
 ###### Method hashOutputScript
 
 ```ts
-hashOutputScript(script: string): string
+hashOutputScript(script: string): string 
 ```
 
 Returns
@@ -6565,9 +6667,9 @@ Allows multiple readers or one writer at a time.
 
 ```ts
 export class SingleWriterMultiReaderLock {
-    constructor(private readonly maxQueued = 4096)
-    async withReadLock<T>(fn: () => Promise<T>): Promise<T>
-    async withWriteLock<T>(fn: () => Promise<T>): Promise<T>
+    constructor(private readonly maxQueued = 4096) 
+    async withReadLock<T>(fn: () => Promise<T>): Promise<T> 
+    async withWriteLock<T>(fn: () => Promise<T>): Promise<T> 
 }
 ```
 
@@ -6579,8 +6681,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class WhatsOnChain extends WhatsOnChainNoServices {
     services: Services;
-    constructor(chain: Chain = "main", config: WalletToolboxWhatsOnChainConfig = {}, services?: Services)
-    async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult>
+    constructor(chain: Chain = "main", config: WalletToolboxWhatsOnChainConfig = {}, services?: Services) 
+    async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> 
 }
 ```
 
@@ -6593,20 +6695,20 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class WhatsOnChainNoServices extends SdkWhatsOnChain {
-    constructor(chain: Chain = "main", config: WalletToolboxWhatsOnChainConfig = {})
-    async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult>
-    async getTxPropagation(txid: string): Promise<number>
-    async getRawTx(txid: string): Promise<string | undefined>
-    async getRawTxResult(txid: string): Promise<GetRawTxResult>
-    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult>
-    async postRawTx(rawTx: HexString): Promise<PostTxResultForTxid>
-    async updateBsvExchangeRate(rate?: BsvExchangeRate, updateMsecs?: number): Promise<BsvExchangeRate>
-    async getUtxoStatus(output: string, outputFormat?: GetUtxoStatusOutputFormat, outpoint?: string): Promise<GetUtxoStatusResult>
-    async getScriptHashConfirmedHistory(hash: string): Promise<GetScriptHashHistoryResult>
-    async getScriptHashUnconfirmedHistory(hash: string): Promise<GetScriptHashHistoryResult>
-    async getScriptHashHistory(hash: string): Promise<GetScriptHashHistoryResult>
-    async getBlockHeaderByHash(hash: string): Promise<BlockHeader | undefined>
-    async getChainInfo(): Promise<WocChainInfo>
+    constructor(chain: Chain = "main", config: WalletToolboxWhatsOnChainConfig = {}) 
+    async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> 
+    async getTxPropagation(txid: string): Promise<number> 
+    async getRawTx(txid: string): Promise<string | undefined> 
+    async getRawTxResult(txid: string): Promise<GetRawTxResult> 
+    async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> 
+    async postRawTx(rawTx: HexString): Promise<PostTxResultForTxid> 
+    async updateBsvExchangeRate(rate?: BsvExchangeRate, updateMsecs?: number): Promise<BsvExchangeRate> 
+    async getUtxoStatus(output: string, outputFormat?: GetUtxoStatusOutputFormat, outpoint?: string): Promise<GetUtxoStatusResult> 
+    async getScriptHashConfirmedHistory(hash: string): Promise<GetScriptHashHistoryResult> 
+    async getScriptHashUnconfirmedHistory(hash: string): Promise<GetScriptHashHistoryResult> 
+    async getScriptHashHistory(hash: string): Promise<GetScriptHashHistoryResult> 
+    async getBlockHeaderByHash(hash: string): Promise<BlockHeader | undefined> 
+    async getChainInfo(): Promise<WocChainInfo> 
 }
 ```
 
@@ -6635,7 +6737,7 @@ See also: [BlockHeader](./client.md#interface-blockheader), [BsvExchangeRate](./
 }
 
 ```ts
-async getBlockHeaderByHash(hash: string): Promise<BlockHeader | undefined>
+async getBlockHeaderByHash(hash: string): Promise<BlockHeader | undefined> 
 ```
 See also: [BlockHeader](./client.md#interface-blockheader)
 
@@ -6644,7 +6746,7 @@ See also: [BlockHeader](./client.md#interface-blockheader)
 May return undefined for unmined transactions that are in the mempool.
 
 ```ts
-async getRawTx(txid: string): Promise<string | undefined>
+async getRawTx(txid: string): Promise<string | undefined> 
 ```
 
 Returns
@@ -6674,7 +6776,7 @@ result for an unknown txid:
     [{"txid":"6815f8014db74eab8b7f75925c68929597f1d97efa970109d990824c25e5e62c","error":"unknown"}]
 
 ```ts
-async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult>
+async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> 
 ```
 See also: [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult)
 
@@ -6683,7 +6785,7 @@ See also: [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresul
 2025-02-16 throwing internal server error 500.
 
 ```ts
-async getTxPropagation(txid: string): Promise<number>
+async getTxPropagation(txid: string): Promise<number> 
 ```
 
 ###### Method postBeef
@@ -6693,14 +6795,14 @@ WhatsOnChain does not natively support a postBeef end-point aware of multiple tx
 Send rawTx in `txids` order from beef.
 
 ```ts
-async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult>
+async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> 
 ```
 See also: [PostBeefResult](./client.md#interface-postbeefresult)
 
 ###### Method postRawTx
 
 ```ts
-async postRawTx(rawTx: HexString): Promise<PostTxResultForTxid>
+async postRawTx(rawTx: HexString): Promise<PostTxResultForTxid> 
 ```
 See also: [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
 
@@ -6720,7 +6822,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class WhatsOnChainServices {
-    static createWhatsOnChainServicesOptions(chain: Chain): WhatsOnChainServicesOptions
+    static createWhatsOnChainServicesOptions(chain: Chain): WhatsOnChainServicesOptions 
     static readonly chainInfo: Array<WocChainInfo | undefined> = [];
     static readonly chainInfoTime: Array<Date | undefined> = [];
     static readonly chainInfoMsecs: number[] = [];
@@ -6728,13 +6830,13 @@ export class WhatsOnChainServices {
     chain: Chain;
     woc: WhatsOnChain;
     public readonly options: WhatsOnChainServicesOptions;
-    constructor(options: WhatsOnChainServicesOptions)
-    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined>
-    async getChainInfo(): Promise<WocChainInfo>
-    async getChainTipHeight(): Promise<number>
-    async getChainTipHash(): Promise<string>
-    async getHeaders(fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]>
-    async getHeaderByteFileLinks(neededRange: HeightRange, fetch?: ChaintracksFetchApi): Promise<GetHeaderByteFileLinksResult[]>
+    constructor(options: WhatsOnChainServicesOptions) 
+    async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> 
+    async getChainInfo(): Promise<WocChainInfo> 
+    async getChainTipHeight(): Promise<number> 
+    async getChainTipHash(): Promise<string> 
+    async getHeaders(fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]> 
+    async getHeaderByteFileLinks(neededRange: HeightRange, fetch?: ChaintracksFetchApi): Promise<GetHeaderByteFileLinksResult[]> 
 }
 ```
 
@@ -6743,7 +6845,7 @@ See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#
 ###### Method getHeaders
 
 ```ts
-async getHeaders(fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]>
+async getHeaders(fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]> 
 ```
 See also: [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi), [WocGetHeadersHeader](./services.md#interface-wocgetheadersheader)
 
@@ -6758,29 +6860,30 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [WocHeadersBulkListener](#function-wocheadersbulklistener) | [getWhatsOnChainBlockHeaderByHash](#function-getwhatsonchainblockheaderbyhash) | [serializeBaseBlockHeader](#function-serializebaseblockheader) |
-| [WocHeadersBulkListener_test](#function-wocheadersbulklistener_test) | [handlePostRawTxErrorResponse](#function-handlepostrawtxerrorresponse) | [serializeBaseBlockHeaders](#function-serializebaseblockheaders) |
-| [WocHeadersLiveListener](#function-wocheaderslivelistener) | [handleScriptHashHistoryCatch](#function-handlescripthashhistorycatch) | [sha256HashOfBinaryFile](#function-sha256hashofbinaryfile) |
-| [WocHeadersLiveListener_test](#function-wocheaderslivelistener_test) | [handleScriptHashHistoryResponse](#function-handlescripthashhistoryresponse) | [snapshotMerklePathResult](#function-snapshotmerklepathresult) |
-| [addWork](#function-addwork) | [handleUtxoConnReset](#function-handleutxoconnreset) | [snapshotPostBeefRequest](#function-snapshotpostbeefrequest) |
-| [arcDefaultUrl](#function-arcdefaulturl) | [isArcAcceptedTxStatus](#function-isarcacceptedtxstatus) | [startChaintracks](#function-startchaintracks) |
-| [arcGorillaPoolUrl](#function-arcgorillapoolurl) | [isArcDoubleSpendTxStatus](#function-isarcdoublespendtxstatus) | [stnArcadeUrl](#function-stnarcadeurl) |
-| [arcadeDefaultUrl](#function-arcadedefaulturl) | [isArcInvalidTxStatus](#function-isarcinvalidtxstatus) | [stnChaintracksUrl](#function-stnchaintracksurl) |
-| [authenticateMerklePathResult](#function-authenticatemerklepathresult) | [isArcServiceErrorStatus](#function-isarcserviceerrorstatus) | [subWork](#function-subwork) |
-| [blockHash](#function-blockhash) | [isBaseBlockHeader](#function-isbaseblockheader) | [swapByteOrder](#function-swapbyteorder) |
-| [buildChaintracksOptionsWithIngestors](#function-buildchaintracksoptionswithingestors) | [isBlockHeader](#function-isblockheader) | [toBinaryBaseBlockHeader](#function-tobinarybaseblockheader) |
-| [classifyArcadeRejection](#function-classifyarcaderejection) | [isKnownValidBulkHeaderFile](#function-isknownvalidbulkheaderfile) | [toDefaultChaintracksArguments](#function-todefaultchaintracksarguments) |
-| [classifyMerklePathResponse](#function-classifymerklepathresponse) | [isLive](#function-islive) | [toDefaultKnexChaintracksArguments](#function-todefaultknexchaintracksarguments) |
-| [classifyOutputUtxo](#function-classifyoutpututxo) | [isLiveBlockHeader](#function-isliveblockheader) | [tstnArcadeUrl](#function-tstnarcadeurl) |
-| [containsControlCharacter](#function-containscontrolcharacter) | [isMoreWork](#function-ismorework) | [tstnChaintracksUrl](#function-tstnchaintracksurl) |
-| [convertBitsToTarget](#function-convertbitstotarget) | [isValidFiatRate](#function-isvalidfiatrate) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
-| [convertBitsToWork](#function-convertbitstowork) | [makeMerklePathNote](#function-makemerklepathnote) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
-| [convertBufferToUint32](#function-convertbuffertouint32) | [makePostBeefServiceError](#function-makepostbeefserviceerror) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
-| [convertUint32ToBuffer](#function-convertuint32tobuffer) | [mapWithConcurrency](#function-mapwithconcurrency) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
-| [convertWocToBlockHeaderHex](#function-convertwoctoblockheaderhex) | [normalizeArcProviderConfig](#function-normalizearcproviderconfig) | [validateArcadeTxData](#function-validatearcadetxdata) |
-| [copyRawTransactionBytes](#function-copyrawtransactionbytes) | [normalizeBulkFileDataValidationRequest](#function-normalizebulkfiledatavalidationrequest) | [validateBaseBlockHeaderFormat](#function-validatebaseblockheaderformat) |
-| [copyValidatedBlockHeader](#function-copyvalidatedblockheader) | [normalizeBulkHeaderFileInfo](#function-normalizebulkheaderfileinfo) | [validateBufferOfHeaders](#function-validatebufferofheaders) |
-| [createAndStartDefaultChaintracks](#function-createandstartdefaultchaintracks) | [normalizeBulkHeaderFileSequence](#function-normalizebulkheaderfilesequence) | [validateBulkFileData](#function-validatebulkfiledata) |
+| [WocHeadersBulkListener](#function-wocheadersbulklistener) | [getExchangeRatesIo](#function-getexchangeratesio) | [serializeBaseBlockHeader](#function-serializebaseblockheader) |
+| [WocHeadersBulkListener_test](#function-wocheadersbulklistener_test) | [getWhatsOnChainBlockHeaderByHash](#function-getwhatsonchainblockheaderbyhash) | [serializeBaseBlockHeaders](#function-serializebaseblockheaders) |
+| [WocHeadersLiveListener](#function-wocheaderslivelistener) | [handlePostRawTxErrorResponse](#function-handlepostrawtxerrorresponse) | [sha256HashOfBinaryFile](#function-sha256hashofbinaryfile) |
+| [WocHeadersLiveListener_test](#function-wocheaderslivelistener_test) | [handleScriptHashHistoryCatch](#function-handlescripthashhistorycatch) | [snapshotMerklePathResult](#function-snapshotmerklepathresult) |
+| [addWork](#function-addwork) | [handleScriptHashHistoryResponse](#function-handlescripthashhistoryresponse) | [snapshotPostBeefRequest](#function-snapshotpostbeefrequest) |
+| [arcDefaultUrl](#function-arcdefaulturl) | [handleUtxoConnReset](#function-handleutxoconnreset) | [startChaintracks](#function-startchaintracks) |
+| [arcGorillaPoolUrl](#function-arcgorillapoolurl) | [isArcAcceptedTxStatus](#function-isarcacceptedtxstatus) | [stnArcadeUrl](#function-stnarcadeurl) |
+| [arcadeDefaultUrl](#function-arcadedefaulturl) | [isArcDoubleSpendTxStatus](#function-isarcdoublespendtxstatus) | [stnChaintracksUrl](#function-stnchaintracksurl) |
+| [authenticateMerklePathResult](#function-authenticatemerklepathresult) | [isArcInvalidTxStatus](#function-isarcinvalidtxstatus) | [subWork](#function-subwork) |
+| [blockHash](#function-blockhash) | [isArcServiceErrorStatus](#function-isarcserviceerrorstatus) | [swapByteOrder](#function-swapbyteorder) |
+| [buildChaintracksOptionsWithIngestors](#function-buildchaintracksoptionswithingestors) | [isBaseBlockHeader](#function-isbaseblockheader) | [toBinaryBaseBlockHeader](#function-tobinarybaseblockheader) |
+| [classifyArcadeRejection](#function-classifyarcaderejection) | [isBlockHeader](#function-isblockheader) | [toDefaultChaintracksArguments](#function-todefaultchaintracksarguments) |
+| [classifyMerklePathResponse](#function-classifymerklepathresponse) | [isKnownValidBulkHeaderFile](#function-isknownvalidbulkheaderfile) | [toDefaultKnexChaintracksArguments](#function-todefaultknexchaintracksarguments) |
+| [classifyOutputUtxo](#function-classifyoutpututxo) | [isLive](#function-islive) | [tstnArcadeUrl](#function-tstnarcadeurl) |
+| [containsControlCharacter](#function-containscontrolcharacter) | [isLiveBlockHeader](#function-isliveblockheader) | [tstnChaintracksUrl](#function-tstnchaintracksurl) |
+| [convertBitsToTarget](#function-convertbitstotarget) | [isMoreWork](#function-ismorework) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
+| [convertBitsToWork](#function-convertbitstowork) | [isValidFiatRate](#function-isvalidfiatrate) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
+| [convertBufferToUint32](#function-convertbuffertouint32) | [makeMerklePathNote](#function-makemerklepathnote) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
+| [convertUint32ToBuffer](#function-convertuint32tobuffer) | [makePostBeefServiceError](#function-makepostbeefserviceerror) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
+| [convertWocToBlockHeaderHex](#function-convertwoctoblockheaderhex) | [mapWithConcurrency](#function-mapwithconcurrency) | [validateArcTxData](#function-validatearctxdata) |
+| [copyMerklePath](#function-copymerklepath) | [normalizeArcProviderConfig](#function-normalizearcproviderconfig) | [validateBaseBlockHeaderFormat](#function-validatebaseblockheaderformat) |
+| [copyRawTransactionBytes](#function-copyrawtransactionbytes) | [normalizeBulkFileDataValidationRequest](#function-normalizebulkfiledatavalidationrequest) | [validateBufferOfHeaders](#function-validatebufferofheaders) |
+| [copyValidatedBlockHeader](#function-copyvalidatedblockheader) | [normalizeBulkHeaderFileInfo](#function-normalizebulkheaderfileinfo) | [validateBulkFileData](#function-validatebulkfiledata) |
+| [createAndStartDefaultChaintracks](#function-createandstartdefaultchaintracks) | [normalizeBulkHeaderFileSequence](#function-normalizebulkheaderfilesequence) | [validateCanonicalMerklePathResult](#function-validatecanonicalmerklepathresult) |
 | [createAndStartDefaultKnexChaintracks](#function-createandstartdefaultknexchaintracks) | [normalizeBulkHeaderFilesInfo](#function-normalizebulkheaderfilesinfo) | [validateGenesisHeader](#function-validategenesisheader) |
 | [createChaintracksInitialSchema](#function-createchaintracksinitialschema) | [normalizeFiatCurrencies](#function-normalizefiatcurrencies) | [validateHeaderDifficulty](#function-validateheaderdifficulty) |
 | [createDefaultBulkFileDataManager](#function-createdefaultbulkfiledatamanager) | [normalizeFiatCurrency](#function-normalizefiatcurrency) | [validateHeaderFormat](#function-validateheaderformat) |
@@ -6801,7 +6904,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [genesisBuffer](#function-genesisbuffer) | [resolveDefaultChaintracksArguments](#function-resolvedefaultchaintracksarguments) | [writeUInt32BE](#function-writeuint32be) |
 | [genesisHeader](#function-genesisheader) | [resolveDefaultKnexChaintracksArguments](#function-resolvedefaultknexchaintracksarguments) | [writeUInt32LE](#function-writeuint32le) |
 | [getBeefForTxid](#function-getbeeffortxid) | [safeDiagnostic](#function-safediagnostic) |  |
-| [getExchangeRatesIo](#function-getexchangeratesio) | [selectBulkHeaderFiles](#function-selectbulkheaderfiles) |  |
+| [getCanonicalMerklePath](#function-getcanonicalmerklepath) | [selectBulkHeaderFiles](#function-selectbulkheaderfiles) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -6821,7 +6924,7 @@ export async function WocHeadersBulkListener(...[fromHeight, toHeight, enqueue, 
     chain: Chain,
     logger?: (...args: any[]) => void,
     idleWait?: number
-]): Promise<boolean>
+]): Promise<boolean> 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [StopListenerToken](./services.md#interface-stoplistenertoken), [logger](./client.md#variable-logger)
@@ -6865,7 +6968,7 @@ v2
 }
 
 ```ts
-export async function WocHeadersBulkListener_test(): Promise<void>
+export async function WocHeadersBulkListener_test(): Promise<void> 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -6876,7 +6979,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 High speed WebSocket based based new block header listener
 
 ```ts
-export async function WocHeadersLiveListener(enqueue: (header: BlockHeader) => void, error: (code: number, message: string) => boolean, stop: StopListenerToken, chain: Chain, _logger: (...args: any[]) => void, idleWait = 100000): Promise<boolean>
+export async function WocHeadersLiveListener(enqueue: (header: BlockHeader) => void, error: (code: number, message: string) => boolean, stop: StopListenerToken, chain: Chain, _logger: (...args: any[]) => void, idleWait = 100000): Promise<boolean> 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [StopListenerToken](./services.md#interface-stoplistenertoken)
@@ -6904,7 +7007,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: WocHeadersLiveListener_test
 
 ```ts
-export async function WocHeadersLiveListener_test(): Promise<void>
+export async function WocHeadersLiveListener_test(): Promise<void> 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -6915,7 +7018,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Add two Buffer encoded chainwork values
 
 ```ts
-export function addWork(work1: string, work2: string): string
+export function addWork(work1: string, work2: string): string 
 ```
 
 Returns
@@ -6928,7 +7031,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: arcDefaultUrl
 
 ```ts
-export function arcDefaultUrl(chain: Chain): string
+export function arcDefaultUrl(chain: Chain): string 
 ```
 
 See also: [Chain](./client.md#type-chain)
@@ -6939,7 +7042,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: arcGorillaPoolUrl
 
 ```ts
-export function arcGorillaPoolUrl(chain: Chain): string | undefined
+export function arcGorillaPoolUrl(chain: Chain): string | undefined 
 ```
 
 See also: [Chain](./client.md#type-chain)
@@ -6953,7 +7056,7 @@ Default Arcade (bsv-blockchain/arcade) endpoint per chain.
 Returns undefined when no public default is known for the chain.
 
 ```ts
-export function arcadeDefaultUrl(chain: Chain): string | undefined
+export function arcadeDefaultUrl(chain: Chain): string | undefined 
 ```
 
 See also: [Chain](./client.md#type-chain)
@@ -6964,7 +7067,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: authenticateMerklePathResult
 
 ```ts
-export async function authenticateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, validator: MerkleRootValidator, requireProofOfWork = false, requireHeaderFormat = true): Promise<ValidatedMerklePathResult>
+export async function authenticateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, validator: MerkleRootValidator, requireProofOfWork = false, requireHeaderFormat = true): Promise<ValidatedMerklePathResult> 
 ```
 
 See also: [GetMerklePathResult](./client.md#interface-getmerklepathresult), [MerkleRootValidator](./services.md#interface-merklerootvalidator), [ValidatedMerklePathResult](./services.md#interface-validatedmerklepathresult)
@@ -7006,7 +7109,7 @@ Builds the shared portion of ChaintracksOptions that all storage backends
 The caller is responsible for providing the storage implementation.
 
 ```ts
-export function buildChaintracksOptionsWithIngestors(params: ChaintracksIngestorParams, storage: ChaintracksOptions["storage"]): ChaintracksOptions
+export function buildChaintracksOptionsWithIngestors(params: ChaintracksIngestorParams, storage: ChaintracksOptions["storage"]): ChaintracksOptions 
 ```
 
 See also: [ChaintracksIngestorParams](./services.md#interface-chaintracksingestorparams), [ChaintracksOptions](./services.md#interface-chaintracksoptions)
@@ -7021,7 +7124,7 @@ one place prevents a provider from calling a rejection "unknown" while the
 monitor's event path calls the same status terminal.
 
 ```ts
-export function classifyArcadeRejection(event: ArcadeLifecycleStatus): ArcadeRejectionClassification
+export function classifyArcadeRejection(event: ArcadeLifecycleStatus): ArcadeRejectionClassification 
 ```
 
 See also: [ArcadeLifecycleStatus](./services.md#interface-arcadelifecyclestatus), [ArcadeRejectionClassification](./services.md#interface-arcaderejectionclassification)
@@ -7037,7 +7140,7 @@ Returns `'retry'` when the request was rate-limited and the caller should retry,
 `'notFound'` for 404, `'badStatus'` for other non-200 codes.
 
 ```ts
-export function classifyMerklePathResponse(status: number, statusText: string, retry: number): "retry" | "notFound" | "badStatus" | "ok"
+export function classifyMerklePathResponse(status: number, statusText: string, retry: number): "retry" | "notFound" | "badStatus" | "ok" 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7051,7 +7154,7 @@ batch callers can finish classifying every candidate before deciding whether
 a destructive operation is safe.
 
 ```ts
-export async function classifyOutputUtxo(services: UtxoServices, output: TableOutput): Promise<OutputUtxoClassification>
+export async function classifyOutputUtxo(services: UtxoServices, output: TableOutput): Promise<OutputUtxoClassification> 
 ```
 
 See also: [OutputUtxoClassification](./services.md#interface-outpututxoclassification), [TableOutput](./storage.md#interface-tableoutput)
@@ -7062,7 +7165,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: containsControlCharacter
 
 ```ts
-export function containsControlCharacter(value: string): boolean
+export function containsControlCharacter(value: string): boolean 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7073,7 +7176,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Computes "target" value for 4 byte Bitcoin block header "bits" value.
 
 ```ts
-export function convertBitsToTarget(bits: number | number[]): BigNumber
+export function convertBitsToTarget(bits: number | number[]): BigNumber 
 ```
 
 Returns
@@ -7093,7 +7196,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Computes "chainWork" value for 4 byte Bitcoin block header "bits" value.
 
 ```ts
-export function convertBitsToWork(bits: number | number[]): string
+export function convertBitsToWork(bits: number | number[]): string 
 ```
 
 Returns
@@ -7175,7 +7278,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: convertWocToBlockHeaderHex
 
 ```ts
-export function convertWocToBlockHeaderHex(woc: WocHeader): BlockHeader
+export function convertWocToBlockHeaderHex(woc: WocHeader): BlockHeader 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader), [WocHeader](./services.md#interface-wocheader)
@@ -7183,10 +7286,23 @@ See also: [BlockHeader](./client.md#interface-blockheader), [WocHeader](./servic
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: copyMerklePath
+
+```ts
+export function copyMerklePath(txid: string, value: unknown): {
+    merklePath: MerklePath;
+    root: string;
+    index: number;
+} 
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: copyRawTransactionBytes
 
 ```ts
-export function copyRawTransactionBytes(value: unknown, name = "rawTx"): number[]
+export function copyRawTransactionBytes(value: unknown, name = "rawTx"): number[] 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7195,7 +7311,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: copyValidatedBlockHeader
 
 ```ts
-export function copyValidatedBlockHeader(value: unknown, requireProofOfWork = false, requireHeaderFormat = true): BlockHeader
+export function copyValidatedBlockHeader(value: unknown, requireProofOfWork = false, requireHeaderFormat = true): BlockHeader 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader)
@@ -7206,7 +7322,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createAndStartDefaultChaintracks
 
 ```ts
-export function createAndStartDefaultChaintracks<TStorage extends ChaintracksOptions["storage"]>(args: DefaultChaintracksArguments, createOptions: (...args: DefaultChaintracksArguments) => ChaintracksOptions): CreatedChaintracks<TStorage>
+export function createAndStartDefaultChaintracks<TStorage extends ChaintracksOptions["storage"]>(args: DefaultChaintracksArguments, createOptions: (...args: DefaultChaintracksArguments) => ChaintracksOptions): CreatedChaintracks<TStorage> 
 ```
 
 See also: [ChaintracksOptions](./services.md#interface-chaintracksoptions), [CreatedChaintracks](./services.md#interface-createdchaintracks), [DefaultChaintracksArguments](./services.md#type-defaultchaintracksarguments)
@@ -7217,7 +7333,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createAndStartDefaultKnexChaintracks
 
 ```ts
-export function createAndStartDefaultKnexChaintracks<TStorage extends ChaintracksOptions["storage"]>(args: DefaultKnexChaintracksArguments, createOptions: (...args: DefaultKnexChaintracksArguments) => ChaintracksOptions): CreatedChaintracks<TStorage>
+export function createAndStartDefaultKnexChaintracks<TStorage extends ChaintracksOptions["storage"]>(args: DefaultKnexChaintracksArguments, createOptions: (...args: DefaultKnexChaintracksArguments) => ChaintracksOptions): CreatedChaintracks<TStorage> 
 ```
 
 See also: [ChaintracksOptions](./services.md#interface-chaintracksoptions), [CreatedChaintracks](./services.md#interface-createdchaintracks), [DefaultKnexChaintracksArguments](./services.md#type-defaultknexchaintracksarguments)
@@ -7230,7 +7346,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Builds the current Chaintracks schema. Exported so dialect DDL can be regression-tested without a live server.
 
 ```ts
-export function createChaintracksInitialSchema(knex: Knex): Knex.SchemaBuilder
+export function createChaintracksInitialSchema(knex: Knex): Knex.SchemaBuilder 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7239,7 +7355,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createDefaultBulkFileDataManager
 
 ```ts
-export function createDefaultBulkFileDataManager(params: ResolvedDefaultChaintracksParams): BulkFileDataManager
+export function createDefaultBulkFileDataManager(params: ResolvedDefaultChaintracksParams): BulkFileDataManager 
 ```
 
 See also: [BulkFileDataManager](./services.md#class-bulkfiledatamanager), [ResolvedDefaultChaintracksParams](./services.md#interface-resolveddefaultchaintracksparams)
@@ -7266,7 +7382,7 @@ check proves it), this branch can be removed and browsers can share the v2
 default. Node runtimes are unchanged.
 
 ```ts
-export function createDefaultChaintracksClient(chain: Exclude<Chain, "mock">): ChaintracksClientApi
+export function createDefaultChaintracksClient(chain: Exclude<Chain, "mock">): ChaintracksClientApi 
 ```
 
 See also: [Chain](./client.md#type-chain), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi)
@@ -7277,7 +7393,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createDefaultChaintracksStorageOptions
 
 ```ts
-export function createDefaultChaintracksStorageOptions(params: ResolvedDefaultChaintracksParams)
+export function createDefaultChaintracksStorageOptions(params: ResolvedDefaultChaintracksParams) 
 ```
 
 See also: [ResolvedDefaultChaintracksParams](./services.md#interface-resolveddefaultchaintracksparams)
@@ -7288,7 +7404,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createDefaultIdbChaintracksOptions
 
 ```ts
-export function createDefaultIdbChaintracksOptions(...args: DefaultChaintracksArguments): ChaintracksOptions
+export function createDefaultIdbChaintracksOptions(...args: DefaultChaintracksArguments): ChaintracksOptions 
 ```
 
 See also: [ChaintracksOptions](./services.md#interface-chaintracksoptions), [DefaultChaintracksArguments](./services.md#type-defaultchaintracksarguments)
@@ -7299,7 +7415,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createDefaultKnexChaintracksOptions
 
 ```ts
-export function createDefaultKnexChaintracksOptions(...args: DefaultKnexChaintracksArguments): ChaintracksOptions
+export function createDefaultKnexChaintracksOptions(...args: DefaultKnexChaintracksArguments): ChaintracksOptions 
 ```
 
 See also: [ChaintracksOptions](./services.md#interface-chaintracksoptions), [DefaultKnexChaintracksArguments](./services.md#type-defaultknexchaintracksarguments)
@@ -7315,7 +7431,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createDefaultNoDbChaintracksOptions
 
 ```ts
-export function createDefaultNoDbChaintracksOptions(...args: DefaultChaintracksArguments): ChaintracksOptions
+export function createDefaultNoDbChaintracksOptions(...args: DefaultChaintracksArguments): ChaintracksOptions 
 ```
 
 See also: [ChaintracksOptions](./services.md#interface-chaintracksoptions), [DefaultChaintracksArguments](./services.md#type-defaultchaintracksarguments)
@@ -7338,7 +7454,7 @@ export function createDefaultWalletServicesOptions(...[chain, arcCallbackUrl, ar
     arcadeUrl?: string,
     arcadeApiKey?: string,
     arcadeCallbackToken?: string
-]): WalletServicesOptions
+]): WalletServicesOptions 
 ```
 
 See also: [Chain](./client.md#type-chain), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [WalletServicesOptions](./client.md#interface-walletservicesoptions)
@@ -7356,7 +7472,7 @@ export async function createIdbChaintracks(...args: DefaultChaintracksArguments)
     storage: ChaintracksStorageIdb;
     chaintracks: Chaintracks;
     available: Promise<void>;
-}>
+}> 
 ```
 
 See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi), [ChaintracksStorageIdb](./services.md#class-chaintracksstorageidb), [DefaultChaintracksArguments](./services.md#type-defaultchaintracksarguments)
@@ -7374,7 +7490,7 @@ export async function createKnexChaintracks(...args: DefaultKnexChaintracksArgum
     storage: ChaintracksStorageKnex;
     chaintracks: Chaintracks;
     available: Promise<void>;
-}>
+}> 
 ```
 
 See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi), [ChaintracksStorageKnex](./services.md#class-chaintracksstorageknex), [DefaultKnexChaintracksArguments](./services.md#type-defaultknexchaintracksarguments)
@@ -7392,7 +7508,7 @@ export async function createNoDbChaintracks(...args: DefaultChaintracksArguments
     storage: ChaintracksStorageNoDb;
     chaintracks: Chaintracks;
     available: Promise<void>;
-}>
+}> 
 ```
 
 See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi), [ChaintracksStorageNoDb](./services.md#class-chaintracksstoragenodb), [DefaultChaintracksArguments](./services.md#type-defaultchaintracksarguments)
@@ -7403,7 +7519,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: createStopHandler
 
 ```ts
-export function createStopHandler(markOk: () => void, isOpen: () => boolean, markClosed: () => void, close: () => void, markDone: () => void): () => void
+export function createStopHandler(markOk: () => void, isOpen: () => boolean, markClosed: () => void, close: () => void, markDone: () => void): () => void 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7416,7 +7532,7 @@ Deserialize a BaseBlockHeader from an 80 byte buffer
 ```ts
 export function deserializeBaseBlockHeader(buffer: number[] | Uint8Array, offset = 0): BaseBlockHeader {
     validateByteWindow(buffer, offset, 80);
-    const reader = Utils.ReaderUint8Array.makeReader(buffer, offset);
+    const reader = ReaderUint8Array.makeReader(buffer, offset);
     const header: BaseBlockHeader = {
         version: reader.readUInt32LE(),
         previousHash: asString(reader.read(32).reverse()),
@@ -7437,7 +7553,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: deserializeBaseBlockHeaders
 
 ```ts
-export function deserializeBaseBlockHeaders(buffer: number[] | Uint8Array, offset = 0, count?: number | undefined): BaseBlockHeader[]
+export function deserializeBaseBlockHeaders(buffer: number[] | Uint8Array, offset = 0, count?: number | undefined): BaseBlockHeader[] 
 ```
 
 See also: [BaseBlockHeader](./client.md#interface-baseblockheader)
@@ -7448,7 +7564,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: deserializeBlockHeader
 
 ```ts
-export function deserializeBlockHeader(buffer: number[] | Uint8Array, height: number, offset = 0): BlockHeader
+export function deserializeBlockHeader(buffer: number[] | Uint8Array, height: number, offset = 0): BlockHeader 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader)
@@ -7459,7 +7575,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: deserializeBlockHeaders
 
 ```ts
-export function deserializeBlockHeaders(firstHeight: number, buffer: number[] | Uint8Array, offset = 0, count?: number | undefined): BlockHeader[]
+export function deserializeBlockHeaders(firstHeight: number, buffer: number[] | Uint8Array, offset = 0, count?: number | undefined): BlockHeader[] 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader)
@@ -7558,7 +7674,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: getBeefForTxid
 
 ```ts
-export async function getBeefForTxid(services: Services, txid: string): Promise<Beef>
+export async function getBeefForTxid(services: Services, txid: string): Promise<Beef> 
 ```
 
 See also: [Services](./services.md#class-services)
@@ -7566,10 +7682,25 @@ See also: [Services](./services.md#class-services)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: getCanonicalMerklePath
+
+Obtain a canonical proof with provider failover when the service supports
+it. Custom WalletServices implementations without the optional failover
+method still fail closed after validating their single lookup.
+
+```ts
+export async function getCanonicalMerklePath(services: WalletServices, chaintracker: ChainTracker, txid: string): Promise<GetMerklePathResult> 
+```
+
+See also: [GetMerklePathResult](./client.md#interface-getmerklepathresult), [WalletServices](./client.md#interface-walletservices)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: getExchangeRatesIo
 
 ```ts
-export async function getExchangeRatesIo(key: string, symbols?: string[], fetchClient?: typeof fetch): Promise<ExchangeRatesIoApi>
+export async function getExchangeRatesIo(key: string, symbols?: string[], fetchClient?: typeof fetch): Promise<ExchangeRatesIoApi> 
 ```
 
 See also: [ExchangeRatesIoApi](./services.md#interface-exchangeratesioapi)
@@ -7580,7 +7711,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: getWhatsOnChainBlockHeaderByHash
 
 ```ts
-export async function getWhatsOnChainBlockHeaderByHash(hash: string, chain: Chain = "main", apiKey?: string): Promise<BlockHeader | undefined>
+export async function getWhatsOnChainBlockHeaderByHash(hash: string, chain: Chain = "main", apiKey?: string): Promise<BlockHeader | undefined> 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain)
@@ -7598,7 +7729,7 @@ export function handlePostRawTxErrorResponse(r: PostTxResultForTxid, nne: () => 
     statusText?: unknown;
     status?: unknown;
     ok?: boolean;
-}): void
+}): void 
 ```
 
 See also: [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
@@ -7612,7 +7743,7 @@ Decide whether a caught error is retryable for script-hash history calls.
 If not retryable, sets `r.error` and returns false.
 
 ```ts
-export function handleScriptHashHistoryCatch(r: GetScriptHashHistoryResult, error_: unknown, _url: string, methodName: string, retry: number, maxRetry: number): boolean
+export function handleScriptHashHistoryCatch(r: GetScriptHashHistoryResult, error_: unknown, _url: string, methodName: string, retry: number, maxRetry: number): boolean 
 ```
 
 See also: [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult)
@@ -7630,7 +7761,7 @@ Returns:
  - `'ok'`        — response was successful, continue parsing
 
 ```ts
-export function handleScriptHashHistoryResponse(r: GetScriptHashHistoryResult, response: ScriptHashHistoryResponse, methodName: string, retry: number): "continue" | "return" | "ok"
+export function handleScriptHashHistoryResponse(r: GetScriptHashHistoryResult, response: ScriptHashHistoryResponse, methodName: string, retry: number): "continue" | "return" | "ok" 
 ```
 
 See also: [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [ScriptHashHistoryResponse](./services.md#interface-scripthashhistoryresponse)
@@ -7644,7 +7775,7 @@ Decide whether the ECONNRESET error is retryable and, if not, set `r.error`.
 Returns true when the caller should retry, false when it should return.
 
 ```ts
-export function handleUtxoConnReset(r: GetUtxoStatusResult, error_: unknown, _url: string, retry: number, maxRetry: number): boolean
+export function handleUtxoConnReset(r: GetUtxoStatusResult, error_: unknown, _url: string, retry: number, maxRetry: number): boolean 
 ```
 
 See also: [GetUtxoStatusResult](./client.md#interface-getutxostatusresult)
@@ -7655,7 +7786,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: isArcAcceptedTxStatus
 
 ```ts
-export function isArcAcceptedTxStatus(txStatus: string | undefined): boolean
+export function isArcAcceptedTxStatus(txStatus: string | undefined): boolean 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7664,7 +7795,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: isArcDoubleSpendTxStatus
 
 ```ts
-export function isArcDoubleSpendTxStatus(txStatus: string | undefined): boolean
+export function isArcDoubleSpendTxStatus(txStatus: string | undefined): boolean 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7673,7 +7804,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: isArcInvalidTxStatus
 
 ```ts
-export function isArcInvalidTxStatus(txStatus: string | undefined): boolean
+export function isArcInvalidTxStatus(txStatus: string | undefined): boolean 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7682,7 +7813,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: isArcServiceErrorStatus
 
 ```ts
-export function isArcServiceErrorStatus(status: number | undefined, detail?: string): boolean
+export function isArcServiceErrorStatus(status: number | undefined, detail?: string): boolean 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7817,7 +7948,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Returns true if work1 is more work (greater than) work2
 
 ```ts
-export function isMoreWork(work1: string, work2: string): boolean
+export function isMoreWork(work1: string, work2: string): boolean 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7826,7 +7957,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: isValidFiatRate
 
 ```ts
-export function isValidFiatRate(value: unknown): value is number
+export function isValidFiatRate(value: unknown): value is number 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7835,7 +7966,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: makeMerklePathNote
 
 ```ts
-export function makeMerklePathNote(what: MerklePathNoteWhat, name: string, extra: Partial<MerklePathNote> = {}): MerklePathNote
+export function makeMerklePathNote(what: MerklePathNoteWhat, name: string, extra: Partial<MerklePathNote> = {}): MerklePathNote 
 ```
 
 See also: [MerklePathNote](./services.md#interface-merklepathnote), [MerklePathNoteWhat](./services.md#type-merklepathnotewhat)
@@ -7846,7 +7977,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: makePostBeefServiceError
 
 ```ts
-export function makePostBeefServiceError(providerName: string, txids: string[], what: "postBeefServiceError" | "postBeefServiceTimeout", timeoutMs?: number): PostBeefResult
+export function makePostBeefServiceError(providerName: string, txids: string[], what: "postBeefServiceError" | "postBeefServiceTimeout", timeoutMs?: number): PostBeefResult 
 ```
 
 See also: [PostBeefResult](./client.md#interface-postbeefresult)
@@ -7857,7 +7988,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: mapWithConcurrency
 
 ```ts
-export async function mapWithConcurrency<T, R>(values: T[], maxConcurrency: number, worker: (value: T, index: number) => Promise<R>): Promise<R[]>
+export async function mapWithConcurrency<T, R>(values: T[], maxConcurrency: number, worker: (value: T, index: number) => Promise<R>): Promise<R[]> 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7868,7 +7999,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Snapshot security-relevant ARC/Arcade constructor configuration exactly once.
 
 ```ts
-export function normalizeArcProviderConfig(config: string | ArcConfig | undefined, defaultDeploymentId: () => string): NormalizedArcProviderConfig
+export function normalizeArcProviderConfig(config: string | ArcConfig | undefined, defaultDeploymentId: () => string): NormalizedArcProviderConfig 
 ```
 
 See also: [ArcConfig](./services.md#interface-arcconfig), [NormalizedArcProviderConfig](./services.md#interface-normalizedarcproviderconfig)
@@ -7881,7 +8012,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Normalize and snapshot a complete validator request before asynchronous work.
 
 ```ts
-export function normalizeBulkFileDataValidationRequest(request: unknown): BulkFileDataValidationRequest
+export function normalizeBulkFileDataValidationRequest(request: unknown): BulkFileDataValidationRequest 
 ```
 
 See also: [BulkFileDataValidationRequest](./services.md#interface-bulkfiledatavalidationrequest)
@@ -7892,7 +8023,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeBulkHeaderFileInfo
 
 ```ts
-export function normalizeBulkHeaderFileInfo(value: unknown, allowStoredBoolean = false): BulkHeaderFileInfo
+export function normalizeBulkHeaderFileInfo(value: unknown, allowStoredBoolean = false): BulkHeaderFileInfo 
 ```
 
 See also: [BulkHeaderFileInfo](./services.md#interface-bulkheaderfileinfo)
@@ -7903,7 +8034,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeBulkHeaderFileSequence
 
 ```ts
-export function normalizeBulkHeaderFileSequence(files: unknown, allowStoredBoolean = false): BulkHeaderFileInfo[]
+export function normalizeBulkHeaderFileSequence(files: unknown, allowStoredBoolean = false): BulkHeaderFileInfo[] 
 ```
 
 See also: [BulkHeaderFileInfo](./services.md#interface-bulkheaderfileinfo)
@@ -7914,7 +8045,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeBulkHeaderFilesInfo
 
 ```ts
-export function normalizeBulkHeaderFilesInfo(value: unknown): BulkHeaderFilesInfo
+export function normalizeBulkHeaderFilesInfo(value: unknown): BulkHeaderFilesInfo 
 ```
 
 See also: [BulkHeaderFilesInfo](./services.md#interface-bulkheaderfilesinfo)
@@ -7925,7 +8056,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeFiatCurrencies
 
 ```ts
-export function normalizeFiatCurrencies(value: unknown, extras: readonly FiatCurrencyCode[] = []): FiatCurrencyCode[]
+export function normalizeFiatCurrencies(value: unknown, extras: readonly FiatCurrencyCode[] = []): FiatCurrencyCode[] 
 ```
 
 See also: [FiatCurrencyCode](./client.md#type-fiatcurrencycode)
@@ -7936,7 +8067,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeFiatCurrency
 
 ```ts
-export function normalizeFiatCurrency(value: unknown, name = "currency"): FiatCurrencyCode
+export function normalizeFiatCurrency(value: unknown, name = "currency"): FiatCurrencyCode 
 ```
 
 See also: [FiatCurrencyCode](./client.md#type-fiatcurrencycode)
@@ -7947,7 +8078,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeFiatExchangeRates
 
 ```ts
-export function normalizeFiatExchangeRates(value: unknown, required: readonly FiatCurrencyCode[], now = Date.now()): FiatExchangeRates
+export function normalizeFiatExchangeRates(value: unknown, required: readonly FiatCurrencyCode[], now = Date.now()): FiatExchangeRates 
 ```
 
 See also: [FiatCurrencyCode](./client.md#type-fiatcurrencycode), [FiatExchangeRates](./client.md#interface-fiatexchangerates)
@@ -7958,7 +8089,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeFiatRate
 
 ```ts
-export function normalizeFiatRate(value: unknown, currency: string): number
+export function normalizeFiatRate(value: unknown, currency: string): number 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7967,7 +8098,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeFiatRateTimestamps
 
 ```ts
-export function normalizeFiatRateTimestamps(value: unknown, now = Date.now()): Record<string, Date> | undefined
+export function normalizeFiatRateTimestamps(value: unknown, now = Date.now()): Record<string, Date> | undefined 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7976,7 +8107,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeFiatTimestamp
 
 ```ts
-export function normalizeFiatTimestamp(value: unknown, now = Date.now()): Date
+export function normalizeFiatTimestamp(value: unknown, now = Date.now()): Date 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7985,7 +8116,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizePostRawHex
 
 ```ts
-export function normalizePostRawHex(value: unknown, maximumBytes: number, name = "rawTx"): string
+export function normalizePostRawHex(value: unknown, maximumBytes: number, name = "rawTx"): string 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7994,7 +8125,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizePostTxids
 
 ```ts
-export function normalizePostTxids(value: unknown, name = "txids", allowEmpty = false): string[]
+export function normalizePostTxids(value: unknown, name = "txids", allowEmpty = false): string[] 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8003,7 +8134,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeTxid
 
 ```ts
-export function normalizeTxid(value: unknown, name = "txid"): string
+export function normalizeTxid(value: unknown, name = "txid"): string 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8012,7 +8143,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: normalizeWalletOutpoint
 
 ```ts
-export function normalizeWalletOutpoint(value: unknown): string | undefined
+export function normalizeWalletOutpoint(value: unknown): string | undefined 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8028,7 +8159,7 @@ export function parseFileLink(file: string): {
     } | "latest";
     sourceUrl: string;
     fileName: string;
-} | undefined
+} | undefined 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8044,7 +8175,7 @@ export function populateUtxoDetails(r: GetUtxoStatusResult, result: Array<{
     value: number;
     height: number;
     tx_pos: number;
-}>, outpoint?: string): void
+}>, outpoint?: string): void 
 ```
 
 See also: [GetUtxoStatusResult](./client.md#interface-getutxostatusresult)
@@ -8057,7 +8188,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Credential-free public Arcade host for supported networks.
 
 ```ts
-export function publicArcadeUrl(chain: Chain): string | undefined
+export function publicArcadeUrl(chain: Chain): string | undefined 
 ```
 
 See also: [Chain](./client.md#type-chain)
@@ -8068,7 +8199,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: readUInt32BE
 
 ```ts
-export function readUInt32BE(a: number[] | Uint8Array, offset: number): number
+export function readUInt32BE(a: number[] | Uint8Array, offset: number): number 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8077,7 +8208,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: readUInt32LE
 
 ```ts
-export function readUInt32LE(a: number[] | Uint8Array, offset: number): number
+export function readUInt32LE(a: number[] | Uint8Array, offset: number): number 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8089,7 +8220,7 @@ Convert an internal tri-state classification to the historical boolean
 contract only when a provider supplied a conclusive answer.
 
 ```ts
-export function requireConclusiveUtxo(classification: OutputUtxoClassification): boolean
+export function requireConclusiveUtxo(classification: OutputUtxoClassification): boolean 
 ```
 
 See also: [OutputUtxoClassification](./services.md#interface-outpututxoclassification)
@@ -8100,7 +8231,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: resolveDefaultChaintracksArguments
 
 ```ts
-export function resolveDefaultChaintracksArguments(args: DefaultChaintracksArguments): ResolvedDefaultChaintracksParams
+export function resolveDefaultChaintracksArguments(args: DefaultChaintracksArguments): ResolvedDefaultChaintracksParams 
 ```
 
 See also: [DefaultChaintracksArguments](./services.md#type-defaultchaintracksarguments), [ResolvedDefaultChaintracksParams](./services.md#interface-resolveddefaultchaintracksparams)
@@ -8111,7 +8242,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: resolveDefaultKnexChaintracksArguments
 
 ```ts
-export function resolveDefaultKnexChaintracksArguments(args: DefaultKnexChaintracksArguments): ResolvedDefaultKnexChaintracksParams
+export function resolveDefaultKnexChaintracksArguments(args: DefaultKnexChaintracksArguments): ResolvedDefaultKnexChaintracksParams 
 ```
 
 See also: [DefaultKnexChaintracksArguments](./services.md#type-defaultknexchaintracksarguments), [ResolvedDefaultKnexChaintracksParams](./services.md#interface-resolveddefaultknexchaintracksparams)
@@ -8124,7 +8255,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Convert an untrusted diagnostic to bounded, single-line text suitable for logs and status APIs.
 
 ```ts
-export function safeDiagnostic(value: unknown, maximum = 512): string
+export function safeDiagnostic(value: unknown, maximum = 512): string 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8133,7 +8264,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: selectBulkHeaderFiles
 
 ```ts
-export function selectBulkHeaderFiles(files: BulkHeaderFileInfo[], chain: Chain, maxPerFile: number): BulkHeaderFileInfo[]
+export function selectBulkHeaderFiles(files: BulkHeaderFileInfo[], chain: Chain, maxPerFile: number): BulkHeaderFileInfo[] 
 ```
 
 See also: [BulkHeaderFileInfo](./services.md#interface-bulkheaderfileinfo), [Chain](./client.md#type-chain)
@@ -8152,7 +8283,7 @@ the block hash for the header.
 export function serializeBaseBlockHeader(header: BaseBlockHeader, buffer?: number[], offset?: number): number[] {
     const validated = copyBaseHeaderData(header);
     validateBaseBlockHeaderFormat(validated);
-    const writer = new Utils.Writer();
+    const writer = new Writer();
     writer.writeUInt32LE(validated.version);
     writer.write(asArray(validated.previousHash).reverse());
     writer.write(asArray(validated.merkleRoot).reverse());
@@ -8187,7 +8318,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: serializeBaseBlockHeaders
 
 ```ts
-export function serializeBaseBlockHeaders(headers: BlockHeader[]): Uint8Array
+export function serializeBaseBlockHeaders(headers: BlockHeader[]): Uint8Array 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader)
@@ -8203,7 +8334,7 @@ Computes sha256 hash of file contents read as bytes with no encoding.
 export async function sha256HashOfBinaryFile(fs: ChaintracksFsApi, filepath: string, bufferSize = 80000): Promise<{
     hash: string;
     length: number;
-}>
+}> 
 ```
 
 See also: [ChaintracksFsApi](./services.md#interface-chaintracksfsapi)
@@ -8229,7 +8360,7 @@ diagnostics. The optional legacy array mode is bounded for older custom
 WalletServices implementations; ordinary providers return one path.
 
 ```ts
-export function snapshotMerklePathResult(value: unknown, allowLegacyArray = false, providerName?: string): SnapshotMerklePathResult
+export function snapshotMerklePathResult(value: unknown, allowLegacyArray = false, providerName?: string): SnapshotMerklePathResult 
 ```
 
 See also: [SnapshotMerklePathResult](./services.md#interface-snapshotmerklepathresult)
@@ -8240,7 +8371,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: snapshotPostBeefRequest
 
 ```ts
-export function snapshotPostBeefRequest(beef: Beef, txids: string[]): ValidatedPostBeefRequest
+export function snapshotPostBeefRequest(beef: Beef, txids: string[]): ValidatedPostBeefRequest 
 ```
 
 See also: [ValidatedPostBeefRequest](./services.md#interface-validatedpostbeefrequest)
@@ -8251,7 +8382,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: startChaintracks
 
 ```ts
-export function startChaintracks<TStorage extends ChaintracksOptions["storage"]>(params: ResolvedDefaultChaintracksParams, options: ChaintracksOptions): CreatedChaintracks<TStorage>
+export function startChaintracks<TStorage extends ChaintracksOptions["storage"]>(params: ResolvedDefaultChaintracksParams, options: ChaintracksOptions): CreatedChaintracks<TStorage> 
 ```
 
 See also: [ChaintracksOptions](./services.md#interface-chaintracksoptions), [CreatedChaintracks](./services.md#interface-createdchaintracks), [ResolvedDefaultChaintracksParams](./services.md#interface-resolveddefaultchaintracksparams)
@@ -8264,7 +8395,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Arcade broadcaster / ARC endpoint for stn, or `undefined` when unset.
 
 ```ts
-export function stnArcadeUrl(): string | undefined
+export function stnArcadeUrl(): string | undefined 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8276,7 +8407,7 @@ ChainTracks service URL for stn. Falls back to the configured Arcade host's
 legacy-compatible path when STN_CHAINTRACKS_URL is unset.
 
 ```ts
-export function stnChaintracksUrl(): string
+export function stnChaintracksUrl(): string 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8287,7 +8418,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Subtract Buffer encoded chainwork values
 
 ```ts
-export function subWork(work1: string, work2: string): string
+export function subWork(work1: string, work2: string): string 
 ```
 
 Returns
@@ -8323,7 +8454,7 @@ the block hash for the header.
 
 ```ts
 export function toBinaryBaseBlockHeader(header: BaseBlockHeader): number[] {
-    const writer = new Utils.Writer();
+    const writer = new Writer();
     writer.writeUInt32LE(header.version);
     writer.writeReverse(asArray(header.previousHash));
     writer.writeReverse(asArray(header.merkleRoot));
@@ -8347,7 +8478,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: toDefaultChaintracksArguments
 
 ```ts
-export function toDefaultChaintracksArguments(params: ResolvedDefaultChaintracksParams): DefaultChaintracksArguments
+export function toDefaultChaintracksArguments(params: ResolvedDefaultChaintracksParams): DefaultChaintracksArguments 
 ```
 
 See also: [DefaultChaintracksArguments](./services.md#type-defaultchaintracksarguments), [ResolvedDefaultChaintracksParams](./services.md#interface-resolveddefaultchaintracksparams)
@@ -8358,7 +8489,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: toDefaultKnexChaintracksArguments
 
 ```ts
-export function toDefaultKnexChaintracksArguments(params: ResolvedDefaultKnexChaintracksParams): DefaultKnexChaintracksArguments
+export function toDefaultKnexChaintracksArguments(params: ResolvedDefaultKnexChaintracksParams): DefaultKnexChaintracksArguments 
 ```
 
 See also: [DefaultKnexChaintracksArguments](./services.md#type-defaultknexchaintracksarguments), [ResolvedDefaultKnexChaintracksParams](./services.md#interface-resolveddefaultknexchaintracksparams)
@@ -8371,7 +8502,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Arcade broadcaster / ARC endpoint for tstn, or `undefined` when `TSTN_ARCADE_URL` is unset.
 
 ```ts
-export function tstnArcadeUrl(): string | undefined
+export function tstnArcadeUrl(): string | undefined 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8383,7 +8514,7 @@ ChainTracks service URL for tstn. Falls back to `${TSTN_ARCADE_URL}/chaintracks/
 `TSTN_CHAINTRACKS_URL` is unset (mirrors the ttn layout). Throws when neither is configured.
 
 ```ts
-export function tstnChaintracksUrl(): string
+export function tstnChaintracksUrl(): string 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8392,7 +8523,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: updateChaintracksFiatExchangeRates
 
 ```ts
-export async function updateChaintracksFiatExchangeRates(targetCurrencies: string[], options: WalletServicesOptions): Promise<FiatExchangeRates>
+export async function updateChaintracksFiatExchangeRates(targetCurrencies: string[], options: WalletServicesOptions): Promise<FiatExchangeRates> 
 ```
 
 See also: [FiatExchangeRates](./client.md#interface-fiatexchangerates), [WalletServicesOptions](./client.md#interface-walletservicesoptions)
@@ -8403,7 +8534,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: updateExchangeratesapi
 
 ```ts
-export async function updateExchangeratesapi(targetCurrencies: string[], options: WalletServicesOptions): Promise<FiatExchangeRates>
+export async function updateExchangeratesapi(targetCurrencies: string[], options: WalletServicesOptions): Promise<FiatExchangeRates> 
 ```
 
 See also: [FiatExchangeRates](./client.md#interface-fiatexchangerates), [WalletServicesOptions](./client.md#interface-walletservicesoptions)
@@ -8416,7 +8547,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Hash map of known valid bulk header files by their `fileHash`.
 
 ```ts
-export function validBulkHeaderFilesByFileHash(): Record<string, BulkHeaderFileInfo>
+export function validBulkHeaderFilesByFileHash(): Record<string, BulkHeaderFileInfo> 
 ```
 
 See also: [BulkHeaderFileInfo](./services.md#interface-bulkheaderfileinfo)
@@ -8433,7 +8564,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Throws Error if blockHash is in the dirtyHashes list.
 
 ```ts
-export function validateAgainstDirtyHashes(blockHash: string): void
+export function validateAgainstDirtyHashes(blockHash: string): void 
 ```
 
 See also: [blockHash](./services.md#function-blockhash)
@@ -8441,12 +8572,12 @@ See also: [blockHash](./services.md#function-blockhash)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-##### Function: validateArcadeTxData
+##### Function: validateArcTxData
 
-Validate and snapshot the untrusted Arcade `GET /tx/{txid}` response.
+Validate and snapshot an untrusted ARC-compatible `GET /tx/{txid}` response.
 
 ```ts
-export function validateArcadeTxData(value: unknown, expectedTxid: string, responseStatus = 200): ArcMinerGetTxData
+export function validateArcTxData(value: unknown, expectedTxid: string, responseStatus = 200): ArcMinerGetTxData 
 ```
 
 See also: [ArcMinerGetTxData](./services.md#interface-arcminergettxdata)
@@ -8460,7 +8591,7 @@ Validates the exact data representation of an unpositioned 80-byte block
 header before it reaches a chain lookup, queue, or serializer.
 
 ```ts
-export function validateBaseBlockHeaderFormat(header: BaseBlockHeader): void
+export function validateBaseBlockHeaderFormat(header: BaseBlockHeader): void 
 ```
 
 See also: [BaseBlockHeader](./client.md#interface-baseblockheader)
@@ -8477,7 +8608,7 @@ Validate headers contained in an array of bytes. The headers must be consecutive
 export function validateBufferOfHeaders(buffer: Uint8Array, previousHash: string, offset = 0, count = -1, previousChainWork?: string): {
     lastHeaderHash: string;
     lastChainWork: string | undefined;
-}
+} 
 ```
 
 Returns
@@ -8503,7 +8634,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Validates the contents of a bulk header file.
 
 ```ts
-export async function validateBulkFileData(bf: BulkHeaderFileInfo, prevHash: string, prevChainWork: string, fetch?: ChaintracksFetchApi): Promise<BulkHeaderFileInfo>
+export async function validateBulkFileData(bf: BulkHeaderFileInfo, prevHash: string, prevChainWork: string, fetch?: ChaintracksFetchApi): Promise<BulkHeaderFileInfo> 
 ```
 
 See also: [BulkHeaderFileInfo](./services.md#interface-bulkheaderfileinfo), [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi)
@@ -8526,12 +8657,27 @@ Argument Details
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: validateCanonicalMerklePathResult
+
+Reject proof-provider results unless at least one returned path proves the
+requested transaction against the active chain. Invalid paths are removed
+before the result is returned so a stale path cannot precede a valid one.
+
+```ts
+export async function validateCanonicalMerklePathResult(txid: string, result: GetMerklePathResult, chaintracker: ChainTracker): Promise<void> 
+```
+
+See also: [GetMerklePathResult](./client.md#interface-getmerklepathresult)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: validateGenesisHeader
 
 Verifies that buffer begins with valid genesis block header for the specified chain.
 
 ```ts
-export function validateGenesisHeader(buffer: Uint8Array, chain: Chain): void
+export function validateGenesisHeader(buffer: Uint8Array, chain: Chain): void 
 ```
 
 See also: [Chain](./client.md#type-chain)
@@ -8544,7 +8690,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Ensures that a header has a valid proof-of-work target and hash.
 
 ```ts
-export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number)
+export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number) 
 ```
 
 Returns
@@ -8562,7 +8708,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validateHeaderFormat
 
 ```ts
-export function validateHeaderFormat(header: BlockHeader): void
+export function validateHeaderFormat(header: BlockHeader): void 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader)
@@ -8599,7 +8745,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validateMerklePathResult
 
 ```ts
-export function validateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, requireProofOfWork = false, requireHeaderFormat = true): ValidatedMerklePathResult
+export function validateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, requireProofOfWork = false, requireHeaderFormat = true): ValidatedMerklePathResult 
 ```
 
 See also: [GetMerklePathResult](./client.md#interface-getmerklepathresult), [ValidatedMerklePathResult](./services.md#interface-validatedmerklepathresult)
@@ -8610,7 +8756,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validatePostBeefResult
 
 ```ts
-export function validatePostBeefResult(value: unknown, expectedTxids: string[], configuredProviderName: string, allowInternalTimeoutNote = false): PostBeefResult
+export function validatePostBeefResult(value: unknown, expectedTxids: string[], configuredProviderName: string, allowInternalTimeoutNote = false): PostBeefResult 
 ```
 
 See also: [PostBeefResult](./client.md#interface-postbeefresult)
@@ -8621,7 +8767,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validatePostBeefResultOrServiceError
 
 ```ts
-export function validatePostBeefResultOrServiceError(value: unknown, expectedTxids: string[], configuredProviderName: string): PostBeefResult
+export function validatePostBeefResultOrServiceError(value: unknown, expectedTxids: string[], configuredProviderName: string): PostBeefResult 
 ```
 
 See also: [PostBeefResult](./client.md#interface-postbeefresult)
@@ -8632,7 +8778,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validatePostTxResult
 
 ```ts
-export function validatePostTxResult(value: unknown, expectedTxid: string, configuredProviderName: string): PostTxResultForTxid
+export function validatePostTxResult(value: unknown, expectedTxid: string, configuredProviderName: string): PostTxResultForTxid 
 ```
 
 See also: [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
@@ -8643,7 +8789,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validatePostTxResultOrServiceError
 
 ```ts
-export function validatePostTxResultOrServiceError(value: unknown, expectedTxid: string, configuredProviderName: string): PostTxResultForTxid
+export function validatePostTxResultOrServiceError(value: unknown, expectedTxid: string, configuredProviderName: string): PostTxResultForTxid 
 ```
 
 See also: [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
@@ -8656,7 +8802,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Snapshot and bind a raw-transaction provider result to its requested txid.
 
 ```ts
-export function validateRawTxResult(value: unknown, expectedTxid: string, providerName?: string): GetRawTxResult
+export function validateRawTxResult(value: unknown, expectedTxid: string, providerName?: string): GetRawTxResult 
 ```
 
 See also: [GetRawTxResult](./client.md#interface-getrawtxresult)
@@ -8667,7 +8813,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validateScriptHash
 
 ```ts
-export function validateScriptHash(output: string, outputFormat?: GetUtxoStatusOutputFormat): string
+export function validateScriptHash(output: string, outputFormat?: GetUtxoStatusOutputFormat): string 
 ```
 
 See also: [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat)
@@ -8680,7 +8826,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Validate and own a script-history result before it contributes competing transaction IDs.
 
 ```ts
-export function validateScriptHashHistoryResult(value: unknown, configuredProviderName?: string): GetScriptHashHistoryResult
+export function validateScriptHashHistoryResult(value: unknown, configuredProviderName?: string): GetScriptHashHistoryResult 
 ```
 
 See also: [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult)
@@ -8695,7 +8841,7 @@ can influence wallet transaction state. Provider names may be replaced with
 a locally configured name so remote data cannot forge durable attribution.
 
 ```ts
-export function validateStatusForTxidsResult(value: unknown, requestedTxids: readonly string[], providerName?: string): GetStatusForTxidsResult
+export function validateStatusForTxidsResult(value: unknown, requestedTxids: readonly string[], providerName?: string): GetStatusForTxidsResult 
 ```
 
 See also: [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult)
@@ -8708,7 +8854,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Validate, bind, and own a UTXO-oracle result before wallet state uses it.
 
 ```ts
-export function validateUtxoStatusResult(value: unknown, expectedOutpoint?: string, configuredProviderName?: string): GetUtxoStatusResult
+export function validateUtxoStatusResult(value: unknown, expectedOutpoint?: string, configuredProviderName?: string): GetUtxoStatusResult 
 ```
 
 See also: [GetUtxoStatusResult](./client.md#interface-getutxostatusresult)
@@ -8719,7 +8865,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validateWocChainInfo
 
 ```ts
-export function validateWocChainInfo(value: unknown, expectedChain: Chain): WocChainInfo
+export function validateWocChainInfo(value: unknown, expectedChain: Chain): WocChainInfo 
 ```
 
 See also: [Chain](./client.md#type-chain), [WocChainInfo](./services.md#interface-wocchaininfo)
@@ -8730,7 +8876,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: wocGetHeadersHeaderToBlockHeader
 
 ```ts
-export function wocGetHeadersHeaderToBlockHeader(h: WocGetHeadersHeader): BlockHeader
+export function wocGetHeadersHeaderToBlockHeader(h: WocGetHeadersHeader): BlockHeader 
 ```
 
 See also: [BlockHeader](./client.md#interface-blockheader), [WocGetHeadersHeader](./services.md#interface-wocgetheadersheader)
@@ -8741,7 +8887,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: workBNtoBuffer
 
 ```ts
-export function workBNtoBuffer(work: BigNumber): string
+export function workBNtoBuffer(work: BigNumber): string 
 ```
 
 Returns
@@ -8759,7 +8905,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: writeUInt32BE
 
 ```ts
-export function writeUInt32BE(n: number, a: number[] | Uint8Array, offset: number): number
+export function writeUInt32BE(n: number, a: number[] | Uint8Array, offset: number): number 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8768,7 +8914,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: writeUInt32LE
 
 ```ts
-export function writeUInt32LE(n: number, a: number[] | Uint8Array, offset: number): number
+export function writeUInt32LE(n: number, a: number[] | Uint8Array, offset: number): number 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -9033,7 +9179,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Variable: MAX_POST_BEEF_TXIDS
 
 ```ts
-MAX_POST_BEEF_TXIDS = Validation.MAXIMUM_SEND_WITH_TRANSACTIONS
+MAX_POST_BEEF_TXIDS = MAXIMUM_SEND_WITH_TRANSACTIONS
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
