@@ -1425,3 +1425,20 @@ artifact checks, strict ESM/CJS consumers, the unchanged SDK2.8.9 default host,
 Repository health, lint, formatting, strict workspace types and the security audit
 pass. The full output-knowledge regression and complete affected mutation campaigns
 are separately pending; these local checks do not establish exact-head hosted CI.
+
+The full output-knowledge suite at a73f6c37c subsequently passed 1,436 tests across
+111 suites in 542.003 seconds. The first complete disclosure campaign failed its
+90% gate at 82.54% over 189 sites (156 killed, 33 survived), with zero uncovered
+or invalid, in 5 minutes 52 seconds. The full HTTP target failed at 88.70% over
+664 sites (554 killed, 75 survived, 35 timed out), zero uncovered or invalid,
+in 6 minutes 34 seconds. Both reports are retained. All 10,118 frozen tracked
+and compiled inputs were verified unchanged at 2026-10-01T09:08:03Z before edits.
+
+Follow-ups preserve runtime source and every target/gate. Thirty-three native
+and disclosure cases, including 300 generated schedules, now cover the exact
+installed authorization context, inclusive byte limits, equivalent reordered
+multi-guard sets and mismatches, and malformed alternate-store headers. Seventy-one
+HTTP cases also cover complete safe CORS headers, changed second-attempt bindings,
+owned same-length bytes, exact queue capacity release and client cancellation
+before binding prepared data. Complete mutation reruns remain pending; no failure
+has been waived or replaced by a partial selection.

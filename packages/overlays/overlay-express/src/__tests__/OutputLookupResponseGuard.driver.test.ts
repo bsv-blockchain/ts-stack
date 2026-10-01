@@ -42,7 +42,12 @@ function fixture() {
       bind: () => ({
         enqueue: async (bytes, _identity, enqueue) => {
           if (!state.data) throw new OutputProtocolError('reset-required', 'private detail')
-          if (!state.omit) enqueue(state.changed ? new Uint8Array() : bytes)
+          if (!state.omit)
+            enqueue(
+              state.changed
+                ? Uint8Array.from(bytes, (byte, index) => (index === 0 ? byte ^ 1 : byte))
+                : bytes
+            )
           if (state.failAfter) throw new Error('uncertain completion')
         }
       }),
@@ -198,6 +203,43 @@ it('prevents a collaborator from enqueueing the same signed response twice', asy
     }
   })
   guardOutputLookupResponse({} as Response, f.options)
-  await expect(run(candidate(), native)).rejects.toThrow('Lookup response was already enqueued')
+  await expect(run(candidate(), native)).rejects.toMatchObject({
+    code: 'unavailable',
+    message: 'Lookup response was already enqueued'
+  })
   expect(native).toHaveBeenCalledTimes(1)
 })
+
+it('preserves all router-owned CORS string headers when signing a replacement', () => {
+  const headers = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'POST',
+    'access-control-allow-headers': 'content-type',
+    'access-control-expose-headers': 'x-bsv-overlay-profile',
+    vary: 'Origin'
+  }
+  const res = { getHeader: (name: string) => headers[name as keyof typeof headers] } as Response
+  expect(lookupResponseControlHeaders(res)).toEqual(headers)
+})
+it.each(['identity', 'status'])(
+  'rejects changed %s on the second signing attempt without another replacement',
+  async mode => {
+    const f = fixture(),
+      native = jest.fn()
+    f.state.data = false
+    guardOutputLookupResponse({} as Response, f.options)
+    const result = await run(candidate(), native)
+    if (!result) throw new Error('Missing replacement')
+    const replacement = { ...candidate(), attempt: 1 as const, ...result }
+    if (mode === 'identity') replacement.headers['x-bsv-overlay-profile'] = 'changed'
+    else replacement.statusCode++
+    await expect(run(replacement, native)).rejects.toMatchObject({
+      code: mode === 'identity' ? 'unauthorized' : 'invalid',
+      message:
+        mode === 'identity'
+          ? 'Lookup response identity or selection changed'
+          : 'Lookup response status changed'
+    })
+    expect(native).not.toHaveBeenCalled()
+  }
+)

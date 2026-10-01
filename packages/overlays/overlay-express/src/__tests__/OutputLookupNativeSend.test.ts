@@ -1,4 +1,4 @@
-import { afterEach, test, expect } from '@jest/globals'
+import { afterEach, test, expect, jest } from '@jest/globals'
 import assert from 'node:assert/strict'
 import express from 'express'
 import { createServer } from 'node:http'
@@ -21,7 +21,7 @@ const closes: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const close of closes.splice(0)) await close()
 })
-async function fixture() {
+async function fixture(maximumRequests = 64) {
   const app = express(),
     server = createServer({ maxHeaderSize: 65536 }, app),
     rateStore = new MemoryStore()
@@ -68,6 +68,7 @@ async function fixture() {
   })
   const wallet = new CompletedProtoWallet(new PrivateKey(1)),
     sign = wallet.createSignature.bind(wallet)
+  let onPrepared: ((signal: AbortSignal) => Promise<void>) | undefined
   let onSign: (() => void | Promise<void>) | undefined,
     applicationResponse = false
   wallet.createSignature = async (...args) => {
@@ -91,10 +92,12 @@ async function fixture() {
             throw new OutputProtocolError('unavailable', 'Synthetic private preparation detail')
           const response = await store.service.read(...args)
           applicationResponse = true
+          await onPrepared?.(args[2]!)
           return response
         }
       },
       disclosure,
+      maximumRequests,
       service: 'records',
       baseURL,
       identity: f.source.selection.identity,
@@ -117,7 +120,7 @@ async function fixture() {
     })
   )
   app.post('/lookup', (_req, res) => res.json({ type: 'output-list', outputs: [] }))
-  const responses: { status: number; body: string }[] = []
+  const responses: { status: number; body: string; headers: Headers }[] = []
   const client = new OutputLookupTransport({
     contract: f.contracts.fresh(f.caller.capabilityDigest, '1000').record,
     trust: f.contracts.recoveryTrust(),
@@ -126,7 +129,11 @@ async function fixture() {
     requestTimeoutMs: 2500,
     fetch: async (input, init) => {
       const response = await fetch(input, init)
-      responses.push({ status: response.status, body: await response.clone().text() })
+      responses.push({
+        status: response.status,
+        body: await response.clone().text(),
+        headers: response.headers
+      })
       return response
     }
   })
@@ -137,6 +144,9 @@ async function fixture() {
     client,
     disclosure,
     responses,
+    onPrepared: (callback: (signal: AbortSignal) => Promise<void>) => {
+      onPrepared = callback
+    },
     onSign: (callback: () => void | Promise<void>) => {
       onSign = callback
     }
@@ -235,6 +245,9 @@ test('signs and gates a sanitized service-preparation error', async () => {
   })
   const response = f.responses.at(-1)!
   expect(response.status).toBe(503)
+  expect(response.headers.get('content-type')?.split(';', 1)[0]).toBe('application/json')
+  expect(response.headers.get('cache-control')).toBe('private, no-store')
+  expect(response.headers.get('x-bsv-overlay-capability')).toBe(f.caller.capabilityDigest)
   expect(JSON.parse(response.body)).toEqual({
     version: 1,
     error: { code: 'unavailable', message: 'Lookup request unavailable', retryable: false }
@@ -273,4 +286,67 @@ test('closes a guarded response if transport preparation throws before signing',
       .slice(received)
       .every(response => !response.body.includes('Synthetic transport preparation failure'))
   ).toBe(true)
+}, 10000)
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+test('releases each guarded HTTP slot once and keeps its full capacity while a read is outstanding', async () => {
+  const f = await fixture(1),
+    first = await f.client.open(f.open),
+    entered = deferred(),
+    release = deferred()
+  f.onPrepared(async () => {
+    entered.resolve()
+    await release.promise
+  })
+  const reading = f.client.read(first, { ...first.limits, waitMs: 0 }).then(
+    value => ({ status: 'fulfilled', value }),
+    error => ({ status: 'rejected', error })
+  )
+  await entered.promise
+  try {
+    const crowded = await fetch(f.baseURL + '/overlay/v1/capabilities')
+    expect(crowded.status).toBe(413)
+    expect(await crowded.json()).toMatchObject({ error: { code: 'limited' } })
+  } finally {
+    release.resolve()
+  }
+  expect(await reading).toMatchObject({ status: 'fulfilled' })
+  const reopened = await fetch(f.baseURL + '/overlay/v1/capabilities')
+  expect(reopened.status).toBe(200)
+}, 10000)
+
+test('does not bind or send prepared lookup data after the client closes the request', async () => {
+  const f = await fixture(),
+    first = await f.client.open(f.open),
+    entered = deferred(),
+    cancelled = deferred(),
+    release = deferred(),
+    finished = deferred()
+  f.onPrepared(async signal => {
+    signal.addEventListener('abort', cancelled.resolve, { once: true })
+    entered.resolve()
+    await release.promise
+    finished.resolve()
+  })
+  const bind = jest.spyOn(f.disclosure, 'bind'),
+    control = jest.spyOn(f.disclosure, 'control')
+  const abort = new AbortController()
+  const reading = f.client.read(first, { ...first.limits, waitMs: 0 }, abort.signal)
+  const rejected = expect(reading).rejects.toThrow()
+  await entered.promise
+  abort.abort()
+  await cancelled.promise
+  release.resolve()
+  await rejected
+  await finished.promise
+  await new Promise<void>(resolve => setImmediate(resolve))
+  expect(bind).not.toHaveBeenCalled()
+  expect(control).not.toHaveBeenCalled()
 }, 10000)

@@ -1,3 +1,5 @@
+import { LookupProviderService } from '../src/lookup/LookupProviderService.js'
+import { providerFixture } from './lookup-provider-fixture.js'
 import { expect, jest } from '@jest/globals'
 import { LookupResponseDisclosure } from '../src/lookup/LookupResponseDisclosure.js'
 import { LookupProviderWork } from '../src/lookup/LookupProviderWork.js'
@@ -478,16 +480,22 @@ test('requires durable native delivery and a synchronous control policy at insta
     { ...f.sessions, responseEnqueue: 'other' }
   ])
     expect(() => new LookupResponseDisclosure({ ...options, sessions } as never)).toThrow(
-      'Lookup disclosure requires a durable native-enqueue store'
+      expect.objectContaining({
+        code: 'unsupported',
+        message: 'Lookup disclosure requires a durable native-enqueue store'
+      })
     )
   for (const authorizeControl of [undefined, async () => true])
     expect(() => new LookupResponseDisclosure({ ...options, authorizeControl } as never)).toThrow(
-      'Lookup control authorization must be synchronous'
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Lookup control authorization must be synchronous'
+      })
     )
   const body = JSON.parse(f.response.body)
   body.scope.service = 'different'
   expect(() => f.disclosure.bind('open', canonicalOutputJSON(body), f.caller)).toThrow(
-    'Lookup response service changed'
+    expect.objectContaining({ code: 'context-changed', message: 'Lookup response service changed' })
   )
 })
 
@@ -655,4 +663,207 @@ test('rejects extra received whitespace beyond the batch byte promise', async ()
     message: 'Lookup response exceeds its declared byte limit'
   })
   expect(sent).toBe(0)
+})
+
+test('passes the exact original request, selection and disclosure stage to installed authorization', async () => {
+  const f = await serviceFixture(),
+    contexts: unknown[] = []
+  const disclosure = new LookupResponseDisclosure({
+    sessions: f.sessions,
+    contracts: f.contracts,
+    authorizeControl: () => true,
+    authorize: async context => {
+      contexts.push(context)
+      return {
+        access: context.principal!,
+        guards: [{ id: 'serving', revision: '0', failure: 'unauthorized' }]
+      }
+    }
+  })
+  for (const operation of ['open', 'read'] as const)
+    await disclosure
+      .bind(operation, f.response.body, f.caller)
+      .enqueue(f.bytes, f.caller.principal!, () => undefined, new AbortController().signal)
+  expect(contexts).toEqual(
+    ['open', 'read'].map(operation =>
+      expect.objectContaining({
+        operation,
+        stage: 'disclosure',
+        principal: f.caller.principal,
+        open: f.open,
+        scope: JSON.parse(f.response.body).scope,
+        selection: expect.objectContaining({
+          profile: expect.objectContaining({ authentication: 'brc103' })
+        })
+      })
+    )
+  )
+})
+
+test('validates all guards independently, while permitting an equivalent reordered set', async () => {
+  const f = await providerFixture('brc103')
+  closes.push(() => f.cleanup())
+  await f.sessions.initializeGuard('second')
+  const guards = [
+    { id: 'serving', revision: '0', failure: 'unauthorized' as const },
+    { id: 'second', revision: '0', failure: 'unauthorized' as const }
+  ]
+  const provider = new LookupProviderService({
+    index: f.index,
+    sessions: f.sessions,
+    contracts: f.contracts,
+    now: () => f.clock.now,
+    authorize: async context => ({ access: context.principal!, guards })
+  })
+  const response = await provider.open(f.open, f.caller),
+    bytes = new TextEncoder().encode(response.body)
+  let current = [...guards].reverse(),
+    sent = 0
+  const disclosure = new LookupResponseDisclosure({
+    sessions: f.sessions,
+    contracts: f.contracts,
+    authorizeControl: () => true,
+    authorize: async context => ({ access: context.principal!, guards: current })
+  })
+  const bound = disclosure.bind('open', response.body, f.caller)
+  await bound.enqueue(
+    bytes,
+    f.caller.principal!,
+    () => {
+      sent++
+      return undefined
+    },
+    new AbortController().signal
+  )
+  expect(sent).toBe(1)
+  current = [{ ...guards[0], revision: '1' }, guards[1]]
+  await expect(
+    bound.enqueue(
+      bytes,
+      f.caller.principal!,
+      () => {
+        sent++
+        return undefined
+      },
+      new AbortController().signal
+    )
+  ).rejects.toMatchObject({
+    code: 'unauthorized',
+    message: 'Lookup response authorization partition changed'
+  })
+  expect(sent).toBe(1)
+})
+
+test('rejects wrong byte types and same-length changes before invoking storage', async () => {
+  const f = await serviceFixture(),
+    bound = f.disclosure.bind('read', f.response.body, f.caller)
+  const changed = f.bytes.slice()
+  changed[0] ^= 1
+  const store = jest.spyOn(f.sessions, 'enqueueResponse')
+  try {
+    for (const bytes of [Array.from(f.bytes), new Uint8Array(), changed]) {
+      await expect(
+        bound.enqueue(
+          bytes as Uint8Array,
+          f.caller.principal!,
+          () => undefined,
+          new AbortController().signal
+        )
+      ).rejects.toMatchObject({ code: 'invalid', message: 'Lookup response bytes changed' })
+      expect(store).not.toHaveBeenCalled()
+    }
+    await expect(
+      bound.enqueue(f.bytes, 'other', () => undefined, new AbortController().signal)
+    ).rejects.toMatchObject({ code: 'unauthorized', message: 'Lookup response principal changed' })
+  } finally {
+    store.mockRestore()
+  }
+})
+
+test('rejects a malformed native session header even from an installed alternate store', async () => {
+  const f = await serviceFixture(),
+    original = f.sessions.enqueueResponse.bind(f.sessions)
+  const gate = jest.spyOn(f.sessions, 'enqueueResponse')
+  try {
+    for (const changed of [undefined, { principal: 'other' }]) {
+      gate.mockImplementation((candidate, validate, enqueue) =>
+        original(
+          candidate,
+          (header, bytes) =>
+            validate(changed === undefined ? undefined : { ...header!, ...changed }, bytes),
+          enqueue
+        )
+      )
+      let sent = 0
+      await expect(
+        f.disclosure.bind('open', f.response.body, f.caller).enqueue(
+          f.bytes,
+          f.caller.principal!,
+          () => {
+            sent++
+            return undefined
+          },
+          new AbortController().signal
+        )
+      ).rejects.toMatchObject({
+        code: 'unauthorized',
+        message: 'Lookup response authorization partition changed'
+      })
+      expect(sent).toBe(0)
+    }
+  } finally {
+    gate.mockRestore()
+  }
+})
+
+test('retains closed control diagnostics for scalar JSON and inclusive response limits', async () => {
+  const f = await serviceFixture()
+  for (const body of ['null', 'true', '0', '"text"', '[]'])
+    expect(() => f.disclosure.control(body, f.caller)).toThrow(
+      expect.objectContaining({ code: 'invalid' })
+    )
+  const body = '{"version":1,"closed":true}'.padEnd(4194304, ' '),
+    bytes = new TextEncoder().encode(body)
+  let sent = 0
+  await f.disclosure.control(body, f.caller).enqueue(
+    bytes,
+    f.caller.principal!,
+    () => {
+      sent++
+      return undefined
+    },
+    new AbortController().signal
+  )
+  expect(sent).toBe(1)
+  expect(() => f.disclosure.control(body + ' ', f.caller)).toThrow(
+    expect.objectContaining({ code: 'limited', message: 'Lookup response byte limit' })
+  )
+})
+
+test('accepts a response exactly at the restored selected byte bound', async () => {
+  const f = await serviceFixture(),
+    saved = await f.sessions.session(JSON.parse(f.response.body).session, f.caller.principal)
+  const original = f.contracts.restore(saved.contract, f.caller.capabilityDigest),
+    restore = jest.spyOn(f.contracts, 'restore')
+  const body = f.response.body.padEnd(65536, ' '),
+    bytes = new TextEncoder().encode(body)
+  restore.mockReturnValue({
+    ...original,
+    profile: { ...original.profile, maxResponseBytes: 65536 }
+  })
+  try {
+    let sent = 0
+    await f.disclosure.bind('open', body, f.caller).enqueue(
+      bytes,
+      f.caller.principal!,
+      () => {
+        sent++
+        return undefined
+      },
+      new AbortController().signal
+    )
+    expect(sent).toBe(1)
+  } finally {
+    restore.mockRestore()
+  }
 })
