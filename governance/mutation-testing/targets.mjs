@@ -886,7 +886,7 @@ export function buildMutationTargets(repositoryRoot) {
       ...lookupProviderTarget(
         'lookup-provider-work.test.ts',
         ['LookupProviderService', 'LookupProviderContracts', 'LookupProviderWork'],
-        ['lookup-provider', 'lookup-provider-work', 'lookup-session']
+        ['lookup-provider', 'lookup-provider-feed', 'lookup-provider-work', 'lookup-session']
       ),
       mutate: [
         'src/lookup/LookupProviderService.ts',
@@ -1003,6 +1003,70 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'proposal-current-query': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/proposal-channel.property.test.ts',
+      additionalInputs: [
+        'src/*.ts',
+        'src/proposals/**',
+        'src/lookup/**',
+        'src/sources/**',
+        'src/storage/**',
+        'src/internal/**',
+        'test/*fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: [
+        'src/proposals/ProposalChannelHeadsQuery.ts',
+        'src/proposals/ProposalChannelHeadsContract.ts',
+        'src/proposals/ProposalChannelHeadsSource.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/proposal-channel*.test.ts',
+          '<rootDir>/test/proposal-current*.test.ts',
+          '<rootDir>/test/proposal-knowledge-order.test.ts',
+          '<rootDir>/test/source-generation-state.test.ts',
+          '<rootDir>/test/membership.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
+    'proposal-current-projection': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/proposal-current.property.test.ts',
+      additionalInputs: [
+        'src/*.ts',
+        'src/proposals/**',
+        'src/lookup/**',
+        'src/sources/**',
+        'src/storage/**',
+        'src/internal/**',
+        'test/*fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: ['src/proposals/ProposalCurrentChannels.ts', 'src/SourceMembership.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/proposal-channel*.test.ts',
+          '<rootDir>/test/proposal-current*.test.ts',
+          '<rootDir>/test/proposal-knowledge-order.test.ts',
+          '<rootDir>/test/source-generation-state.test.ts',
+          '<rootDir>/test/membership.test.ts',
+          '<rootDir>/test/currentness.test.ts',
+          '<rootDir>/test/quarantine.test.ts',
+          '<rootDir>/test/verification-ledger.test.ts',
+          '<rootDir>/test/reconciliation.test.ts',
+          '<rootDir>/test/proposal-bitcoin-core.test.ts',
+          '<rootDir>/test/bitcoin-knowledge.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'proposal-client-verification': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -1068,6 +1132,9 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/reconciliation.test.ts',
           '<rootDir>/test/proposal-bitcoin-core.test.ts',
           '<rootDir>/test/proposal-knowledge-view.test.ts',
+          '<rootDir>/test/proposal-knowledge-order.test.ts',
+          '<rootDir>/test/proposal-current*.test.ts',
+          '<rootDir>/test/source-generation-state.test.ts',
           '<rootDir>/test/knowledge-read-window.test.ts',
           '<rootDir>/test/proposal-core.property.test.ts'
         ],

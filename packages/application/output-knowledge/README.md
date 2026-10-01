@@ -12,7 +12,9 @@ lifecycle, revenue-listing lineage/authority and root-advertisement coordination
 components are implemented. Optional SQLite persistence and authenticated Overlay
 Express adapters exercise concrete service paths. Optional client proposal
 acceptance verifies exact signed envelopes and retains local receipt decisions.
-Private current-channel projection, publication/acquisition, complete serving-path
+Optional current-channel queries, authenticated source grammar and independent
+provider/generation projection are available. Compound private provider storage,
+publication/acquisition, complete serving-path
 integration, platform qualification and downstream application adoption remain incomplete.
 The package version does not indicate a published or production-qualified release.
 See the [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md)

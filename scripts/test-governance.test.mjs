@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 104)
+  assert.equal(result.summary.propertySuites, 106)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 104)
+  assert.equal(result.summary.mutationTargets, 106)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -446,6 +446,7 @@ test('lookup work extraction retains the full legacy service selection and the c
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/lookup-provider.test.ts',
+    '<rootDir>/test/lookup-provider-feed.test.ts',
     '<rootDir>/test/lookup-provider-work.test.ts',
     '<rootDir>/test/lookup-session.test.ts',
     '<rootDir>/test/lookup-provider-work.test.ts'

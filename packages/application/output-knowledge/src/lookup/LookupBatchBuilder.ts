@@ -15,7 +15,8 @@ import {
 } from '@bsv/sdk'
 import { LookupCursorCodec, type LookupCursorPosition } from './LookupCursorCodec.js'
 import { LookupLimitError } from './LookupLimitError.js'
-import type { LookupIndexStorage, LookupIndexSnapshotPage } from './LookupIndexStorage.js'
+import type { LookupIndexSnapshotPage } from './LookupIndexStorage.js'
+import type { LookupIndexFeed } from './LookupIndexFeed.js'
 import type { LookupQueryView } from './LookupQueryRegistry.js'
 
 export interface LookupBatchBoundary {
@@ -104,7 +105,7 @@ function checkSnapshotPage(
  */
 export class LookupBatchBuilder {
   constructor(
-    private readonly index: LookupIndexStorage,
+    private readonly index: LookupIndexFeed,
     readonly maximumScans = 128
   ) {
     if (!Number.isSafeInteger(maximumScans) || maximumScans < 1 || maximumScans > 1024)

@@ -1056,6 +1056,26 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-current-query",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-channel.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-current-projection",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-current.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

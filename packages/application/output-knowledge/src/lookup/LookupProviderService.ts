@@ -25,6 +25,7 @@ import { LookupWake } from './LookupWake.js'
 import { lookupServingEpoch } from './LookupServingEpoch.js'
 import { normalizeLookupDisclosureGuards, type LookupSessionOpening } from './LookupSessionCodec.js'
 import type { LookupIndexStorage } from './LookupIndexStorage.js'
+import type { LookupIndexFeed } from './LookupIndexFeed.js'
 import type { LookupSessionAuthorization, LookupSessionStorage } from './LookupSessionStorage.js'
 
 /** Transport-verified identity and the exact capability request header, never body authority. */
@@ -61,6 +62,11 @@ export interface LookupProviderOptions {
   budgets?: Partial<LookupReadBudgets>
 }
 
+/** Additive composition surface for domain-owned feeds without generic write authority. */
+export interface LookupProviderFeedOptions extends Omit<LookupProviderOptions, 'index'> {
+  index: LookupIndexFeed
+}
+
 const freshSecret = (): string => Utils.toHex(Random(32))
 function caller(input: LookupProviderCaller): LookupProviderCaller {
   closedOutputObject(input, ['principal', 'capabilityDigest'])
@@ -76,11 +82,11 @@ function caller(input: LookupProviderCaller): LookupProviderCaller {
  * legacy finite lookup nor an overlay propagation outbox supplies these promises.
  */
 export class LookupProviderService {
-  private readonly options: LookupProviderOptions
+  private readonly options: LookupProviderFeedOptions
   private readonly work: LookupProviderWork
   readonly wake: LookupWake
   private readonly reader: LookupLiveReader
-  constructor(options: LookupProviderOptions) {
+  constructor(options: LookupProviderFeedOptions) {
     this.options = { ...options }
     if (options.index.durability !== 'durable' || options.sessions.durability !== 'durable')
       throw new OutputProtocolError(

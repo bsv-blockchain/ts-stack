@@ -7,7 +7,7 @@ import {
   type OutputLookupLimits
 } from '@bsv/sdk'
 import { LookupBatchBuilder, type LookupBatchBoundary } from './LookupBatchBuilder.js'
-import type { LookupIndexStorage } from './LookupIndexStorage.js'
+import type { LookupIndexFeed } from './LookupIndexFeed.js'
 import type { LookupQueryView } from './LookupQueryRegistry.js'
 import { checkLookupWork } from './LookupProviderWork.js'
 import { LookupWake } from './LookupWake.js'
@@ -22,7 +22,7 @@ export interface LookupReadBudgets {
 export class LookupLiveReader {
   readonly budgets: Readonly<LookupReadBudgets>
   constructor(
-    private readonly index: LookupIndexStorage,
+    private readonly index: LookupIndexFeed,
     private readonly wake: LookupWake,
     private readonly now: () => string,
     budgets: Partial<LookupReadBudgets> = {}

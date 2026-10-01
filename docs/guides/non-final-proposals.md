@@ -72,8 +72,62 @@ an authorization mechanism or a public raw-SQL extension point.
 
 The private current-channel query companion remains under construction. The
 shared storage primitive alone does not install its writer, policy, lifecycle
-timers, retention promises, visibility guards or current-channel projector.
+timers, retention promises or visibility guards. The separately installed client
+current-channel projector is described below.
 Existing proposal and finite lookup routes retain their existing behavior.
+
+## Read current private channels
+
+The optional `ProposalChannelHeadsQuery` installs the registered
+`BRC-194#proposal-channel-heads-v1` query in `LookupQueryRegistry`. Its parameters
+select one exact installed proposal policy and digest. Query `{}` selects all
+visible channels; `{ channels: [...] }` selects 1–256 distinct channel identifiers
+in strictly increasing order. The lookup and proposal topic use the same service
+name under their separate capability entries. Every snapshot row contains one
+signed head and its provider-reported lifecycle in a single observation group.
+A live replacement carries the predecessor removal, signed successor and new
+state together. A lifecycle update repeats that exact signed head with its new
+state. Neither removal nor expiry is a Bitcoin spend.
+
+`ProposalChannelHeadsSource` wraps an already connected `LiveLookupSource` and
+receives that source's exact `SourceRequest`. It requires durable receipts and
+BRC-103 provider provenance, checks complete query groups before ingestion and
+preserves the underlying receipt/cursor identity. Install `ProposalSourcePolicy`
+in the Bitcoin worker to verify author signatures, selected readers and policy
+separately. Base live framing supports no critical proposal extensions; do not
+advertise such extensions merely because a standalone policy can parse them.
+
+Create `ProposalCurrentChannels` with the same registry, reader and explicit
+source/query selections. Project the `proposals` field from the core's published
+input. That input preserves source generations, empty completed snapshots and
+original group/observation order. Presentation sorting is not event order.
+Older or manually constructed views lacking these facts cannot support a current
+projection. The new metadata is additive; existing journal encodings and ordinary
+proposal acceptance are unchanged.
+
+Each result retains its provider and generation. A replacement snapshot can
+retire an old generation even when it contains no channels. Progressive rows can
+be usable before the snapshot is complete; `complete`, `current`, `visible` and
+`continuous` describe different properties. A snapshot head with an unavailable
+predecessor has `history: 'unresolved'`. No global winning provider, complete
+lineage or Bitcoin finality is inferred. An incompatible later assertion marks
+the source inconsistent, preserves its last coherent prefix and disables active
+intent rather than silently repairing the history.
+
+`activeIntent` combines current visible continuous membership, the provider's
+active assertion and exclusive signed expiry against the core's retained clock.
+It does not establish full predecessor history or authorize finalization. Keep
+using the runtime's durable invalidation and publication deadlines; a display
+must retire activity at its deadline even when the network is silent. Retained
+finalization reservations remain distinct from expired intent.
+
+Provider code can accept the narrower `LookupIndexFeed` through the additive
+`LookupProviderFeedOptions`. The domain owner retains write, retention, compaction
+and close authority. Time advancement must drain the domain's bounded timer work
+before reporting a complete time floor. This interface alone does not compose a
+proposal journal with an index or install private visibility guards. The compound
+provider factory remains under construction; the authenticated HTTP reference
+test uses an explicit index writer and qualifies client composition only.
 
 ## Add authenticated HTTP
 

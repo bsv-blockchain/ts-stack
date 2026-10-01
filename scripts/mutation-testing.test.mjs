@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 104)
+  assert.equal(Object.keys(configured).length, 106)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -66,6 +66,43 @@ test('proposal client and core qualify complete modules and retain cross-layer e
   ])
   assert.ok(selected.includes('output-knowledge-runtime'))
   assert.ok(selected.includes('output-knowledge-proposal-core'))
+})
+
+test('current-channel query and projection register complete source modules and generated histories', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  const query = configured['proposal-current-query']
+  const projection = configured['proposal-current-projection']
+  assert.deepEqual(query.mutate, [
+    'src/proposals/ProposalChannelHeadsQuery.ts',
+    'src/proposals/ProposalChannelHeadsContract.ts',
+    'src/proposals/ProposalChannelHeadsSource.ts'
+  ])
+  assert.deepEqual(projection.mutate, [
+    'src/proposals/ProposalCurrentChannels.ts',
+    'src/SourceMembership.ts'
+  ])
+  for (const target of [query, projection]) {
+    assert.equal(
+      target.propertyTest,
+      `packages/application/output-knowledge/test/proposal-${target === query ? 'channel' : 'current'}.property.test.ts`
+    )
+    for (const pattern of [
+      'proposal-channel*',
+      'proposal-current*',
+      'proposal-knowledge-order',
+      'source-generation-state',
+      'membership'
+    ])
+      assert.ok(
+        target.runnerOptions.jest.config.testMatch.includes(`<rootDir>/test/${pattern}.test.ts`)
+      )
+  }
+  const selected = selectAffectedMutationTargets(configured, [
+    'packages/application/output-knowledge/src/SourceMembership.ts',
+    'packages/application/output-knowledge/src/proposals/ProposalChannelHeadsSource.ts'
+  ])
+  assert.ok(selected.includes('proposal-current-query'))
+  assert.ok(selected.includes('proposal-current-projection'))
 })
 
 test('mutation metrics follow Stryker valid-mutant semantics', () => {

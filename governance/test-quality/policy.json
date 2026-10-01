@@ -1,7 +1,9 @@
 {
   "schemaVersion": 1,
   "lastReviewed": "2026-09-27",
-  "ownerDefinitions": ["ts-stack-maintainers"],
+  "ownerDefinitions": [
+    "ts-stack-maintainers"
+  ],
   "propertyTesting": {
     "library": "fast-check",
     "version": "^4.9.0",
@@ -9,7 +11,11 @@
     "scheduledRuns": 5000,
     "rootCommand": "pnpm test:property",
     "workflow": ".github/workflows/property-tests.yml",
-    "replayEnvironment": ["FAST_CHECK_NUM_RUNS", "FAST_CHECK_SEED", "FAST_CHECK_PATH"],
+    "replayEnvironment": [
+      "FAST_CHECK_NUM_RUNS",
+      "FAST_CHECK_SEED",
+      "FAST_CHECK_PATH"
+    ],
     "owner": "ts-stack-maintainers",
     "reviewBy": "2026-10-04",
     "manifests": [
@@ -1297,6 +1303,28 @@
           "Proposal-only input cannot create Bitcoin verification work or effects.",
           "Count-limited work commits partial verification but publishes only complete source groups.",
           "First local receipt times and accepted expiry survive duplicate receipt, storage reopen and clock rollback."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-current.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+        "target": "At least 300 generated valid histories, presentation orders and exclusive clocks",
+        "invariants": [
+          "Retained source order, not presentation order, selects the source-local current head.",
+          "Exclusive local expiry removes active intent without inventing a provider lifecycle or wallet effect."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-channel.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+        "target": "At least 300 generated atomic multi-channel rejection cases",
+        "invariants": [
+          "An invalid later member rejects a complete domain group without publishing its earlier changes.",
+          "A rejected domain group makes the source inconsistent and disables active intent while retaining its last coherent heads."
         ]
       }
     ],

@@ -37,6 +37,21 @@ export interface ReceivedSourceGroup {
   received: string
   status: 'pending' | 'accepted' | 'quarantined'
 }
+/** Accepted-input source continuity metadata, including generations with no groups. */
+export interface SourceGenerationState {
+  scope: OutputScope
+  generation: string
+  /** Highest locally selected generation for this source family. */
+  current: boolean
+  /** Generation supplying the currently published prefix; may be stale during refresh. */
+  visible: boolean
+  /** Current, available, with every received group accepted; not a completeness claim. */
+  continuous: boolean
+  /** The complete snapshot/finite seed boundary has itself been accepted. */
+  complete: boolean
+  /** A durable snapshot watermark is retained; false for finite-only receipts. */
+  snapshot: boolean
+}
 interface Generation {
   scope: OutputScope
   generation: string
@@ -443,6 +458,24 @@ export class SourceMembershipLedger {
       )
     )
   }
+  sourceStates(): SourceGenerationState[] {
+    const result = [...this.generations.values()].map(active => ({
+      scope: active.scope,
+      generation: active.generation,
+      current: this.isCurrent(active.scope, active.generation),
+      visible: this.families.get(outputSourceIdentity(active.scope))?.visible === active,
+      continuous: this.isContinuous(active.scope, active.generation),
+      complete: active.completionAccepted,
+      snapshot: active.snapshotWatermark !== undefined
+    }))
+    result.sort(
+      (a, b) =>
+        compareKnowledgeText(canonicalOutputJSON(a.scope), canonicalOutputJSON(b.scope)) ||
+        compareGeneration(a.generation, b.generation)
+    )
+    return copy(result)
+  }
+
   isContinuous(scope: OutputScope, generation: string): boolean {
     const family = this.families.get(outputSourceIdentity(scope))
     return (

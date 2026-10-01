@@ -1347,3 +1347,48 @@ export function receiveProposalObservations(options: {
   return { store, runtime }
 }
 ```
+
+## Project a current-channel lookup
+
+This opt-in composition uses an independently installed query and source policy.
+The runtime must already share the connected live source's durable store and
+worker. Project its published input; a current head is not permission to finalize.
+A provider needs its complete atomic writer and disclosure guards before offering
+this query in production.
+
+```ts compile
+// example-id: proposal-current-channel-projection
+import type { OutputKnowledge as CurrentChannelRuntime, SourceRequest } from '@bsv/output-knowledge'
+import type { LiveLookupSource as CurrentChannelLiveSource } from '@bsv/output-knowledge/sources/live-lookup'
+import {
+  ProposalChannelHeadsSource,
+  ProposalCurrentChannels,
+  type ProposalPolicyRegistry as CurrentChannelPolicies,
+  type ProposalCurrentChannelSelection,
+  type ProposalKnowledgeView as CurrentChannelInput
+} from '@bsv/output-knowledge/proposals'
+
+export function attachCurrentChannels(options: {
+  runtime: CurrentChannelRuntime
+  connected: CurrentChannelLiveSource
+  request: SourceRequest
+  policies: CurrentChannelPolicies
+  reader: string
+  selection: ProposalCurrentChannelSelection
+}) {
+  const { parameters, query } = options.selection
+  const source = new ProposalChannelHeadsSource(
+    options.connected,
+    options.policies,
+    parameters,
+    query
+  )
+  const projection = new ProposalCurrentChannels(options.policies, options.reader, [
+    options.selection
+  ])
+  return {
+    subscription: options.runtime.attach(source, options.request),
+    project: (published: CurrentChannelInput) => projection.project(published)
+  }
+}
+```

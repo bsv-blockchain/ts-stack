@@ -17,3 +17,17 @@ export type {
   AuthenticatedProposalHead,
   ProposalKnowledgeView
 } from './ProposalKnowledgeView.js'
+
+export { ProposalChannelHeadsQuery, proposalChannelIndexKey } from './ProposalChannelHeadsQuery.js'
+export {
+  ProposalChannelHeadsContract,
+  type ProposalChannelQueryChange
+} from './ProposalChannelHeadsContract.js'
+export { ProposalChannelHeadsSource } from './ProposalChannelHeadsSource.js'
+export {
+  ProposalCurrentChannels,
+  type ProposalCurrentChannelSelection,
+  type CurrentProposalChannel,
+  type ProposalCurrentSource,
+  type ProposalCurrentChannelsView
+} from './ProposalCurrentChannels.js'

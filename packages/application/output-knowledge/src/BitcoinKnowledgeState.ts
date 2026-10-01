@@ -552,8 +552,10 @@ export class BitcoinKnowledgeState {
         ? {
             proposals: this.proposals
               .view(this.membership.publishedGroups(), this.membership.publishedGroups())
-              .snapshot(this.proposals.evaluatedAt, (scope, generation) =>
-                this.membership.isContinuous(scope, generation)
+              .snapshot(
+                this.proposals.evaluatedAt,
+                (scope, generation) => this.membership.isContinuous(scope, generation),
+                this.membership.sourceStates()
               )
           }
         : {})

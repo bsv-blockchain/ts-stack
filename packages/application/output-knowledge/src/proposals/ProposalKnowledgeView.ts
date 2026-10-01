@@ -9,7 +9,8 @@ import {
 import {
   compareKnowledgeText,
   outputGroupIdentity,
-  type ReceivedSourceGroup
+  type ReceivedSourceGroup,
+  type SourceGenerationState
 } from '../SourceMembership.js'
 import { ProposalSourcePolicy } from './ProposalSourcePolicy.js'
 import { ProposalVerificationPool } from './ProposalVerificationPool.js'
@@ -19,6 +20,15 @@ export interface ProposalObservationLocation {
   generation: string
   groupId: string
   observationId: string
+  /** Retained event order, separate from presentation sorting. Absent on older/manual views. */
+  order?: {
+    phase: ReceivedSourceGroup['phase']
+    sequence: string
+    receipt: string
+    group: number
+    observation: number
+    observations: number
+  }
 }
 export interface AuthenticatedProposalHead extends ProposalObservationLocation {
   proposalId: string
@@ -31,6 +41,8 @@ export interface AuthenticatedProposalHead extends ProposalObservationLocation {
 type StateObservation = Extract<OutputObservation, { kind: 'proposal-state' }>
 type RemovalObservation = Extract<OutputObservation, { kind: 'proposal-remove' }>
 export interface ProposalKnowledgeView {
+  /** Explicit core generation state. Omitted by older/manual history builders. */
+  sources?: SourceGenerationState[]
   evaluatedAt: string
   /** Each exact author-signed variant; predecessor history is not implied. */
   heads: AuthenticatedProposalHead[]
@@ -66,13 +78,23 @@ function headKey(
 }
 function location(
   row: ReceivedSourceGroup,
-  observation: OutputObservation
+  observation: OutputObservation,
+  groupOrder: number,
+  observationOrder: number
 ): ProposalObservationLocation {
   return {
     scope: row.scope,
     generation: row.generation,
     groupId: row.group.id,
-    observationId: observation.id
+    observationId: observation.id,
+    order: {
+      phase: row.phase,
+      sequence: row.group.sequence,
+      receipt: row.received,
+      group: groupOrder,
+      observation: observationOrder,
+      observations: row.group.observations.length
+    }
   }
 }
 
@@ -176,14 +198,21 @@ export class ProposalKnowledgeViewBuilder {
 
   snapshot(
     evaluatedAt: string,
-    continuous: (scope: OutputScope, generation: string) => boolean
+    continuous: (scope: OutputScope, generation: string) => boolean,
+    sources?: readonly SourceGenerationState[]
   ): ProposalKnowledgeView {
     const now = outputU64(evaluatedAt),
-      view: ProposalKnowledgeView = { evaluatedAt, heads: [], states: [], removals: [] }
-    for (const row of this.rows) {
+      view: ProposalKnowledgeView = {
+        evaluatedAt,
+        heads: [],
+        states: [],
+        removals: [],
+        ...(sources === undefined ? {} : { sources: structuredClone([...sources]) })
+      }
+    for (const [groupOrder, row] of this.rows.entries()) {
       if (row.status !== 'accepted') continue
-      for (const observation of row.group.observations)
-        this.append(view, row, observation, now, continuous)
+      for (const [observationOrder, observation] of row.group.observations.entries())
+        this.append(view, row, observation, now, continuous, groupOrder, observationOrder)
     }
     const order = (a: ProposalObservationLocation, b: ProposalObservationLocation): number =>
       compareKnowledgeText(canonicalOutputJSON(a.scope), canonicalOutputJSON(b.scope)) ||
@@ -200,9 +229,11 @@ export class ProposalKnowledgeViewBuilder {
     row: ReceivedSourceGroup,
     observation: OutputObservation,
     now: bigint,
-    continuous: (scope: OutputScope, generation: string) => boolean
+    continuous: (scope: OutputScope, generation: string) => boolean,
+    groupOrder: number,
+    observationOrder: number
   ): void {
-    const origin = location(row, observation)
+    const origin = location(row, observation, groupOrder, observationOrder)
     if (observation.kind === 'proposal') {
       const { proposal } = observation.payload,
         check = this.pool.check(row, observation.id, proposal)

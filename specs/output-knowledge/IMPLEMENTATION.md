@@ -1735,3 +1735,30 @@ and receipt remain retained. Follow-up covers callable/primitive forks, nearest
 ancestor staging, direct write/read gates and foreign/poisoned rollback paths,
 and represents intentional rollback as a normal Error so diagnostics do not
 traverse native connection getters. A complete fresh run is required.
+
+### Current-channel query and accepted projection
+
+The query mapper, complete-group contract, durable authenticated source wrapper
+and current-channel projector are adopted. Core input now includes optional owned
+source-generation metadata and retained observation order, including empty
+completed generations. The projector keeps providers independent, verifies exact
+installed successor rules, rejects an inconsistent whole group and distinguishes
+unresolved predecessor history, provider lifecycle and local exclusive intent
+expiry. A narrower provider read/time feed is additive; old mutable index options
+remain assignable. Existing wire and journal formats are unchanged.
+
+The adopted selection passes 133 tests across 11 suites. An actual BRC-103/104
+HTTP reference test passes progressive snapshot pages, exact durable core receipts,
+live replacement after native restart without reopening the session, atomic
+replacement groups and network-independent expiry. Its explicit index producer
+is a fixture: the compound journal/index/session writer, future-event capacity,
+private visibility guards and coherent proposal timer floor are still required.
+Two generated properties additionally cover ordered histories and all-or-nothing
+multi-channel rejection; complete package and source mutation qualification follow.
+
+The transaction-domain rerun at `d40b01f84` ended after 1,018.58 seconds when two
+workers exhausted memory/aborted. All 9,905 frozen inputs and HEAD matched, but
+there is no final mutation report. A shell exit of zero is not qualification.
+The negative log and execution receipt are retained. Upstream `022f1a250` merged
+cleanly at `3143f37c2`, with all 12 knownTxids regressions passing. These changes
+and prior component evidence do not complete the checkpoint or hosted CI gate.

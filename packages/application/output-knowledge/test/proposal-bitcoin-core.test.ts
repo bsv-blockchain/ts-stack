@@ -735,3 +735,45 @@ it('does not prepare an acceptance before a received group has qualified locally
   expect(state.membership.groups()[0].status).toBe('pending')
   expect(state.snapshot().proposals?.heads).toEqual([])
 })
+
+it('publishes explicit accepted source generations when a complete empty snapshot retires proposal heads', async () => {
+  const { store, worker } = open()
+  await initialize(store)
+  const first = batch([observation()])
+  first.groups[0].sequence = '7'
+  first.coverage = {
+    scope: source,
+    phase: 'snapshot',
+    status: 'complete',
+    through: '7',
+    highWater: '7'
+  }
+  await store.commit(
+    (await store.revision()).received,
+    knowledgeMutation({ kind: 'receive', batch: first })
+  )
+  await worker.advance(store, signal())
+  const before = (await store.read()).proposals!
+  expect(before.heads).toHaveLength(1)
+  expect(before.sources).toMatchObject([
+    { generation: '0', current: true, visible: true, continuous: true, complete: true }
+  ])
+  const nextScope = { ...source, epoch: 'two' }
+  const next = {
+    ...first,
+    provenance: { ...first.provenance, scope: nextScope, generation: '1' },
+    groups: [],
+    coverage: { ...first.coverage, scope: nextScope }
+  }
+  await store.commit(
+    (await store.revision()).received,
+    knowledgeMutation({ kind: 'receive', batch: next })
+  )
+  await worker.advance(store, signal())
+  const after = (await store.read()).proposals!
+  expect(after.heads).toEqual([])
+  expect(after.sources).toMatchObject([
+    { generation: '0', current: false, visible: false, continuous: false, complete: true },
+    { generation: '1', current: true, visible: true, continuous: true, complete: true }
+  ])
+})

@@ -1,6 +1,7 @@
 export {
   LookupProviderService,
   type LookupProviderOptions,
+  type LookupProviderFeedOptions,
   type LookupProviderCaller,
   type LookupProviderResponse,
   type LookupAuthorizationContext
@@ -71,3 +72,5 @@ export {
   type BoundLookupResponse
 } from './LookupResponseDisclosure.js'
 export type { LookupSessionSend, LookupSessionResponseReference } from './LookupSessionSend.js'
+
+export type { LookupIndexFeed } from './LookupIndexFeed.js'
