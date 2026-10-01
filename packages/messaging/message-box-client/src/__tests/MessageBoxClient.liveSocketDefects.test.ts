@@ -39,7 +39,13 @@ const mockSocket = {
   emit: jest.fn(),
   disconnect: jest.fn(),
   connected: true,
-  off: jest.fn(),
+  // Really removes, so the harness follows the client's own lifecycle: it
+  // detaches its auth-phase disconnect handler once authentication completes,
+  // and a mock that ignored `off` would keep firing a listener the client has
+  // already let go of.
+  off: jest.fn((event: string, callback: (...args: any[]) => void) => {
+    socketOnMap[event] = (socketOnMap[event] ?? []).filter(h => h !== callback)
+  }),
   serverIdentityKey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
 }
 
@@ -127,6 +133,13 @@ describe('live-socket defects, as the client behaves today', () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
 
+    // Three `disconnect` listeners are attached by this point and none are
+    // detached, which is why the harness fires every one: storing only the
+    // latest ran an auth-phase handler that touches a flag and not the socket,
+    // and the first version of this test "proved" the opposite by doing so.
+    // The before/after pair below is the real proof — only the long-lived
+    // handler can clear the reference.
+    expect(client.testSocket).toBeDefined()
     fire('disconnect')
 
     // The client has let go of it, but never told it to stop.
