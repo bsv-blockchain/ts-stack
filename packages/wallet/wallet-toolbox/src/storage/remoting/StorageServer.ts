@@ -23,14 +23,14 @@ import {
   WalletInterface,
   WalletLoggerInterface
 } from '@bsv/sdk'
-import express, { Request, Response } from 'express'
+import express, { Request, RequestHandler, Response } from 'express'
 import { AuthMiddlewareOptions, AuthRequest, createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import type { PaymentReplayStore } from '@bsv/payment-express-middleware'
 import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
-import { WERR_INTERNAL, WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 import { AuthId, SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
@@ -212,7 +212,8 @@ function firstRequestHeader(req: Request, name: string): string | undefined {
 export interface WalletStorageServerOptions {
   /** Listener bind host. Omit to retain Node's historical all-interface behavior. */
   host?: string
-  port: number
+  /** Listener port for `start()`. Not used when `app` is mounted in a host application. */
+  port?: number
   wallet: Wallet
   monetize: boolean
   calculateRequestPrice?: (req: Request) => number | Promise<number>
@@ -272,13 +273,23 @@ export interface WalletStorageServerOptions {
   syncTransfers?: boolean
   /** Durable BRC-105 replay claims for monetized multi-replica deployments. */
   paymentReplayStore?: PaymentReplayStore
+  /**
+   * Handlers run on `POST /` after authentication, authenticated rate limiting
+   * and payment, immediately before JSON-RPC dispatch. They see `req.auth` and
+   * the parsed body. A handler that responds instead of calling `next()`
+   * prevents dispatch.
+   */
+  preRpcMiddleware?: RequestHandler[]
+  /** Serve the unauthenticated `GET /`, `/robots.txt` and `/healthz` routes. Default: true. */
+  publicRoutes?: boolean
 }
 
 export class StorageServer {
   private readonly syncTransfers?: KnexSyncTransferStore
-  private readonly app = express()
+  /** Configured Express application. Mount it with `hostApp.use(path, server.app)` instead of calling `start()`. */
+  readonly app: express.Express = express()
   private readonly host?: string
-  private readonly port: number
+  private readonly port?: number
   private readonly storage: StorageProvider
   private readonly wallet: Wallet
   private readonly monetize: boolean
@@ -302,6 +313,8 @@ export class StorageServer {
   private readonly maxRpcArrayItems: number
   private readonly maxRpcResponseBytes: number
   private readonly paymentReplayStore?: PaymentReplayStore
+  private readonly preRpcMiddleware: RequestHandler[]
+  private readonly publicRoutes: boolean
 
   constructor(storage: StorageProvider, options: WalletStorageServerOptions) {
     this.storage = storage
@@ -338,6 +351,8 @@ export class StorageServer {
     this.telemetryConfig = options.telemetry
     this.telemetry = new Telemetry(options.telemetry)
     this.paymentReplayStore = options.paymentReplayStore
+    this.preRpcMiddleware = options.preRpcMiddleware ?? []
+    this.publicRoutes = options.publicRoutes ?? true
     this.defaultRpcListLimit =
       options.defaultRpcListLimit ??
       readResourceLimit(
@@ -515,20 +530,22 @@ export class StorageServer {
     )
     this.app.use(bodyParserErrorHandler)
 
-    this.app.get('/robots.txt', (req: Request, res: Response) => {
-      res.type('text/plain')
-      res.send('User-agent: *\nDisallow: /')
-    })
+    if (this.publicRoutes) {
+      this.app.get('/robots.txt', (req: Request, res: Response) => {
+        res.type('text/plain')
+        res.send('User-agent: *\nDisallow: /')
+      })
 
-    this.app.get('/healthz', (_req: Request, res: Response) => {
-      res.setHeader('Cache-Control', 'no-store')
-      res.status(200).json({ status: 'ok' })
-    })
+      this.app.get('/healthz', (_req: Request, res: Response) => {
+        res.setHeader('Cache-Control', 'no-store')
+        res.status(200).json({ status: 'ok' })
+      })
 
-    this.app.get('/', (req: Request, res: Response) => {
-      res.type('text/plain')
-      res.send(`BRC-100 ${this.wallet.chain}Net Storage Provider.`)
-    })
+      this.app.get('/', (req: Request, res: Response) => {
+        res.type('text/plain')
+        res.send(`BRC-100 ${this.wallet.chain}Net Storage Provider.`)
+      })
+    }
 
     const options: AuthMiddlewareOptions = {
       wallet: this.wallet as WalletInterface,
@@ -606,7 +623,7 @@ export class StorageServer {
     })
 
     // A single POST endpoint for JSON-RPC:
-    this.app.post('/', this.handleRpcRequest.bind(this))
+    this.app.post('/', ...this.preRpcMiddleware, this.handleRpcRequest.bind(this))
   }
 
   private async handleRpcRequest(req: Request, res: Response): Promise<Response> {
@@ -1165,6 +1182,7 @@ export class StorageServer {
   server: any
 
   public start(): void {
+    if (this.port == null) throw new WERR_INVALID_PARAMETER('port', 'set to call start()')
     const listening = (): void => {
       console.log(`WalletStorageServer listening at http://${this.host ?? 'localhost'}:${this.port}`)
     }
