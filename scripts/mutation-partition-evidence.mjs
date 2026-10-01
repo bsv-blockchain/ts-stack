@@ -153,6 +153,15 @@ export function combinePartitionEvidence(
   return { receipt, reportBytes, executionBytes }
 }
 
+export function validateEvidencePaths(directory, destination) {
+  const input = path.resolve(directory),
+    output = path.resolve(destination)
+  const inputPrefix = input.endsWith(path.sep) ? input : `${input}${path.sep}`
+  const outputPrefix = output.endsWith(path.sep) ? output : `${output}${path.sep}`
+  if (input === output || input.startsWith(outputPrefix) || output.startsWith(inputPrefix))
+    throw new Error('Aggregate output and raw input evidence must be disjoint')
+}
+
 function packetIn(directory, file = 'partition-receipt.json') {
   return {
     receipt: JSON.parse(fs.readFileSync(path.join(directory, file), 'utf8')),
@@ -273,10 +282,7 @@ async function main(argv) {
     canonical
   )
   if (!options.output) throw new Error('Combined report output is required')
-  const input = path.resolve(options.directory),
-    output = path.resolve(options.output)
-  if (input === output || input.startsWith(`${output}${path.sep}`))
-    throw new Error('Aggregate output cannot replace raw input evidence')
+  validateEvidencePaths(options.directory, options.output)
   fs.rmSync(options.output, { recursive: true, force: true })
   fs.mkdirSync(options.output, { recursive: true })
   fs.writeFileSync(path.join(options.output, 'mutation.json'), combined.reportBytes)

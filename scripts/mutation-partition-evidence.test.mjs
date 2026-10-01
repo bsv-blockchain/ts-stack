@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
-import { partitionReceipt, combinePartitionEvidence } from './mutation-partition-evidence.mjs'
+import {
+  partitionReceipt,
+  combinePartitionEvidence,
+  validateEvidencePaths
+} from './mutation-partition-evidence.mjs'
 import {
   identity,
   policy,
@@ -129,4 +133,18 @@ test('complete config/source/inventory proof, uncovered/invalid gates and identi
       ),
     /inventory/
   )
+})
+
+test('aggregate destinations cannot replace, contain or descend into raw evidence', () => {
+  for (const output of [
+    '/workspace/raw',
+    '/workspace',
+    '/workspace/raw/core',
+    '/workspace/raw/core/aggregate'
+  ])
+    assert.throws(() => validateEvidencePaths('/workspace/raw', output), /disjoint/)
+  for (const output of ['/workspace/result', '/workspace/raw-extra', '/other/aggregate'])
+    assert.doesNotThrow(() => validateEvidencePaths('/workspace/raw', output))
+  assert.throws(() => validateEvidencePaths('/workspace/raw', '/'), /disjoint/)
+  assert.throws(() => validateEvidencePaths('/', '/workspace/result'), /disjoint/)
 })

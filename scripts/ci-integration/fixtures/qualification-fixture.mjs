@@ -18,7 +18,7 @@ export const policy = {
     maximumInvalid: 0
   }))
 }
-const directory = '/tmp/ts-stack-mutation-evidence'
+const directory = '/canonical/mutation-evidence'
 const sources = new Map([
   [
     'src/api.ts',
@@ -50,7 +50,8 @@ export function report(statuses = ['Killed']) {
   const files = {}
   for (const [index, mutant] of inventory.entries()) {
     const file = (files[mutant.fileName] ??= { source: sources.get(mutant.fileName), mutants: [] })
-    const { fileName: _fileName, ...result } = structuredClone(mutant)
+    const result = structuredClone(mutant)
+    delete result.fileName
     file.mutants.push({ ...result, status: statuses[index] ?? 'Killed' })
   }
   return {

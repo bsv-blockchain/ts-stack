@@ -294,6 +294,12 @@ function requiredArgument(arguments_, index, option) {
   return value
 }
 
+function assignMutationArgument(result, argument, value) {
+  if (argument === '--target') result.targets.push(value)
+  else if (argument === '--partition') result.partition = value
+  else result[argument === '--base' ? 'base' : 'affectedFile'] = value
+}
+
 export function parseArguments(arguments_) {
   const result = { all: false, list: false, targets: [], affectedFile: undefined, base: undefined }
   for (let index = 0; index < arguments_.length; index++) {
@@ -307,9 +313,7 @@ export function parseArguments(arguments_) {
     }
     const value = requiredArgument(arguments_, index, argument)
     index += 1
-    if (argument === '--target') result.targets.push(value)
-    else if (argument === '--partition') result.partition = value
-    else result[argument === '--base' ? 'base' : 'affectedFile'] = value
+    assignMutationArgument(result, argument, value)
   }
   const modes = [
     result.all,

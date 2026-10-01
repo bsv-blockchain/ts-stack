@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { parseArguments } from './mutation-testing.mjs'
 import {
   partitionMutationTarget,
   selectedMutationPartition,
@@ -61,4 +62,30 @@ test('matrix expands only canonical SDKAuth while preserving original target ord
       { target: 'after', partition: 'whole' }
     ]
   )
+})
+
+test('partition command mode requires one exact target without weakening existing mode validation', () => {
+  const defaults = {
+    all: false,
+    list: false,
+    targets: [],
+    affectedFile: undefined,
+    base: undefined
+  }
+  assert.deepEqual(parseArguments(['--target', 'sdk-auth-http', '--partition', 'core']), {
+    ...defaults,
+    targets: ['sdk-auth-http'],
+    partition: 'core'
+  })
+  assert.deepEqual(parseArguments(['--all']), { ...defaults, all: true })
+  for (const args of [
+    ['--all', '--partition', 'core'],
+    ['--list', '--partition', 'core'],
+    ['--affected-file', 'paths', '--partition', 'core'],
+    ['--target', 'sdk-auth-http', '--target', 'other', '--partition', 'core'],
+    ['--target', 'sdk-auth-http', '--base', 'HEAD'],
+    ['--target', 'sdk-auth-http', '--all'],
+    ['--target', 'sdk-auth-http', '--partition']
+  ])
+    assert.throws(() => parseArguments(args))
 })
