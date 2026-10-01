@@ -8,6 +8,7 @@ import { MonitorDaemon } from '../../monitor/MonitorDaemon'
 import { Wallet } from '../../Wallet'
 import { formatUnknownForLog as formatAdminValue } from '../../utility/formatUnknown'
 import { renderAdminPage } from './adminUi'
+import { selectReqReview } from './reqReviewQuery'
 import { runAdminUtxoReview, type AdminUtxoReviewTask } from './reviewUtxos'
 import { MAX_MONITOR_OFFSET, normalizeMonitorIdentityKey, requireMonitorInteger } from '../../monitor/monitorValidation'
 import path from 'node:path'
@@ -37,29 +38,6 @@ export interface MonitorAdminContext {
   config: MonitorAdminContextConfig
   daemon: MonitorDaemon
   authWallet?: Wallet
-}
-
-interface ReqRow {
-  updated_at: Date | string
-  req_created_at: Date | string
-  tx_created_at?: Date | string
-  minutesOld: number
-  hoursOld: number
-  provenTxReqId: number
-  transactionId?: number
-  userId?: number
-  txid: string
-  provenTxId?: number
-  reqStatus: string
-  txStatus?: string
-  satoshis?: number
-  attempts: number
-  notified: boolean
-  history: string
-  notify: string
-  rawTxHex?: string
-  batch?: string
-  inputBeefHex?: string
 }
 
 export function asNumber(value: unknown, fallback: number): number {
@@ -260,7 +238,7 @@ async function getStorage(context: MonitorAdminContext) {
 async function getKnex(context: MonitorAdminContext) {
   const storage = await getStorage(context)
   const knex = (storage as any).knex
-  if (!knex) throw new Error('Joined admin review requires StorageKnex / MySQL.')
+  if (!knex) throw new Error('Joined admin review requires StorageKnex on MySQL or Postgres.')
   return knex
 }
 
@@ -274,45 +252,7 @@ async function queryReqReview(context: MonitorAdminContext, query: Record<string
   const limit = Math.min(asNumber(query.limit, 25), 200)
   const offset = Math.max(asNumber(query.offset, 0), 0)
 
-  const base = knex('proven_tx_reqs as r')
-    .join('transactions as t', 't.txid', 'r.txid')
-    .where('t.transactionId', '>=', minTransactionId)
-
-  if (status) base.andWhere('r.status', status)
-  if (txid) base.andWhere('r.txid', txid)
-  if (batch) base.andWhere('r.batch', batch)
-  if (userId) base.andWhere('t.userId', userId)
-
-  const totalResult = (await base.clone().count({ count: '*' })) as Array<{ count: number | string }>
-  const total = Number(totalResult[0]?.count || 0)
-
-  const rows = (await base
-    .clone()
-    .select([
-      'r.updated_at',
-      'r.created_at as req_created_at',
-      't.created_at as tx_created_at',
-      knex.raw('TIMESTAMPDIFF(MINUTE, r.created_at, NOW()) as minutesOld'),
-      knex.raw('TIMESTAMPDIFF(HOUR, r.created_at, NOW()) as hoursOld'),
-      'r.provenTxReqId',
-      't.transactionId',
-      't.userId',
-      'r.txid',
-      'r.provenTxId',
-      'r.status as reqStatus',
-      't.status as txStatus',
-      't.satoshis',
-      'r.attempts',
-      'r.notified',
-      'r.history',
-      'r.notify',
-      knex.raw('HEX(r.rawTx) as rawTxHex'),
-      'r.batch',
-      knex.raw('HEX(r.inputBEEF) as inputBeefHex')
-    ])
-    .orderBy('r.provenTxReqId', 'desc')
-    .limit(limit)
-    .offset(offset)) as ReqRow[]
+  const { total, rows } = await selectReqReview(knex, { status, txid, batch, userId, minTransactionId, limit, offset })
 
   return {
     total,
