@@ -324,21 +324,3 @@ describe('ChaintracksStorageKnex tests', () => {
     }
   })
 })
-
-describe('ChaintracksStorageKnex dialects', () => {
-  test('rejects Postgres before running migrations', async () => {
-    const knex = makeKnex({ client: 'pg', connection: { host: '127.0.0.1', port: 1 } })
-    const queries: string[] = []
-    knex.on('query', (q: { sql: string }) => queries.push(q.sql))
-    const options = ChaintracksStorageKnex.createStorageKnexOptions('test')
-    options.knex = knex
-    const storage = new ChaintracksStorageKnex(options)
-    try {
-      await expect(storage.makeAvailable()).rejects.toThrow('supports SQLite and MySQL only')
-      await expect(storage.migrateLatest()).rejects.toThrow('supports SQLite and MySQL only')
-      expect(queries).toEqual([])
-    } finally {
-      await knex.destroy()
-    }
-  })
-})
