@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DEPENDENCY_FIELDS = [
   'dependencies',
@@ -324,12 +326,23 @@ function loadProjects() {
   })
 }
 
-async function requiredMutationPackages(projects, base, head) {
-  const { mutationScope } = await import('./ci-mutation-scope.mjs')
-  const { buildMutationTargets } = await import('../governance/mutation-testing/targets.mjs')
-  const policy = JSON.parse(gitText(['show', `${head}:governance/mutation-testing/policy.json`]))
+function requiredMutationPackages(projects, base, head) {
+  // The classifier imports mutation-testing.mjs, and that module imports this
+  // file. Run it in a child process so the cycle stays off module evaluation.
+  // Importing it under top-level await also makes Node 24 exit 13.
+  const mutation = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [path.join(REPOSITORY_ROOT, 'scripts/ci-mutation-scope.mjs'), '--base', base, '--head', head],
+      {
+        cwd: REPOSITORY_ROOT,
+        encoding: 'utf8',
+        maxBuffer: 32 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    )
+  )
   const targets = buildMutationTargets(REPOSITORY_ROOT)
-  const mutation = mutationScope(REPOSITORY_ROOT, { base, head, targets, policy })
   return mutationTargetProjectNames(projects, targets, mutation.required)
 }
 
@@ -341,7 +354,7 @@ function projectRecords(projects, names) {
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
-async function main(arguments_) {
+function main(arguments_) {
   const { all, base, head } = parseArguments(arguments_)
   const changedFiles = all
     ? gitText(['ls-files']).split(/\r?\n/).filter(Boolean)
@@ -363,7 +376,7 @@ async function main(arguments_) {
     ? workspace.build
     : dependencyClosure(projects, [
         ...workspace.build,
-        ...(await requiredMutationPackages(projects, base, head))
+        ...requiredMutationPackages(projects, base, head)
       ])
   const infrastructure = all ? INFRA_COMPONENTS : selectInfraComponents(changedFiles)
   const runtimeComponents = all ? RUNTIME_COMPONENTS : selectRuntimeComponents(changedFiles)
@@ -391,8 +404,10 @@ async function main(arguments_) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  main(process.argv.slice(2)).catch(error => {
+  try {
+    main(process.argv.slice(2))
+  } catch (error) {
     console.error(error instanceof Error ? error.message : error)
     process.exitCode = 1
-  })
+  }
 }
