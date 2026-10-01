@@ -259,6 +259,58 @@ test('a separately collated unique index cannot redefine the source cursor order
   expect(await k.schema.hasTable('snapshot_certificate_field_keys')).toBe(false)
 })
 
+test.each([
+  'fieldName',
+  'certificateId,fieldName',
+  'fieldName,certificateId,userId',
+  'fieldName DESC,certificateId',
+  'fieldName,certificateId DESC',
+  'fieldName,certificateId COLLATE NOCASE'
+])('an incompatible source unique key %s cannot define the snapshot order', async columns => {
+  const k = await fixture()
+  await k.schema.dropTable('certificate_fields')
+  await k.raw(
+    'CREATE TABLE certificate_fields(userId INTEGER,fieldName VARCHAR(100),certificateId INTEGER,fieldValue TEXT)'
+  )
+  await k.raw('CREATE UNIQUE INDEX unsupported_source ON certificate_fields(' + columns + ')')
+  await expect(install(k)).rejects.toThrow('Unsupported snapshot certificate field order')
+  expect(await k.schema.hasTable('snapshot_certificate_field_keys')).toBe(false)
+})
+
+test.each([
+  'renamedMembership INTEGER NOT NULL',
+  'snapshotMembership TEXT NOT NULL',
+  'snapshotMembership INTEGER',
+  'snapshotMembership INTEGER NOT NULL DEFAULT 0',
+  'snapshotMembership INTEGER GENERATED ALWAYS AS (1) VIRTUAL NOT NULL'
+])('an incompatible owned column %s cannot be resumed, adopted or removed', async membership => {
+  const k = await fixture()
+  await install(k)
+  await journal(k)
+  await k.schema.dropTable('snapshot_certificate_field_keys')
+  await k.raw(
+    'CREATE TABLE snapshot_certificate_field_keys(snapshotUserId INTEGER NOT NULL,snapshotFieldName VARCHAR(100) NOT NULL,snapshotCertificateId INTEGER NOT NULL,' +
+      membership +
+      ',PRIMARY KEY(snapshotUserId,snapshotFieldName,snapshotCertificateId))'
+  )
+  await expect(install(k)).rejects.toThrow('table definition mismatch')
+  await expect(enabled(k)).rejects.toThrow('table definition mismatch')
+  await expect(remove(k)).rejects.toThrow('table definition mismatch')
+  expect(await k.schema.hasTable('snapshot_certificate_field_keys')).toBe(true)
+})
+
+test('resume accepts the full-width field cursor and refuses an unrelated progress row', async () => {
+  const k = await fixture()
+  await k('certificate_fields').insert({ userId: 1, certificateId: 1, fieldName: '😀'.repeat(100), fieldValue: 'v' })
+  await install(k)
+  await journal(k)
+  expect(await enabled(k)).toBe(true)
+  await install(k)
+  await expectCertificateMembership(k)
+  await k('snapshot_certificate_index_progress').update({ snapshotTableId: 1 })
+  await expect(enabled(k)).rejects.toThrow('migration is incomplete')
+})
+
 test('bootstrap retains orphan fields as directly owned without inventing parent membership', async () => {
   const k = await fixture()
   await k('certificate_fields').insert({ userId: 7, fieldName: 'orphan', certificateId: 99, fieldValue: 'synthetic' })

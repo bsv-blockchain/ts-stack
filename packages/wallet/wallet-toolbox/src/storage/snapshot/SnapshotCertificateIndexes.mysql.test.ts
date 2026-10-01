@@ -35,15 +35,19 @@ function fixture(change: (kind: Kind, rows: Metadata) => unknown = (_kind, rows)
   let journaled = false
   const answer = (sql: string, values: unknown[]): unknown => {
     queries.push({ sql, values })
-    if (sql.startsWith('SELECT TABLE_NAME AS name'))
+    if (sql.startsWith('SELECT TABLE_NAME AS name')) {
+      expect(values).toEqual(['certificate_fields', 'certificates'])
       return change('sourceTables', [
         { name: 'certificate_fields', engine: 'InnoDB' },
         { name: 'certificates', engine: 'InnoDB' }
       ])
-    if (sql.startsWith('SELECT COLUMN_TYPE AS type'))
+    }
+    if (sql.startsWith('SELECT COLUMN_TYPE AS type')) {
+      expect(values).toEqual(['certificate_fields', 'fieldName'])
       return change('sourceColumn', [
         { type: 'varchar(100)', nullable: 'NO', charset: 'utf8mb4', collation: 'utf8mb4_0900_ai_ci' }
       ])
+    }
     if (sql.startsWith('SELECT ENGINE AS engine')) return change('tables', [{ engine: 'InnoDB' }])
     if (sql.startsWith('select * from information_schema.tables'))
       return tables.has(String(values[0])) ? [{ TABLE_NAME: values[0] }] : []
@@ -225,9 +229,21 @@ test('MySQL owns transactional exact-collation tables, installs observers first,
     expect(ddl[4]).toContain('snapshot_certificate_field_insert')
     expect(ddl.some(sql => sql.includes('CAST(OLD.fieldName AS BINARY)'))).toBe(true)
     expect(ddl.filter(sql => sql.includes('FOR SHARE'))).toHaveLength(4)
+    expect(
+      ddl.filter(sql =>
+        sql.includes(
+          'ON DUPLICATE KEY UPDATE snapshotMembership = snapshot_certificate_field_keys.snapshotMembership | '
+        )
+      )
+    ).toHaveLength(4)
     expect(f.queries.filter(q => q.sql.startsWith('create table')).every(q => q.sql.includes('engine = InnoDB'))).toBe(
       true
     )
+    expect(
+      f.queries
+        .filter(q => q.sql.startsWith('create table'))
+        .every(q => q.sql.includes('varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci'))
+    ).toBe(true)
     expect(f.progress()).toEqual({
       snapshotTableId: 0,
       started: true,
@@ -276,9 +292,35 @@ test.each([
   ['indexes', null]
 ] as Array<[Kind, unknown]>)('invalid %s metadata refuses adoption and removal', async (kind, value) => {
   const f = fixture((current, rows) => (current === kind ? value : rows))
+  const message =
+    kind === 'sourceTables'
+      ? 'Snapshot certificate source requires transactional tables'
+      : kind === 'sourceColumn'
+        ? 'Unsupported snapshot certificate field definition'
+        : 'Snapshot certificate table definition mismatch'
   try {
-    await expect(install(f.k)).rejects.toThrow()
-    await expect(remove(f.k)).rejects.toThrow()
+    await expect(install(f.k)).rejects.toThrow(message)
+    await expect(remove(f.k)).rejects.toThrow(message)
+  } finally {
+    await f.k.destroy()
+  }
+})
+
+test('MySQL resumes equivalent trigger whitespace without replacing the installed observers', async () => {
+  let reformatted = false
+  const f = fixture((kind, rows) =>
+    reformatted && kind === 'triggers'
+      ? rows.map(row => ({ ...row, body: ' \n' + String(row.body).replaceAll(' ', '\n\t ') + '\n ' }))
+      : rows
+  )
+  try {
+    await install(f.k)
+    const created = f.queries.filter(q => q.sql.startsWith('CREATE TRIGGER')).length
+    reformatted = true
+    await install(f.k)
+    expect(f.queries.filter(q => q.sql.startsWith('CREATE TRIGGER'))).toHaveLength(created)
+    await remove(f.k)
+    expect(f.triggers.size).toBe(0)
   } finally {
     await f.k.destroy()
   }
