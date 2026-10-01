@@ -23,6 +23,11 @@ describe('Transaction class method tests', () => {
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('transactionTests2'))
   })
 
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
+  })
+
   afterAll(async () => {
     // Destroy both sets of database contexts
     for (const ctx of ctxs) {

@@ -718,6 +718,33 @@ export abstract class TestUtilsWalletStorage {
     return Setup.createPostgresKnex(connection, database)
   }
 
+  /**
+   * Postgres sequences do not advance when a test inserts a row with an
+   * explicit id, so a later generated id can collide with it. Moves every
+   * sequence in a Postgres `StorageKnex` past the largest id in its column.
+   * Does nothing for other storage.
+   */
+  static async advancePostgresSequences(storage: StorageProvider): Promise<void> {
+    if (!(storage instanceof StorageKnex) || storage.knex.client.dialect !== 'postgresql') return
+    const knex = storage.knex
+    const columns: { rows: Array<{ table: string; column: string; sequence: string }> } = await knex.raw(`
+      select c.relname as "table", a.attname as "column",
+        pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) as "sequence"
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_attribute a on a.attrelid = c.oid
+      where c.relkind = 'r' and n.nspname = current_schema() and a.attnum > 0 and not a.attisdropped
+        and pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) is not null`)
+    for (const { table, column, sequence } of columns.rows) {
+      // `sequence` is a catalog-quoted name from pg_get_serial_sequence.
+      await knex.raw(
+        `select setval(?, m) from (select max(??) as m from ??) x
+         where m > (select case when is_called then last_value else last_value - 1 end from ${sequence})`,
+        [sequence, column, table]
+      )
+    }
+  }
+
   static async createMySQLTestWallet(args: {
     databaseName: string
     chain?: Chain
@@ -971,7 +998,12 @@ export abstract class TestUtilsWalletStorage {
     const storage = new WalletStorageManager(identityKey, activeStorage)
     await storage.makeAvailable()
     if (useReader) {
-      const readerKnex = _tu.createLocalSQLite(readerFile)
+      // The fixture records only the initial migration. A file copy migrates
+      // its rows in place (for example the proven_tx_reqs history reset), so
+      // sync from a migrated copy of the fixture to get the same rows.
+      const migratedReaderFile = await _tu.newTmpFile(`${databaseName}.reader.sqlite`, false, false, false)
+      await _tu.copyFile(readerFile, migratedReaderFile)
+      const readerKnex = _tu.createLocalSQLite(migratedReaderFile)
       const reader = new StorageKnex({
         chain,
         knex: readerKnex,
@@ -979,9 +1011,14 @@ export abstract class TestUtilsWalletStorage {
         commissionPubKeyHex: undefined,
         feeModel: { model: 'sat/kb', value: 1 }
       })
-      await reader.makeAvailable()
-      await storage.syncFromReader(identityKey, new StorageSyncReader({ identityKey }, reader))
-      await reader.destroy()
+      try {
+        await reader.migrate(databaseName, randomBytesHex(33))
+        await reader.makeAvailable()
+        await storage.syncFromReader(identityKey, new StorageSyncReader({ identityKey }, reader))
+      } finally {
+        await reader.destroy()
+        await fsp.rm(migratedReaderFile, { force: true })
+      }
     }
     const services = new Services(chain)
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services)

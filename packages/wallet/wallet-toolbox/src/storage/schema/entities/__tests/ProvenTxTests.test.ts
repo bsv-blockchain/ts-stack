@@ -84,6 +84,11 @@ describe('ProvenTx class method tests', () => {
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('ProvenTxTests2'))
   })
 
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
+  })
+
   afterAll(async () => {
     for (const ctx of ctxs) {
       await ctx.storage.destroy()

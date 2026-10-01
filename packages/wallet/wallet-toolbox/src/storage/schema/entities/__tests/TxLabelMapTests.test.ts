@@ -25,6 +25,11 @@ describe('TxLabelMap Class Tests', () => {
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('txLabelMapTests_db2'))
   })
 
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
+  })
+
   afterAll(async () => {
     // Clean up primary databases
     for (const ctx of ctxs) {

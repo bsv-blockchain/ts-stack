@@ -19,6 +19,11 @@ describe('SyncState class method tests', () => {
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('SyncStateTests'))
   })
 
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of ctxs) await _tu.advancePostgresSequences(ctx.activeStorage)
+  })
+
   afterAll(async () => {
     for (const ctx of ctxs) {
       await ctx.storage.destroy()
