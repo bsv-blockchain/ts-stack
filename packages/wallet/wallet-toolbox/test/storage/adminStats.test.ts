@@ -104,7 +104,10 @@ describe('adminStats and admin req review', () => {
       const knex = (storage as StorageKnex).knex
       const user = await _tu.insertTestUser(storage)
       const { tx } = await _tu.insertTestTransaction(storage, user, false, { status: 'unproven' })
-      const created = new Date(Date.now() - 2 * 60 * 60 * 1000 - 5 * 60 * 1000)
+      // Server clock: the driver writes Dates in the client time zone, which may differ from the server's.
+      const created = knex.raw(
+        storage.dbtype === 'Postgres' ? "now() - interval '125 minutes'" : 'NOW() - INTERVAL 125 MINUTE'
+      )
       await _tu.insertTestProvenTxReq(storage, tx.txid!, undefined, false)
       await knex('proven_tx_reqs').where({ txid: tx.txid }).update({ created_at: created, rawTx: Buffer.from([1, 2, 0xab]) })
 
