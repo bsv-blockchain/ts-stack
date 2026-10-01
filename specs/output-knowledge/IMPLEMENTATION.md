@@ -1442,3 +1442,27 @@ HTTP cases also cover complete safe CORS headers, changed second-attempt binding
 owned same-length bytes, exact queue capacity release and client cancellation
 before binding prepared data. Complete mutation reruns remain pending; no failure
 has been waived or replaced by a partial selection.
+
+### Native lookup delivery qualification after strengthened regressions
+
+On b9a0641a7 the complete 189-site disclosure campaign passes at 97.35%
+(184 killed, 5 survived), with zero uncovered and invalid mutants, in 5m42s.
+The complete 664-site HTTP campaign passes at 90.36% (560 killed, 40 timeout,
+64 survived), with zero uncovered and invalid mutants, in 7m00s. These use all
+registered sources, 300 property runs, the original seed and four workers per
+campaign. No source exclusion, threshold or deadline was changed.
+
+The first campaign failures (82.54% disclosure and 88.70% HTTP) remain recorded.
+The second attempts failed because the local disk filled: the disclosure report
+could not be written, and the HTTP runner recorded 193 invalid mutants from
+ENOSPC. Neither is passing evidence. Both terminated before cleanup; all 10,118
+tracked and compiled inputs matched their frozen hashes. Only derived Jest cache
+groups whose recorded tests belonged exclusively to this checkout were removed.
+The successful third attempts used the unchanged source and test inputs.
+
+The complete 488-site SQLite session campaign also passes at 92.42%
+(450 killed, 1 timeout, 37 survived), with zero uncovered and invalid mutants,
+in 17m19s; all 148 initial tests passed. Every campaign is terminal, and all
+10,118 tracked/compiled inputs still match the frozen hashes.
+These local results do not establish complete checkpoint-two integration or
+exact-head hosted qualification.
