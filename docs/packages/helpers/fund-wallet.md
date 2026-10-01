@@ -3,7 +3,7 @@ id: pkg-fund-wallet
 title: '@bsv/fund-wallet'
 kind: package
 domain: helpers
-version: '1.5.2'
+version: '1.5.3'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
@@ -15,6 +15,10 @@ tags: [helpers, testing, faucet, development]
 ---
 
 # @bsv/fund-wallet
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Command-line faucet/funding tool for development and testing — funds a remote wallet with satoshis from a local Metanet Desktop wallet via private key derivation.
 

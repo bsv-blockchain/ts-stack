@@ -3,7 +3,7 @@ id: pkg-gasp
 title: '@bsv/gasp'
 kind: package
 domain: overlays
-version: '1.3.7'
+version: '1.3.8'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
@@ -15,6 +15,10 @@ tags: [overlay, sync, gasp, graph]
 ---
 
 # @bsv/gasp
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Graph Aware Sync Protocol — synchronize transaction graphs between overlay nodes with incremental building, SPV validation, and bandwidth efficiency.
 

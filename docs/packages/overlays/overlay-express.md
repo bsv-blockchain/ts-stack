@@ -4,7 +4,7 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.7.3'
+version: '2.7.4'
 last_updated: '2026-09-26'
 last_verified: '2026-09-26'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ tags: ['overlay', 'express', 'http']
 ---
 
 # @bsv/overlay-express
+
+This source candidate declares SDK peer `^2.4.0 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Opinionated Express.js HTTP server wrapper for @bsv/overlay with built-in configuration, health checks, and peer discovery.
 

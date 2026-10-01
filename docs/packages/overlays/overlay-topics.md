@@ -15,6 +15,10 @@ tags: ['overlay', 'topics', 'uhrp']
 
 # @bsv/overlay-topics
 
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Canonical collection of pre-built BSV overlay topic managers and lookup services for identity, tokens, supply chain, messaging, and more.
 
 ## DID overlay retirement (2.0 candidate)
