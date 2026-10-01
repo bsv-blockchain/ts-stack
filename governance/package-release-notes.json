@@ -209,22 +209,22 @@
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.14.4",
-      "releaseType": "patch",
-      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions. Adds an SDK3 peer alternative while retaining the existing SDK2.8.0 floor. Public Argon2id declarations reference the typed hash-wasm package while retaining the same generic binary/string contract and emitted runtime bytes.",
-      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
+      "releaseType": "minor",
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions. Adds an SDK3 peer alternative while retaining the existing SDK2.8.0 floor. Public Argon2id declarations reference the typed hash-wasm package while retaining the same generic binary/string contract and emitted runtime bytes. StorageServer exposes its configured Express application as app so a host can mount it with hostApp.use(path, server.app) instead of calling start(); port is optional and only required by start(). The preRpcMiddleware option inserts Express handlers on POST / after authentication, the authenticated rate limit and payment, immediately before JSON-RPC dispatch; a handler that responds stops the call before dispatch. publicRoutes: false removes the unauthenticated GET /, /robots.txt and /healthz routes.",
+      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records. StorageServer defaults are unchanged; existing start() callers need no change."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.14.4",
-      "releaseType": "patch",
-      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
+      "releaseType": "minor",
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions. Released in step with @bsv/wallet-toolbox 2.15.0, which adds StorageServer mounting; StorageServer is not part of this entry point.",
       "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.14.4",
-      "releaseType": "patch",
-      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions. Adds an SDK3 peer alternative while retaining the existing SDK2.8.0 floor.",
+      "releaseType": "minor",
+      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions. Adds an SDK3 peer alternative while retaining the existing SDK2.8.0 floor. Released in step with @bsv/wallet-toolbox 2.15.0, which adds StorageServer mounting; StorageServer is not part of this entry point.",
       "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
     },
     {

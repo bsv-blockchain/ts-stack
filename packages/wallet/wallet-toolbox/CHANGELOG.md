@@ -4,7 +4,16 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.14.5
+## wallet-toolbox 2.15.0
+
+- `StorageServer.app` is public, so a host can mount the storage server in its
+  own Express application (`hostApp.use('/storage', server.app)`) instead of
+  calling `start()`. `port` is optional and only required by `start()`.
+- `preRpcMiddleware` adds Express handlers on `POST /` after authentication,
+  the authenticated rate limit and payment, immediately before JSON-RPC
+  dispatch. A handler that responds stops the call before dispatch.
+- `publicRoutes: false` removes the unauthenticated `GET /`, `/robots.txt` and
+  `/healthz` routes. Defaults are unchanged.
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference
   aliases when `createAction` or `signAction` reports them as `sending` or
