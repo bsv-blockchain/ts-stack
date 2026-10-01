@@ -119,6 +119,7 @@ function applyKnexBaseFilters(
     .whereNull('o.spentBy')
 }
 
+// ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
 function applyKnexTagFilters(query: Knex.QueryBuilder, k: Knex, tagIds: number[], queryModeAll: boolean): void {
   if (queryModeAll) {
     for (const tagId of tagIds) {

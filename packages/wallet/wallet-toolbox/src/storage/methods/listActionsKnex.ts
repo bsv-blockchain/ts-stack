@@ -177,6 +177,7 @@ export async function listActions(
   }
 
   const makeWithLabelsQueries = () => {
+    // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
     const cteq = k.raw(
       `
             SELECT ${columns.map(() => '??').join(',')},

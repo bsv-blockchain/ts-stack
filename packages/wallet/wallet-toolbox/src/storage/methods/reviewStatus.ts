@@ -72,6 +72,7 @@ export async function reviewStatus(
         .whereExists(function () {
           this.select(k.raw(1))
             .from('transactions as t')
+            // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
             .whereRaw("?? = ?? and t.status = 'failed'", ['outputs.spentBy', 't.transactionId'])
             .whereNotExists(function () {
               // A failed transaction can still be reconciled from active or valid reqs.
@@ -104,6 +105,7 @@ export async function reviewStatus(
         .whereExists(function () {
           this.select(k.raw(1))
             .from('transactions as t')
+            // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
             .whereRaw("?? = ?? and t.status = 'failed'", ['outputs.transactionId', 't.transactionId'])
             .whereNotExists(function () {
               // A failed transaction can still be reconciled from active or valid reqs.
@@ -125,6 +127,7 @@ export async function reviewStatus(
       q: k<TableTransaction>('transactions')
         .update({
           status: 'completed',
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
           provenTxId: k.raw('(SELECT ?? FROM proven_txs AS p WHERE transactions.txid = p.txid)', ['p.provenTxId'])
         })
         .whereNull('provenTxId')

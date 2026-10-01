@@ -623,6 +623,7 @@ export class KnexMigrations implements MigrationSource<string> {
           knex
         })
         const settings = await storage.makeAvailable()
+        // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
         await knex.raw('update users set ?? = ? where ?? is NULL', [
           'activeStorage',
           settings.storageIdentityKey,

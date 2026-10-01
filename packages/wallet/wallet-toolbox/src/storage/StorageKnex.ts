@@ -359,6 +359,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .whereNull('pb.preparedBeefId')
       .select('o.userId', 'o.txid as rootTxid')
       .groupBy('o.userId', 'o.txid')
+      // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
       .orderByRaw('MIN(??)', ['o.outputId'])
       .limit(limit)) as PreparedBeefRoot[]
     return rows
@@ -515,6 +516,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         k
           .select('*')
           .from('transactions')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
           .whereRaw('?? = ?? and ?? = ?', [
             'proven_txs.provenTxId',
             'transactions.provenTxId',
@@ -545,6 +547,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         k
           .select('*')
           .from('transactions')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
           .whereRaw('proven_tx_reqs.txid = transactions.txid and ?? = ?', ['transactions.userId', args.userId])
       )
     })
@@ -569,6 +572,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       k
         .select('*')
         .from('tx_labels')
+        // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
         .whereRaw('?? = ?? and ?? = ?', [
           'tx_labels.txLabelId',
           'tx_labels_map.txLabelId',
@@ -597,6 +601,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       k
         .select('*')
         .from('output_tags')
+        // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
         .whereRaw('?? = ?? and ?? = ?', [
           'output_tags.outputTagId',
           'output_tags_map.outputTagId',
@@ -1947,6 +1952,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         void this.select(1)
           .from('action_batch_outputs as abo')
           .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
           .whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           .whereIn('ab.status', ['active', 'prepared'])
           .where('ab.expiresAt', '>', now)
@@ -1986,6 +1992,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         void this.select(1)
           .from('action_batch_outputs as abo')
           .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
           .whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           .whereIn('ab.status', ['active', 'prepared'])
           .where('ab.expiresAt', '>', now)
@@ -2025,6 +2032,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         void this.select(1)
           .from('action_batch_outputs as abo')
           .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
           .whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           .whereIn('ab.status', ['active', 'prepared'])
           .where('ab.expiresAt', '>', now)
@@ -2270,6 +2278,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .whereNot('o.derivationSuffix', '')
           .whereNull('o.spentBy')
           .whereNotExists(function () {
+            // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
             void this.select(1).from('action_batch_outputs as abo').whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           })
           .whereIn('t.status', status)
