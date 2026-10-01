@@ -403,6 +403,19 @@ function argumentsFor(argv) {
   return result
 }
 
+export async function loadCanonicalEvidence(targetIds, load) {
+  const canonical = new Map()
+  let index = 0
+  async function worker() {
+    const targetId = targetIds[index++]
+    if (targetId === undefined) return
+    canonical.set(targetId, await load(targetId))
+    return worker()
+  }
+  await Promise.all(Array.from({ length: Math.min(4, targetIds.length) }, worker))
+  return canonical
+}
+
 async function main(argv) {
   const options = argumentsFor(argv)
   const targets = buildMutationTargets(ROOT)
@@ -436,9 +449,9 @@ async function main(argv) {
     reportBytes: fs.readFileSync(path.join(path.dirname(file), 'mutation.json'), 'utf8'),
     executionBytes: fs.readFileSync(path.join(path.dirname(file), 'execution.json'), 'utf8')
   }))
-  const canonical = new Map()
-  for (const targetId of identity.targetIds)
-    canonical.set(targetId, await targetEvidence(ROOT, targets[targetId], targetId))
+  const canonical = await loadCanonicalEvidence(identity.targetIds, targetId =>
+    targetEvidence(ROOT, targets[targetId], targetId)
+  )
   const qualified = verifyFullCampaign(identity, evidence, policy, targetId =>
     canonical.get(targetId)
   )

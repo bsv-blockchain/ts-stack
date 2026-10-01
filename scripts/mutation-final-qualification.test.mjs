@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import fs from 'node:fs'
 import { createHash } from 'node:crypto'
-import { makeTargetReceipt, verifyFullCampaign } from './mutation-final-qualification.mjs'
+import {
+  makeTargetReceipt,
+  verifyFullCampaign,
+  loadCanonicalEvidence
+} from './mutation-final-qualification.mjs'
 
 const identity = {
   sourceSha: 'a'.repeat(40),
@@ -296,5 +300,28 @@ test('successful execution evidence binds the exact report, properties, run and 
       JSON.stringify(replay)
     ).mode,
     'diagnostic'
+  )
+})
+
+test('canonical evidence loading bounds resource concurrency and propagates missing evidence', async () => {
+  const ids = Array.from({ length: 33 }, (_, index) => String(index))
+  let active = 0
+  let peak = 0
+  const results = await loadCanonicalEvidence(ids, async id => {
+    active += 1
+    peak = Math.max(peak, active)
+    await new Promise(resolve => setImmediate(resolve))
+    active -= 1
+    return `canonical-${id}`
+  })
+  assert.equal(peak, 4)
+  assert.equal(results.size, ids.length)
+  for (const id of ids) assert.equal(results.get(id), `canonical-${id}`)
+  await assert.rejects(
+    loadCanonicalEvidence(ids, async id => {
+      if (id === '3') throw new Error('missing canonical source')
+      return id
+    }),
+    /missing canonical source/
   )
 })
