@@ -1563,3 +1563,25 @@ with their owning sections, keeps License last, and distinguishes existing nativ
 service/workbench evidence from remaining complete-profile and application work.
 This is local component qualification, not exact-head remote CI or checkpoint-two
 completion.
+
+### Final native root qualification for the current batch
+
+On `189bed0c3a69d4af129db2cbbdda053f85091d7d`, the complete 255-site root-journal
+campaign passes 98.82% (250 killed, two detected timeouts, three survivors), with
+zero uncovered or invalid mutants, in 37m17s. The root-records request partition
+passes 99.08% over 218 sites (216 killed, two survivors) in 57m08s. Its serving
+partition passes 93.77% over 257 sites (241 killed, 16 survivors) in 38m51s.
+The repository's pinned canonical inventory and partition combiner verify the
+exact 475-site union at 96.21% (457 killed, 18 survivors), with zero uncovered
+or invalid mutants. Every original test, source, property budget, seed, worker
+limit and score gate is retained. These are explicitly local component receipts;
+they do not impersonate hosted execution or a repository-wide qualification.
+
+The recovered worker failures remain in the execution logs. All 10,119 frozen
+tracked and compiled inputs matched their original hashes after the last campaign
+finished, at 2026-10-01T12:39:50Z. Together with the preceding runtime, proposal,
+HTTP, middleware and reference-app evidence, this closes the current native
+delivery validation batch. Proposal client acceptance and its replay profile,
+private query and projection composition, remaining application integrations,
+and exact-head remote CI still require implementation or qualification before
+checkpoint two can be approved.
