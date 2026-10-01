@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 92)
+  assert.equal(result.summary.propertySuites, 93)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 92)
+  assert.equal(result.summary.mutationTargets, 93)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -654,6 +654,22 @@ test('proposal send qualification retains the entire SQLite journal and all jour
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const registration = mutationPolicy.targets.find(value => value.id === 'proposal-journal-send')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('proposal disclosure qualification retains its entire authority boundary and generated native-enqueue cases', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['proposal-response-disclosure']
+  assert.deepEqual(target.mutate, ['src/proposals/ProposalResponseDisclosure.ts'])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/proposal-disclosure*.test.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, ['src/proposals/**', 'test/proposal-*.ts'])
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = policy.targets.find(value => value.id === 'proposal-response-disclosure')
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)

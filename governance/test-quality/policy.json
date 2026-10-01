@@ -1146,6 +1146,18 @@
           "Unrelated channel changes do not invalidate an unchanged selected record.",
           "Reopening preserves original records and send checks without inventing delivery rollback or rewriting history."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-disclosure.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact original proposal response binding, current caller authority, retained capability and exclusive expiry at native enqueue",
+        "target": "At least 300 generated caller, byte, authority and operation-specific deadline combinations",
+        "invariants": [
+          "A response is queued only for its original authenticated caller and unchanged canonical bytes.",
+          "Current installed policy and host access intersect with the original retained contract and its exclusive recovery deadline.",
+          "Active get responses stop at signed expiry, while retained publication acknowledgements remain recoverable through retention."
+        ]
       }
     ],
     "exclusions": [

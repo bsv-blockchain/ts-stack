@@ -1078,3 +1078,50 @@ export async function enqueuePreparedProposal(
   )
 }
 ```
+
+## Bind a proposal result to its original request
+
+The service-owned disclosure companion supplies the response semantics for the
+native journal gate. The transport authenticates and signs first; it must pass
+the actual signed bytes and caller to the final enqueue helper. Keep current
+host access in the journal's policy domain. This example does not mount HTTP.
+
+```typescript compile
+// example-id: proposal-response-disclosure
+import {
+  ProposalResponseDisclosure,
+  type ProposalResponseDisclosureOptions,
+  type ProposalResponseOperation,
+  type ProposalServiceCaller,
+  type ProposalJournalSend
+} from '@bsv/output-knowledge/proposals'
+
+export function bindProposalResult(
+  options: ProposalResponseDisclosureOptions,
+  operation: ProposalResponseOperation,
+  originalRequestText: string,
+  serviceResult: unknown,
+  caller: ProposalServiceCaller
+) {
+  const bound = new ProposalResponseDisclosure(options).bind(
+    operation,
+    originalRequestText,
+    serviceResult,
+    caller
+  )
+  return {
+    body: bound.body,
+    enqueue: async (
+      journal: ProposalJournalSend,
+      signedBytes: Uint8Array,
+      authenticatedIdentity: string,
+      nativeEnqueue: (bytes: Uint8Array) => undefined
+    ) =>
+      journal.enqueueResponse(
+        { reference: bound.reference, bytes: signedBytes },
+        (entry, bytes) => bound.validate(entry, bytes, authenticatedIdentity),
+        nativeEnqueue
+      )
+  }
+}
+```

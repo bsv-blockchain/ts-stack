@@ -617,6 +617,17 @@ export function buildMutationTargets(repositoryRoot) {
         '<rootDir>/src/script/templates/__tests/RevenueListing.property.test.ts'
       ])
     },
+    'proposal-response-disclosure': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/proposal-disclosure.property.test.ts',
+      additionalInputs: ['src/proposals/**', 'test/proposal-*.ts'],
+      mutate: ['src/proposals/ProposalResponseDisclosure.ts'],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/proposal-disclosure*.test.ts'], {
+        esm: true
+      })
+    },
     'proposal-journal-send': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',

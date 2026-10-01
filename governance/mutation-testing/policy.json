@@ -936,6 +936,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-response-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact original proposal response binding, current caller authority, retained capability and exclusive expiry at native enqueue",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

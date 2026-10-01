@@ -160,7 +160,7 @@ It reads the exact current channel or retained proposal under its writer lock,
 rechecks a trusted synchronous disclosure predicate and enters the native response
 queue before unlocking. The predicate must bind the outgoing bytes, original
 contract, retention and current access; missing records never authorize disclosure.
-Hydration and signing happen beforehand. Owned inputs, a 1 MiB response bound,
+Hydration and signing happen beforehand. Owned inputs, a 4 MiB response bound,
 reentry checks and independent-writer serialization leave existing journal bytes
 and APIs unchanged. This primitive is not a complete HTTP service; see the package
 guide for policy coherence and post-enqueue failure semantics.
@@ -272,3 +272,24 @@ view without a peer-request envelope. Its owned facts do not establish unspentne
 local-policy approval or permission to serve. `SDKRootEvictionEvidence` retains
 its existing request-signature and withdrawal/consumption checks using the same
 underlying verifier.
+
+## Proposal response disclosure
+
+`ProposalResponseDisclosure` from `@bsv/output-knowledge/proposals` binds the
+original request text, authenticated caller and service result. Its owned bound
+response supplies a current-channel selector for get and a retained-proposal
+selector for put/finalize. Pass its validator to `ProposalJournalSend` only at
+actual native enqueue, after response signing. Binding alone grants no send
+permission. The validator reconstructs the exact allowed wire body from the fresh
+record, checks current installed policy and host access, restores the original
+publication or admission selection, and applies its byte and retention bounds.
+
+A publication acknowledgement remains recoverable after a newer channel revision.
+A get/finalize response whose state changed must be obtained again. An active get
+is withheld at signed expiry even if the expiry timer has not run; the ordinary
+service get commits the expired state on retry. Unresolved finalization keeps
+its recorded recovery contract while its original job is reconciled. Discovery
+changes and unrelated channel writes do not rebind those records. Missing and
+unauthorized gets use the same not-found result. The companion performs no
+admission, wallet action or network I/O; the authenticated HTTP adapter must also
+bind signed headers, enforce physical work limits and handle cancellation.

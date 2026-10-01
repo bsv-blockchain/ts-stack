@@ -1172,3 +1172,22 @@ and all 33 compiled examples against 22 exact package tarballs pass. The new
 mutation registration is additive, with unchanged 90%/zero-uncovered/zero-invalid
 gates. Its complete execution and authenticated HTTP/service composition are
 still pending; this primitive alone does not establish profile readiness.
+
+## Service-owned proposal response binding
+
+The optional `ProposalResponseDisclosure` companion adds synchronous response
+semantics above the native journal gate. It binds actual request bytes and
+caller to an immutable wire body and exact record selector. A fresh journal
+record supplies the original capability, current policy/access decision,
+exclusive retention boundary and exact response state. Publication ACKs survive
+new revisions; get/finalize responses reject changed state. Active get stops at
+signed expiry without depending on a timer. No asynchronous callback, discovery
+refresh or new effect runs inside the journal lock.
+
+All 14 focused tests pass with full statement, branch, function and line coverage,
+including a 300-case property and real SQLite enqueue. Cases include original
+publication/admission selectors, changed discovery, signed expiry, unresolved
+finalization, current revocation, unrelated writes, restart, actual request/response
+budgets and byte ownership. Complete-source mutation and HTTP composition remain
+pending. This adds a public optional companion without changing existing service
+methods or persisted formats.
