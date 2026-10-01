@@ -1010,6 +1010,61 @@ Run `StorageKnex.migrate(...)` before constructing the manager during an
 upgrade. `makeAvailable()` validates and loads an already-migrated database; it
 does not apply schema changes.
 
+### Mounting StorageServer in an Express application
+
+`server.app` is the configured Express application. Mount it in a host
+application instead of calling `start()`; `port` and `http` are only used by
+`start()`.
+
+```typescript
+import express from 'express'
+import { SessionManager } from '@bsv/sdk'
+import { AuthRequest, createAuthMiddleware } from '@bsv/auth-express-middleware'
+import { StorageServer } from '@bsv/wallet-toolbox'
+
+// Use KnexSessionManager when the host runs more than one process.
+const sessionManager = new SessionManager()
+
+const storageServer = new StorageServer(storage, {
+  wallet,
+  monetize: false,
+  sessionManager,
+  // Leave GET /, /robots.txt and /healthz to the host.
+  publicRoutes: false,
+  preRpcMiddleware: [
+    async (req, res, next) => {
+      if (await overQuota((req as AuthRequest).auth.identityKey, req.body.method)) {
+        res.status(507).json({ status: 'error', code: 'ERR_QUOTA_EXCEEDED' })
+        return
+      }
+      next()
+    }
+  ]
+})
+
+const app = express()
+app.use('/storage', storageServer.app)
+app.use(express.json())
+app.use(createAuthMiddleware({ wallet, sessionManager }))
+// ...host routes
+app.listen(8080)
+```
+
+Clients connect with `new StorageClient(wallet, 'https://host.example/storage')`.
+`AuthFetch` sends the BRC-104 handshake to the origin's `/.well-known/auth`,
+not to the mount path, so the host must answer it with its own auth middleware
+using the same `wallet` and the same `sessionManager` as the storage server.
+Mount the storage server before the host's auth middleware and body parsers;
+the storage app authenticates and parses its own requests. It keeps its own
+security headers, CORS, concurrency and rate limits, and inherits the host's
+`trust proxy` setting unless `trustProxy` is set.
+
+`preRpcMiddleware` handlers run on JSON-RPC `POST /` requests after
+authentication, the authenticated rate limit and, when `monetize` is set, the
+payment middleware. They see `req.auth` and the parsed body. A handler that
+responds instead of calling `next()` stops the call before dispatch. They do not
+run on the action batch upload routes.
+
 ## Development
 
 ### Overlay identity verification

@@ -2610,7 +2610,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export interface WalletStorageServerOptions {
     host?: string;
-    port: number;
+    port?: number;
     wallet: Wallet;
     monetize: boolean;
     calculateRequestPrice?: (req: Request) => number | Promise<number>;
@@ -2634,6 +2634,8 @@ export interface WalletStorageServerOptions {
     maxRpcResponseBytes?: number;
     syncTransfers?: boolean;
     paymentReplayStore?: PaymentReplayStore;
+    preRpcMiddleware?: RequestHandler[];
+    publicRoutes?: boolean;
 }
 ```
 
@@ -2728,6 +2730,14 @@ Durable BRC-105 replay claims for monetized multi-replica deployments.
 paymentReplayStore?: PaymentReplayStore
 ```
 
+###### Property port
+
+Listener port for `start()`. Not used when `app` is mounted in a host application.
+
+```ts
+port?: number
+```
+
 ###### Property preAuthRateLimit
 
 Pre-authentication IP rate limiting. Defaults to 300 requests per minute.
@@ -2736,6 +2746,25 @@ one aggregate limit.
 
 ```ts
 preAuthRateLimit?: Partial<RateLimitOptions>
+```
+
+###### Property preRpcMiddleware
+
+Handlers run on `POST /` after authentication, authenticated rate limiting
+and payment, immediately before JSON-RPC dispatch. They see `req.auth` and
+the parsed body. A handler that responds instead of calling `next()`
+prevents dispatch.
+
+```ts
+preRpcMiddleware?: RequestHandler[]
+```
+
+###### Property publicRoutes
+
+Serve the unauthenticated `GET /`, `/robots.txt` and `/healthz` routes. Default: true.
+
+```ts
+publicRoutes?: boolean
 ```
 
 ###### Property rateLimit
@@ -6168,6 +6197,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class StorageServer {
+    readonly app: express.Express = express();
     constructor(storage: StorageProvider, options: WalletStorageServerOptions)
     server: any;
     public start(): void
@@ -6179,6 +6209,14 @@ export class StorageServer {
 ```
 
 See also: [EntityTimeStamp](./client.md#interface-entitytimestamp), [StorageProvider](./storage.md#class-storageprovider), [WalletStorageServerOptions](./storage.md#interface-walletstorageserveroptions), [validateDate](./storage.md#function-validatedate), [validateEntities](./storage.md#function-validateentities), [validateEntity](./storage.md#function-validateentity)
+
+###### Property app
+
+Configured Express application. Mount it with `hostApp.use(path, server.app)` instead of calling `start()`.
+
+```ts
+readonly app: express.Express = express()
+```
 
 ###### Method validateEntities
 
