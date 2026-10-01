@@ -6,14 +6,24 @@ the runtime verifies evidence and reconciles spends, and an application projecto
 interprets the resulting state. Signing, payments and wallet actions remain
 explicit application workflows.
 
-This implementation branch is in progress. Shared SDK wire types, the journal
-adapters, evidence verification and dependency planning, spend selection, source
-membership reduction, the default Bitcoin protocol worker and runtime orchestration
-are implemented, together with wallet, finite per-host lookup and direct-delivery
-adapters and optional scoped source currentness with durable expiry. Service
-integrations, proposal processing and complete qualification evidence are still being connected before
-checkpoint-two review. The package version does not
-indicate a published or production-qualified release.
+This implementation branch is in progress. The Bitcoin knowledge core, durable
+receipt journals, progressive and live lookup client/provider, proposal host
+lifecycle, revenue-listing lineage/authority and root-advertisement coordination
+components are implemented. Optional SQLite persistence and authenticated Overlay
+Express adapters exercise concrete service paths. Proposal acceptance in the
+client core, private publication/acquisition, complete serving-path integration,
+platform qualification and downstream application adoption remain incomplete.
+The package version does not indicate a published or production-qualified release.
+See the [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md)
+for exact component evidence and outstanding work.
+
+Start with [durable receipt storage](#durable-receipt-journal),
+[protocol work and projection](#protocol-work-and-application-projection), and
+[source adapters](#source-adapters). Optional service components are described in
+[the live provider](#durable-progressive-and-live-provider),
+[proposal policies and lifecycle](#installed-proposal-policies),
+[root coordination](#durable-root-advertisement-decisions), and
+[revenue-listing history](#revenue-listing-history).
 
 ## Revenue listing history
 
@@ -84,6 +94,66 @@ installed signer. Returned bytes carry their observation revision for the separa
 native final-enqueue guard. The component installs no automatic peer policy or
 HTTP route. Existing parsed-packet journal calls and lookup work behavior remain
 unchanged; cancellation retains physical signing capacity until work settles.
+
+### Root coordination, recovery and local rules
+
+The optional root journal also implements `RootEvictionCheckedStorage`: checked
+retention, evaluation, assessment and result reads sample the trusted clock and
+recheck access, installed policy and external context inside the shared commit
+gate. Their observations include the exact current head for later signing and
+final enqueue. Existing deterministic methods and the local stored format remain
+unchanged. See the root coordination guide for callback and service obligations.
+
+The optional `RootEvictionCoordinatedStorage` companion atomically retains each
+request with its original signed capability selection and reserves its narrower
+advertised result limit. Explicit coordination configuration uses the sealed
+`root-eviction/2` format. Existing default format1 behavior remains unchanged;
+`upgradeCoordination` is an explicit transactional migration that preserves history
+and fences older open connections. Missing legacy selections are never filled
+from current discovery. See the root coordination guide for storage budgets,
+recovery, migration and the remaining complete-service obligations.
+
+The Node root entry also exports `SQLiteRootEvictionMaintenance`, an optional
+trusted local recovery companion. It opens the same existing sealed database,
+scans bounded pending digests and expires work using a clock and maintenance
+authority checked inside the shared gate. It preserves completed actions and
+original selections, requires no requester reconnection, and never grants peer
+authority or changes eligibility. The host still installs a bounded startup and
+periodic scheduling loop; see the root guide and compiled example. No existing
+journal API or storage-format migration is required for this companion.
+
+`RootEvictionRecoveryStorage` is a further optional worker companion implemented
+by the SQLite journal. `recoverCoordinated` resolves a pending digest to its original
+saved signed capability and current result under a checked local-worker guard,
+without discovery or requester impersonation. It cannot adopt legacy operations
+with missing selections or authorize new decisions. Independent maintenance expiry
+continues even when chain/context-dependent recovery cannot proceed.
+
+The optional root entry also exports `RootEvictionScheduler`. Explicit startup and
+periodic bounded scans recover durable work after lost wake hints or process restart.
+Manual/advisory mode is the default; automatic evaluation requires an installed
+versioned policy and current guarded authority. Separate expiry and evaluation scans
+preserve expiry progress while physical evidence work is stalled. Await `stop()`
+before closing caller-owned storage; logical cancellation alone does not drain a
+non-cooperating dependency. See the root coordination guide for bounds and lifecycle.
+
+`SQLiteRootEvictionLocalRules` in the Node root entry adds opt-in format3 local-rule
+history and complete assessment coverage, independently from peer suppression
+requests. Every active rule reserves lift capacity. Unknown rule results remain
+unresolved, and lifting a rule cannot grant membership until complete reassessment
+and projection. Formats1/2 retain their behavior; use the explicit format2-to3
+`upgradeLocalRules` migration and exact sealed configuration. Trusted operator
+attribution, installed matchers and verified currentness remain application ports.
+See the [root coordination guide](../../../docs/guides/root-eviction-coordination.md)
+for migration, bounds, retries and serving obligations.
+
+The evidence entry also exports `SDKRootAdvertisementEvidence` for direct local
+admission and reassessment. It verifies the exact SHIP/SLAP output, script digest,
+advertiser authentication and Bitcoin evidence in the installed immutable chain
+view without a peer-request envelope. Its owned facts do not establish unspentness,
+local-policy approval or permission to serve. `SDKRootEvictionEvidence` retains
+its existing request-signature and withdrawal/consumption checks using the same
+underlying verifier.
 
 ## Getting started
 
@@ -966,6 +1036,27 @@ ancestry, then reserve its verified raw bytes in SQLite. They deliberately leave
 ordinary admission unresolved and do not substitute for HTTP or topic integration.
 Do not advertise the complete BRC-194 profile based on these components alone.
 
+### Proposal response disclosure
+
+`ProposalResponseDisclosure` from `@bsv/output-knowledge/proposals` binds the
+original request text, authenticated caller and service result. Its owned bound
+response supplies a current-channel selector for get and a retained-proposal
+selector for put/finalize. Pass its validator to `ProposalJournalSend` only at
+actual native enqueue, after response signing. Binding alone grants no send
+permission. The validator reconstructs the exact allowed wire body from the fresh
+record, checks current installed policy and host access, restores the original
+publication or admission selection, and applies its byte and retention bounds.
+
+A publication acknowledgement remains recoverable after a newer channel revision.
+A get/finalize response whose state changed must be obtained again. An active get
+is withheld at signed expiry even if the expiry timer has not run; the ordinary
+service get commits the expired state on retry. Unresolved finalization keeps
+its recorded recovery contract while its original job is reconciled. Discovery
+changes and unrelated channel writes do not rebind those records. Missing and
+unauthorized gets use the same not-found result. The companion performs no
+admission, wallet action or network I/O; the authenticated HTTP adapter must also
+bind signed headers, enforce physical work limits and handle cancellation.
+
 ### Explicit startup and recovery work
 
 Use `SQLiteProposalJournal.create` for intentional installation and `open` for
@@ -1024,90 +1115,13 @@ its cursor atomically. Five child-process exits cover opening, capture, receipt,
 advance and live capture. Separate cases cover lost CAS acknowledgements, late
 workers, exact predecessor receipts and durable continuity reset/replay. These
 fixtures qualify the client; they do not constitute a durable provider or a
-deployed service. Complete authenticated service composition, the provider's
-durable log, mobile qualification and application demonstrations remain required
-before checkpoint-two approval.
+deployed service. Separate native provider, authenticated HTTP and two-host reference-workbench
+suites cover those components; the client fixture alone is not their evidence.
+Complete profile integration, mobile qualification and downstream application
+adoption remain separate obligations. Follow the implementation record for the
+current checkpoint status rather than treating one fixture as full qualification.
 
 ## License
 
 See the package-local [LICENSE.txt](./LICENSE.txt) and
 [third-party notices](./THIRD_PARTY_NOTICES.md) for distribution terms.
-
-The optional root journal also implements `RootEvictionCheckedStorage`: checked
-retention, evaluation, assessment and result reads sample the trusted clock and
-recheck access, installed policy and external context inside the shared commit
-gate. Their observations include the exact current head for later signing and
-final enqueue. Existing deterministic methods and the local stored format remain
-unchanged. See the root coordination guide for callback and service obligations.
-
-The optional `RootEvictionCoordinatedStorage` companion atomically retains each
-request with its original signed capability selection and reserves its narrower
-advertised result limit. Explicit coordination configuration uses the sealed
-`root-eviction/2` format. Existing default format1 behavior remains unchanged;
-`upgradeCoordination` is an explicit transactional migration that preserves history
-and fences older open connections. Missing legacy selections are never filled
-from current discovery. See the root coordination guide for storage budgets,
-recovery, migration and the remaining complete-service obligations.
-
-The Node root entry also exports `SQLiteRootEvictionMaintenance`, an optional
-trusted local recovery companion. It opens the same existing sealed database,
-scans bounded pending digests and expires work using a clock and maintenance
-authority checked inside the shared gate. It preserves completed actions and
-original selections, requires no requester reconnection, and never grants peer
-authority or changes eligibility. The host still installs a bounded startup and
-periodic scheduling loop; see the root guide and compiled example. No existing
-journal API or storage-format migration is required for this companion.
-
-`RootEvictionRecoveryStorage` is a further optional worker companion implemented
-by the SQLite journal. `recoverCoordinated` resolves a pending digest to its original
-saved signed capability and current result under a checked local-worker guard,
-without discovery or requester impersonation. It cannot adopt legacy operations
-with missing selections or authorize new decisions. Independent maintenance expiry
-continues even when chain/context-dependent recovery cannot proceed.
-
-The optional root entry also exports `RootEvictionScheduler`. Explicit startup and
-periodic bounded scans recover durable work after lost wake hints or process restart.
-Manual/advisory mode is the default; automatic evaluation requires an installed
-versioned policy and current guarded authority. Separate expiry and evaluation scans
-preserve expiry progress while physical evidence work is stalled. Await `stop()`
-before closing caller-owned storage; logical cancellation alone does not drain a
-non-cooperating dependency. See the root coordination guide for bounds and lifecycle.
-
-`SQLiteRootEvictionLocalRules` in the Node root entry adds opt-in format3 local-rule
-history and complete assessment coverage, independently from peer suppression
-requests. Every active rule reserves lift capacity. Unknown rule results remain
-unresolved, and lifting a rule cannot grant membership until complete reassessment
-and projection. Formats1/2 retain their behavior; use the explicit format2-to3
-`upgradeLocalRules` migration and exact sealed configuration. Trusted operator
-attribution, installed matchers and verified currentness remain application ports.
-See the [root coordination guide](../../../docs/guides/root-eviction-coordination.md)
-for migration, bounds, retries and serving obligations.
-
-The evidence entry also exports `SDKRootAdvertisementEvidence` for direct local
-admission and reassessment. It verifies the exact SHIP/SLAP output, script digest,
-advertiser authentication and Bitcoin evidence in the installed immutable chain
-view without a peer-request envelope. Its owned facts do not establish unspentness,
-local-policy approval or permission to serve. `SDKRootEvictionEvidence` retains
-its existing request-signature and withdrawal/consumption checks using the same
-underlying verifier.
-
-## Proposal response disclosure
-
-`ProposalResponseDisclosure` from `@bsv/output-knowledge/proposals` binds the
-original request text, authenticated caller and service result. Its owned bound
-response supplies a current-channel selector for get and a retained-proposal
-selector for put/finalize. Pass its validator to `ProposalJournalSend` only at
-actual native enqueue, after response signing. Binding alone grants no send
-permission. The validator reconstructs the exact allowed wire body from the fresh
-record, checks current installed policy and host access, restores the original
-publication or admission selection, and applies its byte and retention bounds.
-
-A publication acknowledgement remains recoverable after a newer channel revision.
-A get/finalize response whose state changed must be obtained again. An active get
-is withheld at signed expiry even if the expiry timer has not run; the ordinary
-service get commits the expired state on retry. Unresolved finalization keeps
-its recorded recovery contract while its original job is reconciled. Discovery
-changes and unrelated channel writes do not rebind those records. Missing and
-unauthorized gets use the same not-found result. The companion performs no
-admission, wallet action or network I/O; the authenticated HTTP adapter must also
-bind signed headers, enforce physical work limits and handle cancellation.

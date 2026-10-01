@@ -1549,3 +1549,17 @@ compiled inputs matched the pre-run hashes after both campaigns terminated.
 This qualifies the retained native proposal send boundary, including owned Buffer
 bytes; it does not establish the still-unimplemented proposal client acceptance,
 new replay profile, private query bridge, or complete checkpoint-two readiness.
+
+The runtime lifecycle follow-up is qualified locally on `cb8f96c51`: all 1,507
+native tests across 112 suites pass, with 97.67% statement, 95.50% branch, 99.13%
+function and 98.12% line coverage. The runtime itself has 100% function/line and
+99.31% branch coverage. The complete 422-site mutation rerun passes 91.71%
+(301 killed, 86 detected timeouts, 35 survivors, zero uncovered/invalid) in 6m37s.
+Its recovered mutated-worker exit remains in the execution log; prior failing
+results remain retained. All 10,119 tracked/compiled inputs matched after both
+campaigns terminated. Root health, lint, full formatting and strict workspace
+types passed for the batch. The README now groups root/proposal component details
+with their owning sections, keeps License last, and distinguishes existing native
+service/workbench evidence from remaining complete-profile and application work.
+This is local component qualification, not exact-head remote CI or checkpoint-two
+completion.
