@@ -21,7 +21,8 @@ test('compiled examples are scoped through their first-party dependency closure'
       'overlay-and-gasp',
       'wallet-storage',
       'durable-lookup-provider',
-      'local-wallet-recovery'
+      'local-wallet-recovery',
+      'root-coordination-http'
     ]
   )
 })

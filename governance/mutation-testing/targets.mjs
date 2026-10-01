@@ -624,6 +624,42 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'overlay-root-eviction-http': {
+      packageDirectory: 'packages/overlays/overlay-express',
+      manifest: 'packages/overlays/overlay-express/package.json',
+      propertyTest:
+        'packages/overlays/overlay-express/src/__tests__/RootEvictionRoutes.property.test.ts',
+      mutate: ['src/RootEvictionRoutes.ts', 'src/RootEvictionHTTPPolicy.ts'],
+      additionalInputs: [
+        'src/__tests__/RootEvictionRoutes.fixture.ts',
+        'src/RootEvictionResponseGuard.ts',
+        'src/OutputLookupHTTPPolicy.ts',
+        '../../application/output-knowledge/src/root-eviction/**',
+        '../../application/output-knowledge/src/internal/**',
+        '../../sdk/src/**',
+        '../../application/output-knowledge/test/root-*.ts',
+        '../../middleware/auth-express-middleware/src/**',
+        '../../middleware/auth-express-middleware/mod.ts'
+      ],
+      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests__/RootEvictionRoutes*.test.ts'], {
+        config: {
+          moduleNameMapper: {
+            ...Object.fromEntries(
+              [
+                'root-eviction-service-fixture',
+                'root-contract-fixture',
+                'root-eviction-fixture'
+              ].map(name => [
+                String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/${name}\.js$`,
+                resolve(repositoryRoot, `packages/application/output-knowledge/test/${name}.ts`)
+              ])
+            ),
+            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+            '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+          }
+        }
+      })
+    },
     'overlay-output-lookup-http': {
       packageDirectory: 'packages/overlays/overlay-express',
       manifest: 'packages/overlays/overlay-express/package.json',

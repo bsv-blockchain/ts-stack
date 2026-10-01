@@ -516,3 +516,54 @@ manual until an operator explicitly installs narrower automatic authority.
 The [implementation tracker](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/IMPLEMENTATION.md)
 records outstanding service and adapter qualification. Existing token formats,
 finite lookup, GASP and local administration retain their current behavior.
+
+## Optional authenticated request and status routes
+
+`createRootEvictionRouter` from `@bsv/overlay-express/root-eviction` composes the
+bounded service with the actual BRC-103/104 HTTP boundary. Mount it at the Express
+application root before generic body parsers, compression, caching or payload
+logging. Its `baseURL` selects the exact path prefix; it handles only
+`/overlay/v1/root-evictions/request`, `/overlay/v1/root-evictions/status` and,
+unless `handleHandshake: false`, the origin's `/.well-known/auth` handshake.
+Use the same authentication middleware instance for that handshake and all
+companions on the origin. Other routes, including legacy lookup, pass through.
+
+Supply one shared `RootEvictionService` and its same durable journal. The router
+preserves actual UTF-8 bytes through authentication and intake, rejects invalid
+encoding, duplicate headers, compression and pre-parsed bodies, and requires the
+selected profile, capability digest and `cache-control: no-store`. Its body and
+response ceilings default to 1 MiB, with a default 64 active HTTP requests. The
+service independently bounds physical work, including abandoned signing work.
+Configure pre-authentication rate limits and HTTP header/body deadlines at the
+host. Any published capability's byte limits must fit both the router and the
+service; a smaller host ceiling is not permission to advertise larger support.
+
+`manifest()` reads an already available local snapshot and must not perform
+network discovery. Return `undefined` during discovery unavailability so an exact
+retry can recover its original saved contract. Status requires no discovery.
+A capability route is deliberately not installed: publish a matching capability
+only after the scheduler, evidence policy and every serving/admission/GASP adapter
+satisfy the complete profile. Default admission still records pending work for
+manual/advisory evaluation; receipt does not apply a peer decision.
+
+The result candidate carries the actual observed revision. After packet signing
+and BRC-104 signing, the router calls the shared journal gate before native enqueue.
+The installed synchronous `authorize(identity, access)` callback rechecks current
+requester/auditor privilege and relevant policy/context. An undefined `access`
+asks only for permission to send a sanitized control error. Stale results become
+signed resets; revoked result access becomes a sanitized not-found response when
+control delivery is independently allowed. If even that replacement is stale or
+unauthorized, the connection closes. All authorization writers must participate
+in this gate or an explicitly coherent local policy port. Coordination results
+report decisions using an empty advertisement-serving inventory; they do not
+publish advertisements.
+
+Browser access is public and credential-free by default, including previously
+unknown origins. An explicit `allowedOrigins` array opts into exact origins;
+`[]` rejects browser-origin requests. Neither mode grants requester authority.
+HTTP cache/CORS fields are transport metadata, not BRC-104 signed headers. Clients
+using `AuthFetch` apply `cache-control` at the underlying fetch boundary, require
+mutual authentication and the expected root identity, disable payment attempts,
+and validate the signed result against the original signed request and frozen
+policy. The current HTTP fixtures exercise those actual SDK and SQLite boundaries;
+they do not replace a reusable bounded root client or the remaining root adapters.

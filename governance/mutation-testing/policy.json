@@ -876,6 +876,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-root-eviction-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/RootEvictionRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated root HTTP delivery through the actual durable SQLite decision/send gate",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

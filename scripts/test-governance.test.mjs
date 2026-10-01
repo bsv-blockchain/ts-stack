@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 86)
+  assert.equal(result.summary.propertySuites, 87)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 86)
+  assert.equal(result.summary.mutationTargets, 87)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -500,4 +500,30 @@ test('lineage layout and traversal partitions cover every original line with ide
     '<rootDir>/test/revenue-lineage-graph.property.test.ts',
     '<rootDir>/test/revenue-lineage-traversal.property.test.ts'
   ])
+})
+
+test('root HTTP target covers both full modules and its actual authentication/storage inputs', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const target = targets['overlay-root-eviction-http']
+  assert.deepEqual(target.mutate, ['src/RootEvictionRoutes.ts', 'src/RootEvictionHTTPPolicy.ts'])
+  for (const input of [
+    'src/__tests__/RootEvictionRoutes.fixture.ts',
+    'src/RootEvictionResponseGuard.ts',
+    'src/OutputLookupHTTPPolicy.ts',
+    '../../application/output-knowledge/src/root-eviction/**',
+    '../../application/output-knowledge/src/internal/**',
+    '../../sdk/src/**',
+    '../../middleware/auth-express-middleware/src/**'
+  ])
+    assert.ok(target.additionalInputs.includes(input))
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/__tests__/RootEvictionRoutes*.test.ts'
+  ])
+  const mutation = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = mutation.targets.find(value => value.id === 'overlay-root-eviction-http')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
 })

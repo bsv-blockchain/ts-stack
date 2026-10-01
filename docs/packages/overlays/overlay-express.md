@@ -70,6 +70,15 @@ access checks. It resets a stale response in full and separately fences the sign
 replacement. It does not mount routes or automatically guard existing serving
 paths. See [root coordination](../../guides/root-eviction-coordination.md).
 
+The optional `@bsv/overlay-express/root-eviction` entry exposes
+`createRootEvictionRouter` for explicit request/status integration. A shared
+`RootEvictionService` and durable journal preserve received bytes, original
+selection and final current access through packet and HTTP signing. Wildcard
+credential-free CORS remains the default; exact origin lists are opt-in. Mount
+before generic parsers with the origin's actual shared authentication middleware.
+Capabilities, scheduling and complete serving/admission/GASP enforcement still
+require separate integration; no existing route is changed automatically.
+
 The unpublished 2.8.0 candidate adds `configureOutputLookup` and the separate
 `@bsv/overlay-express/output-lookup` entry. Supply a durable companion service,
 signed capability identity, chain and explicit allowed browser origins before

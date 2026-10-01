@@ -808,3 +808,34 @@ stronger exact capacity, inventory-recovery and pre-invocation callback assertio
 changed 97-site coordination and 426-site records campaigns, service/lookup/journal
 mutation and final hosted qualification remain required. No broader checkpoint or
 complete root-service readiness is implied.
+
+## Optional root coordination HTTP composition
+
+The optional `@bsv/overlay-express/root-eviction` entry now composes the shared
+bounded service with exact request/status routes and the actual BRC-103/104
+handshake. It preserves received UTF-8 bytes, checks the selected raw byte limit,
+retains work before signing, and uses the observed journal revision plus current
+requester/auditor access at native enqueue after both signing stages. Public
+credential-free CORS remains the default, with explicit exact-origin opt-in.
+Legacy routes and startup remain unchanged. Capabilities, scheduling, all-path
+serving/admission/GASP integration and native host configuration remain separate
+unfinished obligations; the router alone does not claim the complete profile.
+
+The production increment passes the complete Overlay Express suite (620 tests
+across 24 suites); the subsequent test-only additions pass 42 focused cases,
+including 300 generated packet/HTTP-signing schedules with bounded fixture
+rotation. Packed ESM/CommonJS consumers and strict legacy SDK 2.8.9 consumers pass.
+All 26 compiled examples pass against 22 exact tarballs; root health, lint,
+formatting, types and the 145-page documentation build pass. The independent
+full-source HTTP mutation campaign is still pending and the actual registry is
+87 targets/properties at unchanged gates. No checkpoint or exact-head hosted-CI
+completion is claimed by these local checks.
+
+Completed independent root campaigns retain exact current production sources:
+records 97.65% over 426 mutations (416 killed), coordination 91.75% over 97
+(89 killed), and service 90.14% over 71 (64 killed), all with zero timeouts,
+uncovered or invalid mutants. The coordination rerun replaces its earlier
+29-timeout observation after test start barriers were made fail-fast. Automatic
+worker recovery occurred three times in the records run and once in the
+coordination run. The independent database, codec, journal, lookup and lineage
+qualification work remains separate from these results.

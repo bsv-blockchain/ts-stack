@@ -1074,6 +1074,18 @@
           "An authentic signature over a changed observation is rejected, and cancelled physical work remains bounded.",
           "Only an unchanged observation with current access can enter the native final send queue."
         ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/RootEvictionRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated root HTTP delivery through the actual durable SQLite decision/send gate",
+        "target": "At least 300 generated retry/status, padding, revision and access schedules across packet and BRC-104 signing",
+        "invariants": [
+          "A complete result is queued only under its observed revision and current requester/auditor authority.",
+          "A stale or revoked candidate becomes a separately authorized signed control error without original result bytes.",
+          "Exact retries retain the original capability and raw byte limits without new discovery or repeated decisions."
+        ]
       }
     ],
     "exclusions": [

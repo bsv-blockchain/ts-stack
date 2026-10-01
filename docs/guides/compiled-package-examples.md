@@ -830,3 +830,32 @@ export function createRootStatusHandler(installed: RootEvictionServiceOptions) {
   ) => service.status(receivedUTF8Text, authenticatedCaller, signal)
 }
 ```
+
+## Compose root coordination intake with authenticated HTTP
+
+Install the router before generic parsers, using the same durable store for
+retention, observed results and native final enqueue. Configure the origin's
+shared authentication middleware and current access callbacks explicitly. This
+composition does not advertise capabilities or enable automatic peer decisions.
+
+```typescript compile
+// example-id: root-coordination-http
+import {
+  createRootEvictionRouter,
+  type RootEvictionRouteOptions
+} from '@bsv/overlay-express/root-eviction'
+import {
+  RootEvictionService as HTTPRootService,
+  type RootEvictionServiceOptions as HTTPRootServiceOptions
+} from '@bsv/output-knowledge/root-eviction'
+import { SQLiteRootEvictionStore as CoordinationHTTPJournal } from '@bsv/output-knowledge/root-eviction/sqlite'
+
+export function createRootCoordinationHTTP(
+  journal: CoordinationHTTPJournal,
+  service: Omit<HTTPRootServiceOptions, 'journal'>,
+  http: Omit<RootEvictionRouteOptions, 'journal' | 'companion'>
+) {
+  const companion = new HTTPRootService({ ...service, journal })
+  return createRootEvictionRouter({ ...http, journal, companion })
+}
+```

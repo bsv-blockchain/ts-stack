@@ -33,6 +33,15 @@ supply the complete target inventory and safe control-response headers. The
 explains storage, policy and all-path integration obligations. Existing routes
 remain unchanged; importing this companion does not enable the BRC-199 profile.
 
+The optional `@bsv/overlay-express/root-eviction` entry composes a shared
+`RootEvictionService` with exact authenticated request/status routes. It preserves
+received UTF-8 byte limits and checks the observed revision and current access
+again at native enqueue after packet and HTTP signing. Mount before generic
+parsers with the same origin authentication middleware and durable journal.
+Credential-free wildcard CORS is the default; exact origins are opt-in. It does
+not publish capabilities or install a decision scheduler or serving adapters.
+See the root coordination guide for installation and remaining obligations.
+
 Overlay Express requires Node.js 22 or newer and a separately installed
 `@bsv/sdk` peer dependency.
 
