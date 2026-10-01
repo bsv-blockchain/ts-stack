@@ -459,16 +459,65 @@
           "Every supported value round-trips to the identical deterministic byte sequence.",
           "Text and map keys remain normalized and canonical across independent encode and decode passes."
         ]
-      }
-    ],
-    "exclusions": [
+      },
       {
-        "manifest": "packages/helpers/did-client/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "This package orchestrates wallet, PushDrop, DID, and overlay APIs; its independent codecs and advertisement boundaries are governed in @bsv/did and the overlay suites.",
+        "path": "packages/helpers/did/tests/brc202.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Immutable identity-key DID resolution and strict profile options",
+        "target": "Immutable identity-key DID resolution and strict profile options with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-10-04"
       },
+      {
+        "path": "packages/helpers/did/tests/brc52-envelope.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Original BRC52 signed byte parsing, derived signature and exact projected graph",
+        "target": "Original BRC52 signed byte parsing, derived signature and exact projected graph with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/helpers/did/tests/brc52-status.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Locally selected outpoint status evidence, freshness and privacy",
+        "target": "Locally selected outpoint status evidence, freshness and privacy with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/helpers/did/tests/brc52-disclosure.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Consent, exact authenticated payload, recipient binding, replay and field decryption",
+        "target": "Consent, exact authenticated payload, recipient binding, replay and field decryption with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-04"
+      }
+    ],
+    "exclusions": [
       {
         "manifest": "packages/helpers/simple/package.json",
         "kind": "adapter-or-composition",

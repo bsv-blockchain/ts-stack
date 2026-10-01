@@ -18,7 +18,7 @@
     "esModuleInterop": true,
     "types": ["jest", "node"]
   },
-  "files": ["mod.ts"],
+  "files": ["mod.ts", "brc52.ts"],
   "include": ["src"],
   "exclude": ["dist", "node_modules"]
 }

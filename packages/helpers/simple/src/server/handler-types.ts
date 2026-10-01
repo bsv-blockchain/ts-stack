@@ -89,7 +89,12 @@ function requestLimit(limits?: HandlerLimits): number {
   return value
 }
 
-async function readBoundedJson(req: any, maximum: number): Promise<unknown> {
+async function readBoundedJson(
+  req: any,
+  maximum: number,
+  url: string,
+  parseJson?: (text: string, url: string) => unknown
+): Promise<unknown> {
   const headers = requestMember(req, 'headers')
   const declared = headers instanceof Headers ? headers.get('content-length') : null
   if (declared != null && (!/^(0|[1-9]\d*)$/.test(declared) || Number(declared) > maximum)) {
@@ -104,7 +109,7 @@ async function readBoundedJson(req: any, maximum: number): Promise<unknown> {
   }
 
   const reader = body.getReader()
-  const decoder = new TextDecoder()
+  const decoder = new TextDecoder('utf-8', { fatal: parseJson !== undefined })
   let total = 0
   let text = ''
   try {
@@ -123,7 +128,7 @@ async function readBoundedJson(req: any, maximum: number): Promise<unknown> {
     reader.releaseLock()
   }
 
-  return JSON.parse(text) as unknown
+  return parseJson == null ? (JSON.parse(text) as unknown) : parseJson(text, url)
 }
 
 /**
@@ -133,7 +138,8 @@ async function readBoundedJson(req: any, maximum: number): Promise<unknown> {
  */
 export function toNextHandlers(
   handler: RouteHandler,
-  limits?: HandlerLimits
+  limits?: HandlerLimits,
+  parseJson?: (text: string, url: string) => unknown
 ): {
   GET?: (req: any) => Promise<any>
   POST?: (req: any) => Promise<any>
@@ -160,7 +166,7 @@ export function toNextHandlers(
         method,
         ...(headers instanceof Headers ? { headers } : {}),
         json: async () => {
-          jsonPromise ??= readBoundedJson(req, maxRequestBytes)
+          jsonPromise ??= readBoundedJson(req, maxRequestBytes, ownedRequest.url, parseJson)
           return await jsonPromise
         }
       })

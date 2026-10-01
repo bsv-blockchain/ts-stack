@@ -13,9 +13,6 @@ export { JsonFileStore } from './json-file-store'
 export type { RegistryResult } from './identity-registry'
 export { IdentityRegistry, createIdentityRegistryHandler } from './identity-registry'
 
-// DID Resolver
-export { DIDResolverService, createDIDResolverHandler } from './did-resolver'
-
 // Server Wallet Manager
 export { ServerWalletManager, createServerWalletHandler } from './server-wallet-manager'
 

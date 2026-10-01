@@ -32,11 +32,6 @@ export type { DesktopIntegrityRecord } from './desktopintegrity/types.js'
 export { default as DesktopIntegrityTopicManager } from './desktopintegrity/DesktopIntegrityTopicManager.js'
 export { default as createDesktopIntegrityLookupService } from './desktopintegrity/DesktopIntegrityLookupService.js'
 
-// did
-export type { DIDRecord, DIDQuery } from './did/types.js'
-export { default as DIDTopicManager } from './did/DIDTopicManager.js'
-export { default as createDIDLookupService } from './did/DIDLookupService.js'
-
 // fractionalize
 export type { FractionalizeRecord, FractionalizeQuery } from './fractionalize/types.js'
 export { default as FractionalizeTopicManager } from './fractionalize/FractionalizeTopicManager.js'

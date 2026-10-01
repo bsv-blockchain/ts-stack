@@ -118,7 +118,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.8.0"
+    "@bsv/sdk": "^2.8.0 || ^3.0.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

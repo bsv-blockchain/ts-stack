@@ -26,8 +26,8 @@ Use the browser-safe default entry point in frontend applications and
 | **Inscriptions**              | Write text, JSON, or file hashes permanently to the blockchain                      |
 | **MessageBox P2P**            | Send and receive payments and tokens peer-to-peer via MessageBox                    |
 | **Certification**             | Issue and manage BSV certificates with a standalone Certifier                       |
-| **Verifiable Credentials**    | W3C-compatible VCs backed by BSV certificates, with on-chain revocation             |
-| **DIDs**                      | Generate and resolve `did:bsv:` Decentralized Identifiers                           |
+| **Verifiable Credentials**    | Proposed BRC-203 envelopes preserving original BRC-52 signatures and ciphertext     |
+| **DIDs**                      | Encode and resolve BRC-202 identity-key `did:key` identifiers                       |
 | **Overlay Networks**          | Broadcast to and query SHIP/SLAP overlay services                                   |
 | **Server Wallet**             | Run a backend wallet for automated operations and funding flows                     |
 
@@ -67,22 +67,7 @@ code-unit order, independent of the host locale. The shared internal comparator
 in the unpublished 0.6.0 candidate does not change signed bytes or require a
 consumer migration.
 
-`CredentialIssuer.verify()` authenticates the embedded BSV certificate and
-requires the W3C wrapper's issuer, subject, type, fields, proof, and revocation
-reference to match it. Wrapper timestamps are formatting metadata, not claims
-covered by the certificate signature. The current synchronous
-`toVerifiablePresentation()` / `createPresentation()` helpers only assemble a
-presentation envelope: their `proof` has no holder signature, challenge, or
-audience and must not be used for authentication or replay-sensitive access
-decisions.
-
-Remote DID resolution treats the configured universal resolver, application
-proxy, and transaction/spend-index provider as authoritative trust sources.
-Responses are bounded, strictly validated, and bound to the requested DID and
-reported output-0 chain, but the current result carries no cryptographic chain
-or freshness proof. Do not use a remotely resolved key as the sole evidence for
-authentication or an irreversible payment; confirm it through an independently
-trusted channel or resolver policy.
+Identity-key DIDs resolve deterministically offline. They establish a public-key encoding, not live key control or trust. BRC-203 credential export verifies the original certificate signature and preserves its binary/ciphertext. Its proposed custom mechanism and status extensions are unregistered; generic W3C conformance and deployed interoperability are not claimed. Disclosure authorization, issuer trust, status, and holder authentication remain separate decisions. See the [breaking migration guide](docs/guides/identity-credential-migration.md).
 
 The generated server-wallet handler defaults every action closed. Applications
 must provide an authorization callback bound to their authenticated session and
@@ -115,7 +100,7 @@ automation that called these routes anonymously, and verify every replica uses
 the same policy before exposing the route. Do not restore the old deployment
 behavior with an unconditional public `authorize: () => true` callback.
 
-Token and DID custom-input spends locate the requested outpoint rather than
+Token custom-input spends locate the requested outpoint rather than
 assuming input zero, sign only that input, and require the wallet's final
 transaction to preserve every inspected input and output. Incoming MessageBox
 tokens are bounded and rebound to a fresh authenticated envelope before
@@ -123,6 +108,8 @@ internalization; body or caller metadata cannot replace the authenticated
 sender or transaction.
 
 ## A taste of the API
+
+The proposed BRC-203 HTTP verifier requires `{ credential: originalEnvelopeJson }`, with the original envelope JSON text as a string. Parsed credential objects are rejected. Preserve received text for strict duplicate-member verification; inspect `verification.verified` and apply trust/status policy separately. Web requests receive strict UTF-8 and duplicate-member checks; custom parsed-body adapters must provide their own strict decoding. See the [credential migration guide](docs/guides/identity-credential-migration.md).
 
 ```typescript
 import { createWallet } from '@bsv/simple/browser'
@@ -141,7 +128,7 @@ await wallet.inscribeText('Hello BSV!')
 
 // Get your DID
 const did = wallet.getDID()
-// { id: 'did:bsv:02abc...', ... }
+// { id: 'did:key:zQ3sh...', verificationMethod: [...], ... }
 ```
 
 ## Next Steps

@@ -54,20 +54,22 @@ const cases: TestCase[] = [
 const testIssuer = {
   getInfo: jest.fn(() => ({
     publicKey: SUBJECT_KEY,
-    did: `did:bsv:${SUBJECT_KEY}`,
+    did: 'did:key:mock',
     schemas: [{ id: 'test-schema', name: 'Test Schema', certificateTypeBase64: CERTIFICATE_TYPE }]
   })),
-  isRevoked: jest.fn(async () => false),
+  getRevocationRecordStatus: jest.fn(async () => 'unknown'),
+  issueCertificate: jest.fn(
+    async (subject: string, schemaId: string, fields: Record<string, string>) => ({
+      subject,
+      schemaId,
+      fields
+    })
+  ),
   issue: jest.fn(async (subject: string, schemaId: string, fields: Record<string, string>) => ({
-    _bsv: {
-      certificate: {
-        subject,
-        schemaId,
-        fields
-      }
-    }
+    credential: { subject, schemaId, fields },
+    keyringForSubject: {}
   })),
-  verify: jest.fn(async (credential: unknown) => ({ valid: true, credential })),
+  verify: jest.fn(async (input: string) => ({ verified: true, credential: JSON.parse(input) })),
   revoke: jest.fn(async (serialNumber: string) => ({ txid: `revoke-${serialNumber}` }))
 }
 
@@ -130,24 +132,17 @@ describe('createCredentialIssuerHandler POST routing', () => {
       body: { subjectKey: SUBJECT_KEY, fields: { name: 'Issue' } },
       expectedBody: {
         success: true,
-        credential: {
-          _bsv: {
-            certificate: {
-              subject: SUBJECT_KEY,
-              schemaId: 'test-schema',
-              fields: { name: 'Issue' }
-            }
-          }
-        }
+        credential: { subject: SUBJECT_KEY, schemaId: 'test-schema', fields: { name: 'Issue' } },
+        keyringForSubject: {}
       }
     },
     {
       name: 'verify',
       url: 'https://issuer.example/api/credential-issuer?action=verify',
-      body: { credential: { id: 'credential-1' } },
+      body: { credential: '{"id":"credential-1"}' },
       expectedBody: {
         success: true,
-        verification: { valid: true, credential: { id: 'credential-1' } }
+        verification: { verified: true, credential: { id: 'credential-1' } }
       }
     },
     {
@@ -180,6 +175,24 @@ describe('createCredentialIssuerHandler POST routing', () => {
     await expect(response.json()).resolves.toEqual({
       success: false,
       error: 'Credential issuer operation failed'
+    })
+  })
+
+  it('keeps certificate requests above the envelope JSON limit supported', async () => {
+    const fields = Object.fromEntries(
+      Array.from({ length: 5 }, (_, index) => [`field${index}`, 'x'.repeat(60_000)])
+    )
+    const response = await handler.POST?.(
+      new Request('https://issuer.example/api/credential-issuer?action=certify', {
+        method: 'POST',
+        body: JSON.stringify({ identityKey: SUBJECT_KEY, fields })
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      subject: SUBJECT_KEY,
+      schemaId: 'test-schema',
+      fields
     })
   })
 

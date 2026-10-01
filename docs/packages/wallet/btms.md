@@ -4,7 +4,7 @@ title: '@bsv/btms'
 kind: package
 domain: wallet
 npm: '@bsv/btms'
-version: '1.2.3'
+version: '1.2.4'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms
 ---
 
 # @bsv/btms
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 BTMS — Basic Token Management System — is a modular library for issuing, sending, receiving, and burning UTXO-based tokens on the BSV blockchain. <!-- audio: Btms.m4a @ 00:00 -->
 

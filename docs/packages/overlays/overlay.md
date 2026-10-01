@@ -4,7 +4,7 @@ title: '@bsv/overlay'
 kind: package
 domain: overlays
 npm: '@bsv/overlay'
-version: '2.6.2'
+version: '2.6.3'
 last_updated: '2026-09-26'
 last_verified: '2026-09-26'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ tags: ['overlay', 'framework']
 ---
 
 # @bsv/overlay
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Core library defining the Overlay Services Engine for UTXO-based systems on BSV.
 

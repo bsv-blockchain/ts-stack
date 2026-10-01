@@ -7,7 +7,6 @@ ENVIRONMENT='npm-production'
 PKGS=(
   "@bsv/amountinator"
   "@bsv/wallet-helper"
-  "@bsv/did-client"
   "@bsv/fund-wallet"
   "@bsv/simple"
   "@bsv/templates"

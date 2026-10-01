@@ -2,9 +2,9 @@
 id: release-operations
 title: 'Release and Operations Guide'
 kind: reference
-version: '1.1.2'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+version: '1.1.3'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: stable
 tags: [reference, releases, operations, rollback, npm, containers]
@@ -262,3 +262,43 @@ deployed behavior complete from a local build alone.
 See [npm Package Supply Chain](./npm-package-supply-chain.md),
 [Container Supply Chain](./container-supply-chain.md), and
 [Versioning Policy](../about/versioning.md) for the underlying contracts.
+
+## Complete mutation qualification before publication
+
+The publication candidate must complete the reusable `mutation-tests.yml`
+campaign at its exact `github.sha`. The npm publisher waits for preparation and
+full qualification; the OCI publisher waits for discovery and full qualification;
+the Marketplace publisher waits for credential-free source validation and full
+qualification. Each guard requires both a successful campaign and its nonempty
+`qualified-sha` equal to the candidate SHA before entering a job with publisher
+credentials. All existing source, audit, environment, scanning, provenance,
+artifact and publication checks remain in force.
+
+Every canonical mutation target must have a successful fresh report and matching
+source/run/attempt/configuration/lock-bound receipt. The verifier reconstructs
+canonical source ranges and mutant inventory with pinned Stryker 9.6.1 and rechecks
+all existing target gates. A partial manual target is diagnostic only. Earlier
+weekly passes, previous attempts and reports from another source cannot satisfy
+the gate; rerun the complete workflow when a full attempt needs replacement.
+
+No mutation target is permanently removed by PR deferral. A failure at this final
+gate blocks publication and requires a source fix and newly qualified candidate;
+there is no label or manual input that converts failure into permission to publish.
+For npm and general OCI, a discovered empty publication set avoids a needless full
+campaign. Marketplace still verifies its existing-title condition within its
+credentialed read/publish lane after qualification.
+
+General OCI and Marketplace remain independent publication workflows. A shared
+infra tag can therefore perform two full campaigns, each bound to its own run and
+candidate, rather than trusting a different workflow's artifacts. This adds final
+qualification compute; it does not save that duplication. Consolidation or trusted
+cross-workflow reuse would need a separately reviewed orchestration/permission
+change. No release, tag, package, image or Marketplace publication is performed by
+this CI policy change itself.
+
+The full mutation preparation first validates current inventory-review dates and
+security advisories. An expired review or failed audit stops expensive campaign
+execution. Renewed inventory dates record source/disposition review; they do not
+qualify a runtime campaign. Target receipts also bind the fresh successful runner
+record, report digest, property run count, deterministic seed and empty replay
+path. An overridden partial replay cannot qualify publication.

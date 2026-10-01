@@ -73,7 +73,7 @@
     "idb": "^8.0.3"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.8.0"
+    "@bsv/sdk": "^2.8.0 || ^3.0.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

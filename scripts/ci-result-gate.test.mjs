@@ -109,3 +109,50 @@ test('PRs require real analysis and dependency review; out-of-scope failures sti
   needs['coverage-sdk'].result = 'failure'
   assert.match(validateCiResults(needs, 'pull_request').join('\n'), /coverage-sdk/)
 })
+
+test('failed PR prerequisites cannot turn suppressed mutation into qualified scope skips', () => {
+  for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
+    const needs = evidence()
+    needs['dependency-review'].result = 'success'
+    needs['sonar-zero-findings'].result = result
+    needs['mutation-tests'].result = 'skipped'
+    const errors = validateCiResults(needs, 'pull_request')
+    assert.ok(errors.some(error => error.startsWith('sonar-zero-findings:')))
+    assert.ok(errors.some(error => error.startsWith('mutation-tests:')))
+  }
+})
+
+test('successful diagnostic mutation never bypasses a failed required PR gate', () => {
+  for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
+    const needs = evidence()
+    needs['dependency-review'].result = 'success'
+    needs['sonar-zero-findings'].result = result
+    needs['mutation-tests'].result = 'success'
+    const errors = validateCiResults(needs, 'pull_request')
+    assert.ok(errors.some(error => error.startsWith('sonar-zero-findings:')))
+  }
+})
+
+test('deferred results form an honest complete partition and never impersonate required success', async () => {
+  const { validateMutationClassification } = await import('./ci-result-gate.mjs')
+  const targets = { changed: {}, unaffected: {}, cosmetic: {} }
+  const policy = {
+    targets: [
+      { id: 'changed', risk: 'critical' },
+      { id: 'unaffected', risk: 'critical' },
+      { id: 'cosmetic', risk: 'high' }
+    ]
+  }
+  const classification = { required: ['changed'], deferred: ['cosmetic'], outside: ['unaffected'] }
+  assert.deepEqual(validateMutationClassification(classification, ['changed'], targets, policy), [])
+  for (const value of [
+    undefined,
+    { ...classification, required: [] },
+    { ...classification, outside: [] },
+    { ...classification, deferred: ['cosmetic', 'changed'] },
+    { ...classification, deferred: ['unaffected'], outside: ['cosmetic'] },
+    { ...classification, outside: ['unknown'] }
+  ]) {
+    assert.ok(validateMutationClassification(value, ['changed'], targets, policy).length)
+  }
+})

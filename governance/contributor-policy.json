@@ -32,7 +32,6 @@
       "infra/wallet-infra/AGENTS.md",
       "packages/helpers/amountinator/AGENTS.md",
       "packages/helpers/bsv-wallet-helper/AGENTS.md",
-      "packages/helpers/did-client/AGENTS.md",
       "packages/helpers/fund-wallet/AGENTS.md",
       "packages/helpers/simple/AGENTS.md",
       "packages/helpers/ts-templates/AGENTS.md",

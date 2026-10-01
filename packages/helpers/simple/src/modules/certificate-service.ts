@@ -96,7 +96,8 @@ function existingCertificateIds(
 
 export async function acquireRemoteCertificate(
   core: WalletCore,
-  config: RemoteCertificateRequest
+  config: RemoteCertificateRequest,
+  beforeAcquire?: (certificate: CertificateData) => void
 ): Promise<CertificateData> {
   const ownedConfig = snapshotPlainDataRecord(config)
   if (ownedConfig == null) throw new TypeError('Invalid remote certificate request')
@@ -150,6 +151,8 @@ export async function acquireRemoteCertificate(
       type: info.certificateType
     }
   )
+
+  beforeAcquire?.(certificate)
 
   const acquired = await client.acquireCertificate({
     type: certificate.type,

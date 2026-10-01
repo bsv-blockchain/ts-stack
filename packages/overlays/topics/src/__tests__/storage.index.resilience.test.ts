@@ -7,7 +7,6 @@ import { AppsStorageManager } from '../apps/AppsStorageManager.js'
 import { Bsv21StorageManager } from '../bsv21/Bsv21StorageManager.js'
 import { BTMSStorageManager } from '../btms/BTMSStorageManager.js'
 import { DesktopIntegrityStorage } from '../desktopintegrity/DesktopIntegrityStorage.js'
-import { DIDStorageManager } from '../did/DIDStorageManager.js'
 import { DstasStorageManager } from '../dstas/DstasStorageManager.js'
 import { FractionalizeStorage } from '../fractionalize/FractionalizeStorage.js'
 import { HelloWorldStorage } from '../hello/HelloWorldStorage.js'
@@ -80,7 +79,6 @@ const managers: Array<{ name: string, build: (db: Db) => { trigger: () => Promis
   { name: 'Bsv21StorageManager', build: db => { const manager = new Bsv21StorageManager(db); return { trigger: async () => await manager.deleteToken('t', 0) } } },
   { name: 'BTMSStorageManager', build: db => { const manager = new BTMSStorageManager(db); return { trigger: async () => await manager.deleteRecord('t', 0) } } },
   { name: 'DesktopIntegrityStorage', build: db => { const manager = new DesktopIntegrityStorage(db); return { trigger: async () => await manager.deleteRecord('t', 0) } } },
-  { name: 'DIDStorageManager', build: db => { const manager = new DIDStorageManager(db); return { trigger: async () => await manager.deleteRecord('t', 0) } } },
   { name: 'DstasStorageManager', build: db => { const manager = new DstasStorageManager(db); return { trigger: async () => await manager.deleteToken('t', 0) } } },
   { name: 'FractionalizeStorage', build: db => { const manager = new FractionalizeStorage(db); return { trigger: async () => await manager.deleteRecord('t', 0) } } },
   { name: 'HelloWorldStorage', build: db => { const manager = new HelloWorldStorage(db); return { trigger: async () => await manager.deleteRecord('t', 0) } } },
@@ -187,7 +185,6 @@ describe('outpoint-keyed writes are idempotent', () => {
     ['Bsv21StorageManager', async db => await new Bsv21StorageManager(db).storeToken({ txid: 't', outputIndex: 0 } as any)],
     ['BTMSStorageManager', async db => await new BTMSStorageManager(db).storeRecord('t', 0, 'asset', 1, 'owner')],
     ['DesktopIntegrityStorage', async db => await new DesktopIntegrityStorage(db).storeRecord('t', 0, 'hash')],
-    ['DIDStorageManager', async db => await new DIDStorageManager(db).storeRecord('t', 0, 'serial')],
     ['DstasStorageManager', async db => await new DstasStorageManager(db).storeToken({ txid: 't', outputIndex: 0 } as any)],
     ['FractionalizeStorage', async db => await new FractionalizeStorage(db).storeRecord('t', 0)],
     ['HelloWorldStorage', async db => await new HelloWorldStorage(db).storeRecord('t', 0, 'hi')],

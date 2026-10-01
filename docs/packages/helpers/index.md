@@ -22,7 +22,6 @@ Utility libraries and helper tools for common BSV operations. Includes high-leve
 | [@bsv/wallet-helper](wallet-helper.md) | Fluent transaction builder for explicit wallet-backed transactions, BRC-29 derivation, and ordinal support                    |
 | [@bsv/templates](templates.md)         | ScriptTemplate implementations including OpReturn, MultiPushDrop, P2MSKH, and the hardware-backed R1K1Wallet |
 | [@bsv/did](did.md)                     | SD-JWT VC and optional `did:key` helpers for BSV SDK identity keys                                                            |
-| [@bsv/did-client](did-client.md)       | DID client for creating, revoking, and querying on-chain DIDs with overlay broadcast                                          |
 | [@bsv/air-gap](air-gap.md)             | One-directional optical air-gap transport — fountain-coded QR parts for arbitrary bytes                                       |
 | [@bsv/amountinator](amountinator.md)   | Multi-currency converter (SATS↔BSV↔15+ fiat) with exchange rate caching                                                       |
 | [@bsv/fund-wallet](fund-wallet.md)     | CLI faucet for funding wallets from Metanet Desktop during development and testing                                            |
