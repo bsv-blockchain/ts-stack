@@ -159,10 +159,10 @@ export class ProposalVerificationPool {
       closedOutputObject(item, ['reference', 'firstReceivedAt', 'status'])
       closedOutputObject(item.reference, ['group', 'observationId', 'envelope'])
       const key = identity(item.reference),
-        retained = this.receipts.get(key)
+        retainedAt = this.receipts.get(key)?.stamp.firstReceivedAt
       if (
-        !retained ||
-        retained.stamp.firstReceivedAt !== item.firstReceivedAt ||
+        retainedAt === undefined ||
+        retainedAt !== item.firstReceivedAt ||
         !['verified', 'invalid', 'unsupported', 'unauthorized'].includes(item.status)
       )
         throw new OutputProtocolError(

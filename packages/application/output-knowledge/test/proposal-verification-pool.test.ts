@@ -121,6 +121,30 @@ describe('local proposal exact-envelope receipt binding', () => {
     expect(() => pool.receive([first], stamps)).toThrow('differs')
     expect(pool.pending()).toEqual([])
   })
+
+  it.each(['10', undefined])(
+    'rejects unretained decisions even when their receipt time is %s',
+    firstReceivedAt => {
+      const pool = new ProposalVerificationPool(policy())
+      for (const status of ['verified', 'invalid', 'unsupported', 'unauthorized'] as const) {
+        expect(() =>
+          pool.apply([
+            {
+              reference: { group: 'unknown', observationId: 'head', envelope: '11'.repeat(32) },
+              firstReceivedAt: firstReceivedAt as string,
+              status
+            }
+          ])
+        ).toThrow(
+          new OutputProtocolError(
+            'invalid',
+            'Retained proposal decision differs from local receipt'
+          )
+        )
+      }
+      expect(pool.pending()).toEqual([])
+    }
+  )
 })
 
 it.each(['scope', 'generation', 'group', 'observation'] as const)(

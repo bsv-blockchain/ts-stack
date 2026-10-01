@@ -218,10 +218,10 @@ export class ProposalScheduler {
    * Yielding between every item would invoke a deferred recovery before an
    * immediately following expiry callback can begin shutdown.
    */
-  private *scanItems(
+  private async *scanItems(
     items: ProposalMaintenanceItem[],
     report: ProposalScheduleReport
-  ): Generator<Promise<number>, void, undefined> {
+  ): AsyncGenerator<number, void, undefined> {
     for (const candidate of items) {
       if (this.stopped) break
       report.scanned++
