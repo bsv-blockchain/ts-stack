@@ -158,7 +158,7 @@ test('wallet mutation allowances preserve other limits and complete campaign exe
     assert.match(job.source, /^      max-parallel: 6$/m)
     assert.match(
       job.source,
-      /^        run: node scripts\/mutation-testing\.mjs --target "\$\{\{ matrix\.target \}\}"$/m
+      /^        run: node scripts\/mutation-testing\.mjs --target "\$\{\{ matrix\.target \}\}" --partition "\$\{\{ matrix\.partition \}\}"$/m
     )
   }
 })
@@ -380,7 +380,7 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     candidate => candidate.name === 'mutation-quality'
   ).source
   assert.match(job, /MUTATION_TARGETS: \$\{\{ needs\.prepare\.outputs\.mutation-targets \}\}/)
-  const script = /        run: \|\n([\s\S]*)$/
+  const script = /        run: \|\n([\s\S]*?)(?=\n      -|$)/
     .exec(job)[1]
     .split('\n')
     .map(line => line.replace(/^          /, ''))
