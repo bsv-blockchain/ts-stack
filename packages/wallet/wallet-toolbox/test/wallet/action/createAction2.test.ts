@@ -31,8 +31,9 @@ describe('createAction2 nosend transactions', () => {
 
   let ctxs: TestWalletNoSetup[] = []
   const env = _tu.getEnv('test')
-  // Also the database and storage name: keep it within MySQL and Postgres identifier limits.
-  const testName = () => (expect.getState().currentTestName ?? 'test').slice(0, 60)
+  // Also the database and storage name: keep it within MySQL and Postgres identifier limits,
+  // without the trailing space MySQL rejects.
+  const testName = () => (expect.getState().currentTestName ?? 'test').slice(0, 60).trimEnd()
 
   beforeEach(async () => {
     ctxs = []
