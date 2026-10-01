@@ -9,10 +9,20 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 1.9.2 candidate
+### Dependency update (2.0.0 candidate)
 
 - Refresh the packed templates range to include its CommonJS interoperability
-  repair. Topic APIs, schemas and admission behavior are unchanged.
+  repair. This dependency repair is independent of the API removals below.
+
+### Removed (2.0.0 candidate)
+
+- Remove `tm_did` / `ls_did`, `DIDTopicManager`, `createDIDLookupService`,
+  `DIDRecord` and `DIDQuery`. Public certificate discovery uses the existing
+  identity overlay; deterministic identity-key DID resolution uses `@bsv/did`.
+  Hosts are discovery providers, not issuer trust anchors. Operators must
+  explicitly select hosted services and reconcile stale advertisements; no
+  replacement service is installed and no database or on-chain data is deleted.
+  See [migration guidance](../../../docs/guides/identity-did-vc-migration.md).
 
 - Accept SDK-compatible 200-row UHRP lookup pages with deterministic outpoint ordering and unchanged selector/signature validation.
 

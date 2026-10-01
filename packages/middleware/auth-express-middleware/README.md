@@ -50,7 +50,7 @@ memory, pending-request and timeout limits before authentication. See the
 ## Empty binary request bodies
 
 Auth middleware 2.3.0 signs zero-length dense byte arrays and `Uint8Array`/`Buffer`
-values with BRC-104's `-1` body-length sentinel, matching SDK AuthFetch 2.9.0.
+values with BRC-104's `-1` body-length sentinel, matching the integrated SDK AuthFetch 3.0.0 candidate.
 This includes `express.raw({ type: 'application/octet-stream' })` mounted before
 authentication without `captureRawBody`: Express may expose an empty Buffer even
 when HTTP carries no body. Nonempty byte bodies keep their existing preimages.

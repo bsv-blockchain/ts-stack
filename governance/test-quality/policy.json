@@ -96,55 +96,6 @@
         ]
       },
       {
-        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts",
-        "manifest": "packages/wallet/wallet-toolbox/package.json",
-        "risk": "critical",
-        "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership, profile-bound keyset cursors and bounded packed payload admission",
-        "target": "Randomized read, cancellation, close and expiry schedules with an independent admission and cleanup model; randomized source profiles, payload/page limits and independent writes against pinned SQL views",
-        "invariants": [
-          "At most one database read is admitted and concurrent or nested reads do not queue.",
-          "Closing, cancellation and expiry reject later admission and discard late successful results.",
-          "Capacity remains occupied until physical reads and transaction cleanup settle.",
-          "Every completed lifecycle removes its expiry timer and rejects further reads.",
-          "Pinned keyset traversal returns every original owned row and tombstone exactly once under independent writes, within both page limits; cursor retries repeat the same page."
-        ]
-      },
-      {
-        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
-        "manifest": "packages/wallet/wallet-toolbox/package.json",
-        "risk": "critical",
-        "boundary": "Wallet durable profile-bound snapshot merges, normalized ID mappings, acknowledged cursors and primary-generation fencing",
-        "target": "Randomized bounded SQL page, stale preparation, acknowledgement loss and source-view replacement schedules with an independent profile/content oracle",
-        "invariants": [
-          "Only the acknowledged destination cursor advances after each atomic page commit.",
-          "Concurrent prepared pages cannot overwrite a newer checkpoint, and replacing a source view fences its old pages.",
-          "Incoming IDs and parent references are mapped within one wallet profile without duplicating logical records.",
-          "A restart explicitly begins the replacement view at its first table while preserving existing destination data and legacy checkpoints."
-        ]
-      },
-      {
-        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncDestination.property.test.ts",
-        "manifest": "packages/wallet/wallet-toolbox/package.json",
-        "risk": "critical",
-        "boundary": "Wallet durable snapshot destination binding, atomic checkpoint admission and primary-generation fencing",
-        "target": "Randomized original profile metadata, same-view binding drift, independent profiles and replacement views",
-        "invariants": [
-          "Same-view metadata changes reject without modifying the durable checkpoint.",
-          "A replacement view starts at table zero with a fresh session while preserving another profile."
-        ]
-      },
-      {
-        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncRows.property.test.ts",
-        "manifest": "packages/wallet/wallet-toolbox/package.json",
-        "risk": "critical",
-        "boundary": "Wallet bounded snapshot row detachment and profile/source-scoped normalized parent and child ID mapping",
-        "target": "Randomized overlapping incoming IDs across profiles and sources with independent expected mapping and persisted-row oracles",
-        "invariants": [
-          "Incoming parent IDs resolve only within the selected profile and source storage.",
-          "Only newly learned child IDs are persisted, existing parent and foreign mappings remain unchanged, and missing parents reject."
-        ]
-      },
-      {
         "path": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
         "manifest": "packages/overlays/topics/package.json",
         "risk": "critical",
@@ -510,6 +461,111 @@
         ]
       },
       {
+        "path": "packages/helpers/did/tests/brc202.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Immutable identity-key DID resolution and strict profile options",
+        "target": "Immutable identity-key DID resolution and strict profile options with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/helpers/did/tests/brc52-envelope.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Original BRC52 signed byte parsing, derived signature and exact projected graph",
+        "target": "Original BRC52 signed byte parsing, derived signature and exact projected graph with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/helpers/did/tests/brc52-status.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Locally selected outpoint status evidence, freshness and privacy",
+        "target": "Locally selected outpoint status evidence, freshness and privacy with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/helpers/did/tests/brc52-disclosure.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "Consent, exact authenticated payload, recipient binding, replay and field decryption",
+        "target": "Consent, exact authenticated payload, recipient binding, replay and field decryption with independent bounded synthetic positive/negative histories",
+        "invariants": [
+          "Original signed inputs and identity bytes retain their meaning.",
+          "Unauthorized, malformed, replayed or conflicting inputs fail closed.",
+          "Trust, status and privacy policy are never inferred from wrapper claims."
+        ],
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership, profile-bound keyset cursors and bounded packed payload admission",
+        "target": "Randomized read, cancellation, close and expiry schedules with an independent admission and cleanup model; randomized source profiles, payload/page limits and independent writes against pinned SQL views",
+        "invariants": [
+          "At most one database read is admitted and concurrent or nested reads do not queue.",
+          "Closing, cancellation and expiry reject later admission and discard late successful results.",
+          "Capacity remains occupied until physical reads and transaction cleanup settle.",
+          "Every completed lifecycle removes its expiry timer and rejects further reads.",
+          "Pinned keyset traversal returns every original owned row and tombstone exactly once under independent writes, within both page limits; cursor retries repeat the same page."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet durable profile-bound snapshot merges, normalized ID mappings, acknowledged cursors and primary-generation fencing",
+        "target": "Randomized bounded SQL page, stale preparation, acknowledgement loss and source-view replacement schedules with an independent profile/content oracle",
+        "invariants": [
+          "Only the acknowledged destination cursor advances after each atomic page commit.",
+          "Concurrent prepared pages cannot overwrite a newer checkpoint, and replacing a source view fences its old pages.",
+          "Incoming IDs and parent references are mapped within one wallet profile without duplicating logical records.",
+          "A restart explicitly begins the replacement view at its first table while preserving existing destination data and legacy checkpoints."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncDestination.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet durable snapshot destination binding, atomic checkpoint admission and primary-generation fencing",
+        "target": "Randomized original profile metadata, same-view binding drift, independent profiles and replacement views",
+        "invariants": [
+          "Same-view metadata changes reject without modifying the durable checkpoint.",
+          "A replacement view starts at table zero with a fresh session while preserving another profile."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncRows.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet bounded snapshot row detachment and profile/source-scoped normalized parent and child ID mapping",
+        "target": "Randomized overlapping incoming IDs across profiles and sources with independent expected mapping and persisted-row oracles",
+        "invariants": [
+          "Incoming parent IDs resolve only within the selected profile and source storage.",
+          "Only newly learned child IDs are persisted, existing parent and foreign mappings remain unchanged, and missing parents reject."
+        ]
+      },
+      {
         "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",
@@ -520,7 +576,7 @@
           "Exact page retries preserve immutable bytes and the independent hash-chain receipt without double charging.",
           "The authenticated profile cannot read or release another profile's archive.",
           "Capacity remains reserved through interrupted cleanup and is released exactly once after every page is deleted.",
-          "A complete SQL capture contains the selected profile\u2019s original rows; cancellation removes all staged pages and reservations without activating wallet data."
+          "A complete SQL capture contains the selected profile’s original rows; cancellation removes all staged pages and reservations without activating wallet data."
         ]
       },
       {
@@ -578,13 +634,6 @@
       }
     ],
     "exclusions": [
-      {
-        "manifest": "packages/helpers/did-client/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "This package orchestrates wallet, PushDrop, DID, and overlay APIs; its independent codecs and advertisement boundaries are governed in @bsv/did and the overlay suites.",
-        "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-10-04"
-      },
       {
         "manifest": "packages/helpers/simple/package.json",
         "kind": "adapter-or-composition",

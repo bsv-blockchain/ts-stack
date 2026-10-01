@@ -110,3 +110,8 @@ lookup identities, publisher choice, updates and wallet fallback expectations.
 [Sync reliability and proof recovery](wallet-sync-reliability.md) describes the
 Toolbox 2.14 candidate API, cancellation, atomic checkpoints, foreground fairness,
 proof recovery, benchmark scope and the next coherent-snapshot milestone.
+
+## Identity, DIDs and credentials
+
+- [Unified integration and implementer guidance](identity-did-vc.md)
+- [Breaking API and service migration](identity-did-vc-migration.md)

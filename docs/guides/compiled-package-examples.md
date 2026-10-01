@@ -3,8 +3,8 @@ id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-08'
-last_verified: '2026-09-08'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 status: stable
 tags: [guide, typescript, packages, consumers, examples]
@@ -41,25 +41,24 @@ void connectExampleWallet
 
 ```ts compile
 // example-id: credentials-and-identity
-import { BsvDid, type DidDocument } from '@bsv/did'
-import type { DIDQuery } from '@bsv/overlay-topics'
+import { BsvDid, type DidDocument, type DidResolutionResult } from '@bsv/did'
+import { DID, type DidDocument as SimpleDidDocument } from '@bsv/simple'
 
-// Declared rather than derived from `PrivateKey`, so this fence compiles on its
-// own. Only fences importing a changed package are selected, so the one above
-// is absent whenever `@bsv/sdk` is unchanged, and a fence that reaches across to
-// it fails for reasons that have nothing to do with the boundary under test.
-declare const examplePublicKeyDer: number[]
-
-const exampleDidDocument: DidDocument = BsvDid.toDidDocument(
-  BsvDid.fromPublicKey(examplePublicKeyDer)
+// Public BRC-202 specification vector; this is never a production identity.
+const exampleIdentityPublicKey =
+  '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const exampleIdentityDid = BsvDid.fromPublicKey(exampleIdentityPublicKey)
+const exampleDidDocument: DidDocument = BsvDid.toDidDocument(exampleIdentityDid)
+const exampleSimpleDidDocument: SimpleDidDocument = exampleDidDocument
+const exampleIdentityResolution: DidResolutionResult = DID.resolve(
+  DID.fromIdentityKey(exampleIdentityPublicKey)
 )
-const acceptDidLookup = (query: DIDQuery): DIDQuery => query
 
-void exampleDidDocument
-void acceptDidLookup
+void exampleSimpleDidDocument
+void exampleIdentityResolution
 ```
 
-The compiler combines the *selected* fences into one consumer module, and on a
+The compiler combines the _selected_ fences into one consumer module, and on a
 pull request it selects only the fences whose import closure reaches a changed
 package. So an earlier fence's imports are available only when that fence
 happened to be selected too, and a fence that leans on one is broken by any
@@ -187,3 +186,34 @@ pnpm docs:examples
 The command requires built package outputs and network access only when the
 clean temporary consumer's external dependencies are not already present in
 the pnpm store. It never publishes or deploys an artifact.
+
+## Original BRC52 certificate envelope
+
+This offline public test vector exercises the proposed BRC203 exporter and strict
+verification without signing, provider lookup or wallet operations. A successful
+cryptographic result leaves issuer trust and application reliance undecided.
+
+```ts compile
+// example-id: brc52-original-envelope
+import {
+  exportBRC52Envelope,
+  parseBRC52Envelope,
+  verifyBRC52Envelope,
+  type BRC52VerificationResult
+} from '@bsv/did/brc52'
+
+const exampleFrozenBRC52 =
+  'EREREREREREREREREREREREREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIgLGBH+UQe19bTBFQG6VwHzYXHeOS4zvPKerrAm5XHCe5QL5MIoBkljDEEk0T4X4nVIptTHIRYNvmbCGAfETvOA2+TMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzAQIFZW1haWxcVVZGUlVWRlJVVkZSVVZGUlVWRlJVVkZSVVZGUlVWRlJVVkZSVVZGUlVWRWZLb2dPdHExcjV6QUpSblVTejEwM2Q3KzBzWU1WNk4yR2I4eFA1Z2FWRUtVaEF0OHEEbmFtZVRVbEpTVWxKU1VsSlNVbEpTVWxKU1VsSlNVbEpTVWxKU1VsSlNVbEpTVWxJQmJZRm55NjRWcEw0VU9FcnU5V3RJMHJ3UUdPRlVCTjZvUngreUxBPT0wRQIhANMWdEUAF6o+tEnqiQqXaU8hQbo0qgN8jXfE0+H/mjSLAiAWM62TibaYVrbEbV1wSnRxp8kShtEduaCUdmrudO28vw=='
+const exampleOriginalBytes = Uint8Array.from(atob(exampleFrozenBRC52), character =>
+  character.charCodeAt(0)
+)
+const exampleEnvelope = exportBRC52Envelope(exampleOriginalBytes)
+const exampleTransport = JSON.stringify(exampleEnvelope)
+const exampleVerification: BRC52VerificationResult = verifyBRC52Envelope(
+  'application/json',
+  exampleTransport
+)
+if (!exampleVerification.verified) throw new Error(exampleVerification.errors.join('; '))
+if (parseBRC52Envelope(exampleTransport).envelope.certificateBinary !== exampleFrozenBRC52)
+  throw new Error('Original signed bytes changed')
+```

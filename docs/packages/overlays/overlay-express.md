@@ -7,6 +7,9 @@ npm: '@bsv/overlay-express'
 version: '2.7.4'
 last_updated: '2026-09-28'
 last_verified: '2026-09-28'
+
+last_updated: '2026-09-26'
+last_verified: '2026-09-26'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express'
 status: stable
@@ -18,6 +21,10 @@ tags: ['overlay', 'express', 'http']
 The unpublished 2.7.4 candidate refreshes the packed first-party dependency
 ranges for the next wallet interoperability release; no independent API or wire
 format changes are introduced. Adopt after the dependency graph is published.
+
+This source candidate declares SDK peer `^2.4.0 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Opinionated Express.js HTTP server wrapper for @bsv/overlay with built-in configuration, health checks, and peer discovery.
 
@@ -77,16 +84,25 @@ await server.configureKnex('postgresql://user:pass@localhost/db')
 
 ### Register multiple topics
 
+Register services only under an explicit operator choice. The existing identity
+pair serves attributed public certificates under BRC-189 semantics; discovery
+of its host does not establish issuer trust. Identity-key DID resolution is
+local and deterministic. The serial-token DID overlay is removed in the
+proposed `@bsv/overlay-topics` 2.0 release; see the
+[migration guide](../../guides/identity-did-vc-migration.md).
+
 ```typescript
+import { IdentityTopicManager, createIdentityLookupService } from '@bsv/overlay-topics'
+
 server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
-server.configureTopicManager('tm_did', new DIDTopicManager())
+server.configureTopicManager('tm_identity', new IdentityTopicManager())
 
 await server.configureLookupServiceWithMongo('ls_helloworld', db =>
   createHelloWorldLookupService(db)
 )
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
-await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
+await server.configureLookupServiceWithMongo('ls_identity', db => createIdentityLookupService(db))
 
 await server.configureEngine()
 await server.start()

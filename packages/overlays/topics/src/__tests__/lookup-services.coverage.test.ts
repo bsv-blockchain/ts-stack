@@ -5,7 +5,6 @@ import { BasketMapLookupService } from '../basketmap/BasketMapLookupService.js'
 import { Bsv21LookupService } from '../bsv21/Bsv21LookupService.js'
 import { CertMapLookupService } from '../certmap/CertMapLookupService.js'
 import { DesktopIntegrityLookupService } from '../desktopintegrity/DesktopIntegrityLookupService.js'
-import { DIDLookupService } from '../did/DIDLookupService.js'
 import { DstasLookupService } from '../dstas/DstasLookupService.js'
 import { IdentityLookupService } from '../identity/IdentityLookupService.js'
 import { MessageBoxLookupService } from '../message-box/MessageBoxLookupService.js'
@@ -243,38 +242,6 @@ describe('lookup service query routing', () => {
     expect(db.findByProtocolID).toHaveBeenCalled()
     await service.outputEvicted(txid, 1)
     await expect(service.getMetaData()).resolves.toMatchObject({ name: 'ls_protomap' })
-  })
-
-  it('normalizes DID filters and rejects reversed time windows', async () => {
-    const db = storage(['findRecords', 'deleteRecord'])
-    const service = new DIDLookupService(db as never)
-    await service.lookup(
-      question('ls_did', {
-        serialNumber: 'AQE=',
-        outpoint: `${txid}.2`,
-        startDate: '2026-01-01T00:00:00.000Z',
-        endDate: '2026-02-01T00:00:00.000Z',
-        limit: 5,
-        skip: 1,
-        sortOrder: 'asc'
-      })
-    )
-    expect(db.findRecords).toHaveBeenCalledWith(
-      expect.objectContaining({ serialNumber: 'AQE=', txid, outputIndex: 2 }),
-      5,
-      1,
-      'asc'
-    )
-    await expect(
-      service.lookup(
-        question('ls_did', {
-          startDate: '2026-02-01T00:00:00.000Z',
-          endDate: '2026-01-01T00:00:00.000Z'
-        })
-      )
-    ).rejects.toThrow('must not follow')
-    await service.outputEvicted(txid, 2)
-    await expect(service.getDocumentation()).resolves.toContain('DID Lookup Service')
   })
 
   it('routes SupplyChain txid, chain, and bounded scans', async () => {

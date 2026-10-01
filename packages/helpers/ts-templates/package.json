@@ -43,7 +43,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown mod.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
+    "build": "tsdown mod.ts src/mandala-encoding.ts src/mandala-signing.ts src/R1K1Wallet.artifact.ts src/signing-context.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
     "dev": "pnpm build --watch",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/ts-templates/src/**/*.ts\" \"packages/helpers/ts-templates/__tests/*.ts\" \"packages/helpers/ts-templates/*.{js,json,ts}\"",
     "lint": "oxlint src __tests --deny-warnings",
@@ -89,7 +89,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.6 || ^3.0.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

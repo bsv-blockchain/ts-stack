@@ -20,6 +20,10 @@ The unpublished 2.1.7 candidate refreshes the packed first-party dependency
 ranges for the next wallet interoperability release; no independent API or wire
 format changes are introduced. Adopt after the dependency graph is published.
 
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Satoshi/BSV/USD and multi-fiat currency conversion with exchange rate caching and wallet settings integration — convert between crypto (SATS, BSV) and 15+ fiat currencies with auto-refresh.
 
 ## Install

@@ -37,15 +37,9 @@ export type {
   PaymentRequest,
   IncomingPayment,
   DirectPaymentResult,
-  DIDDocument,
-  DIDVerificationMethod,
-  DIDParseResult,
   CredentialFieldType,
   CredentialFieldSchema,
   CredentialSchemaConfig,
-  VerifiableCredential,
-  VerifiablePresentation,
-  VerificationResult,
   CredentialIssuerConfig,
   RevocationRecord,
   RevocationStore
@@ -58,7 +52,6 @@ export {
   TransactionError,
   MessageBoxError,
   CertificationError,
-  DIDError,
   CredentialError
 } from './core/errors'
 
@@ -106,9 +99,6 @@ export {
   // Identity Registry
   IdentityRegistry,
   createIdentityRegistryHandler,
-  // DID Resolver
-  DIDResolverService,
-  createDIDResolverHandler,
   // Server Wallet Manager
   ServerWalletManager,
   createServerWalletHandler,

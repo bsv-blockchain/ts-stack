@@ -13,7 +13,13 @@ test('compiled examples are scoped through their first-party dependency closure'
 
   assert.deepEqual(
     selected.map(example => example.id),
-    ['sdk-and-simple', 'middleware', 'overlay-and-gasp', 'wallet-storage']
+    [
+      'sdk-and-simple',
+      'credentials-and-identity',
+      'middleware',
+      'overlay-and-gasp',
+      'wallet-storage'
+    ]
   )
 })
 

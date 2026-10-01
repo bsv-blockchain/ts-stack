@@ -79,7 +79,7 @@ Existing nonempty non-multipart signature preimages retain their released normal
 Empty byte requests now consistently use BRC-104's `-1` sentinel in AuthFetch
 and auth middleware, including the existing `express.raw` integration without
 raw capture. SDK clients and auth receivers that previously signed/reconstructed
-length `0` for empty byte arrays must adopt SDK 2.9.0 and auth middleware 2.3.0
+length `0` for empty byte arrays must adopt the integrated SDK 3.0.0 candidate and auth middleware 2.3.0
 together for those requests. This correction does not change nonempty bodies or
 multipart payload-part bytes; an empty multipart payload part remains distinct
 from a missing part.

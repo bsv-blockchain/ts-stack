@@ -1,0 +1,42 @@
+{
+  "profile": "https://github.com/bsv-blockchain/BRCs/blob/master/peer-to-peer/0203.md#BRC52EnvelopeV1",
+  "certificateBinary": "EREREREREREREREREREREREREREREREREREREREREREiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIgLGBH+UQe19bTBFQG6VwHzYXHeOS4zvPKerrAm5XHCe5QL5MIoBkljDEEk0T4X4nVIptTHIRYNvmbCGAfETvOA2+TMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzAQIFZW1haWxcVVZGUlVWRlJVVkZSVVZGUlVWRlJVVkZSVVZGUlVWRlJVVkZSVVZGUlVWRWZLb2dPdHExcjV6QUpSblVTejEwM2Q3KzBzWU1WNk4yR2I4eFA1Z2FWRUtVaEF0OHEEbmFtZVRVbEpTVWxKU1VsSlNVbEpTVWxKU1VsSlNVbEpTVWxKU1VsSlNVbEpTVWxJQmJZRm55NjRWcEw0VU9FcnU5V3RJMHJ3UUdPRlVCTjZvUngreUxBPT0wRQIhANMWdEUAF6o+tEnqiQqXaU8hQbo0qgN8jXfE0+H/mjSLAiAWM62TibaYVrbEbV1wSnRxp8kShtEduaCUdmrudO28vw==",
+  "credential": {
+    "@context": [
+      "https://www.w3.org/ns/credentials/v2",
+      {
+        "@protected": true,
+        "brc": {
+          "@id": "https://github.com/bsv-blockchain/BRCs/blob/master/peer-to-peer/0203.md#",
+          "@prefix": true
+        },
+        "certificateType": "brc:certificateType",
+        "serialNumber": "brc:serialNumber",
+        "revocationOutpoint": "brc:revocationOutpoint",
+        "encryptedFields": {
+          "@id": "brc:encryptedFields",
+          "@type": "@json"
+        }
+      }
+    ],
+    "type": [
+      "VerifiableCredential",
+      "brc:BRC52EncryptedCertificate"
+    ],
+    "issuer": "did:key:zQ3sheBXCeZNNKcYTSbn3U6mTZD228vEFA753n76azCDQq16g",
+    "credentialSubject": {
+      "id": "did:key:zQ3shajmTb29MxR6htjD79Hdo6vneJLvyKCzZSRcawNWks9JC",
+      "encryptedFields": {
+        "email": "UVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVEfKogOtq1r5zAJRnUSz103d7+0sYMV6N2Gb8xP5gaVEKUhAt8q",
+        "name": "UlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlIBbYFny64VpL4UOEru9WtI0rwQGOFUBN6oRx+yLA=="
+      }
+    },
+    "certificateType": "ERERERERERERERERERERERERERERERERERERERERERE=",
+    "serialNumber": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=",
+    "revocationOutpoint": "3333333333333333333333333333333333333333333333333333333333333333.1",
+    "credentialStatus": {
+      "type": "brc:BRC52OutpointStatus",
+      "revocationOutpoint": "3333333333333333333333333333333333333333333333333333333333333333.1"
+    }
+  }
+}

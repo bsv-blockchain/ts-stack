@@ -4,7 +4,7 @@ title: '@bsv/teranode-listener'
 kind: package
 domain: network
 npm: '@bsv/teranode-listener'
-version: '1.1.6'
+version: '1.1.7'
 last_updated: '2026-08-26'
 last_verified: '2026-08-26'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ tags: ['network', 'broadcast', 'teranode', 'p2p', 'libp2p']
 ---
 
 # @bsv/teranode-listener
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > TypeScript library for subscribing to Teranode P2P topics (blocks, subtrees, mining updates) via libp2p DHT and gossipsub.
 

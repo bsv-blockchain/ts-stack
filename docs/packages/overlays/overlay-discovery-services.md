@@ -7,6 +7,9 @@ npm: '@bsv/overlay-discovery-services'
 version: '2.2.7'
 last_updated: '2026-09-28'
 last_verified: '2026-09-28'
+
+last_updated: '2026-09-26'
+last_verified: '2026-09-26'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services'
 status: stable
@@ -18,6 +21,10 @@ tags: ['overlay', 'discovery']
 The unpublished 2.2.7 candidate refreshes the packed first-party dependency
 ranges for the next wallet interoperability release; no independent API or wire
 format changes are introduced. Adopt after the dependency graph is published.
+
+This source candidate declares SDK peer `^2.4.0 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Implements SHIP and SLAP protocols for peer discovery and service advertisement in overlay networks.
 
@@ -206,7 +213,7 @@ const serviceDiscovery = await engine.lookup({
 
 ## Common pitfalls
 
-1. **Auto-registration** — SHIP/SLAP are auto-registered by Engine; don't manually add `tm_ship` and `tm_slap`
+1. **Explicit registration** — A bare Engine needs caller registration of `tm_ship`/`tm_slap` and their lookup services. OverlayExpress has separate host setup; neither implies automatic BRC189 identity-overlay installation.
 2. **Topic/service naming** — Must follow `tm_*` or `ls_*` pattern; invalid names rejected by validators
 3. **URI format** — Must be valid HTTPS; localhost/IPs not advertised in production
 4. **Token signature linkage** — Advertiser verifies signature, identity, metadata, one-satoshi output, transaction, and exact outpoint before signing; mismatches fail

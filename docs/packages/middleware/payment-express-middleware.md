@@ -18,6 +18,10 @@ tags: [middleware, express, payment, '402', brc-29]
 
 The unpublished 2.2 candidate adds opt-in BRC-118 multipart payments behind verified raw authentication. It preserves the existing payment validation, replay and internalization path. See the [BRC-118 deployment guide](../../guides/brc118-payments.md), including CORS and receiver-first rollout.
 
+This source candidate declares SDK peer `^2.9.0 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 Express middleware for the legacy authenticated `x-bsv-payment` JSON flow. It
 runs after `@bsv/auth-express-middleware`, validates an Atomic BEEF payment,
 atomically rejects transaction-ID reuse, internalizes output zero, and exposes

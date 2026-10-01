@@ -1,4 +1,6 @@
-import { compareCodeUnits } from '../core/code-unit-order'
+import { BsvDid } from '@bsv/did'
+import { exportBRC52StructuredCertificate, verifyBRC52Envelope } from '@bsv/did/brc52'
+import type { BRC52Envelope, BRC52VerificationResult } from '@bsv/did/brc52'
 import {
   ProtoWallet,
   PrivateKey,
@@ -26,9 +28,6 @@ import {
   CertificateData,
   CredentialSchemaConfig,
   CredentialIssuerConfig,
-  VerifiableCredential,
-  VerifiablePresentation,
-  VerificationResult,
   RevocationRecord,
   RevocationStore
 } from '../core/types'
@@ -39,10 +38,6 @@ import { acquireRemoteCertificate, RemoteCertificateRequest } from './certificat
 // Constants
 // ============================================================================
 
-const VC_CONTEXT = 'https://www.w3.org/2018/credentials/v1'
-const PROOF_TYPE = 'BSVMasterCertificateProof2024'
-const REVOCATION_TYPE = 'BSVHashLockRevocation2024'
-const ZERO_REVOCATION_OUTPOINT = `${'00'.repeat(32)}.0`
 const CREDENTIAL_FIELD_TYPES = new Set([
   'text',
   'email',
@@ -228,41 +223,6 @@ function ownSchemaConfig(config: CredentialSchemaConfig): CredentialSchemaConfig
       ? {}
       : { computedFields: record.computedFields as CredentialSchemaConfig['computedFields'] })
   })
-}
-
-function exactStringArray(value: unknown, expected: string[]): boolean {
-  if (!Array.isArray(value) || value.length !== expected.length) return false
-  for (let index = 0; index < expected.length; index++) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
-    if (
-      descriptor == null ||
-      Object.getOwnPropertyDescriptor(descriptor, 'value') == null ||
-      descriptor.value !== expected[index]
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
-function canonicalIsoDate(value: unknown): string | undefined {
-  if (typeof value !== 'string' || value.length > 32) return undefined
-  const milliseconds = Date.parse(value)
-  if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== value)
-    return undefined
-  return value
-}
-
-function credentialSubjectMatches(value: unknown, certificate: CertificateData): boolean {
-  const record = snapshotPlainDataRecord(value)
-  if (record == null || record.id !== `did:bsv:${certificate.subject}`) return false
-  const expectedKeys = ['id', ...Object.keys(certificate.fields)].sort(compareCodeUnits)
-  const actualKeys = Object.keys(record).sort(compareCodeUnits)
-  return (
-    expectedKeys.length === actualKeys.length &&
-    expectedKeys.every((key, index) => key === actualKeys[index]) &&
-    Object.entries(certificate.fields).every(([key, field]) => record[key] === field)
-  )
 }
 
 // ============================================================================
@@ -551,13 +511,13 @@ export class CredentialIssuer {
   }
 
   /**
-   * Issue a Verifiable Credential.
+   * Issue an encrypted BRC-52 certificate for delivery to its subject.
    */
-  async issue(
+  async issueCertificate(
     subjectIdentityKey: string,
     schemaId: string,
     fields: Record<string, string>
-  ): Promise<VerifiableCredential> {
+  ): Promise<CertificateData> {
     const subject = canonicalIdentityKey(subjectIdentityKey, 'credential subject')
     const normalizedSchemaId = validateSchemaId(schemaId)
     if (normalizedSchemaId == null) throw new CredentialError('Credential schema is required')
@@ -654,103 +614,25 @@ export class CredentialIssuer {
       })
     }
 
-    // Wrap in W3C VC
-    return toVerifiableCredential(certData, this.pubKey, {
-      credentialType: schema.getInfo().name.replace(/\s+/g, '')
-    })
+    return certData
   }
 
-  /**
-   * Verify a Verifiable Credential.
-   */
-  async verify(vc: VerifiableCredential): Promise<VerificationResult> {
-    const errors: string[] = []
-    let certificate: CertificateData | undefined
-    let credentialType: string | undefined
-    try {
-      const credential = snapshotPlainDataRecord(vc)
-      const bsv = snapshotPlainDataRecord(credential?._bsv)
-      if (credential == null || bsv == null) throw new TypeError('Invalid credential')
-      const legacyCertificateTypes = uniqueCertificateTypes(
-        [...this.schemas.values()].flatMap(schema => schema.getCertificateTypeMigration().legacy)
-      )
-      certificate = await validateCertificateData(
-        bsv.certificate,
-        { certifier: this.pubKey },
-        { legacyCertificateTypes }
-      )
-      const schema = [...this.schemas.values()].find(
-        candidate =>
-          certificate != null &&
-          [
-            candidate.getCertificateTypeMigration().canonical,
-            ...candidate.getCertificateTypeMigration().legacy
-          ].includes(certificate.type)
-      )
-      if (schema == null) throw new TypeError('Unknown credential schema')
-      credentialType = schema.getInfo().name.replace(/\s+/g, '')
-      const issuedAt = canonicalIsoDate(credential.issuanceDate)
-      const proof = snapshotPlainDataRecord(credential.proof)
-      const status =
-        credential.credentialStatus == null
-          ? undefined
-          : snapshotPlainDataRecord(credential.credentialStatus)
-      const expectedStatus =
-        certificate.revocationOutpoint === ZERO_REVOCATION_OUTPOINT
-          ? credential.credentialStatus == null
-          : status != null &&
-            status.id === `bsv:${certificate.revocationOutpoint}` &&
-            status.type === REVOCATION_TYPE
-      if (
-        !exactStringArray(credential['@context'], [VC_CONTEXT]) ||
-        !exactStringArray(credential.type, ['VerifiableCredential', credentialType]) ||
-        credential.id != null ||
-        credential.expirationDate != null ||
-        credential.issuer !== `did:bsv:${certificate.certifier}` ||
-        issuedAt == null ||
-        !credentialSubjectMatches(credential.credentialSubject, certificate) ||
-        !expectedStatus ||
-        proof == null ||
-        proof.type !== PROOF_TYPE ||
-        proof.created !== issuedAt ||
-        proof.proofPurpose !== 'assertionMethod' ||
-        proof.verificationMethod !== `did:bsv:${certificate.certifier}#key-1` ||
-        proof.signatureValue !== certificate.signature
-      ) {
-        throw new TypeError('Credential wrapper does not match its signed certificate')
-      }
-    } catch {
-      errors.push('Credential structure or signature is invalid')
-    }
-
-    let revoked = false
-    if (
-      certificate != null &&
-      errors.length === 0 &&
-      certificate.revocationOutpoint !== ZERO_REVOCATION_OUTPOINT
-    ) {
-      try {
-        const hasRecord = await this.store.findByOutpoint(certificate.revocationOutpoint)
-        if (hasRecord === true) revoked = false
-        else if (hasRecord === false) revoked = true
-        else errors.push('Credential revocation status is unavailable')
-      } catch {
-        errors.push('Credential revocation status is unavailable')
-      }
-    }
-
-    if (revoked) {
-      errors.push('Credential has been revoked')
-    }
-
+  /** Deliver an authenticated BRC-203 envelope and the separate subject keyring. */
+  async issue(
+    subjectIdentityKey: string,
+    schemaId: string,
+    fields: Record<string, string>
+  ): Promise<IssuedCredential> {
+    const certificate = await this.issueCertificate(subjectIdentityKey, schemaId, fields)
     return {
-      valid: errors.length === 0,
-      revoked,
-      errors,
-      ...(certificate == null ? {} : { issuer: `did:bsv:${certificate.certifier}` }),
-      ...(certificate == null ? {} : { subject: `did:bsv:${certificate.subject}` }),
-      ...(credentialType == null ? {} : { type: `VerifiableCredential, ${credentialType}` })
+      credential: exportCredential(certificate),
+      keyringForSubject: certificate.keyringForSubject
     }
+  }
+
+  /** Verify certificate integrity only. Issuer trust, disclosure, and chain status are separate. */
+  verify(input: string | Uint8Array): BRC52VerificationResult {
+    return verifyBRC52Envelope('application/json', input)
   }
 
   /**
@@ -805,11 +687,10 @@ export class CredentialIssuer {
   }
 
   /**
-   * Check if a credential has been revoked.
+   * Inspect local secret retention; it does not establish on-chain revocation.
    */
-  async isRevoked(serialNumber: string): Promise<boolean> {
-    const hasRecord = await this.store.has(serialNumber)
-    return !hasRecord
+  async getRevocationRecordStatus(serialNumber: string): Promise<'retained' | 'unknown'> {
+    return (await this.store.has(serialNumber)) === true ? 'retained' : 'unknown'
   }
 
   /**
@@ -832,142 +713,28 @@ export class CredentialIssuer {
 
     return {
       publicKey: this.pubKey,
-      did: `did:bsv:${this.pubKey}`,
+      did: BsvDid.fromPublicKey(this.pubKey),
       schemas: schemaList
     }
   }
 }
 
-// ============================================================================
-// Standalone W3C VC/VP utilities
-// ============================================================================
-
-function requiredCertificateString(
-  record: Record<string, unknown>,
-  key: keyof CertificateData
-): string {
-  const value = record[key]
-  if (typeof value !== 'string' || value.length === 0 || value.length > 1024 * 1024) {
-    throw new TypeError(`Invalid certificate ${key}`)
-  }
-  return value
+/** The subject keyring is delivery material, never part of the credential graph. */
+export interface IssuedCredential {
+  credential: BRC52Envelope
+  keyringForSubject: Record<string, string>
 }
 
-function snapshotCertificateForCredential(value: unknown): CertificateData {
-  const record = snapshotPlainDataRecord(value)
-  if (record == null) throw new TypeError('Invalid certificate data')
-  let type: string
-  try {
-    type = canonicalCertificateType(record.type)
-  } catch {
-    type = legacyCompatibleCertificateType(record.type)
-  }
-  return Object.assign(Object.create(null) as CertificateData, {
-    type,
-    serialNumber: requiredCertificateString(record, 'serialNumber'),
-    subject: canonicalIdentityKey(record.subject, 'certificate subject'),
-    certifier: canonicalIdentityKey(record.certifier, 'certificate certifier'),
-    revocationOutpoint: requiredCertificateString(record, 'revocationOutpoint'),
-    fields: validateCredentialFields(record.fields),
-    signature: requiredCertificateString(record, 'signature'),
-    keyringForSubject: validateCredentialFields(record.keyringForSubject)
+function exportCredential(certificate: Omit<CertificateData, 'keyringForSubject'>): BRC52Envelope {
+  return exportBRC52StructuredCertificate({
+    type: certificate.type,
+    serialNumber: certificate.serialNumber,
+    subject: certificate.subject,
+    certifier: certificate.certifier,
+    revocationOutpoint: certificate.revocationOutpoint,
+    fields: certificate.fields,
+    signature: certificate.signature
   })
-}
-
-/**
- * Wrap a CertificateData into a W3C Verifiable Credential.
- */
-export function toVerifiableCredential(
-  cert: CertificateData,
-  issuerKey: string,
-  options?: { credentialType?: string }
-): VerifiableCredential {
-  const ownedCertificate = snapshotCertificateForCredential(cert)
-  const ownedOptions =
-    options == null
-      ? (Object.create(null) as Record<string, unknown>)
-      : snapshotPlainDataRecord(options)
-  if (ownedOptions == null) throw new TypeError('Invalid verifiable credential options')
-  const now = new Date().toISOString()
-  const credentialType = ownedOptions.credentialType ?? 'BSVCertificate'
-  if (
-    typeof credentialType !== 'string' ||
-    credentialType.length === 0 ||
-    new TextEncoder().encode(credentialType).byteLength > 256
-  ) {
-    throw new TypeError('Invalid verifiable credential type')
-  }
-  const canonicalIssuerKey = canonicalIdentityKey(issuerKey, 'credential issuer')
-  const fields = ownedCertificate.fields
-
-  return {
-    '@context': [VC_CONTEXT],
-    type: ['VerifiableCredential', credentialType],
-    issuer: `did:bsv:${canonicalIssuerKey}`,
-    issuanceDate: now,
-    credentialSubject: {
-      id: `did:bsv:${ownedCertificate.subject}`,
-      ...fields
-    },
-    credentialStatus:
-      ownedCertificate.revocationOutpoint === ZERO_REVOCATION_OUTPOINT
-        ? undefined
-        : {
-            id: `bsv:${ownedCertificate.revocationOutpoint}`,
-            type: REVOCATION_TYPE
-          },
-    proof: {
-      type: PROOF_TYPE,
-      created: now,
-      proofPurpose: 'assertionMethod',
-      verificationMethod: `did:bsv:${canonicalIssuerKey}#key-1`,
-      signatureValue: ownedCertificate.signature
-    },
-    _bsv: {
-      certificate: ownedCertificate
-    }
-  }
-}
-
-/**
- * Wrap an array of VCs into an unsigned W3C presentation-shaped envelope.
- *
- * The current synchronous API has no holder wallet, verifier challenge, or
- * audience and therefore cannot create authentication evidence. Consumers must
- * not treat the returned `proof` metadata as a signature or replay protection.
- */
-export function toVerifiablePresentation(
-  credentials: VerifiableCredential[],
-  holderKey: string
-): VerifiablePresentation {
-  if (!Array.isArray(credentials) || credentials.length > 1000) {
-    throw new TypeError('Verifiable credentials must be a bounded dense array')
-  }
-  const ownedCredentials: VerifiableCredential[] = []
-  for (let index = 0; index < credentials.length; index++) {
-    const descriptor = Object.getOwnPropertyDescriptor(credentials, String(index))
-    if (descriptor == null || Object.getOwnPropertyDescriptor(descriptor, 'value') == null) {
-      throw new TypeError('Verifiable credentials must be a bounded dense own-data array')
-    }
-    const credential = snapshotPlainDataRecord(descriptor.value)
-    if (credential == null) throw new TypeError('Invalid verifiable credential')
-    ownedCredentials.push(Object.assign(Object.create(null) as VerifiableCredential, credential))
-  }
-  const canonicalHolderKey = canonicalIdentityKey(holderKey, 'presentation holder')
-  const now = new Date().toISOString()
-
-  return {
-    '@context': [VC_CONTEXT],
-    type: ['VerifiablePresentation'],
-    holder: `did:bsv:${canonicalHolderKey}`,
-    verifiableCredential: ownedCredentials,
-    proof: {
-      type: PROOF_TYPE,
-      created: now,
-      proofPurpose: 'authentication',
-      verificationMethod: `did:bsv:${canonicalHolderKey}#key-1`
-    }
-  }
 }
 
 // ============================================================================
@@ -975,22 +742,26 @@ export function toVerifiablePresentation(
 // ============================================================================
 
 export function createCredentialMethods(core: WalletCore): {
-  acquireCredential: (config: RemoteCertificateRequest) => Promise<VerifiableCredential>
+  acquireCredential: (config: RemoteCertificateRequest) => Promise<BRC52Envelope>
   listCredentials: (config: {
     certifiers: string[]
     types: string[]
     limit?: number
-  }) => Promise<VerifiableCredential[]>
-  createPresentation: (credentials: VerifiableCredential[]) => VerifiablePresentation
+  }) => Promise<BRC52Envelope[]>
 } {
   return {
     /**
      * Acquire a Verifiable Credential from a remote issuer server.
      */
-    async acquireCredential(config: RemoteCertificateRequest): Promise<VerifiableCredential> {
+    async acquireCredential(config: RemoteCertificateRequest): Promise<BRC52Envelope> {
       try {
-        const certData = await acquireRemoteCertificate(core, config)
-        return toVerifiableCredential(certData, certData.certifier)
+        let credential: BRC52Envelope | undefined
+        await acquireRemoteCertificate(core, config, certificate => {
+          credential = exportCredential(certificate)
+        })
+        if (credential === undefined)
+          throw new CredentialError('Certificate export was unavailable')
+        return credential
       } catch (error) {
         throw new CredentialError(`Credential acquisition failed: ${(error as Error).message}`)
       }
@@ -1003,7 +774,7 @@ export function createCredentialMethods(core: WalletCore): {
       certifiers: string[]
       types: string[]
       limit?: number
-    }): Promise<VerifiableCredential[]> {
+    }): Promise<BRC52Envelope[]> {
       try {
         const ownedConfig = snapshotPlainDataRecord(config)
         if (ownedConfig == null) throw new TypeError('Invalid credential list configuration')
@@ -1030,33 +801,19 @@ export function createCredentialMethods(core: WalletCore): {
             throw new TypeError('Wallet returned a certificate outside the requested scope')
           }
           const fields = validateCredentialFields(cert.fields)
-          const keyringForSubject = validateCredentialFields(cert.keyringForSubject ?? {})
-          const issuerKey = cert.certifier as string
-          return toVerifiableCredential(
-            {
-              type: cert.type as string,
-              serialNumber: cert.serialNumber as string,
-              subject: cert.subject as string,
-              certifier: cert.certifier as string,
-              revocationOutpoint: cert.revocationOutpoint as string,
-              fields,
-              signature: cert.signature as string,
-              keyringForSubject
-            },
-            issuerKey
-          )
+          return exportCredential({
+            type: cert.type as string,
+            serialNumber: cert.serialNumber as string,
+            subject: cert.subject as string,
+            certifier: cert.certifier as string,
+            revocationOutpoint: cert.revocationOutpoint as string,
+            fields,
+            signature: cert.signature as string
+          })
         })
       } catch (error) {
         throw new CredentialError(`Failed to list credentials: ${(error as Error).message}`)
       }
-    },
-
-    /**
-     * Build an unsigned presentation envelope. This does not prove holder
-     * control and must not authorize a replay-sensitive operation.
-     */
-    createPresentation(credentials: VerifiableCredential[]): VerifiablePresentation {
-      return toVerifiablePresentation(credentials, core.getIdentityKey())
     }
   }
 }

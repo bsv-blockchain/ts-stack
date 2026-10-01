@@ -214,7 +214,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.9.0 candidate — prepared BRC-118 payments and recipient interoperability
+### 3.0.0 candidate — prepared BRC-118 payments and recipient interoperability
 
 - Preserve native body serialization and inferred Content-Type on ordinary HTTP
   fallback, including cached unauthenticated peers; retain owned payment bytes.
@@ -231,6 +231,16 @@ All notable changes to this project will be documented in this file. The format 
 - Derive the recipient's own BRC-29 child key on settlement receipt.
 - Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
   adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
+
+### Removed (3.0.0 candidate)
+
+- Remove the legacy `identity/DIDTokenValidation` module and its
+  `CanonicalDIDToken`, `DID_TOKEN_PROTOCOL`, `MAX_DID_SERIAL_BYTES`,
+  `decodeCanonicalDIDToken` and `normalizeDIDSerialNumber` exports. Consumers
+  must move identity-key DID operations to `@bsv/did` and public certificate
+  discovery to supported wallet/identity APIs; serial records do not identify
+  issuer or subject. See [migration guidance](../../docs/guides/identity-did-vc-migration.md).
+  This source removal deletes no user records or on-chain outputs.
 
 ### Fixed (2.8.11 candidate)
 

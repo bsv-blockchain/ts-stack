@@ -10,16 +10,13 @@ export const DEFAULT_CONFIG: WalletDefaults = {
   tokenProtocolID: [0 as SecurityLevel, 'token'],
   tokenKeyID: '1',
   messageBoxHost: 'https://messagebox.babbage.systems',
-  registryUrl: undefined,
-  didBasket: 'did-chain',
-  didResolverUrl: 'https://bsvdid-universal-resolver.nchain.systems',
-  didProtocolID: [0 as SecurityLevel, 'bsvdid']
+  registryUrl: undefined
 }
 
 export function mergeDefaults(partial: Partial<WalletDefaults>): WalletDefaults {
   const record = snapshotPlainDataRecord(partial)
   if (record == null) throw new TypeError('Wallet defaults must be a plain own-data object')
-  for (const field of ['registryFetch', 'didFetch'] as const) {
+  for (const field of ['registryFetch'] as const) {
     if (record[field] != null && typeof record[field] !== 'function') {
       throw new TypeError(`Wallet default ${field} must be a function`)
     }
@@ -56,11 +53,6 @@ export function mergeDefaults(partial: Partial<WalletDefaults>): WalletDefaults 
     ...(record.registryUrl === undefined ? {} : { registryUrl: record.registryUrl as string }),
     ...(record.registryFetch === undefined
       ? {}
-      : { registryFetch: record.registryFetch as typeof fetch }),
-    didBasket: selected('didBasket'),
-    didResolverUrl: selected('didResolverUrl'),
-    ...(record.didProxyUrl === undefined ? {} : { didProxyUrl: record.didProxyUrl as string }),
-    ...(record.didFetch === undefined ? {} : { didFetch: record.didFetch as typeof fetch }),
-    didProtocolID: protocol(selected('didProtocolID'), 'didProtocolID')
+      : { registryFetch: record.registryFetch as typeof fetch })
   })
 }

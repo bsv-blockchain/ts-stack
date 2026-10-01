@@ -19,214 +19,326 @@
  * Safe to run repeatedly (idempotent). Does not touch non-workspace deps.
  */
 
-import { readFileSync, readdirSync } from 'node:fs'
-import { resolve, dirname, join } from 'node:path'
+import {
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  existsSync,
+  openSync,
+  readSync,
+  closeSync
+} from 'node:fs'
+import { resolve, dirname, join, delimiter, basename, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
+import { acceptsPeerVersion } from './peer-version-range.mjs'
 import { readUtf8FileIfExists, writeUtf8FileAtomic } from './file-system.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = resolve(__dirname, '..')
-const DRY_RUN = process.argv.includes('--dry-run')
-const WORKSPACE_ONLY = process.argv.includes('--workspace-only')
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const DEPENDENCY_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies'
+]
+const PNPM_NAMES = new Set(['pnpm', 'pnpm.cjs', 'pnpm.js'])
 
-// --- 1. Collect all workspace package.json paths ---
-const output = execSync('pnpm -r ls --json --depth 0', { cwd: ROOT }).toString()
-const pkgList = JSON.parse(output)
+function nodePnpmLauncher(executable) {
+  const prefix = readFileSync(executable).subarray(0, 128).toString('utf8')
+  return prefix.startsWith('#!') && prefix.split('\n', 1)[0].includes('node')
+}
 
-// Build name → { path, version } map
-const workspaceMap = {}
-for (const pkg of pkgList) {
-  if (pkg.name && pkg.version && pkg.path) {
-    workspaceMap[pkg.name] = { version: pkg.version, path: pkg.path }
+function packagePnpmLauncher(directory, packageName, relativeLauncher) {
+  const packageDirectory = resolve(directory, 'node_modules', packageName)
+  const executable = resolve(packageDirectory, relativeLauncher)
+  const metadata = readUtf8FileIfExists(resolve(packageDirectory, 'package.json'))
+  if (metadata === undefined || !existsSync(executable)) return undefined
+  if (JSON.parse(metadata)?.name !== packageName) return undefined
+  const qualified = realpathSync(executable)
+  if (!qualified.startsWith(realpathSync(packageDirectory) + sep)) return undefined
+  return { executable: qualified, nodeLauncher: true }
+}
+
+function readBoundedShim(executable) {
+  const descriptor = openSync(executable, 'r')
+  try {
+    const bytes = Buffer.alloc(8_193)
+    const count = readSync(descriptor, bytes, 0, bytes.length, 0)
+    return count > 8_192 ? undefined : bytes.subarray(0, count).toString('utf8')
+  } finally {
+    closeSync(descriptor)
   }
 }
 
-function parseVersion(version) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
-  if (!match) return null
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3])
+const SHIM_TARGET =
+  /"(?:%~dp0|%dp0%|\$basedir|\$\{basedir\})\/node_modules\/(pnpm\/bin\/pnpm\.cjs|corepack\/dist\/pnpm\.js)"/gi
+const SHIM_NODE_COMMANDS = [
+  '"%_prog%" ',
+  '"%~dp0/node.exe" ',
+  '"%dp0%/node.exe" ',
+  '& "$basedir/node$exe" ',
+  '& "node$exe" ',
+  'exec "$basedir/node" ',
+  'exec node '
+]
+
+function shimInvokesNode(line) {
+  const lower = line.trimStart().toLowerCase()
+  if (['rem ', '::', '#', 'echo ', '@echo '].some(prefix => lower.startsWith(prefix))) return false
+  return SHIM_NODE_COMMANDS.some(command => lower.includes(command))
+}
+
+function selectedShimRoute(source) {
+  if (source === undefined) return undefined
+  const targets = new Set()
+  for (const line of source.replaceAll('\\', '/').split('\n')) {
+    if (!shimInvokesNode(line)) continue
+    for (const match of line.matchAll(SHIM_TARGET)) targets.add(match[1].toLowerCase())
   }
+  if (targets.size !== 1) return undefined
+  return [...targets][0]
 }
 
-function compareVersion(a, b) {
-  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
+function windowsShimLauncher(directory, shim) {
+  const route = selectedShimRoute(readBoundedShim(resolve(directory, shim)))
+  if (route === undefined)
+    throw new Error('Cannot locate pnpm: unknown or incoherent Windows shim route')
+  const separator = route.indexOf('/')
+  const launcher = packagePnpmLauncher(
+    directory,
+    route.slice(0, separator),
+    route.slice(separator + 1)
+  )
+  if (launcher === undefined)
+    throw new Error('Cannot locate pnpm: Windows shim target package is missing or invalid')
+  return launcher
 }
 
-function caretUpperBound(version) {
-  if (version.major > 0) return { major: version.major + 1, minor: 0, patch: 0 }
-  if (version.minor > 0) return { major: 0, minor: version.minor + 1, patch: 0 }
-  return { major: 0, minor: 0, patch: version.patch + 1 }
+function windowsPnpmLauncher(directory) {
+  const native = resolve(directory, 'pnpm.exe')
+  if (existsSync(native)) return { executable: realpathSync(native), nodeLauncher: false }
+  const shim = ['pnpm.cmd', 'pnpm.ps1', 'pnpm'].find(name => existsSync(resolve(directory, name)))
+  return shim === undefined ? undefined : windowsShimLauncher(directory, shim)
 }
 
-function acceptsPeerVersion(range, wsVersion) {
-  if (!range.startsWith('^')) return false
-  const minimum = parseVersion(range.slice(1))
-  const current = parseVersion(wsVersion)
-  if (!minimum || !current) return false
-  return (
-    compareVersion(current, minimum) >= 0 && compareVersion(current, caretUpperBound(minimum)) < 0
+function pathPnpmLauncher(directory, platform) {
+  if (platform === 'win32') return windowsPnpmLauncher(directory)
+  const candidate = resolve(directory, 'pnpm')
+  if (!existsSync(candidate)) return undefined
+  const executable = realpathSync(candidate)
+  return { executable, nodeLauncher: nodePnpmLauncher(executable) }
+}
+
+function configuredPnpmLauncher(root, configured, platform) {
+  if (!configured) return undefined
+  const executable = resolve(root, configured)
+  const name = basename(executable)
+  if (platform === 'win32' && ['pnpm.cmd', 'pnpm.ps1'].includes(name))
+    return existsSync(executable) ? windowsShimLauncher(dirname(executable), name) : undefined
+  if (!PNPM_NAMES.has(name) || !existsSync(executable)) return undefined
+  const qualified = realpathSync(executable)
+  return { executable: qualified, nodeLauncher: nodePnpmLauncher(qualified) }
+}
+
+/** Resolve the launcher without relying on shell/PATHEXT command execution. */
+export function resolvePnpmLauncher(root, environment = process.env, platform = process.platform) {
+  const pathValue = environment.PATH ?? environment.Path ?? ''
+  const pathDelimiter = platform === 'win32' ? ';' : delimiter
+  for (const directory of pathValue.split(pathDelimiter)) {
+    const launcher = pathPnpmLauncher(resolve(root, directory), platform)
+    if (launcher !== undefined) return launcher
+  }
+  const configured = configuredPnpmLauncher(root, environment.npm_execpath, platform)
+  if (configured !== undefined) return configured
+  throw new Error('Cannot locate pnpm for workspace package discovery')
+}
+
+/** Resolve pnpm once, then pass the fixed listing arguments without a shell. */
+export function listWorkspacePackages(
+  root,
+  environment = process.env,
+  platform = process.platform
+) {
+  const { executable, nodeLauncher } = resolvePnpmLauncher(root, environment, platform)
+  const command = nodeLauncher ? process.execPath : executable
+  const arguments_ = ['-r', 'ls', '--json', '--depth', '0']
+  if (nodeLauncher) arguments_.unshift(executable)
+  return JSON.parse(
+    execFileSync(command, arguments_, { cwd: root, env: environment, encoding: 'utf8' })
   )
 }
 
-console.log(`Found ${Object.keys(workspaceMap).length} workspace packages`)
+function workspacePackages(pkgList) {
+  const result = {}
+  for (const pkg of pkgList) {
+    if (pkg.name && pkg.version && pkg.path)
+      result[pkg.name] = { version: pkg.version, path: pkg.path }
+  }
+  return result
+}
 
-// --- 2. Rewrite cross-references ---
-let totalChanges = 0
-
-for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
-  const jsonPath = resolve(pkgPath, 'package.json')
+function readWorkspacePackage(jsonPath) {
   let raw
   try {
     raw = readFileSync(jsonPath, 'utf-8')
   } catch {
-    continue
+    return undefined
   }
-
-  const pkg = JSON.parse(raw)
-  let changed = false
-
-  for (const field of [
-    'dependencies',
-    'devDependencies',
-    'peerDependencies',
-    'optionalDependencies'
-  ]) {
-    if (!pkg[field]) continue
-    for (const [dep, range] of Object.entries(pkg[field])) {
-      const ws = workspaceMap[dep]
-      if (!ws) continue
-      // Runtime, development, and optional workspace edges must link to the
-      // local package. pnpm rewrites workspace:^ to ^X.Y.Z during publish.
-      // Peer ranges remain ordinary semver because they express the public
-      // compatibility contract rather than an installation edge.
-      const target = field === 'peerDependencies' ? `^${ws.version}` : 'workspace:^'
-      const valid =
-        field === 'peerDependencies' ? acceptsPeerVersion(range, ws.version) : range === target
-      if (!valid) {
-        console.log(`  ${pkg.name}: ${dep} ${range} → ${target}`)
-        pkg[field][dep] = target
-        changed = true
-        totalChanges++
-      }
-    }
-  }
-
-  if (changed && !DRY_RUN) {
-    writeUtf8FileAtomic(jsonPath, JSON.stringify(pkg, null, 2) + '\n')
-  }
+  return JSON.parse(raw)
 }
 
-console.log(
-  `\n${DRY_RUN ? '[DRY RUN] Would update' : 'Updated'} ${totalChanges} cross-package references`
-)
+function writePackageIfChanged(jsonPath, pkg, changes, dryRun) {
+  if (changes > 0 && !dryRun) writeUtf8FileAtomic(jsonPath, JSON.stringify(pkg, null, 2) + '\n')
+}
 
-// --- 3. Sync standalone infrastructure (not part of pnpm workspace) ---
-//
-// Infra components consume workspace packages from the npm registry, not via
-// `workspace:*`. After a publish, their `^X.Y.Z` ranges go stale relative to
-// the new workspace versions. Rewrite those ranges and patch-bump the infra
-// component so the infra-release workflow picks up the new deps in its next
-// Docker build.
-const INFRA_DIR = resolve(ROOT, 'infra')
-let infraDepChanges = 0
-let infraBumps = 0
+function workspaceReference(field, range, version) {
+  if (field === 'peerDependencies')
+    return { target: `^${version}`, valid: acceptsPeerVersion(range, version) }
+  return { target: 'workspace:^', valid: range === 'workspace:^' }
+}
 
-// Plain-string parse of a semver-shaped `MAJOR.MINOR.PATCH[suffix]`. Avoids a
-// regex so we can't accidentally hit catastrophic backtracking (and don't trip
-// SonarCloud's typescript:S5852 "super-linear regex" rule) on a degenerate
-// version string. Linear scan, capped length.
+function rewriteWorkspaceReferences(pkg, workspaceMap) {
+  let changes = 0
+  for (const field of DEPENDENCY_FIELDS) {
+    for (const [dep, range] of Object.entries(pkg[field] ?? {})) {
+      const ws = workspaceMap[dep]
+      if (!ws) continue
+      // Installation edges use workspace links; peers retain their compatibility contract.
+      const { target, valid } = workspaceReference(field, range, ws.version)
+      if (valid) continue
+      console.log(`  ${pkg.name}: ${dep} ${range} → ${target}`)
+      pkg[field][dep] = target
+      changes++
+    }
+  }
+  return changes
+}
+
+function syncWorkspaceReferences(workspaceMap, dryRun) {
+  let totalChanges = 0
+  for (const { path: pkgPath } of Object.values(workspaceMap)) {
+    const jsonPath = resolve(pkgPath, 'package.json')
+    const pkg = readWorkspacePackage(jsonPath)
+    if (pkg === undefined) continue
+    const changes = rewriteWorkspaceReferences(pkg, workspaceMap)
+    totalChanges += changes
+    writePackageIfChanged(jsonPath, pkg, changes, dryRun)
+  }
+  return totalChanges
+}
+
 const isAsciiDigit = code => code >= 48 && code <= 57
-const allDigits = s => {
-  if (s.length === 0) return false
-  for (let i = 0; i < s.length; i++) {
-    if (!isAsciiDigit(s.codePointAt(i))) return false
+function allDigits(value) {
+  if (value.length === 0) return false
+  for (let i = 0; i < value.length; i++) {
+    if (!isAsciiDigit(value.codePointAt(i))) return false
   }
   return true
 }
-const bumpPatch = version => {
-  if (typeof version !== 'string' || version.length === 0 || version.length > 64) return null
 
+// Preserve the existing bounded scanner, including its suffix and leading-zero behavior.
+function bumpPatch(version) {
+  if (typeof version !== 'string' || version.length === 0 || version.length > 64) return null
   const dot1 = version.indexOf('.')
   if (dot1 < 1) return null
   const dot2 = version.indexOf('.', dot1 + 1)
   if (dot2 < dot1 + 2) return null
-
   const major = version.slice(0, dot1)
   const minor = version.slice(dot1 + 1, dot2)
   if (!allDigits(major) || !allDigits(minor)) return null
-
   const tail = version.slice(dot2 + 1)
   let patchEnd = 0
-  while (patchEnd < tail.length && isAsciiDigit(tail.codePointAt(patchEnd))) {
-    patchEnd++
-  }
+  while (patchEnd < tail.length && isAsciiDigit(tail.codePointAt(patchEnd))) patchEnd++
   if (patchEnd === 0) return null
-
   const patch = Number(tail.slice(0, patchEnd))
-  const suffix = tail.slice(patchEnd)
-  return `${major}.${minor}.${patch + 1}${suffix}`
+  return `${major}.${minor}.${patch + 1}${tail.slice(patchEnd)}`
 }
 
-if (!WORKSPACE_ONLY) {
+function infraComponentDirectories(root) {
+  const infraDirectory = resolve(root, 'infra')
   let entries = []
   try {
-    entries = readdirSync(INFRA_DIR, { withFileTypes: true })
+    entries = readdirSync(infraDirectory, { withFileTypes: true })
   } catch (error) {
     const missing =
       typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
     if (!missing) throw error
   }
-  // Only owned service roots and the separately deployed notifier participate.
-  // Never recurse into node_modules or arbitrary nested examples.
-  const componentDirs = entries
+  const directories = entries
     .filter(entry => entry.isDirectory())
-    .map(entry => join(INFRA_DIR, entry.name))
-  componentDirs.push(join(INFRA_DIR, 'uhrp-server-cloud-bucket', 'notifier'))
-  for (const componentDir of componentDirs) {
-    const jsonPath = join(componentDir, 'package.json')
+    .map(entry => join(infraDirectory, entry.name))
+  directories.push(join(infraDirectory, 'uhrp-server-cloud-bucket', 'notifier'))
+  return directories
+}
+
+function rewriteInfraReferences(pkg, workspaceMap) {
+  let changes = 0
+  for (const field of DEPENDENCY_FIELDS) {
+    for (const [dep, range] of Object.entries(pkg[field] ?? {})) {
+      const ws = workspaceMap[dep]
+      if (!ws) continue
+      const target = `^${ws.version}`
+      if (range === target) continue
+      console.log(`  [infra] ${pkg.name}: ${dep} ${range} → ${target}`)
+      pkg[field][dep] = target
+      changes++
+    }
+  }
+  return changes
+}
+
+function bumpInfraPackage(pkg) {
+  const bumped = bumpPatch(pkg.version || '0.0.0')
+  if (!bumped) return 0
+  console.log(`  [infra] ${pkg.name}: version ${pkg.version} → ${bumped}`)
+  pkg.version = bumped
+  return 1
+}
+
+function syncInfraReferences(root, workspaceMap, dryRun) {
+  let changes = 0
+  let bumps = 0
+  for (const directory of infraComponentDirectories(root)) {
+    const jsonPath = join(directory, 'package.json')
     const raw = readUtf8FileIfExists(jsonPath)
     if (raw === undefined) continue
     const pkg = JSON.parse(raw)
-    let changed = false
-
-    for (const field of [
-      'dependencies',
-      'devDependencies',
-      'peerDependencies',
-      'optionalDependencies'
-    ]) {
-      if (!pkg[field]) continue
-      for (const [dep, range] of Object.entries(pkg[field])) {
-        const ws = workspaceMap[dep]
-        if (!ws) continue
-        const target = `^${ws.version}`
-        if (range !== target) {
-          console.log(`  [infra] ${pkg.name}: ${dep} ${range} → ${target}`)
-          pkg[field][dep] = target
-          changed = true
-          infraDepChanges++
-        }
-      }
-    }
-
-    if (changed) {
-      const bumped = bumpPatch(pkg.version || '0.0.0')
-      if (bumped) {
-        console.log(`  [infra] ${pkg.name}: version ${pkg.version} → ${bumped}`)
-        pkg.version = bumped
-        infraBumps++
-      }
-      if (!DRY_RUN) {
-        writeUtf8FileAtomic(jsonPath, JSON.stringify(pkg, null, 2) + '\n')
-      }
-    }
+    const componentChanges = rewriteInfraReferences(pkg, workspaceMap)
+    if (componentChanges === 0) continue
+    changes += componentChanges
+    bumps += bumpInfraPackage(pkg)
+    writePackageIfChanged(jsonPath, pkg, componentChanges, dryRun)
   }
+  return { changes, bumps }
 }
 
-console.log(
-  `${DRY_RUN ? '[DRY RUN] Would update' : 'Updated'} ${infraDepChanges} infra dep reference(s) across ${infraBumps} component(s)`
-)
+export function syncVersions({
+  root = ROOT,
+  dryRun = false,
+  workspaceOnly = false,
+  packageList
+} = {}) {
+  const workspaceMap = workspacePackages(packageList ?? listWorkspacePackages(root))
+  console.log(`Found ${Object.keys(workspaceMap).length} workspace packages`)
+  const changes = syncWorkspaceReferences(workspaceMap, dryRun)
+  console.log(
+    `\n${dryRun ? '[DRY RUN] Would update' : 'Updated'} ${changes} cross-package references`
+  )
+  const infra = workspaceOnly
+    ? { changes: 0, bumps: 0 }
+    : syncInfraReferences(root, workspaceMap, dryRun)
+  console.log(
+    `${dryRun ? '[DRY RUN] Would update' : 'Updated'} ${infra.changes} infra dep reference(s) across ${infra.bumps} component(s)`
+  )
+}
+
+if (
+  process.argv[1] !== undefined &&
+  existsSync(process.argv[1]) &&
+  realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  syncVersions({
+    dryRun: process.argv.includes('--dry-run'),
+    workspaceOnly: process.argv.includes('--workspace-only')
+  })
+}

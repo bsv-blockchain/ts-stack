@@ -135,7 +135,7 @@ await wallet.relinquishCert({
 })
 ```
 
-This removes the certificate from the wallet. For on-chain revocation of Verifiable Credentials, see the [Credentials Guide](credentials.md).
+This removes the certificate from the wallet. For BRC-52 revocation operations and explicit status evidence, see the [Credentials Guide](credentials.md).
 
 ## Complete Example
 

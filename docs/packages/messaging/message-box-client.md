@@ -18,13 +18,17 @@ tags: [messaging, message-box, brc-103, brc-29]
 
 The unpublished 2.6 candidate accepts strict bounded base64 transaction bytes at the PeerPay receive boundary, alongside deployed array/byte representations. Outgoing encoding stays unchanged. This does not remove encrypted relay message limits or provide a durable settlement journal.
 
+This source candidate declares SDK peer `^2.8.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Browser- and Node-compatible authenticated store-and-forward messaging,
 > live WebSockets, peer payments, token settlement, permissions, quotes, and
 > push-device registration.
 
-The 2.5.4 source candidate raises the `@bsv/sdk` peer floor to `^2.8.6`: SDK 2.8.0 through 2.8.5 reject every valid incoming BRC-29 payment in `PeerPayClient.acceptPayment()` and `rejectPayment()` because the recipient key is derived without `forSelf`. There is no source change.
+The 2.5.4 release raised the `@bsv/sdk` peer floor to `^2.8.6`: SDK 2.8.0 through 2.8.5 reject every valid incoming BRC-29 payment in `PeerPayClient.acceptPayment()` and `rejectPayment()` because the recipient key is derived without `forSelf`. That release changed peer metadata without changing source.
 
-The 2.5.3 release fixes the CommonJS build (`new MessageBoxClient()` failed with `LookupResolver.default is not a constructor` under `require()`). `sendMessage()` HTTP failures now append the server's well-formed failure code, for example `Message Box send failed with HTTP 400 (ERR_DUPLICATE_MESSAGE).`; free-text server descriptions are never copied into errors. The `@bsv/sdk` peer floor is now `^2.8.0`, the first SDK release providing modules this package already required.
+The 2.5.3 release fixes the CommonJS build (`new MessageBoxClient()` failed with `LookupResolver.default is not a constructor` under `require()`). `sendMessage()` HTTP failures now append the server's well-formed failure code, for example `Message Box send failed with HTTP 400 (ERR_DUPLICATE_MESSAGE).`; free-text server descriptions are never copied into errors. That 2.5.3 release required `^2.8.0`, the first SDK release providing modules this package already required.
 
 ## Install
 
@@ -33,7 +37,8 @@ npm install @bsv/message-box-client @bsv/sdk
 ```
 
 `@bsv/sdk` is a required peer. Node.js 22 or newer is supported.
-Use SDK 2.8.6 or newer. The package imports SDK validation modules first
+The current candidate requires `^2.8.6 || ^3.0.0`; use SDK2.8.6 or newer within
+the SDK2 family, or the proposed SDK3 candidate after the linked qualification. The package imports SDK validation modules first
 shipped in 2.8.0, and SDK 2.8.6 fixes BRC-29 payment acceptance. BRC-29 sends accept both historical `number[]` and
 binary Wallet Wire `Uint8Array` transaction results. Payment receipt also
 recovers pending typed-array tokens serialized through JSON as numeric-key

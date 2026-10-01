@@ -1,59 +1,39 @@
-import { MasterCertificate, PrivateKey, ProtoWallet, Utils } from '@bsv/sdk'
-import { CertificateData, CredentialIssuerConfig, VerifiableCredential } from '../../core/types'
+import { BsvDid } from '@bsv/did'
+import { exportBRC52StructuredCertificate } from '@bsv/did/brc52'
+import envelopeFixture from './fixtures/brc203-envelope.json'
+import { Certificate, Utils } from '@bsv/sdk'
+import { CertificateData, CredentialIssuerConfig } from '../../core/types'
 import legacyCredentialFixture from '../../core/__tests__/fixtures/pre-0.6-credential.json'
 import { Certifier, createCertificationMethods } from '../certification'
 import {
   CredentialIssuer,
   CredentialSchema,
   MemoryRevocationStore,
-  createCredentialMethods,
-  toVerifiableCredential,
-  toVerifiablePresentation
+  createCredentialMethods
 } from '../credentials'
 
 const PRIVATE_KEY = '0000000000000000000000000000000000000000000000000000000000000001'
-const SUBJECT_KEY = '030dbed53c3613c887ad36e8bde365c2e58f6196735a589cd09d6bc316fa550df4'
-const CERTIFIER_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
-const ZERO_OUTPOINT = `${'00'.repeat(32)}.0`
-const CERTIFICATE_TYPE = Utils.toBase64(Array.from({ length: 32 }, () => 1))
-const CERTIFICATE_SERIAL = Utils.toBase64(Array.from({ length: 32 }, () => 2))
+const frozenCertificate = Certificate.fromBinary(
+  Utils.toArray(envelopeFixture.certificateBinary, 'base64')
+)
+const SUBJECT_KEY = frozenCertificate.subject
+const CERTIFIER_KEY = frozenCertificate.certifier
 const EXPLICIT_CERTIFICATE_TYPE = Utils.toBase64(Array.from({ length: 32 }, () => 3))
 const OLD_CERTIFICATE_SERIAL = Utils.toBase64(Array.from({ length: 32 }, () => 4))
 const LEGACY_CERTIFIER_TYPE = Utils.toBase64(Utils.toArray('certification', 'utf8'))
 
-const certificate = {
-  type: CERTIFICATE_TYPE,
-  serialNumber: CERTIFICATE_SERIAL,
-  subject: SUBJECT_KEY,
-  certifier: CERTIFIER_KEY,
-  revocationOutpoint: ZERO_OUTPOINT,
-  fields: { name: 'QWxpY2U=', role: 'YWRtaW4=' },
-  signature: 'signature',
-  keyringForSubject: {
-    name: 'encrypted-name'
-  }
-}
-
-async function signedCertificate(outpoint = ZERO_OUTPOINT): Promise<CertificateData> {
-  const master = new MasterCertificate(
-    certificate.type,
-    certificate.serialNumber,
-    certificate.subject,
-    certificate.certifier,
-    outpoint,
-    certificate.fields,
-    { name: 'AA==', role: 'AQ==' }
-  )
-  await master.sign(new ProtoWallet(new PrivateKey(PRIVATE_KEY, 'hex')))
+// Frozen issuer-secured bytes, with inert keyring placeholders for mocked wallet acquisition.
+// The mock never decrypts them; this tests transport/state ordering, not keyring interoperability.
+async function signedCertificate(): Promise<CertificateData> {
   return {
-    type: master.type,
-    serialNumber: master.serialNumber,
-    subject: master.subject,
-    certifier: master.certifier,
-    revocationOutpoint: master.revocationOutpoint,
-    fields: { ...master.fields },
-    signature: master.signature as string,
-    keyringForSubject: { ...master.masterKeyring }
+    type: frozenCertificate.type,
+    serialNumber: frozenCertificate.serialNumber,
+    subject: frozenCertificate.subject,
+    certifier: frozenCertificate.certifier,
+    revocationOutpoint: frozenCertificate.revocationOutpoint,
+    fields: { ...frozenCertificate.fields },
+    signature: frozenCertificate.signature as string,
+    keyringForSubject: { email: 'AA==', name: 'AQ==' }
   }
 }
 
@@ -521,91 +501,6 @@ describe('MemoryRevocationStore', () => {
   })
 })
 
-describe('Verifiable credential helpers', () => {
-  it('wraps certificate data as a W3C verifiable credential', () => {
-    const vc = toVerifiableCredential(certificate, CERTIFIER_KEY, {
-      credentialType: 'EmployeeCredential'
-    })
-
-    expect(vc['@context']).toContain('https://www.w3.org/2018/credentials/v1')
-    expect(vc.type).toEqual(['VerifiableCredential', 'EmployeeCredential'])
-    expect(vc.issuer).toBe(`did:bsv:${CERTIFIER_KEY}`)
-    expect(vc.credentialSubject).toMatchObject({
-      id: `did:bsv:${SUBJECT_KEY}`,
-      name: 'QWxpY2U=',
-      role: 'YWRtaW4='
-    })
-    expect(vc.credentialStatus).toBeUndefined()
-    expect(vc.proof.signatureValue).toBe('signature')
-    expect(vc._bsv.certificate).toEqual(certificate)
-  })
-
-  it('adds credential status when the revocation outpoint is non-zero', () => {
-    const vc = toVerifiableCredential(
-      {
-        ...certificate,
-        revocationOutpoint: 'abc.0'
-      },
-      CERTIFIER_KEY
-    )
-
-    expect(vc.credentialStatus).toEqual({
-      id: 'bsv:abc.0',
-      type: 'BSVHashLockRevocation2024'
-    })
-  })
-
-  it('wraps credentials as a verifiable presentation', () => {
-    const vc = toVerifiableCredential(certificate, CERTIFIER_KEY)
-    const presentation = toVerifiablePresentation([vc], SUBJECT_KEY)
-
-    expect(presentation.holder).toBe(`did:bsv:${SUBJECT_KEY}`)
-    expect(presentation.verifiableCredential).toEqual([vc])
-    expect(presentation.proof.verificationMethod).toBe(`did:bsv:${SUBJECT_KEY}#key-1`)
-  })
-
-  it('ignores inherited VC options and rejects certificate accessors without invoking them', () => {
-    Object.defineProperty(Object.prototype, 'credentialType', {
-      value: 'AmbientCredential',
-      configurable: true
-    })
-    try {
-      expect(toVerifiableCredential(certificate, CERTIFIER_KEY, {}).type).toEqual([
-        'VerifiableCredential',
-        'BSVCertificate'
-      ])
-    } finally {
-      Reflect.deleteProperty(Object.prototype, 'credentialType')
-    }
-
-    const getter = jest.fn(() => certificate.fields)
-    const accessorCertificate = Object.defineProperty({ ...certificate }, 'fields', {
-      get: getter,
-      enumerable: true
-    })
-    expect(() => toVerifiableCredential(accessorCertificate, CERTIFIER_KEY)).toThrow(
-      'Invalid certificate data'
-    )
-    expect(getter).not.toHaveBeenCalled()
-  })
-
-  it('copies presentation credentials without using inherited indices or iterators', () => {
-    const vc = toVerifiableCredential(certificate, CERTIFIER_KEY)
-    const iterator = jest.fn(() => [vc][Symbol.iterator]())
-    const credentials = [vc]
-    Object.defineProperty(credentials, Symbol.iterator, { get: iterator })
-
-    const presentation = toVerifiablePresentation(credentials, SUBJECT_KEY)
-    expect(presentation.verifiableCredential).toHaveLength(1)
-    expect(iterator).not.toHaveBeenCalled()
-
-    const sparse: VerifiableCredential[] = []
-    sparse.length = 1
-    Object.setPrototypeOf(sparse, Object.assign(Object.create(Array.prototype), { 0: vc }))
-    expect(() => toVerifiablePresentation(sparse, SUBJECT_KEY)).toThrow('dense own-data array')
-  })
-})
-
 describe('CredentialIssuer', () => {
   it('uses only dense own issuer and revocation configuration data', async () => {
     const inheritedConfig = Object.create({ privateKey: PRIVATE_KEY }) as CredentialIssuerConfig
@@ -659,7 +554,7 @@ describe('CredentialIssuer', () => {
     const info = issuer.getInfo()
 
     expect(info.publicKey).toBeDefined()
-    expect(info.did).toBe(`did:bsv:${info.publicKey}`)
+    expect(info.did).toBe(BsvDid.fromPublicKey(info.publicKey))
     expect(info.schemas).toEqual([
       {
         id: 'employee',
@@ -669,209 +564,46 @@ describe('CredentialIssuer', () => {
     ])
   })
 
-  it('issues certificates only for declared schema fields and cryptographically verifies them', async () => {
-    const issuer = await CredentialIssuer.create({
-      privateKey: PRIVATE_KEY,
-      schemas: [
-        {
-          id: 'employee',
-          name: 'Employee',
-          fields: [
-            { key: 'name', label: 'Name', type: 'text', required: true },
-            { key: 'email', label: 'Email', type: 'email', required: true }
-          ]
-        }
-      ]
-    })
-
-    await expect(
-      issuer.issue(SUBJECT_KEY, 'employee', {
-        name: 'Alice',
-        email: 'alice@example.com',
-        privilege: 'admin'
-      })
-    ).rejects.toThrow('not declared by the schema')
-    const vc = await issuer.issue(SUBJECT_KEY, 'employee', {
-      name: 'Alice',
-      email: 'alice@example.com'
-    })
-    await expect(issuer.verify(vc)).resolves.toMatchObject({
-      valid: true,
-      revoked: false,
-      errors: []
-    })
-    const finalByte = vc.proof.signatureValue.slice(-2)
-    vc.proof.signatureValue = `${vc.proof.signatureValue.slice(0, -2)}${finalByte === '00' ? '01' : '00'}`
-    await expect(issuer.verify(vc)).resolves.toMatchObject({
-      valid: false,
-      errors: ['Credential structure or signature is invalid']
-    })
+  it('returns original signed bytes with subject keyring delivery outside the graph', async () => {
+    const issuer = await CredentialIssuer.create({ privateKey: PRIVATE_KEY })
+    const certificate = await signedCertificate()
+    jest.spyOn(issuer, 'issueCertificate').mockResolvedValueOnce(certificate)
+    const delivery = await issuer.issue(SUBJECT_KEY, 'mocked-existing-certificate', {})
+    expect(delivery.credential.certificateBinary).toBe(envelopeFixture.certificateBinary)
+    expect(delivery.credential.credential).toEqual(envelopeFixture.credential)
+    expect(delivery.keyringForSubject).toEqual(certificate.keyringForSubject)
+    expect(delivery.credential).not.toHaveProperty('keyringForSubject')
+    expect(delivery.credential).not.toHaveProperty('proof')
+    expect(issuer.verify(JSON.stringify(delivery.credential)).verified).toBe(true)
   })
 
-  it('verifies a genuinely signed credential issued with the pre-upgrade schema default', async () => {
-    const issuer = await CredentialIssuer.create({
-      privateKey: PRIVATE_KEY,
-      schemas: [
-        {
-          id: 'employee',
-          name: 'Employee',
-          fields: [
-            { key: 'name', label: 'Name', type: 'text' },
-            { key: 'role', label: 'Role', type: 'text' }
-          ]
-        }
-      ]
-    })
-    const legacyCertificate = legacyCredentialFixture.certificate as CertificateData
-    const vc = toVerifiableCredential(legacyCertificate, CERTIFIER_KEY, {
-      credentialType: 'Employee'
-    })
-
-    await expect(issuer.verify(vc)).resolves.toMatchObject({
-      valid: true,
-      revoked: false,
-      errors: []
-    })
-  })
-
-  it('verifies valid and malformed credentials', async () => {
-    const issuer = await CredentialIssuer.create({
-      privateKey: PRIVATE_KEY,
-      schemas: [
-        {
-          id: 'employee',
-          name: 'Employee',
-          certificateTypeBase64: CERTIFICATE_TYPE,
-          fields: []
-        }
-      ]
-    })
-    const vc = toVerifiableCredential(await signedCertificate(), CERTIFIER_KEY, {
-      credentialType: 'Employee'
-    })
-
-    await expect(issuer.verify(vc)).resolves.toMatchObject({
-      valid: true,
-      revoked: false,
+  it('verifies a frozen BRC-203 envelope without asserting issuer trust or chain status', async () => {
+    const issuer = await CredentialIssuer.create({ privateKey: PRIVATE_KEY })
+    expect(issuer.verify(JSON.stringify(envelopeFixture))).toMatchObject({
+      verified: true,
       errors: [],
-      issuer: `did:bsv:${CERTIFIER_KEY}`,
-      subject: `did:bsv:${SUBJECT_KEY}`
+      mediaType: 'application/vc'
     })
-
-    const withoutOwnCertificate: Partial<typeof vc> = { ...vc }
-    delete withoutOwnCertificate._bsv
-    Object.defineProperty(Object.prototype, '_bsv', {
-      value: vc._bsv,
-      configurable: true
+    expect(issuer.verify(JSON.stringify(envelopeFixture))).not.toHaveProperty('revoked')
+    const tampered = structuredClone(envelopeFixture)
+    tampered.credential.issuer = BsvDid.fromPublicKey(SUBJECT_KEY)
+    expect(issuer.verify(JSON.stringify(tampered))).toMatchObject({
+      verified: false,
+      verifiedDocument: null
     })
-    try {
-      await expect(issuer.verify(withoutOwnCertificate as typeof vc)).resolves.toMatchObject({
-        valid: false,
-        errors: ['Credential structure or signature is invalid']
-      })
-    } finally {
-      Reflect.deleteProperty(Object.prototype, '_bsv')
-    }
-
-    await expect(
-      issuer.verify({
-        ...vc,
-        '@context': [],
-        type: [],
-        proof: undefined,
-        _bsv: undefined
-      } as any)
-    ).resolves.toMatchObject({
-      valid: false,
-      errors: ['Credential structure or signature is invalid']
-    })
-
-    for (const deceptiveContext of [
-      `https://evil.example/${vc['@context'][0]}`,
-      `${vc['@context'][0]}.evil.example`
-    ]) {
-      await expect(
-        issuer.verify({
-          ...vc,
-          '@context': [deceptiveContext]
-        })
-      ).resolves.toMatchObject({
-        valid: false,
-        errors: ['Credential structure or signature is invalid']
-      })
-    }
-
-    await expect(
-      issuer.verify({
-        ...vc,
-        '@context': 'https://www.w3.org/2018/credentials/v1'
-      } as any)
-    ).resolves.toMatchObject({
-      valid: false,
-      errors: ['Credential structure or signature is invalid']
-    })
-
-    const tampered = structuredClone(vc)
-    tampered._bsv.certificate.fields.name = 'QXR0YWNrZXI='
-    tampered.credentialSubject.name = 'QXR0YWNrZXI='
-    await expect(issuer.verify(tampered)).resolves.toMatchObject({
-      valid: false,
-      errors: ['Credential structure or signature is invalid']
-    })
-
-    const reorderedSubject: typeof vc.credentialSubject = { id: vc.credentialSubject.id }
-    for (const key of Object.keys(vc.credentialSubject).reverse()) {
-      reorderedSubject[key] = vc.credentialSubject[key]
-    }
-    const originalSort = Array.prototype.sort
-    Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
-      if (typeof compareFn !== 'function') {
-        throw new Error('Array.prototype.sort was called without a comparator')
-      }
-      return originalSort.call(this, compareFn)
-    }
-    try {
-      await expect(
-        issuer.verify({ ...vc, credentialSubject: reorderedSubject })
-      ).resolves.toMatchObject({
-        valid: true,
-        errors: []
-      })
-    } finally {
-      Array.prototype.sort = originalSort
-    }
+    expect(issuer.verify('{}')).toMatchObject({ verified: false, verifiedDocument: null })
   })
 
-  it('detects revoked credentials when revocation records are missing', async () => {
-    const issuer = await CredentialIssuer.create({
-      privateKey: PRIVATE_KEY,
-      schemas: [
-        {
-          id: 'employee',
-          name: 'Employee',
-          certificateTypeBase64: CERTIFICATE_TYPE,
-          fields: []
-        }
-      ]
-    })
-    const vc = toVerifiableCredential(
-      await signedCertificate(`${'11'.repeat(32)}.0`),
-      CERTIFIER_KEY,
-      { credentialType: 'Employee' }
-    )
-
-    await expect(issuer.verify(vc)).resolves.toMatchObject({
-      valid: false,
-      revoked: true,
-      errors: ['Credential has been revoked']
-    })
+  it('does not claim old short certificate types can be rewrapped into BRC-203', () => {
+    const { keyringForSubject: _keyring, ...core } = legacyCredentialFixture.certificate
+    expect(() => exportBRC52StructuredCertificate(core)).toThrow()
   })
 
   it('rejects revoke calls when revocation is disabled', async () => {
     const issuer = await CredentialIssuer.create({ privateKey: PRIVATE_KEY })
 
     await expect(issuer.revoke('serial-1')).rejects.toThrow('Revocation is not enabled')
-    await expect(issuer.isRevoked('serial-1')).resolves.toBe(true)
+    await expect(issuer.getRevocationRecordStatus('serial-1')).resolves.toBe('unknown')
   })
 
   it('ignores inherited revocation transaction evidence and retains secrets after a malformed spend result', async () => {
@@ -892,8 +624,8 @@ describe('CredentialIssuer', () => {
         schemas: [{ id: 'employee', name: 'Employee', fields: [] }],
         revocation: { enabled: true, wallet, store }
       })
-      const credential = await issuer.issue(SUBJECT_KEY, 'employee', {})
-      const serial = credential._bsv.certificate.serialNumber
+      const credential = await issuer.issueCertificate(SUBJECT_KEY, 'employee', {})
+      const serial = credential.serialNumber
       await expect(store.load(serial)).resolves.toMatchObject({ beef: [] })
 
       await expect(issuer.revoke(serial)).rejects.toThrow(
@@ -1010,7 +742,7 @@ describe('createCredentialMethods', () => {
       serialNumber: OLD_CERTIFICATE_SERIAL,
       certifier: CERTIFIER_KEY
     })
-    expect(vc.issuer).toBe(`did:bsv:${CERTIFIER_KEY}`)
+    expect(vc.credential.issuer).toBe(BsvDid.fromPublicKey(CERTIFIER_KEY))
   })
 
   it('accepts acquired certificate fields when only their key insertion order differs', async () => {
@@ -1053,7 +785,7 @@ describe('createCredentialMethods', () => {
           fields: { name: 'Alice' },
           fetch: fetchMock as typeof fetch
         })
-      ).resolves.toMatchObject({ issuer: `did:bsv:${CERTIFIER_KEY}` })
+      ).resolves.toMatchObject({ credential: { issuer: BsvDid.fromPublicKey(CERTIFIER_KEY) } })
     } finally {
       Array.prototype.sort = originalSort
     }
@@ -1222,7 +954,22 @@ describe('createCredentialMethods', () => {
       limit: 100
     })
     expect(credentials).toHaveLength(1)
-    expect(credentials[0].issuer).toBe(`did:bsv:${CERTIFIER_KEY}`)
+    expect(credentials[0].credential.issuer).toBe(BsvDid.fromPublicKey(CERTIFIER_KEY))
+  })
+
+  it('exports only the signed core and never reads unrelated stored keyring caches', async () => {
+    client.listCertificates.mockResolvedValueOnce({
+      totalCertificates: 1,
+      certificates: [remoteCertificate]
+    })
+    const methods = createCredentialMethods(core)
+    const [credential] = await methods.listCredentials({
+      certifiers: [CERTIFIER_KEY],
+      types: [remoteCertificate.type]
+    })
+    expect(credential.certificateBinary).toBe(envelopeFixture.certificateBinary)
+    expect(credential).not.toHaveProperty('keyringForSubject')
+    expect(credential).not.toHaveProperty('disclosure')
   })
 
   it('fails closed for malformed, inherited, sparse, or out-of-scope certificate lists', async () => {
@@ -1272,12 +1019,5 @@ describe('createCredentialMethods', () => {
         types: [remoteCertificate.type]
       })
     ).rejects.toThrow('Failed to list credentials: wallet offline')
-  })
-
-  it('creates presentations for the wallet identity key', () => {
-    const vc = toVerifiableCredential(certificate, CERTIFIER_KEY)
-    const methods = createCredentialMethods(core)
-
-    expect(methods.createPresentation([vc]).holder).toBe(`did:bsv:${SUBJECT_KEY}`)
   })
 })
