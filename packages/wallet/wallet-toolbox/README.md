@@ -63,6 +63,21 @@ store already left with unjournaled schema objects by an older version. Preserve
 the database and verified backups and reconcile the exact schema and migration
 journal before recovery; do not delete journal rows or wallet data blindly.
 
+### Postgres storage
+
+`StorageKnex` runs on Postgres through the knex `pg` client. Install `pg` in the
+application. Settings report `dbtype: 'Postgres'`; remote clients older than
+this release reject that value.
+
+Bigint columns and counts must reach `StorageKnex` as numbers. node-postgres
+returns int8 as strings by default, so either create the knex instance with
+`Setup.createPostgresKnex(connectionJson, database)` or add
+`Setup.postgresAfterCreate` as the pool's `afterCreate` hook.
+
+Set `RUNPOSTGRES=1` and `POSTGRES_CONNECTION` (JSON node-postgres connection
+config) to include Postgres in the Knex test suites. Test databases are created
+on that server as needed.
+
 ## Overview
 
 The Wallet Toolbox is the reference implementation of the BRC-100 wallet interface. It connects the BSV SDK's cryptographic primitives to real storage backends, network services, and signing flows so that application developers don't have to wire these layers together themselves.
