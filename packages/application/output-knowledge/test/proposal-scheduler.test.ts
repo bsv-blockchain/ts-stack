@@ -67,8 +67,14 @@ it('requires a durable source and remains opt-in', async () => {
   expect(f.page).not.toHaveBeenCalled()
   await f.worker.stop()
   f.worker.wake()
-  await expect(f.worker.runOnce()).rejects.toMatchObject({ code: 'cancelled' })
-  await expect(f.worker.start(() => {})).rejects.toMatchObject({ code: 'cancelled' })
+  await expect(f.worker.runOnce()).rejects.toMatchObject({
+    code: 'cancelled',
+    message: 'Proposal scheduling stopped'
+  })
+  await expect(f.worker.start(() => {})).rejects.toMatchObject({
+    code: 'cancelled',
+    message: 'Proposal scheduling stopped'
+  })
 })
 
 it('keeps expiry moving while deduplicated recovery calls retain every physical slot', async () => {
@@ -173,7 +179,10 @@ it('rejects an oversized page and a cursor that makes no progress', async () => 
   await expect(f.worker.runOnce()).rejects.toThrow('page')
   f.page.mockResolvedValue({ items: [], next: 'same' })
   await f.worker.runOnce()
-  await expect(f.worker.runOnce()).rejects.toMatchObject({ code: 'unavailable' })
+  await expect(f.worker.runOnce()).rejects.toMatchObject({
+    code: 'unavailable',
+    message: 'Proposal maintenance continuation did not advance'
+  })
   await f.worker.stop()
 })
 
@@ -287,3 +296,48 @@ it('owns the installed service and inventory methods and reports synchronous rec
   const final = await f.worker.stop()
   expect([...first.failures, ...final.failures]).toEqual([{ key: a, phase: 'recovery', error }])
 })
+
+it('accepts a completely full bounded page and drains exactly once across repeated stop calls', async () => {
+  const f = fixture({ pageSize: 1 }),
+    job = deferred<void>()
+  f.page.mockResolvedValue({ items: [hint()] })
+  f.reconcile.mockReturnValue(job.promise)
+  expect(await f.worker.runOnce()).toMatchObject({
+    scanned: 1,
+    recoveriesStarted: 1,
+    retainedJobs: 1
+  })
+  const first = f.worker.stop(),
+    second = f.worker.stop()
+  expect(second).toBe(first)
+  job.resolve()
+  expect(await first).toMatchObject({ recoveryCallsCompleted: 1, retainedJobs: 0 })
+  expect(f.worker.stop()).toBe(first)
+  expect(await second).toEqual(await first)
+})
+
+it.each([
+  [
+    { items: [{ ...hint(), channelKey: { length: 1 } }] },
+    'invalid',
+    'Invalid proposal maintenance channel'
+  ],
+  [{ items: [{ ...hint(), channelKey: 'é'.repeat(8192) }] }, 'limited', 'Output JSON byte limit'],
+  [{ items: [{ ...hint(), state: 'retired' }] }, 'invalid', 'Invalid proposal maintenance state'],
+  [
+    { items: [hint()], next: { length: 1 } },
+    'invalid',
+    'Invalid proposal maintenance continuation'
+  ],
+  [{ items: [hint()], next: 'é'.repeat(16384) }, 'limited', 'Output JSON byte limit']
+])(
+  'preserves bounded inventory failures without invoking service effects',
+  async (page, code, message) => {
+    const f = fixture()
+    f.page.mockResolvedValue(page as never)
+    await expect(f.worker.runOnce()).rejects.toMatchObject({ code, message })
+    expect(f.expire).not.toHaveBeenCalled()
+    expect(f.reconcile).not.toHaveBeenCalled()
+    await f.worker.stop()
+  }
+)

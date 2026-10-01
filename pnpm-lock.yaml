@@ -86,6 +86,9 @@ importers:
       '@bsv/output-knowledge':
         specifier: workspace:^
         version: link:../../packages/application/output-knowledge
+      '@bsv/overlay':
+        specifier: workspace:^
+        version: link:../../packages/overlays/overlay
       '@bsv/overlay-express':
         specifier: workspace:^
         version: link:../../packages/overlays/overlay-express

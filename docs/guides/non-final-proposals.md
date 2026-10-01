@@ -176,8 +176,8 @@ framing limits, retained acknowledgements and unchanged finite lookup behavior.
 Generated schedules vary these boundaries together. Separate Engine/Mongo tests
 qualify ordinary admission receipt recovery.
 
-Complete checkpoint-two qualification, startup recovery/expiry scheduling,
-configuration evolution, retained-fence compaction and application projection
+Complete checkpoint-two qualification, configuration evolution,
+retained-fence compaction and application projection
 integration are tracked in the [implementation record](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/IMPLEMENTATION.md).
 The endpoint adapter alone does not complete those service obligations. The
 [compiled examples](./compiled-package-examples.md) verify public package wiring.
@@ -227,5 +227,26 @@ an expired manifest or bypasses the provider's current access and retention rule
 The HTTP integration tests use this client with real mutual authentication,
 native SQLite disclosure, post-signing access changes and serialized original
 operation recovery after discovery changes. The evidence/admission ports in that
-fixture are synthetic, so this does not yet establish the complete Engine-backed
-pipeline or production deployment readiness.
+component fixture are synthetic. The separate reference application's
+`test/proposalPipeline.test.ts` composes the public client and HTTP adapter with
+actual SDK Script/SPV verification, a real Topic Manager and Engine, retained
+Mongo admission history, SQLite proposal state and the recovery scheduler.
+
+The pipeline first puts and reads a private signed document without invoking
+ordinary admission. It rejects another authenticated identity and invalid Script
+evidence. A valid explicit finalization then commits through Engine; an injected
+loss boundary prevents the returned receipt from reaching the proposal journal.
+After closing and reopening both adapters, the scheduler finds the retained
+reservation and recovers the original Engine history without another submit.
+It does so after proposal/manifest expiry, with current caller access revoked and
+discovery/evidence resolution unavailable. This is completion of an existing
+reservation, not authority to start a new one. Once caller access is restored,
+the saved original SDK request retrieves the same admission result and assessment
+identity.
+
+Run this example using the [workbench instructions](./output-knowledge-workbench.md).
+It uses public synthetic keys and a pinned test chain, not live funds or a
+consensus node. The HTTP fixture maps the selected HTTPS origin to an owned
+loopback listener while preserving actual BRC-103/104 authentication; it does
+not qualify TLS termination or production deployment. Interactive private
+subscriptions and admission-driven lookup projection remain separate work.

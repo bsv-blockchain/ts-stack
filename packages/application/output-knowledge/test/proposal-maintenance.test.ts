@@ -128,25 +128,38 @@ it.each([0, 257, 1.5, NaN, Infinity])(
 
 it('requires durable indexed storage and validates the cursor namespace/identity binding', async () => {
   const f = fixture()
-  for (const changed of [
-    { durability: 'volatile' as const },
-    { getChannelEntry: undefined },
-    { getProposalEntry: undefined }
-  ])
-    expect(() => new ProposalJournalMaintenance(f.decorated(changed))).toThrow()
+  expect(() => new ProposalJournalMaintenance(f.decorated({ durability: 'volatile' }))).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Proposal maintenance requires durable storage'
+    })
+  )
+  for (const changed of [{ getChannelEntry: undefined }, { getProposalEntry: undefined }])
+    expect(() => new ProposalJournalMaintenance(f.decorated(changed))).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Proposal maintenance requires indexed retained records'
+      })
+    )
   await f.put()
   await f.put('22'.repeat(32))
   const page = await f.source.page(1)
   const other = new ProposalJournalMaintenance(f.decorated({ namespace: 'different' }))
-  await expect(other.page(1, page.next)).rejects.toMatchObject({ code: 'context-changed' })
+  await expect(other.page(1, page.next)).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Proposal maintenance cursor changed storage'
+  })
   const cursor = JSON.parse(page.next!)
   for (const changed of [
     { ...cursor, after: '3' },
     { ...cursor, through: '3' },
-    { ...cursor, through: '0' },
-    { ...cursor, extra: true }
+    { ...cursor, through: '0' }
   ])
-    await expect(f.source.page(1, JSON.stringify(changed))).rejects.toThrow()
+    await expect(f.source.page(1, JSON.stringify(changed))).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Proposal maintenance cursor exceeds retained history'
+    })
+  await expect(f.source.page(1, JSON.stringify({ ...cursor, extra: true }))).rejects.toThrow()
   for (const malformed of ['', 'x'.repeat(16385), '{}', JSON.stringify({ ...cursor, after: 1 })])
     await expect(f.source.page(1, malformed)).rejects.toThrow()
   expect(await f.source.page(1, JSON.stringify({ ...cursor, after: cursor.through }))).toEqual({
@@ -169,19 +182,29 @@ it.each(['empty', 'oversized', 'unordered', 'gap', 'beyond'] as const)(
       beyond: [{ ...entries[0], revision: '3' }]
     }
     const source = new ProposalJournalMaintenance(f.decorated({ read: async () => altered[kind] }))
-    await expect(source.page(2)).rejects.toMatchObject({ code: 'unavailable' })
+    const messages = {
+      empty: 'Proposal maintenance history is missing',
+      oversized: 'Proposal maintenance history is missing',
+      unordered: 'Proposal maintenance history is unordered',
+      gap: 'Proposal maintenance history has a gap',
+      beyond: 'Proposal maintenance history is missing'
+    }
+    await expect(source.page(2)).rejects.toMatchObject({
+      code: 'unavailable',
+      message: messages[kind]
+    })
   }
 )
 
 it('does not disguise missing channel/proposal indexes and defers a concurrent index change', async () => {
   const f = fixture(),
     plan = await f.put()
-  for (const changes of [
-    { getChannelEntry: async () => undefined },
-    { getProposalEntry: async () => undefined }
-  ]) {
+  for (const [changes, message] of [
+    [{ getChannelEntry: async () => undefined }, 'Proposal maintenance channel is missing'],
+    [{ getProposalEntry: async () => undefined }, 'Proposal maintenance proposal is missing']
+  ] as const) {
     const source = new ProposalJournalMaintenance(f.decorated(changes))
-    await expect(source.page(1)).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(source.page(1)).rejects.toMatchObject({ code: 'unavailable', message })
   }
   const entry = (await f.storage.getChannelEntry(proposalChannelKey(plan.next.proposal.body)))!
   const changed = new ProposalJournalMaintenance(
@@ -195,10 +218,42 @@ it('does not disguise missing channel/proposal indexes and defers a concurrent i
       })
     })
   )
-  await expect(changed.page(1)).rejects.toThrow('channel changed')
+  await expect(changed.page(1)).rejects.toMatchObject({
+    code: 'unavailable',
+    message: 'Proposal maintenance channel changed'
+  })
   const race = new ProposalJournalMaintenance(
     f.decorated({ getProposalEntry: async () => ({ ...entry, revision: '2' }) })
   )
   expect(await race.page(1)).toEqual({ items: [] })
   expect((await f.source.page(1)).items[0].proposalId).toBe(plan.next.proposalId)
+})
+
+it('checks the cursor type and UTF-8 budget before interpreting its retained history', async () => {
+  const f = fixture()
+  await f.put()
+  await f.put('22'.repeat(32))
+  const { next } = await f.source.page(1)
+  for (const value of [42, { length: 1 }, new TextEncoder().encode(next!), ' '.repeat(16385)])
+    await expect(f.source.page(1, value as never)).rejects.toMatchObject({
+      code: 'invalid',
+      message: 'Invalid proposal maintenance cursor'
+    })
+  // JSON whitespace is accepted; exactly the stated byte budget must still work.
+  expect((await f.source.page(1, next!.padEnd(16384))).items).toHaveLength(1)
+  const oversizedUTF8 = JSON.stringify({ ...JSON.parse(next!), binding: 'é'.repeat(8200) })
+  expect(oversizedUTF8.length).toBeLessThan(16384)
+  await expect(f.source.page(1, oversizedUTF8)).rejects.toMatchObject({ code: 'limited' })
+})
+
+it('rejects a page over its requested bound even when every record is valid and ordered', async () => {
+  const f = fixture()
+  await f.put()
+  await f.put('22'.repeat(32))
+  const entries = await f.storage.read('0', 2)
+  const source = new ProposalJournalMaintenance(f.decorated({ read: async () => entries }))
+  await expect(source.page(1)).rejects.toMatchObject({
+    code: 'unavailable',
+    message: 'Proposal maintenance history is missing'
+  })
 })

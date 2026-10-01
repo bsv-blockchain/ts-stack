@@ -18,6 +18,7 @@
   "dependencies": {
     "@bsv/sdk": "workspace:^",
     "@bsv/output-knowledge": "workspace:^",
+    "@bsv/overlay": "workspace:^",
     "@bsv/overlay-express": "workspace:^",
     "@bsv/auth-express-middleware": "workspace:^",
     "express": "^5.2.1",

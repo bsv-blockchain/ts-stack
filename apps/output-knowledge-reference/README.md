@@ -24,10 +24,13 @@ does not make it current. Each provider has its own identity, index and retained
 sessions. A disconnected client resumes its original local control record and
 cursor, rather than inventing another Open.
 
-The producer currently verifies the fixed evidence before explicitly updating
-the lookup read model. This is not the ordinary topic-admission bridge. Private
-publication, paid acquisition, protected release, covenant purchase flows and
-root-host eviction remain separate integrations under construction.
+The interactive producer verifies the fixed evidence before explicitly updating
+the lookup read model. A separate automated proposal pipeline now connects the
+public SDK client, authenticated HTTP, real Script/SPV verification, ordinary
+Engine/Mongo admission and SQLite reservation recovery. The interactive lookup
+producer is not yet driven by that admission pipeline. Private publication, paid
+acquisition, protected release, covenant purchase flows and root-host eviction
+remain separate integrations under construction.
 
 ## Fixture provenance
 
@@ -74,6 +77,18 @@ expected results, storage boundaries and qualification limits.
 
 Run `pnpm --filter output-knowledge-reference-app test` for real Script/SPV,
 progressive snapshot and authenticated HTTP/SQLite client recovery checks.
+The proposal pipeline test starts an isolated three-member MongoDB 8.2.6 replica
+set through the workspace's existing audited test fixture. Its first run needs
+the pinned Mongo binary available or downloadable; it never contacts an existing
+Mongo database. The fixture closes its own processes, connections and files.
+Run just that composition with
+`pnpm --filter output-knowledge-reference-app exec vitest run test/proposalPipeline.test.ts`.
+It records a signed private proposal, rejects an unauthorized reader and invalid
+transaction evidence, loses delivery after a real Engine commit, reopens both
+adapters and recovers the original receipt without a new submission. Recovery
+also works with discovery/evidence access unavailable and the original manifest
+expired. Restoring caller authorization is still required to disclose the result.
+
 `pnpm --filter output-knowledge-reference-app test:browser` builds the production
 bundles and runs Chrome/Chromium with native IndexedDB, two actual local providers,
 two clients, page-close recovery and independent source membership. It requires
@@ -81,5 +96,7 @@ free ports 4174 and 4175 and closes only the servers/profile it creates.
 The browser check writes a review screenshot under
 `artifacts/reference-workbench/workbench.png`.
 
-This is not ordinary Topic Manager admission, a mainnet spend, protected-content
-delivery or native mobile OS qualification. Those remain separate checkpoint work.
+The proposal test exercises ordinary Topic Manager admission on the pinned
+synthetic chain. It does not establish mining, current unspentness, protected
+content delivery, interactive private subscriptions or native mobile OS
+qualification. Those remain separate checkpoint work.

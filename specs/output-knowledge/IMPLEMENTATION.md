@@ -104,7 +104,9 @@ submission and GASP behavior remains available to applications that do not opt i
 - An optional bounded Engine proposal-admission bridge, recovering original
   retained receipts and projecting only the selected topic. Actual Engine/Mongo
   restart and lost-response tests pass, and complete-source mutation passes
-  96.88%; full HTTP/service composition remains required.
+  96.88%. The reference app now composes this bridge with actual SDK verification,
+  HTTP/service/SQLite state and Engine/Mongo admission recovery; interactive
+  projection remains separate.
 - Concrete SDK proposal evidence verification and signed PRP1/SQLite integration
   against pinned synthetic header ancestry, with ordinary admission kept separate.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
@@ -1344,3 +1346,49 @@ branches, functions and lines; the focused native/lifecycle selection passes 50
 cases. The SDK's full shared finite/proposal selection passes 136 tests across
 five suites. Whole-workspace strict types and the final root lint pass. The
 canonical mutation runs below still need to qualify these current inputs.
+
+## Proposal pipeline and recovery qualification
+
+At source 0be75f48f, the full SDK client target passes 92.16% over 319 sites
+(286 killed, 25 survived, eight timeout detections), zero uncovered or invalid,
+in 3 minutes 43 seconds. The full changed SQLite journal target passes 97.45%
+over 353 sites (343 killed, nine survived, one timeout detection), zero uncovered
+or invalid, in 22 minutes 8 seconds. Stryker recovered one worker SIGSEGV and one
+out-of-memory restart; those diagnostics remain retained. All 9337 tracked and
+compiled inputs were verified unchanged through the campaigns.
+
+The initial complete maintenance target failed its 90% gate at 87.04% over
+324 sites (265 killed, 42 survived, 17 timeout detections) in 30 minutes
+14 seconds. Its report is retained. Follow-up assertions distinguish protocol
+failures from accidental exceptions, check byte limits with multibyte text,
+accept full bounded pages and verify one physical shutdown across repeated calls.
+The same complete five-suite selection now passes 60 tests, including both
+300-case properties, in 96.895 seconds; both modules retain 100% statements,
+branches, functions and lines. The complete mutation rerun remains required;
+no source, test, operator, deadline or threshold has been excluded or weakened.
+
+The reference app's `proposalPipeline.test.ts` now uses public SDK and package
+interfaces throughout: retained authenticated proposal requests, real author
+signatures, Script/SPV verification against pinned synthetic headers, a Topic
+Manager and ordinary Engine, retained admission history in a three-member
+MongoDB 8.2.6 replica set, SQLite proposal reservations, and the bounded recovery
+scheduler. Put/get does not admit ordinary topic state; an unauthorized identity
+cannot read, and invalid Script evidence creates no finalization reservation.
+
+An explicit valid request commits Engine admission, then an injected loss prevents
+receipt linkage in the proposal journal. Closing and reopening both adapters
+recovers the same admission and assessment identity after proposal/manifest expiry,
+with discovery and evidence resolution unavailable and caller access revoked.
+Assertions require zero new Engine submissions or verification calls. Restoring
+caller access permits the serialized original SDK request to retrieve its result.
+The test does not restart Mongo processes, supply production TLS, use real funds,
+broadcast, or establish currentness/private entitlement. The browser lookup
+producer and admission-driven private projection remain separate integrations.
+
+The repository app suite passes seven tests across three files in 22.16 seconds;
+the existing Chrome/native IndexedDB two-provider/two-client live recovery check
+also passes. The Engine bridge's 64 focused cases, app and whole-workspace strict
+types, root health/lint/format, and 147-page documentation/link build pass. The only
+dependency change is the existing workspace overlay package in the private app
+and its lockfile importer; all other resolutions remain. These component results
+do not establish exact-head remote CI or completion of checkpoint two.

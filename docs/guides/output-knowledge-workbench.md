@@ -117,6 +117,46 @@ The browser harness uses foreground clicks and DOM-mutation waits so background
 animation-frame throttling does not masquerade as an application failure. It
 does not replace protocol assertions with screenshots.
 
+## Recover an admitted proposal after losing its receipt
+
+The automated `test/proposalPipeline.test.ts` example connects the public
+`OutputProposalTransport`, authenticated proposal router, `SDKProposalEvidence`,
+`ProposalService`, `SQLiteProposalJournal`, `OverlayProposalAdmission` and ordinary
+Engine backed by a three-member Mongo replica set. Run it from the repository root:
+
+```sh
+pnpm --filter output-knowledge-reference-app exec vitest run test/proposalPipeline.test.ts
+```
+
+Build the workspace dependencies first as above. The existing overlay test
+fixture owns randomly named databases, temporary files and loopback ports, and
+uses MongoDB 8.2.6. It may download that pinned binary on the first run. It does
+not connect to a deployed database. All transaction, author and provider keys
+remain public fixtures; no external broadcaster or advertiser is installed.
+
+The author records and reads a signed private proposal. Neither operation admits
+ordinary topic state. Another authenticated identity cannot read it, and invalid
+Script evidence cannot reserve finalization. A later valid explicit request
+creates a reservation and commits a real topic admission. An injected loss after
+the Engine commit leaves the proposal journal in `finalizing`, reproducing the
+uncertainty a host must recover instead of resubmitting under a new identity.
+
+Both adapters then close and reopen. The recovery scheduler completes the
+reservation from the retained Engine receipt even though the original proposal
+and manifest have expired, caller authorization is revoked, and discovery and
+evidence resolution are unavailable. Assertions require zero new Engine submits
+or evidence-verification calls, the original admission identity and the original
+assessment context. Restoring caller access permits the serialized original SDK
+request to retrieve that same result. Recovery of committed internal work never
+bypasses current response authorization.
+
+This test runs real HTTP message authentication through an explicit mapping
+from the fixture HTTPS origin to its loopback listener. TLS termination is not
+part of its evidence. It also does not restart the Mongo replica processes or
+claim recovery from destroyed storage; separate native persistence tests exercise
+those failure boundaries. The interactive browser producer and its lookup index
+are still separate from this proposal admission pipeline.
+
 Private publication, paid acquisition, covenant authority and wallet composition,
 STEAK/POTATOES release, LCH integration, root-host serving fences and native
 mobile qualification remain separate implementation work. This demonstration
