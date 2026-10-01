@@ -234,6 +234,61 @@ describe('BRC-38/39 portable wallet data', () => {
     expect(importedRemoteSyncMap.output.idMap[778]).toBe(targetOutputId)
   })
 
+  test('merges an imported sync state into the target row for the same storage identity', async () => {
+    const rootKeyHex = '5'.repeat(64)
+    const source = await createPortableSource('portable_merge_renamed_source', rootKeyHex)
+    const document = await exportBRC38(source.activeStorage, source.identityKey)
+    const target = await createPortableSource('portable_merge_renamed_target', rootKeyHex)
+    const targetUser = verifyTruthy(await target.activeStorage.findUserByIdentityKey(source.identityKey))
+    const partial = { userId: targetUser.userId, storageIdentityKey: remoteSyncStorageIdentityKey }
+    const targetRemote = verifyOne(await target.activeStorage.findSyncStates({ partial }))
+    await target.activeStorage.updateSyncState(targetRemote.syncStateId, { storageName: 'renamed remote' })
+
+    await importBRC38(target.activeStorage, document, { mode: 'merge' })
+
+    const merged = verifyOne(await target.activeStorage.findSyncStates({ partial }))
+    expect(merged.syncStateId).toBe(targetRemote.syncStateId)
+    expect(merged.storageName).toBe(remoteSyncStorageName)
+    expect(JSON.parse(merged.syncMap).transaction.idMap[777]).toBeGreaterThan(0)
+  })
+
+  test('restores one sync state per storage identity from a legacy export', async () => {
+    const document = minimalDocument()
+    const syncState = (syncStateId: number, storageIdentityKey: string, storageName: string) => ({
+      created_at: iso,
+      updated_at: iso,
+      when: iso,
+      syncStateId,
+      userId: document.user.userId,
+      storageIdentityKey,
+      storageName,
+      status: 'success',
+      init: true,
+      refNum: `ref-${syncStateId}`,
+      syncMap: { progress: syncStateId }
+    })
+    document.tables.syncStates.push(
+      syncState(1, 'raced', 'source'),
+      syncState(2, 'raced', 'source'),
+      syncState(3, 'shared', 'first app'),
+      syncState(4, 'shared', 'second app')
+    )
+    const target = await createEmptyStorage('portable_restore_legacy_sync_states')
+
+    await importBRC38(target, document, { mode: 'restore' })
+
+    const rows = await target.findSyncStates({ partial: { userId: document.user.userId as number } })
+    expect(rows.map(row => row.syncStateId)).toEqual([1, 3])
+    expect(rows[0]).toMatchObject({ status: 'success', syncMap: '{"progress":1}' })
+    expect(rows[1]).toMatchObject({
+      storageName: 'first app',
+      status: 'unknown',
+      init: false,
+      syncMap: JSON.stringify(createSyncMap())
+    })
+    expect(rows[1].when).toBeUndefined()
+  })
+
   test('encrypts and decrypts BRC-39 with the expected header and normalized password', async () => {
     const document = minimalDocument()
     const bytes = await encryptBRC39(document, 'Cafe\u0301')

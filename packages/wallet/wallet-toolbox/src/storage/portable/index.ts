@@ -422,8 +422,34 @@ function decodeBRC38(data: BRC38WalletData): DecodedBRC38 {
     certificateFields: data.tables.certificateFields.map(r =>
       fromPortableRow<TableCertificateField>('certificateField', r)
     ),
-    syncStates: data.tables.syncStates.map(r => fromPortableRow<TableSyncState>('syncState', r))
+    syncStates: collapseSyncStates(data.tables.syncStates.map(r => fromPortableRow<TableSyncState>('syncState', r)))
   }
+}
+
+/**
+ * Knex storage holds one sync state per user and source storage identity, but
+ * older exports can contain several. Keep the oldest. Rows with different
+ * names may describe different source databases that reused one identity key,
+ * so the kept checkpoint is restarted as a new sync state.
+ */
+function collapseSyncStates(rows: TableSyncState[]): TableSyncState[] {
+  const groups = new Map<string, TableSyncState[]>()
+  for (const row of rows) {
+    const group = groups.get(row.storageIdentityKey)
+    if (group == null) groups.set(row.storageIdentityKey, [row])
+    else group.push(row)
+  }
+  return Array.from(groups.values(), group => {
+    const kept = group.reduce((oldest, row) => (row.syncStateId < oldest.syncStateId ? row : oldest))
+    if (group.every(row => row.storageName === kept.storageName)) return kept
+    return {
+      ...kept,
+      status: 'unknown',
+      init: false,
+      when: undefined,
+      syncMap: JSON.stringify(createSyncMap())
+    }
+  })
 }
 
 async function restoreBRC38(storage: StorageProvider, data: DecodedBRC38): Promise<BRC38ImportResult> {
@@ -525,7 +551,7 @@ async function mergeBRC38(
     data.syncStates,
     targetUser.userId,
     importMap,
-    data.sourceStorage
+    currentSyncState.syncStateId
   )
   return {
     mode: 'merge',
@@ -541,7 +567,7 @@ async function mergeImportedSyncStates(
   syncStates: TableSyncState[],
   userId: number,
   importMap: SyncMap,
-  sourceStorage: TableSettings
+  importSyncStateId: number
 ): Promise<{ inserts: number; updates: number }> {
   let inserts = 0
   let updates = 0
@@ -551,25 +577,19 @@ async function mergeImportedSyncStates(
       userId,
       syncMap: JSON.stringify(remapSyncMap(JSON.parse(source.syncMap), importMap))
     }
-    const existing = verifyOneOrNone(
-      await storage.findSyncStates({
-        partial: {
-          userId,
-          storageIdentityKey: row.storageIdentityKey,
-          storageName: row.storageName
-        }
-      })
-    )
+    // Knex storage holds one sync state per storage identity. IndexedDB may
+    // still hold legacy rows that differ only by name; prefer the exact name.
+    const matches = await storage.findSyncStates({
+      partial: { userId, storageIdentityKey: row.storageIdentityKey }
+    })
+    const existing = matches.length > 1 ? matches.find(s => s.storageName === row.storageName) : matches[0]
     if (existing == null) {
       row.syncStateId = 0
       await storage.insertSyncState(row)
       inserts++
     } else {
       row.syncStateId = existing.syncStateId
-      if (
-        row.storageIdentityKey === sourceStorage.storageIdentityKey &&
-        row.storageName === sourceStorage.storageName
-      ) {
+      if (existing.syncStateId === importSyncStateId) {
         row.syncMap = existing.syncMap
       }
       await storage.updateSyncState(existing.syncStateId, row)
