@@ -524,6 +524,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     })
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('proven_txs'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -548,6 +549,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     })
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('proven_tx_reqs'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -576,6 +578,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     )
     if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('tx_labels_map'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -603,6 +606,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     )
     if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('output_tags_map'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -1226,6 +1230,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       }
     }
     if (args.paged != null) {
+      if (args.orderDescending !== true) void q.orderBy(pagingOrder(table))
       void q.limit(args.paged.limit)
       void q.offset(args.paged.offset ?? 0)
     }
@@ -1580,7 +1585,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   async getCount<T extends object>(q: Knex.QueryBuilder<T, T[]>): Promise<number> {
     // Alias the count: the default result key differs by dialect, and Postgres
     // returns count(*) as a bigint string.
-    void q.count({ count: '*' })
+    // A paged find query orders its rows; an aggregate cannot keep that order on Postgres.
+    void q.clearOrder().count({ count: '*' })
     const r = await q
     return Number(r[0].count)
   }
@@ -2464,5 +2470,51 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       ...values
     } as AdminStatsResult
     return r
+  }
+}
+
+/**
+ * Key columns that give paged queries a deterministic row order. Without an
+ * ORDER BY, Postgres may return the rows of consecutive LIMIT/OFFSET pages in
+ * different orders, so sync chunks could repeat some rows and skip others.
+ */
+function pagingOrder(table: string): string[] {
+  return pagingKey(table).map(column => `${table}.${column}`)
+}
+
+function pagingKey(table: string): string[] {
+  switch (table) {
+    case 'certificate_fields':
+      return ['certificateId', 'fieldName']
+    case 'certificates':
+      return ['certificateId']
+    case 'commissions':
+      return ['commissionId']
+    case 'monitor_events':
+      return ['id']
+    case 'output_baskets':
+      return ['basketId']
+    case 'output_tags':
+      return ['outputTagId']
+    case 'output_tags_map':
+      return ['outputTagId', 'outputId']
+    case 'outputs':
+      return ['outputId']
+    case 'proven_tx_reqs':
+      return ['provenTxReqId']
+    case 'proven_txs':
+      return ['provenTxId']
+    case 'sync_states':
+      return ['syncStateId']
+    case 'transactions':
+      return ['transactionId']
+    case 'tx_labels':
+      return ['txLabelId']
+    case 'tx_labels_map':
+      return ['txLabelId', 'transactionId']
+    case 'users':
+      return ['userId']
+    default:
+      return []
   }
 }

@@ -28,6 +28,9 @@ attention to changes that materially alter behavior or extend functionality.
 - `MonitorDaemon` accepts `postgresConnection` (JSON node-postgres config), and
   the operator `monitor-daemon` command accepts `--database-client postgres`.
 - `ChaintracksStorageKnex` rejects a Postgres knex before running migrations.
+- Paged `StorageKnex` find queries and the `get*ForUser` sync queries order rows
+  by key. Without an order, Postgres could return consecutive LIMIT/OFFSET pages
+  in different orders, so `getSyncChunk` repeated some rows and skipped others.
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference
   aliases when `createAction` or `signAction` reports them as `sending` or
