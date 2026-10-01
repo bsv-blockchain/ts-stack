@@ -96,6 +96,7 @@ export class KnexMigrations implements MigrationSource<string> {
     migrations[SYNC_TRANSFER_MIGRATION] = {
       config: { transaction: true },
       async up(knex) {
+        const dbtype = await determineDBType(knex)
         // MySQL DDL commits implicitly; table/slot creation also tolerates an interrupted migration.
         if (!(await knex.schema.hasTable('sync_transfers')))
           await knex.schema.createTable('sync_transfers', table => {
@@ -122,7 +123,7 @@ export class KnexMigrations implements MigrationSource<string> {
             table.integer('slot').notNullable().references('slot').inTable('sync_transfers')
             table.integer('offset').notNullable()
             table
-              .specificType('bytes', String(knex.client.config.client).includes('mysql') ? 'mediumblob' : 'blob')
+              .specificType('bytes', dbtype === 'MySQL' ? 'mediumblob' : dbtype === 'Postgres' ? 'bytea' : 'blob')
               .notNullable()
             table.primary(['slot', 'offset'])
           })
@@ -609,7 +610,11 @@ export class KnexMigrations implements MigrationSource<string> {
           knex
         })
         const settings = await storage.makeAvailable()
-        await knex.raw('update users set activeStorage = ? where activeStorage is NULL', [settings.storageIdentityKey])
+        await knex.raw('update users set ?? = ? where ?? is NULL', [
+          'activeStorage',
+          settings.storageIdentityKey,
+          'activeStorage'
+        ])
         await knex.schema.alterTable('users', table => {
           table.string('activeStorage').notNullable().alter()
         })
@@ -835,7 +840,8 @@ export class KnexMigrations implements MigrationSource<string> {
           await knex.raw('ALTER TABLE transactions MODIFY COLUMN rawTx LONGBLOB')
           await knex.raw('ALTER TABLE transactions MODIFY COLUMN inputBEEF LONGBLOB')
           await knex.raw('ALTER TABLE outputs MODIFY COLUMN lockingScript LONGBLOB')
-        } else {
+        } else if (dbtype !== 'Postgres') {
+          // Postgres bytea is unbounded; there is nothing to widen.
           await knex.schema.alterTable('proven_tx_reqs', table => {
             table.binary('rawTx', 10000000).alter()
             table.binary('beef', 10000000).alter()
@@ -888,6 +894,9 @@ export class KnexMigrations implements MigrationSource<string> {
  * @returns {DBType} connected database engine variant
  */
 export async function determineDBType(knex: Knex<any, any[]>): Promise<DBType> {
+  // The MySQL probe below is not valid Postgres SQL, and a failed statement
+  // would abort the surrounding migration transaction.
+  if (knex.client?.dialect === 'postgresql') return 'Postgres'
   try {
     const q = `SELECT 
   CASE 
