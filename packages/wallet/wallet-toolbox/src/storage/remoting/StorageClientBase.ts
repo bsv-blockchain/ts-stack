@@ -228,7 +228,10 @@ function validateRemoteStorageSettings(value: unknown): RemoteStorageSettings {
     throw new Error('Wallet storage returned invalid settings.')
   }
   const dbtype = properties.dbtype?.value
-  if (dbtype !== undefined && (typeof dbtype !== 'string' || !['SQLite', 'MySQL', 'IndexedDB'].includes(dbtype))) {
+  if (
+    dbtype !== undefined &&
+    (typeof dbtype !== 'string' || !['SQLite', 'MySQL', 'Postgres', 'IndexedDB'].includes(dbtype))
+  ) {
     throw new Error('Wallet storage returned invalid settings.')
   }
   const maxOutputScript = properties.maxOutputScript?.value
