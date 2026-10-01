@@ -381,36 +381,6 @@ describe('extracted operator command execution', () => {
     expect(writer.destroy).toHaveBeenCalledTimes(1)
   })
 
-  test('passes the database connection to the monitor daemon for the selected client', async () => {
-    process.env.TEST_POSTGRES = '{"host":"database.example"}'
-    const daemon = {
-      createSetup: jest.fn().mockImplementation(async function (this: MockState) {
-        this.setup = { monitor: { runOnce: jest.fn().mockResolvedValue(undefined) } }
-      }),
-      destroy: jest.fn().mockResolvedValue(undefined),
-      setup: undefined
-    }
-    mockState.monitorDaemonFactory.mockReturnValue(daemon)
-    mockState.chaintracksFactory.mockReturnValue({ destroy: jest.fn().mockResolvedValue(undefined) })
-
-    await monitorDaemonCommand.execute(
-      new Map(),
-      operatorPlan('monitor-daemon', {
-        chain: 'test',
-        databaseClient: 'postgres',
-        databaseEnvironment: 'TEST_POSTGRES',
-        taalApiKeyEnvironment: 'TEST_TAAL',
-        whatsonchainApiKeyEnvironment: 'TEST_WOC',
-        bitailsApiKeyEnvironment: 'TEST_BITAILS',
-        startupTaskMode: 'none',
-        runMode: 'once'
-      })
-    )
-    const [setup] = mockState.monitorDaemonFactory.mock.calls.at(-1) as [Record<string, unknown>]
-    expect(setup.postgresConnection).toBe('{"host":"database.example"}')
-    expect(setup.mySQLConnection).toBeUndefined()
-  })
-
   test('runs one monitor pass and closes daemon and Chaintracks resources', async () => {
     process.env.TEST_DATABASE = 'mysql'
     const monitor = {

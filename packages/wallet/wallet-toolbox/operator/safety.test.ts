@@ -343,32 +343,10 @@ describe('Wallet Toolbox operator safety', () => {
       effect: 'remote-write',
       requiresProductionApproval: false,
       parameters: {
-        databaseClient: 'mysql',
         databaseEnvironment: 'TEST_CLOUD_MYSQL_CONNECTION',
         runMode: 'daemon'
       }
     })
-    expect(
-      monitorDaemonCommand.plan(
-        new Map([
-          ['chain', 'main'],
-          ['database-client', 'postgres']
-        ])
-      )
-    ).toMatchObject({
-      parameters: {
-        databaseClient: 'postgres',
-        databaseEnvironment: 'MAIN_CLOUD_POSTGRES_CONNECTION'
-      }
-    })
-    expect(() =>
-      monitorDaemonCommand.plan(
-        new Map([
-          ['chain', 'test'],
-          ['database-client', 'sqlite']
-        ])
-      )
-    ).toThrow('"--database-client" must be "mysql" or "postgres"')
     expect(
       monitorDaemonCommand.plan(
         new Map([

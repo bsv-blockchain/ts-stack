@@ -19,8 +19,6 @@ export interface MonitorDaemonSetup {
   chain?: Chain
   sqliteFilename?: string
   mySQLConnection?: string
-  /** JSON node-postgres connection config. */
-  postgresConnection?: string
   knexConfig?: Knex.Config
   knex?: Knex<any, any[]>
   storageKnexOptions?: StorageKnexOptions
@@ -62,14 +60,6 @@ export class MonitorDaemon {
         pool: { min: 0, max: 7, idleTimeoutMillis: 15000 }
       }
     }
-    if (setup.postgresConnection != null && setup.postgresConnection !== '') {
-      // StorageKnex installs the per-connection int8 parser on this knex.
-      setup.knexConfig = {
-        client: 'pg',
-        connection: JSON.parse(setup.postgresConnection),
-        pool: { min: 0, max: 7, idleTimeoutMillis: 15000 }
-      }
-    }
     if (setup.knexConfig != null) setup.knex = makeKnex(setup.knexConfig)
     if (setup.knex != null) {
       setup.storageKnexOptions = {
@@ -95,7 +85,7 @@ export class MonitorDaemon {
     if (setup.storageManager == null) {
       throw new WERR_INVALID_PARAMETER(
         'storageManager',
-        'valid or one of mySQLConnection, postgresConnection, knexConfig, knex, storageKnexOptions, or storageProvider'
+        'valid or one of mySQLConnection, knexConfig, knex, storageKnexOptions, or storageProvider'
       )
     }
   }

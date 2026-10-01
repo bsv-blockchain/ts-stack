@@ -10,14 +10,6 @@ import {
 const STARTUP_TASK_MODES = new Set<MonitorStartupTaskMode>(['alltoother', 'default', 'multiuser', 'none'])
 
 type RunMode = 'daemon' | 'once'
-type DatabaseClient = 'mysql' | 'postgres'
-
-function parseDatabaseClient(value: string): DatabaseClient {
-  if (value !== 'mysql' && value !== 'postgres') {
-    throw new Error('Operator option "--database-client" must be "mysql" or "postgres"')
-  }
-  return value
-}
 
 function parseStartupTaskMode(value: string): MonitorStartupTaskMode {
   if (!STARTUP_TASK_MODES.has(value as MonitorStartupTaskMode)) {
@@ -65,7 +57,6 @@ export const monitorDaemonCommand: OperatorCommand = {
   allowedOptions: new Set([
     'bitails-api-key-env',
     'chain',
-    'database-client',
     'database-env',
     'mode',
     'startup-task-mode',
@@ -75,13 +66,8 @@ export const monitorDaemonCommand: OperatorCommand = {
   plan(options) {
     const chain = parseChain(optionString(options, 'chain', 'test'))
     const prefix = chain === 'main' ? 'MAIN' : 'TEST'
-    const databaseClient = parseDatabaseClient(optionString(options, 'database-client', 'mysql'))
     const databaseEnvironment = parseEnvironmentName(
-      optionString(
-        options,
-        'database-env',
-        `${prefix}_CLOUD_${databaseClient === 'postgres' ? 'POSTGRES' : 'MYSQL'}_CONNECTION`
-      ),
+      optionString(options, 'database-env', `${prefix}_CLOUD_MYSQL_CONNECTION`),
       'database-env'
     )
     const taalApiKeyEnvironment = parseEnvironmentName(
@@ -110,7 +96,6 @@ export const monitorDaemonCommand: OperatorCommand = {
         chain,
         runMode,
         startupTaskMode,
-        databaseClient,
         databaseEnvironment,
         databaseConfigured: optionalEnvironment(databaseEnvironment) !== undefined,
         taalApiKeyEnvironment,
@@ -127,7 +112,6 @@ export const monitorDaemonCommand: OperatorCommand = {
       await import('../../out/src/index.js')
     const startedAt = new Date().toISOString()
     const chain = plan.parameters.chain as Chain
-    const databaseClient = (plan.parameters.databaseClient ?? 'mysql') as DatabaseClient
     const databaseEnvironment = plan.parameters.databaseEnvironment as string
     const taalApiKeyEnvironment = plan.parameters.taalApiKeyEnvironment as string
     const whatsonchainApiKeyEnvironment = plan.parameters.whatsonchainApiKeyEnvironment as string
@@ -150,9 +134,7 @@ export const monitorDaemonCommand: OperatorCommand = {
     servicesOptions.chaintracks = chaintracks
     const daemon = new MonitorDaemon({
       chain,
-      ...(databaseClient === 'postgres'
-        ? { postgresConnection: requiredEnvironment(databaseEnvironment) }
-        : { mySQLConnection: requiredEnvironment(databaseEnvironment) }),
+      mySQLConnection: requiredEnvironment(databaseEnvironment),
       servicesOptions,
       chaintracks,
       startupTaskMode
