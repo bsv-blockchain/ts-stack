@@ -34,6 +34,8 @@ minimumReleaseAgeExclude:
 # security-patched release until Jest adopts it directly.
 overrides:
   brace-expansion@<5.0.12: 5.0.12
+  # Keep the upstream Engine.IO advisory floor; the resolved version is unchanged.
+  engine.io@<6.6.10: 6.6.10
   # Vite's PostCSS graph permits nanoid 3 releases older than the security
   # fix. Select the first patched 3.x release without changing its public API.
   nanoid@<3.3.18: 3.3.18

@@ -219,7 +219,7 @@ retains the middleware API used here; Node and Express peer requirements fit the
 existing toolchain. Only that importer reference is added to the generated lock.
 No package resolution, production route, runtime dependency or wallet graph changes.
 
-The root workspace carries six narrow audited dependency overrides:
+The root workspace carries seven narrow audited dependency overrides:
 
 - Jest 30.4.2 still constrains parts of its reporting and coverage graph to
   minimatch releases with older `brace-expansion` ranges. The follow-up
@@ -228,6 +228,10 @@ The root workspace carries six narrow audited dependency overrides:
   and existing standalone substitutions select 5.0.12 until every supported
   path resolves it natively. The release preserves the existing module exports,
   types and Node engine range.
+- `socket.io` in `@bsv/authsocket` still admits `engine.io` releases below
+  6.6.10. The workspace now retains upstream's explicit first-patched-release
+  substitution, matching this branch's already-selected 6.6.10 resolution.
+  Its existing public API and tested consumer behavior remain unchanged.
 - Express/body-parser, Superagent, and Stryker's `typed-rest-client@2.3.1` can
   retain vulnerable `qs` releases. A version-bounded substitution selects
   6.16.0, the first release that also fixes the bracket/comma array-limit bypass
@@ -262,7 +266,7 @@ changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
 produce maintenance reminders in source CI and fail the separate weekly
 maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
-The 2026-09-16 review rechecked all 24 selectors against the frozen graphs,
+The 2026-10-01 review reconciled all 25 selectors against the frozen graphs,
 current upstream manifests, and the advisory audit. The supported graphs still
 select exact `gaxios@7.1.3`, admit `uuid@9`, and pin `qs@6.15.1` without their
 registered substitutions, while the current frontmatter plugin still requests
