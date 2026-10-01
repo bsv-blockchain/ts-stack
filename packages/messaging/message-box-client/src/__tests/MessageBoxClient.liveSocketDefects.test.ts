@@ -4,9 +4,8 @@ import { jest } from '@jest/globals'
 
 /**
  * Live-socket behaviour that three defects used to break: a room left
- * unjoinable after a disconnect, and a dropped socket left reconnecting
- * unattended. Both ran without a relay, a wallet or a network, and both began
- * as characterisation tests asserting the broken behaviour.
+ * unjoinable after a disconnect, an orphaned socket acting on its successor,
+ * and rooms lost on reconnect. Runs without a relay, a wallet or a network.
  *
  * Run just this file:
  *   pnpm --filter @bsv/message-box-client exec node --experimental-vm-modules \
@@ -14,11 +13,7 @@ import { jest } from '@jest/globals'
  *     src/__tests/MessageBoxClient.liveSocketDefects.test.ts
  */
 
-/**
- * Every handler per event, not just the last. The client registers more than
- * one `disconnect` listener — an auth-phase one and the long-lived one that
- * drops `this.socket` — so keeping only the latest fires the wrong one.
- */
+/** Every handler per event, so listener accumulation is observable. */
 const socketOnMap: Record<string, Array<(...args: any[]) => void>> = {}
 const fire = (event: string, ...args: any[]): void => {
   for (const handler of socketOnMap[event] ?? []) handler(...args)
@@ -31,10 +26,7 @@ const mockSocket = {
   emit: jest.fn(),
   disconnect: jest.fn(),
   connected: true,
-  // Really removes, so the harness follows the client's own lifecycle: it
-  // detaches its auth-phase disconnect handler once authentication completes,
-  // and a mock that ignored `off` would keep firing a listener the client has
-  // already let go of.
+  // Really removes, as Socket.IO's does.
   off: jest.fn((event: string, callback: (...args: any[]) => void) => {
     socketOnMap[event] = (socketOnMap[event] ?? []).filter(h => h !== callback)
   }),
@@ -45,6 +37,7 @@ jest.unstable_mockModule('@bsv/authsocket-client', () => ({
   AuthSocketClient: jest.fn(() => mockSocket)
 }))
 
+const { AuthSocketClient } = await import('@bsv/authsocket-client')
 const { MessageBoxClient } = await import('../MessageBoxClient.js')
 
 const IDENTITY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
@@ -88,6 +81,7 @@ const joinRoomEmits = (): unknown[][] =>
 
 describe('live-socket defects, as the client behaves today', () => {
   beforeEach(() => {
+    for (const event of Object.keys(socketOnMap)) delete socketOnMap[event]
     mockSocket.emit.mockClear()
     mockSocket.disconnect.mockClear()
     mockSocket.connected = true
@@ -103,32 +97,90 @@ describe('live-socket defects, as the client behaves today', () => {
     expect(client.getJoinedRooms().has(ROOM)).toBe(false)
 
     mockSocket.emit.mockClear()
+    setTimeout(() => fire('authenticationSuccess'), 0)
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
 
     expect(joinRoomEmits()).toHaveLength(1)
   })
 
-  /**
-   * Socket.IO reconnects by default, and a dropped socket's handlers still read
-   * `this.socket`, so one left running would authenticate on its replacement.
-   */
-  it('disposes a dropped socket instead of leaving it reconnecting', async () => {
+  /** A transient drop is Socket.IO's to retry; the client restores the subscription. */
+  it('keeps a dropped socket and rejoins its rooms when connect fires again', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    const socket = client.testSocket
 
-    // Three `disconnect` listeners are attached by this point and none are
-    // detached, which is why the harness fires every one: storing only the
-    // latest ran an auth-phase handler that touches a flag and not the socket,
-    // and the first version of this test "proved" the opposite by doing so.
-    // The before/after pair below is the real proof — only the long-lived
-    // handler can clear the reference.
-    expect(client.testSocket).toBeDefined()
-    fire('disconnect')
+    mockSocket.connected = false
+    fire('disconnect', 'transport close')
 
-    // The client has let go of it, but never told it to stop.
-    expect(client.testSocket).toBeUndefined()
-    expect(mockSocket.disconnect).toHaveBeenCalled()
+    expect(client.testSocket).toBe(socket)
+    expect(mockSocket.disconnect).not.toHaveBeenCalled()
     expect(client.getJoinedRooms().size).toBe(0)
+
+    mockSocket.emit.mockClear()
+    mockSocket.connected = true
+    fire('connect')
+    expect(joinRoomEmits()).toHaveLength(0)
+    fire('authenticationSuccess')
+
+    expect(joinRoomEmits()).toEqual([['joinRoom', ROOM]])
+    expect(client.getJoinedRooms().has(ROOM)).toBe(true)
+    expect(client.testSocket).toBe(socket)
+  })
+
+  it('joins through the attempt in flight rather than building a second connection', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    const constructed = (AuthSocketClient as jest.Mock).mock.calls.length
+
+    mockSocket.connected = false
+    fire('disconnect', 'transport close')
+    mockSocket.emit.mockClear()
+
+    let joined = false
+    const joining = client.joinRoom('other_inbox').then(() => {
+      joined = true
+    })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(joined).toBe(false)
+    expect(joinRoomEmits()).toHaveLength(0)
+
+    mockSocket.connected = true
+    fire('connect')
+    fire('authenticationSuccess')
+    await joining
+
+    expect((AuthSocketClient as jest.Mock).mock.calls).toHaveLength(constructed)
+    expect(joinRoomEmits().map(call => call[1])).toEqual([ROOM, `${IDENTITY}-other_inbox`])
+  })
+
+  it('does not accumulate listeners across reconnects', async () => {
+    const client = await connected()
+    const counts = (): number[] => Object.values(socketOnMap).map(handlers => handlers.length)
+    const before = counts()
+
+    for (let i = 0; i < 3; i++) {
+      mockSocket.connected = false
+      fire('disconnect', 'transport close')
+      mockSocket.connected = true
+      fire('connect')
+      fire('authenticationSuccess')
+    }
+
+    expect(counts()).toEqual(before)
+    expect(client.testSocket).toBeDefined()
+  })
+
+  it('treats a requested disconnect as terminal', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    await client.disconnectWebSocket()
+
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
+    expect(client.testSocket).toBeUndefined()
+    mockSocket.emit.mockClear()
+    fire('connect')
+    fire('authenticationSuccess')
+    expect(joinRoomEmits()).toHaveLength(0)
   })
 
   /**

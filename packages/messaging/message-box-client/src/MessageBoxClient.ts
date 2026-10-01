@@ -931,6 +931,10 @@ export class MessageBoxClient {
   private initialized = false
   private socketAuthenticated = false
   private connectionInitPromise?: Promise<void>
+  /** Settles the in-flight `connectionInitPromise`; driven by the socket's own handlers. */
+  private settleAuthWait?: (error?: Error) => void
+  /** Rooms the consumer asked for. Survives a drop; `joinedRooms` does not. */
+  private readonly requestedRooms: Set<string> = new Set()
   protected originator?: OriginatorDomainNameStringUnder250Bytes
   private readonly socketOptions: MessageBoxClientOptions['socketOptions']
   private readonly expectedServerIdentityByOrigin: ReadonlyMap<string, PubKeyHex>
@@ -1215,7 +1219,7 @@ export class MessageBoxClient {
 
     Logger.log('[MB CLIENT] Setting up WebSocket connection...')
 
-    if (this.socketAuthenticated && this.socket != null) {
+    if (this.socketAuthenticated && this.socket?.connected === true) {
       return
     }
 
@@ -1245,48 +1249,68 @@ export class MessageBoxClient {
       })
       this.socket = socket
 
-      this.socket.on('connect', () => {
+      // Fires on the first connection and on every Socket.IO reconnection.
+      socket.on('connect', () => {
+        if (this.socket !== socket) return
         Logger.log('[MB CLIENT] Connected to WebSocket.')
+
+        if (this.connectionInitPromise == null) {
+          this.beginAuthWait().catch(() => {})
+        }
 
         Logger.log('[MB CLIENT] Sending WebSocket authentication data')
         if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
           Logger.error('[MB CLIENT ERROR] Cannot send authentication: Identity key is missing!')
         } else {
-          this.socket?.emit('authenticated', { identityKey: this.myIdentityKey })
+          socket.emit('authenticated', { identityKey: this.myIdentityKey })
         }
       })
 
-      // Listen for authentication success from the server
-      this.socket.on('authenticationSuccess', () => {
+      socket.on('authenticationSuccess', () => {
+        if (this.socket !== socket) return
         const serverIdentityKey = canonicalIdentityKey(
-          this.socket?.serverIdentityKey,
+          socket.serverIdentityKey,
           `Authenticated Message Box WebSocket identity for ${targetOrigin}`
         )
         this.pinAuthenticatedServerIdentity(targetOrigin, serverIdentityKey)
         Logger.log('[MB CLIENT] WebSocket authentication successful')
         this.socketAuthenticated = true
+        // The server refuses joins before this point, and a reconnect is a new
+        // server-side socket in no rooms.
+        for (const roomId of this.requestedRooms) {
+          socket.emit('joinRoom', roomId)
+          this.joinedRooms.add(roomId)
+        }
+        this.settleAuthWait?.()
       })
 
-      // Handle authentication failures
-      this.socket.on('authenticationFailed', () => {
+      socket.on('authenticationFailed', () => {
+        if (this.socket !== socket) return
         Logger.error('[MB CLIENT ERROR] WebSocket authentication failed')
         this.socketAuthenticated = false
+        this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket authentication failed!'))
       })
 
-      this.socket.on('disconnect', () => {
+      socket.on('disconnect', (reason?: string) => {
+        if (this.socket !== socket) return
         Logger.log('[MB CLIENT] Disconnected from MessageBox server')
-        // Socket.IO reconnects by default. Stop it: this socket's handlers read
-        // this.socket, so once replaced it would authenticate on, and later
-        // clear, its successor.
-        socket.disconnect()
-        // Membership belongs to the socket that joined. Left set, the guard in
-        // joinRoom matches and the next socket never emits a join.
+        // Membership belongs to the server-side socket that joined.
         this.joinedRooms.clear()
-        this.socket = undefined
         this.socketAuthenticated = false
+        if (reason === 'io client disconnect' || reason === 'io server disconnect') {
+          // Socket.IO will not retry these; the object is dead.
+          this.socket = undefined
+          this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
+          return
+        }
+        // Transient: Socket.IO reconnects and re-emits `connect`. Callers that
+        // arrive meanwhile wait on this attempt.
+        if (this.connectionInitPromise == null) {
+          this.beginAuthWait().catch(() => {})
+        }
       })
 
-      this.socket.on('error', () => {
+      socket.on('error', () => {
         Logger.error('[MB CLIENT ERROR] WebSocket error')
       })
     }
@@ -1295,77 +1319,34 @@ export class MessageBoxClient {
       this.socket.emit('authenticated', { identityKey: this.myIdentityKey })
     }
 
-    this.connectionInitPromise = new Promise<void>((resolve, reject) => {
-      const socketAny = this.socket as any
-      let settled = false
-      let timeoutId: ReturnType<typeof setTimeout> | undefined
+    await this.beginAuthWait()
+  }
 
-      const finalizeResolve = (): void => {
-        if (settled) return
-        settled = true
-        if (timeoutId != null) {
-          clearTimeout(timeoutId)
-          timeoutId = undefined
-        }
-        if (typeof socketAny?.off === 'function') {
-          socketAny.off('authenticationSuccess', onSuccess)
-          socketAny.off('authenticationFailed', onFailed)
-          socketAny.off('disconnect', onDisconnectBeforeAuth)
-        }
-        this.connectionInitPromise = undefined
-        Logger.log('[MB CLIENT] WebSocket fully authenticated and ready!')
-        resolve()
+  /**
+   * Starts the single in-flight authentication attempt and registers it as
+   * `connectionInitPromise`. The socket's long-lived handlers settle it, so no
+   * per-attempt listeners accumulate across reconnects.
+   */
+  private beginAuthWait(): Promise<void> {
+    const promise = new Promise<void>((resolve, reject) => {
+      const settle = (error?: Error): void => {
+        clearTimeout(timeoutId)
+        if (this.connectionInitPromise === promise) this.connectionInitPromise = undefined
+        this.settleAuthWait = undefined
+        if (error != null) reject(error)
+        else resolve()
       }
-
-      const finalizeReject = (error: Error): void => {
-        if (settled) return
-        settled = true
-        if (timeoutId != null) {
-          clearTimeout(timeoutId)
-          timeoutId = undefined
-        }
-        if (typeof socketAny?.off === 'function') {
-          socketAny.off('authenticationSuccess', onSuccess)
-          socketAny.off('authenticationFailed', onFailed)
-          socketAny.off('disconnect', onDisconnectBeforeAuth)
-        }
-        this.connectionInitPromise = undefined
-        reject(error)
-      }
-
-      const onSuccess = (): void => {
-        this.socketAuthenticated = true
-        finalizeResolve()
-      }
-
-      const onFailed = (): void => {
-        this.socketAuthenticated = false
-        finalizeReject(new Error('[MB CLIENT ERROR] WebSocket authentication failed!'))
-      }
-
-      const onDisconnectBeforeAuth = (): void => {
-        this.socketAuthenticated = false
-      }
-
-      if (this.socketAuthenticated) {
-        finalizeResolve()
-        return
-      }
-
-      socketAny?.on('authenticationSuccess', onSuccess)
-      socketAny?.on('authenticationFailed', onFailed)
-      socketAny?.on('disconnect', onDisconnectBeforeAuth)
-
-      timeoutId = setTimeout(() => {
-        if (this.socketAuthenticated) {
-          finalizeResolve()
-        } else {
-          finalizeReject(new Error('[MB CLIENT ERROR] WebSocket authentication timed out!'))
-        }
+      const timeoutId = setTimeout(() => {
+        settle(
+          this.socketAuthenticated
+            ? undefined
+            : new Error('[MB CLIENT ERROR] WebSocket authentication timed out!')
+        )
       }, 5000)
+      this.settleAuthWait = settle
     })
-
-    await this.connectionInitPromise
+    this.connectionInitPromise = promise
+    return promise
   }
 
   /**
@@ -1553,17 +1534,16 @@ export class MessageBoxClient {
       forbidControls: true
     })
 
-    // Ensure WebSocket connection is established first
-    if (this.socket == null) {
-      Logger.log('[MB CLIENT] No WebSocket connection. Initializing...')
-      await this.initializeConnection(overrideHost)
-    }
+    // Returns at once when authenticated; otherwise awaits the attempt in flight.
+    await this.initializeConnection(overrideHost)
 
     if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
       throw new Error('[MB CLIENT ERROR] Identity key is not defined')
     }
 
     const roomId = `${this.myIdentityKey ?? ''}-${canonicalMessageBox}`
+
+    this.requestedRooms.add(roomId)
 
     if (this.joinedRooms.has(roomId)) {
       Logger.log('[MB CLIENT] WebSocket room already joined')
@@ -1619,13 +1599,7 @@ export class MessageBoxClient {
   }): Promise<void> {
     Logger.log('[MB CLIENT] Setting up a WebSocket room listener')
 
-    // Ensure WebSocket connection is established first
-    if (this.socket == null) {
-      Logger.log('[MB CLIENT] No WebSocket connection. Initializing...')
-      await this.initializeConnection(overrideHost)
-    }
-
-    // Join the room
+    // Join the room (joinRoom establishes the connection first)
     await this.joinRoom(messageBox, overrideHost)
 
     // Ensure identity key is available before creating roomId
@@ -1855,8 +1829,11 @@ export class MessageBoxClient {
     // Dropped first, and regardless of the socket: a caller that leaves while
     // disconnected must not be left claiming a room it will never rejoin.
     this.joinedRooms.delete(roomId)
+    this.requestedRooms.delete(roomId)
 
-    if (this.socket == null) {
+    // Emitting while disconnected would buffer a leave for a room the next
+    // server-side socket is not in.
+    if (this.socket?.connected !== true) {
       Logger.warn('[MB CLIENT] Attempted to leave a room but WebSocket is not connected.')
       return
     }
@@ -1884,11 +1861,16 @@ export class MessageBoxClient {
       Logger.log('[MB CLIENT] No active WebSocket connection to close.')
     } else {
       Logger.log('[MB CLIENT] Closing WebSocket connection...')
-      this.socket.disconnect()
-      // The socket that held these is going; a new one must join for itself.
-      this.joinedRooms.clear()
+      const socket = this.socket
+      // Detached first so the socket's own `disconnect` event is ignored.
       this.socket = undefined
+      this.socketAuthenticated = false
+      socket.disconnect()
+      this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
     }
+    // Teardown is deliberate: nothing is left to restore.
+    this.joinedRooms.clear()
+    this.requestedRooms.clear()
   }
 
   /**
