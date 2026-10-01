@@ -42,6 +42,20 @@ const plans = new Map([
     }
   ],
   [
+    'proposal-channel-storage',
+    {
+      fallback: 'factory',
+      files: new Map([
+        ['src/proposals/SQLiteProposalFeedWriter.ts', 'writer'],
+        ['src/proposals/SQLiteProposalFeedInventory.ts', 'inventory'],
+        ['src/proposals/ProposalChannelFeedCapacity.ts', 'contract'],
+        ['src/proposals/ProposalChannelFeedRecords.ts', 'contract'],
+        ['src/proposals/ProposalFeedPrivacy.ts', 'contract'],
+        ['src/proposals/AuthorDocumentPolicy.ts', 'contract']
+      ])
+    }
+  ],
+  [
     'wallet-retained-snapshot',
     {
       fallback: 'lifecycle',

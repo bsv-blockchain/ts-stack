@@ -81,7 +81,8 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
     readonly namespace: string,
     readonly identity: string,
     state: ProposalJournalState,
-    composition?: OutputJSONObject
+    composition?: OutputJSONObject,
+    private readonly observeSendClock?: () => void
   ) {
     outputString(namespace)
     this.state = state
@@ -103,7 +104,10 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
       initialize: (mode: SQLiteProposalJournalMode) => this.initialize(mode),
       append: (transition: ProposalTransition, local?: OutputJSONObject) =>
         this.append(transition, local),
-      channel: (key: string) => this.working().channel(key)
+      channel: (key: string) => this.working().channel(key),
+      head: () => this.working().head(),
+      channelEntry: (key: string) => this.working().channelEntry(key),
+      read: (after: string, maximum: number) => this.working().read(after, maximum)
     }
   }
 
@@ -273,24 +277,38 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
       const bytes = new Uint8Array(candidate.bytes)
       let started = false
       try {
-        this.domain.transaction(
+        const outcome = this.domain.transaction(
           () => {
             started = true
             this.refresh()
-            const entry = this.responseEntry(reference)
-            if (validate(entry, bytes.slice()) !== true)
-              throw new OutputProtocolError(
-                'unauthorized',
-                'Proposal response is no longer authorized'
-              )
-            if (enqueue(bytes) !== undefined)
-              throw new OutputProtocolError(
-                'invalid',
-                'Proposal response enqueue must be synchronous'
-              )
+            const send = () => {
+              const entry = this.responseEntry(reference)
+              if (validate(entry, bytes.slice()) !== true)
+                throw new OutputProtocolError(
+                  'unauthorized',
+                  'Proposal response is no longer authorized'
+                )
+              if (enqueue(bytes) !== undefined)
+                throw new OutputProtocolError(
+                  'invalid',
+                  'Proposal response enqueue must be synchronous'
+                )
+            }
+            if (this.observeSendClock === undefined) {
+              send()
+              return { ok: true as const }
+            }
+            this.observeSendClock()
+            try {
+              this.domain.savepoint(send)
+              return { ok: true as const }
+            } catch (error) {
+              return { ok: false as const, error }
+            }
           },
           { retireOnFailedRollback: true }
         )
+        if (!outcome.ok) throw outcome.error
       } catch (error) {
         if (
           !started &&

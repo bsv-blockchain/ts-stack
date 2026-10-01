@@ -1392,3 +1392,65 @@ export function attachCurrentChannels(options: {
   }
 }
 ```
+
+## Compose a private channel provider
+
+This Node-only owner atomically maintains private proposal history, the current
+lookup feed and retained sessions. Install the corresponding current-channel
+query and signed capabilities before accepting traffic. The host still supplies
+fresh authorization and its durable external-access guards. Pass the provider
+and disclosure companion to the authenticated HTTP router together; drain intake
+and physical work before closing the owner. Creation is an explicit installation
+choice, never a fallback when opening retained state fails.
+
+```ts compile
+// example-id: proposal-private-channel-provider
+import {
+  SQLiteProposalChannelStore as PrivateChannelStorage,
+  type SQLiteProposalChannelStoreOptions as PrivateChannelStorageOptions
+} from '@bsv/output-knowledge/proposals/channels-sqlite'
+import {
+  LookupProviderService as PrivateChannelProvider,
+  LookupResponseDisclosure as PrivateChannelDisclosure,
+  type LookupProviderContracts as PrivateChannelContracts,
+  type LookupProviderOptions as PrivateChannelProviderOptions,
+  type LookupResponseDisclosureOptions as PrivateChannelDisclosureOptions
+} from '@bsv/output-knowledge/lookup'
+
+export function createPrivateChannelProvider(options: {
+  installation: 'create' | 'open'
+  storage: PrivateChannelStorageOptions
+  contracts: PrivateChannelContracts
+  policy: { id: string; digest: string }
+  authorize: PrivateChannelProviderOptions['authorize']
+  authorizeControl: PrivateChannelDisclosureOptions['authorizeControl']
+}) {
+  const owner =
+    options.installation === 'create'
+      ? PrivateChannelStorage.create(options.storage)
+      : PrivateChannelStorage.open(options.storage)
+  const authorize: PrivateChannelProviderOptions['authorize'] = async (input, signal) => {
+    const current = await options.authorize(input, signal)
+    const guarded = await owner.authorizeLookup(options.policy, {
+      ...current,
+      principal: input.principal
+    })
+    return { access: guarded.access, guards: guarded.guards }
+  }
+  const shared = { sessions: owner.sessions, contracts: options.contracts, authorize }
+  return {
+    owner,
+    // Use this same journal for put, finalization, recovery and maintenance.
+    journal: owner.journal,
+    provider: new PrivateChannelProvider({
+      ...shared,
+      index: owner.feed,
+      now: () => options.storage.now()
+    }),
+    disclosure: new PrivateChannelDisclosure({
+      ...shared,
+      authorizeControl: options.authorizeControl
+    })
+  }
+}
+```

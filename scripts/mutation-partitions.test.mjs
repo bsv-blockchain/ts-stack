@@ -188,6 +188,24 @@ test('root records keep whole files, original tests and future sources under one
 
 for (const [targetId, fallback, expected] of [
   [
+    'proposal-channel-storage',
+    'factory',
+    {
+      factory: [
+        'src/proposals/SQLiteProposalChannelStore.ts',
+        'src/lookup/SQLiteLookupSessionBootstrap.ts'
+      ],
+      writer: ['src/proposals/SQLiteProposalFeedWriter.ts'],
+      inventory: ['src/proposals/SQLiteProposalFeedInventory.ts'],
+      contract: [
+        'src/proposals/ProposalChannelFeedCapacity.ts',
+        'src/proposals/ProposalChannelFeedRecords.ts',
+        'src/proposals/ProposalFeedPrivacy.ts',
+        'src/proposals/AuthorDocumentPolicy.ts'
+      ]
+    }
+  ],
+  [
     'output-knowledge-proposal-core',
     'worker',
     {

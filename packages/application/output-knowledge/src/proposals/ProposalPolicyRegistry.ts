@@ -1,5 +1,7 @@
 import {
   canonicalOutputJSON,
+  Hash,
+  Utils,
   closedOutputObject,
   decodeOutputBytes,
   outputIdentity,
@@ -84,6 +86,26 @@ export class ProposalPolicyRegistry {
       action,
       validated.body,
       outputIdentity(caller)
+    )
+  }
+
+  /** Local continuity descriptor, never a permission or remotely asserted capability. */
+  readVisibility(proposal: OutputSignedProposal): string {
+    const validated = this.validate(proposal, proposal.body)
+    const installed = this.resolve(validated.body)
+    const visibility =
+      installed.policy.readVisibility === undefined
+        ? validated.body
+        : installed.policy.readVisibility(
+            structuredClone(validated.body),
+            structuredClone(installed.parameters)
+          )
+    const text = canonicalOutputJSON(
+      { policy: validated.body.policy, visibility },
+      { bytes: 1048576 }
+    )
+    return Utils.toHex(
+      Hash.sha256(Utils.toArray('BRC194/local-read-visibility/1\0' + text, 'utf8'))
     )
   }
 

@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 106)
+  assert.equal(result.summary.propertySuites, 107)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 106)
+  assert.equal(result.summary.mutationTargets, 107)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -651,6 +651,8 @@ test('proposal send qualification retains the entire SQLite journal and all jour
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/proposal-journal*.test.ts',
+    '<rootDir>/test/proposal-storage-channel.test.ts',
+    '<rootDir>/test/proposal-feed-writer.test.ts',
     '<rootDir>/test/sqlite-transaction-domain.test.ts',
     '<rootDir>/test/proposal-service*.test.ts',
     '<rootDir>/test/proposal-send*.test.ts',

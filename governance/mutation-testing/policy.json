@@ -1076,6 +1076,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-channel-storage",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-storage-channel.property.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic private proposal/current-feed/session storage, reserved future events, truthful timer coverage and guarded visibility",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

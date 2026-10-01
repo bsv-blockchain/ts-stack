@@ -442,6 +442,7 @@ test('every selected application execution part is downloaded before canonical a
   const selected = partitionedMutationTargets(application, targets)
   assert.ok(selected.includes('output-knowledge-proposal-core'))
   assert.ok(selected.includes('proposal-journal-send'))
+  assert.ok(selected.includes('proposal-channel-storage'))
   const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
     job => job.name === 'mutation-quality'
   ).source

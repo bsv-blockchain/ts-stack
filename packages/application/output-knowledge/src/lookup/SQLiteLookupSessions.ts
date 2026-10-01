@@ -70,6 +70,8 @@ function workBound(maximum: number): void {
     throw new OutputProtocolError('invalid', 'Invalid lookup session compaction bound')
 }
 
+export const sqliteLookupSessionComposition = Symbol('SQLite session composition')
+
 /**
  * Node-only durable session companion sharing the index's actual connection and
  * transaction. The trusted clock returns Unix seconds and is sampled after the
@@ -87,13 +89,13 @@ export class SQLiteLookupSessions implements LookupSessionStorage, LookupSession
   private readonly disclosure: SQLiteLookupDisclosure
 
   private constructor(
-    index: SQLiteLookupIndex,
+    bridge: SQLiteLookupBridge,
     private readonly codec: LookupSessionCodec,
     private readonly clock: () => string,
     options: Partial<LookupSessionCapacity>,
     initialize: boolean
   ) {
-    this.bridge = index[sqliteLookupBridge]()
+    this.bridge = bridge
     this.capacity = lookupSessionCapacity(options)
     const configuration = sessionConfiguration(this.capacity)
     if (initialize) initializeLookupSessions(this.bridge, configuration)
@@ -108,7 +110,7 @@ export class SQLiteLookupSessions implements LookupSessionStorage, LookupSession
     clock: () => string,
     capacity: Partial<LookupSessionCapacity> = {}
   ): SQLiteLookupSessions {
-    return new SQLiteLookupSessions(index, codec, clock, capacity, true)
+    return new SQLiteLookupSessions(index[sqliteLookupBridge](), codec, clock, capacity, true)
   }
   static open(
     index: SQLiteLookupIndex,
@@ -116,7 +118,18 @@ export class SQLiteLookupSessions implements LookupSessionStorage, LookupSession
     clock: () => string,
     capacity: Partial<LookupSessionCapacity> = {}
   ): SQLiteLookupSessions {
-    return new SQLiteLookupSessions(index, codec, clock, capacity, false)
+    return new SQLiteLookupSessions(index[sqliteLookupBridge](), codec, clock, capacity, false)
+  }
+
+  /** @internal Constructor capability for an explicitly owned compound domain. */
+  static [sqliteLookupSessionComposition](
+    bridge: SQLiteLookupBridge,
+    codec: LookupSessionCodec,
+    clock: () => string,
+    capacity: Partial<LookupSessionCapacity>,
+    initialize: boolean
+  ): SQLiteLookupSessions {
+    return new SQLiteLookupSessions(bridge, codec, clock, capacity, initialize)
   }
 
   /** Failed operations roll back their work, but not a successfully observed clock. */
@@ -143,6 +156,7 @@ export class SQLiteLookupSessions implements LookupSessionStorage, LookupSession
         this.bridge.database,
         'UPDATE output_lookup_session_meta SET clock=? WHERE namespace=?'
       ).run(position(latest), this.bridge.namespace)
+      this.bridge.recordClock?.(latest)
       return outcome
     })
     if (!result.ok) throw result.error
@@ -282,6 +296,7 @@ export class SQLiteLookupSessions implements LookupSessionStorage, LookupSession
         manifestDigest: outputPacketDigest('capabilities', value.contract.manifest.body)
       }
       return this.run(now => {
+        this.bridge.validateOpening?.(value)
         const epoch = this.records.epoch(value.epoch)
         const existing = this.recovered(original, epoch, now)
         if (existing) return existing

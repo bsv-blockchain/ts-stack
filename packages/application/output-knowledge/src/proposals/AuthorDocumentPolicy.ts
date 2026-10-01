@@ -55,6 +55,10 @@ export class AuthorDocumentPolicy implements ProposalPolicy {
     return action === 'read' ? body.recipients.includes(caller) : caller === body.author
   }
 
+  readVisibility(body: OutputProposalBody): OutputJSONObject {
+    return { recipients: [...body.recipients] }
+  }
+
   successor(previous: OutputProposalBody, next: OutputProposalBody): void {
     requireDocument(
       previous.author === next.author &&

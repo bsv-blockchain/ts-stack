@@ -70,11 +70,11 @@ Final-send failures use the stricter connection-retirement rule because delivery
 cannot be undone. These implementation ports are internal, synchronous, and not
 an authorization mechanism or a public raw-SQL extension point.
 
-The private current-channel query companion remains under construction. The
-shared storage primitive alone does not install its writer, policy, lifecycle
-timers, retention promises or visibility guards. The separately installed client
-current-channel projector is described below.
-Existing proposal and finite lookup routes retain their existing behavior.
+The optional `SQLiteProposalChannelStore` now composes the proposal journal,
+current index, retained log, session pins and visibility fences on one connection.
+The shared storage primitive alone does not enable that profile. Select the
+compound factory explicitly, as described below. Existing proposal and finite
+lookup routes retain their existing behavior.
 
 ## Read current private channels
 
@@ -125,9 +125,88 @@ Provider code can accept the narrower `LookupIndexFeed` through the additive
 `LookupProviderFeedOptions`. The domain owner retains write, retention, compaction
 and close authority. Time advancement must drain the domain's bounded timer work
 before reporting a complete time floor. This interface alone does not compose a
-proposal journal with an index or install private visibility guards. The compound
-provider factory remains under construction; the authenticated HTTP reference
-test uses an explicit index writer and qualifies client composition only.
+proposal journal with an index or install private visibility guards. Use the
+compound factory for that role. The authenticated HTTP current-channel reference
+commits signed proposals through this producer, closes and reopens its native
+store, and resumes the client's saved session without another open request. The
+complete program qualification remains tracked separately.
+
+## Own the private proposal and lookup state together
+
+Import `SQLiteProposalChannelStore` from
+`@bsv/output-knowledge/proposals/channels-sqlite`. Supply a file path, namespace,
+provider identity, the same installed policy registry and `ProposalTransitions`,
+a `LookupSessionCodec` under the selected lookup trust contract, and a synchronous
+trusted clock. `create` installs every component in one physical transaction;
+`open` requires the existing sealed configuration and complete retained inventory.
+Never recover missing storage by calling `create`: preserve all service-identity
+history, permanent channel fences and original session material.
+
+Use `store.journal` as the proposal service's journal and final native-send port,
+`store.feed` as the lookup provider's read/time source, and `store.sessions` as its
+session and final native-send port. These facets share one transaction domain.
+The feed exposes no generic index writer, compactor or independent close method.
+Close the owner only after intake, workers and physical network work have drained.
+A legacy standalone journal or lookup writer cannot open this compound namespace.
+Its separate formats do not rewrite existing standalone storage.
+
+Every accepted journal transition updates the current row, immutable live group,
+indexed expiry inventory and completion obligations in the same transaction.
+`store.commit` additionally accepts a bounded group with at most one transition
+per channel. A conflict in any member rolls back the whole group. Exact replays
+append no new event; a mixed replay/new call groups only its newly committed
+members and does not regroup historical events. All put, reservation, completion,
+recovery and timer producers must use this owner. A lookup subscription never
+initiates a finalization or wallet action.
+
+Capacity checks hold a future expiry entry for each active head, the native
+journal's completion entry for each reserved finalization, and corresponding
+index versions, groups, bytes and revision space. The sealed journal entry bound
+also guarantees that a future terminal record fits its index row and group.
+A conservative complete-wire reservation accounts for proposal/state bytes,
+worst-case bounded reader scopes, repeated identifiers and the response envelope.
+The producer rejects an unstreamable whole group before committing it. `wire`
+selects compatible advertised maxima, defaulting to 4 MiB and 1024 observations;
+new session contracts must support those sealed maxima. Individual client reads
+may request less and receive the explicit BRC-193 `limited` response without
+cursor advancement. There is no hidden payload download or split domain group.
+
+The owner samples time after acquiring the write gate. A delayed update,
+withdrawal or reservation cannot consume expired intent. An exact retry keeps
+its original time, and an already reserved finalization can complete after intent
+expiry. Proposal expiry produces an indexed state event; it does not delete the
+row's retained query membership. Bounded expiry passes advance a separate
+processed-through floor only when every due proposal at that boundary is handled.
+A partial pass cannot promise a complete snapshot. Journal, lookup sessions and
+native journal sends share the same retained monotonic clock, including rejected
+policy checks and failed native enqueue. A failed send rolls back its own work
+while retaining the sampled clock; it cannot claim that delivery was undone.
+
+Fresh lookup authorization must include
+`store.authorizeLookup(policyReference, authorization)`. Pass the returned access
+and guards to the ordinary provider authorization result. The helper adds a
+mandatory policy visibility fence; a direct session commit that omits it fails.
+Continue to apply current host access and its own durable block/release guards.
+The factory does not supply a host access policy or make a retained private record
+authority to disclose it.
+
+An optional pure `ProposalPolicy.readVisibility` descriptor declares when the
+installed policy's readable principal set is unchanged. Equal canonical values
+must imply identical read permission for **every** caller. The author-document
+policy uses its immutable recipients, so ordinary content edits preserve live
+sessions. A policy without this hook conservatively uses its complete signed
+body. When an existing channel's descriptor changes, the compound writer advances
+the policy fence atomically with its state: both previously visible and previously
+invisible sessions reset before serialization or actual signed enqueue. A new
+eligible channel is an ordinary live entry. Mutable external authorization still
+uses its independent host guard protocol.
+
+This implementation retains append-only private history and permanent fences
+within explicit capacities. Exhaustion fails before effects; configuration
+migration and safe compaction require their own qualified path. The factory,
+native provider tests, generated restart schedules and authenticated HTTP
+producer/client restart establish component behavior. Interactive browser and
+complete checkpoint-two qualification remain required before the program handoff.
 
 ## Add authenticated HTTP
 
@@ -380,7 +459,10 @@ operation recovery after discovery changes. The evidence/admission ports in that
 component fixture are synthetic. The separate reference application's
 `test/proposalPipeline.test.ts` composes the public client and HTTP adapter with
 actual SDK Script/SPV verification, a real Topic Manager and Engine, retained
-Mongo admission history, SQLite proposal state and the recovery scheduler.
+Mongo admission history, SQLite proposal state and the recovery scheduler. It runs
+with both the existing standalone journal and the optional compound owner. The
+compound case verifies that publication, reservation and recovered finalization
+update the retained current feed without a separate index writer.
 
 The pipeline first puts and reads a private signed document without invoking
 ordinary admission. It rejects another authenticated identity and invalid Script

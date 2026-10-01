@@ -621,6 +621,11 @@ jobs:
         with:
           pattern: mutation-proposal-journal-send-*
           path: .mutation-parts/proposal-journal-send
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'proposal-channel-storage')
+        with:
+          pattern: mutation-proposal-channel-storage-*
+          path: .mutation-parts/proposal-channel-storage
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:

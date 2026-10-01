@@ -33,7 +33,8 @@ import {
   ProposalChannelHeadsSource,
   ProposalCurrentChannels,
   ProposalSourcePolicy,
-  proposalChannelIndexKey
+  ProposalTransitions,
+  proposalChannelKey
 } from '@bsv/output-knowledge/proposals'
 import {
   LookupProviderContracts,
@@ -44,7 +45,7 @@ import {
   lookupServingEpochExtension,
   type LookupProviderOptions
 } from '@bsv/output-knowledge/lookup'
-import { SQLiteLookupIndex, SQLiteLookupSessions } from '@bsv/output-knowledge/lookup/sqlite'
+import { SQLiteProposalChannelStore } from '@bsv/output-knowledge/proposals/channels-sqlite'
 import {
   LiveLookupSource,
   prepareLiveLookupSource,
@@ -66,9 +67,9 @@ import {
   resolver
 } from '../../../packages/application/output-knowledge/test/evidence-fixture.js'
 
-// This exercises real authenticated transport, durable receipts and accepted
-// projection. The explicit index writer is a fixture, not a claim that the
-// proposal journal/index/session companion is already integrated.
+// The producer commits through one private journal/index/session owner. Actual
+// authenticated transport and durable client receipts resume after both owners
+// restart, preserving complete current-channel projection and atomic replacements.
 it('keeps authenticated current-channel snapshot/live receipts resumable across native restart', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'proposal-current-http-')),
     app = express(),
@@ -80,12 +81,13 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
     parameters = { policy: reference },
     query = {},
     service = proposalScope.service
-  let index: SQLiteLookupIndex | undefined,
+  let owner: SQLiteProposalChannelStore | undefined,
     runtime: OutputKnowledge | undefined,
     control: SQLiteOperationStateStore | undefined
   const errors: unknown[] = [],
     requests: string[] = []
-  let now = 10000
+  let now = 10000,
+    activeRequests = 0
   const clock = () => String(Math.floor(now / 1000))
   try {
     await new Promise<void>((resolve, reject) => {
@@ -93,11 +95,6 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
       server.listen(0, '127.0.0.1', resolve)
     })
     const baseURL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`
-    index = SQLiteLookupIndex.create(join(directory, 'provider.sqlite'), 'private-heads', {
-      chain,
-      service,
-      policy: reference
-    })
     const queries = new LookupQueryRegistry([
       { policy: new ProposalChannelHeadsQuery(registry), parameters }
     ])
@@ -115,11 +112,25 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
       queries,
       () => manifest
     )
-    const sessions = SQLiteLookupSessions.create(
-      index,
-      new LookupSessionCodec(contracts.recoveryTrust()),
-      clock
+    const lifecycle = new ProposalTransitions(
+      registry,
+      { chain, service },
+      {
+        maxLifetimeSeconds: '90',
+        futureSkewSeconds: '2'
+      }
     )
+    const providerStorage = {
+      path: join(directory, 'provider.sqlite'),
+      namespace: 'private-heads',
+      identity: author,
+      lifecycle,
+      policies: registry,
+      sessionCodec: new LookupSessionCodec(contracts.recoveryTrust()),
+      now: clock
+    }
+    owner = SQLiteProposalChannelStore.create(providerStorage)
+    const sessions = owner.sessions
     const epoch = await sessions.createEpoch()
     await sessions.initializeGuard('serving')
     const describe = queries.describe()[0]
@@ -161,41 +172,68 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
     const authorize: LookupProviderOptions['authorize'] = async input => {
       if (input.principal !== recipient)
         throw new OutputProtocolError('unauthorized', 'Private reader required')
-      return {
+      const authorization = await owner!.authorizeLookup(reference, {
+        principal: input.principal,
         access: recipient,
         guards: [
-          { id: 'serving', revision: await sessions.guard('serving'), failure: 'unauthorized' }
+          {
+            id: 'serving',
+            revision: await owner!.sessions.guard('serving'),
+            failure: 'unauthorized'
+          }
         ]
-      }
+      })
+      return { access: authorization.access, guards: authorization.guards }
     }
-    const provider = new LookupProviderService({
-      index,
-      sessions,
-      contracts,
-      authorize,
-      now: clock,
-      budgets: { pollMs: 5 }
-    })
-    const disclosure = new LookupResponseDisclosure({
-      sessions,
-      contracts,
-      authorize,
-      authorizeControl: () => true
-    })
+    const createProvider = () =>
+      new LookupProviderService({
+        index: owner!.feed,
+        sessions: owner!.sessions,
+        contracts,
+        authorize,
+        now: clock,
+        budgets: { pollMs: 5 }
+      })
+    const createDisclosure = () =>
+      new LookupResponseDisclosure({
+        sessions: owner!.sessions,
+        contracts,
+        authorize,
+        authorizeControl: () => true
+      })
+    let provider = createProvider(),
+      disclosure = createDisclosure()
     const authenticate = createAuthMiddleware({
       wallet: new CompletedProtoWallet(new PrivateKey(1)),
       allowUnauthenticated: true,
       transportLimits: { requestTimeoutMs: 2000 }
     })
     app.use(rateLimit({ windowMs: 60000, limit: 2000, store: rateStore }))
-    app.use((request, _response, next) => {
+    app.use((request, response, next) => {
       requests.push(request.path)
+      activeRequests++
+      let settled = false
+      const settle = () => {
+        if (!settled) {
+          settled = true
+          activeRequests--
+        }
+      }
+      response.once('finish', settle)
+      response.once('close', settle)
       next()
     })
     app.use(
       createOutputLookupRouter({
-        companion: provider,
-        disclosure,
+        companion: {
+          open: (...args) => provider.open(...args),
+          read: (...args) => provider.read(...args),
+          close: (...args) => provider.close(...args)
+        },
+        disclosure: {
+          bind: (...args) => disclosure.bind(...args),
+          control: (...args) => disclosure.control(...args)
+        },
         service,
         baseURL,
         identity: author,
@@ -208,28 +246,15 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
         allowedOrigins: []
       })
     )
-    const write = async (proposal: OutputSignedProposal, previous: string | null) => {
-      const head = await index!.head()
-      return index!.commit({
-        base: head.sequence,
-        evaluatedAt: clock(),
-        edits: [
-          {
-            key: proposalChannelIndexKey(proposal),
-            previous,
-            next: {
-              data: { version: 1, proposal, state: { status: 'active', recordedAt: clock() } },
-              expiresAt: null
-            }
-          }
-        ],
-        event: { kind: 'fixture-proposal-transition' }
-      })
+    const write = async (proposal: OutputSignedProposal) => {
+      const current = await owner!.journal.getChannel(proposalChannelKey(proposal.body))
+      const transition = lifecycle.put(current, proposal, author, clock())
+      expect((await owner!.journal.commit(transition)).status).toBe('committed')
     }
     const first = signed({ chain, channel: '11'.repeat(32) })
-    await write(first, null)
-    await write(signed({ chain, channel: '22'.repeat(32) }), null)
-    await write(signed({ chain, channel: '33'.repeat(32) }), null)
+    await write(first)
+    await write(signed({ chain, channel: '22'.repeat(32) }))
+    await write(signed({ chain, channel: '33'.repeat(32) }))
     const scope = {
       chain,
       provider: author,
@@ -347,13 +372,21 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
     runtime = undefined
     await control!.close()
     control = undefined
+    await vi.waitFor(() => expect(activeRequests).toBe(0), { timeout: 5000 })
+    const retained = await owner.feed.head()
+    await owner.close()
+    owner = undefined
+    owner = SQLiteProposalChannelStore.open(providerStorage)
+    expect(await owner.feed.head()).toEqual(retained)
+    provider = createProvider()
+    disclosure = createDisclosure()
     const successor = signed({
       chain,
       channel: first.body.channel,
       revision: '1',
       previous: outputPacketDigest('proposal', first.body)
     })
-    await write(successor, '1')
+    await write(successor)
     const opens = requests.filter(path => path.endsWith('/lookup/open')).length
     const resumed = await start(false)
     await vi.waitFor(
@@ -396,7 +429,7 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
         server.close(error => (error ? reject(error) : resolve()))
       )
     rateStore.shutdown()
-    await index?.close()
+    await owner?.close()
     rmSync(directory, { recursive: true, force: true })
   }
 }, 30000)

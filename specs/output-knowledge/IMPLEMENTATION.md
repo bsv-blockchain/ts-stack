@@ -1775,3 +1775,63 @@ journal/current-query/current-projection and legacy-view selection now passes
 authenticated HTTP progressive/live/restart integration, package types, root lint
 and complete root/workspace formatting pass. The prior full-run failure remains
 negative evidence; fresh complete qualification is required for this follow-up.
+
+### Atomic private channel owner
+
+Full native qualification at `4ec3c560a` passes 1,777 tests / 133 suites in
+679.845 seconds, with all 9,934 frozen inputs and HEAD unchanged. Its preceding
+metadata assertion, formatting and maintainability failures remain recorded
+above; this is a fresh source-bound success, not a reinterpretation of those runs.
+
+The optional `SQLiteProposalChannelStore` factory, restricted journal/feed/session
+facets, atomic session bootstrap, indexed proposal timers and retained visibility
+fences are now adopted locally. Active heads reserve their future expiry event;
+finalizing heads retain native completion reservations and matching index capacity.
+Sealed row/group bounds and conservative complete-wire bounds prevent accepting
+an unrepresentable future event. Shared observed time survives rejected work;
+partial expiry cannot advance complete snapshot coverage. Content edits preserve
+sessions under the installed stable read descriptor; readership changes reset
+previously visible and invisible sessions before native enqueue.
+
+The isolated compiled implementation passes 167 tests / nine suites, including
+300 native rejection, replay, partial-expiry and restart schedules, plus complete
+legacy session/journal compatibility. An additional wire-bound regression is
+adopted. The canonical adopted selection passes 251 tests / 14 suites, including
+the 300 native schedules; package types, root lint and 69 governance checks pass.
+The actual BRC-103 HTTP demonstration now commits through the compound journal,
+reopens provider storage and resumes the durable client session without reopening
+it. Atomic live replacement and locally derived intent expiry still pass. Public
+packed consumers and complete package/mutation qualification follow. The new
+critical complete-source target retains 90% and zero uncovered/invalid gates;
+whole-file factory/writer/inventory/contract execution parts preserve the canonical
+union and original inputs. These component changes do not complete checkpoint two.
+
+The adopted compound batch passes all 1,834 native tests / 139 suites in 795.129
+seconds: 97.98% statements, 96.14% branches, 99.2% functions and 98.33% lines.
+All 9,961 frozen inputs and HEAD match. Packed public exports, 42 compiled examples
+against 22 exact tarballs, eight reference-app tests and complete root health,
+lint, formatting and workspace types pass. The generated API facts change only
+the output-knowledge entry after whitespace normalization.
+
+A subsequent review found that unsuccessful native proposal delivery rolled back
+its sampled clock. Three regressions confirm the earlier behavior. The correction
+runs only the opt-in compound send inside a savepoint after retaining time; the
+legacy journal's transaction behavior is preserved. The isolated correction passes
+89 journal/compound tests across four suites. The real Engine/Mongo pipeline now
+runs in both standalone and compound modes and verifies that publication,
+reservation and recovered finalization update the current feed without manual
+index writes. Both isolated pipeline modes and their application types pass.
+These follow-up edits require fresh adopted-source qualification.
+
+Hosted head `4ec3c560a` reached the 45-minute wallet-recovery-encoding job bound
+without a final report. The cancellation is retained as negative evidence. Its
+prior local complete campaign took 27m53s, with 171 mutants and 91.81%; that older
+result does not replace terminal successful qualification of the current head.
+
+The follow-up canonical compound selection passes 269 tests / 14 suites, including
+its full 300-case native property. All eight complete target modules reach 100%
+statements, functions and lines, with 99.6% branches in a diagnostic coverage run.
+A further local-context regression checks owned recovery retention and exclusion
+from lookup payloads. The adopted reference application passes nine tests across
+four suites, including both native storage modes. Mutation qualification and the
+fresh complete native run remain pending; line coverage is not mutation evidence.

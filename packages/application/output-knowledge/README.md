@@ -13,9 +13,11 @@ components are implemented. Optional SQLite persistence and authenticated Overla
 Express adapters exercise concrete service paths. Optional client proposal
 acceptance verifies exact signed envelopes and retains local receipt decisions.
 Optional current-channel queries, authenticated source grammar and independent
-provider/generation projection are available. Compound private provider storage,
-publication/acquisition, complete serving-path
-integration, platform qualification and downstream application adoption remain incomplete.
+provider/generation projection are available. The optional compound SQLite
+proposal/current-feed/session owner is implemented with atomic visibility fences,
+future-event reservations and bounded expiry. Complete publication/acquisition,
+serving-path integration, platform qualification and downstream application
+adoption remain incomplete.
 The package version does not indicate a published or production-qualified release.
 See the [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md)
 for exact component evidence and outstanding work.
@@ -1154,3 +1156,25 @@ current checkpoint status rather than treating one fixture as full qualification
 
 See the package-local [LICENSE.txt](./LICENSE.txt) and
 [third-party notices](./THIRD_PARTY_NOTICES.md) for distribution terms.
+
+## Atomic private proposal channel storage
+
+Import `SQLiteProposalChannelStore` from
+`@bsv/output-knowledge/proposals/channels-sqlite` for a separately sealed,
+Node-only proposal journal, current-query feed and session owner. Its `journal`,
+`feed` and `sessions` share one actual connection, including final native enqueue.
+Use explicit `create` for initial installation and `open` for recovery. All writers
+must use that owner; existing standalone constructors and formats are unchanged.
+
+The owner reserves future expiry/completion space and whole-wire group capacity,
+rejects delayed commits after exclusive intent expiry, preserves exact retries,
+and retains a truthful timer floor across partial work and restart. Its optional
+multi-channel commit publishes one complete group or rolls back all participants.
+Apply current host access and the mandatory guard returned by `authorizeLookup`.
+An installed pure read-visibility descriptor keeps ordinary content edits live
+while atomically resetting sessions after readership changes.
+
+See the [private channel storage guide](../../../docs/guides/non-final-proposals.md#own-the-private-proposal-and-lookup-state-together)
+for contracts, migration boundaries, wire/capacity choices and remaining
+qualification. No automatic migration, compaction, new finalization or public
+GASP disclosure is enabled by this factory.

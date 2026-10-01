@@ -1,4 +1,10 @@
-import type { OutputChain, OutputJSONObject, OutputProposalBody, Transaction } from '@bsv/sdk'
+import type {
+  OutputChain,
+  OutputJSON,
+  OutputJSONObject,
+  OutputProposalBody,
+  Transaction
+} from '@bsv/sdk'
 
 export type ProposalAction = 'put' | 'read' | 'finalize'
 
@@ -13,6 +19,13 @@ export interface ProposalPolicy {
   parameters(input: unknown): OutputJSONObject
   validate(body: OutputProposalBody, parameters: OutputJSONObject): void
   permits(action: ProposalAction, body: OutputProposalBody, caller: string): boolean
+  /**
+   * Optional pure read-visibility descriptor. Equal canonical values MUST mean
+   * permits('read', body, caller) is identical for EVERY caller. Mutable host
+   * policy remains separate. Omitting this uses the complete signed body, so
+   * unknown policies conservatively invalidate sessions on any head replacement.
+   */
+  readVisibility?(body: OutputProposalBody, parameters: OutputJSONObject): OutputJSON
   successor(previous: OutputProposalBody, next: OutputProposalBody): void
   /** Relation only. The host must separately verify BEEF and ordinary topic admission. */
   finalization(body: OutputProposalBody, proposalId: string, transaction: Transaction): void

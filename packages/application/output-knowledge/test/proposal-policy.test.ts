@@ -349,3 +349,54 @@ describe('author-document-v1', () => {
     expect(() => checkFinalization(proposal, tx)).toThrow('anchor at input zero')
   })
 })
+
+it('uses a stable document read descriptor without treating that descriptor as authority', () => {
+  const original = signed()
+  const changed = signed({ payload: bytes(canonicalOutputJSON({ text: 'changed' })) })
+  expect(registry.readVisibility(original)).toBe(registry.readVisibility(changed))
+  expect(registry.permits('read', original, outsider)).toBe(false)
+  const descriptor = policy.readVisibility(original.body)
+  ;(descriptor.recipients as string[]).pop()
+  expect(original.body.recipients).toHaveLength(2)
+})
+
+it('conservatively treats the full signed body as visibility for a legacy policy', () => {
+  const legacy: ProposalPolicy = {
+    id: policy.id,
+    parameters: policy.parameters.bind(policy),
+    validate: policy.validate.bind(policy),
+    permits: policy.permits.bind(policy),
+    successor: policy.successor.bind(policy),
+    finalization: policy.finalization.bind(policy)
+  }
+  const installed = new ProposalPolicyRegistry([
+    { policy: legacy, parameters: { maxTextBytes: 32 } }
+  ])
+  expect(installed.readVisibility(signed())).not.toBe(
+    installed.readVisibility(signed({ payload: bytes(canonicalOutputJSON({ text: 'changed' })) }))
+  )
+})
+
+it('isolates read descriptor callbacks from owned signed bodies and installed parameters', () => {
+  const original = signed()
+  const described: ProposalPolicy = {
+    id: policy.id,
+    parameters: policy.parameters.bind(policy),
+    validate: policy.validate.bind(policy),
+    permits: policy.permits.bind(policy),
+    successor: policy.successor.bind(policy),
+    finalization: policy.finalization.bind(policy),
+    readVisibility: (body, parameters) => {
+      body.recipients.length = 0
+      parameters.maxTextBytes = 1
+      return { marker: 'local' }
+    }
+  }
+  const installed = new ProposalPolicyRegistry([
+    { policy: described, parameters: { maxTextBytes: 32 } }
+  ])
+  expect(installed.readVisibility(original)).toMatch(/^[0-9a-f]{64}$/)
+  expect(original.body.recipients).toHaveLength(2)
+  expect(installed.describe()[0].parameters).toEqual({ maxTextBytes: 32 })
+  expect(installed.validate(original, scope)).toEqual(original)
+})

@@ -228,3 +228,11 @@ Before running a governed non-PR suite, read its policy prerequisites. After the
 run, perform its cleanup and attach evidence to the tracker or release record.
 No private credential, production wallet data, or secret output belongs in CI
 logs.
+
+The `proposal-channel-storage` target qualifies the complete atomic private
+channel owner, writer, deadline inventory, privacy/representation contract and
+session bootstrap. Its factory, writer, inventory and contract execution parts
+split whole files only; new files fall back to factory. Every part retains the
+canonical tests, 300-case native property budget, configuration and thresholds.
+The final canonical aggregate remains mandatory. Passing an isolated draft or
+one execution part is not a completed target qualification.

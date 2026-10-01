@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 106)
+  assert.equal(Object.keys(configured).length, 107)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -379,4 +379,30 @@ test('runtime publication qualification covers the complete runtime and its publ
     'packages/application/output-knowledge/src/OutputKnowledge.ts'
   ])
   assert.ok(selected.includes('output-knowledge-runtime'))
+})
+
+test('compound proposal storage preserves all native implementations and canonical property input', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['proposal-channel-storage']
+  assert.deepEqual(target.mutate, [
+    'src/proposals/SQLiteProposalChannelStore.ts',
+    'src/lookup/SQLiteLookupSessionBootstrap.ts',
+    'src/proposals/SQLiteProposalFeedWriter.ts',
+    'src/proposals/SQLiteProposalFeedInventory.ts',
+    'src/proposals/ProposalChannelFeedCapacity.ts',
+    'src/proposals/ProposalChannelFeedRecords.ts',
+    'src/proposals/ProposalFeedPrivacy.ts',
+    'src/proposals/AuthorDocumentPolicy.ts'
+  ])
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/proposal-storage-channel.property.test.ts'
+  )
+  assert.ok(
+    target.runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/test/proposal-storage-channel*.test.ts'
+    )
+  )
+  assert.ok(
+    target.runnerOptions.jest.config.testMatch.includes('<rootDir>/test/lookup-native-send.test.ts')
+  )
 })

@@ -1320,6 +1320,17 @@
           "An invalid later member rejects a complete domain group without publishing its earlier changes.",
           "A rejected domain group makes the source inconsistent and disables active intent while retaining its last coherent heads."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-storage-channel.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic private proposal/current-feed/session storage, reserved future events, truthful timer coverage and guarded visibility",
+        "target": "At least 300 native failure, replay, bounded-expiry and restart schedules",
+        "invariants": [
+          "A rejected member rolls back all journal entries, current rows and live groups in its domain change.",
+          "A partial expiry pass never advances the complete timer floor, including after restart; exact retries append no duplicate group."
+        ]
       }
     ],
     "exclusions": [

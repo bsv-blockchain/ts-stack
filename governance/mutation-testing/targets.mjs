@@ -692,6 +692,8 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/proposal-journal*.test.ts',
+          '<rootDir>/test/proposal-storage-channel.test.ts',
+          '<rootDir>/test/proposal-feed-writer.test.ts',
           '<rootDir>/test/sqlite-transaction-domain.test.ts',
           '<rootDir>/test/proposal-service*.test.ts',
           '<rootDir>/test/proposal-send*.test.ts',
@@ -933,7 +935,9 @@ export function buildMutationTargets(repositoryRoot) {
         'lookup-provider',
         'lookup-native-send',
         'lookup-send.property',
-        'proposal-journal-composition'
+        'proposal-journal-composition',
+        'proposal-storage-channel',
+        'lookup-session-bootstrap'
       ],
       ['src/proposals/**', 'test/proposal-client-fixture.ts', 'test/live-lookup-fixture.ts']
     ),
@@ -999,6 +1003,44 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/live-lookup-source.test.ts',
           '<rootDir>/test/live-lookup-indexeddb.test.ts',
           '<rootDir>/test/live-lookup-http.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
+    'proposal-channel-storage': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/proposal-storage-channel.property.test.ts',
+      additionalInputs: [
+        'src/proposals/**',
+        'src/lookup/**',
+        'src/storage/**',
+        'src/internal/**',
+        'test/*fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: [
+        'src/proposals/SQLiteProposalChannelStore.ts',
+        'src/lookup/SQLiteLookupSessionBootstrap.ts',
+        'src/proposals/SQLiteProposalFeedWriter.ts',
+        'src/proposals/SQLiteProposalFeedInventory.ts',
+        'src/proposals/ProposalChannelFeedCapacity.ts',
+        'src/proposals/ProposalChannelFeedRecords.ts',
+        'src/proposals/ProposalFeedPrivacy.ts',
+        'src/proposals/AuthorDocumentPolicy.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/proposal-storage-channel*.test.ts',
+          '<rootDir>/test/proposal-feed-*.test.ts',
+          '<rootDir>/test/lookup-session-bootstrap.test.ts',
+          '<rootDir>/test/proposal-policy.test.ts',
+          '<rootDir>/test/proposal-transitions.test.ts',
+          '<rootDir>/test/proposal-journal*.test.ts',
+          '<rootDir>/test/lookup-sqlite-sessions.test.ts',
+          '<rootDir>/test/lookup-native-send.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build' }
       )
