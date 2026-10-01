@@ -24,7 +24,11 @@ export interface LiveMessage {
   body: string
 }
 
-/** The one place a stored message is announced to the recipient's joined sockets. */
+/**
+ * The one place a stored message is announced to joined sockets of this
+ * process. Sockets on other nodes are not reached (see sticky sessions in
+ * DEPLOYING.md).
+ */
 export async function deliverLiveMessage(
   connections: WebSocketConnectionRegistry,
   message: LiveMessage
@@ -47,10 +51,11 @@ export async function deliverLiveMessage(
 
 /**
  * Wrap an HTTP send handler so a successful store is announced like a socket
- * send. Runs after the response is written and never alters it.
+ * send. Runs after the response is written; the status and body sent are
+ * unchanged, though `res.status` and `res.json` are wrapped to observe them.
  */
 export function withLiveDelivery(
-  liveDelivery: LiveDelivery | undefined,
+  liveDelivery: LiveDelivery,
   handler: (req: ExpressRequest, res: Response) => Promise<unknown>
 ): (req: ExpressRequest, res: Response) => Promise<unknown> {
   return async (req, res) => {
@@ -67,7 +72,7 @@ export function withLiveDelivery(
       return originalJson(body)
     }
     const result = await handler(req, res)
-    const connections = liveDelivery?.connections
+    const connections = liveDelivery.connections
     if (connections != null && status === 200) {
       try {
         await announceStored(connections, req, payload)

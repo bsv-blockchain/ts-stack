@@ -42,12 +42,7 @@ import {
   WebSocketMinuteRateLimiter
 } from './security/webSocketConnections.js'
 import { canonicalIdentityKey, isCanonicalMessageId } from './security/messageFields.js'
-import {
-  createLiveDelivery,
-  deliverLiveMessage,
-  withLiveDelivery,
-  type LiveDelivery
-} from './security/liveDelivery.js'
+import { deliverLiveMessage, withLiveDelivery, type LiveDelivery } from './security/liveDelivery.js'
 
 export { createMessageBoxContext } from './context.js'
 export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
@@ -174,7 +169,9 @@ export async function closeMessageBoxWebSockets(io: AuthSocketServer | null): Pr
     disconnectAuthenticatedSockets(state?.connections.sockets() ?? [])
   }
   state?.connections.clear()
-  if (state != null) state.liveDelivery.connections = null
+  if (state != null && state.liveDelivery.connections === state.connections) {
+    state.liveDelivery.connections = null
+  }
   webSocketState.delete(io)
 }
 
@@ -228,11 +225,16 @@ export function registerMessageBoxPostAuthRoutes(
     | 'calculateRequestPrice'
     | 'paymentReplayStore'
     | 'paymentTransactionVerifier'
-  > &
-    Partial<Pick<MessageBoxContext, 'liveDelivery'>>,
+    | 'liveDelivery'
+  >,
   routingPrefix: string = '',
   authenticatedRateLimitOptions: Partial<RateLimitOptions> = {}
 ): void {
+  if (ctx.liveDelivery == null) {
+    throw new Error(
+      'registerMessageBoxPostAuthRoutes requires ctx.liveDelivery; without it HTTP sends are never pushed to sockets'
+    )
+  }
   const runtime: MessageBoxRuntimeDeps = {
     knex: ctx.knex,
     wallet: ctx.wallet,
@@ -296,6 +298,9 @@ export function attachMessageBoxWebSockets(
   if (!ctx.enableWebSockets) {
     return null
   }
+  if (ctx.liveDelivery.connections != null) {
+    throw new Error('A MessageBoxContext supports one attachMessageBoxWebSockets call')
+  }
 
   Logger.log('[WEBSOCKET] Initializing WebSocket support...')
 
@@ -304,7 +309,7 @@ export function attachMessageBoxWebSockets(
   const connections = new WebSocketConnectionRegistry()
   const resources = readMessageBoxResourceConfig()
   const pricing = readMessageBoxPricingConfig()
-  const liveDelivery = ctx.liveDelivery ?? createLiveDelivery()
+  const { liveDelivery } = ctx
   liveDelivery.connections = connections
   webSocketState.set(io, { connections, liveDelivery })
 

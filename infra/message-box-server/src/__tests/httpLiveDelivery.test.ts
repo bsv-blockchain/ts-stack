@@ -13,6 +13,7 @@ import {
 
 const BOX = 'live_http_box'
 const EVENT_TIMEOUT_MS = 10_000
+const QUIET_MS = 500
 
 async function createSchema(database: Knex): Promise<void> {
   await database.schema.createTable('messageBox', table => {
@@ -110,28 +111,29 @@ describe('HTTP sendMessage live delivery', () => {
     delete process.env.MESSAGE_BOX_MONETIZATION_ENABLED
   })
 
-  it('pushes an HTTP-stored message to a connected recipient joined to the room', async () => {
-    const recipientKey = (await recipientWallet.getPublicKey({ identityKey: true })).publicKey
-    const ctx = createMessageBoxContext({
+  type Push = { sender: string; messageId: string; body: string }
+
+  function newContext(enableWebSockets: boolean) {
+    return createMessageBoxContext({
       knex: database,
       wallet: serverWallet(),
-      enableWebSockets: true,
+      enableWebSockets,
       enableSwagger: false
     })
-    const app = buildApp(ctx, senderKey)
-    httpServer = createServer(app)
-    const io = attachMessageBoxWebSockets(httpServer, ctx)
-    await new Promise<void>(resolve => httpServer?.listen(0, '127.0.0.1', resolve))
-    const address = httpServer.address()
-    if (address == null || typeof address === 'string') throw new Error('Missing test server port')
+  }
 
-    client = new MessageBoxClient({
-      host: `http://127.0.0.1:${address.port}`,
-      walletClient: recipientWallet as WalletInterface
-    })
+  async function listen(server: HttpServer): Promise<string> {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (address == null || typeof address === 'string') throw new Error('Missing test server port')
+    return `http://127.0.0.1:${address.port}`
+  }
+
+  async function joinRecipient(host: string, pushes: Push[]): Promise<string> {
+    const recipientKey = (await recipientWallet.getPublicKey({ identityKey: true })).publicKey
+    client = new MessageBoxClient({ host, walletClient: recipientWallet as WalletInterface })
     await client.initializeConnection()
     const roomId = `${recipientKey}-${BOX}`
-    const pushes: Array<{ sender: string; messageId: string; body: string }> = []
     const joined = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('joinedRoom timeout')), EVENT_TIMEOUT_MS)
       client?.testSocket?.on('joinedRoom', (data: { roomId: string }) => {
@@ -151,6 +153,25 @@ describe('HTTP sendMessage live delivery', () => {
       }
     })
     await joined
+    return recipientKey
+  }
+
+  /** Wait for the first push, then a quiet period so a duplicate emit is seen. */
+  async function settle(pushes: Push[]): Promise<void> {
+    const deadline = Date.now() + EVENT_TIMEOUT_MS
+    while (pushes.length === 0 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    await new Promise(resolve => setTimeout(resolve, QUIET_MS))
+  }
+
+  it('pushes an HTTP-stored message exactly once to a joined recipient', async () => {
+    const ctx = newContext(true)
+    const app = buildApp(ctx, senderKey)
+    httpServer = createServer(app)
+    const io = attachMessageBoxWebSockets(httpServer, ctx)
+    const pushes: Push[] = []
+    const recipientKey = await joinRecipient(await listen(httpServer), pushes)
 
     const response = await request(app)
       .post('/sendMessage')
@@ -158,34 +179,71 @@ describe('HTTP sendMessage live delivery', () => {
     expect(response.status).toBe(200)
     expect(response.body.status).toBe('success')
 
-    const deadline = Date.now() + EVENT_TIMEOUT_MS
-    while (pushes.length === 0 && Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
+    await settle(pushes)
     expect(pushes).toEqual([{ sender: senderKey, messageId: 'm-1', body: 'hi' }])
     await closeMessageBoxWebSockets(io)
   })
 
-  it('stores and returns 200 without notifying when WebSockets are disabled', async () => {
-    const recipientKey = (await recipientWallet.getPublicKey({ identityKey: true })).publicKey
-    const ctx = createMessageBoxContext({
-      knex: database,
-      wallet: serverWallet(),
-      enableWebSockets: false,
-      enableSwagger: false
-    })
+  it('pushes a WebSocket-sent message exactly once to a joined recipient', async () => {
+    const ctx = newContext(true)
     const app = buildApp(ctx, senderKey)
     httpServer = createServer(app)
+    const io = attachMessageBoxWebSockets(httpServer, ctx)
+    const host = await listen(httpServer)
+    const pushes: Push[] = []
+    const recipientKey = await joinRecipient(host, pushes)
 
-    expect(attachMessageBoxWebSockets(httpServer, ctx)).toBeNull()
-    expect(ctx.liveDelivery.connections).toBeNull()
+    const senderWallet = new ProtoWallet(new PrivateKey(203))
+    const sender = new MessageBoxClient({ host, walletClient: senderWallet as WalletInterface })
+    await sender.initializeConnection()
+    try {
+      await sender.sendLiveMessage({
+        recipient: recipientKey,
+        messageBox: BOX,
+        messageId: 'm-ws',
+        body: 'hi'
+      })
+      await settle(pushes)
+      const senderIdentity = (await senderWallet.getPublicKey({ identityKey: true })).publicKey
+      expect(pushes).toEqual([{ sender: senderIdentity, messageId: 'm-ws', body: 'hi' }])
+    } finally {
+      await sender.disconnectWebSocket().catch(() => undefined)
+    }
+    await closeMessageBoxWebSockets(io)
+  })
 
+  it('stores and returns 200 but pushes nothing when the route context has WebSockets disabled', async () => {
+    const socketCtx = newContext(true)
+    httpServer = createServer()
+    const io = attachMessageBoxWebSockets(httpServer, socketCtx)
+    const pushes: Push[] = []
+    const recipientKey = await joinRecipient(await listen(httpServer), pushes)
+
+    const disabledCtx = newContext(false)
+    expect(attachMessageBoxWebSockets(createServer(), disabledCtx)).toBeNull()
+    const app = buildApp(disabledCtx, senderKey)
     const response = await request(app)
       .post('/sendMessage')
       .send({ message: { recipient: recipientKey, messageBox: BOX, messageId: 'm-2', body: 'hi' } })
     expect(response.status).toBe(200)
     expect(response.body.status).toBe('success')
-    const stored = await database('messages').where({ messageId: 'm-2' })
-    expect(stored).toHaveLength(1)
+
+    await new Promise(resolve => setTimeout(resolve, QUIET_MS))
+    expect(pushes).toEqual([])
+    expect(await database('messages').where({ messageId: 'm-2' })).toHaveLength(1)
+    await closeMessageBoxWebSockets(io)
+  })
+
+  it('rejects a second attach on one context', async () => {
+    const ctx = newContext(true)
+    httpServer = createServer()
+    const io = attachMessageBoxWebSockets(httpServer, ctx)
+    expect(() => attachMessageBoxWebSockets(createServer(), ctx)).toThrow(/one attach/)
+    await closeMessageBoxWebSockets(io)
+  })
+
+  it('refuses to mount the send route without a liveDelivery handle', () => {
+    const ctx = { ...newContext(true), liveDelivery: undefined }
+    expect(() => registerMessageBoxPostAuthRoutes(express(), ctx as never)).toThrow(/liveDelivery/)
   })
 })
