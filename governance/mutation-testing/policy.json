@@ -1026,6 +1026,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "output-knowledge-runtime",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/runtime-publication.property.test.ts",
+      "risk": "critical",
+      "boundary": "Application runtime publication deadlines and bounded source lifecycle",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

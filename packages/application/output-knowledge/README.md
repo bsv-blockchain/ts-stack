@@ -291,6 +291,34 @@ snapshots, fences retired generations, and applies live membership in source ord
 replacement rules and current-view dependency closure. Membership is not a spend
 edge, and a newly reported output cannot undo a known spend.
 
+## Publication deadlines for other state
+
+The optional `OutputKnowledgeWorker.nextInvalidation(input)` method returns the
+earliest exclusive U64 epoch-second deadline that applies to an accepted input.
+It is a pure installed local policy: it may examine the owned snapshot supplied
+to it, but cannot fetch remote data, change policy during the runtime lifetime or
+perform effects. Returning `undefined` means no additional deadline for that
+snapshot. The runtime combines it with existing assessment deadlines, schedules
+another worker pass, and checks it again after asynchronous projector work and
+when reading a saved projection. Long deadlines use exact integer comparisons
+and bounded timer intervals. A delayed timer cannot make expired state current.
+
+The worker's `advance` method must commit the due invalidation through the
+knowledge store. The scheduling hook does not mutate state or manufacture an
+outpoint, accepted revision, proposal agreement or Bitcoin evidence. If a worker
+leaves expired state unresolved, projection publication fails explicitly instead
+of entering a tight automatic retry loop. Applications can retry after resolving
+the worker condition. Existing workers can omit the method and retain their
+current behavior; the existing store's expired-assessment error remains unchanged.
+
+This boundary protects new publication and reads. Applications must also retire
+an already displayed provisional view at its known deadline and reconcile when a
+sleeping tab resumes. They cannot assume that a previously emitted object is
+revoked by modifying another object in memory. A complete proposal integration
+still needs installed proposal validation, retained replay interpretation,
+durable expiry state and visibly distinct proposal/currentness/admission labels.
+The runtime hook by itself supplies none of those domain guarantees.
+
 ## Source equivocation and recovery
 
 After the entire batch passes schema and trusted-session checks, `BitcoinKnowledge`

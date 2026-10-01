@@ -275,7 +275,7 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
         enqueue.constructor.name === 'AsyncFunction'
       )
         throw new OutputProtocolError('invalid', 'Proposal response callbacks must be synchronous')
-      const bytes = candidate.bytes.slice()
+      const bytes = new Uint8Array(candidate.bytes)
       try {
         this.database.exec('BEGIN IMMEDIATE')
       } catch (error) {

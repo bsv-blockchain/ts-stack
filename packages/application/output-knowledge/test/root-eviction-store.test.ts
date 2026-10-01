@@ -261,3 +261,23 @@ describe('durable root decisions and serving fences', () => {
     inspection.close()
   })
 })
+
+it('owns a Buffer control response before authorization reads caller state', async () => {
+  const f = await make(),
+    input = Buffer.from('fixture-owned-control'),
+    expected = Array.from(input)
+  let received: number[] | undefined
+  await f.store.enqueue(
+    { revision: '0', targets: [], bytes: input },
+    () => {
+      input.fill(0)
+      return true
+    },
+    owned => {
+      received = Array.from(owned)
+      return undefined
+    }
+  )
+  expect(received).toEqual(expected)
+  expect(input.every(value => value === 0)).toBe(true)
+})

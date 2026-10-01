@@ -171,7 +171,7 @@ export class AuthenticatedResponseQueue {
         input.body.byteLength === 0,
       'A bodyless guarded response cannot discard signed body bytes.'
     )
-    return { statusCode: input.statusCode, headers, body: input.body.slice() }
+    return { statusCode: input.statusCode, headers, body: new Uint8Array(input.body) }
   }
   prepare(
     input: AuthenticatedResponseReplacement,
@@ -218,7 +218,7 @@ export class AuthenticatedResponseQueue {
       statusCode === current.statusCode && Buffer.from(body).equals(Buffer.from(current.body)),
       'The signed response differs from the retained candidate.'
     )
-    const bytes = body.slice()
+    const bytes = new Uint8Array(body)
     const headers = { ...current.headers, ...signedHeaders }
     delete headers['content-length']
     if (![204, 304].includes(statusCode)) headers['content-length'] = String(bytes.byteLength)

@@ -442,7 +442,7 @@ export class SQLiteRootEvictionStore
         'Root send callbacks must be synchronous'
       )
       const targets = candidate.targets.map(target => this.selectedTarget(target))
-      const bytes = candidate.bytes.slice()
+      const bytes = new Uint8Array(candidate.bytes)
       outputAssert(
         this.database.head().revision === candidate.revision,
         'Root serving revision changed before enqueue',

@@ -969,6 +969,29 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'output-knowledge-runtime': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/runtime-publication.property.test.ts',
+      additionalInputs: [
+        'src/ports.ts',
+        'src/KnowledgeStore.ts',
+        'src/RuntimeEvents.ts',
+        'src/validation.ts',
+        'src/storage/**',
+        'src/internal/**',
+        'test/fixtures/reconciliation-vectors.json',
+        'test/empty-reducer.ts',
+        'test/evidence-fixture.ts'
+      ],
+      mutate: ['src/OutputKnowledge.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/runtime.test.ts', '<rootDir>/test/runtime-publication.property.test.ts'],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'output-knowledge-journal': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',

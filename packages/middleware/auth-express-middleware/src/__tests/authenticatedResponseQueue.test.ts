@@ -293,3 +293,26 @@ it.each([200, 204])(
     )
   }
 )
+
+it('owns a Buffer replacement while its caller continues during actual signing', async () => {
+  const packet = replacement(),
+    original = Buffer.from(packet.body)
+  let signatures = 0
+  const f = await make((_req, res) => {
+    guardAuthenticatedResponse(res, (candidate, enqueue) => {
+      if (candidate.attempt === 0) return packet
+      enqueue()
+    })
+    const onSign = () => {
+      if (++signatures === 2) packet.body.fill(0)
+      else f.onSign(onSign)
+    }
+    f.onSign(onSign)
+    res.json({ initial: 'replace' })
+  })
+  const result = await fetchSigned(f)
+  expect(signatures).toBe(2)
+  expect(result.status).toBe(409)
+  expect(await result.text()).toBe(original.toString())
+  expect(packet.body.every(value => value === 0)).toBe(true)
+})

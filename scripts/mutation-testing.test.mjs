@@ -274,3 +274,20 @@ test('lookup native enqueue qualification retains whole source and actual native
   ])
     assert.ok(selected.includes(name))
 })
+
+test('runtime publication qualification covers the complete runtime and its public lifecycle regressions', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['output-knowledge-runtime']
+  assert.deepEqual(target.mutate, ['src/OutputKnowledge.ts'])
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/runtime-publication.property.test.ts'
+  )
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/runtime.test.ts',
+    '<rootDir>/test/runtime-publication.property.test.ts'
+  ])
+  const selected = selectAffectedMutationTargets(buildMutationTargets(REPOSITORY_ROOT), [
+    'packages/application/output-knowledge/src/OutputKnowledge.ts'
+  ])
+  assert.ok(selected.includes('output-knowledge-runtime'))
+})

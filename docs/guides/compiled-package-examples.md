@@ -1256,3 +1256,42 @@ export function maintainRetainedProposals(
   return { worker, lifetime: worker.start(onPass) }
 }
 ```
+
+## Local protocol publication deadlines
+
+A custom protocol worker can expose its earliest exclusive deadline without
+creating a Bitcoin outpoint. The supplied protocol still implements validated,
+durable invalidation; the runtime schedules it and closes stale publication.
+This composition alone does not implement proposal acceptance or UI expiry.
+
+```ts compile
+// example-id: output-runtime-publication-deadline
+import {
+  OutputKnowledge,
+  type OutputKnowledgeWorker,
+  type KnowledgeStore,
+  type AcceptedInput,
+  type DomainProjector
+} from '@bsv/output-knowledge'
+
+interface InstalledProtocol {
+  advance(store: KnowledgeStore, signal: AbortSignal): Promise<void>
+  pendingBytes(store: KnowledgeStore, signal: AbortSignal): Promise<number>
+  // Pure, exact U64 epoch seconds derived from this accepted snapshot.
+  // advance commits the due invalidation before a fresh projection can publish.
+  nextInvalidation(input: AcceptedInput): string | undefined
+}
+
+export function createDeadlineAwareRuntime(
+  store: KnowledgeStore,
+  protocol: InstalledProtocol,
+  projector: DomainProjector
+): OutputKnowledge {
+  const worker: OutputKnowledgeWorker = {
+    advance: (selectedStore, signal) => protocol.advance(selectedStore, signal),
+    pendingBytes: (selectedStore, signal) => protocol.pendingBytes(selectedStore, signal),
+    nextInvalidation: input => protocol.nextInvalidation(input)
+  }
+  return new OutputKnowledge({ store, worker, projector })
+}
+```

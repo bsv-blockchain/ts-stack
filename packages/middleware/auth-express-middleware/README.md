@@ -397,3 +397,8 @@ Current TS Stack changes are licensed under the Open BSV License Version 6; see
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+Guarded responses and replacements own their byte snapshots, including Node
+`Buffer` inputs. Subsequent caller mutation does not change the bytes selected for
+signing or enqueue. Durable guard callbacks still must check current application
+authorization and enqueue synchronously; owned bytes do not supply that authority.

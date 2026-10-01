@@ -21,6 +21,24 @@ currentness and application projection. Receiving data never authorizes a wallet
 action. The implementation branch is still being qualified; this page does not
 announce a registry release or completed BRC-192–199 implementation.
 
+## Publication deadlines
+
+A locally installed `OutputKnowledgeWorker` can optionally provide the pure,
+synchronous `nextInvalidation(input)` method. It receives an owned accepted input
+and returns the earliest exclusive U64 epoch-second deadline for additional
+state, or `undefined`. The runtime combines it with Bitcoin assessment deadlines,
+bounds timer waits and checks expiry again after asynchronous projection work.
+The worker's `advance` method must commit due invalidations durably before a new
+projection becomes current. A stalled worker cannot renew expired state by merely
+projecting it again. Omitting the hook preserves the existing Bitcoin behavior.
+
+This scheduling interface does not implement proposal acceptance or authorize
+wallet actions. Apps must separately retire information already displayed when
+its known deadline passes, including after a sleeping tab wakes. The runtime
+cannot recall an object already delivered to an application. See the [workbench
+guide](../../guides/output-knowledge-workbench.md) and the compiled
+[composition example](../../guides/compiled-package-examples.md).
+
 ## Root advertisement journal
 
 The optional `root-eviction/evidence` entry verifies actual SHIP/SLAP advertisements,

@@ -1466,3 +1466,36 @@ in 17m19s; all 148 initial tests passed. Every campaign is terminal, and all
 10,118 tracked/compiled inputs still match the frozen hashes.
 These local results do not establish complete checkpoint-two integration or
 exact-head hosted qualification.
+
+## Runtime publication deadlines and owned delivery bytes
+
+An optional pure `OutputKnowledgeWorker.nextInvalidation` supplies the earliest
+exclusive U64 epoch-second deadline for additional accepted state. The runtime
+combines it with Bitcoin assessment expiry, uses bounded timers, suppresses late
+asynchronous projection results and requires the worker to commit invalidation
+before publishing current state again. Default workers and persisted/wire formats
+remain unchanged. Invalid clocks and malformed installed deadlines fail closed;
+an unresolved deadline cannot create a tight automatic retry loop. A projection
+read also retains its publication gate across asynchronous storage access, so a
+concurrent context change cannot return the old projection before its new context
+commit finishes. A focused regression fails without this last read gate.
+
+Proposal acceptance, durable proposal validity and clearing already displayed UI
+state remain separate integrations. The generated deadline tests use a controlled
+in-memory context transition to exercise the scheduling contract; they do not
+claim to implement those integrations or prove a physical database restart.
+Thirty-seven runtime/property cases pass, including 300 exact deadline schedules,
+with 100% line/function and 95.55% branch coverage for the whole runtime module.
+The complete-source mutation target is registered with the existing 90%, zero
+uncovered and zero invalid requirements; its execution remains pending.
+
+Proposal/root native delivery and authenticated response replacement now make
+independent Uint8Array copies for Buffer inputs as well. Three synthetic ownership
+regressions fail without their corresponding copy changes. Existing HTTP intake
+already supplies plain owned byte arrays; these tests do not establish a deployed
+incident. The complete middleware suite passes 311 tests, Overlay Express passes
+771, and seven reference-app cases plus the two-host native Chrome demonstration
+pass. Packed middleware consumers include Express 4/5; all 39 documentation
+examples compile against 22 exact tarballs, and all 147 built HTML pages pass
+link validation. Full output-knowledge and complete affected mutation campaigns,
+remaining architectural integrations and exact-head hosted CI are still required.

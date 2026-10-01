@@ -32,6 +32,14 @@ export interface OutputKnowledgeWorker {
   /** One bounded pass over durable pending work, also persisting due invalidations. */
   advance(store: KnowledgeStore, signal: AbortSignal): Promise<void>
   pendingBytes(store: KnowledgeStore, signal: AbortSignal): Promise<number>
+  /**
+   * Optional earliest exclusive invalidation time in U64 epoch seconds for this
+   * accepted input, including non-Bitcoin state such as proposal activity.
+   * This pure local method must not consult mutable remote state or perform I/O.
+   * advance() must durably invalidate due state; this hook only schedules work
+   * and prevents a delayed worker from publishing an expired projection.
+   */
+  nextInvalidation?(input: AcceptedInput): string | undefined
 }
 export interface OutputKnowledgeOptions {
   store: KnowledgeStore
@@ -60,6 +68,7 @@ export class OutputKnowledge {
   private readonly maximumSources: number
   private readonly now: () => number
   private readonly projectorPolicy: string | undefined
+  private readonly nextInvalidation: OutputKnowledgeWorker['nextInvalidation']
   private gate = 0
   private projection: { value: Projection; input: AcceptedInput } | undefined
   private ingest: Promise<void> = Promise.resolve()
@@ -85,6 +94,7 @@ export class OutputKnowledge {
     )
       throw new OutputProtocolError('invalid', 'Invalid source concurrency bound')
     this.now = options.now ?? Date.now
+    this.nextInvalidation = options.worker.nextInvalidation?.bind(options.worker)
     this.projectorPolicy = options.projector
       ? outputHex32(options.projector.policyDigest)
       : undefined
@@ -299,6 +309,7 @@ export class OutputKnowledge {
       this.emit({ kind: 'knowledge', input })
       this.armExpiry(input)
       if (!this.options.projector) continue
+      this.requirePublicationWindow(input)
       const gate = this.gate,
         projector = this.options.projector
       if (projector.policyDigest !== this.projectorPolicy)
@@ -325,6 +336,7 @@ export class OutputKnowledge {
         this.dirty = true
         continue
       }
+      this.requirePublicationWindow(current)
       // No await between this final gate and making the owned result observable.
       this.projection = { value: owned, input }
       this.emit({ kind: 'projection', projection: owned, knowledgeRevision: input.revision })
@@ -339,21 +351,53 @@ export class OutputKnowledge {
       a.revision.accepted === b.revision.accepted
     )
   }
-  private armExpiry(input: AcceptedInput): void {
-    clearTimeout(this.expiry)
+  private clock(): bigint {
+    const now = this.now()
+    if (!Number.isSafeInteger(now) || now < 0)
+      throw new OutputProtocolError('invalid', 'Invalid runtime publication clock')
+    return BigInt(now)
+  }
+  private deadline(input: AcceptedInput): bigint | undefined {
     const deadlines = input.assessments
       .filter(row => row.state !== 'stale' && row.expiresAt !== undefined)
       .map(row => outputU64(row.expiresAt!))
-    if (!deadlines.length) return
-    // U64 deadlines may exceed Number.MAX_SAFE_INTEGER. Compare in bigint;
-    // converting the bounded difference preserves only the comparator sign.
-    deadlines.sort((a, b) => Number(a - b))
-    const earliest = deadlines[0],
-      remaining = earliest * 1000n - BigInt(this.now())
+    const extra = this.nextInvalidation?.(JSON.parse(canonicalOutputJSON(input)) as AcceptedInput)
+    if (extra !== undefined) deadlines.push(outputU64(extra))
+    return deadlines.reduce<bigint | undefined>(
+      (earliest, value) => (earliest === undefined || value < earliest ? value : earliest),
+      undefined
+    )
+  }
+  private expired(input: AcceptedInput): boolean {
+    const deadline = this.deadline(input)
+    return deadline !== undefined && this.clock() >= deadline * 1000n
+  }
+  private requirePublicationWindow(input: AcceptedInput): void {
+    if (!this.expired(input)) return
+    this.projection = undefined
+    throw new OutputProtocolError('expired', 'Due knowledge invalidation has not committed', true)
+  }
+  private armExpiry(input: AcceptedInput): void {
+    clearTimeout(this.expiry)
+    const earliest = this.deadline(input)
+    if (earliest === undefined) return
+    const remaining = earliest * 1000n - this.clock()
+    // A stalled/incorrect worker cannot create a tight automatic retry loop.
+    // Publishing and reading remain closed until a later pass commits invalidation.
+    if (remaining <= 0n) return
     const delay = Math.max(1, Math.min(60000, Number(remaining)))
     this.expiry = setTimeout(() => {
-      if (BigInt(this.now()) >= earliest * 1000n) this.schedule()
-      else this.armExpiry(input)
+      try {
+        if (this.clock() >= earliest * 1000n) {
+          this.gate++
+          this.projection = undefined
+          this.schedule()
+        } else this.armExpiry(input)
+      } catch (error) {
+        this.gate++
+        this.projection = undefined
+        this.error(error)
+      }
     }, delay)
   }
   async flush(): Promise<void> {
@@ -369,9 +413,17 @@ export class OutputKnowledge {
   }
   async readProjection(): Promise<Projection | undefined> {
     this.ready()
-    const saved = this.projection
+    const saved = this.projection,
+      gate = this.gate
     if (!saved) return undefined
     const current = await this.options.store.read(undefined, this.abort.signal)
+    if (this.abort.signal.aborted || gate !== this.gate) return undefined
+    if (this.expired(current) || this.expired(saved.input)) {
+      this.gate++
+      this.projection = undefined
+      this.schedule()
+      return undefined
+    }
     return !this.abort.signal.aborted &&
       this.options.projector?.policyDigest === this.projectorPolicy &&
       this.sameCheckpoint(current, saved.input)

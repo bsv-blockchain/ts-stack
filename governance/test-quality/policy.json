@@ -1262,6 +1262,18 @@
           "Revocation, blocked or advanced durable guards, cancellation and exclusive session expiry withhold data.",
           "Retained sessions restore their original selected contract without silently adopting current discovery."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/runtime-publication.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Application runtime publication deadlines and bounded source lifecycle",
+        "target": "At least 300 generated exclusive-deadline schedules preserve durable revision and publication boundaries",
+        "invariants": [
+          "No projection becomes current at or after its exclusive local deadline.",
+          "Only durable worker invalidation permits publication to resume; a late timer does not renew state.",
+          "Existing Bitcoin assessment expiry and omitted-hook behavior remain unchanged."
+        ]
       }
     ],
     "exclusions": [

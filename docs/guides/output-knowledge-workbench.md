@@ -162,3 +162,13 @@ STEAK/POTATOES release, LCH integration, root-host serving fences and native
 mobile qualification remain separate implementation work. This demonstration
 is evidence for the live lookup and durable client composition, not approval of
 the complete BRC-192–199 package or a production deployment.
+
+## Additional local publication deadlines
+
+Custom workers can opt into the runtime's pure `nextInvalidation(input)` hook
+for non-Bitcoin state. It schedules worker work and closes projection publication
+at an exclusive deadline; the worker still must commit the invalidation. Existing
+Bitcoin assessment behavior is unchanged. See the [runtime contract](../packages/application/output-knowledge.md#publication-deadlines).
+This workbench does not yet claim private proposal projection or UI expiry:
+those require installed proposal acceptance, durable replay meaning and explicit
+retirement of previously displayed activity when a tab resumes.

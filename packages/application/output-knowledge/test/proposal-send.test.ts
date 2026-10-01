@@ -443,3 +443,24 @@ it('preserves an unexpected lock-acquisition error without running callbacks', a
   expect(called).toBe(false)
   expect((await f.store.head()).revision).toBe('1')
 })
+
+it('owns a Buffer response before caller or validator mutation', async () => {
+  const f = await make(),
+    input = Buffer.from(f.bytes),
+    expected = Array.from(f.bytes)
+  let received: number[] | undefined
+  await f.store.enqueueResponse(
+    { reference: f.channel, bytes: input },
+    (_entry, owned) => {
+      input.fill(0)
+      owned.fill(1)
+      return true
+    },
+    owned => {
+      received = Array.from(owned)
+      return undefined
+    }
+  )
+  expect(received).toEqual(expected)
+  expect(input.every(value => value === 0)).toBe(true)
+})
