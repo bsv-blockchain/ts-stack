@@ -184,6 +184,23 @@ The BSV Blockchain Libraries Project aims to structure and maintain a middleware
 
 ## Getting Started
 
+### Package entry points
+
+The SDK3 retirement candidate removes `identity/DIDTokenValidation`; use the
+[identity/DID/VC migration guide](../../docs/guides/identity-did-vc-migration.md)
+for the identity-key DID and original BRC52 envelope replacements.
+
+`@bsv/sdk/umd` is an ESM entry that installs `globalThis.bsv` with the classic
+bundle's export descriptors and re-exports the canonical SDK constructors.
+`@bsv/sdk/umd.ts` supports ESM and CommonJS through the existing wildcard.
+The explicit `./umd` condition remains import-only. The standalone
+`dist/umd/bundle.js` keeps its classic-script interface. These packaging fixes
+preserve its bytes after the intentional DID-token retirement; they do not
+create a second module class graph. Importing the global facade retains all
+SDK exports, so its size is measured separately from selective module imports.
+Cold BasePoint/JacobianPoint leaf entries retain their initialization wrappers
+and original class identity in Node and browser bundlers.
+
 ### Installation
 
 To install the SDK, run:
