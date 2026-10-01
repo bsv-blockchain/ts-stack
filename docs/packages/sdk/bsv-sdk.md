@@ -598,3 +598,15 @@ Explicitly configured substrate `responseTimeout` values remain enforced, and
 response validation and origin checks are unchanged. No API or wire migration
 is needed. Applications affected by the timeout defect can update their bundled
 SDK; a wallet release alone cannot replace code served by a web application.
+
+### Root coordination source candidate
+
+The optional `OutputRootEvictionTransport` executes authenticated submit/status
+requests for one retained BRC-199 operation. It preserves the original signed
+request, capability and independently retained evaluation policy, with finite
+header/body/deadline limits and physical I/O ownership after cancellation.
+`OutputRootEvictionServiceError` exposes only a validated service error. Existing
+lookup transport behavior remains unchanged. See the [root coordination
+guide](../../guides/root-eviction-coordination.md) for durable ownership, authority
+and currentness boundaries; these helpers do not activate root policy or serving
+adapters automatically.

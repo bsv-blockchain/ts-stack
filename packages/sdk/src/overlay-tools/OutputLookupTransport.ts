@@ -1,4 +1,3 @@
-import { AuthFetch } from '../auth/clients/AuthFetch.js'
 import type { WalletInterface } from '../wallet/Wallet.interfaces.js'
 import {
   restoreOutputCapability,
@@ -24,14 +23,8 @@ import { outputPacketDigest, outputU64 } from './OutputProtocol.js'
 import { OutputProtocolError, outputAssert } from './OutputProtocolError.js'
 import { canonicalOutputJSON } from './OutputProtocolJSON.js'
 import * as s from './OutputProtocolSchema.js'
-import {
-  OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES,
-  outputServiceErrorHTTPStatus,
-  parseOutputServiceError,
-  type OutputServiceError
-} from './OutputServiceError.js'
-import { readLookupResponseBytes } from './LookupResponseReader.js'
-import { LookupResourceLimitError } from './LookupResources.js'
+import { parseOutputServiceError, type OutputServiceError } from './OutputServiceError.js'
+import { OutputFiniteHTTP } from './internal/OutputFiniteHTTP.js'
 
 export interface OutputLookupTransportOptions {
   /** Original integrity-protected local capability record, never remote input. */
@@ -58,35 +51,8 @@ export class OutputLookupServiceError extends OutputProtocolError {
   }
 }
 
-const maximumHeaderBytes = 16384
 const maximumRequestBytes = 1048576
 const closedResponse = s.object({ version: s.literal(1), closed: s.literal(true) })
-
-function checkHeaders(headers: Headers): void {
-  let bytes = 0
-  const encoder = new TextEncoder()
-  headers.forEach((value, name) => {
-    bytes += encoder.encode(name).length + encoder.encode(value).length
-    outputAssert(bytes <= maximumHeaderBytes, 'Lookup HTTP header limit', 'limited')
-  })
-}
-
-function checkHTTPResponse(response: Response, url: string): void {
-  outputAssert(
-    !response.redirected && (response.url === '' || response.url === url),
-    'Lookup response changed endpoint',
-    'unauthorized'
-  )
-  checkHeaders(response.headers)
-  const encoding = response.headers.get('content-encoding')
-  outputAssert(
-    encoding === null || encoding.toLowerCase() === 'identity',
-    'Lookup requires identity encoding'
-  )
-  // BRC-104 does not sign Content-Type, and existing authentication middleware
-  // can send a signed JSON body as application/octet-stream. The strict JSON
-  // decoder below checks actual UTF-8 bytes after authentication instead.
-}
 
 /**
  * Bounded BRC-193 HTTP transport for one retained service contract. No discovery,
@@ -102,13 +68,10 @@ function checkHTTPResponse(response: Response, url: string): void {
  */
 export class OutputLookupTransport {
   private readonly selection: OutputCapabilitySelection
-  private readonly wallet?: WalletInterface
-  private readonly fetchClient: typeof fetch
+  private readonly http: OutputFiniteHTTP
   private readonly now: () => string
-  private readonly timeout: number
   private readonly allowLocalHTTP: boolean
   private readonly extensions: readonly string[]
-  private active = false
 
   constructor(options: OutputLookupTransportOptions) {
     outputAssert(
@@ -116,22 +79,33 @@ export class OutputLookupTransport {
       'Lookup transport requires the live lookup profile'
     )
     this.selection = restoreOutputCapability(options.contract, options.trust)
-    this.wallet = options.wallet
     outputAssert(
-      this.selection.profile.authentication === 'none' || this.wallet !== undefined,
+      this.selection.profile.authentication === 'none' || options.wallet !== undefined,
       'Authenticated lookup requires a wallet'
     )
-    const fetchClient = options.fetch ?? globalThis.fetch
-    outputAssert(typeof fetchClient === 'function', 'Lookup requires a fetch implementation')
-    // Fetch is a Web IDL global method. Calling an injected Window.fetch as a
-    // property of this transport supplies the wrong receiver in browsers.
-    this.fetchClient = fetchClient.bind(globalThis)
+    this.http = new OutputFiniteHTTP({
+      selection: this.selection,
+      wallet: options.wallet,
+      fetch: options.fetch,
+      requestTimeoutMs: options.requestTimeoutMs,
+      messages: {
+        fetch: 'Lookup requires a fetch implementation',
+        timeout: 'Invalid lookup request deadline',
+        headers: 'Lookup HTTP header limit',
+        responseEndpoint: 'Lookup response changed endpoint',
+        encoding: 'Lookup requires identity encoding',
+        cancelled: 'Lookup request cancelled',
+        active: 'Lookup request or earlier I/O is still active',
+        deadline: 'Lookup request deadline',
+        contract: 'Lookup response changed selected contract',
+        payment: 'Live lookup cannot request payment',
+        status: 'Lookup error status mismatch',
+        endpoint: 'Lookup transport changed endpoint',
+        body: 'Lookup HTTP body limit'
+      },
+      serviceError: packet => new OutputLookupServiceError(packet)
+    })
     this.now = options.now ?? (() => String(Math.floor(Date.now() / 1000)))
-    this.timeout = options.requestTimeoutMs ?? 30000
-    outputAssert(
-      Number.isSafeInteger(this.timeout) && this.timeout > 0 && this.timeout <= 30000,
-      'Invalid lookup request deadline'
-    )
     this.allowLocalHTTP = options.trust.allowLocalHTTP === true
     this.extensions = [...(options.trust.supportedExtensions ?? [])]
   }
@@ -269,142 +243,6 @@ export class OutputLookupTransport {
       `/overlay/v1/lookup/${operation}`,
       this.allowLocalHTTP
     )
-    outputAssert(!signal?.aborted, 'Lookup request cancelled', 'cancelled')
-    outputAssert(!this.active, 'Lookup request or earlier I/O is still active', 'limited')
-    this.active = true
-    const controller = new AbortController()
-    const stop = () =>
-      controller.abort(new OutputProtocolError('cancelled', 'Lookup request cancelled'))
-    signal?.addEventListener('abort', stop, { once: true })
-    if (signal?.aborted) stop()
-    const timer = setTimeout(
-      () =>
-        controller.abort(new OutputProtocolError('unavailable', 'Lookup request deadline', true)),
-      this.timeout
-    )
-    let rejectAbort: (() => void) | undefined
-    const cancelled = new Promise<never>((_resolve, reject) => {
-      rejectAbort = () => reject(controller.signal.reason)
-      controller.signal.addEventListener('abort', rejectAbort, { once: true })
-      if (controller.signal.aborted) rejectAbort()
-    })
-    const pending = this.request(url, body, maximumBytes, controller.signal)
-    void pending.then(
-      () => {
-        this.active = false
-      },
-      () => {
-        this.active = false
-      }
-    )
-    try {
-      return await Promise.race([pending, cancelled])
-    } finally {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', stop)
-      if (rejectAbort) controller.signal.removeEventListener('abort', rejectAbort)
-      controller.abort()
-    }
-  }
-
-  private async request(
-    url: string,
-    body: string,
-    maximumBytes: number,
-    signal: AbortSignal
-  ): Promise<Uint8Array> {
-    const headers = { 'content-type': 'application/json', ...this.selection.headers }
-    const boundedFetch = this.boundedFetch(url, maximumBytes, signal)
-    const response =
-      this.selection.profile.authentication === 'brc103'
-        ? await new AuthFetch(
-            this.wallet!,
-            undefined,
-            undefined,
-            undefined,
-            {
-              maxResponseBytes: Math.max(maximumBytes, OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES),
-              requestTimeoutMs: this.timeout
-            },
-            boundedFetch
-          ).fetch(url, {
-            method: 'POST',
-            headers,
-            body,
-            allowPayments: false,
-            requireMutualAuth: true,
-            expectedIdentityKey: this.selection.manifest.body.identity
-          })
-        : await boundedFetch(url, { method: 'POST', headers, body })
-    signal.throwIfAborted()
-    for (const [key, value] of Object.entries(this.selection.headers))
-      outputAssert(
-        response.headers.get(key) === value,
-        'Lookup response changed selected contract',
-        'context-changed'
-      )
-    const bytes = await readLookupResponseBytes(response, {
-      maxResponseBytes: response.status === 200 ? maximumBytes : OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES,
-      signal
-    })
-    if (response.status === 200) return bytes
-    outputAssert(response.status !== 402, 'Live lookup cannot request payment', 'unsupported')
-    const packet = parseOutputServiceError(bytes)
-    outputAssert(
-      response.status === outputServiceErrorHTTPStatus(packet.error.code),
-      'Lookup error status mismatch'
-    )
-    throw new OutputLookupServiceError(packet)
-  }
-
-  /** Bound original bytes/headers before authentication or JSON parsing. */
-  private boundedFetch(
-    applicationURL: string,
-    maximumBytes: number,
-    signal: AbortSignal
-  ): typeof fetch {
-    const authURL = new URL(applicationURL).origin + '/.well-known/auth'
-    return async (input, init) => {
-      signal.throwIfAborted()
-      let url: string
-      if (typeof input === 'string') url = input
-      else if (input instanceof URL) url = input.href
-      else url = input.url
-      outputAssert(
-        url === applicationURL || url === authURL,
-        'Lookup transport changed endpoint',
-        'unauthorized'
-      )
-      const headers = new Headers(init?.headers)
-      headers.set('cache-control', 'no-store')
-      checkHeaders(headers)
-      const response = await this.fetchClient(input, {
-        ...init,
-        headers,
-        redirect: 'error',
-        cache: 'no-store',
-        credentials: 'omit',
-        signal
-      })
-      try {
-        signal.throwIfAborted()
-        checkHTTPResponse(response, url)
-        const applicationLimit =
-          response.status === 200 ? maximumBytes : OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES
-        const bytes = await readLookupResponseBytes(response, {
-          maxResponseBytes: url === authURL ? 1048576 : applicationLimit,
-          signal
-        })
-        return new Response(Uint8Array.from(bytes), {
-          status: response.status,
-          headers: response.headers
-        })
-      } catch (error) {
-        void response.body?.cancel().catch(() => undefined)
-        if (error instanceof LookupResourceLimitError)
-          throw new OutputProtocolError('limited', 'Lookup HTTP body limit')
-        throw error
-      }
-    }
+    return await this.http.exchange(url, body, maximumBytes, signal)
   }
 }

@@ -886,6 +886,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-root-eviction-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionTransport.property.test.ts",
+      "risk": "critical",
+      "boundary": "Finite authenticated root coordination client with immutable original operation/selection and physically bounded HTTP exchange",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

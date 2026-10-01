@@ -42,3 +42,4 @@ export { default as TopicBroadcaster } from './SHIPBroadcaster.js'
 // Historically, it was also known by two other names:
 export { default as SHIPBroadcaster } from './SHIPBroadcaster.js'
 export { default as SHIPCast } from './SHIPBroadcaster.js'
+export * from './OutputRootEvictionTransport.js'

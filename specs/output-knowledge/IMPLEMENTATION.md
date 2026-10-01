@@ -876,3 +876,41 @@ and stronger boundary tests. Detected timeouts are retained explicitly; they are
 not presented as assertion kills. Independent database qualification remains
 active, and the SDK client and remaining root integration obligations are still
 unfinished.
+
+## Retained root client and shared finite HTTP exchange
+
+The optional SDK root client owns one original signed request, original retained
+capability and independently selected evaluation-policy digest. Submit retries
+send that exact operation; status derives the original requester/request ID.
+Both authenticate the selected root, prohibit payment, bind the signed response
+to the original request/policy and retain physical capacity through cancellation.
+This private profile requires HTTPS even when general development HTTP support
+is enabled. No discovery, durable persistence, polling or eligibility decision is
+performed by the transport.
+
+The extracted internal finite exchange preserves existing lookup public classes,
+error identities and diagnostics, anonymous lookup behavior, authentication,
+header/body limits, redirect policy and cancellation behavior. Its complete source
+remains in the original authentication mutation target and also participates in
+the independent root-client target. Existing target ranges and tests were retained.
+
+The root-client target passes 93 focused cases, including 39 unit cases, the 53
+existing lookup regressions and 300 generated root result schedules. Its complete
+224-site mutation run passes 93.75%: 203 killed, 14 surviving and seven detected
+timeouts, with zero uncovered or invalid sites. Both production sources exactly
+match the report. Earlier 228-site runs failed at 88.16% and 89.91%; stronger
+inclusive-limit, handshake, encoding and cleanup assertions and removal of the
+unreachable private-profile HTTP branch precede this passing run. The unchanged
+gate remains 90%. A separate real BRC-103/104 and SQLite route integration passes
+42 cases. The prior complete SDK run passes 8,131 tests across 247 suites, packed
+ESM/CommonJS and browser consumers, and 28 compiled examples against 22 tarballs.
+The final source revision is undergoing a fresh full SDK run; the complete shared
+authentication campaign and exact-head hosted checks remain separate obligations.
+
+The independent 305-site database campaign finished at 93.44% (278 killed,
+20 surviving and seven detected timeouts), with an OOM recovery and a later
+SIGABRT worker recovery. During that run, SDK `typecheck` emitted changes to its
+compiled lookup dependencies. The report is retained as diagnostic evidence only,
+not qualification against unchanged dependencies. A clean run against the final
+fixed dependency cohort is still required. No complete root profile or second
+review checkpoint is claimed.

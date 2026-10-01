@@ -3,6 +3,7 @@ import { rootHTTPFixture } from './RootEvictionRoutes.fixture.js'
 import { createRootEvictionRouter } from '../RootEvictionRoutes.js'
 import { rootContractKey } from '../../../../application/output-knowledge/test/root-contract-fixture.js'
 import { policy } from '../../../../application/output-knowledge/test/root-eviction-fixture.js'
+import { rootContractTrust } from '../../../../application/output-knowledge/test/root-contract-fixture.js'
 
 const fixtures: Awaited<ReturnType<typeof rootHTTPFixture>>[] = []
 async function fixture(...args: Parameters<typeof rootHTTPFixture>) {
@@ -12,6 +13,46 @@ async function fixture(...args: Parameters<typeof rootHTTPFixture>) {
 }
 afterEach(async () => {
   for (const f of fixtures.splice(0)) await f.cleanup()
+})
+
+it('uses the bounded SDK client for actual authenticated intake and status with offline original selection', async () => {
+  const f = await fixture()
+  const { OutputRootEvictionTransport, CompletedProtoWallet, OUTPUT_PROFILES } =
+    await import('@bsv/sdk')
+  const { requesterKey } =
+    await import('../../../../application/output-knowledge/test/root-eviction-fixture.js')
+  const selected = f.contracts.retain(f.selection.manifest, f.selection.selector, '150')
+  const calls: string[] = []
+  const transport = new OutputRootEvictionTransport({
+    contract: selected.record,
+    trust: {
+      ...rootContractTrust(),
+      kind: 'coordination',
+      service: 'root-advertisements',
+      profile: OUTPUT_PROFILES.eviction
+    },
+    request: JSON.parse(f.text),
+    policyDigest: policy,
+    wallet: new CompletedProtoWallet(requesterKey),
+    requestTimeoutMs: 3000,
+    // Local test listener stands behind the selected HTTPS origin. Preserve the
+    // real HTTP/authentication exchange without external DNS or network traffic.
+    fetch: async (input, init) => {
+      const url = new URL(String(input))
+      expect(url.origin).toBe('https://root.example.test')
+      calls.push(url.pathname)
+      const response = await fetch(f.origin + url.pathname, init)
+      return new Response(response.body, { status: response.status, headers: response.headers })
+    }
+  })
+  const original = await transport.submit()
+  expect(original.body.outcomes[0].actionStatus).toBe('pending')
+  f.stateHTTP.manifest = undefined
+  expect((await transport.submit()).body).toEqual(original.body)
+  expect((await transport.status()).body).toEqual(original.body)
+  expect(calls).toContain('/.well-known/auth')
+  expect(calls.filter(path => path.endsWith('/request'))).toHaveLength(2)
+  expect(calls.filter(path => path.endsWith('/status'))).toHaveLength(1)
 })
 
 it('authenticates actual raw intake and status, retaining original selection through discovery loss', async () => {

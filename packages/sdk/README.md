@@ -660,3 +660,12 @@ bases. Their new-request clock check is separate from retained-outcome recovery.
 They do not authorize suppression, verify BEEF, persist tombstones or guard
 serving paths. See the [root coordination guide](../../docs/guides/root-eviction-coordination.md).
 Existing SHIP/SLAP, lookup and GASP behavior remains unchanged.
+
+`OutputRootEvictionTransport` composes those contracts with bounded BRC-103/104
+HTTP. Supply an integrity-protected original capability/request record, separately
+retained policy digest, trusted root configuration and wallet. `submit()` retries
+only that signed operation and `status()` derives its original key. Both require
+the expected root identity, prohibit payment and validate results against the
+original selection. Cancellation retains physical capacity until pending I/O
+settles. Durable storage, polling, current server authority and serving decisions
+remain separate; existing lookup transport APIs and defaults are unchanged.

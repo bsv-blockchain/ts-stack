@@ -568,7 +568,8 @@ using `AuthFetch` apply `cache-control` at the underlying fetch boundary, requir
 mutual authentication and the expected root identity, disable payment attempts,
 and validate the signed result against the original signed request and frozen
 policy. The current HTTP fixtures exercise those actual SDK and SQLite boundaries;
-they do not replace a reusable bounded root client or the remaining root adapters.
+the SDK client described below uses the same boundaries. Remaining root adapters
+are still separate obligations.
 
 ## Native Overlay Express configuration
 
@@ -596,3 +597,42 @@ owns the injected journal and any evaluation workers: stop incoming requests,
 settle physical work, then close its database. `server.close()` does not acquire
 ownership of that injected store. This method does not advertise capabilities,
 install a scheduler or retrofit ordinary discovery, caching, live delivery or GASP.
+
+## Retained-operation SDK client
+
+`OutputRootEvictionTransport` in SDK 2.9.0 executes a finite submit or status request
+for one already retained operation. Save the original signed request, selected
+capability record and independently selected evaluation-policy digest in an
+integrity-protected local store before the first send. Supply those records,
+trusted root/base/chain/rule configuration and the authentication wallet to its
+constructor. It revalidates the capability and original requester signature,
+checks their common root and chain, and enforces selected target, lifetime and
+request-byte ceilings before networking.
+
+`submit()` sends only that original signed packet. `status()` derives its key from
+the same original requester and request ID. Both keep the original selected
+capability headers and exact endpoint; neither discovers a replacement manifest.
+Restoration after manifest expiry permits original retries and status, not new
+operations under expired selection. The server independently rechecks current
+requester or auditor permission. A separately authorized auditor wallet may read
+status; it cannot impersonate the original requester when submitting.
+
+Every call requires mutual BRC-103/104 authentication with the selected root and
+disables payment. The shared finite exchange bounds headers and original streamed
+bytes, rejects endpoint changes and non-identity encoding, and uses no-store,
+omitted cookie credentials and rejected redirects. It checks the selected response
+headers and HTTP/error-code agreement before parsing the result. The client then
+verifies the root's packet signature, exact original request and independently
+retained policy digest. `OutputRootEvictionServiceError.packet` holds an owned,
+validated error packet. Neither a valid signature nor a successful status lookup
+establishes present serving eligibility, verified Bitcoin evidence or another
+root's agreement.
+
+One physical request is active per instance. Cancellation or the finite request
+deadline releases the caller, but another operation remains refused until late
+wallet/fetch work actually settles. Applications own durable operation storage,
+retry/backoff decisions and any polling loop; avoid constructing fresh instances
+to evade physical work limits. The client sends no new suppression decision and
+performs no automatic payment, discovery, persistence or local serving change.
+Existing `OutputLookupTransport` signatures, diagnostics, defaults and behavior
+remain intact through the shared finite exchange.

@@ -1086,6 +1086,18 @@
           "A stale or revoked candidate becomes a separately authorized signed control error without original result bytes.",
           "Exact retries retain the original capability and raw byte limits without new discovery or repeated decisions."
         ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Finite authenticated root coordination client with immutable original operation/selection and physically bounded HTTP exchange",
+        "target": "At least 300 generated submit/status, original request, revision and evaluation-policy result schedules",
+        "invariants": [
+          "Every submit and status request remains bound to the original root, endpoint, requester/request ID and retained capability.",
+          "Signed results must bind the original request and independently retained evaluation policy.",
+          "Authentication requires the expected root identity and never permits payment."
+        ]
       }
     ],
     "exclusions": [

@@ -876,3 +876,22 @@ export function configureRootCoordinationHost(
   host.configureRootEviction(options)
 }
 ```
+
+## Resume a retained root coordination operation
+
+Load these options from trusted configuration and integrity-protected local
+operation storage. The original request, capability and evaluation policy must
+already have been saved; the client performs no discovery or persistence.
+
+```typescript compile
+// example-id: root-coordination-client
+import {
+  OutputRootEvictionTransport as RetainedRootClient,
+  type OutputRootEvictionTransportOptions as RetainedRootClientOptions
+} from '@bsv/sdk'
+
+export async function readOriginalRootDecision(options: RetainedRootClientOptions) {
+  const client = new RetainedRootClient(options)
+  return await client.status()
+}
+```

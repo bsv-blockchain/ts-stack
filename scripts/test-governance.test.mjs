@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 87)
+  assert.equal(result.summary.propertySuites, 88)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 87)
+  assert.equal(result.summary.mutationTargets, 88)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -524,6 +524,31 @@ test('root HTTP target covers both full modules and its actual authentication/st
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const registration = mutation.targets.find(value => value.id === 'overlay-root-eviction-http')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('finite HTTP extraction preserves existing authentication ranges and adds independent root coverage', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const shared = 'src/overlay-tools/internal/OutputFiniteHTTP.ts'
+  assert.ok(targets['sdk-auth-http'].mutate.includes('src/overlay-tools/OutputLookupTransport.ts'))
+  assert.ok(targets['sdk-auth-http'].mutate.includes(shared))
+  assert.ok(
+    targets['sdk-auth-http'].runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
+    )
+  )
+  const target = targets['sdk-root-eviction-http']
+  assert.deepEqual(target.mutate, ['src/overlay-tools/OutputRootEvictionTransport.ts', shared])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
+    '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
+  ])
+  const mutation = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = mutation.targets.find(value => value.id === 'sdk-root-eviction-http')
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)
