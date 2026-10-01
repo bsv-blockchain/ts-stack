@@ -1529,3 +1529,23 @@ pass. All 39 examples compile against 22 exact tarballs; 147 generated HTML page
 pass link checks. Seven reference-app cases and the native two-host Chrome
 demonstration pass. These are local component checks; complete mutation and
 exact-head hosted qualification remain required.
+
+Runtime lifecycle follow-up (2026-10-01): the complete second whole-runtime
+campaign on `289764f69` reached 89.10% across 422 mutations (299 killed, 77
+detected timeouts, 46 survivors, zero uncovered/invalid), below the unchanged
+90% gate. Its report and recovered mutated-worker failure remain negative
+evidence. Added assertions exercise completed-operation cancellation cleanup,
+no worker/projector activity on an early timer wake, retryable exclusive expiry,
+and automatic publication recovery after a pending context write fails during
+either worker or projector work. These test observable lifecycle behavior; they
+do not relax the source selection or gate. Seventy-four isolated runtime cases
+and strict draft compilation passed before integration; complete current native
+and mutation qualification follow.
+
+The independent whole SQLite proposal-journal campaign on the same head passed
+97.44% across 352 mutations (343 killed, 9 survivors, zero uncovered/invalid) in
+20m18s. One recovered worker SIGSEGV remains recorded. All 10,119 tracked and
+compiled inputs matched the pre-run hashes after both campaigns terminated.
+This qualifies the retained native proposal send boundary, including owned Buffer
+bytes; it does not establish the still-unimplemented proposal client acceptance,
+new replay profile, private query bridge, or complete checkpoint-two readiness.

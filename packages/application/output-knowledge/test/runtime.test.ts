@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -720,6 +721,7 @@ describe('exclusive projection publication windows', () => {
       await runtime.setContext(context())
       await expect(runtime.flush()).rejects.toMatchObject({
         code: 'expired',
+        retryable: true,
         message: expect.stringMatching(/\S/)
       })
       expect(await runtime.readProjection()).toBeUndefined()
@@ -894,7 +896,8 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       expect((await f.journal.head()).received).toBe('2')
       commit.mockResolvedValue({ status: 'limited', reason: 'synthetic storage bound' })
       await expect(f.runtime.attach(once, request()).done).rejects.toMatchObject({
-        code: 'limited'
+        code: 'limited',
+        message: expect.stringMatching(/\S/)
       })
     } finally {
       commit.mockRestore()
@@ -920,7 +923,8 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       expect((await f.store.read()).context.id).toBe('next-context')
       commit.mockResolvedValue({ status: 'limited', reason: 'synthetic storage bound' })
       await expect(f.runtime.setContext({ ...next, id: 'limited-context' })).rejects.toMatchObject({
-        code: 'limited'
+        code: 'limited',
+        message: expect.stringMatching(/\S/)
       })
       expect((await f.store.read()).context.id).toBe('next-context')
     } finally {
@@ -1043,7 +1047,8 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       await expect(
         f.runtime.attach(once, { ...request(), limits: { ...f.runtime.limits } }).done
       ).rejects.toMatchObject({
-        code: 'limited'
+        code: 'limited',
+        message: expect.stringMatching(/\S/)
       })
       expect((await f.journal.head()).received).toBe('1')
       expect((await observer.next()).value).toMatchObject({ kind: 'error', code: 'limited' })
@@ -1632,4 +1637,157 @@ describe('stable runtime error identities', () => {
     expect(failure(() => f.runtime.events())).toMatchObject(diagnostic('cancelled'))
     await expect(f.runtime.readProjection()).rejects.toMatchObject(diagnostic('cancelled'))
   })
+})
+
+describe('runtime lifecycle release and recovery', () => {
+  it('detaches completed operation signals before later runtime cancellation', async () => {
+    const signals: AbortSignal[] = []
+    const f = await open({
+      ...noWork,
+      async advance(_store, signal) {
+        signals.push(signal)
+      }
+    })
+    try {
+      await f.runtime.flush()
+      expect(signals.length).toBeGreaterThan(0)
+      for (const signal of signals) {
+        expect(signal.aborted).toBe(false)
+        expect(getEventListeners(signal, 'abort')).toHaveLength(0)
+      }
+      await f.runtime.close()
+      // A completed task is detached, while active tasks still receive abort.
+      expect(signals.every(signal => !signal.aborted)).toBe(true)
+    } finally {
+      await f.runtime.close()
+    }
+  })
+
+  it('does not rerun worker or projector on an early timer wake', async () => {
+    jest.useFakeTimers()
+    let clock = 1000,
+      advances = 0,
+      projections = 0
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      now: () => clock,
+      worker: {
+        ...noWork,
+        nextInvalidation: () => '2',
+        async advance() {
+          advances++
+        }
+      },
+      projector: {
+        policyDigest: 'ff'.repeat(32),
+        async project(input) {
+          projections++
+          return projection(input)
+        }
+      }
+    })
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      expect([advances, projections]).toEqual([1, 1])
+      await jest.advanceTimersByTimeAsync(1000)
+      expect([advances, projections]).toEqual([1, 1])
+      expect((await runtime.readProjection())?.contextId).toBe(context().id)
+      clock = 2000
+      await jest.advanceTimersByTimeAsync(1000)
+      expect([advances, projections]).toEqual([2, 1])
+      expect(await runtime.readProjection()).toBeUndefined()
+      // An unresolved exclusive deadline cannot install another immediate timer.
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      await runtime.close()
+      jest.useRealTimers()
+    }
+  })
+
+  it.each(['worker', 'projector'])(
+    'automatically resumes publication after a pending context write fails during %s work',
+    async location => {
+      const entered = deferred(),
+        release = deferred(),
+        committing = deferred(),
+        commitRelease = deferred(),
+        published = deferred()
+      let hold = false
+      const pause = async () => {
+        if (hold) {
+          hold = false
+          entered.resolve()
+          await release.promise
+        }
+      }
+      const f = await open(
+        {
+          ...noWork,
+          async advance() {
+            if (location === 'worker') await pause()
+          }
+        },
+        {
+          policyDigest: 'ff'.repeat(32),
+          async project(input) {
+            if (location === 'projector') await pause()
+            return projection(input)
+          }
+        }
+      )
+      const seen: Projection[] = []
+      const iterator = f.runtime.events(new AbortController().signal)[Symbol.asyncIterator]()
+      const observing = (async () => {
+        for (;;) {
+          const item = await iterator.next()
+          if (item.done) return
+          if (item.value.kind === 'projection') {
+            seen.push(item.value.projection)
+            published.resolve()
+          }
+        }
+      })()
+      const spy = jest.spyOn(f.store, 'commit').mockImplementationOnce(async () => {
+        committing.resolve()
+        await commitRelease.promise
+        throw new OutputProtocolError('unavailable', 'Synthetic context write failure')
+      })
+      let changed: Promise<unknown> | undefined, flushing: Promise<unknown> | undefined
+      try {
+        hold = true
+        flushing = f.runtime.flush().then(
+          () => undefined,
+          error => error
+        )
+        await entered.promise
+        changed = f.runtime.setContext({ ...context(), id: 'uncommitted-context' }).then(
+          () => undefined,
+          error => error
+        )
+        await committing.promise
+        release.resolve()
+        expect(await flushing).toBeUndefined()
+        expect(await f.runtime.readProjection()).toBeUndefined()
+        expect(seen).toEqual([])
+        commitRelease.resolve()
+        expect(await changed).toMatchObject({ code: 'unavailable' })
+        // No new flush or source message: dirty work must resume automatically.
+        await published.promise
+        expect(seen.map(value => value.contextId)).toEqual([context().id])
+        expect((await f.journal.head()).accepted).toBe('1')
+        expect((await f.runtime.readProjection())?.contextId).toBe(context().id)
+      } finally {
+        release.resolve()
+        commitRelease.resolve()
+        await changed
+        await flushing
+        spy.mockRestore()
+        await iterator.return?.()
+        await observing
+        await f.runtime.close()
+      }
+    }
+  )
 })
