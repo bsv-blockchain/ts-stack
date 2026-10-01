@@ -5,9 +5,11 @@ import { runInNewContext } from 'node:vm'
 
 const source = readFileSync(join(__dirname, 'runSnapshotArchiveMysql.cjs'), 'utf8')
 const dockerSource = readFileSync(join(__dirname, 'snapshotArchiveDocker.cjs'), 'utf8')
+const groupsSource = readFileSync(join(__dirname, 'snapshotMysqlFixtureGroups.cjs'), 'utf8')
 const owner = '00000000-0000-4000-8000-000000000001'
 const id = 'a'.repeat(64)
-type Failure = 'none' | 'image' | 'create-reply' | 'child' | 'cleanup-identity' | 'cancel'
+type Failure =
+  'none' | 'image' | 'create-reply' | 'child' | 'late-child' | 'cleanup-identity' | 'cancel' | 'late-cancel'
 interface Call {
   executable: string
   args: string[]
@@ -20,6 +22,8 @@ function fixture(failure: Failure) {
     process: { platform: 'darwin', env: {} },
     require: (name: string) => (name === 'node:assert/strict' ? assert : { existsSync: () => true })
   })
+  const groups = { exports: {} }
+  runInNewContext(groupsSource, { module: groups })
   const docker = helper.exports as { image: string }
   const metadata = {
     Id: id,
@@ -38,7 +42,7 @@ function fixture(failure: Failure) {
     calls.push({ executable, args, options })
     if (executable === '/synthetic/node') {
       childFinished = true
-      if (failure === 'child') throw error
+      if (failure === 'child' || (failure === 'late-child' && args[1] === 'global-schedules')) throw error
       return 'synthetic native proof\n'
     }
     assert.deepEqual(Array.from(args.slice(0, 2)), ['--context', 'desktop-linux'])
@@ -76,7 +80,10 @@ function fixture(failure: Failure) {
     options: Record<string, unknown>,
     callback: (error: unknown, stdout: string) => void
   ) => {
-    if (executable === '/synthetic/node' && failure === 'cancel') {
+    if (
+      executable === '/synthetic/node' &&
+      (failure === 'cancel' || (failure === 'late-cancel' && args[1] === 'global-locks'))
+    ) {
       calls.push({ executable, args, options })
       const signal = options.signal as AbortSignal
       signal.addEventListener('abort', () => callback(error, ''), { once: true })
@@ -97,6 +104,7 @@ function fixture(failure: Failure) {
     'node:crypto': { randomBytes: () => Buffer.alloc(32), randomUUID: () => owner },
     'node:path': { join },
     './snapshotArchiveDocker.cjs': helper.exports,
+    './snapshotMysqlFixtureGroups.cjs': groups.exports,
     '../../out/src/utility/runInSeries.js': {
       runInSeries: async (items: Iterable<unknown>, visit: (value: unknown) => Promise<void>) => {
         for (const item of items) await visit(item)
@@ -139,25 +147,55 @@ test('successful fixture retains bounds and proves exact-owner removal after its
   ]) {
     expect(creation.args).toContain(value)
   }
-  const child = f.calls.find(call => call.executable === '/synthetic/node')!
-  expect(child.options.timeout).toBe(60000)
-  expect(child.options.env).toMatchObject({
-    TS_STACK_SNAPSHOT_CONTAINER_OWNER: owner,
-    TS_STACK_SNAPSHOT_CONTAINER_ID: id
-  })
+  const children = f.calls.filter(call => call.executable === '/synthetic/node')
+  expect(children.map(child => child.args[1])).toEqual([
+    'archive',
+    'profile',
+    'relation',
+    'certificate',
+    'global-crash',
+    'global-locks',
+    'global-schedules',
+    'global-seeks',
+    'global-integration'
+  ])
+  for (const child of children) {
+    expect(child.args[0]).toBe(join(__dirname, 'snapshotArchiveMysql.cjs'))
+    expect(child.options.timeout).toBe(60000)
+    expect(child.options.maxBuffer).toBe(1048576)
+    expect(child.options.env).toMatchObject({
+      TS_STACK_SNAPSHOT_CONTAINER_OWNER: owner,
+      TS_STACK_SNAPSHOT_CONTAINER_ID: id
+    })
+  }
   expect(
     f.calls.filter(call => call.executable !== '/synthetic/node').every(call => call.options.timeout === 15000)
   ).toBe(true)
   expect(f.calls.filter(call => call.args[2] === 'rm')).toHaveLength(1)
 })
 
-test.each(['create-reply', 'child'] as const)(
+test.each(['create-reply', 'child', 'late-child'] as const)(
   'a %s failure removes only the claimed container and preserves the failure',
   async failure => {
     const f = fixture(failure)
     await expect(f.run()).rejects.toBe(f.error)
     expect(f.exists()).toBe(false)
     expect(f.calls.filter(call => call.args[2] === 'rm')).toHaveLength(1)
+    const children = f.calls.filter(call => call.executable === '/synthetic/node')
+    const expected = {
+      'create-reply': [],
+      child: ['archive'],
+      'late-child': [
+        'archive',
+        'profile',
+        'relation',
+        'certificate',
+        'global-crash',
+        'global-locks',
+        'global-schedules'
+      ]
+    }
+    expect(children.map(child => child.args[1])).toEqual(expected[failure])
   }
 )
 
@@ -175,14 +213,22 @@ test('an unexpected cleanup identity refuses removal and reports unproved cleanu
   expect(f.calls.some(call => call.args[2] === 'rm')).toBe(false)
 })
 
-test('SIGTERM cancels owned work, awaits independently bounded cleanup and removes listeners', async () => {
-  const f = fixture('cancel')
-  await expect(f.run()).rejects.toBe(f.error)
-  expect(f.exists()).toBe(false)
-  expect(f.signals.size).toBe(0)
-  const child = f.calls.find(call => call.executable === '/synthetic/node')!
-  expect((child.options.signal as AbortSignal).aborted).toBe(true)
-  const removal = f.calls.find(call => call.args[2] === 'rm')!
-  expect(removal.options.signal).toBeUndefined()
-  expect(removal.options.timeout).toBe(15000)
-})
+test.each(['cancel', 'late-cancel'] as const)(
+  '%s awaits independently bounded cleanup and removes listeners',
+  async failure => {
+    const f = fixture(failure)
+    await expect(f.run()).rejects.toBe(f.error)
+    expect(f.exists()).toBe(false)
+    expect(f.signals.size).toBe(0)
+    const children = f.calls.filter(call => call.executable === '/synthetic/node')
+    expect(children.map(child => child.args[1])).toEqual(
+      failure === 'cancel'
+        ? ['archive']
+        : ['archive', 'profile', 'relation', 'certificate', 'global-crash', 'global-locks']
+    )
+    expect((children.at(-1)!.options.signal as AbortSignal).aborted).toBe(true)
+    const removal = f.calls.find(call => call.args[2] === 'rm')!
+    expect(removal.options.signal).toBeUndefined()
+    expect(removal.options.timeout).toBe(15000)
+  }
+)
