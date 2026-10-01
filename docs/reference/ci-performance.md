@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.3.3'
+version: '1.3.4'
 last_updated: '2026-10-01'
 last_verified: '2026-10-01'
 review_cadence_days: 30
@@ -292,3 +292,37 @@ assurance reports should distinguish configured inputs from effective cases,
 assertion-killed mutants from timeouts, and measured exact-source evidence from
 historical target names. None of these metrics establishes historical escaped-
 defect yield or an optimal percentage threshold by itself.
+
+### SDKAuth execution partitions
+
+The existing `sdk-auth-http` target remains one canonical policy/property
+registration. Its source specifications are grouped by file into core validation
+and Peer, AuthFetch client, and SimplifiedFetchTransport. Every range of a file
+stays in one part; a new canonical helper defaults to core, and unsupported
+wildcard/unknown partition inputs fail. Each part retains the complete original
+Jest test selection, four workers and governed property inputs. The current pinned
+inventory replays to 95 + 137 + 91 = 323 mutants, exactly matching the unpartitioned
+canonical inventory.
+
+A part's score is diagnostic. It still requires complete actual source/config/
+mutant evidence and zero uncovered/invalid outcomes. Only the combined original
+canonical denominator and score can pass the target's required gate. Missing,
+duplicate, overlapping, changed, stale or differently seeded parts fail. Completion
+ordering and part-local mutant IDs cannot change the canonical result. The full
+qualification workflow retains raw reports and independently reconstructs the
+aggregate before it can issue the publication SHA.
+
+PR matrix execution still waits for the prerequisite/analysis policy from #705;
+diagnostics cannot bypass failed final gates. Six matrix jobs remain the global
+parallelism limit, with four Stryker workers in each part. The required PR
+aggregate receives only contents-read permission to check out its verifier; no
+write permission, security setting or branch-protection change is introduced.
+
+Archived SDKAuth jobs have a 19–37 minute tail. Three smaller parallel jobs can
+reduce that tail, but they repeat the complete dry run three times and add
+aggregate installation/replay setup. Queue contention may shift other targets.
+The static 323-mutant equivalence proof is not a measured hosted speedup or a
+billing estimate. Record comparable exact-source elapsed time, total execution,
+dry-run and aggregate overhead before claiming a reduction. Wallet retained
+snapshot partition adoption is independently owned and is not implemented by
+this SDKAuth change.

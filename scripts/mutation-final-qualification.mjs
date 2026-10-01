@@ -16,6 +16,8 @@ const INPUTS = [
   'governance/mutation-testing/stryker.config.mjs',
   'scripts/mutation-testing.mjs',
   'scripts/mutation-final-qualification.mjs',
+  'scripts/mutation-partitions.mjs',
+  'scripts/mutation-partition-evidence.mjs',
   '.github/workflows/mutation-tests.yml',
   'package.json',
   'pnpm-lock.yaml',
@@ -85,7 +87,7 @@ export async function canonicalInventory(directory, sources, mutate) {
   }))
 }
 
-export async function targetEvidence(root, target, targetId) {
+export async function targetEvidence(root, target, targetId, partition = 'whole') {
   const directory = path.resolve(root, target.packageDirectory)
   const sources = targetSources(root, target)
   const config = JSON.parse(
@@ -99,7 +101,11 @@ export async function targetEvidence(root, target, targetId) {
       ],
       {
         cwd: directory,
-        env: { ...process.env, TS_STACK_MUTATION_TARGET: targetId },
+        env: {
+          ...process.env,
+          TS_STACK_MUTATION_TARGET: targetId,
+          TS_STACK_MUTATION_PARTITION: partition
+        },
         encoding: 'utf8'
       }
     )
@@ -316,6 +322,29 @@ function requireExecution(identity, targetId, reportBytes, policy, mode, executi
     )
 }
 
+export function inspectMutationEvidence({
+  identity,
+  targetId,
+  reportBytes,
+  policy,
+  mode,
+  evidence,
+  executionBytes,
+  requireScore = true
+}) {
+  if (!['full', 'diagnostic'].includes(mode)) throw new Error('Unknown campaign mode')
+  if (!identity.targetIds.includes(targetId))
+    throw new Error('Target is outside canonical campaign')
+  const report = JSON.parse(reportBytes)
+  requireExecution(identity, targetId, reportBytes, policy, mode, JSON.parse(executionBytes))
+  requireReportSources(report, evidence.sources)
+  const metrics = reportMetrics(report)
+  requireCompleteInventory(report, evidence)
+  const errors = evaluateMutationReport(targetId, metrics, policy, { requireScore })
+  if (errors.length) throw new Error(errors.join('\n'))
+  return metrics
+}
+
 export function makeTargetReceipt(
   identity,
   targetId,
@@ -325,16 +354,15 @@ export function makeTargetReceipt(
   evidence,
   executionBytes
 ) {
-  if (!['full', 'diagnostic'].includes(mode)) throw new Error('Unknown campaign mode')
-  if (!identity.targetIds.includes(targetId))
-    throw new Error('Target is outside canonical campaign')
-  const report = JSON.parse(reportBytes)
-  requireExecution(identity, targetId, reportBytes, policy, mode, JSON.parse(executionBytes))
-  requireReportSources(report, evidence.sources)
-  const metrics = reportMetrics(report)
-  requireCompleteInventory(report, evidence)
-  const errors = evaluateMutationReport(targetId, metrics, policy)
-  if (errors.length) throw new Error(errors.join('\n'))
+  const metrics = inspectMutationEvidence({
+    identity,
+    targetId,
+    reportBytes,
+    policy,
+    mode,
+    evidence,
+    executionBytes
+  })
   return {
     schemaVersion: 1,
     mode,

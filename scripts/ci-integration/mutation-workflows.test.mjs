@@ -88,12 +88,12 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
     /mode=diagnostic/
   )
   const gate = workflow.jobs['mutation-quality']
-  assert.deepEqual(gate.needs, ['prepare', 'mutation-tests'])
+  assert.deepEqual(gate.needs, ['prepare', 'mutation-tests', 'sdk-auth-aggregate'])
   const script = gate.steps.find(step => step.name === 'Verify the campaign').run
   for (const prepare of ['success', 'failure', 'cancelled', 'skipped', '']) {
     for (const mutation of ['success', 'failure', 'cancelled', 'skipped', '']) {
       const run = spawnSync('/bin/bash', ['-e', '-c', script], {
-        env: { PREPARE_RESULT: prepare, MUTATION_RESULT: mutation },
+        env: { PREPARE_RESULT: prepare, MUTATION_RESULT: mutation, SDK_AUTH_REQUIRED: 'false' },
         encoding: 'utf8'
       })
       assert.equal(run.status === 0, prepare === 'success' && mutation === 'success')
@@ -107,7 +107,7 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
   const capture = workflow.jobs['mutation-tests'].steps.find(
     step => step.name === 'Capture successful exact-source complete target evidence'
   )
-  assert.equal(capture.if, undefined)
+  assert.equal(capture.if, "matrix.partition == 'whole'")
   assert.match(capture.run, /mutation-final-qualification\.mjs capture/)
   assert.match(
     gate.steps.find(step => step.id === 'qualification').run,
@@ -127,4 +127,48 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
   ])
     assert.ok(allowance.includes(target))
   assert.match(deadline, /&& 90 \|\| 45/)
+})
+
+test('SDKAuth partial jobs cannot replace the original canonical global gate or the final raw-part recheck', async () => {
+  const { parse } = await import('yaml')
+  const full = parse(
+    readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
+  )
+  const ci = parse(readFileSync(CI_PATH, 'utf8'))
+  for (const workflow of [ci, full]) {
+    assert.equal(workflow.jobs['mutation-tests'].strategy['max-parallel'], 6)
+    assert.match(workflow.jobs['mutation-tests'].strategy.matrix, /mutation-matrix/)
+    assert.match(
+      workflow.jobs['mutation-tests'].steps.find(step =>
+        step.name?.includes('mutation-quality ratchet')
+      ).run,
+      /--partition/
+    )
+  }
+  const gate = full.jobs['mutation-quality']
+  const script = gate.steps.find(step => step.name === 'Verify the campaign').run
+  for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
+    const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: {
+        PREPARE_RESULT: 'success',
+        MUTATION_RESULT: 'success',
+        SDK_AUTH_REQUIRED: 'true',
+        SDK_AUTH_RESULT: result
+      }
+    })
+    assert.equal(run.status === 0, result === 'success')
+  }
+  const recheck = gate.steps.findIndex(
+    step =>
+      step.name === 'Independently recheck all raw SDKAuth partitions before full qualification'
+  )
+  assert.ok(recheck >= 0 && recheck < gate.steps.findIndex(step => step.id === 'qualification'))
+  assert.match(gate.steps[recheck].run, /mutation-partition-evidence\.mjs recheck/)
+  assert.match(
+    ci.jobs['mutation-quality'].steps.find(
+      step => step.name === 'Require the unchanged global SDKAuth target gate'
+    ).run,
+    /mutation-partition-evidence\.mjs verify/
+  )
+  assert.deepEqual(full.jobs['sdk-auth-aggregate'].needs, ['prepare', 'mutation-tests'])
 })

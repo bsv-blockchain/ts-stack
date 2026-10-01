@@ -356,7 +356,7 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     candidate => candidate.name === 'mutation-quality'
   ).source
   assert.match(job, /MUTATION_TARGETS: \$\{\{ needs\.prepare\.outputs\.mutation-targets \}\}/)
-  const script = /        run: \|\n([\s\S]*)$/
+  const script = /        run: \|\n([\s\S]*?)(?=\n      -|$)/
     .exec(job)[1]
     .split('\n')
     .map(line => line.replace(/^          /, ''))
