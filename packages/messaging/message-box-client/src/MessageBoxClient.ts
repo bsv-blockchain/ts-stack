@@ -1237,12 +1237,13 @@ export class MessageBoxClient {
         throw new Error(`Conflicting Message Box WebSocket identity pin for ${targetOrigin}.`)
       }
       const expectedServerIdentityKey = socketConfiguredIdentity ?? sharedExpectedIdentity
-      this.socket = AuthSocketClient(targetHost, {
+      const socket = AuthSocketClient(targetHost, {
         ...this.socketOptions,
         wallet: this.walletClient,
         originator: this.originator,
         ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
       })
+      this.socket = socket
 
       this.socket.on('connect', () => {
         Logger.log('[MB CLIENT] Connected to WebSocket.')
@@ -1274,6 +1275,13 @@ export class MessageBoxClient {
 
       this.socket.on('disconnect', () => {
         Logger.log('[MB CLIENT] Disconnected from MessageBox server')
+        // Socket.IO reconnects by default. Stop it: this socket's handlers read
+        // this.socket, so once replaced it would authenticate on, and later
+        // clear, its successor.
+        socket.disconnect()
+        // Membership belongs to the socket that joined. Left set, the guard in
+        // joinRoom matches and the next socket never emits a join.
+        this.joinedRooms.clear()
         this.socket = undefined
         this.socketAuthenticated = false
       })
@@ -1839,21 +1847,22 @@ export class MessageBoxClient {
       forbidControls: true
     })
     await this.assertInitialized()
-    if (this.socket == null) {
-      Logger.warn('[MB CLIENT] Attempted to leave a room but WebSocket is not connected.')
-      return
-    }
-
     if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
       throw new Error('[MB CLIENT ERROR] Identity key is not defined')
     }
 
     const roomId = `${this.myIdentityKey}-${canonicalMessageBox}`
+    // Dropped first, and regardless of the socket: a caller that leaves while
+    // disconnected must not be left claiming a room it will never rejoin.
+    this.joinedRooms.delete(roomId)
+
+    if (this.socket == null) {
+      Logger.warn('[MB CLIENT] Attempted to leave a room but WebSocket is not connected.')
+      return
+    }
+
     Logger.log('[MB CLIENT] Leaving WebSocket room')
     this.socket.emit('leaveRoom', roomId)
-
-    // Ensure the room is removed from tracking
-    this.joinedRooms.delete(roomId)
   }
 
   /**
@@ -1876,6 +1885,8 @@ export class MessageBoxClient {
     } else {
       Logger.log('[MB CLIENT] Closing WebSocket connection...')
       this.socket.disconnect()
+      // The socket that held these is going; a new one must join for itself.
+      this.joinedRooms.clear()
       this.socket = undefined
     }
   }

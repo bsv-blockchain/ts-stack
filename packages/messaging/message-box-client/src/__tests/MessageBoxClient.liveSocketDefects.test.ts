@@ -3,18 +3,10 @@ import { WalletClient, AuthFetch } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 
 /**
- * Characterisation tests for three live-socket defects.
- *
- * Each one asserts what the client does **today**, not what it should do, and
- * each is named for the defect it pins. They exist so the behaviour can be
- * demonstrated without a relay, a wallet or a network, and so the fixes have a
- * baseline that visibly inverts.
- *
- * **Every test in this file is expected to fail once the defect it names is
- * fixed.** That failure is the fix landing. Replace each with its positive form
- * at that point rather than deleting it.
- *
- * Verified against @bsv/message-box-client 2.5.5.
+ * Live-socket behaviour that three defects used to break: a room left
+ * unjoinable after a disconnect, and a dropped socket left reconnecting
+ * unattended. Both ran without a relay, a wallet or a network, and both began
+ * as characterisation tests asserting the broken behaviour.
  *
  * Run just this file:
  *   pnpm --filter @bsv/message-box-client exec node --experimental-vm-modules \
@@ -101,35 +93,26 @@ describe('live-socket defects, as the client behaves today', () => {
     mockSocket.connected = true
   })
 
-  /**
-   * D3 — `disconnectWebSocket()` leaves `joinedRooms` populated, so the guard in
-   * `joinRoom` matches on the next listen and no join is ever emitted on the
-   * new socket. Deterministic: no relay restart, no network, no timing.
-   */
-  it('DEFECT: a room is never rejoined after disconnectWebSocket', async () => {
+  /** Membership is per socket, so a new one has to join for itself. */
+  it('rejoins a room after disconnectWebSocket', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
     expect(joinRoomEmits()).toHaveLength(1)
 
     await client.disconnectWebSocket()
-    expect(client.getJoinedRooms().has(ROOM)).toBe(true) // the stale claim
+    expect(client.getJoinedRooms().has(ROOM)).toBe(false)
 
     mockSocket.emit.mockClear()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
 
-    // The socket is live and the client believes it is subscribed. It is not:
-    // nothing was emitted, so the server never put this socket in the room.
-    expect(joinRoomEmits()).toHaveLength(0)
+    expect(joinRoomEmits()).toHaveLength(1)
   })
 
   /**
-   * D2 — the `disconnect` handler drops the reference without disposing the
-   * socket. Socket.IO's reconnection is on by default, so that object keeps
-   * reconnecting while the client ignores it, and its handlers still act on
-   * `this.socket` — meaning the orphan can authenticate on, and later null,
-   * whichever socket replaced it.
+   * Socket.IO reconnects by default, and a dropped socket's handlers still read
+   * `this.socket`, so one left running would authenticate on its replacement.
    */
-  it('DEFECT: a dropped socket is orphaned rather than disposed', async () => {
+  it('disposes a dropped socket instead of leaving it reconnecting', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
 
@@ -143,21 +126,15 @@ describe('live-socket defects, as the client behaves today', () => {
     fire('disconnect')
 
     // The client has let go of it, but never told it to stop.
-    // The reference is dropped...
     expect(client.testSocket).toBeUndefined()
-    // ...but nothing ever told the socket to stop. Socket.IO's reconnection is
-    // on by default, so this object keeps reconnecting unattended, and its
-    // handlers still act on `this.socket` — whichever socket that now is.
-    expect(mockSocket.disconnect).not.toHaveBeenCalled()
+    expect(mockSocket.disconnect).toHaveBeenCalled()
+    expect(client.getJoinedRooms().size).toBe(0)
   })
 
   /**
-   * Not covered here: `leaveRoom` returns at its no-socket guard before
-   * reaching `joinedRooms.delete`, so the one public call that could clear a
-   * stale entry is a no-op in exactly the state that produces one. Reaching it
-   * needs `assertInitialized` to pass after a disconnect, and stubbing that far
-   * drags in a server-identity validation this harness does not model. The
-   * defect is plain in the source: the guard and the delete in `leaveRoom`,
-   * with the delete below the early return.
+   * Not covered here: `leaveRoom` now drops the room before its no-socket
+   * guard, so leaving while disconnected clears the claim. Reaching it needs
+   * `assertInitialized` to pass after a disconnect, and stubbing that far pulls
+   * in a server-identity check this harness does not model.
    */
 })
