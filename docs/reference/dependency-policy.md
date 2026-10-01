@@ -200,15 +200,19 @@ compatibility checks, not a throughput or memory benchmark. No public npm
 version or consumer migration changes; protected Linux image and exact-head
 analysis gates still qualify the eventual service artifacts before promotion.
 
-The root workspace carries six narrow audited dependency overrides:
+The root workspace carries seven narrow audited dependency overrides:
 
-- Jest 30.4.2 still constrains parts of its reporting and coverage graph to
+- Jest 30.4.2 and Stryker still constrain parts of their reporting and coverage graphs to
   minimatch releases with older `brace-expansion` ranges. The follow-up
   advisories GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p and
   GHSA-q2hr-2g5m-vwhr require `brace-expansion` 5.0.12, so the workspace
   and existing standalone substitutions select 5.0.12 until every supported
   path resolves it natively. The release preserves the existing module exports,
   types and Node engine range.
+- `socket.io` in `@bsv/authsocket` still admits `engine.io` releases below
+  6.6.10. GHSA-2gc4-cqfq-p2gv is a protocol-revision mismatch that can crash
+  the Node process during a transport upgrade, so the workspace selects
+  6.6.10, the first patched release, without changing the public Engine.IO API.
 - Express/body-parser, Superagent, and Stryker's `typed-rest-client@2.3.1` can
   retain vulnerable `qs` releases. A version-bounded substitution selects
   6.16.0, the first release that also fixes the bracket/comma array-limit bypass
