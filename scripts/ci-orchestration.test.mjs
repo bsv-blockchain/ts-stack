@@ -27,7 +27,7 @@ function workflowJobBlocks(workflow) {
 
 function assertWalletMutationTimeout(job, defaultMinutes) {
   const targets =
-    '["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader"]'
+    '["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'
   const expected = `    timeout-minutes: \${{ contains(fromJSON('${targets}'), matrix.target) && 90 || ${defaultMinutes} }}`
   assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
 }
