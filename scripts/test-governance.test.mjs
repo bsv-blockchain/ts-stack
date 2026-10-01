@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 89)
+  assert.equal(result.summary.propertySuites, 90)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 89)
+  assert.equal(result.summary.mutationTargets, 90)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -565,6 +565,34 @@ test('root scheduling retains a complete source target and generated lifecycle s
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const registration = policy.targets.find(value => value.id === 'root-eviction-scheduler')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+})
+
+test('root local rules retain complete new sources and every prior root storage target', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const target = targets['root-eviction-local-rules']
+  assert.deepEqual(target.mutate, [
+    'src/root-eviction/SQLiteRootEvictionLocalRules.ts',
+    'src/root-eviction/RootEvictionLocalRuleSchema.ts',
+    'src/root-eviction/RootEvictionLocalRules.ts'
+  ])
+  assert.ok(target.additionalInputs.includes('test/fixtures/root-local-rules-worker.mjs'))
+  assert.ok(
+    targets['root-eviction-storage'].mutate.includes(
+      'src/root-eviction/SQLiteRootEvictionDatabase.ts'
+    )
+  )
+  assert.ok(
+    targets['root-eviction-records'].mutate.includes(
+      'src/root-eviction/RootEvictionServingRecords.ts'
+    )
+  )
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = policy.targets.find(value => value.id === 'root-eviction-local-rules')
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)

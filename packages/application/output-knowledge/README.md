@@ -983,3 +983,13 @@ versioned policy and current guarded authority. Separate expiry and evaluation s
 preserve expiry progress while physical evidence work is stalled. Await `stop()`
 before closing caller-owned storage; logical cancellation alone does not drain a
 non-cooperating dependency. See the root coordination guide for bounds and lifecycle.
+
+`SQLiteRootEvictionLocalRules` in the Node root entry adds opt-in format3 local-rule
+history and complete assessment coverage, independently from peer suppression
+requests. Every active rule reserves lift capacity. Unknown rule results remain
+unresolved, and lifting a rule cannot grant membership until complete reassessment
+and projection. Formats1/2 retain their behavior; use the explicit format2-to3
+`upgradeLocalRules` migration and exact sealed configuration. Trusted operator
+attribution, installed matchers and verified currentness remain application ports.
+See the [root coordination guide](../../../docs/guides/root-eviction-coordination.md)
+for migration, bounds, retries and serving obligations.

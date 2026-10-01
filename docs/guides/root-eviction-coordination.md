@@ -691,3 +691,81 @@ scheduler/service work, and only then close caller-owned storage. The scheduler 
 closes injected databases. A restart uses a new scheduler and resumes durable work.
 This component does not add broader local rules, projection acknowledgements or
 serving/cache/live/GASP fences; those remain required integrations for the full profile.
+
+## Broader local rules and complete coverage
+
+`SQLiteRootEvictionLocalRules` is a separate trusted-local administration and
+assessment companion in `root-eviction/sqlite`. It does not create peer requests,
+expose administration over the coordination routes, download a matcher, or define
+a universal domain/identity ban. The root installs its own versioned evaluator and
+independently authorizes the recorded operator. A descriptor contains that local
+rule identifier, canonical JSON parameters, a supporting-material digest and the
+operator identity. The descriptor and its original policy digest are immutable;
+changing the rule requires a new installation and an explicit lift of the old one.
+
+Opt in with both `coordination` and `localRules` in the sealed configuration. New
+files then use `root-eviction/3`; ordinary configurations retain formats1/2 exactly.
+For an existing format2 file, preserve a consistent backup, stop incompatible
+workers, and call `SQLiteRootEvictionStore.upgradeLocalRules` with the same root,
+chain, capacities and coordination configuration plus explicit local-rule limits.
+The transaction preserves all requests, contracts, decisions and assessment history,
+creates the new rule records, advances the shared revision, invalidates existing
+eligibility and queues withdrawals. An exact completed upgrade is retryable. Old
+open connections fail their next gate after the configuration seal changes. An
+ordinary `open` never upgrades, recreates missing tables, or silently fills missing
+history. Upgrade a format1 file to format2 explicitly before choosing format3.
+
+Installation and lifting each use permanent operation IDs, semantic fences and
+current checked authorization. Retries return their original operation outcome;
+altered meaning under the same ID fails. Rules receive durable root-issued blocking
+decision IDs, independent from BRC-199 peer decisions. The reference implementation
+uses SHA-256 of UTF-8 `bsv-root-local-rule/v1`, one zero byte and canonical JSON
+containing `action`, `root`, `chain`, `operationId` and committed decimal `revision`.
+`action` is `install` or `lift`. This is a local record convention, not a new peer
+signature or a change to the BRC-199 decision formula. A lift records the exact
+original rule it affects; a later independent attempt to lift an already inactive
+rule records a no-op. Neither operation changes peer-basis history.
+
+A rule-set epoch is distinct from the common root revision. Each actual install or
+lift advances both and atomically invalidates every retained serving view with a
+withdrawal intent. The complete `active()` result carries all active descriptors in
+decision-ID order. The trusted evaluator verifies actual advertisement facts and
+independent currentness/topic rules outside the gate, then submits exactly one
+`matches` result for every active rule together with the observed revision and
+epoch. `null` means an unknown implementation, unsupported parameters or unavailable
+facts. It must not be substituted with `false`. No rule may be omitted. These are
+trusted evaluation ports, never fields copied from a peer's request.
+
+`assess` owns the input, rechecks access, policy, context, revision, epoch and the
+complete active inventory, and atomically records its evidence digest, rule matches,
+coverage and projection intent. Known matching rules appear alongside peer bases in
+the sorted blocker list, each retaining its original policy digest. Any unknown
+rule prevents eligibility. A positive chain/currentness/topic result, complete
+known rule coverage, no active blocker and a durable include acknowledgement are
+all required before serving. Existing lower-level `assess` and peer evaluation calls
+remain available in format3 but cannot grant that richer eligibility: they invalidate
+coverage and require the companion's complete assessment. Replaying an old completed
+assessment returns its original revision without refreshing coverage or membership.
+
+Lifting one rule leaves every other matching rule and peer suppression effective.
+When the last blocker disappears, the output remains unresolved until a fresh
+complete assessment and projection. A new outpoint is separately assessed against
+all active rules; an exact peer tombstone never silently becomes a broader ban.
+Nothing here erases Bitcoin history, a verified spend edge or another root's policy.
+Changing the ordinary root policy also invalidates existing eligibility.
+
+Local rule history defaults to 4,096 immutable records and 64 MiB, with at most
+16 KiB per descriptor. Limits may be narrowed explicitly and remain sealed. The
+shared `capacity.assessments` bounds permanent install, lift and assessment operation
+fences. Each active rule reserves one future lift record and enough epoch/revision
+space for its lift and withdrawal acknowledgements; new assessments cannot consume
+that reservation. Lifted history is not reclaimed or reused. Capacity exhaustion is
+an explicit refusal requiring operator planning, never silent truncation. The sum
+of all active local rules and the largest peer-basis count on any target must fit
+`capacity.blockers`, even before knowing which rules match. New rules or peer bases
+are rejected atomically if they would violate that result-budget reservation.
+
+The companion provides durable storage and complete-coverage fencing. The installed
+rule evaluator, verified advertisement/currentness inputs, host lifecycle and every
+serving/admission/cache/live/GASP adapter still require explicit composition. It
+must not be used alone to advertise a complete BRC-199 root service.

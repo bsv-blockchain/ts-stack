@@ -973,3 +973,51 @@ finished in 30m28s; traversal finished in 7m21s. These are local qualification
 results, not controlled performance claims or exact-head hosted results. The
 previous unpartitioned hosted timeout remains recorded; no source, test or gate
 was excluded to obtain the separate results.
+
+## Explicit local-rule history and complete serving assessments
+
+Opt-in SQLite format3 now retains immutable, attributable local rule descriptors,
+complete active-rule inventory, a monotonic rule epoch and per-target match
+coverage. Install and lift operations share the journal's cross-process gate and
+invalidate serving eligibility and projections atomically. Independent peer
+suppression bases remain separate. A trusted local evaluator must assess every
+active rule against the target; unknown rules or unavailable facts remain
+unresolved. Legacy assessments cannot grant eligibility in format3. Rule lifting
+never establishes currentness, restores an unrelated peer basis or skips a fresh
+complete assessment and projection acknowledgement.
+
+The explicit format2-to-format3 migration preserves retained request/action
+history, fences connections using the old configuration seal and invalidates
+previous serving assessments. Default format1 and format2 configurations remain
+unchanged. Rule history and descriptor bytes are bounded. Capacity accounting
+reserves future lift history, epochs and revisions, including withdrawal
+acknowledgements, so ordinary assessment traffic cannot consume the capacity
+needed to retire an active rule. No peer-accessible administration or implicit
+matcher installation is introduced.
+
+The production revision passes the full output-runtime suite: 1,278 tests across
+97 suites. Root health, lint, formatting and type checks, packed consumers,
+actual browser/IndexedDB restart and CSP checks, and 30 compiled examples against
+22 tarballs pass. Documentation compilation initially found duplicate imported
+type names in the combined example; distinct aliases corrected that failure.
+The repaired examples, seven documentation tests, 140 source-page validations
+and the 145-page build pass. Actual test governance passes with 90 properties,
+90 mutation targets and every prior source/test union retained.
+
+The first complete local-rule mutation run failed the unchanged 90% gate at
+76.45% (250 killed, 77 surviving). Eight additional tests cover closed shapes,
+strict inventory bounds, persisted accounting, complete retry effects, canonical
+local decision identity, missing retained installation records and closure. The
+production source was unchanged. All 28 focused unit tests plus two actual
+process-termination tests and 300 generated schedules pass. The full 327-site
+rerun passes 92.66% (303 killed, 24 surviving), with zero uncovered or invalid
+sites and no detected timeouts. Both executable sources exactly match the saved
+report. The 1,803-file compiled SDK dependency inventory is unchanged. The full
+1,278-test run preceded the eight test-only additions; it is not presented as a
+later full-suite run.
+
+Codec, serving-record, journal and clean database qualification remain separate
+obligations. Installed advertisement/currentness evaluation, coherent host context
+transitions, all serving/admission/GASP paths and exact-head hosted CI are still
+unfinished. This component result does not establish complete root-profile or
+second-checkpoint readiness.

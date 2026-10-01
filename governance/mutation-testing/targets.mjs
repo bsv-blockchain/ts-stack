@@ -86,6 +86,8 @@ function rootEvictionTarget(property, files) {
       'src/internal/BoundedOutputWork.ts',
       'test/root-eviction-service-fixture.ts',
       'test/root-eviction-scheduler-fixture.ts',
+      'test/root-eviction-local-rules-fixture.ts',
+      'test/fixtures/root-local-rules-worker.mjs',
       'test/root-eviction-fixture.ts',
       'test/fixtures/root-eviction-worker.mjs',
       'test/fixtures/root-commit-lock-worker.mjs',
@@ -456,6 +458,17 @@ export function buildMutationTargets(repositoryRoot) {
           buildCommand: 'pnpm build'
         }
       )
+    },
+    'root-eviction-local-rules': {
+      ...rootEvictionTarget('root-eviction-local-rules.property.test.ts', [
+        'SQLiteRootEvictionLocalRules',
+        'RootEvictionLocalRuleSchema',
+        'RootEvictionLocalRules'
+      ]),
+      ...jestTarget('jest.config.js', ['<rootDir>/test/root-eviction-local-rules*.test.ts'], {
+        esm: true,
+        buildCommand: 'pnpm build'
+      })
     },
     'root-eviction-scheduler': {
       ...rootEvictionTarget('root-eviction-scheduler.property.test.ts', ['RootEvictionScheduler']),

@@ -14,6 +14,7 @@ import type {
   RootEvictionServing,
   RootEvictionServingTarget
 } from './RootEvictionStorage.js'
+import { rootLocalRuleReservation } from './RootEvictionLocalRuleSchema.js'
 import type { SQLiteRootEvictionDatabase } from './SQLiteRootEvictionDatabase.js'
 
 /** Internal serving records; attribution and evidence policy are evaluated by the installed service. */
@@ -23,8 +24,12 @@ export class RootEvictionServingRecords {
   private blockers(key: string): RootEvictionServing['blockers'] {
     return this.database
       .all(
-        'SELECT decision,policy FROM root_bases WHERE target_key=? AND lifted_by IS NULL ORDER BY decision LIMIT ?',
-        key,
+        this.database.configuration.localRules
+          ? `SELECT decision,policy FROM root_bases WHERE target_key=? AND lifted_by IS NULL
+          UNION ALL SELECT r.decision,r.policy FROM root_rule_bindings b JOIN root_local_rules r ON r.decision=b.decision
+          WHERE b.target_key=? AND r.lifted_by IS NULL ORDER BY decision LIMIT ?`
+          : 'SELECT decision,policy FROM root_bases WHERE target_key=? AND lifted_by IS NULL ORDER BY decision LIMIT ?',
+        ...(this.database.configuration.localRules ? [key, key] : [key]),
         this.database.configuration.capacity.blockers + 1
       )
       .map(row => ({
@@ -67,14 +72,30 @@ export class RootEvictionServingRecords {
     const row = this.view(target, requireAdvertisement)
     let state: RootEvictionServing['state'] = 'unresolved'
     if (blockers.length > 0) state = 'suppressed'
-    else if (row?.eligible === 1 && row.ready === 1) state = 'eligible'
+    else if (row?.eligible === 1 && row.ready === 1 && this.covered(key)) state = 'eligible'
     return {
       state,
       revision: row ? rootDecimal(row.revision) : '0',
       blockers
     }
   }
-  stage(target: RootEvictionServingTarget, eligible: boolean, revision: string): void {
+  private covered(key: string): boolean {
+    if (!this.database.configuration.localRules) return true
+    const coverage = this.database.get(
+      'SELECT epoch FROM root_rule_coverage WHERE target_key=?',
+      key
+    )
+    const epoch = rootDecimal(
+      this.database.get('SELECT epoch FROM root_rule_meta WHERE id=1')?.epoch
+    )
+    return coverage !== undefined && rootDecimal(coverage.epoch) === epoch
+  }
+  stage(
+    target: RootEvictionServingTarget,
+    eligible: boolean,
+    revision: string,
+    ruleEpoch?: string
+  ): void {
     const previous = this.view(target)
     outputAssert(
       previous ||
@@ -84,6 +105,19 @@ export class RootEvictionServingRecords {
       'limited'
     )
     const key = rootTargetKey(target)
+    if (this.database.configuration.localRules) {
+      if (ruleEpoch === undefined) {
+        eligible = false
+        this.database.run('DELETE FROM root_rule_coverage WHERE target_key=?', key)
+      } else {
+        outputAssert(
+          rootPosition(ruleEpoch) ===
+            this.database.get('SELECT epoch FROM root_rule_meta WHERE id=1')?.epoch,
+          'Root rule coverage epoch changed',
+          'context-changed'
+        )
+      }
+    }
     const membership = eligible && this.blockers(key).length === 0 ? 'include' : 'withdraw'
     this.database.run(
       `INSERT INTO root_views VALUES (?,?,?,?,?,0)
@@ -94,6 +128,12 @@ export class RootEvictionServingRecords {
       rootPosition(revision),
       eligible ? 1 : 0
     )
+    if (this.database.configuration.localRules && ruleEpoch !== undefined)
+      this.database.run(
+        'INSERT INTO root_rule_coverage VALUES (?,?) ON CONFLICT(target_key) DO UPDATE SET epoch=excluded.epoch',
+        key,
+        rootPosition(ruleEpoch)
+      )
     this.database.run(
       'INSERT INTO root_projections VALUES (?,?,?) ON CONFLICT(target_key) DO UPDATE SET revision=excluded.revision,membership=excluded.membership',
       key,
@@ -144,6 +184,16 @@ export class RootEvictionServingRecords {
       'Root active-decision capacity is full',
       'limited'
     )
+    if (this.database.configuration.localRules)
+      rootLocalRuleReservation(
+        this.database,
+        Number(
+          this.database.get(
+            'SELECT count(*) AS n FROM root_bases WHERE target_key=? AND lifted_by IS NULL',
+            key
+          )!.n
+        ) + 1
+      )
     const decision = this.decision(record, index, revision)
     this.database.run(
       'INSERT INTO root_bases VALUES (?,?,?,?,?,?,?,NULL)',
@@ -229,7 +279,9 @@ export class RootEvictionServingRecords {
     if (row?.projection_revision !== revision) return false
     const key = rootTargetKey(target)
     const membership =
-      row.eligible === 1 && this.blockers(key).length === 0 ? 'include' : 'withdraw'
+      row.eligible === 1 && this.covered(key) && this.blockers(key).length === 0
+        ? 'include'
+        : 'withdraw'
     outputAssert(
       intent.membership === membership,
       'Root projection acknowledgement changed its membership',

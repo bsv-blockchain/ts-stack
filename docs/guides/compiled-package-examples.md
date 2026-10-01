@@ -925,3 +925,60 @@ export async function runRootRecoveryUntilShutdown(
   }
 }
 ```
+
+## Assess all installed root rules
+
+Open the already-created format3 journal with its exact configuration. The caller
+supplies independently verified currentness and a trusted local evaluator. An
+unavailable or unrecognized rule returns `null`. The companion checks the complete
+inventory and revision at commit; the serving adapter separately completes the
+returned durable projection intents before including the output.
+
+```typescript compile
+// example-id: root-local-rule-coverage
+import { SQLiteRootEvictionLocalRules } from '@bsv/output-knowledge/root-eviction/sqlite'
+import type {
+  RootEvictionConfiguration as LocalRulesConfiguration,
+  RootEvictionCommitGuard as LocalRulesCommitGuard,
+  RootEvictionServingTarget,
+  RootEvictionLocalRule
+} from '@bsv/output-knowledge/root-eviction'
+
+export async function assessInstalledRootRules(
+  path: string,
+  configuration: LocalRulesConfiguration,
+  guard: LocalRulesCommitGuard,
+  operationId: string,
+  target: RootEvictionServingTarget,
+  eligible: boolean,
+  evidenceDigest: string,
+  matchVerifiedAdvertisement: (rule: RootEvictionLocalRule) => Promise<boolean | null>
+) {
+  const rules = SQLiteRootEvictionLocalRules.open(path, configuration)
+  try {
+    const observed = await rules.active(guard)
+    const matches = []
+    for (const record of observed.value.rules) {
+      matches.push({
+        decisionId: record.decisionId,
+        matches: await matchVerifiedAdvertisement(record.rule)
+      })
+    }
+    return await rules.assess(
+      {
+        operationId,
+        expectedRevision: observed.head.revision,
+        ruleEpoch: observed.value.epoch,
+        target,
+        eligible,
+        evidenceDigest,
+        reasonCode: 'installed-advertisement-policy',
+        matches
+      },
+      guard
+    )
+  } finally {
+    await rules.close()
+  }
+}
+```

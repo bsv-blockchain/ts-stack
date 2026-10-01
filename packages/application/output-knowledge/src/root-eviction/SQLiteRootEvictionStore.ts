@@ -66,9 +66,16 @@ export class SQLiteRootEvictionStore
     path: string,
     configuration: RootEvictionConfiguration,
     policy?: string,
-    upgradeCoordination = false
+    upgradeCoordination = false,
+    upgradeLocalRules = false
   ) {
-    this.database = new SQLiteRootEvictionDatabase(path, configuration, policy, upgradeCoordination)
+    this.database = new SQLiteRootEvictionDatabase(
+      path,
+      configuration,
+      policy,
+      upgradeCoordination,
+      upgradeLocalRules
+    )
     this.requests = new RootEvictionRequests(this.database)
     this.views = new RootEvictionServingRecords(this.database)
     this.contracts = new RootEvictionContractRecords(this.database, this.requests)
@@ -89,6 +96,13 @@ export class SQLiteRootEvictionStore
     configuration: RootEvictionConfiguration
   ): SQLiteRootEvictionStore {
     return new SQLiteRootEvictionStore(path, configuration, undefined, true)
+  }
+  /** Existing format2 only, or an exact retry of the completed format3 upgrade. */
+  static upgradeLocalRules(
+    path: string,
+    configuration: RootEvictionConfiguration
+  ): SQLiteRootEvictionStore {
+    return new SQLiteRootEvictionStore(path, configuration, undefined, false, true)
   }
   private work<T>(body: () => T): Promise<T> {
     return synchronousPromise(() => this.database.transaction(body))
@@ -452,3 +466,5 @@ export class SQLiteRootEvictionStore
 }
 
 export { SQLiteRootEvictionMaintenance } from './SQLiteRootEvictionMaintenance.js'
+
+export { SQLiteRootEvictionLocalRules } from './SQLiteRootEvictionLocalRules.js'

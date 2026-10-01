@@ -20,6 +20,8 @@ export interface RootEvictionConfiguration {
   capacity?: Partial<RootEvictionCapacity>
   /** Opt in to sealed original-contract storage; ordinary format1 remains unchanged. */
   coordination?: { contractBytes?: number }
+  /** Explicit format3 local-rule history and coverage; requires coordination. */
+  localRules?: { rules?: number; bytes?: number }
 }
 export interface RootEvictionHead {
   revision: string

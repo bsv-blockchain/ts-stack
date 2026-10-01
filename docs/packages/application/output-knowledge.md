@@ -235,3 +235,13 @@ authority compose separately from evidence verification and serving projections.
 Await its physical shutdown drain before closing injected storage. The
 [root coordination guide](../../guides/root-eviction-coordination.md) describes
 bounds, report handling, fair scans and restart behavior.
+
+`SQLiteRootEvictionLocalRules` in `root-eviction/sqlite` adds an opt-in format3
+companion for immutable operator-rule records and complete current-epoch coverage.
+It reserves future lift history and keeps local rules separate from peer bases.
+Unknown rules cannot grant eligibility; a lift requires fresh assessment and
+projection before membership. Existing formats1/2 remain unchanged. The explicit
+`upgradeLocalRules` migration preserves history and fences older connections;
+ordinary open never repairs missing history. See the
+[root coordination guide](../../guides/root-eviction-coordination.md) and its
+compiled complete-inventory example for the trusted evaluator boundary.

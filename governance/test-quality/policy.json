@@ -1110,6 +1110,18 @@
           "Cancellation and changed access, context, policy or deadline cannot apply a stale decision.",
           "Physical work remains owned until settlement, while independent expiry and bounded wrapping scans continue."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-local-rules.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable root-local rule administration, complete coverage fences and independent peer blockers",
+        "target": "At least 300 generated local-rule, peer-basis, currentness, projection, lifting and restart schedules",
+        "invariants": [
+          "Operator rules have root-issued durable records independent from peer request authority.",
+          "Eligibility requires complete current-epoch coverage, verified currentness and completed projection.",
+          "Lifting one basis cannot erase other blockers or replay an old assessment into current eligibility."
+        ]
       }
     ],
     "exclusions": [

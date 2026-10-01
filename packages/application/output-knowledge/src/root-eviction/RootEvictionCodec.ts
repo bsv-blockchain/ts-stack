@@ -39,11 +39,13 @@ export function rootConfiguration(input: RootEvictionConfiguration): {
   chain: RootEvictionConfiguration['chain']
   capacity: Readonly<RootEvictionCapacity>
   coordination?: Readonly<{ contractBytes: number }>
+  localRules?: Readonly<{ rules: number; bytes: number }>
   seal: string
 } {
   outputAssert(
-    Object.keys(input).every(key => ['root', 'chain', 'capacity', 'coordination'].includes(key)) &&
-      Object.keys(input.chain).length === 2,
+    Object.keys(input).every(key =>
+      ['root', 'chain', 'capacity', 'coordination', 'localRules'].includes(key)
+    ) && Object.keys(input.chain).length === 2,
     'Invalid root storage configuration'
   )
   const root = outputIdentity(input.root)
@@ -72,14 +74,35 @@ export function rootConfiguration(input: RootEvictionConfiguration): {
     )
     coordination = Object.freeze({ contractBytes })
   }
+  let localRules: Readonly<{ rules: number; bytes: number }> | undefined
+  if (input.localRules !== undefined) {
+    const rules = input.localRules.rules ?? 4096
+    const bytes = input.localRules.bytes ?? 67108864
+    outputAssert(
+      coordination !== undefined &&
+        Object.keys(input.localRules).every(key => key === 'rules' || key === 'bytes') &&
+        Number.isSafeInteger(rules) &&
+        rules > 0 &&
+        rules <= 4096 &&
+        Number.isSafeInteger(bytes) &&
+        bytes > 0 &&
+        bytes <= 67108864,
+      'Invalid root local-rule capacity or missing coordination'
+    )
+    localRules = Object.freeze({ rules, bytes })
+  }
   const original = { format: 'root-eviction/1', root, chain, capacity }
+  const coordinated = coordination
+    ? { ...original, format: 'root-eviction/2', coordination }
+    : original
   return {
     root,
     chain,
     capacity: Object.freeze(capacity),
     ...(coordination ? { coordination } : {}),
+    ...(localRules ? { localRules } : {}),
     seal: canonicalOutputJSON(
-      coordination ? { ...original, format: 'root-eviction/2', coordination } : original
+      localRules ? { ...coordinated, format: 'root-eviction/3', localRules } : coordinated
     )
   }
 }

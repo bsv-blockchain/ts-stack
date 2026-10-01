@@ -55,3 +55,11 @@ export type {
   RootEvictionSchedulerOptions,
   RootEvictionScheduleReport
 } from './RootEvictionScheduler.js'
+
+export type {
+  RootEvictionLocalRule,
+  RootEvictionLocalRuleRecord,
+  RootEvictionLocalRuleSet,
+  RootEvictionLocalRuleAssessment,
+  RootEvictionLocalRulesStorage
+} from './RootEvictionLocalRules.js'

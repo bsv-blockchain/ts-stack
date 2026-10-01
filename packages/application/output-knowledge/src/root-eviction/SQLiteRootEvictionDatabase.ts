@@ -9,6 +9,12 @@ import {
 } from '@bsv/sdk'
 import type { RootEvictionConfiguration, RootEvictionHead } from './RootEvictionStorage.js'
 import { rootConfiguration, rootDecimal, rootPosition } from './RootEvictionCodec.js'
+import {
+  ROOT_LOCAL_RULE_SCHEMA,
+  rootLocalRuleInventory,
+  rootLocalRuleCompletionReservation
+} from './RootEvictionLocalRuleSchema.js'
+import { RootEvictionServingRecords } from './RootEvictionServingRecords.js'
 
 /** Internal shared connection: every decision and final enqueue uses this same write lock. */
 export class SQLiteRootEvictionDatabase {
@@ -21,13 +27,23 @@ export class SQLiteRootEvictionDatabase {
     path: string,
     configuration: RootEvictionConfiguration,
     policy: string | undefined,
-    upgradeCoordination = false
+    upgradeCoordination = false,
+    upgradeLocalRules = false
   ) {
     this.configuration = rootConfiguration(configuration)
     outputAssert(
       !upgradeCoordination ||
-        (policy === undefined && this.configuration.coordination !== undefined),
+        (policy === undefined &&
+          this.configuration.coordination !== undefined &&
+          !this.configuration.localRules),
       'Root coordination upgrade requires an existing journal and explicit configuration'
+    )
+    outputAssert(
+      !upgradeLocalRules ||
+        (policy === undefined &&
+          !upgradeCoordination &&
+          this.configuration.localRules !== undefined),
+      'Root local-rule upgrade requires an existing coordinated journal and explicit configuration'
     )
     outputAssert(
       path.length > 0 && path !== ':memory:' && !path.startsWith('file:'),
@@ -48,6 +64,7 @@ export class SQLiteRootEvictionDatabase {
       )
       if (policy !== undefined) this.initialize(policy)
       if (upgradeCoordination) this.upgradeCoordination()
+      if (upgradeLocalRules) this.upgradeLocalRules()
       this.transaction(() => {
         this.head()
         this.inventory()
@@ -97,6 +114,7 @@ export class SQLiteRootEvictionDatabase {
       ) STRICT;
     `)
     if (this.configuration.coordination) this.createContracts()
+    if (this.configuration.localRules) this.database.exec(ROOT_LOCAL_RULE_SCHEMA)
     // The constructor owns cleanup. Closing the connection rolls back any
     // incomplete initialization, including failures while creating the schema.
     this.database
@@ -134,6 +152,35 @@ export class SQLiteRootEvictionDatabase {
       this.database.exec('COMMIT')
     } catch (error) {
       // Constructor cleanup closes the connection and rolls back any still-open transaction.
+      this.database.exec('ROLLBACK')
+      throw error
+    } finally {
+      this.active = false
+    }
+  }
+
+  /** Opt-in format2-to-format3 migration, preserving all prior history and fencing older connections. */
+  private upgradeLocalRules(): void {
+    const { root, chain, capacity, coordination } = this.configuration
+    const original = rootConfiguration({ root, chain, capacity, coordination }).seal
+    this.database.exec('BEGIN IMMEDIATE')
+    this.active = true
+    try {
+      const row = this.get('SELECT configuration FROM root_meta WHERE id=1')
+      outputAssert(
+        row?.configuration === original || row?.configuration === this.configuration.seal,
+        'Root local-rule upgrade differs from the original coordinated configuration',
+        'context-changed'
+      )
+      if (row.configuration === original) {
+        this.database.exec(ROOT_LOCAL_RULE_SCHEMA)
+        this.run('UPDATE root_meta SET configuration=? WHERE id=1', this.configuration.seal)
+        new RootEvictionServingRecords(this).invalidate(this.advance())
+      }
+      this.completionRevisions()
+      this.inventory()
+      this.database.exec('COMMIT')
+    } catch (error) {
       this.database.exec('ROLLBACK')
       throw error
     } finally {
@@ -226,6 +273,7 @@ export class SQLiteRootEvictionDatabase {
       'unavailable'
     )
     if (this.configuration.coordination) this.contractInventory()
+    if (this.configuration.localRules) rootLocalRuleInventory(this)
   }
 
   private contractInventory(): void {
@@ -303,6 +351,8 @@ export class SQLiteRootEvictionDatabase {
     }
   }
   private completionRevisions(): void {
+    // Validate the exact schema seal before consulting optional-format tables.
+    const head = this.head()
     const row = this.get(`SELECT
       (SELECT coalesce(sum(targets),0) FROM root_requests) - (SELECT count(*) FROM root_actions) AS pending,
       (SELECT count(*) FROM root_projections) AS projections`)!
@@ -317,9 +367,12 @@ export class SQLiteRootEvictionDatabase {
     // Every pending target can need a terminal decision and a later projection
     // acknowledgement. Existing intents also retain their own acknowledgement
     // slot. Ordinary local work cannot consume these held revision numbers.
-    const held = 2n * BigInt(Number(row.pending)) + BigInt(Number(row.projections))
+    const held =
+      2n * BigInt(Number(row.pending)) +
+      BigInt(Number(row.projections)) +
+      rootLocalRuleCompletionReservation(this)
     outputAssert(
-      outputU64(this.head().revision) + held <= 18446744073709551615n,
+      outputU64(head.revision) + held <= 18446744073709551615n,
       'Root journal cannot reserve completion revisions',
       'limited'
     )
