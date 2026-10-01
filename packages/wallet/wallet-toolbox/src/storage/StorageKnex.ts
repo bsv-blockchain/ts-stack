@@ -682,21 +682,43 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   /**
    * Insert one row and return its auto-increment primary key. MySQL and SQLite
    * report the id as the insert result; Postgres requires a RETURNING clause.
+   *
+   * `recoverable` marks inserts that the findOrInsert helpers retry as a find
+   * after a duplicate-key error, in the same transaction; see `inSavepoint`.
    */
-  private async insertReturningId(table: string, idColumn: string, row: object, trx?: TrxToken): Promise<number> {
-    const q = this.toDb(trx)(table).insert(row)
+  private async insertReturningId(
+    table: string,
+    idColumn: string,
+    row: object,
+    trx?: TrxToken,
+    recoverable = false
+  ): Promise<number> {
     if (this.dbtype !== 'Postgres') {
-      const [id] = await q
+      const [id] = await this.toDb(trx)(table).insert(row)
       return id
     }
-    const [r] = await q.returning(idColumn)
-    return r[idColumn]
+    const insert = async (db: Knex): Promise<number> => {
+      const [r] = await db(table).insert(row).returning(idColumn)
+      return r[idColumn]
+    }
+    return recoverable ? await this.inSavepoint(trx, insert) : await insert(this.toDb(trx))
+  }
+
+  /**
+   * The findOrInsert helpers catch a failed insert and find the row again in
+   * the same transaction. MySQL and SQLite allow that. Postgres aborts the
+   * whole transaction on any statement error, so there the insert runs in a
+   * savepoint that is rolled back on its own.
+   */
+  private async inSavepoint<R>(trx: TrxToken | undefined, run: (db: Knex) => Promise<R>): Promise<R> {
+    if (trx == null || this.dbtype !== 'Postgres') return await run(this.toDb(trx))
+    return await (trx as Knex.Transaction).transaction(async savepoint => await run(savepoint))
   }
 
   override async insertProvenTx(tx: TableProvenTx, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxId === 0) delete e.provenTxId
-    const id = await this.insertReturningId('proven_txs', 'provenTxId', e, trx)
+    const id = await this.insertReturningId('proven_txs', 'provenTxId', e, trx, true)
     tx.provenTxId = id
     return tx.provenTxId
   }
@@ -855,7 +877,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTxReq(tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
-    const id = await this.insertReturningId('proven_tx_reqs', 'provenTxReqId', e, trx)
+    const id = await this.insertReturningId('proven_tx_reqs', 'provenTxReqId', e, trx, true)
     tx.provenTxReqId = id
     return tx.provenTxReqId
   }
@@ -909,7 +931,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutputBasket(basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(basket, trx, undefined, ['isDeleted'])
     if (e.basketId === 0) delete e.basketId
-    const id = await this.insertReturningId('output_baskets', 'basketId', e, trx)
+    const id = await this.insertReturningId('output_baskets', 'basketId', e, trx, true)
     basket.basketId = id
     return basket.basketId
   }
@@ -917,7 +939,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.transactionId === 0) delete e.transactionId
-    const id = await this.insertReturningId('transactions', 'transactionId', e, trx)
+    const id = await this.insertReturningId('transactions', 'transactionId', e, trx, true)
     tx.transactionId = id
     return tx.transactionId
   }
@@ -955,27 +977,27 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutputTag(tag: TableOutputTag, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tag, trx, undefined, ['isDeleted'])
     if (e.outputTagId === 0) delete e.outputTagId
-    const id = await this.insertReturningId('output_tags', 'outputTagId', e, trx)
+    const id = await this.insertReturningId('output_tags', 'outputTagId', e, trx, true)
     tag.outputTagId = id
     return tag.outputTagId
   }
 
   override async insertOutputTagMap(tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(tagMap, trx, undefined, ['isDeleted'])
-    await this.toDb(trx)<TableOutputTagMap>('output_tags_map').insert(e)
+    await this.inSavepoint(trx, async db => await db<TableOutputTagMap>('output_tags_map').insert(e))
   }
 
   override async insertTxLabel(label: TableTxLabel, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(label, trx, undefined, ['isDeleted'])
     if (e.txLabelId === 0) delete e.txLabelId
-    const id = await this.insertReturningId('tx_labels', 'txLabelId', e, trx)
+    const id = await this.insertReturningId('tx_labels', 'txLabelId', e, trx, true)
     label.txLabelId = id
     return label.txLabelId
   }
 
   override async insertTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
-    await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
+    await this.inSavepoint(trx, async db => await db<TableTxLabelMap>('tx_labels_map').insert(e))
   }
 
   override async insertMonitorEvent(event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
@@ -2230,23 +2252,42 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .select('o.*')
           .forUpdate()
 
-      let output: TableOutput | undefined
+      const excluded: number[] = []
+      const candidates = (): Knex.QueryBuilder<TableOutput, TableOutput[]> =>
+        excluded.length > 0 ? baseQuery().whereNotIn('o.outputId', excluded) : baseQuery()
+      const selectOutput = async (): Promise<TableOutput | undefined> => {
+        let output: TableOutput | undefined
 
-      if (exactSatoshis !== undefined) {
-        output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
+        if (exactSatoshis !== undefined) {
+          output = await candidates().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
+        }
+
+        output ??= await candidates()
+          .where('o.satoshis', '>=', targetSatoshis)
+          .orderBy('o.satoshis', 'asc')
+          .orderBy('o.outputId', 'asc')
+          .first()
+
+        output ??= await candidates()
+          .where('o.satoshis', '<', targetSatoshis)
+          .orderBy('o.satoshis', 'desc')
+          .orderBy('o.outputId', 'desc')
+          .first()
+        return output
       }
 
-      output ??= await baseQuery()
-        .where('o.satoshis', '>=', targetSatoshis)
-        .orderBy('o.satoshis', 'asc')
-        .orderBy('o.outputId', 'asc')
-        .first()
-
-      output ??= await baseQuery()
-        .where('o.satoshis', '<', targetSatoshis)
-        .orderBy('o.satoshis', 'desc')
-        .orderBy('o.outputId', 'desc')
-        .first()
+      let output = await selectOutput()
+      // Under Postgres READ COMMITTED the NOT EXISTS above uses the statement's
+      // snapshot, so an action batch reservation committed while the statement
+      // waited for the row lock is not visible to it. Re-check with a new statement.
+      while (
+        output != null &&
+        this.dbtype === 'Postgres' &&
+        (await this.findReservedActionBatchOutputIds([output.outputId], trx)).length > 0
+      ) {
+        excluded.push(output.outputId)
+        output = await selectOutput()
+      }
 
       if (output == null) return undefined
 
