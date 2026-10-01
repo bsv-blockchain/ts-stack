@@ -91,6 +91,7 @@ jobs:
       build-projects: ${{ steps.scope.outputs.build-projects }}
       mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
       mutation-classification: ${{ steps.scope.outputs.mutation-classification }}
+      mutation-matrix: ${{ steps.scope.outputs.mutation-matrix }}
       infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
       has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
@@ -143,6 +144,8 @@ jobs:
           echo "conformance=$(jq -r '.conformance' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "mutation-targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
           echo "mutation-classification=$MUTATION_SCOPE" >> "$GITHUB_OUTPUT"
+          echo "mutation-matrix=$(node scripts/mutation-partition-evidence.mjs matrix --selected \
+            "$MUTATION_TARGETS")" >> "$GITHUB_OUTPUT"
           echo "has-infra=$(jq -r '.infraMatrix.include | length > 0' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
 
           {
@@ -228,6 +231,7 @@ jobs:
       coverage-required: ${{ steps.scope.outputs.coverage-required }}
       mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
       mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
+      mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
@@ -477,7 +481,7 @@ jobs:
             --dry-run
 
   mutation-tests:
-    name: Mutation / ${{ matrix.target }}
+    name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
     # Analyzer failures stop expensive qualification; explicit diagnostics only
     # collect evidence and never waive the required final analyzer/merge gates.
     if: >-
@@ -499,14 +503,13 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 6
-      matrix:
-        target: ${{ fromJSON(needs.prepare.outputs.mutation-targets) }}
+      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           cache: pnpm
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -517,13 +520,19 @@ jobs:
       - name: Restore build outputs
         run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Enforce the affected mutation-quality ratchet
-        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}"
+        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}" --partition "${{ matrix.partition }}"
+      - name: Capture complete execution-partition evidence
+        if: matrix.partition != 'whole'
+        run: |
+          node scripts/mutation-partition-evidence.mjs capture --mode diagnostic \
+            --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
+            --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
       - name: Preserve the machine-readable mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: mutation-${{ matrix.target }}
-          path: artifacts/mutation/${{ matrix.target }}/mutation.json
+          name: mutation-${{ matrix.target }}-${{ matrix.partition }}
+          path: artifacts/mutation/${{ matrix.target }}
           if-no-files-found: ignore
           retention-days: 30
 
@@ -534,8 +543,9 @@ jobs:
       - prepare
       - mutation-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - name: Verify the affected mutation targets
         env:
@@ -554,6 +564,39 @@ jobs:
           echo "Required targets: $MUTATION_TARGETS" >> "$GITHUB_STEP_SUMMARY"
           echo "Deferred, not passed: $(jq -c '.deferred' <<<"$MUTATION_CLASSIFICATION")" >> "$GITHUB_STEP_SUMMARY"
           echo 'Full qualification is required separately at the exact publication candidate.' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: contains(fromJSON(needs.prepare.outputs.mutation-targets || '[]'), 'sdk-auth-http')
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        if: contains(fromJSON(needs.prepare.outputs.mutation-targets || '[]'), 'sdk-auth-http')
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: contains(fromJSON(needs.prepare.outputs.mutation-targets || '[]'), 'sdk-auth-http')
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - name: Install pinned SDKAuth aggregate verifier
+        if: contains(fromJSON(needs.prepare.outputs.mutation-targets || '[]'), 'sdk-auth-http')
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.mutation-targets || '[]'), 'sdk-auth-http')
+        with:
+          pattern: mutation-sdk-auth-http-*
+          path: .sdk-auth-parts
+      - name: Require the unchanged global SDKAuth target gate
+        if: contains(fromJSON(needs.prepare.outputs.mutation-targets || '[]'), 'sdk-auth-http')
+        run: |
+          node scripts/mutation-partition-evidence.mjs verify --mode diagnostic \
+            --target sdk-auth-http --directory .sdk-auth-parts \
+            --output artifacts/mutation/sdk-auth-http
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always() && contains(fromJSON(needs.prepare.outputs.mutation-targets || '[]'), 'sdk-auth-http')
+        with:
+          name: mutation-sdk-auth-http-canonical
+          path: artifacts/mutation/sdk-auth-http
+          if-no-files-found: ignore
+          retention-days: 30
 
   standard-tests:
     name: Tests / non-coverage packages
