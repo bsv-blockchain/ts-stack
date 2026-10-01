@@ -78,6 +78,7 @@ import {
   validatePreparedBeefPolicy
 } from './methods/preparedBeef'
 import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
+import { usePostgresInt8Numbers } from './knexPostgres'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
   /**
@@ -135,6 +136,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     super(options)
     if (options.knex == null) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
+    usePostgresInt8Numbers(this.knex)
     this.preparedBeefPolicy = validatePreparedBeefPolicy(options.preparedBeef)
     this.preparedBeefCoordinator = new PreparedBeefCoordinator(this)
     if (this.telemetry.enabled) {

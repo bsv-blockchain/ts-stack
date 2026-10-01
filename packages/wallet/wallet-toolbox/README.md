@@ -69,10 +69,11 @@ journal before recovery; do not delete journal rows or wallet data blindly.
 application. Settings report `dbtype: 'Postgres'`; remote clients older than
 this release reject that value.
 
-Bigint columns and counts must reach `StorageKnex` as numbers. node-postgres
-returns int8 as strings by default, so either create the knex instance with
-`Setup.createPostgresKnex(connectionJson, database)` or add
-`Setup.postgresAfterCreate` as the pool's `afterCreate` hook.
+node-postgres returns int8 (bigint columns, counts) as strings by default.
+`StorageKnex` sets a parser on each connection its knex acquires so these come
+back as numbers, as with mysql2 and better-sqlite3. The process-wide `pg.types`
+defaults are not changed. `Setup.createPostgresKnex(connectionJson, database)`
+creates a knex with the same parser installed.
 
 Set `RUNPOSTGRES=1` and `POSTGRES_CONNECTION` (JSON node-postgres connection
 config) to include Postgres in the Knex test suites. Test databases are created

@@ -27,6 +27,7 @@ import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { Wallet } from './Wallet'
 import { StorageClient } from './storage/remoting/StorageClient'
 import { StorageKnex } from './storage/StorageKnex'
+import { usePostgresInt8Numbers } from './storage/knexPostgres'
 import { WalletStorageProvider } from './sdk/WalletStorage.interfaces'
 import type { ManagedChangePolicyOptions } from './storage/methods/managedChangePolicy'
 import type { PreparedBeefOptions } from './storage/methods/preparedBeef'
@@ -435,10 +436,9 @@ DEV_KEYS = '{
   }
 
   /**
-   * Postgres connections must return bigint columns and counts as numbers, as
-   * mysql2 and better-sqlite3 do. node-postgres returns int8 as a string by
-   * default, so this installs a per-connection parser rather than changing the
-   * process-wide `pg.types` defaults.
+   * Creates a knex for a Postgres `StorageKnex`. int8 values (bigint columns,
+   * counts) are returned as numbers, as with mysql2 and better-sqlite3, using a
+   * per-connection parser; see `usePostgresInt8Numbers`.
    *
    * @param connection JSON node-postgres connection config
    * @param database optional database name overriding `connection.database`
@@ -452,22 +452,11 @@ DEV_KEYS = '{
     const config: Knex.Config = {
       client: 'pg',
       connection: c,
-      pool: { min: 0, max: 7, idleTimeoutMillis: 15000, afterCreate: Setup.postgresAfterCreate }
+      pool: { min: 0, max: 7, idleTimeoutMillis: 15000 }
     }
     const knex = makeKnex(config)
+    usePostgresInt8Numbers(knex)
     return knex
-  }
-
-  /**
-   * Knex `pool.afterCreate` hook for Postgres pools used by `StorageKnex`.
-   * Parses int8 (bigint, count) values as JavaScript numbers.
-   */
-  static postgresAfterCreate(
-    conn: { setTypeParser: (oid: number, parse: (value: string) => number) => void },
-    done: (err: Error | null, conn: unknown) => void
-  ): void {
-    conn.setTypeParser(20, value => Number.parseInt(value, 10))
-    done(null, conn)
   }
 
   /**
