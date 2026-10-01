@@ -5,8 +5,8 @@ kind: package
 domain: application
 npm: '@bsv/output-knowledge'
 version: '0.1.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge'
 status: experimental
@@ -22,6 +22,12 @@ action. The implementation branch is still being qualified; this page does not
 announce a registry release or completed BRC-192–199 implementation.
 
 ## Publication deadlines
+
+Context transitions also form a publication barrier: `setContext` closes it
+before writing, and overlapping changes keep it closed until all settle. Await
+that promise before using the requested context. `flush` cannot finish a pending
+context write, and an in-flight worker or projector cannot publish the old
+context during that interval. Failed writes preserve the committed journal.
 
 A locally installed `OutputKnowledgeWorker` can optionally provide the pure,
 synchronous `nextInvalidation(input)` method. It receives an owned accepted input

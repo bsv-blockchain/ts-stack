@@ -293,6 +293,14 @@ edge, and a newly reported output cannot undo a known spend.
 
 ## Publication deadlines for other state
 
+`setContext` closes publication before its asynchronous commit starts. If several
+context changes overlap, publication stays closed until all of them settle. A
+worker or projector already in flight cannot republish an earlier context during
+that interval. Await `setContext` before treating the requested context as
+committed; `flush` does not finish a pending context write. A failed context
+transition preserves the journal's previous committed state and still returns
+its original error to the caller.
+
 The optional `OutputKnowledgeWorker.nextInvalidation(input)` method returns the
 earliest exclusive U64 epoch-second deadline that applies to an accepted input.
 It is a pure installed local policy: it may examine the owned snapshot supplied

@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { SQLiteJournal } from '../src/storage/SQLiteJournal.js'
 import { knowledgeMutation } from '../src/storage/Journal.js'
 import { describe, expect, it, jest } from '@jest/globals'
 import { Utils, OutputProtocolError } from '@bsv/sdk'
@@ -169,7 +173,10 @@ describe('runtime orchestration and publication ports', () => {
         afterYield = true
       }
     }
-    await expect(runtime.attach(source, request()).done).rejects.toMatchObject({ code: 'limited' })
+    await expect(runtime.attach(source, request()).done).rejects.toMatchObject({
+      code: 'limited',
+      message: expect.stringMatching(/\S/)
+    })
     expect(afterYield).toBe(false)
     expect((await journal.head()).received).toBe('1')
     await runtime.close()
@@ -207,9 +214,11 @@ describe('runtime orchestration and publication ports', () => {
       }
     }
     const { runtime } = await open(noWork, projector)
+    const events = runtime.events()[Symbol.asyncIterator]()
     hold = true
     const flushing = runtime.flush()
     await entered.promise
+    expect((await events.next()).value.kind).toBe('knowledge')
     const next = context()
     next.id = 'verification-new'
     next.generation = '1'
@@ -221,6 +230,15 @@ describe('runtime orchestration and publication ports', () => {
       generation: '1',
       contextId: 'verification-new'
     })
+    expect((await events.next()).value).toMatchObject({
+      kind: 'knowledge',
+      input: { context: { id: 'verification-new' } }
+    })
+    expect((await events.next()).value).toMatchObject({
+      kind: 'projection',
+      projection: { contextId: 'verification-new' }
+    })
+    await events.return?.()
     await runtime.close()
   })
 
@@ -263,7 +281,10 @@ describe('runtime orchestration and publication ports', () => {
     await runtime.close()
     release.resolve()
     await subscription.done
-    await expect(runtime.readProjection()).rejects.toMatchObject({ code: 'cancelled' })
+    await expect(runtime.readProjection()).rejects.toMatchObject({
+      code: 'cancelled',
+      message: expect.stringMatching(/\S/)
+    })
     await expect(journal.head()).rejects.toThrow('closed')
     const other = await open()
     expect(() =>
@@ -312,7 +333,10 @@ describe('runtime orchestration and publication ports', () => {
       }
     })
     await malformed.setContext(context())
-    await expect(malformed.flush()).rejects.toMatchObject({ code: 'invalid' })
+    await expect(malformed.flush()).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(/\S/)
+    })
     expect(await malformed.readProjection()).toBeUndefined()
     await malformed.close()
   })
@@ -334,7 +358,10 @@ describe('runtime orchestration and publication ports', () => {
       }
     })
     await runtime.setContext(context())
-    await expect(runtime.flush()).rejects.toMatchObject({ code: 'limited' })
+    await expect(runtime.flush()).rejects.toMatchObject({
+      code: 'limited',
+      message: expect.stringMatching(/\S/)
+    })
     release.resolve()
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(await runtime.readProjection()).toBeUndefined()
@@ -366,7 +393,10 @@ describe('runtime orchestration and publication ports', () => {
           retryable: true
         })
       )
-    await expect(queue.next()).rejects.toMatchObject({ code: 'reset-required' })
+    await expect(queue.next()).rejects.toMatchObject({
+      code: 'reset-required',
+      message: expect.stringMatching(/\S/)
+    })
     expect(disposed).toBe(1)
     const waiting = new RuntimeEvents(new AbortController().signal, () => {})
     const pending = waiting.next()
@@ -444,10 +474,13 @@ describe('runtime orchestration and publication ports', () => {
     await attached.done
     policy = 'cd'.repeat(32)
     expect(await runtime.readProjection()).toBeUndefined()
-    await expect(runtime.flush()).rejects.toMatchObject({ code: 'context-changed' })
+    await expect(runtime.flush()).rejects.toMatchObject({
+      code: 'context-changed',
+      message: expect.stringMatching(/\S/)
+    })
     await expect(
       runtime.setContext({ ...context(), partition: { ...partition, access: 'private' } })
-    ).rejects.toMatchObject({ code: 'unauthorized' })
+    ).rejects.toMatchObject({ code: 'unauthorized', message: expect.stringMatching(/\S/) })
     await runtime.close()
   })
 
@@ -462,7 +495,10 @@ describe('runtime orchestration and publication ports', () => {
       }
     })
     await runtime.setContext(context())
-    await expect(runtime.flush()).rejects.toMatchObject({ code: 'invalid' })
+    await expect(runtime.flush()).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(/\S/)
+    })
     expect(await runtime.readProjection()).toBeUndefined()
     const events = runtime.events()[Symbol.asyncIterator]()
     const source: Source = {
@@ -499,13 +535,19 @@ describe('runtime orchestration and publication ports', () => {
     })
     expect(queue[Symbol.asyncIterator]()).toBe(queue)
     const waiting = queue.next()
-    await expect(queue.next()).rejects.toMatchObject({ code: 'conflict' })
+    await expect(queue.next()).rejects.toMatchObject({
+      code: 'conflict',
+      message: expect.stringMatching(/\S/)
+    })
     const event = { kind: 'error', code: 'unavailable', message: 'offline', retryable: true }
     queue.push(JSON.stringify(event))
     expect(await waiting).toEqual({ done: false, value: event })
     const next = queue.next()
     abort.abort()
-    await expect(next).rejects.toMatchObject({ code: 'cancelled' })
+    await expect(next).rejects.toMatchObject({
+      code: 'cancelled',
+      message: expect.stringMatching(/\S/)
+    })
     queue.push(JSON.stringify(event))
     queue.close()
     expect(disposed).toBe(1)
@@ -515,7 +557,10 @@ describe('runtime orchestration and publication ports', () => {
     const already = new AbortController()
     already.abort()
     const cancelled = new RuntimeEvents(already.signal, () => {})
-    await expect(cancelled.next()).rejects.toMatchObject({ code: 'cancelled' })
+    await expect(cancelled.next()).rejects.toMatchObject({
+      code: 'cancelled',
+      message: expect.stringMatching(/\S/)
+    })
   })
 })
 
@@ -610,7 +655,10 @@ describe('exclusive projection publication windows', () => {
         fixture.setClock(2000)
         if (companion) expect(await fixture.runtime.readProjection()).toBeUndefined()
         else
-          await expect(fixture.runtime.readProjection()).rejects.toMatchObject({ code: 'expired' })
+          await expect(fixture.runtime.readProjection()).rejects.toMatchObject({
+            code: 'expired',
+            message: expect.stringMatching(/\S/)
+          })
         await fixture.runtime.flush()
         expect((await fixture.runtime.readProjection())?.contextId).toBe('expired-state-revision')
         expect((await fixture.store.read()).revision.accepted).toBe('2')
@@ -643,7 +691,7 @@ describe('exclusive projection publication windows', () => {
       await entered.promise
       fixture.setClock(2000)
       release.resolve()
-      expect(await outcome).toMatchObject({ code: 'expired' })
+      expect(await outcome).toMatchObject({ code: 'expired', message: expect.stringMatching(/\S/) })
       expect(await fixture.runtime.readProjection()).toBeUndefined()
       await fixture.runtime.flush()
       expect((await fixture.runtime.readProjection())?.contextId).toBe('expired-state-revision')
@@ -670,7 +718,10 @@ describe('exclusive projection publication windows', () => {
     })
     try {
       await runtime.setContext(context())
-      await expect(runtime.flush()).rejects.toMatchObject({ code: 'expired' })
+      await expect(runtime.flush()).rejects.toMatchObject({
+        code: 'expired',
+        message: expect.stringMatching(/\S/)
+      })
       expect(await runtime.readProjection()).toBeUndefined()
       expect(calls).toBe(1)
     } finally {
@@ -687,7 +738,7 @@ describe('exclusive projection publication windows', () => {
       expect((await fixture.journal.head()).accepted).toBe('1')
       fixture.setClock(2000)
       await jest.advanceTimersByTimeAsync(1000)
-      await fixture.runtime.flush()
+      expect((await fixture.journal.head()).accepted).toBe('2')
       expect((await fixture.runtime.readProjection())?.contextId).toBe('expired-state-revision')
       expect((await fixture.journal.head()).accepted).toBe('2')
     } finally {
@@ -730,7 +781,10 @@ describe('exclusive projection publication windows', () => {
       })
       try {
         await runtime.setContext(context())
-        await expect(runtime.flush()).rejects.toMatchObject({ code: 'invalid' })
+        await expect(runtime.flush()).rejects.toMatchObject({
+          code: 'invalid',
+          message: expect.stringMatching(/\S/)
+        })
         expect(await runtime.readProjection()).toBeUndefined()
       } finally {
         await runtime.close()
@@ -835,7 +889,7 @@ describe('bounded runtime intake and lifecycle recovery', () => {
           },
           request()
         ).done
-      ).rejects.toMatchObject({ code: 'conflict' })
+      ).rejects.toMatchObject({ code: 'conflict', message: expect.stringMatching(/\S/) })
       expect(commit).toHaveBeenCalledTimes(8)
       expect((await f.journal.head()).received).toBe('2')
       commit.mockResolvedValue({ status: 'limited', reason: 'synthetic storage bound' })
@@ -895,7 +949,10 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       await entered.promise
       subscription.close()
       release.resolve()
-      expect(await outcome).toMatchObject({ code: 'cancelled' })
+      expect(await outcome).toMatchObject({
+        code: 'cancelled',
+        message: expect.stringMatching(/\S/)
+      })
       expect((await f.journal.head()).received).toBe('1')
     } finally {
       release.resolve()
@@ -945,7 +1002,10 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       second.close()
       release.resolve()
       await first.done
-      expect(await outcome).toMatchObject({ code: 'cancelled' })
+      expect(await outcome).toMatchObject({
+        code: 'cancelled',
+        message: expect.stringMatching(/\S/)
+      })
       expect(acknowledged).toBe(false)
       expect(calls).toBe(1)
       expect((await f.journal.head()).received).toBe('2')
@@ -988,7 +1048,7 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       expect((await f.journal.head()).received).toBe('1')
       expect((await observer.next()).value).toMatchObject({ kind: 'error', code: 'limited' })
       await f.runtime.close()
-      expect(await work).toMatchObject({ code: 'cancelled' })
+      expect(await work).toMatchObject({ code: 'cancelled', message: expect.stringMatching(/\S/) })
       release.resolve()
       expect((await observer.next()).done).toBe(true)
     } finally {
@@ -996,5 +1056,580 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       await observer.return?.()
       await f.runtime.close()
     }
+  })
+})
+
+describe('publication and bounded-source boundary regressions', () => {
+  it.each(['partition', 'generation', 'context', 'received', 'accepted'] as const)(
+    'withholds a cached projection when only the store %s checkpoint changes',
+    async field => {
+      const f = await open(noWork, {
+        policyDigest: 'ff'.repeat(32),
+        project: async input => projection(input)
+      })
+      const current = await f.store.read(),
+        altered = structuredClone(current)
+      if (field === 'partition') altered.partition.account = 'another-account'
+      if (field === 'generation') altered.generation = '9'
+      if (field === 'context') altered.context.id = 'another-context'
+      if (field === 'received') altered.revision.received = '9'
+      if (field === 'accepted') altered.revision.accepted = '9'
+      const read = jest.spyOn(f.store, 'read').mockResolvedValueOnce(altered)
+      try {
+        expect(await f.runtime.readProjection()).toBeUndefined()
+        expect((await f.runtime.readProjection())?.contextId).toBe(current.context.id)
+      } finally {
+        read.mockRestore()
+        await f.runtime.close()
+      }
+    }
+  )
+
+  it.each(['generation', 'contextId'] as const)(
+    'rejects an independently changed projector %s',
+    async field => {
+      const journal = new MemoryJournal('test'),
+        store = new KnowledgeStore(journal, emptyReducer(), { partition })
+      const runtime = new OutputKnowledge({
+        store,
+        worker: noWork,
+        projector: {
+          policyDigest: 'ff'.repeat(32),
+          project: async input => ({ ...projection(input), [field]: '9' })
+        }
+      })
+      try {
+        await runtime.setContext(context())
+        await expect(runtime.flush()).rejects.toMatchObject({
+          code: 'invalid',
+          message: expect.stringContaining('checkpoint')
+        })
+        expect(await runtime.readProjection()).toBeUndefined()
+      } finally {
+        await runtime.close()
+      }
+    }
+  )
+
+  it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects a malformed pending-byte count %s before committing receipt',
+    async pending => {
+      const f = await open({ ...noWork, pendingBytes: async () => pending })
+      try {
+        const result = f.runtime.attach(
+          {
+            id: 'source',
+            async *open() {
+              yield batch()
+            }
+          },
+          request()
+        )
+        await expect(result.done).rejects.toMatchObject({
+          code: 'limited',
+          message: expect.stringContaining('capacity')
+        })
+        expect((await f.journal.head()).received).toBe('1')
+      } finally {
+        await f.runtime.close()
+      }
+    }
+  )
+
+  it('accepts the inclusive pending-byte boundary and rejects its next byte', async () => {
+    const size = new TextEncoder().encode(JSON.stringify(batch())).length
+    // Canonicalization changes property order, not the encoded byte count of this fixture.
+    let pending = 16 * 1024 * 1024 - size
+    const f = await open({ ...noWork, pendingBytes: async () => pending })
+    try {
+      await f.runtime.attach(
+        {
+          id: 'source',
+          async *open() {
+            yield batch()
+          }
+        },
+        request()
+      ).done
+      expect((await f.journal.head()).received).toBe('2')
+      pending++
+      await expect(
+        f.runtime.attach(
+          {
+            id: 'source',
+            async *open() {
+              yield batch()
+            }
+          },
+          request()
+        ).done
+      ).rejects.toMatchObject({ code: 'limited', message: expect.stringContaining('capacity') })
+      expect((await f.journal.head()).received).toBe('2')
+    } finally {
+      await f.runtime.close()
+    }
+  })
+
+  it.each([1, 16])(
+    'accepts exactly %s sources when their aggregate capacity equals the bound',
+    async maximumSources => {
+      const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+      const runtime = new OutputKnowledge({
+        store,
+        worker: noWork,
+        maximumSources,
+        limits: { batchBytes: 4096, pendingBytes: maximumSources * 4096 }
+      })
+      try {
+        expect(runtime.limits.pendingBytes).toBe(maximumSources * 4096)
+      } finally {
+        await runtime.close()
+      }
+    }
+  )
+
+  it.each([
+    { maximumSources: 17, pendingBytes: 131072 },
+    { maximumSources: 3, pendingBytes: 8192 }
+  ])('rejects independent source-count and aggregate-capacity violations %j', async limits => {
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    try {
+      let failure: unknown
+      try {
+        new OutputKnowledge({
+          store,
+          worker: noWork,
+          maximumSources: limits.maximumSources,
+          limits: { batchBytes: 4096, pendingBytes: limits.pendingBytes }
+        })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toMatchObject({
+        code: 'invalid',
+        message: expect.stringContaining('concurrency')
+      })
+    } finally {
+      await store.close()
+    }
+  })
+
+  it.each([-1, 0.5, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid publication clock %s with a nonempty diagnostic',
+    async clock => {
+      const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+      const runtime = new OutputKnowledge({
+        store,
+        worker: { ...noWork, nextInvalidation: () => '2' },
+        now: () => clock,
+        projector: { policyDigest: 'ff'.repeat(32), project: async input => projection(input) }
+      })
+      try {
+        await runtime.setContext(context())
+        await expect(runtime.flush()).rejects.toMatchObject({
+          code: 'invalid',
+          message: expect.stringContaining('clock')
+        })
+        expect(await runtime.readProjection()).toBeUndefined()
+      } finally {
+        await runtime.close()
+      }
+    }
+  )
+
+  it.each([
+    { companion: '2', due: 2000 },
+    { companion: '6', due: 3000 }
+  ])(
+    'automatically commits the earliest live deadline across unordered assessments and a companion %j',
+    async ({ companion, due }) => {
+      jest.useFakeTimers()
+      let clock = 0,
+        calls = 0
+      const original = context(),
+        base = emptyReducer(),
+        journal = new MemoryJournal('test')
+      const assessments: AcceptedInput['assessments'] = ['5', '3', '4', '1', undefined].map(
+        (expiresAt, index) => ({
+          id: String(index + 1).repeat(64),
+          outpoint: { chain, txid: 'cd'.repeat(32), outputIndex: index },
+          state: index === 3 ? 'stale' : 'unknown',
+          contextId: original.id,
+          generation: original.generation,
+          policyDigest: original.policyDigest,
+          origin: { kind: 'local' },
+          evidenceIds: [],
+          ...(expiresAt === undefined ? {} : { expiresAt })
+        })
+      )
+      const store = new KnowledgeStore(
+        journal,
+        {
+          async reduce(entries, signal) {
+            const input = await base.reduce(entries, signal)
+            input.assessments = input.context.id === original.id ? structuredClone(assessments) : []
+            return input
+          }
+        },
+        { partition, now: () => clock }
+      )
+      const runtime = new OutputKnowledge({
+        store,
+        now: () => clock,
+        worker: {
+          pendingBytes: async () => 0,
+          nextInvalidation: input => (input.context.id === original.id ? companion : undefined),
+          async advance() {
+            calls++
+            const history = await store.inspect(),
+              input = await base.reduce(history.entries, new AbortController().signal)
+            if (clock >= due && input.context.id === original.id)
+              await store.commit(
+                history.revision.received,
+                knowledgeMutation({
+                  kind: 'context',
+                  context: { ...original, id: 'after-earliest' }
+                })
+              )
+          }
+        },
+        projector: { policyDigest: 'ff'.repeat(32), project: async input => projection(input) }
+      })
+      try {
+        await runtime.setContext(original)
+        await runtime.flush()
+        expect(calls).toBe(1)
+        clock = due - 1
+        await jest.advanceTimersByTimeAsync(due - 1)
+        expect(calls).toBe(1)
+        expect((await runtime.readProjection())?.contextId).toBe(original.id)
+        clock = due
+        await jest.advanceTimersByTimeAsync(1)
+        expect((await journal.head()).accepted).toBe('2')
+        expect(calls).toBe(2)
+        expect((await runtime.readProjection())?.contextId).toBe('after-earliest')
+      } finally {
+        await runtime.close()
+        jest.useRealTimers()
+      }
+    }
+  )
+})
+
+describe('pending context publication barrier', () => {
+  it.each(['worker', 'projector'])(
+    'keeps old in-flight %s work closed until a requested context commits',
+    async location => {
+      const entered = deferred(),
+        release = deferred(),
+        committing = deferred(),
+        commitRelease = deferred()
+      let hold = false
+      const pause = async () => {
+        if (hold) {
+          hold = false
+          entered.resolve()
+          await release.promise
+        }
+      }
+      const f = await open(
+        {
+          ...noWork,
+          advance: async () => {
+            if (location === 'worker') await pause()
+          }
+        },
+        {
+          policyDigest: 'ff'.repeat(32),
+          async project(input) {
+            if (location === 'projector') await pause()
+            return projection(input)
+          }
+        }
+      )
+      const seen: Projection[] = [],
+        iterator = f.runtime.events(new AbortController().signal)[Symbol.asyncIterator]()
+      const observing = (async () => {
+        for (;;) {
+          const event = await iterator.next()
+          if (event.done) return
+          if (event.value.kind === 'projection') seen.push(event.value.projection)
+        }
+      })().then(
+        () => undefined,
+        error => error
+      )
+      const commit = f.store.commit.bind(f.store)
+      const spy = jest.spyOn(f.store, 'commit').mockImplementationOnce(async (...args) => {
+        committing.resolve()
+        await commitRelease.promise
+        return commit(...args)
+      })
+      let changed: Promise<void> | undefined
+      let flushing: Promise<unknown> | undefined
+      try {
+        hold = true
+        flushing = f.runtime.flush().then(
+          () => undefined,
+          error => error
+        )
+        await entered.promise
+        changed = f.runtime.setContext({ ...context(), id: 'after-pending-context' })
+        await committing.promise
+        release.resolve()
+        expect(await flushing).toBeUndefined()
+        expect(await f.runtime.readProjection()).toBeUndefined()
+        expect(seen).toEqual([])
+        commitRelease.resolve()
+        await changed
+        await f.runtime.flush()
+        expect((await f.runtime.readProjection())?.contextId).toBe('after-pending-context')
+        expect(seen.map(value => value.contextId)).toEqual(['after-pending-context'])
+      } finally {
+        release.resolve()
+        commitRelease.resolve()
+        await changed
+        await flushing
+        spy.mockRestore()
+        await iterator.return?.()
+        await f.runtime.close()
+        expect(await observing).toBeUndefined()
+      }
+    }
+  )
+
+  it('keeps publication closed while any overlapping requested context remains uncommitted', async () => {
+    const firstEntered = deferred(),
+      secondEntered = deferred(),
+      firstRelease = deferred(),
+      secondRelease = deferred()
+    const f = await open(noWork, {
+      policyDigest: 'ff'.repeat(32),
+      project: async input => projection(input)
+    })
+    const commit = f.store.commit.bind(f.store)
+    const spy = jest.spyOn(f.store, 'commit').mockImplementation(async (...args) => {
+      const body = args[1].body
+      if (body.kind === 'context' && body.context.id === 'first-request') {
+        firstEntered.resolve()
+        await firstRelease.promise
+      }
+      if (body.kind === 'context' && body.context.id === 'second-request') {
+        secondEntered.resolve()
+        await secondRelease.promise
+      }
+      return commit(...args)
+    })
+    const first = f.runtime.setContext({ ...context(), id: 'first-request' }).then(
+      () => undefined,
+      error => error
+    )
+    await firstEntered.promise
+    const second = f.runtime.setContext({ ...context(), id: 'second-request' }).then(
+      () => undefined,
+      error => error
+    )
+    try {
+      await secondEntered.promise
+      firstRelease.resolve()
+      expect(await first).toBeUndefined()
+      await f.runtime.flush()
+      expect(await f.runtime.readProjection()).toBeUndefined()
+      secondRelease.resolve()
+      expect(await second).toBeUndefined()
+      await f.runtime.flush()
+      expect((await f.runtime.readProjection())?.contextId).toBe('second-request')
+      expect((await f.journal.head()).accepted).toBe('3')
+    } finally {
+      firstRelease.resolve()
+      secondRelease.resolve()
+      await first
+      await second
+      spy.mockRestore()
+      await f.runtime.close()
+    }
+  })
+})
+
+describe('runtime installed configuration and visible error contracts', () => {
+  it('retains the installed critical-extension set independently of caller array changes', async () => {
+    const extensions = ['urn:example:runtime-extension']
+    const item = batch()
+    item.groups[0].observations[0].extensions = { [extensions[0]]: true }
+    item.groups[0].observations[0].critical = [...extensions]
+    const journal = new MemoryJournal('test'),
+      store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({ store, worker: noWork, supportedExtensions: extensions })
+    extensions[0] = 'urn:example:not-installed'
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      await runtime.attach(
+        {
+          id: 'source',
+          async *open() {
+            yield item
+          }
+        },
+        request()
+      ).done
+      expect((await journal.head()).received).toBe('2')
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it('derives default source capacity from a smaller pending-byte budget', async () => {
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      worker: noWork,
+      limits: { batchBytes: 4096, pendingBytes: 8192 }
+    })
+    try {
+      expect(runtime.limits.pendingBytes).toBe(8192)
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it.each(['limited', 'unavailable', 'conflict', 'expired', 'invalid', 'unauthorized'] as const)(
+    'reports source %s with bounded public diagnostics and the correct retry policy',
+    async code => {
+      const f = await open(),
+        events = f.runtime.events()[Symbol.asyncIterator]()
+      const source: Source = {
+        id: 'source',
+        open() {
+          return {
+            [Symbol.asyncIterator]() {
+              return {
+                next: async () => {
+                  throw new OutputProtocolError(code, 'internal fixture-only diagnostic')
+                }
+              }
+            }
+          }
+        }
+      }
+      try {
+        await expect(f.runtime.attach(source, request()).done).rejects.toMatchObject({ code })
+        expect((await events.next()).value).toEqual({
+          kind: 'error',
+          source: 'source',
+          code,
+          message: 'Output runtime ' + code,
+          retryable: ['limited', 'unavailable', 'conflict', 'expired'].includes(code)
+        })
+      } finally {
+        await events.return?.()
+        await f.runtime.close()
+      }
+    }
+  )
+
+  it('acknowledges a durable source only after actual SQLite receipt commitment and reopens it', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'runtime-durable-source-'))
+    const path = join(directory, 'journal.sqlite')
+    const journal = new SQLiteJournal(path, 'test'),
+      store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({ store, worker: noWork })
+    let acknowledged = false
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      await runtime.attach(
+        {
+          id: 'source',
+          requiredDurability: 'durable',
+          async *open() {
+            yield batch()
+            expect((await journal.head()).received).toBe('2')
+            acknowledged = true
+          }
+        },
+        request()
+      ).done
+      expect(acknowledged).toBe(true)
+      await runtime.close()
+      const reopened = new SQLiteJournal(path, 'test')
+      try {
+        expect((await reopened.head()).received).toBe('2')
+        expect((await reopened.read('1', 8))[0].body.kind).toBe('receive')
+      } finally {
+        await reopened.close()
+      }
+    } finally {
+      await runtime.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('stable runtime error identities', () => {
+  const failure = (run: () => unknown) => {
+    try {
+      run()
+      return undefined
+    } catch (error) {
+      return error
+    }
+  }
+  const diagnostic = (code: string) => ({ code, message: expect.stringMatching(/\S/) })
+
+  it('preserves error codes and useful messages across attachment, partition, durability and observer bounds', async () => {
+    const f = await open(noWork, undefined, { observations: 1 })
+    const release = deferred(),
+      selected = { ...request(), limits: { ...f.runtime.limits } }
+    const source = (id: string): Source => ({
+      id,
+      async *open() {
+        await release.promise
+        const value = batch(id)
+        value.provenance.adapter = id
+        yield value
+      }
+    })
+    const subscriptions: ReturnType<OutputKnowledge['attach']>[] = []
+    try {
+      expect(failure(() => f.runtime.attach(source('one'), request()))).toMatchObject(
+        diagnostic('invalid')
+      )
+      expect(
+        failure(() =>
+          f.runtime.attach(source('one'), {
+            ...selected,
+            partition: { ...partition, account: 'different' }
+          })
+        )
+      ).toMatchObject(diagnostic('unauthorized'))
+      expect(
+        failure(() =>
+          f.runtime.attach({ ...source('one'), requiredDurability: 'durable' }, selected)
+        )
+      ).toMatchObject(diagnostic('unsupported'))
+      subscriptions.push(f.runtime.attach(source('one'), selected))
+      expect(failure(() => f.runtime.attach(source('one'), selected))).toMatchObject(
+        diagnostic('conflict')
+      )
+      for (const id of ['two', 'three', 'four'])
+        subscriptions.push(f.runtime.attach(source(id), selected))
+      expect(failure(() => f.runtime.attach(source('five'), selected))).toMatchObject(
+        diagnostic('limited')
+      )
+      const controllers = Array.from({ length: 8 }, () => new AbortController())
+      for (const controller of controllers) f.runtime.events(controller.signal)
+      expect(failure(() => f.runtime.events())).toMatchObject(diagnostic('limited'))
+      for (const controller of controllers) controller.abort()
+      expect(failure(() => f.runtime.events(controllers[0].signal))).toMatchObject(
+        diagnostic('cancelled')
+      )
+    } finally {
+      release.resolve()
+      await Promise.all(subscriptions.map(value => value.done))
+      await f.runtime.close()
+    }
+    expect(failure(() => f.runtime.events())).toMatchObject(diagnostic('cancelled'))
+    await expect(f.runtime.readProjection()).rejects.toMatchObject(diagnostic('cancelled'))
   })
 })

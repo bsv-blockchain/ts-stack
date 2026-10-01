@@ -3,8 +3,8 @@ id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: stable
 tags: [guide, typescript, packages, consumers, examples]

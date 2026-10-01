@@ -74,6 +74,7 @@ export class OutputKnowledge {
   private ingest: Promise<void> = Promise.resolve()
   private work: Promise<void> | undefined
   private dirty = false
+  private contextChanges = 0
   private runningOperations = 0
   private expiry: ReturnType<typeof setTimeout> | undefined
 
@@ -232,18 +233,24 @@ export class OutputKnowledge {
         'unauthorized',
         'Use a separate store/runtime for another account partition'
       )
+    const mutation = knowledgeMutation({ kind: 'context', context })
     this.gate++
     this.projection = undefined
-    const mutation = knowledgeMutation({ kind: 'context', context })
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const expected = (await this.options.store.revision(this.abort.signal)).received
-      const result = await this.options.store.commit(expected, mutation, this.abort.signal)
-      if (result.status === 'conflict') continue
-      if ('reason' in result) throw new OutputProtocolError(result.status, result.reason)
-      this.schedule()
-      return
+    this.contextChanges++
+    try {
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const expected = (await this.options.store.revision(this.abort.signal)).received
+        const result = await this.options.store.commit(expected, mutation, this.abort.signal)
+        if (result.status === 'conflict') continue
+        if ('reason' in result) throw new OutputProtocolError(result.status, result.reason)
+        this.schedule()
+        return
+      }
+      throw new OutputProtocolError('conflict', 'Context commit contention budget')
+    } finally {
+      this.contextChanges--
+      if (this.dirty) this.schedule()
     }
-    throw new OutputProtocolError('conflict', 'Context commit contention budget')
   }
 
   private async operation<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -284,7 +291,7 @@ export class OutputKnowledge {
   private schedule(): void {
     if (this.abort.signal.aborted) return
     this.dirty = true
-    if (this.work) return
+    if (this.work || this.contextChanges > 0) return
     this.work = this.drain()
       .catch(error => {
         this.error(error)
@@ -306,6 +313,10 @@ export class OutputKnowledge {
       }
     )
     for await (const input of inputs) {
+      if (this.contextChanges > 0) {
+        this.dirty = true
+        return
+      }
       this.emit({ kind: 'knowledge', input })
       this.armExpiry(input)
       if (!this.options.projector) continue
@@ -332,6 +343,10 @@ export class OutputKnowledge {
         )
       const current = await this.options.store.read(undefined, this.abort.signal)
       this.ready()
+      if (this.contextChanges > 0) {
+        this.dirty = true
+        return
+      }
       if (gate !== this.gate || !this.sameCheckpoint(current, input)) {
         this.dirty = true
         continue
@@ -415,7 +430,7 @@ export class OutputKnowledge {
     this.ready()
     const saved = this.projection,
       gate = this.gate
-    if (!saved) return undefined
+    if (!saved || this.contextChanges > 0) return undefined
     const current = await this.options.store.read(undefined, this.abort.signal)
     if (this.abort.signal.aborted || gate !== this.gate) return undefined
     if (this.expired(current) || this.expired(saved.input)) {

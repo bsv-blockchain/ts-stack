@@ -1499,3 +1499,33 @@ pass. Packed middleware consumers include Express 4/5; all 39 documentation
 examples compile against 22 exact tarballs, and all 147 built HTML pages pass
 link validation. Full output-knowledge and complete affected mutation campaigns,
 remaining architectural integrations and exact-head hosted CI are still required.
+
+### Complete first runtime campaign and context-publication follow-up
+
+On `00fc94c68`, the full output-knowledge suite passes 1,469 tests in 112 suites
+in 532 seconds. The complete 385-site authenticated-response queue campaign
+passes 97.40% (356 killed, 19 timeout, 10 survived), with zero uncovered or
+invalid mutants, in 22m43s. A worker SIGSEGV was recovered by the runner and
+remains in the retained log. The whole 396-site runtime campaign fails at 71.97%
+(223 killed, 62 timeout, 107 survived, four uncovered, zero invalid) in 5m15s.
+It supplies no passing qualification. All 10,119 tracked/compiled inputs match
+their frozen hashes after all runs terminate. Only owned, terminal temporary
+directories and inactive generated sandboxes were cleaned; reports are retained.
+
+The follow-up holds publication closed while any requested context commit is
+pending. It covers both an already-running worker and an asynchronous projector,
+including overlapping context requests. Two initial regressions fail on the
+preceding implementation. Additional tests observe autonomous timer invalidation
+before any explicit flush, unordered competing assessment/companion deadlines,
+each checkpoint field, exact source/byte bounds, diagnostic identities and real
+SQLite receipt acknowledgement/reopen. These changes preserve source selections,
+property runs, seed, workers, deadlines and the 90%/zero-uncovered/zero-invalid
+gate. Qualification of the follow-up and remaining native journals is pending.
+
+The integrated follow-up passes 71 runtime/property cases, including 300 generated
+deadline schedules, with 100% line/function and 99.31% branch coverage for the
+whole runtime. Repository health, lint, formatting and strict workspace types
+pass. All 39 examples compile against 22 exact tarballs; 147 generated HTML pages
+pass link checks. Seven reference-app cases and the native two-host Chrome
+demonstration pass. These are local component checks; complete mutation and
+exact-head hosted qualification remain required.
