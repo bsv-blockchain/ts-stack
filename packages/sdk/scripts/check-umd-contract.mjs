@@ -3,14 +3,58 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
+import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import os from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import vm from 'node:vm'
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib'
+
+// Discover npm without executing a PATH command or relying on Node's install
+// layout. Homebrew and distro packages can store npm outside Node's prefix.
+function resolveNpmCli({
+  execPath = process.execPath,
+  env = process.env,
+  platform = process.platform
+} = {}) {
+  const pathCandidates = (env.PATH ?? '')
+    .split(path.delimiter)
+    .filter(Boolean)
+    .map(directory => path.resolve(directory, platform === 'win32' ? 'npm.cmd' : 'npm'))
+  const runtimeDirectory = path.dirname(execPath)
+  const candidates = [
+    ...pathCandidates,
+    env.npm_execpath,
+    path.resolve(runtimeDirectory, '../lib/node_modules/npm/bin/npm-cli.js'),
+    path.join(runtimeDirectory, 'node_modules/npm/bin/npm-cli.js')
+  ].filter(candidate => typeof candidate === 'string' && path.isAbsolute(candidate))
+  const resolved = candidates
+    .map(candidate => {
+      try {
+        const launcher = realpathSync(candidate)
+        // Windows distributes a batch shim alongside npm's JavaScript CLI.
+        const cli =
+          path.basename(launcher).toLowerCase() === 'npm.cmd'
+            ? realpathSync(path.join(path.dirname(launcher), 'node_modules/npm/bin/npm-cli.js'))
+            : launcher
+        if (path.basename(cli) !== 'npm-cli.js' || !statSync(cli).isFile()) return undefined
+        const npmManifest = JSON.parse(
+          readFileSync(path.resolve(path.dirname(cli), '../package.json'), 'utf8')
+        )
+        return npmManifest.name === 'npm' ? cli : undefined
+      } catch {
+        return undefined
+      }
+    })
+    .find(Boolean)
+  if (!resolved)
+    throw new Error(
+      'Cannot find an installed npm JavaScript CLI from PATH, npm_execpath, or the Node installation'
+    )
+  return resolved
+}
 
 // The default profile packs the already-built SDK and installs that exact
 // tarball offline without lifecycle scripts or peer-resolution exceptions.
@@ -29,8 +73,9 @@ if (options.has('--consumer')) {
 } else {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'sdk-umd-contract-'))
   consumer = path.join(temporary, 'consumer')
+  const npmCli = resolveNpmCli()
   function npm(args, cwd) {
-    const run = spawnSync('npm', args, {
+    const run = spawnSync(process.execPath, [npmCli, ...args], {
       cwd,
       encoding: 'utf8',
       timeout: 60_000,
@@ -57,7 +102,12 @@ if (options.has('--consumer')) {
     JSON.stringify({ private: true, type: 'module' }) + '\n'
   )
   npm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', tarball], consumer)
-  packedArtifact = { tarball, sha256: sha256(await fs.readFile(tarball)) }
+  packedArtifact = {
+    tarball,
+    sha256: sha256(await fs.readFile(tarball)),
+    npmCli,
+    nodeExecutable: process.execPath
+  }
 }
 const output = path.resolve(options.get('--output') ?? path.join(consumer, 'umd-contract-results'))
 assert.ok(
@@ -75,16 +125,6 @@ const { build: esbuild } = await import(pathToFileURL(toolRequire.resolve('esbui
 const { build: vite, createLogger } = await import(pathToFileURL(toolRequire.resolve('vite')).href)
 const generator = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
-function descriptorShape(descriptor) {
-  return {
-    enumerable: descriptor.enumerable,
-    configurable: descriptor.configurable,
-    ...('writable' in descriptor ? { writable: descriptor.writable } : {}),
-    ...('get' in descriptor ? { getter: typeof descriptor.get === 'function' } : {}),
-    ...('set' in descriptor ? { setter: typeof descriptor.set === 'function' } : {})
-  }
-}
-
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
@@ -100,41 +140,58 @@ function sizes(bytes) {
 }
 
 const classicBytes = await fs.readFile(path.join(packageRoot, 'dist/umd/bundle.js'))
-const previousClassicGlobal = { previousSDK: true }
-const browser = vm.createContext({
-  bsv: previousClassicGlobal,
-  TextEncoder,
-  TextDecoder,
-  atob,
-  btoa,
-  crypto: globalThis.crypto,
-  URL,
-  URLSearchParams,
-  AbortController,
-  setTimeout,
-  clearTimeout,
-  fetch() {
-    throw new Error('The SDK import must not make network requests')
-  }
-})
-vm.runInContext(classicBytes.toString('utf8'), browser, { timeout: 30_000 })
-assert.notEqual(
-  browser.bsv,
-  previousClassicGlobal,
-  'Classic asset must replace the existing global'
-)
-assert.equal(browser.bsv.PrivateKey.fromString('1').toPublicKey().toString(), generator)
-const names = Object.keys(browser.bsv).sort()
-const descriptors = Object.fromEntries(
-  names.map(name => [name, descriptorShape(Object.getOwnPropertyDescriptor(browser.bsv, name))])
-)
-const markerDescriptors = {
-  module: descriptorShape(Object.getOwnPropertyDescriptor(browser.bsv, '__esModule')),
-  tag: descriptorShape(Object.getOwnPropertyDescriptor(browser.bsv, Symbol.toStringTag))
+// Execute a normal, isolated module fixture rather than dynamically evaluating
+// the classic asset. The function's receiver preserves its browser script `this`.
+// Keep the raw packed bytes unchanged inside the wrapper and record provenance.
+await fs.mkdir(output, { recursive: true })
+const classicProbe = path.join(output, 'classic-probe.mjs')
+const classicPrefix = Buffer.from(`import assert from 'node:assert/strict';
+const previousClassicGlobal = { previousSDK: true };
+globalThis.bsv = previousClassicGlobal;
+globalThis.fetch = () => { throw new Error('The SDK import must not make network requests'); };
+function loadClassic() {
+`)
+const classicSuffix = Buffer.from(`
 }
-const globalDescriptor = descriptorShape(Object.getOwnPropertyDescriptor(browser, 'bsv'))
-assert.equal(browser.bsv.__esModule, true)
-assert.equal(browser.bsv[Symbol.toStringTag], 'Module')
+loadClassic.call(globalThis);
+assert.notEqual(globalThis.bsv, previousClassicGlobal, 'Classic asset must replace the existing global');
+assert.equal(globalThis.bsv.PrivateKey.fromString('1').toPublicKey().toString(), ${JSON.stringify(generator)});
+assert.equal(globalThis.bsv.__esModule, true);
+assert.equal(globalThis.bsv[Symbol.toStringTag], 'Module');
+function descriptorShape(descriptor) {
+  return {
+    enumerable: descriptor.enumerable,
+    configurable: descriptor.configurable,
+    ...('writable' in descriptor ? { writable: descriptor.writable } : {}),
+    ...('get' in descriptor ? { getter: typeof descriptor.get === 'function' } : {}),
+    ...('set' in descriptor ? { setter: typeof descriptor.set === 'function' } : {})
+  };
+}
+const names = Object.keys(globalThis.bsv).sort((left, right) => left.localeCompare(right, 'en'));
+const descriptors = Object.fromEntries(names.map(name =>
+  [name, descriptorShape(Object.getOwnPropertyDescriptor(globalThis.bsv, name))]));
+const markerDescriptors = {
+  module: descriptorShape(Object.getOwnPropertyDescriptor(globalThis.bsv, '__esModule')),
+  tag: descriptorShape(Object.getOwnPropertyDescriptor(globalThis.bsv, Symbol.toStringTag))
+};
+const globalDescriptor = descriptorShape(Object.getOwnPropertyDescriptor(globalThis, 'bsv'));
+console.log(JSON.stringify({ names, descriptors, markerDescriptors, globalDescriptor }));
+`)
+await fs.writeFile(classicProbe, Buffer.concat([classicPrefix, classicBytes, classicSuffix]))
+const classicProbeBytes = await fs.readFile(classicProbe)
+assert.deepEqual(
+  classicProbeBytes.subarray(classicPrefix.length, classicPrefix.length + classicBytes.length),
+  classicBytes,
+  'Classic probe must contain the exact packed asset bytes'
+)
+const classicRun = spawnSync(process.execPath, [classicProbe], {
+  cwd: consumer,
+  encoding: 'utf8',
+  timeout: 30_000,
+  maxBuffer: 4 * 1024 * 1024
+})
+assert.equal(classicRun.status, 0, `Classic asset contract failed: ${classicRun.stderr}`)
+const { names, descriptors, markerDescriptors, globalDescriptor } = JSON.parse(classicRun.stdout)
 
 // The import-only case contains no SDK root import: a bundler dropping the
 // facade's initialization must fail. The named case compares every export
@@ -146,7 +203,7 @@ const markerDescriptors = ${JSON.stringify(markerDescriptors)};
 const expectedGlobalDescriptor = ${JSON.stringify(globalDescriptor)};
 const globalSDK = globalThis.bsv;
 if (!globalSDK || globalSDK.previousSDK) throw new Error('Missing global bsv replacement');
-if (JSON.stringify(Object.keys(globalSDK).sort()) !== JSON.stringify(expectedNames))
+if (JSON.stringify(Object.keys(globalSDK).sort((left, right) => left.localeCompare(right, 'en'))) !== JSON.stringify(expectedNames))
   throw new Error('Global exports differ from the classic asset');
 function shape(d) {
   return { enumerable: d.enumerable, configurable: d.configurable,
@@ -207,38 +264,63 @@ const result = {
     bytes: sizes(classicBytes),
     exportCount: names.length,
     descriptorParityReference: true,
-    publicGenerator: true
+    publicGenerator: true,
+    runtimeProbe: 'static-node-child',
+    rawAssetBytesPreserved: true,
+    probeSHA256: sha256(classicProbeBytes)
   },
   cases: [],
   leafCases: []
 }
-const requireBoundary = spawnSync(
-  process.execPath,
-  [
-    '--input-type=commonjs',
-    '-e',
-    `
-try { require('@bsv/sdk/umd'); throw new Error('Explicit ./umd unexpectedly accepts require'); }
+const requireBoundaryFixture = path.join(output, 'require-boundary.cjs')
+await fs.writeFile(
+  requireBoundaryFixture,
+  `try { require('@bsv/sdk/umd'); throw new Error('Explicit ./umd unexpectedly accepts require'); }
 catch (error) {
   if (error.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
     console.error(error.name + ': ' + error.message); process.exitCode = 1;
   }
 }`
-  ],
-  { cwd: consumer, encoding: 'utf8', timeout: 30_000 }
 )
+const requireBoundary = spawnSync(process.execPath, [requireBoundaryFixture], {
+  cwd: consumer,
+  encoding: 'utf8',
+  timeout: 30_000
+})
 result.explicitImportOnlyContract = {
   exitCode: requireBoundary.status,
   error: requireBoundary.stderr
 }
+// Fixture imports and globals must be exercised in deterministic order.
+function forEachSequential(values, callback) {
+  return values.reduce(
+    (previous, value, index) => previous.then(() => callback(value, index)),
+    Promise.resolve()
+  )
+}
+
+function fixtureImports(requireProfile, named, alias) {
+  if (requireProfile) {
+    if (named) {
+      return `const moduleSDK = require(${JSON.stringify(alias)});\nconst canonicalSDK = require('@bsv/sdk');`
+    }
+    return `require(${JSON.stringify(alias)});`
+  }
+  if (named) {
+    return `import * as moduleSDK from ${JSON.stringify(alias)};\nimport * as canonicalSDK from '@bsv/sdk';`
+  }
+  return `import ${JSON.stringify(alias)};`
+}
+
 const profiles = [
   ...aliases.map(alias => ({ alias, requireProfile: false })),
   ...requireAliases.map(alias => ({ alias, requireProfile: true }))
 ]
-for (const { alias, requireProfile } of profiles) {
-  for (const pattern of requireProfile
+await forEachSequential(profiles, async ({ alias, requireProfile }) => {
+  const patterns = requireProfile
     ? ['require-only', 'named-require']
-    : ['import-only', 'named-import']) {
+    : ['import-only', 'named-import']
+  await forEachSequential(patterns, async pattern => {
     const caseRoot = path.join(output, alias.replaceAll('/', '_'), pattern)
     await fs.mkdir(caseRoot, { recursive: true })
     const extension = requireProfile ? 'cjs' : 'mjs'
@@ -246,16 +328,10 @@ for (const { alias, requireProfile } of profiles) {
     const fixture = path.join(caseRoot, `preset-global.${extension}`)
     await fs.writeFile(fixture, 'globalThis.bsv = { previousSDK: true };\n')
     const named = pattern === 'named-import' || pattern === 'named-require'
-    const imports = requireProfile
-      ? named
-        ? `const moduleSDK = require(${JSON.stringify(alias)});\nconst canonicalSDK = require('@bsv/sdk');`
-        : `require(${JSON.stringify(alias)});`
-      : named
-        ? `import * as moduleSDK from ${JSON.stringify(alias)};\nimport * as canonicalSDK from '@bsv/sdk';`
-        : `import ${JSON.stringify(alias)};`
+    const imports = fixtureImports(requireProfile, named, alias)
     const identity = named
       ? `
-if (JSON.stringify(Object.keys(moduleSDK).sort()) !== JSON.stringify(expectedNames))
+if (JSON.stringify(Object.keys(moduleSDK).sort((left, right) => left.localeCompare(right, 'en'))) !== JSON.stringify(expectedNames))
   throw new Error('Facade namespace differs');
 for (const name of expectedNames)
   if (moduleSDK[name] !== canonicalSDK[name] || globalSDK[name] !== canonicalSDK[name])
@@ -269,7 +345,7 @@ if (new globalSDK.Curve() !== new canonicalSDK.Curve()) throw new Error('Curve s
       ? "require('./preset-global.cjs');"
       : "import './preset-global.mjs';"
     await fs.writeFile(entry, `${preset}\n${imports}\n${assertions}\n${identity}`)
-    for (const tool of ['native-node', 'esbuild', 'vite']) {
+    await forEachSequential(['native-node', 'esbuild', 'vite'], async tool => {
       let artifact = entry
       let buildError
       try {
@@ -312,11 +388,9 @@ if (new globalSDK.Curve() !== new canonicalSDK.Curve()) throw new Error('Curve s
       } catch (error) {
         buildError = error.message
       }
-      const execute = `try { await import(${JSON.stringify(pathToFileURL(artifact).href)}); }
-catch (error) { console.error(error.name + ': ' + error.message); process.exitCode = 1; }`
       const run = buildError
         ? undefined
-        : spawnSync(process.execPath, ['--input-type=module', '-e', execute], {
+        : spawnSync(process.execPath, [artifact], {
             cwd: consumer,
             encoding: 'utf8',
             timeout: 30_000,
@@ -362,14 +436,14 @@ try {
             .join('/')
         )
       }
-    }
-  }
-}
+    })
+  })
+})
 // Native fixtures construct the cold leaf before importing any SDK barrel.
 // Browser fixtures import only that leaf alias, so a barrel cannot mask a
 // missing initialization edge after tree shaking.
-for (const leaf of ['BasePoint', 'JacobianPoint']) {
-  for (const suffix of ['', '.ts']) {
+await forEachSequential(['BasePoint', 'JacobianPoint'], async leaf => {
+  await forEachSequential(['', '.ts'], async suffix => {
     const alias = `@bsv/sdk/primitives/${leaf}${suffix}`
     const caseRoot = path.join(output, 'leaves', leaf + (suffix ? '-ts' : ''))
     await fs.mkdir(caseRoot, { recursive: true })
@@ -394,7 +468,7 @@ if (${JSON.stringify(leaf)} === 'JacobianPoint' &&
     (!(jacobian instanceof Leaf) || !value.isInfinity()))
   throw new Error('Canonical JacobianPoint identity changed');
 `
-    for (const mode of ['esm', 'cjs']) {
+    await forEachSequential(['esm', 'cjs'], async mode => {
       const loader =
         mode === 'esm'
           ? 'const load = async name => await import(name);'
@@ -424,9 +498,7 @@ if (!(point instanceof Point) || !(point instanceof BasePoint) ||
 if (new Curve() !== curve) throw new Error('Canonical Curve singleton changed');
 `
       )
-      const execute = `try { await import(${JSON.stringify(pathToFileURL(entry).href)}); }
-catch (error) { console.error(error.name + ': ' + error.message); process.exitCode = 1; }`
-      const run = spawnSync(process.execPath, ['--input-type=module', '-e', execute], {
+      const run = spawnSync(process.execPath, [entry], {
         cwd: consumer,
         encoding: 'utf8',
         timeout: 30_000,
@@ -441,7 +513,7 @@ catch (error) { console.error(error.name + ': ' + error.message); process.exitCo
         sha256: sha256(await fs.readFile(entry)),
         coldLeafBeforeBarrel: true
       })
-    }
+    })
     const browserEntry = path.join(caseRoot, 'entry.mjs')
     await fs.writeFile(
       browserEntry,
@@ -451,7 +523,7 @@ ${conversion}
 export default Leaf;
 `
     )
-    for (const tool of ['esbuild', 'vite']) {
+    await forEachSequential(['esbuild', 'vite'], async tool => {
       const directory = path.join(caseRoot, tool)
       const artifact = path.join(directory, 'bundle.mjs')
       await fs.mkdir(directory, { recursive: true })
@@ -529,11 +601,9 @@ export default Leaf;
       } catch (error) {
         buildError = error.message
       }
-      const execute = `try { await import(${JSON.stringify(pathToFileURL(artifact).href)}); }
-catch (error) { console.error(error.name + ': ' + error.message); process.exitCode = 1; }`
       const run = buildError
         ? undefined
-        : spawnSync(process.execPath, ['--input-type=module', '-e', execute], {
+        : spawnSync(process.execPath, [artifact], {
             cwd: consumer,
             encoding: 'utf8',
             timeout: 30_000,
@@ -580,9 +650,9 @@ try {
             .join('/')
         )
       }
-    }
-  }
-}
+    })
+  })
+})
 await fs.writeFile(
   path.join(output, 'index.html'),
   `<!doctype html>

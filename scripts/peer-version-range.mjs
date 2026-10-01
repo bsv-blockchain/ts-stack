@@ -1,5 +1,5 @@
 /** The governed peer syntax is complete stable caret versions, optionally joined by ` || `. */
-const VERSION_PATTERN = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/
+const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 
 function parseVersion(value) {
   if (typeof value !== 'string' || value.length > 64) return null
@@ -30,6 +30,6 @@ export function acceptsPeerVersion(range, workspaceVersion) {
   const minimums = alternatives.map(alternative =>
     alternative.startsWith('^') ? parseVersion(alternative.slice(1)) : null
   )
-  if (minimums.some(minimum => minimum === null)) return false
+  if (minimums.includes(null)) return false
   return minimums.some(minimum => acceptsCaret(minimum, current))
 }

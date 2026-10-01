@@ -6,7 +6,7 @@ version: '1.0.0'
 last_updated: '2026-09-30'
 last_verified: '2026-09-30'
 review_cadence_days: 30
-status: draft
+status: experimental
 tags: [identity, did, credentials, migration]
 ---
 

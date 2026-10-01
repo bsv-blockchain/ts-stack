@@ -87,11 +87,18 @@ class SourceReader {
       if (prefix > maximum) throw new TypeError('BRC-52 CompactSize exceeds limit')
       return prefix
     }
-    const width = prefix === 253 ? 2 : prefix === 254 ? 4 : 8
+    let width = 8
+    let minimum = 4_294_967_296n
+    if (prefix === 253) {
+      width = 2
+      minimum = 253n
+    } else if (prefix === 254) {
+      width = 4
+      minimum = 65_536n
+    }
     const raw = this.take(width)
     let value = 0n
     for (let index = width - 1; index >= 0; index--) value = value * 256n + BigInt(raw[index])
-    const minimum = prefix === 253 ? 253n : prefix === 254 ? 65_536n : 4_294_967_296n
     if (value < minimum || value > BigInt(maximum))
       throw new TypeError('Noncanonical or oversized BRC-52 CompactSize')
     return Number(value)
@@ -132,7 +139,7 @@ export function verifyBRC52CertificateBinary(
   const subject = identityKey(reader.take(33))
   const certifier = identityKey(reader.take(33))
   const txid = toHex(reader.take(32))
-  const outputIndex = reader.compactSize(0xffff_ffff)
+  const outputIndex = reader.compactSize(0xff_ff_ff_ff)
   const count = reader.compactSize(BRC52_LIMITS.fields)
   const fields: Record<string, string> = Object.create(null) as Record<string, string>
   for (let index = 0; index < count; index++) {

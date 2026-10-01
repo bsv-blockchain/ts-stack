@@ -277,7 +277,9 @@ export async function receiveBRC52Disclosure(
     throw new Error('Authenticated request expired during reliance assessment')
   }
   const disclosedFields: Record<string, string> = {}
-  for (const [fieldName, ciphertext] of Object.entries(keyring)) {
+  await Object.entries(keyring).reduce(async (previous, [fieldName, ciphertext]) => {
+    // Start each wallet operation only after the prior field completed successfully.
+    await previous
     const result = await options.wallet.decrypt({
       protocolID: [2, 'certificate field encryption'],
       keyID: `${source.serialNumber} ${fieldName}`,
@@ -302,7 +304,7 @@ export async function receiveBRC52Disclosure(
     } finally {
       plaintext.fill(0)
     }
-  }
+  }, Promise.resolve())
   return {
     verifiedDocument: envelope.credential,
     disclosedFields,

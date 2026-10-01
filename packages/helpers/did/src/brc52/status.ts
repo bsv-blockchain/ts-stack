@@ -108,7 +108,7 @@ function text(value: unknown, maximum = 1024): string {
     throw new Error('Expected bounded text')
   }
   for (const character of value) {
-    const code = character.charCodeAt(0)
+    const code = character.codePointAt(0) as number
     if (code < 32 || code === 127) throw new Error('Expected bounded text')
   }
   return value

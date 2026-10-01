@@ -496,6 +496,22 @@ describe('BRC-203 authenticated disclosure receiver integration port', () => {
     expect(options.wallet.decrypt).toHaveBeenCalledTimes(2)
   })
 
+  test('aborts after the first failed field without starting the next wallet decryption', async () => {
+    const options = receiverOptions({
+      inputData: JSON.stringify(
+        disclosedEnvelope({ name: privateNameKeyring, email: privateNameKeyring })
+      )
+    })
+    options.wallet.decrypt = jest.fn(async () => {
+      throw new Error('Synthetic first field failure')
+    })
+    await expect(receiveBRC52Disclosure(options)).rejects.toThrow('Synthetic first field failure')
+    expect(options.wallet.decrypt).toHaveBeenCalledTimes(1)
+    expect(options.wallet.decrypt).toHaveBeenCalledWith(
+      expect.objectContaining({ keyID: `${fixture.credential.serialNumber} name` })
+    )
+  })
+
   test.each([
     'unknown-field',
     'master-keyring',
