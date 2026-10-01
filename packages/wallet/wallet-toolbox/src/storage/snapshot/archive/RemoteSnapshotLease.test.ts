@@ -69,9 +69,12 @@ test('close fences synchronously, drains the client operation and cancels the ex
     await expect(lease.run(async () => 2)).rejects.toThrow('already has an operation')
     let closed = false
     const closing = lease.close()
-    void closing.then(() => {
-      closed = true
-    })
+    void closing.then(
+      () => {
+        closed = true
+      },
+      () => undefined
+    )
     expect(lease.close()).toBe(closing)
     expect(lease.isOpen).toBe(false)
     expect(signal!.aborted).toBe(true)
@@ -289,9 +292,13 @@ test('poll delay holds the operation until its exact duration without issuing re
   const { transport, rpc } = remoteReaderFixture([])
   const lease = new RemoteSnapshotLease(transport, { lifetimeMs: 1000 })
   let finished = false
-  const waiting = lease.wait(100).then(() => {
-    finished = true
-  })
+  const waiting = lease.wait(100)
+  void waiting.then(
+    () => {
+      finished = true
+    },
+    () => undefined
+  )
   await jest.advanceTimersByTimeAsync(99)
   expect(finished).toBe(false)
   await jest.advanceTimersByTimeAsync(1)

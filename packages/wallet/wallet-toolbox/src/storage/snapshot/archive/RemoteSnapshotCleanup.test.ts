@@ -70,9 +70,13 @@ test('pending cleanup uses bounded exponential delay and one signal until a real
     if (calls.length < 6) throw new SnapshotArchiveCleanupPendingError()
   })
   let completed = false
-  const closing = drainSnapshotArchiveRequest(cancel).then(() => {
-    completed = true
-  })
+  const closing = drainSnapshotArchiveRequest(cancel)
+  void closing.then(
+    () => {
+      completed = true
+    },
+    () => undefined
+  )
   await jest.advanceTimersByTimeAsync(2499)
   expect(completed).toBe(false)
   expect(calls).toEqual([1000000, 1000100, 1000300, 1000700, 1001500])
