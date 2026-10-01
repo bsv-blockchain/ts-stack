@@ -75,6 +75,11 @@ back as numbers, as with mysql2 and better-sqlite3. The process-wide `pg.types`
 defaults are not changed. `Setup.createPostgresKnex(connectionJson, database)`
 creates a knex with the same parser installed.
 
+Postgres migrations run one at a time. Migrations that add indexes to existing
+tables run outside a transaction and use `CREATE INDEX CONCURRENTLY`, so writes
+continue while an index is built. `MonitorDaemon` takes a `postgresConnection`
+(JSON node-postgres config). `ChaintracksStorageKnex` does not support Postgres.
+
 Set `RUNPOSTGRES=1` and `POSTGRES_CONNECTION` (JSON node-postgres connection
 config) to include Postgres in the Knex test suites. Test databases are created
 on that server as needed.
