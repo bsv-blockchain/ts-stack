@@ -1762,3 +1762,16 @@ there is no final mutation report. A shell exit of zero is not qualification.
 The negative log and execution receipt are retained. Upstream `022f1a250` merged
 cleanly at `3143f37c2`, with all 12 knownTxids regressions passing. These changes
 and prior component evidence do not complete the checkpoint or hosted CI gate.
+
+The full native run at `d0c58a1e` completed 1,777 tests across 133 suites:
+1,775 passed and two older exact-view assertions failed because they omitted the
+new retained order metadata. All 9,934 frozen inputs and HEAD matched throughout
+the 688-second run. The corrections retain the prior history comparisons while
+explicitly checking the newly ordered fields. Hosted CI also found one unformatted
+policy registration and 12 maintainability findings; those are corrected without
+suppressions or changes to qualification thresholds. The complete affected
+journal/current-query/current-projection and legacy-view selection now passes
+366 tests across 28 suites, including both 300-case generated properties. The
+authenticated HTTP progressive/live/restart integration, package types, root lint
+and complete root/workspace formatting pass. The prior full-run failure remains
+negative evidence; fresh complete qualification is required for this follow-up.

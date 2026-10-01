@@ -201,7 +201,13 @@ describe('attributable proposal knowledge without implicit channel selection', (
       [second, first],
       [second, first]
     ).snapshot('50', () => true)
-    expect(a).toEqual(b)
+    const withoutOrder = (view: typeof a) => ({
+      ...view,
+      heads: view.heads.map(({ order: _order, ...head }) => head)
+    })
+    expect(withoutOrder(a)).toEqual(withoutOrder(b))
+    expect(a.heads.map(head => head.order?.group)).toEqual([0, 1])
+    expect(b.heads.map(head => head.order?.group)).toEqual([1, 0])
     expect(a.heads).toHaveLength(2)
   })
 
@@ -245,6 +251,14 @@ describe('attributable proposal knowledge without implicit channel selection', (
         generation: '0',
         groupId: 'removal',
         observationId: 'removed-head',
+        order: {
+          phase: 'finite',
+          sequence: '0',
+          receipt: '2',
+          group: 1,
+          observation: 0,
+          observations: 1
+        },
         report: removal.payload
       }
     ])

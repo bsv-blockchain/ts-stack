@@ -42,16 +42,13 @@ export function fixture(selected = source) {
     channel: proposal.body.channel,
     proposalId: outputPacketDigest('proposal', proposal.body)
   })
-  const pair = (
-    proposal = signed(),
-    state: OutputProposalState = { status: 'active', recordedAt: '10' }
-  ): OutputObservation[] => [
+  const pair = (proposal = signed(), state?: OutputProposalState): OutputObservation[] => [
     { id: 'head', scope: selected, kind: 'proposal', payload: { proposal } },
     {
       id: 'state',
       scope: selected,
       kind: 'proposal-state',
-      payload: { ...referenceFor(proposal), state }
+      payload: { ...referenceFor(proposal), state: state ?? { status: 'active', recordedAt: '10' } }
     }
   ]
   const removal = (proposal: OutputSignedProposal): OutputObservation => ({

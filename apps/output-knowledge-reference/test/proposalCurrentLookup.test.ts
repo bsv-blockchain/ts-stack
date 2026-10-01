@@ -367,7 +367,7 @@ it('keeps authenticated current-channel snapshot/live receipts resumable across 
       },
       { timeout: 10000, interval: 25 }
     )
-    expect(requests.filter(path => path.endsWith('/lookup/open')).length).toBe(opens)
+    expect(requests.filter(path => path.endsWith('/lookup/open'))).toHaveLength(opens)
     expect(
       (await resumed.core.inspect()).entries.some(
         row =>

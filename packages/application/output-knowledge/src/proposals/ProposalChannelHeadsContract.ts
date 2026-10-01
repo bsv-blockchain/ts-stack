@@ -11,6 +11,7 @@ import {
   type OutputSourceGroup,
   type OutputProposalState
 } from '@bsv/sdk'
+import { outputSourceIdentity } from '../SourceMembership.js'
 import { ProposalPolicyRegistry } from './ProposalPolicyRegistry.js'
 import { ProposalChannelHeadsQuery } from './ProposalChannelHeadsQuery.js'
 
@@ -27,6 +28,7 @@ const same = (a: unknown, b: unknown): boolean => canonicalOutputJSON(a) === can
  * This is not signature/policy verification, history selection or effect authority.
  */
 export class ProposalChannelHeadsContract {
+  readonly sourceIdentity: string
   private readonly scope: OutputScope
   private readonly policy: { id: string; digest: string }
   private readonly channels: Set<string> | undefined
@@ -41,6 +43,7 @@ export class ProposalChannelHeadsContract {
     const normalized = rule.parameters(parameters)
     const selected = rule.query(query, normalized) as { channels?: string[] }
     this.scope = parseOutputScope(scope)
+    this.sourceIdentity = outputSourceIdentity(this.scope)
     this.policy = normalized.policy as { id: string; digest: string }
     this.channels = selected.channels && new Set(selected.channels)
     if (
@@ -70,42 +73,57 @@ export class ProposalChannelHeadsContract {
     let position = 0,
       previous = ''
     while (position < observations.length) {
-      const initial = observations[position]
-      let removed: Removal | undefined
-      let channel: string
-      if (initial.kind === 'proposal-remove') {
-        if (phase !== 'live') this.invalid('Snapshot cannot remove a channel')
-        removed = initial.payload
-        channel = this.reference(removed)
-        position++
-      } else if (initial.kind === 'proposal') channel = this.proposal(initial.payload.proposal)
-      else this.invalid('Expected a channel head or an authorized identifier removal')
-      if (channel <= previous) this.invalid('Current-channel changes must be unique and sorted')
-      previous = channel
-      const change: ProposalChannelQueryChange = { channel, ...(removed ? { removed } : {}) }
-      const next = observations[position]
-      if (next?.kind === 'proposal' && next.payload.proposal.body.channel === channel) {
-        const proposal = next.payload.proposal
-        this.proposal(proposal)
-        const state = observations[position + 1]
-        if (
-          state?.kind !== 'proposal-state' ||
-          this.reference(state.payload) !== channel ||
-          state.payload.proposalId !== outputPacketDigest('proposal', proposal.body)
-        )
-          this.invalid('Current-channel head must be followed by its exact state')
-        if (
-          removed &&
-          (proposal.body.previous !== removed.proposalId ||
-            removed.proposalId === state.payload.proposalId)
-        )
-          this.invalid('Replacement does not name the removed predecessor')
-        change.head = { proposal, state: state.payload.state }
-        position += 2
-      } else if (!removed) this.invalid('Current-channel state pair is incomplete')
-      changes.push(change)
+      const next = this.change(observations, position, phase)
+      if (next.change.channel <= previous)
+        this.invalid('Current-channel changes must be unique and sorted')
+      previous = next.change.channel
+      changes.push(next.change)
+      position = next.position
     }
     return structuredClone(changes)
+  }
+
+  private change(observations: OutputObservation[], start: number, phase: 'snapshot' | 'live') {
+    const initial = observations[start]
+    let position = start,
+      removed: Removal | undefined,
+      channel: string
+    if (initial.kind === 'proposal-remove') {
+      if (phase !== 'live') this.invalid('Snapshot cannot remove a channel')
+      removed = initial.payload
+      channel = this.reference(removed)
+      position++
+    } else if (initial.kind === 'proposal') channel = this.proposal(initial.payload.proposal)
+    else this.invalid('Expected a channel head or an authorized identifier removal')
+    const change: ProposalChannelQueryChange = { channel, ...(removed ? { removed } : {}) }
+    const next = observations[position]
+    if (next?.kind === 'proposal' && next.payload.proposal.body.channel === channel) {
+      change.head = this.head(next.payload.proposal, observations[position + 1], removed, channel)
+      position += 2
+    } else if (!removed) this.invalid('Current-channel state pair is incomplete')
+    return { change, position }
+  }
+
+  private head(
+    proposal: OutputSignedProposal,
+    state: OutputObservation | undefined,
+    removed: Removal | undefined,
+    channel: string
+  ) {
+    this.proposal(proposal)
+    if (
+      state?.kind !== 'proposal-state' ||
+      this.reference(state.payload) !== channel ||
+      state.payload.proposalId !== outputPacketDigest('proposal', proposal.body)
+    )
+      this.invalid('Current-channel head must be followed by its exact state')
+    if (
+      removed &&
+      (proposal.body.previous !== removed.proposalId ||
+        removed.proposalId === state.payload.proposalId)
+    )
+      this.invalid('Replacement does not name the removed predecessor')
+    return { proposal, state: state.payload.state }
   }
 
   private reference(value: {

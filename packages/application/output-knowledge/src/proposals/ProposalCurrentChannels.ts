@@ -4,7 +4,6 @@ import {
   outputPacketDigest,
   outputU64,
   OutputProtocolError,
-  parseOutputScope,
   type OutputJSON,
   type OutputJSONObject,
   type OutputObservation,
@@ -13,7 +12,11 @@ import {
   type OutputSignedProposal,
   type OutputSourceGroup
 } from '@bsv/sdk'
-import { outputSourceIdentity, type SourceGenerationState } from '../SourceMembership.js'
+import {
+  compareKnowledgeText,
+  outputSourceIdentity,
+  type SourceGenerationState
+} from '../SourceMembership.js'
 import type { ProposalKnowledgeView, ProposalObservationLocation } from './ProposalKnowledgeView.js'
 import {
   ProposalChannelHeadsContract,
@@ -55,6 +58,7 @@ type OrderedGroup = {
   group: OutputSourceGroup
   order: NonNullable<ProposalObservationLocation['order']>
 }
+type SourceOrder = { snapshotLast: string; watermark?: string; through?: bigint }
 type Selection = ProposalCurrentChannelSelection
 const same = (a: unknown, b: unknown): boolean => canonicalOutputJSON(a) === canonicalOutputJSON(b)
 const key = (scope: OutputScope, generation: string): string =>
@@ -80,9 +84,13 @@ export class ProposalCurrentChannels {
       throw new OutputProtocolError('invalid', 'Install 1–64 current-channel selections')
     for (const input of selections) {
       const selection = structuredClone(input)
-      const scope = parseOutputScope({ ...selection.source, epoch: 'configuration' })
-      new ProposalChannelHeadsContract(policies, scope, selection.parameters, selection.query)
-      const identity = outputSourceIdentity(scope)
+      const contract = new ProposalChannelHeadsContract(
+        policies,
+        { ...selection.source, epoch: 'configuration' },
+        selection.parameters,
+        selection.query
+      )
+      const identity = contract.sourceIdentity
       if (this.selections.has(identity))
         throw new OutputProtocolError('invalid', 'Duplicate current-channel selection')
       this.selections.set(identity, selection)
@@ -139,34 +147,13 @@ export class ProposalCurrentChannels {
     )
     let channels = new Map<string, CurrentProposalChannel>()
     const result: ProposalCurrentSource = { ...source, consistent: true, channels: [] }
-    let snapshotLast = '',
-      watermark: string | undefined,
-      through: bigint | undefined
+    const order: SourceOrder = { snapshotLast: '' }
     for (const row of this.groups(view, source)) {
       const staged = new Map(channels)
       try {
-        if (row.order.phase === 'snapshot') {
-          if (
-            through !== undefined ||
-            (watermark !== undefined && watermark !== row.group.sequence)
-          )
-            this.inconsistent('Snapshot order changed')
-          watermark = row.group.sequence
-        } else if (row.order.phase === 'live') {
-          const sequence = outputU64(row.group.sequence)
-          if (sequence <= (through ?? (watermark === undefined ? -1n : outputU64(watermark))))
-            this.inconsistent('Live sequence did not advance')
-          through = sequence
-        } else this.inconsistent('Current-channel query requires snapshot/live phases')
+        this.advanceOrder(order, row)
         const changes = contract.check(row.group, row.order.phase)
-        for (const change of changes) {
-          if (row.order.phase === 'snapshot') {
-            if (change.channel <= snapshotLast)
-              this.inconsistent('Snapshot channels are not strictly ordered')
-            snapshotLast = change.channel
-          }
-          this.applyChange(staged, change, source, row.group.id, now)
-        }
+        this.applyGroup(staged, changes, source, row, order, now)
         channels = staged
       } catch (error) {
         if (!(error instanceof OutputProtocolError)) throw error
@@ -176,10 +163,50 @@ export class ProposalCurrentChannels {
       }
     }
     result.channels = [...channels.values()].sort((a, b) =>
-      a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : 0
+      compareKnowledgeText(a.channel, b.channel)
     )
     if (!result.consistent) for (const channel of result.channels) channel.activeIntent = false
     return result
+  }
+
+  private advanceOrder(
+    order: SourceOrder,
+    row: OrderedGroup
+  ): asserts row is OrderedGroup & { order: { phase: 'snapshot' | 'live' } } {
+    if (row.order.phase === 'snapshot') {
+      if (
+        order.through !== undefined ||
+        (order.watermark !== undefined && order.watermark !== row.group.sequence)
+      )
+        this.inconsistent('Snapshot order changed')
+      order.watermark = row.group.sequence
+    } else if (row.order.phase === 'live') {
+      const sequence = outputU64(row.group.sequence)
+      if (
+        sequence <=
+        (order.through ?? (order.watermark === undefined ? -1n : outputU64(order.watermark)))
+      )
+        this.inconsistent('Live sequence did not advance')
+      order.through = sequence
+    } else this.inconsistent('Current-channel query requires snapshot/live phases')
+  }
+
+  private applyGroup(
+    channels: Map<string, CurrentProposalChannel>,
+    changes: ProposalChannelQueryChange[],
+    source: SourceGenerationState,
+    row: OrderedGroup,
+    order: SourceOrder,
+    now: bigint
+  ): void {
+    for (const change of changes) {
+      if (row.order.phase === 'snapshot') {
+        if (change.channel <= order.snapshotLast)
+          this.inconsistent('Snapshot channels are not strictly ordered')
+        order.snapshotLast = change.channel
+      }
+      this.applyChange(channels, change, source, row.group.id, now)
+    }
   }
 
   private applyChange(
@@ -191,11 +218,7 @@ export class ProposalCurrentChannels {
   ): void {
     const previous = channels.get(change.channel)
     if (change.removed) {
-      if (
-        !previous ||
-        previous.membership !== 'present' ||
-        previous.proposalId !== change.removed.proposalId
-      )
+      if (previous?.membership !== 'present' || previous.proposalId !== change.removed.proposalId)
         this.inconsistent('Removal does not name the current retained head')
       channels.set(change.channel, {
         ...previous,
@@ -250,20 +273,27 @@ export class ProposalCurrentChannels {
       if (removed || !same(previous.proposal, proposal))
         this.inconsistent('An identical signed body changed its retained envelope')
       this.lifecycle(previous.state, state)
-    } else {
-      if (previous.membership === 'present' && !removed)
-        this.inconsistent('A different head omitted its predecessor removal')
-      this.policies.successor(previous.proposal, proposal)
-      if (
-        previous.state.status !== 'active' ||
-        outputU64(state.recordedAt) >= outputU64(previous.proposal.body.expiresAt) ||
-        outputU64(state.recordedAt) < outputU64(previous.state.recordedAt)
-      )
-        this.inconsistent('Replacement extends an inactive or expired predecessor')
-      if (state.status !== (proposal.body.operation === 'withdraw' ? 'withdrawn' : 'active'))
-        this.inconsistent('Replacement skipped its initial lifecycle state')
-    }
+    } else this.replacement(previous, proposal, state, removed)
     return previous.history
+  }
+
+  private replacement(
+    previous: CurrentProposalChannel,
+    proposal: OutputSignedProposal,
+    state: OutputProposalState,
+    removed: boolean
+  ): void {
+    if (previous.membership === 'present' && !removed)
+      this.inconsistent('A different head omitted its predecessor removal')
+    this.policies.successor(previous.proposal, proposal)
+    if (
+      previous.state.status !== 'active' ||
+      outputU64(state.recordedAt) >= outputU64(previous.proposal.body.expiresAt) ||
+      outputU64(state.recordedAt) < outputU64(previous.state.recordedAt)
+    )
+      this.inconsistent('Replacement extends an inactive or expired predecessor')
+    if (state.status !== (proposal.body.operation === 'withdraw' ? 'withdrawn' : 'active'))
+      this.inconsistent('Replacement skipped its initial lifecycle state')
   }
 
   private stateMatches(proposal: OutputSignedProposal, state: OutputProposalState): void {
@@ -357,7 +387,9 @@ export class ProposalCurrentChannels {
     const ordered = [...rows.values()].sort((a, b) => {
       const left = outputU64(a.order.receipt),
         right = outputU64(b.order.receipt)
-      return left < right ? -1 : left > right ? 1 : a.order.group - b.order.group
+      if (left < right) return -1
+      if (left > right) return 1
+      return a.order.group - b.order.group
     })
     const positions = new Set<number>()
     for (const row of ordered) {
@@ -366,8 +398,8 @@ export class ProposalCurrentChannels {
       positions.add(row.order.group)
       if (row.group.observations.length !== row.order.observations)
         throw new OutputProtocolError('unavailable', 'Current-channel group is incomplete')
-      for (let index = 0; index < row.group.observations.length; index++)
-        if (!row.group.observations[index])
+      for (const observation of row.group.observations)
+        if (!observation)
           throw new OutputProtocolError('unavailable', 'Current-channel group is incomplete')
     }
     return ordered

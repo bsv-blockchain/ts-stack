@@ -21,8 +21,8 @@ export class SQLiteTransactionDomain {
   private active: 'read' | 'write' | 'publishing' | undefined
   private closed = false
   private staged = new Map<symbol, StagedValue>()
-  private preparing = new Set<symbol>()
-  private owners = new Set<string>()
+  private readonly preparing = new Set<symbol>()
+  private readonly owners = new Set<string>()
   private parents: Map<symbol, StagedValue>[] = []
   private savepointSequence = 0
   private poisoned?: { error: unknown }
@@ -84,21 +84,7 @@ export class SQLiteTransactionDomain {
       for (const value of this.staged.values()) value.publish()
       return result
     } catch (error) {
-      if (began && !committed) {
-        try {
-          this.database.exec('ROLLBACK')
-        } catch (rollbackError) {
-          // A pre-commit failure cannot leave an active transaction readable.
-          // Only a lost COMMIT acknowledgement with native autocommit restored
-          // may keep the connection for durable-state recovery.
-          if (options.retireOnFailedRollback || !committing || !this.settled()) this.retire()
-          // An intentional no-op rollback cannot report success when rollback failed.
-          if (error instanceof RollbackValue && error.owner === this) throw rollbackError
-        }
-      }
-      if (committed) this.retire()
-      if (error instanceof RollbackValue && error.owner === this) return error.value as T
-      throw error
+      return this.failed<T>(error, { began, committed, committing }, options.retireOnFailedRollback)
     } finally {
       this.staged.clear()
       this.preparing.clear()
@@ -106,6 +92,34 @@ export class SQLiteTransactionDomain {
       this.savepointSequence = 0
       this.poisoned = undefined
       this.active = undefined
+    }
+  }
+
+  private failed<T>(
+    error: unknown,
+    state: { began: boolean; committed: boolean; committing: boolean },
+    retireOnFailedRollback: boolean | undefined
+  ): T {
+    if (state.began && !state.committed)
+      this.rollbackFailedWork(error, state.committing, retireOnFailedRollback)
+    if (state.committed) this.retire()
+    if (error instanceof RollbackValue && error.owner === this) return error.value as T
+    throw error
+  }
+
+  private rollbackFailedWork(
+    error: unknown,
+    committing: boolean,
+    retireOnFailure: boolean | undefined
+  ): void {
+    try {
+      this.database.exec('ROLLBACK')
+    } catch (rollbackError) {
+      // Pre-commit failure cannot leave an active transaction readable. Only
+      // lost COMMIT acknowledgement with native autocommit restored permits recovery.
+      if (retireOnFailure || !committing || !this.settled()) this.retire()
+      // An intentional no-op cannot report success when its rollback failed.
+      if (error instanceof RollbackValue && error.owner === this) throw rollbackError
     }
   }
 
