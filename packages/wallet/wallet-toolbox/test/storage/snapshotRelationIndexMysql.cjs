@@ -16,12 +16,16 @@ function success(result) {
   if (!result.ok) throw result.error
 }
 async function until(check) {
-  for (let i = 0; i < 1000; i++) {
-    const result = await check()
-    if (result) return result
-    await new Promise(resolve => setTimeout(resolve, 5))
+  let result
+  function* attempts() {
+    for (let i = 0; i < 1000 && !result; i++) yield i
   }
-  throw Error('Native lock observation exceeded five seconds')
+  await runInSeries(attempts(), async () => {
+    result = await check()
+    if (!result) await new Promise(resolve => setTimeout(resolve, 5))
+  })
+  if (!result) throw new Error('Native lock observation exceeded five seconds')
+  return result
 }
 
 async function fixture(admin, connection, isolation, relation, tableId) {
@@ -34,19 +38,23 @@ async function fixture(admin, connection, isolation, relation, tableId) {
   const events = []
   let transaction
   try {
-    for (const client of [k, writer, observer])
+    await runInSeries([k, writer, observer], async client => {
       await client.raw('SET SESSION TRANSACTION ISOLATION LEVEL ' + isolation.toUpperCase())
-    for (const p of relations) {
-      for (const [table, key] of [
-        [p.left, p.leftKey],
-        [p.right, p.rightKey]
-      ]) {
-        await k.schema.createTable(table, t => {
-          t.integer(key).primary()
-          t.integer('userId').notNullable()
-        })
-        await k(table).insert({ [key]: 1, userId: 1 })
-      }
+    })
+    await runInSeries(relations, async p => {
+      await runInSeries(
+        [
+          [p.left, p.leftKey],
+          [p.right, p.rightKey]
+        ],
+        async ([table, key]) => {
+          await k.schema.createTable(table, t => {
+            t.integer(key).primary()
+            t.integer('userId').notNullable()
+          })
+          await k(table).insert({ [key]: 1, userId: 1 })
+        }
+      )
       await k.schema.createTable(p.table, t => {
         t.integer(p.leftKey)
         t.integer(p.rightKey)
@@ -54,7 +62,7 @@ async function fixture(admin, connection, isolation, relation, tableId) {
         t.primary([p.leftKey, p.rightKey])
         t.index(p.rightKey)
       })
-    }
+    })
     await install(k)
     const p = relation
     const mapping = { [p.leftKey]: 1, [p.rightKey]: 1, isDeleted: false }

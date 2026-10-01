@@ -117,21 +117,27 @@ function triggers(isMysql: boolean): { observers: Trigger[]; producers: Trigger[
     const changed = `${different(relation.leftKey)} OR ${different(relation.rightKey)}`
     const remove = removeMap(relation, tableId)
     const add = addMapSide(isMysql, relation, tableId, 'left') + ' ' + addMapSide(isMysql, relation, tableId, 'right')
-    observers.push(trigger(isMysql, `${prefix}_map_delete`, relation.table, 'AFTER', 'DELETE', remove))
-    observers.push(trigger(isMysql, `${prefix}_map_before_update`, relation.table, 'BEFORE', 'UPDATE', remove, changed))
-    producers.push(trigger(isMysql, `${prefix}_map_insert`, relation.table, 'AFTER', 'INSERT', add))
-    producers.push(trigger(isMysql, `${prefix}_map_after_update`, relation.table, 'AFTER', 'UPDATE', add, changed))
+    observers.push(
+      trigger(isMysql, `${prefix}_map_delete`, relation.table, 'AFTER', 'DELETE', remove),
+      trigger(isMysql, `${prefix}_map_before_update`, relation.table, 'BEFORE', 'UPDATE', remove, changed)
+    )
+    producers.push(
+      trigger(isMysql, `${prefix}_map_insert`, relation.table, 'AFTER', 'INSERT', add),
+      trigger(isMysql, `${prefix}_map_after_update`, relation.table, 'AFTER', 'UPDATE', add, changed)
+    )
     for (const side of ['left', 'right'] as const) {
       const { table, key } = sideInfo(relation, side)
       const ownerChanged = `${different(key)} OR ${different('userId')}`
       const subtract = removeParent(relation, tableId, side)
       const append = addParent(isMysql, relation, tableId, side)
-      observers.push(trigger(isMysql, `${prefix}_${side}_delete`, table, 'AFTER', 'DELETE', subtract))
       observers.push(
+        trigger(isMysql, `${prefix}_${side}_delete`, table, 'AFTER', 'DELETE', subtract),
         trigger(isMysql, `${prefix}_${side}_before_update`, table, 'BEFORE', 'UPDATE', subtract, ownerChanged)
       )
-      producers.push(trigger(isMysql, `${prefix}_${side}_insert`, table, 'AFTER', 'INSERT', append))
-      producers.push(trigger(isMysql, `${prefix}_${side}_after_update`, table, 'AFTER', 'UPDATE', append, ownerChanged))
+      producers.push(
+        trigger(isMysql, `${prefix}_${side}_insert`, table, 'AFTER', 'INSERT', append),
+        trigger(isMysql, `${prefix}_${side}_after_update`, table, 'AFTER', 'UPDATE', append, ownerChanged)
+      )
     }
   }
   return { observers, producers }
@@ -238,12 +244,7 @@ async function sqliteTable(k: Knex, table: string, keys: boolean, secondary: boo
   if (!secondary) return true
   for (const expectedIndex of indexes) {
     const found = existing.find(index => index.name === expectedIndex.name)
-    if (
-      found === undefined ||
-      found.unique !== 0 ||
-      found.partial !== 0 ||
-      !(await sqliteIndex(k, found.name, expectedIndex.columns))
-    )
+    if (found?.unique !== 0 || found.partial !== 0 || !(await sqliteIndex(k, found.name, expectedIndex.columns)))
       return false
   }
   return true
@@ -262,7 +263,8 @@ async function mysqlTable(k: Knex, table: string, keys: boolean, secondary: bool
     columns.length !== expected.length ||
     columns.some((column, i) => {
       const field = expected[i]
-      const type = field.type === 'boolean' ? 'tinyint' : 'int' + (field.unsigned === true ? ' unsigned' : '')
+      const integerType = field.unsigned === true ? 'int unsigned' : 'int'
+      const type = field.type === 'boolean' ? 'tinyint' : integerType
       return (
         column.name !== field.name ||
         column.type.replaceAll(/\(\d+\)/g, '') !== type ||
