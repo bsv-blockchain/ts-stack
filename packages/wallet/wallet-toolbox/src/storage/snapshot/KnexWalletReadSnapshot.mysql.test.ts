@@ -147,7 +147,9 @@ test.each([
     expect(query.sql).toContain(
       '`snapshotLeftId` = `' + name + '`.`' + left + '` and `snapshotRightId` = `' + name + '`.`' + right + '`'
     )
-    expect(query.bindings).toEqual([tableId, 41])
+    expect(query.sql).toContain(`/*+ JOIN_FIXED_ORDER() JOIN_INDEX(${name}) */`)
+    expect(query.sql).toContain('`snapshotMembership` between ? and ?')
+    expect(query.bindings).toEqual([tableId, 41, 1, 3])
     const legacy = walletSnapshotSourceQuery(k, table, 41).toSQL()
     expect(legacy.sql).not.toContain('snapshot_relation_keys')
     expect(legacy.sql).toContain('or exists')

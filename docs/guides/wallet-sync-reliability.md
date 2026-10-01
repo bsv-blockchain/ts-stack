@@ -287,6 +287,9 @@ locking reads even if their writer transaction has an older consistent read view
 SQLite uses its writer lock. Standard tables and their indexes are unchanged.
 MySQL page queries explicitly select the auxiliary primary index: a maintenance
 index can otherwise scan and sort an entire profile before applying the page limit.
+The query also reads the recorded membership and fixes the join order and indexed
+source lookup. A covering-index plan can otherwise scan the prior prefix before
+InnoDB refreshes statistics, even when ordinary EXPLAIN reports a range.
 
 The same migration-journal, retained-view, interrupted-migrator recovery and
 reader-drain requirements described above apply. The migration has
@@ -302,7 +305,8 @@ Repository fixtures compare all thirteen ordinary/archive tables and legacy
 offsets before and after indexing, generate ownership/rekey schedules, and kill
 the real migrator at seven DDL/bootstrap boundaries on SQLite and MySQL. The
 native MySQL fixture observes independent locks under READ COMMITTED and
-REPEATABLE READ and checks late-page row-read counts with interleaved profiles.
+REPEATABLE READ and checks late-page native row-read counts with interleaved
+profiles both before and after ANALYZE TABLE.
 These are isolated synthetic fixtures, not deployed PXC or physical mobile
 qualification. Certificate fields, proof requests/proofs, source commit ordering,
 nonblocking IndexedDB, streaming and staged restore remain required. Reader

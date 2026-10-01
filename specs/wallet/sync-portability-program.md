@@ -11,7 +11,8 @@ ownership bases, retains inconsistent mappings for closure refusal, and resumes
 256-row bootstrap batches after interrupted DDL or transaction commits. Retained
 ordinary/archive readers choose the complete migration inside their pinned view.
 Native fixtures cover seven migrator process-loss boundaries, independent writer
-locks under both MySQL isolation levels and late-page range/read-count evidence.
+locks under both MySQL isolation levels and late-page range/read-count evidence
+both before and after native optimizer statistics refresh.
 Repository and exact-head qualification must still complete for this checkpoint.
 The other three indirect tables, commit ordering, nonblocking IndexedDB and the
 remaining program below remain open; this does not complete S2.

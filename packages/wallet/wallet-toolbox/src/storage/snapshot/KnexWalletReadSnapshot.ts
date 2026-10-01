@@ -153,11 +153,16 @@ export function walletSnapshotSourceQuery(
     const relationKeys = String(k.client.config.client).includes('mysql')
       ? k.raw('?? FORCE INDEX (??)', ['snapshot_relation_keys', 'PRIMARY'])
       : 'snapshot_relation_keys'
-    return k(relationKeys)
+    const query = k(relationKeys)
       .crossJoin(name, function () {
         void this.on('snapshotLeftId', '=', `${name}.${left}`).andOn('snapshotRightId', '=', `${name}.${right}`)
       })
       .where({ snapshotTableId: relationId, snapshotUserId: userId })
+    // Read the recorded membership and keep source lookups indexed even before
+    // InnoDB has refreshed cardinality statistics after bootstrap or bulk writes.
+    if (String(k.client.config.client).includes('mysql'))
+      void query.whereBetween('snapshotMembership', [1, 3]).hintComment(['JOIN_FIXED_ORDER()', `JOIN_INDEX(${name})`])
+    return query
   }
   const query = k(name)
   if (table === 'provenTxReqs') {

@@ -112,7 +112,8 @@ view. See the [migration and recovery contract](https://bsv-blockchain.github.io
 The separate numeric relation migration indexes label/tag maps while retaining
 both parent ownership bases, tombstones and cross-profile inconsistency checks.
 It preserves composite cursor and legacy OFFSET order, resumes bounded bootstrap
-after interruption, and pins MySQL paging to the auxiliary primary index. See its
+after interruption, and bounds MySQL paging before and after statistics refresh
+with the auxiliary primary index and indexed source lookups. See its
 [migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-numeric-relation-indexes-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 

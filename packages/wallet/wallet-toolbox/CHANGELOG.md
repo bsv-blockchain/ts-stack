@@ -11,7 +11,8 @@ attention to changes that materially alter behavior or extend functionality.
   Preserve both parent ownership bases through moves, rekeys, tombstones and
   deletion; retain inconsistent relationships for explicit closure refusal.
   Resume bounded bootstrap after interrupted DDL/transactions and use the
-  matching auxiliary primary index for MySQL page seeks. The remaining indirect
+  matching auxiliary primary index, recorded membership and indexed source
+  lookups for bounded MySQL pages before and after statistics refresh. The remaining indirect
   tables and full sync/portability program are incomplete.
 
 - Add an exact-claim source-owner fence and additive owner migration. Remote

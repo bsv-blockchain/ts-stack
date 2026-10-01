@@ -26,7 +26,6 @@ async function seedLargeRelations(k, userId, otherId) {
       await trx('output_tags_map').insert(ids.map(id => ({ ...common, outputTagId: id, outputId: id % 2 ? 2 : 1 })))
     })
   })
-  await k.raw('ANALYZE TABLE snapshot_relation_keys, tx_labels_map, output_tags_map')
 }
 
 async function handlerCounters(source, view) {
@@ -81,19 +80,25 @@ async function observePage(source, view, read, table, leftId) {
 
 async function largeSeeks(source, userId, otherId) {
   await seedLargeRelations(source.knex, userId, otherId)
-  const view = await source.openReadSnapshot()
-  const read = pageReader(source, userId, 'large-seek-fixture', view, true, true)
   const results = []
-  try {
-    await runInSeries(['txLabelMaps', 'outputTagMaps'], async table => {
-      await read(table, undefined, { maxRows: 1 })
-      await runInSeries([1500, 7000, 8280], async leftId => {
-        results.push(await observePage(source, view, read, table, leftId))
+  // A statistics refresh can hide a full-prefix scan after bootstrap or bulk
+  // writes. Prove the same bounded native work on both sides of that boundary.
+  await runInSeries(['fresh', 'refreshed'], async statistics => {
+    if (statistics === 'refreshed')
+      await source.knex.raw('ANALYZE TABLE snapshot_relation_keys, tx_labels_map, output_tags_map')
+    const view = await source.openReadSnapshot()
+    const read = pageReader(source, userId, 'large-seek-fixture', view, true, true)
+    try {
+      await runInSeries(['txLabelMaps', 'outputTagMaps'], async table => {
+        await read(table, undefined, { maxRows: 1 })
+        await runInSeries([1500, 7000, 8280], async leftId => {
+          results.push({ statistics, ...(await observePage(source, view, read, table, leftId)) })
+        })
       })
-    })
-  } finally {
-    await view.close()
-  }
+    } finally {
+      await view.close()
+    }
+  })
   return results
 }
 
