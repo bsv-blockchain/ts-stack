@@ -1377,7 +1377,7 @@ export abstract class TestUtilsWalletStorage {
     return e
   }
 
-  static async insertTestSyncState(storage: StorageProvider, u: TableUser) {
+  static async insertTestSyncState(storage: StorageProvider, u: TableUser, storageIdentityKey?: string) {
     const now = new Date()
     const settings = await storage.getSettings()
     const e: TableSyncState = {
@@ -1385,7 +1385,7 @@ export abstract class TestUtilsWalletStorage {
       updated_at: now,
       syncStateId: 0,
       userId: u.userId,
-      storageIdentityKey: settings.storageIdentityKey,
+      storageIdentityKey: storageIdentityKey ?? settings.storageIdentityKey,
       storageName: settings.storageName,
       status: 'unknown',
       init: false,

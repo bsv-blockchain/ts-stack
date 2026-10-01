@@ -31,6 +31,7 @@ describe('SyncState class method tests', () => {
     // Assign a unique value to refNum and valid userId
     syncState.userId = 1
     syncState.refNum = `testRefNum-${Date.now()}`
+    syncState.storageIdentityKey = syncState.refNum
 
     // Insert the SyncState into storage
     await syncState.updateStorage(ctx.activeStorage)
@@ -58,6 +59,7 @@ describe('SyncState class method tests', () => {
     // Assign a unique value to refNum and valid userId
     syncState.userId = 1
     syncState.refNum = `testRefNum-${Date.now()}`
+    syncState.storageIdentityKey = syncState.refNum
 
     // Insert the SyncState into storage
     await syncState.updateStorage(ctx.activeStorage)
@@ -127,6 +129,7 @@ describe('SyncState class method tests', () => {
     // Assign a unique value to refNum and valid userId
     syncState.userId = 1
     syncState.refNum = `testRefNum-${Date.now()}`
+    syncState.storageIdentityKey = syncState.refNum
 
     // Define the chunk object with all required properties
     const chunk: sdk.SyncChunk = {

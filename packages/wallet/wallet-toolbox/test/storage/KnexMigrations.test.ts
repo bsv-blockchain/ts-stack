@@ -11,6 +11,9 @@ import {
   wait
 } from '../../src/index.all'
 import { Knex } from 'knex'
+import { createSyncMap } from '../../src/storage/schema/entities/EntityBase'
+
+const SYNC_STATE_IDENTITY_MIGRATION = '2026-09-30-001 unique sync state per storage identity'
 
 describe('KnexMigrations tests', () => {
   jest.setTimeout(99999999)
@@ -281,6 +284,97 @@ describe('KnexMigrations tests', () => {
       [1, '00'.repeat(32)]
     )) as [Array<{ key: string | null }>, unknown]
     expect(txidPlan.some(step => step.key === 'idx_transactions_user_txid')).toBe(true)
+  })
+
+  test('5ab keeps the oldest sync state per storage identity and makes the pair unique', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratesyncstateidentity.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+
+    try {
+      await knex.schema.createTable('sync_states', table => {
+        table.timestamp('updated_at').notNullable().defaultTo(knex.fn.now())
+        table.increments('syncStateId')
+        table.integer('userId').notNullable()
+        table.string('storageIdentityKey', 130).notNullable()
+        table.string('storageName').notNullable()
+        table.string('status').notNullable()
+        table.boolean('init').notNullable()
+        table.string('refNum', 100).notNullable().unique()
+        table.text('syncMap').notNullable()
+        table.dateTime('when')
+      })
+      const when = '2026-09-01T00:00:00.000Z'
+      const row = (syncStateId: number, userId: number, storageIdentityKey: string, storageName: string) => ({
+        syncStateId,
+        userId,
+        storageIdentityKey,
+        storageName,
+        status: 'success',
+        init: true,
+        refNum: `ref-${syncStateId}`,
+        syncMap: `{"progress":${syncStateId}}`,
+        when
+      })
+      await knex('sync_states').insert([
+        row(1, 1, 'raced', 'source'),
+        row(2, 1, 'raced', 'source'),
+        row(3, 1, 'raced', 'source'),
+        row(4, 1, 'renamed', 'old name'),
+        row(5, 1, 'renamed', 'new name'),
+        row(6, 2, 'raced', 'source')
+      ])
+      const restartedAfter = new Date().toISOString()
+
+      const source = new KnexMigrations('test', 'sync state identity test', '1'.repeat(64), 1000)
+      const migration = await source.getMigration(SYNC_STATE_IDENTITY_MIGRATION)
+      await migration.up(knex)
+
+      const rows = await knex('sync_states').orderBy('syncStateId')
+      expect(rows.map(r => r.syncStateId)).toEqual([1, 4, 6])
+      expect(rows[0]).toMatchObject({ status: 'success', syncMap: '{"progress":1}', when })
+      expect(rows[2]).toMatchObject({ status: 'success', syncMap: '{"progress":6}', when })
+      expect(rows[1]).toMatchObject({
+        storageName: 'old name',
+        status: 'unknown',
+        syncMap: JSON.stringify(createSyncMap()),
+        when: null
+      })
+      expect(Boolean(rows[1].init)).toBe(false)
+      expect(rows[1].updated_at >= restartedAfter).toBe(true)
+
+      await expect(knex('sync_states').insert(row(7, 1, 'raced', 'other name'))).rejects.toThrow(/UNIQUE/)
+      await knex('sync_states').insert(row(8, 1, 'other source', 'source'))
+
+      await migration.down?.(knex)
+      await knex('sync_states').insert(row(9, 1, 'raced', 'source'))
+    } finally {
+      await knex.destroy()
+    }
+  })
+
+  test('5ac restores the MySQL sync state support index before dropping the unique index', async () => {
+    const index = jest.fn()
+    const dropUnique = jest.fn()
+    const raw = jest
+      .fn()
+      .mockResolvedValueOnce([[{ database_type: 'MySQL' }]])
+      .mockResolvedValueOnce([[]])
+    const alterTable = jest.fn(
+      async (
+        _tableName: string,
+        callback: (tableBuilder: { index: typeof index; dropUnique: typeof dropUnique }) => void
+      ) => {
+        callback({ index, dropUnique })
+      }
+    )
+    const knex = { raw, schema: { alterTable } } as unknown as Knex
+    const source = new KnexMigrations('test', 'MySQL rollback test', '1'.repeat(64), 1000)
+    const migration = await source.getMigration(SYNC_STATE_IDENTITY_MIGRATION)
+
+    await migration.down?.(knex)
+
+    expect(index).toHaveBeenCalledWith(['userId'], 'sync_states_userid_foreign')
+    expect(dropUnique).toHaveBeenCalledWith(['userId', 'storageIdentityKey'], 'sync_states_user_storage_identity')
   })
 
   test('5b upgrades only exact untouched managed-change defaults', async () => {

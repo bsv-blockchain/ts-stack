@@ -5,6 +5,7 @@ import { Chain } from '../../sdk/types'
 import { StorageKnex } from '../StorageKnex'
 import { WalletError } from '../../sdk/WalletError'
 import { WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
+import { createSyncMap } from './entities/EntityBase'
 import {
   DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
   DEFAULT_MANAGED_CHANGE_TARGET_UTXOS,
@@ -90,6 +91,64 @@ export class KnexMigrations implements MigrationSource<string> {
       } else {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
         table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
+      }
+    }
+
+    migrations['2026-09-30-001 unique sync state per storage identity'] = {
+      async up(knex) {
+        // Concurrent findOrInsertSyncStateAuth calls could each insert a row,
+        // after which every lookup for the pair failed. Keep the oldest row.
+        const groups: Array<{ userId: number; storageIdentityKey: string; keepId: number; names: number | string }> =
+          await knex('sync_states')
+            .select('userId', 'storageIdentityKey')
+            .min({ keepId: 'syncStateId' })
+            .countDistinct({ names: 'storageName' })
+            .groupBy('userId', 'storageIdentityKey')
+            .havingRaw('count(*) > 1')
+        const restartAt =
+          groups.length > 0 && (await determineDBType(knex)) === 'SQLite' ? new Date().toISOString() : knex.fn.now(3)
+        for (const group of groups) {
+          await knex('sync_states')
+            .where({ userId: group.userId, storageIdentityKey: group.storageIdentityKey })
+            .where('syncStateId', '>', group.keepId)
+            .delete()
+          // Rows with different names may track different source databases
+          // that reused one identity key, so the kept checkpoint may not
+          // belong to the next caller. Restart it as a new sync state.
+          if (Number(group.names) > 1) {
+            await knex('sync_states')
+              .where({ syncStateId: group.keepId })
+              .update({
+                status: 'unknown',
+                init: false,
+                when: null,
+                syncMap: JSON.stringify(createSyncMap()),
+                updated_at: restartAt
+              })
+          }
+        }
+        await knex.schema.alterTable('sync_states', table => {
+          table.unique(['userId', 'storageIdentityKey'], { indexName: 'sync_states_user_storage_identity' })
+        })
+      },
+      async down(knex) {
+        // MySQL may discard the automatically-created userId foreign key
+        // index once the unique index can support the foreign key.
+        if ((await determineDBType(knex)) === 'MySQL') {
+          const result = await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [
+            'sync_states',
+            'sync_states_userid_foreign'
+          ])
+          const indexes = result[0] as unknown[]
+          if (indexes.length === 0) {
+            await knex.schema.alterTable('sync_states', table => {
+              table.index(['userId'], 'sync_states_userid_foreign')
+            })
+          }
+        }
+        await knex.schema.alterTable('sync_states', table => {
+          table.dropUnique(['userId', 'storageIdentityKey'], 'sync_states_user_storage_identity')
+        })
       }
     }
 

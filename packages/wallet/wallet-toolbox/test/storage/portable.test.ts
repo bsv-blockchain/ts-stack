@@ -361,7 +361,7 @@ describe('BRC-38/39 portable wallet data', () => {
       provenTxId: proven.provenTxId
     })
     const req = await _tu.insertTestProvenTxReq(storage, proven.txid, proven.provenTxId)
-    const remoteSyncState = await _tu.insertTestSyncState(storage, user)
+    const remoteSyncState = await _tu.insertTestSyncState(storage, user, remoteSyncStorageIdentityKey)
     const remoteSyncMap = createSyncMap()
     remoteSyncMap.transaction.idMap[777] = tx.transactionId
     remoteSyncMap.output.idMap[778] = ctx.setup!.u1tx1o0.outputId
@@ -373,7 +373,6 @@ describe('BRC-38/39 portable wallet data', () => {
     remoteSyncMap.provenTx.idMap[784] = proven.provenTxId
     remoteSyncMap.provenTxReq.idMap[785] = req.provenTxReqId
     await storage.updateSyncState(remoteSyncState.syncStateId, {
-      storageIdentityKey: remoteSyncStorageIdentityKey,
       storageName: remoteSyncStorageName,
       syncMap: JSON.stringify(remoteSyncMap)
     })
