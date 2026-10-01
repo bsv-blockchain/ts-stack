@@ -1,3 +1,4 @@
+import { readSnapshotGlobalIndexState } from '../../schema/snapshotGlobalIndexMigration'
 import { readSnapshotCertificateIndexState } from '../../schema/snapshotCertificateIndexMigration'
 import { readSnapshotRelationIndexState } from '../../schema/snapshotRelationIndexMigration'
 import { readSnapshotProfileIndexState } from '../../schema/snapshotProfileIndexMigration'
@@ -53,24 +54,30 @@ export async function openKnexSnapshotArchiveSource(
   }
   const view = await openView()
   try {
-    const { header, profileIndexes, relationIndexes, certificateIndexes } = await view.read(async trx => {
-      const sourceStorage = await storage.readSettings(trx)
-      const user = await storage.findUserByIdentityKey(identityKey, trx)
-      if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
-      return {
-        header: {
-          sourceStorage,
-          user,
-          sourceSchema: await readSnapshotArchiveSourceSchema(storage, storage.toDb(trx))
-        },
-        profileIndexes: await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
-        relationIndexes: await readSnapshotRelationIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
-        certificateIndexes: await readSnapshotCertificateIndexState(
-          storage.toDb(trx),
-          storage.knex.client.config.migrations
-        )
+    const { header, profileIndexes, relationIndexes, certificateIndexes, globalIndexes } = await view.read(
+      async trx => {
+        const sourceStorage = await storage.readSettings(trx)
+        const user = await storage.findUserByIdentityKey(identityKey, trx)
+        if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
+        return {
+          header: {
+            sourceStorage,
+            user,
+            sourceSchema: await readSnapshotArchiveSourceSchema(storage, storage.toDb(trx))
+          },
+          profileIndexes: await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
+          relationIndexes: await readSnapshotRelationIndexState(
+            storage.toDb(trx),
+            storage.knex.client.config.migrations
+          ),
+          globalIndexes: await readSnapshotGlobalIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
+          certificateIndexes: await readSnapshotCertificateIndexState(
+            storage.toDb(trx),
+            storage.knex.client.config.migrations
+          )
+        }
       }
-    })
+    )
     const userId = header.user.userId
     const snapshotId = Utils.toHex(Random(32))
     return {
@@ -90,7 +97,8 @@ export async function openKnexSnapshotArchiveSource(
         view,
         profileIndexes,
         relationIndexes,
-        certificateIndexes
+        certificateIndexes,
+        globalIndexes
       ),
       validateClosure: async () => {
         await view.read(trx =>
@@ -99,7 +107,8 @@ export async function openKnexSnapshotArchiveSource(
             userId,
             profileIndexes,
             relationIndexes,
-            certificateIndexes
+            certificateIndexes,
+            globalIndexes
           )
         )
       }

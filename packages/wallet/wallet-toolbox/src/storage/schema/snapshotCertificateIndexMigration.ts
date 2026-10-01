@@ -62,8 +62,8 @@ async function sourceText(k: Knex): Promise<TextDefinition> {
       columns.length !== 1 ||
       column?.type !== 'varchar(100)' ||
       column.nullable !== 'NO' ||
-      !/^[a-zA-Z0-9_]+$/.test(column.charset) ||
-      !/^[a-zA-Z0-9_]+$/.test(column.collation)
+      !/^\w+$/.test(column.charset) ||
+      !/^\w+$/.test(column.collation)
     )
       throw new WERR_INVALID_OPERATION('Unsupported snapshot certificate field definition')
     return { charset: column.charset, collation: column.collation }
@@ -102,7 +102,8 @@ async function sourceText(k: Knex): Promise<TextDefinition> {
 }
 
 function fieldType(text: TextDefinition): string {
-  return `varchar(100)${text.charset === null ? '' : ` CHARACTER SET ${text.charset}`} COLLATE ${text.collation}`
+  const charset = text.charset === null ? '' : ' CHARACTER SET ' + text.charset
+  return `varchar(100)${charset} COLLATE ${text.collation}`
 }
 function insertMembership(isMysql: boolean, select: string, bit: number): string {
   const merge = isMysql
@@ -340,7 +341,8 @@ async function mysqlTable(
     columns.some((column, i) => {
       const field = expected[i]
       const integerType = field.unsigned === true ? 'int unsigned' : 'int'
-      const type = field.type === 'varchar(100)' ? field.type : field.type === 'boolean' ? 'tinyint' : integerType
+      const scalarType = field.type === 'boolean' ? 'tinyint' : integerType
+      const type = field.type === 'varchar(100)' ? field.type : scalarType
       return (
         column.name !== field.name ||
         (textColumn(column.name) ? column.type : column.type.replaceAll(/\(\d+\)/g, '')) !== type ||
@@ -454,6 +456,12 @@ function positive(value: number | undefined): number {
     throw new WERR_INVALID_OPERATION('Invalid snapshot certificate source key')
   return value
 }
+function validateSourceRow(row: { userId: number; fieldName: string; certificateId: number }): void {
+  positive(row.userId)
+  positive(row.certificateId)
+  if (typeof row.fieldName !== 'string' || Array.from(row.fieldName).length > 100)
+    throw new WERR_INVALID_OPERATION('Invalid snapshot certificate source key')
+}
 async function bootstrapPage(k: Knex): Promise<boolean> {
   return await k.transaction(async trx => {
     if (!mysql(k))
@@ -484,12 +492,7 @@ async function bootstrapPage(k: Knex): Promise<boolean> {
       fieldName: string
       certificateId: number
     }> = await source
-    for (const row of rows) {
-      positive(row.userId)
-      positive(row.certificateId)
-      if (typeof row.fieldName !== 'string' || Array.from(row.fieldName).length > 100)
-        throw new WERR_INVALID_OPERATION('Invalid snapshot certificate source key')
-    }
+    rows.forEach(validateSourceRow)
     if (rows.length !== 0) {
       const parentQuery = trx('certificates')
         .select('certificateId', 'userId')

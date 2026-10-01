@@ -233,7 +233,11 @@ reader and service guard execution. Retained profile and relation migrations now
 each execute as a whole-file part, alongside reader, storage and the lifecycle
 fallback. The subsequent certificate-field migration is registered as another
 complete source and whole-file part with the same full retained test selection;
-its independently defined fixture is included in the input digest. Archive groups store/migration, source/closure and the capture fallback.
+its independently defined fixture is included in the input digest. Global
+proof/request migration and trigger sources are each registered in full and run
+in disjoint whole-file parts, with the independent global fixture included in
+the same retained input digest. These parts preserve the complete canonical
+source and test union. Archive groups store/migration, source/closure and the capture fallback.
 Remote reader groups lease, rows, page/open/cursor and the admission fallback.
 These partitions retain every original source specification and full test
 configuration. The single-file retained reader remains one complete part;

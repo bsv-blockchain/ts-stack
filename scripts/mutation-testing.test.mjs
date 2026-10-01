@@ -201,7 +201,8 @@ test('additional package-relative fixture inputs select their target without rep
   assert.equal(Object.keys(canonical).length, 46)
   assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
     'test/utils/snapshotRelationFixtures.ts',
-    'test/utils/snapshotCertificateFixtures.ts'
+    'test/utils/snapshotCertificateFixtures.ts',
+    'test/utils/snapshotGlobalFixtures.ts'
   ])
   assert.deepEqual(
     selectAffectedMutationTargets(canonical, [
@@ -211,7 +212,10 @@ test('additional package-relative fixture inputs select their target without rep
   )
   for (const input of [
     'src/storage/schema/snapshotCertificateIndexMigration.ts',
+    'src/storage/schema/snapshotGlobalIndexMigration.ts',
+    'src/storage/schema/snapshotGlobalIndexTriggers.ts',
     'test/utils/snapshotCertificateFixtures.ts',
+    'test/utils/snapshotGlobalFixtures.ts',
     'src/storage/schema/snapshotRelationIndexMigration.ts',
     'src/storage/schema/snapshotProfileIndexMigration.ts',
     'src/storage/snapshot/RetainedReadSnapshot.property.test.ts'

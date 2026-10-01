@@ -145,7 +145,7 @@ async function captureFixture() {
     assert.equal(manifest.pages, 14)
     assert.equal(manifest.binding.sourceStorage.storageIdentityKey, 'native-source')
     assert.equal(manifest.binding.user.activeStorage, 'historical selection')
-    assert.equal(manifest.binding.sourceSchema, '2026-10-01-005 add snapshot certificate field key indexes')
+    assert.equal(manifest.binding.sourceSchema, '2026-10-01-006 add snapshot global reference indexes')
     const store = new KnexSnapshotArchiveStore(writer.knex)
     const first = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 8)).bytes)
     const second = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 9)).bytes)
@@ -433,7 +433,7 @@ async function requestFixture(writer, reader) {
       sourceStorageIdentityKey: 'native-source',
       digest: ready.digest
     })
-    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-005 add snapshot certificate field key indexes')
+    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-006 add snapshot global reference indexes')
     const page = await replacement.read(identity, ready.archiveId, 8)
     const decoded = decodeSyncTransfer(verifySnapshotArchivePage(page, verified.receipts[8]))
     assert.equal(decoded.rows[0].label, 'replacement')
@@ -483,9 +483,73 @@ async function requestFixture(writer, reader) {
     await Promise.all([controller.close(), replacement.close()])
   }
 }
+const { mysqlFixtureGroups } = require('./snapshotMysqlFixtureGroups.cjs')
+const indexFixtures = {
+  profile: async () => {
+    const { qualifyMysqlProfileIndexProcessLoss } = require('./snapshotProfileIndexCrash.cjs')
+    const profileIndexProcessLoss = await qualifyMysqlProfileIndexProcessLoss(database, connection)
+    const { qualifyMysqlProfileIndexLocks } = require('./snapshotProfileIndexMysql.cjs')
+    const profileIndexLocks = await qualifyMysqlProfileIndexLocks(database, connection)
+    return { profileIndexProcessLoss, profileIndexLocks }
+  },
+  relation: async () => {
+    const { qualifyMysqlRelationIndexProcessLoss } = require('./snapshotRelationIndexCrash.cjs')
+    const relationIndexProcessLoss = await qualifyMysqlRelationIndexProcessLoss(database, connection)
+    const { qualifyMysqlRelationIndexLocks } = require('./snapshotRelationIndexMysql.cjs')
+    const relationIndexLocks = await qualifyMysqlRelationIndexLocks(database, connection)
+    const { qualifyMysqlRelationIndexSeeks } = require('./snapshotRelationIndexSeeks.cjs')
+    const relationIndexSeeks = await qualifyMysqlRelationIndexSeeks(database, connection)
+    return { relationIndexProcessLoss, relationIndexLocks, relationIndexSeeks }
+  },
+  certificate: async () => {
+    const { qualifyMysqlCertificateIndexProcessLoss } = require('./snapshotCertificateIndexCrash.cjs')
+    const certificateIndexProcessLoss = await qualifyMysqlCertificateIndexProcessLoss(database, connection)
+    const { qualifyMysqlCertificateIndexLocks } = require('./snapshotCertificateIndexMysql.cjs')
+    const certificateIndexLocks = await qualifyMysqlCertificateIndexLocks(database, connection)
+    const { qualifyMysqlCertificateIndexSchedules } = require('./snapshotCertificateIndexMysqlSchedules.cjs')
+    const certificateIndexSchedules = await qualifyMysqlCertificateIndexSchedules(database, connection)
+    const { qualifyMysqlCertificateIndexSeeks } = require('./snapshotCertificateIndexSeeks.cjs')
+    const certificateIndexSeeks = await qualifyMysqlCertificateIndexSeeks(database, connection)
+    return { certificateIndexProcessLoss, certificateIndexLocks, certificateIndexSchedules, certificateIndexSeeks }
+  },
+  'global-crash': async () => {
+    const { qualifyMysqlGlobalIndexProcessLoss } = require('./snapshotGlobalIndexCrash.cjs')
+    return { globalIndexProcessLoss: await qualifyMysqlGlobalIndexProcessLoss(database, connection) }
+  },
+  'global-locks': async () => {
+    const { qualifyMysqlGlobalIndexLocks } = require('./snapshotGlobalIndexMysql.cjs')
+    return { globalIndexLocks: await qualifyMysqlGlobalIndexLocks(database, connection) }
+  },
+  'global-schedules': async () => {
+    const { qualifyMysqlGlobalIndexSchedules } = require('./snapshotGlobalIndexMysqlSchedules.cjs')
+    return { globalIndexSchedules: await qualifyMysqlGlobalIndexSchedules(database, connection) }
+  },
+  'global-seeks': async () => {
+    const { qualifyMysqlGlobalIndexSeeks } = require('./snapshotGlobalIndexSeeks.cjs')
+    return { globalIndexSeeks: await qualifyMysqlGlobalIndexSeeks(database, connection) }
+  },
+  'global-integration': async () => {
+    const { qualifyMysqlGlobalIndexIntegration } = require('./snapshotGlobalIndexIntegration.cjs')
+    return { globalIndexIntegration: await qualifyMysqlGlobalIndexIntegration(database, connection) }
+  }
+}
+async function runIndexFixtures(group) {
+  const results = {}
+  const groups = group === 'all' ? mysqlFixtureGroups.slice(1) : [group]
+  await runInSeries(groups, async name => {
+    Object.assign(results, await indexFixtures[name]())
+  })
+  return results
+}
 async function main() {
+  const group = process.argv[2] ?? 'all'
   try {
+    assert.ok(group === 'all' || mysqlFixtureGroups.includes(group), 'Unknown native fixture group')
     const version = (await database.raw('SELECT VERSION() AS version'))[0][0].version
+    if (group !== 'archive' && group !== 'all') {
+      console.log(JSON.stringify({ version, group, ...(await runIndexFixtures(group)) }))
+      return
+    }
     await addSnapshotArchiveTables(database)
     const store = new KnexSnapshotArchiveStore(database),
       peer = new KnexSnapshotArchiveStore(replica),
@@ -534,24 +598,7 @@ async function main() {
     assert.equal(await database.schema.hasTable('snapshot_archive_pages'), true)
     assert.equal(Number((await database('snapshot_archive_capacity').first()).archives), 0)
     const capture = await captureFixture()
-    const { qualifyMysqlProfileIndexProcessLoss } = require('./snapshotProfileIndexCrash.cjs')
-    const profileIndexProcessLoss = await qualifyMysqlProfileIndexProcessLoss(database, connection)
-    const { qualifyMysqlProfileIndexLocks } = require('./snapshotProfileIndexMysql.cjs')
-    const profileIndexLocks = await qualifyMysqlProfileIndexLocks(database, connection)
-    const { qualifyMysqlRelationIndexProcessLoss } = require('./snapshotRelationIndexCrash.cjs')
-    const relationIndexProcessLoss = await qualifyMysqlRelationIndexProcessLoss(database, connection)
-    const { qualifyMysqlRelationIndexLocks } = require('./snapshotRelationIndexMysql.cjs')
-    const relationIndexLocks = await qualifyMysqlRelationIndexLocks(database, connection)
-    const { qualifyMysqlRelationIndexSeeks } = require('./snapshotRelationIndexSeeks.cjs')
-    const relationIndexSeeks = await qualifyMysqlRelationIndexSeeks(database, connection)
-    const { qualifyMysqlCertificateIndexProcessLoss } = require('./snapshotCertificateIndexCrash.cjs')
-    const certificateIndexProcessLoss = await qualifyMysqlCertificateIndexProcessLoss(database, connection)
-    const { qualifyMysqlCertificateIndexLocks } = require('./snapshotCertificateIndexMysql.cjs')
-    const certificateIndexLocks = await qualifyMysqlCertificateIndexLocks(database, connection)
-    const { qualifyMysqlCertificateIndexSchedules } = require('./snapshotCertificateIndexMysqlSchedules.cjs')
-    const certificateIndexSchedules = await qualifyMysqlCertificateIndexSchedules(database, connection)
-    const { qualifyMysqlCertificateIndexSeeks } = require('./snapshotCertificateIndexSeeks.cjs')
-    const certificateIndexSeeks = await qualifyMysqlCertificateIndexSeeks(database, connection)
+    const indexes = group === 'all' ? await runIndexFixtures(group) : {}
     console.log(
       JSON.stringify({
         version,
@@ -564,15 +611,7 @@ async function main() {
         expiredPartialUnreadable: true,
         profileReservationRace: true,
         idempotentPartialDdl: true,
-        profileIndexProcessLoss,
-        profileIndexLocks,
-        relationIndexProcessLoss,
-        relationIndexLocks,
-        relationIndexSeeks,
-        certificateIndexProcessLoss,
-        certificateIndexLocks,
-        certificateIndexSchedules,
-        certificateIndexSeeks,
+        ...indexes,
         capture
       })
     )

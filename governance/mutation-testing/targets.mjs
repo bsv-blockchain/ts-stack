@@ -400,7 +400,8 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/wallet/wallet-toolbox/package.json',
       additionalInputs: [
         'test/utils/snapshotRelationFixtures.ts',
-        'test/utils/snapshotCertificateFixtures.ts'
+        'test/utils/snapshotCertificateFixtures.ts',
+        'test/utils/snapshotGlobalFixtures.ts'
       ],
       propertyTest:
         'packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
@@ -410,6 +411,8 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/schema/snapshotProfileIndexMigration.ts',
         'src/storage/schema/snapshotRelationIndexMigration.ts',
         'src/storage/schema/snapshotCertificateIndexMigration.ts',
+        'src/storage/schema/snapshotGlobalIndexMigration.ts',
+        'src/storage/schema/snapshotGlobalIndexTriggers.ts',
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',

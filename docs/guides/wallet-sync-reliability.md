@@ -308,9 +308,10 @@ native MySQL fixture observes independent locks under READ COMMITTED and
 REPEATABLE READ and checks late-page native row-read counts with interleaved
 profiles both before and after ANALYZE TABLE.
 These are isolated synthetic fixtures, not deployed PXC or physical mobile
-qualification. Certificate fields, proof requests/proofs, source commit ordering,
-nonblocking IndexedDB, streaming and staged restore remain required. Reader
-advertisement stays disabled and #569 remains open.
+qualification. The following migrations cover certificate fields and global
+proof requests/proofs. Source commit ordering, nonblocking IndexedDB, streaming
+and staged restore remain required. Reader advertisement stays disabled and
+#569 remains open.
 
 ### Auxiliary certificate-field indexes (unpublished candidate)
 
@@ -353,8 +354,63 @@ writer-lock checks, malformed metadata refusals and actual migration-process
 termination at seven DDL/bootstrap boundaries on both databases. Native reader
 fixtures measure first and late pages before and after optimizer statistics refresh. These
 are synthetic source qualification fixtures, not deployed or physical mobile
-acceptance. Proof/request indexes, commit ordering, nonblocking IndexedDB and
-the remaining sync/portability program remain open.
+acceptance. The following migration covers proof/request indexes; commit
+ordering, nonblocking IndexedDB and the remaining sync/portability program
+remain open.
+
+### Auxiliary global proof/request indexes (unpublished candidate)
+
+Migration `2026-10-01-006 add snapshot global reference indexes` adds four
+auxiliary tables: `snapshot_global_edges`, `snapshot_global_keys`,
+`snapshot_global_guards` and `snapshot_global_index_progress`. Requests belong
+to profiles with a transaction whose txid matches the request. Proofs belong
+through either a transaction's direct proof reference or a matching request's
+proof reference. Multiple transactions and both reference bases retain separate
+edges; removing one basis cannot remove another profile's remaining reference.
+Missing proofs keep bounded presence metadata so later insertion or deletion
+updates the same indexed selection. Unused proof guards are collected after the
+last reference disappears.
+
+Triggers serialize reference counts and proof presence in the writer's atomic
+transaction. MySQL uses current locking reads, including an auxiliary lock for an
+absent proof, so an older REPEATABLE READ snapshot cannot publish stale presence
+or restore an obsolete request pointer. Removal observers precede producers.
+Bootstrap locks at most 256 current transaction rows and commits their edges and
+progress together. Retrying a committed batch does not increment reference counts
+twice. Source txid comparison metadata must agree; source indexes, exact text,
+standard rows, legacy OFFSET and portable/cursor encodings remain unchanged.
+
+MySQL requires the standard unsigned key and matching text definitions on
+transactional InnoDB tables. Custom CASCADE or SET NULL foreign-key actions are
+refused before auxiliary DDL because InnoDB does not invoke affected child row
+triggers for implicit cascades. Standard RESTRICT and NO ACTION definitions are
+supported. SQLite verifies standard key/column definitions and complete txid
+lookup indexes with matching BINARY, NOCASE or RTRIM order. Invalid legacy keys
+or oversized text refuse bootstrap without publishing completion.
+
+This is another explicit `transaction: false` migration. Preserve partial owned
+DDL and committed positions, exclude other migrators, and recover a stale Knex
+lock only after proving its migrator stopped. Ordinary and archive readers adopt
+complete journal/progress state inside their pinned view; absent journals keep
+legacy selection and incomplete journaled state refuses opening. MySQL pages
+use the auxiliary `(table, user, present, row)` index and indexed source lookups,
+including before statistics refresh. Drain readers before down; validate all
+owned objects before stopping producers and removing auxiliary tables. These
+auxiliary structures remain outside BRC-38.
+
+Fixtures cover shared references, full-width unsigned IDs, source collations,
+independent writer commits, retained ordinary/archive pages, bootstrap replay,
+eight migrator process-loss boundaries, and first/late query plans and measured
+row fetches. The pinned native launcher runs every archive/profile/relation/
+certificate/global family sequentially with a 60-second child deadline per
+group and verified owned-container cleanup. The global family is split into
+complete process-loss, locking, schedule, seek and integration groups after its
+combined local run consumed 51.6 seconds of the 60-second allowance. Every earlier
+case remains mandatory. Complete exact-head qualification remains mandatory;
+these synthetic fixtures do not establish deployed PXC or physical mobile
+acceptance. Commit ordering, tombstones, primary reconciliation, nonblocking
+IndexedDB, remote destinations, streaming/staged portability and full system
+acceptance remain open. Reader advertisement stays disabled.
 
 ## Durable local SQL sync and ordinary backup
 

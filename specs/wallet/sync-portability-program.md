@@ -18,8 +18,13 @@ The subsequent certificate-field checkpoint preserves text collation and exact
 field names while indexing both direct and parent ownership. Its resumable
 migration and retained-view adoption include ordinary and archive paths; native
 process-loss, concurrent-writer and bounded-page qualification remain mandatory.
-The two global proof/request tables, commit ordering, nonblocking IndexedDB and
-the remaining program below remain open; this does not complete S2.
+The global proof/request checkpoint adds reference edges, exact per-profile
+counts and presence guards, including independent current-read writers and
+resumable bounded bootstrap. Ordinary/archive selection uses complete state in
+the retained view. All thirteen standard tables now have auxiliary indexed
+selection paths; complete native, mutation and exact-head qualification remain
+required. Commit ordering, tombstones, nonblocking IndexedDB and the remaining
+program below remain open; this does not complete S2.
 
 ## Baseline and immediate defect
 

@@ -6,6 +6,7 @@ const { join } = require('node:path')
 const assert = require('node:assert/strict')
 const { executable, context, image, validateContext, validateContainer } = require('./snapshotArchiveDocker.cjs')
 const { runInSeries } = require('../../out/src/utility/runInSeries.js')
+const { mysqlFixtureGroups } = require('./snapshotMysqlFixtureGroups.cjs')
 const execute = (file, args, options) =>
   new Promise((resolve, reject) => {
     execFile(
@@ -97,18 +98,23 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 500))
       }
     })
-    const result = await execute(process.execPath, [join(__dirname, 'snapshotArchiveMysql.cjs')], {
-      env: {
-        ...process.env,
-        TS_STACK_SNAPSHOT_CONTAINER: name,
-        TS_STACK_SNAPSHOT_CONTAINER_ID: id,
-        TS_STACK_SNAPSHOT_CONTAINER_OWNER: owner,
-        TS_STACK_SNAPSHOT_MYSQL_SECRET: secret
-      },
-      signal: cancellation.signal,
-      timeout: 60000
+    await runInSeries(mysqlFixtureGroups, async group => {
+      const started = Date.now()
+      process.stdout.write(JSON.stringify({ group, status: 'started' }) + '\n')
+      const result = await execute(process.execPath, [join(__dirname, 'snapshotArchiveMysql.cjs'), group], {
+        env: {
+          ...process.env,
+          TS_STACK_SNAPSHOT_CONTAINER: name,
+          TS_STACK_SNAPSHOT_CONTAINER_ID: id,
+          TS_STACK_SNAPSHOT_CONTAINER_OWNER: owner,
+          TS_STACK_SNAPSHOT_MYSQL_SECRET: secret
+        },
+        signal: cancellation.signal,
+        timeout: 60000
+      })
+      process.stdout.write(result)
+      process.stdout.write(JSON.stringify({ group, status: 'passed', milliseconds: Date.now() - started }) + '\n')
     })
-    process.stdout.write(result)
   } catch (error) {
     failure = error
   }

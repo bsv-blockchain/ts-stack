@@ -1,3 +1,4 @@
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 const assert = require('node:assert/strict')
 const { randomUUID } = require('node:crypto')
 const { knex } = require('knex')
@@ -29,11 +30,12 @@ async function seed(k) {
     { certificateId: 1, userId: 1 },
     { certificateId: 2, userId: 2 }
   ])
-  for (const [i, fieldName] of names.entries())
+  await runInSeries(names.entries(), async ([i, fieldName]) => {
     await k('certificate_fields')
       .insert({ userId: (i % 2) + 1, fieldName, certificateId: (i % 2) + 1, fieldValue: 'initial' })
       .onConflict(['fieldName', 'certificateId'])
       .merge(['userId', 'fieldValue'])
+  })
 }
 async function operation(k, op, counts) {
   counts[op.kind]++
@@ -120,14 +122,14 @@ async function qualify(k, collation) {
     user: fc.integer({ min: 1, max: 3 }),
     name: fc.integer({ min: 0, max: names.length - 1 })
   })
-  const counts = Array(9).fill(0)
+  const counts = Array.from({ length: 9 }, () => 0)
   await fc.assert(
     fc.asyncProperty(fc.array(generated, { minLength: 1, maxLength: 24 }), async schedule => {
       await seed(k)
-      for (const op of schedule) {
+      await runInSeries(schedule, async op => {
         await operation(k, op, counts)
         await oracle(k)
-      }
+      })
     }),
     { numRuns: 300, seed: 3242026 }
   )
@@ -153,7 +155,7 @@ async function qualifyMysqlCertificateIndexSchedules(control, connection) {
   assert.equal(connection.host, '127.0.0.1')
   assert.equal(connection.database, 'ts569_snapshot')
   const results = []
-  for (const collation of ['utf8mb4_0900_ai_ci', 'utf8mb4_unicode_ci', 'utf8mb4_bin']) {
+  await runInSeries(['utf8mb4_0900_ai_ci', 'utf8mb4_unicode_ci', 'utf8mb4_bin'], async collation => {
     const database = 'ts569_certificate_schedules_' + randomUUID().replaceAll('-', '')
     await control.raw(`CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE ${collation}`, [database])
     const k = knex({ client: 'mysql2', connection: { ...connection, database }, pool: { min: 1, max: 1 } })
@@ -163,7 +165,7 @@ async function qualifyMysqlCertificateIndexSchedules(control, connection) {
       await k.destroy()
       await control.raw('DROP DATABASE ??', [database])
     }
-  }
+  })
   return results
 }
 module.exports = { oracle, qualifyMysqlCertificateIndexSchedules }

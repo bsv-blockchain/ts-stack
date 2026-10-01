@@ -120,6 +120,12 @@ independent direct/parent ownership. Empty text keys, interrupted bootstrap and
 case-only renames retain their source meaning. It leaves standard indexes and
 legacy cursor order intact; readers require the complete migration in their
 pinned view. See the [certificate migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-certificate-field-indexes-unpublished-candidate).
+The global proof/request migration adds exact profile reference counts and
+presence guards, with resumable bootstrap and retained ordinary/archive reads.
+Direct and request-based proof references remain independent; removing the last
+reference collects its auxiliary presence guard. Standard rows, text comparisons,
+indexes and cursor/portable bytes remain unchanged. See the
+[global migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-global-proofrequest-indexes-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results
@@ -147,7 +153,7 @@ Timing compares successive candidates, not a controlled comparison against upstr
 
 SQLite migration handling introduced in 2.13.2 runs transactional migration DDL
 and the migration journal update together. The unpublished profile-index and
-numeric relation and certificate-field migrations are explicit resumable exceptions: auxiliary keys and progress commit
+numeric relation, certificate-field and global proof/request migrations are explicit resumable exceptions: auxiliary keys and progress commit
 in bounded batches before its final migration journal entry. Foreign-key enforcement is disabled before the
 migration transaction for table rebuilds and restored after success or failure.
 Failed transactional migrations can be retried after reopening the database

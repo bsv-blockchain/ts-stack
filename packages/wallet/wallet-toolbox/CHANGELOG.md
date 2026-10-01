@@ -6,11 +6,19 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add resumable global proof/request ownership indexes with exact reference
+  counts and proof-presence guards. Preserve both ownership bases, current
+  independent-writer changes and pinned ordinary/archive views. Bootstrap,
+  process-loss recovery and native first/late page qualification keep standard
+  rows/indexes and portable/cursor bytes unchanged. Complete system acceptance
+  and the remaining sync/portability program are still required.
+
 - Add resumable certificate-field profile indexes preserving source collation,
   empty names, direct/parent ownership and exact rename bytes. Ordinary and
   archive readers adopt complete migration state inside their retained view;
   standard indexes, legacy OFFSET order and BRC-38/cursor bytes stay unchanged.
-  Proof/request indexing and the full program remain incomplete.
+  The subsequent global checkpoint extends this selection to proofs/requests;
+  the full program remains incomplete.
 
 - Add auxiliary numeric relationship indexes for label/tag maps without changing
   standard indexes, composite cursors, legacy OFFSET order or BRC-38 bytes.

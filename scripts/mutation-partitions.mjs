@@ -21,6 +21,8 @@ const plans = new Map([
         ['src/storage/schema/snapshotProfileIndexMigration.ts', 'profile-index'],
         ['src/storage/schema/snapshotRelationIndexMigration.ts', 'relation-index'],
         ['src/storage/schema/snapshotCertificateIndexMigration.ts', 'certificate-index'],
+        ['src/storage/schema/snapshotGlobalIndexMigration.ts', 'global-index'],
+        ['src/storage/schema/snapshotGlobalIndexTriggers.ts', 'global-triggers'],
         ['src/storage/StorageKnex.ts', 'storage'],
         ['src/storage/StorageProvider.ts', 'storage']
       ])

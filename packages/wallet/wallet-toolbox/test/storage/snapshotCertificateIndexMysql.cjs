@@ -1,3 +1,4 @@
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 // Synthetic current-read and bootstrap-lock qualification on the native MySQL fixture.
 const assert = require('node:assert/strict')
 const { randomUUID } = require('node:crypto')
@@ -15,11 +16,15 @@ const success = result => {
   if (!result.ok) throw result.error
 }
 async function until(check) {
-  for (let i = 0; i < 1000; i++) {
-    const result = await check()
-    if (result) return result
-    await new Promise(resolve => setTimeout(resolve, 5))
+  let observed
+  function* pending() {
+    for (let i = 0; i < 1000 && !observed; i++) yield i
   }
+  await runInSeries(pending(), async () => {
+    observed = await check()
+    if (!observed) await new Promise(resolve => setTimeout(resolve, 5))
+  })
+  if (observed) return observed
   throw new Error('Native lock observation exceeded five seconds')
 }
 async function fixture(admin, connection, isolation) {
@@ -32,8 +37,9 @@ async function fixture(admin, connection, isolation) {
     events = []
   let transaction
   try {
-    for (const client of [k, writer, observer])
+    await runInSeries([k, writer, observer], async client => {
       await client.raw('SET SESSION TRANSACTION ISOLATION LEVEL ' + isolation.toUpperCase())
+    })
     await k.raw(
       'CREATE TABLE certificates(certificateId INT UNSIGNED PRIMARY KEY,userId INT UNSIGNED NOT NULL,isDeleted TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB'
     )
@@ -222,8 +228,9 @@ async function qualifyMysqlCertificateIndexLocks(control, connection) {
   assert.equal(connection.host, '127.0.0.1')
   assert.equal(connection.database, 'ts569_snapshot')
   const results = []
-  for (const isolation of ['read committed', 'repeatable read'])
+  await runInSeries(['read committed', 'repeatable read'], async isolation => {
     results.push(await fixture(control, connection, isolation))
+  })
   return results
 }
 module.exports = { qualifyMysqlCertificateIndexLocks }
