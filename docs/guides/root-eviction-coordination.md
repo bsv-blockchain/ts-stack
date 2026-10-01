@@ -18,7 +18,7 @@ operator policy and retention of public history. Each root decides under its own
 installed policy. An authenticated peer request supplies attribution and evidence;
 it does not grant administrative access or create agreement among roots.
 
-The SDK 2.9.0 source candidate includes the request, status and result contracts in
+The SDK 3.0.0 source candidate includes the request, status and result contracts in
 `@bsv/sdk/overlay-tools/OutputRootEvictionProtocol`, also exported from the root SDK.
 The output-knowledge source candidate also supplies a durable local decision journal.
 Optional authenticated request/status routes are available in the Overlay Express
@@ -612,7 +612,7 @@ handshake policy. Neither CORS nor a successful handshake grants root authority.
 
 Configuration remains opt-in and the legacy main entry loads the new router only
 when configured. Existing SDK consumers need no migration; enabling the root
-companion requires SDK 2.9.0 and the matching middleware candidate. The application
+companion requires SDK 3.0.0 and the matching middleware candidate. The application
 owns the injected journal and any evaluation workers: stop incoming requests,
 settle physical work, then close its database. `server.close()` does not acquire
 ownership of that injected store. This method does not advertise capabilities,
@@ -620,7 +620,7 @@ install a scheduler or retrofit ordinary discovery, caching, live delivery or GA
 
 ## Retained-operation SDK client
 
-`OutputRootEvictionTransport` in SDK 2.9.0 executes a finite submit or status request
+`OutputRootEvictionTransport` in SDK 3.0.0 executes a finite submit or status request
 for one already retained operation. Save the original signed request, selected
 capability record and independently selected evaluation-policy digest in an
 integrity-protected local store before the first send. Supply those records,

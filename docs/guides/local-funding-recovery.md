@@ -53,11 +53,11 @@ controller. This code does not replace application permissions, selected-chain
 currentness or the BRC-195 seller ledger. Do not expose its low-level storage
 commit hook to an untrusted client.
 
-The optional recovery modules require the SDK 2.9 output-protocol helpers.
+The optional recovery modules require the SDK 3.0 output-protocol helpers.
 Existing wallet imports and the ordinary storage construction/internalization
 methods retain compatibility with SDK 2.8.11. The local hook's declaration is
 separate from the new funding-operation types so disabling this feature does not
-pull an SDK 2.9-only type into an existing consumer.
+pull an SDK 3.0-only type into an existing consumer.
 
 ## One output, one operation
 

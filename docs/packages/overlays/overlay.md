@@ -15,10 +15,14 @@ tags: ['overlay', 'framework']
 
 # @bsv/overlay
 
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Core library defining the Overlay Services Engine for UTXO-based systems on BSV.
 
 The optional `@bsv/overlay/proposal-admission` entry supplies
-`OverlayProposalAdmission` for a durably reserved proposal service. With SDK 2.9
+`OverlayProposalAdmission` for a durably reserved proposal service. With SDK 3.0
 or newer and explicit retained-history storage, it recovers the original ordinary
 topic receipt, projects only that topic's STEAK and preserves uncertainty after
 duplicate or failed submissions. It bounds physical concurrency and result

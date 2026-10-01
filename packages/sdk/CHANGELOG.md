@@ -214,7 +214,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### Added (2.9.0 candidate)
+### Added (3.0.0 candidate)
 
 - Add bounded BRC-199 signed request/result and status representations, direct authenticated requester/root/chain bindings, exact decision identities and restoration-basis checks. New-request clocks are separate from historical recovery. Evidence, local authority, durable decisions and all-path serving guards remain separate; existing discovery behavior is unchanged.
 - Add bounded BRC-195 payment-header parsing and exact single BRC-29 funding-output inspection with proof-independent wallet operation identifiers. Callers retain responsibility for independently derived payment keys, chain acceptance, acquisition reservation and durable idempotent wallet credit.
@@ -235,6 +235,16 @@ All notable changes to this project will be documented in this file. The format 
 - Add `retainOutputCapability` and `restoreOutputCapability` for bounded local retention of the original signed manifest, selector and freshness policy. Recovery revalidates the original selection without substituting current discovery or treating manifest expiry as loss of an existing obligation. Local storage integrity, current authorization and operation deadlines remain required. No existing API or stored encoding changes.
 - Add bounded common packet-service error parsing and exact BRC-193 HTTP mappings, including `not-found` responses and explicit capacity minimums. Errors cannot carry successful cursors or trigger automatic payment; local cancellation and storage revision failures retain their existing behavior.
 - Add `AuthFetch.fetch(..., { allowPayments: false })` to disable automatic BRC-105 payment for unpaid authenticated requests. The opt-out survives authentication recovery and caller option mutation; omission or `true` preserves existing payment behavior. Ordinary HTTP fallback errors are unchanged. No migration is required for existing callers.
+
+### Removed (3.0.0 candidate)
+
+- Remove the legacy `identity/DIDTokenValidation` module and its
+  `CanonicalDIDToken`, `DID_TOKEN_PROTOCOL`, `MAX_DID_SERIAL_BYTES`,
+  `decodeCanonicalDIDToken` and `normalizeDIDSerialNumber` exports. Consumers
+  must move identity-key DID operations to `@bsv/did` and public certificate
+  discovery to supported wallet/identity APIs; serial records do not identify
+  issuer or subject. See [migration guidance](../../docs/guides/identity-did-vc-migration.md).
+  This source removal deletes no user records or on-chain outputs.
 
 ### Fixed (2.8.11 candidate)
 

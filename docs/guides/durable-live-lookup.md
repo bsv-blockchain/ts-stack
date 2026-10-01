@@ -43,7 +43,7 @@ structural companion interface accepts the provider service without making the
 dual-format Express package import an ESM-only runtime. Alternatively, call
 `OverlayExpress.configureOutputLookup` before `start`. This installs the same
 router and reuses the host's authentication instance and request capacity. The
-new adapter requires SDK 2.9.0. Existing finite lookup routes and the legacy root
+new adapter requires SDK 3.0.0. Existing finite lookup routes and the legacy root
 entry remain compatible and do not eagerly load the optional adapter.
 
 The [compiled package example](compiled-package-examples.md#durable-lookup-provider)

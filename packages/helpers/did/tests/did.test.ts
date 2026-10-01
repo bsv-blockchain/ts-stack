@@ -32,7 +32,7 @@ describe('BsvDid', () => {
     expect(document.assertionMethod).toEqual([`${did}#${decoded.multibaseValue}`])
   })
 
-  test('normalizes hexadecimal and byte-array public-key inputs', () => {
+  test('accepts compressed hexadecimal, byte-array and public-key object inputs', () => {
     const publicKeyObject = PrivateKey.fromRandom().toPublicKey()
     const publicKey = publicKeyObject.toDER() as number[]
     const publicKeyHex = publicKey.map(byte => byte.toString(16).padStart(2, '0')).join('')

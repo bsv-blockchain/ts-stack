@@ -1,7 +1,6 @@
 import { jest } from '@jest/globals'
 import type { Collection, Db } from 'mongodb'
 import { Bsv21StorageManager } from '../bsv21/Bsv21StorageManager.js'
-import { DIDStorageManager } from '../did/DIDStorageManager.js'
 import { DstasStorageManager } from '../dstas/DstasStorageManager.js'
 import { lookupByOwnerOrOutpoint } from '../shared/tokenLookupTail.js'
 import { StasStorageManager } from '../stas/StasStorageManager.js'
@@ -38,51 +37,6 @@ function cursorHarness(rows = [{ txid, outputIndex: 2 }]): CursorHarness {
 }
 
 describe('bounded storage query construction', () => {
-  it('binds every DID filter and ascending pagination to explicit Mongo fields', async () => {
-    const { db, find, sort, skip, limit, project } = cursorHarness()
-    const storage = new DIDStorageManager(db)
-    const startDate = new Date('2026-01-01T00:00:00.000Z')
-    const endDate = new Date('2026-02-01T00:00:00.000Z')
-
-    await expect(
-      storage.findRecords(
-        { serialNumber: 'serial', txid, outputIndex: 2, startDate, endDate },
-        5,
-        3,
-        'asc'
-      )
-    ).resolves.toEqual([{ txid, outputIndex: 2 }])
-
-    expect(find).toHaveBeenCalledWith({
-      serialNumber: 'serial',
-      txid,
-      outputIndex: 2,
-      createdAt: { $gte: startDate, $lte: endDate }
-    })
-    expect(sort).toHaveBeenCalledWith({ createdAt: 1, txid: 1, outputIndex: 1 })
-    expect(skip).toHaveBeenCalledWith(3)
-    expect(limit).toHaveBeenCalledWith(5)
-    expect(project).toHaveBeenCalledWith({ txid: 1, outputIndex: 1 })
-  })
-
-  it('builds exact open-ended DID date windows and descending scans', async () => {
-    const { db, find, sort } = cursorHarness()
-    const storage = new DIDStorageManager(db)
-    const startDate = new Date('2026-01-01T00:00:00.000Z')
-    const endDate = new Date('2026-02-01T00:00:00.000Z')
-
-    await storage.findRecords({ startDate }, 10, 0, 'desc')
-    await storage.findRecords({ endDate }, 10, 0, 'desc')
-    await storage.findRecords({}, 10, 0, 'desc')
-
-    expect(find.mock.calls.map(call => call[0])).toEqual([
-      { createdAt: { $gte: startDate } },
-      { createdAt: { $lte: endDate } },
-      {}
-    ])
-    expect(sort).toHaveBeenLastCalledWith({ createdAt: -1, txid: -1, outputIndex: -1 })
-  })
-
   it('propagates BSV-21 and STAS filters with default and caller pagination', async () => {
     const bsv = cursorHarness()
     const bsvStorage = new Bsv21StorageManager(bsv.db)

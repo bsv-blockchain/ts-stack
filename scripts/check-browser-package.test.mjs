@@ -1,15 +1,72 @@
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 import {
   aggregateBundleSizes,
   bundleComposition,
   bundleSizes,
+  parseBrowserArguments,
   prohibitedModuleIds,
   prohibitedRuntimeSpecifiers,
   validateBrowserBudget,
-  validateBundleBudget
+  validateBundleBudget,
+  validateBudgetFile
 } from './check-browser-package.mjs'
+
+test('browser selector preserves default CLI and independently selects an optional budget', () => {
+  assert.deepEqual(parseBrowserArguments(['.']), {
+    packageDirectory: '.',
+    budgetFile: 'browser-budget.json',
+    measureOnly: false
+  })
+  assert.deepEqual(
+    parseBrowserArguments(['.', '--budget', 'browser-brc52-budget.json', '--measure']),
+    {
+      packageDirectory: '.',
+      budgetFile: 'browser-brc52-budget.json',
+      measureOnly: true
+    }
+  )
+  for (const arguments_ of [
+    [],
+    ['--measure'],
+    ['.', 'extra'],
+    ['.', '--budget'],
+    ['.', '--measure', '--measure'],
+    ['.', '--budget', 'a', '--budget', 'b']
+  ]) {
+    assert.throws(() => parseBrowserArguments(arguments_))
+  }
+})
+
+test('browser budget selector requires registered package-local files without fallback', () => {
+  const directory = fileURLToPath(new URL('../packages/helpers/did', import.meta.url))
+  const policy = {
+    packages: [
+      { path: 'packages/helpers/did', budget: 'packages/helpers/did/browser-brc52-budget.json' }
+    ]
+  }
+  assert.equal(validateBudgetFile(directory, 'browser-budget.json', policy), 'browser-budget.json')
+  assert.equal(
+    validateBudgetFile(directory, 'browser-brc52-budget.json', policy),
+    'browser-brc52-budget.json'
+  )
+  for (const filename of [
+    '../browser-brc52-budget.json',
+    '/tmp/browser-brc52-budget.json',
+    'sub/browser-brc52-budget.json',
+    'browser-missing.json',
+    '',
+    undefined
+  ]) {
+    assert.throws(() => validateBudgetFile(directory, filename, policy))
+  }
+  assert.throws(() =>
+    validateBudgetFile(path.join(directory, 'other'), 'browser-brc52-budget.json', policy)
+  )
+})
 
 test('multi-file payload sizes sum each independently transferred representation', () => {
   const payloads = [Buffer.from('alpha alpha alpha'), Buffer.from('alpha alpha alpha')]

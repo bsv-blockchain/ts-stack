@@ -1237,3 +1237,26 @@ The [proposal guide](../../docs/guides/non-final-proposals.md) describes composi
 recovery and lifecycle ownership. Explicit startup recovery/expiry, configuration
 evolution, retained-fence compaction, projection integration, SDK client and full
 checkpoint-two qualification remain open.
+
+## Source95c proposal qualification and upstream reconciliation
+
+The strengthened complete 313-site proposal journal run passes at 97.76%:
+306 killed, seven survived, zero uncovered or invalid, in 18 minutes 12 seconds.
+Two recovered native worker crashes remain in its diagnostic record. The earlier
+83.39% failure is preserved; no exclusions, lowered threshold or waiver were added.
+
+The complete 416-site proposal HTTP run at the same frozen source failed its
+90% gate at 84.62%: 342 killed, 64 survived and ten timeout detections, with zero
+uncovered or invalid, in 26 minutes 55 seconds. The 207-test dry run passed.
+This failure remains open and requires stronger meaningful lifecycle, capacity
+and exact response assertions before requalification. All 9208 frozen source and
+compiled dependency inputs remained unchanged throughout both runs.
+
+Main20c independently retires the obsolete serial-DID module and advances SDK3
+and topics2. This branch preserves those migration requirements while carrying
+its additive output helpers into the same unpublished candidates. Existing SDK2
+peer floors remain available for legacy paths; optional new output features now
+require the SDK3 candidate. The new output-knowledge package has no published SDK2
+compatibility promise. All original mutation targets remain and the four upstream
+DID targets bring the combined registry to 98. Neither component scores nor main's
+prior qualification establish green CI for this combined source.

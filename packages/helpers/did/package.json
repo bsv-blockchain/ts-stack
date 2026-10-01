@@ -1,11 +1,11 @@
 {
   "name": "@bsv/did",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
   },
-  "description": "SD-JWT VC and did:key helpers for BSV SDK identities",
+  "description": "Identity-key DID and signature-preserving BRC52 credential adapters with independent SD-JWT helpers",
   "keywords": [
     "bsv",
     "did",
@@ -45,19 +45,29 @@
         "types": "./dist/src/*.d.cts",
         "default": "./dist/src/*.cjs"
       }
+    },
+    "./brc52": {
+      "import": {
+        "types": "./dist/brc52.d.ts",
+        "default": "./dist/brc52.js"
+      },
+      "require": {
+        "types": "./dist/brc52.d.cts",
+        "default": "./dist/brc52.cjs"
+      }
     }
   },
   "scripts": {
-    "build": "tsdown mod.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
+    "build": "tsdown mod.ts brc52.ts src/validation.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
     "dev": "pnpm build --watch",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/did/{src,tests}/**/*.ts\" \"packages/helpers/did/*.{js,json,ts}\"",
     "lint": "oxlint src tests --deny-warnings",
-    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports BsvDid,SdJwtVcHolder,SdJwtVcIssuer,SdJwtVcPresenter,SdJwtVcVerifier,applyDisclosures,base64UrlDecode,base64UrlDecodeJson,base64UrlEncode,base64UrlEncodeJson,createKeyBindingJwt,decodeDidKey,decodeJwt,disclosureDigest,encodeBase58Multibase,generateQrCode,jwkToPublicKey,parseDisclosure,parseSdJwt,privateKeyToJwk,publicKeyFromDid,publicKeyToDidKey,publicKeyToJwk,selectDisclosures,serializeSdJwt,signCompact,signJwt,verificationMethodForDid,verifyCompact,verifyJwt,verifyKeyBindingJwt",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports BsvDid,SdJwtVcHolder,SdJwtVcIssuer,SdJwtVcPresenter,SdJwtVcVerifier,applyDisclosures,base64UrlDecode,base64UrlDecodeJson,base64UrlEncode,base64UrlEncodeJson,createKeyBindingJwt,decodeDidKey,decodeJwt,disclosureDigest,encodeBase58Multibase,generateQrCode,jwkToPublicKey,parseDisclosure,parseSdJwt,privateKeyToJwk,publicKeyFromDid,publicKeyToDidKey,publicKeyToJwk,selectDisclosures,serializeSdJwt,signCompact,signJwt,verificationMethodForDid,verifyCompact,verifyJwt,verifyKeyBindingJwt --entry-exports \"./brc52=BRC52_DISABLED_OUTPOINT|BRC52_ENVELOPE_PROFILE|BRC52_LIMITS|BRC52_VOCABULARY|BRC52MemoryNonceStore|exportBRC52Envelope|exportBRC52StructuredCertificate|parseBRC52Envelope|verifyBRC52CertificateBinary|verifyBRC52Envelope|evaluateBRC52Status|produceBRC52Disclosure|receiveBRC52Disclosure\"",
     "prepublishOnly": "pnpm build",
     "test": "jest",
-    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs . && node ../../../scripts/check-browser-package.mjs . --budget browser-brc52-budget.json",
     "test:coverage": "jest --coverage",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath tests/codec.property.test.ts",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath tests/codec.property.test.ts tests/brc202.property.test.ts tests/brc52-envelope.property.test.ts tests/brc52-status.property.test.ts tests/brc52-disclosure.property.test.ts",
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
@@ -77,7 +87,8 @@
     "oxlint": "^1.76.0",
     "ts-jest": "^29.4.12",
     "tsdown": "0.22.14",
-    "typescript": "npm:@typescript/typescript6@6.0.2"
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@jest/globals": "^30.4.1"
   },
   "repository": {
     "type": "git",
@@ -89,11 +100,18 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.6 || ^3.0.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
       "optional": false
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "brc52": [
+        "dist/brc52.d.ts"
+      ]
     }
   }
 }

@@ -15,6 +15,10 @@ tags: ['overlay', 'express', 'http']
 
 # @bsv/overlay-express
 
+This source candidate declares SDK peer `^2.4.0 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Opinionated Express.js HTTP server wrapper for @bsv/overlay with built-in configuration, health checks, and peer discovery.
 
 ## Install
@@ -64,7 +68,7 @@ process.once('SIGINT', () => void server.close())
 
 The optional `@bsv/overlay-express/root-eviction-response` entry connects
 authenticated response queueing to a durable root-advertisement journal.
-`guardRootAdvertisementResponse` requires middleware 2.3.0, SDK 2.9.0, a revision
+`guardRootAdvertisementResponse` requires middleware 2.3.0, SDK 3.0.0, a revision
 captured before hydration, every disclosed target and current synchronous data/control
 access checks. It resets a stale response in full and separately fences the signed
 replacement. It does not mount routes or automatically guard existing serving
@@ -91,7 +95,7 @@ provider database ownership with the application.
 
 The [durable lookup guide](../../guides/durable-live-lookup.md) explains the provider,
 SQLite recovery, current authorization and mounting rules. The feature requires
-SDK 2.9.0; legacy root imports and finite routes remain available without enabling
+SDK 3.0.0; legacy root imports and finite routes remain available without enabling
 it. The candidate is not a package publication or a claim of complete application
 qualification.
 
@@ -108,16 +112,25 @@ await server.configureKnex('postgresql://user:pass@localhost/db')
 
 ### Register multiple topics
 
+Register services only under an explicit operator choice. The existing identity
+pair serves attributed public certificates under BRC-189 semantics; discovery
+of its host does not establish issuer trust. Identity-key DID resolution is
+local and deterministic. The serial-token DID overlay is removed in the
+proposed `@bsv/overlay-topics` 2.0 release; see the
+[migration guide](../../guides/identity-did-vc-migration.md).
+
 ```typescript
+import { IdentityTopicManager, createIdentityLookupService } from '@bsv/overlay-topics'
+
 server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
-server.configureTopicManager('tm_did', new DIDTopicManager())
+server.configureTopicManager('tm_identity', new IdentityTopicManager())
 
 await server.configureLookupServiceWithMongo('ls_helloworld', db =>
   createHelloWorldLookupService(db)
 )
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
-await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
+await server.configureLookupServiceWithMongo('ls_identity', db => createIdentityLookupService(db))
 
 await server.configureEngine()
 await server.start()
@@ -277,7 +290,7 @@ monitor.start()
 `configureProposals` before `start` or the separate
 `@bsv/overlay-express/proposals` router composes the durable proposal service,
 service-owned disclosure validator and shared journal/native-enqueue gate.
-This entry requires SDK 2.9 and auth middleware 2.3; legacy root peer floors and
+This entry requires SDK 3.0 and auth middleware 2.3; legacy root peer floors and
 routes remain unchanged. A current channel read differs from recovery of a
 retained publication ACK. Both require current authorization and original
 contract bounds after response signing. One sanitized replacement error may be

@@ -48,7 +48,7 @@ changes from other processes. The browser root remains unchanged.
 
 See the [provider guide](../../../docs/guides/durable-live-lookup.md) for creation,
 restart, projection, disclosure guards, HTTP mounting and retention. The optional
-Overlay Express adapter requires SDK 2.9.0 and a signed matching capability. This
+Overlay Express adapter requires SDK 3.0.0 and a signed matching capability. This
 increment does not complete topic admission, payment, private acquisition or the
 full BRC-192–199 reference application.
 

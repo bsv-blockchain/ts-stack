@@ -17,6 +17,7 @@ test('compiled examples are scoped through their first-party dependency closure'
       'root-advertisement-response',
       'authenticated-response-admission',
       'sdk-and-simple',
+      'credentials-and-identity',
       'middleware',
       'overlay-and-gasp',
       'wallet-storage',

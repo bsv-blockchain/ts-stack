@@ -76,7 +76,7 @@ const INPUT_LIMIT = 1048576
 const ASSESSMENT_PREFIX = 'overlay-topic-admission-v1:'
 
 /**
- * Optional Node bridge for ProposalServiceAdmission, requiring SDK 2.9 or newer.
+ * Optional Node bridge for ProposalServiceAdmission, requiring SDK 3.0 or newer.
  * Recover only retained ordinary topic admission; submission errors, duplicate
  * STEAK and missing history never establish rejection or rollback. The caller
  * owns authentication, proposal policy/transaction relation verification and

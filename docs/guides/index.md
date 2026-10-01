@@ -109,3 +109,8 @@ Overlay Express adapter, including recovery, authorization and retention boundar
 
 Compose the signed policy, durable journal, retained admission and native response
 disclosure layers behind explicitly selected BRC-194 endpoints.
+
+## Identity, DIDs and credentials
+
+- [Unified integration and implementer guidance](identity-did-vc.md)
+- [Breaking API and service migration](identity-did-vc-migration.md)

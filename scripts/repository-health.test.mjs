@@ -73,11 +73,11 @@ test('workspace inventory ignores generated mutation sandboxes while retaining n
   )
 })
 
-test('workspace discovery exactly matches the 44-project registry', () => {
+test('workspace discovery exactly matches the 43-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 44)
-  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 35)
+  assert.equal(discovered.length, 43)
+  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 34)
   assert.deepEqual(
     discovered.map(project => project.path),
     [...projects.projects].map(project => project.path).sort()
@@ -100,7 +100,7 @@ test('workspace discovery exactly matches the 44-project registry', () => {
 test('every checked-in first-party package manifest uses the current Association name', () => {
   const manifests = discoverPackageManifests()
 
-  assert.equal(manifests.length, 53)
+  assert.equal(manifests.length, 52)
   assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
   assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
 
@@ -113,8 +113,8 @@ test('current repository health controls and ratchet are internally consistent',
   const result = evaluateRepositoryHealth({ today: '2026-09-04' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 44)
-  assert.equal(result.publicPackages, 35)
+  assert.equal(result.projects.length, 43)
+  assert.equal(result.publicPackages, 34)
   assert.equal(result.findings.length, 0)
 })
 
@@ -261,7 +261,7 @@ test('every public package declares supported runtime and canonical support meta
     project => project.manifest.private !== true
   )
 
-  assert.equal(publicPackages.length, 35)
+  assert.equal(publicPackages.length, 34)
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
@@ -315,7 +315,7 @@ test('every public package declares supported runtime and canonical support meta
 
 test('every public package has canonical, machine-verified consumer profiles', () => {
   const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
-  assert.equal(publicProjects.length, 35)
+  assert.equal(publicProjects.length, 34)
   assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
   assert.deepEqual(
     [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),

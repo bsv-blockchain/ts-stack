@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.9.0'
+version: '3.0.0'
 npm: '@bsv/sdk'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,7 +15,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The 2.9.0 source candidate adds explicitly selected BRC-192–194 output observation,
+The separately approved SDK3 retirement removes the obsolete serial-DID token
+validation module. Native identity, certificate and authentication APIs remain.
+Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
+[migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
+qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+The 3.0.0 source candidate adds explicitly selected BRC-192–194 output observation,
 lookup, proposal put/get/finalize and signed capability representations, bounded protocol JSON and packet
 verification. Existing lookup, submit and wallet interfaces retain their behavior.
 Stateful orchestration is provided by the separate

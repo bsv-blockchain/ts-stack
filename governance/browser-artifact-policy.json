@@ -13,18 +13,18 @@
       "splittingDisposition": "Single self-contained codec entry with zero runtime dependencies; no server adapter or optional platform code exists to split."
     },
     {
-      "name": "@bsv/did-client",
-      "path": "packages/helpers/did-client",
-      "budget": "packages/helpers/did-client/browser-budget.json",
-      "entry": ".",
-      "splittingDisposition": "No optional server adapter is reachable from the browser entry. The reviewed security candidate remains one chunk: Vite 621454/159609/129460 raw/gzip/Brotli bytes across 100 modules and two packages, esbuild 479390/144836/120543 across 99 modules, and UMD 482205/142581/117523 across 99 modules. The growth is the versioned SDK trust-boundary validation graph; splitting it would change the synchronous client contract. The rounded limits retain roughly 14-17% headroom for maintenance of those approved trust-boundary validators without immediately reopening the growth decision."
-    },
-    {
       "name": "@bsv/did",
       "path": "packages/helpers/did",
       "budget": "packages/helpers/did/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The package is browser-native and has no optional server adapter in its entry. The reviewed security candidate remains one chunk: Vite 227259/69765/58647 raw/gzip/Brotli bytes across 65 modules and four packages, and esbuild 173279/64528/55001 across 67 modules."
+      "splittingDisposition": "The immutable BRC202 DID and separate SD-JWT root entry retain the existing browser budget. The optional BRC52 VC entry has an independent exact-tarball measurement and gate; applications importing only the root do not opt into its all-export graph."
+    },
+    {
+      "name": "@bsv/did",
+      "path": "packages/helpers/did",
+      "budget": "packages/helpers/did/browser-brc52-budget.json",
+      "entry": "./brc52",
+      "splittingDisposition": "The optional BRC52 entry provides original-signature envelopes, authenticated selective disclosure, and outpoint status. Its complete export graph is measured and gated independently; measured all-export size is not a claim about every application tree-shaken bundle."
     },
     {
       "name": "@bsv/simple",

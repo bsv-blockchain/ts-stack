@@ -491,7 +491,7 @@ storage and must drain requests before closing it.
 
 The optional `@bsv/overlay-express/output-lookup` entry exports
 `createOutputLookupRouter(options: OutputLookupRouteOptions): Router`, with matching
-ESM and CommonJS declarations. It requires SDK 2.9.0. The companion port exposes
+ESM and CommonJS declarations. It requires SDK 3.0.0. The companion port exposes
 `open`, `read` and `close`, each accepting unknown wire input, a transport-verified
 `OutputLookupCaller` and optional abort signal. It returns already serialized
 `body` bytes and exact capability/profile selection headers. Do not modify that

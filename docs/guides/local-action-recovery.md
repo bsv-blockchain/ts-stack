@@ -25,7 +25,7 @@ types, but these three methods are **not new BRC-100 transport methods**. Ordina
 `Wallet.createAction` and `Wallet.signAction` retain their existing behavior.
 Remote storage, IndexedDB, wallet-provider switching and an ephemeral action-batch
 workspace do not acquire this capability by implementing the existing interface.
-These optional modules use SDK 2.9 helpers. Existing wallet imports and ordinary
+These optional modules use SDK 3.0 helpers. Existing wallet imports and ordinary
 storage methods remain compatible with SDK 2.8.11 when this feature is disabled.
 
 ## Installation and ownership

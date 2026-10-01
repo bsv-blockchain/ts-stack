@@ -4,7 +4,7 @@ title: '@bsv/chirp'
 kind: package
 domain: network
 npm: '@bsv/chirp'
-version: '0.1.3'
+version: '0.1.4'
 last_updated: '2026-09-27'
 last_verified: '2026-09-27'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ tags: ['network', 'storage', 'uhrp', 'merkle', 'brc-167']
 ---
 
 # @bsv/chirp
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Browser- and Node-compatible BRC-167 reference implementation for progressively publishing and resiliently resolving large UHRP-addressed byte streams.
 

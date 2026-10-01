@@ -148,7 +148,7 @@
     "uuid": "^14.0.1"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.4.0"
+    "@bsv/sdk": "^2.4.0 || ^3.0.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

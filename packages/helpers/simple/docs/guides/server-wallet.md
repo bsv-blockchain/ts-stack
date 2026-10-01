@@ -139,8 +139,8 @@ The server wallet has all the same methods as the browser wallet:
 - `inscribeText()`, `inscribeJSON()`, `inscribeFileHash()`, `inscribeImageHash()`
 - `certifyForMessageBox()`, `sendMessageBoxPayment()`, `listIncomingPayments()`, `acceptIncomingPayment()`
 - `acquireCertificateFrom()`, `listCertificatesFrom()`, `relinquishCert()`
-- `getDID()`, `resolveDID()`, `registerDID()`
-- `acquireCredential()`, `listCredentials()`, `createPresentation()`
+- `getDID()`, `resolveDID()`
+- `acquireCredential()`, `listCredentials()`
 - `advertiseSHIP()`, `advertiseSLAP()`, `broadcastAction()`, `withRetry()`
 
 ## Next.js API Route Example

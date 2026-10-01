@@ -110,13 +110,9 @@ Available handler factories:
 
 - `createServerWalletHandler()` — Server wallet with key persistence
 - `createIdentityRegistryHandler()` — MessageBox identity registry
-- `createDIDResolverHandler()` — DID resolution proxy (nChain + WoC fallback)
-- `createCredentialIssuerHandler()` — W3C Verifiable Credential issuer
+- `createCredentialIssuerHandler()` — BRC-52 issuer and proposed BRC-203 envelope verifier
 
-`createDIDResolverHandler()` is a validating proxy, not an independent chain
-proof verifier. Its configured universal resolver and transaction/spend-index
-provider are authoritative trust sources; require independent confirmation
-before using a remotely resolved key for authentication or irreversible value.
+Identity-key resolution uses `DID.resolve` offline. Authentication, issuer trust, disclosure authorization, and certificate status must be evaluated independently.
 
 ## 7. No Need to Import @bsv/sdk
 
