@@ -24,6 +24,10 @@ sign a zero body length for an empty response must adopt the specified sentinel.
 AuthFetch stops pending certificate dispatch and session recovery after its
 request deadline. An already dispatched request may still complete on the
 server; callers must resolve its outcome before retrying a non-idempotent write.
+A request still waiting on a wallet prompt at the deadline is never sent and
+rejects with `Timed out waiting for authenticated response.`; one already sent
+rejects with the same message followed by `The request was sent; its outcome is
+unknown.`
 
 AuthFetch's automatic BRC-105 payment path delegates spending authorization to
 the configured wallet's `createAction` policy. Use a wallet that requires the

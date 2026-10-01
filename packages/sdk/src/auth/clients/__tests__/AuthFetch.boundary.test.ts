@@ -1,6 +1,11 @@
 import { jest } from '@jest/globals'
 
 import * as Utils from '../../../primitives/utils.js'
+import PrivateKey from '../../../primitives/PrivateKey.js'
+import { ProtoWallet } from '../../../wallet/ProtoWallet.js'
+import { Peer } from '../../Peer.js'
+import { SessionManager } from '../../SessionManager.js'
+import { AuthMessage, PeerSession, Transport } from '../../types.js'
 import { AuthFetch } from '../AuthFetch.js'
 
 function buildResponsePayload(
@@ -691,5 +696,162 @@ describe('AuthFetch expired-request dispatch boundary', () => {
     expect(peer.toPeer).toHaveBeenCalledTimes(1)
     expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledTimes(1)
     expect((authFetch as any).pendingRequestNonces.size).toBe(0)
+  })
+})
+
+describe('AuthFetch late wallet approval boundary', () => {
+  const unknownOutcome =
+    'Timed out waiting for authenticated response. The request was sent; its outcome is unknown.'
+
+  class LocalTransport implements Transport {
+    remote?: LocalTransport
+    general: AuthMessage[] = []
+    holdGeneral?: Promise<void>
+    private onDataCallback?: (message: AuthMessage) => Promise<void>
+
+    async send(message: AuthMessage): Promise<void> {
+      if (message.messageType === 'general' && this.holdGeneral !== undefined) {
+        this.general.push(message)
+        return await this.holdGeneral
+      }
+      if (message.messageType === 'general') this.general.push(message)
+      void this.remote?.onDataCallback?.(message).catch(() => {})
+    }
+
+    async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
+      this.onDataCallback = callback
+    }
+  }
+
+  class HeldSessions extends SessionManager {
+    hold?: Promise<void>
+
+    async updateSession(session: PeerSession): Promise<void> {
+      if (this.hold !== undefined) await this.hold
+      super.updateSession(session)
+    }
+  }
+
+  function setup(sessions?: SessionManager): {
+    authFetch: AuthFetch
+    wallet: ProtoWallet
+    client: LocalTransport
+  } {
+    const client = new LocalTransport()
+    const server = new LocalTransport()
+    client.remote = server
+    server.remote = client
+    const serverPeer = new Peer(new ProtoWallet(new PrivateKey(31)), server)
+    serverPeer.listenForGeneralMessages((sender, payload) => {
+      void serverPeer.toPeer(buildResponsePayload(payload.slice(0, 32), 200, {}, []), sender)
+    })
+    const wallet = new ProtoWallet(new PrivateKey(32))
+    const authFetch = new AuthFetch(wallet)
+    ;(authFetch as any).peers['https://service.example'] = {
+      peer: new Peer(wallet, client, undefined, sessions),
+      identityKey: new PrivateKey(31).toPublicKey().toString(),
+      supportsMutualAuth: true,
+      pendingCertificateRequests: []
+    }
+    return { authFetch, wallet, client }
+  }
+
+  function holdWallet(wallet: ProtoWallet, method: 'createHmac' | 'createSignature'): () => void {
+    let approve!: () => void
+    const approved = new Promise<void>(resolve => {
+      approve = resolve
+    })
+    const original = (wallet[method] as Function).bind(wallet)
+    jest.spyOn(wallet, method).mockImplementation(async (...args: any[]) => {
+      await approved
+      return original(...args)
+    })
+    return approve
+  }
+
+  async function expireThenApprove(
+    authFetch: AuthFetch,
+    approve: () => void,
+    message: string
+  ): Promise<void> {
+    const pending = authFetch.fetch('https://service.example/certificate', {
+      method: 'POST',
+      body: 'synthetic'
+    })
+    const rejected = expect(pending).rejects.toThrow(message)
+    await jest.advanceTimersByTimeAsync(30000)
+    await rejected
+    approve()
+    await jest.advanceTimersByTimeAsync(1000)
+  }
+
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  test('a handshake approved after the deadline never sends the request', async () => {
+    const { authFetch, wallet, client } = setup()
+    const approve = holdWallet(wallet, 'createHmac')
+    const sign = jest.spyOn(wallet, 'createSignature')
+    await expireThenApprove(authFetch, approve, 'Timed out waiting for authenticated response.')
+    expect(client.general).toHaveLength(0)
+    expect(sign).not.toHaveBeenCalled()
+  })
+
+  test('a signature approved after the deadline never sends the request', async () => {
+    const { authFetch, wallet, client } = setup()
+    const approve = holdWallet(wallet, 'createSignature')
+    await expireThenApprove(authFetch, approve, 'Timed out waiting for authenticated response.')
+    expect(client.general).toHaveLength(0)
+  })
+
+  test('a request already sent at the deadline reports an unknown outcome', async () => {
+    const { authFetch, client } = setup()
+    let failSend!: (error: Error) => void
+    client.holdGeneral = new Promise<void>((_resolve, reject) => {
+      failSend = reject
+    })
+    await expireThenApprove(
+      authFetch,
+      () => failSend(new Error('Session not found for nonce')),
+      unknownOutcome
+    )
+    expect(client.general).toHaveLength(1)
+  })
+
+  test('a session update finishing after the deadline never sends the request', async () => {
+    const sessions = new HeldSessions()
+    const { authFetch, wallet, client } = setup(sessions)
+    let release!: () => void
+    const sign = wallet.createSignature.bind(wallet)
+    jest.spyOn(wallet, 'createSignature').mockImplementation(async (...args) => {
+      sessions.hold = new Promise<void>(resolve => {
+        release = resolve
+      })
+      return await sign(...args)
+    })
+    await expireThenApprove(
+      authFetch,
+      () => release(),
+      'Timed out waiting for authenticated response.'
+    )
+    expect(client.general).toHaveLength(0)
+  })
+
+  test('a prompt answered in time sends once and resolves', async () => {
+    const { authFetch, client } = setup()
+    await expect(
+      authFetch.fetch('https://service.example/certificate', { method: 'POST', body: 'synthetic' })
+    ).resolves.toMatchObject({ status: 200 })
+    expect(client.general).toHaveLength(1)
+  })
+
+  test('a denied signature still rejects without sending', async () => {
+    const { authFetch, wallet, client } = setup()
+    const denied = new Error('User denied the signature request')
+    jest.spyOn(wallet, 'createSignature').mockRejectedValue(denied)
+    await expect(
+      authFetch.fetch('https://service.example/certificate', { method: 'POST', body: 'synthetic' })
+    ).rejects.toBe(denied)
+    expect(client.general).toHaveLength(0)
   })
 })

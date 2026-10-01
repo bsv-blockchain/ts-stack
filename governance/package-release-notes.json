@@ -168,8 +168,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.10",
       "releaseType": "patch",
-      "summary": "WalletClient and the binary BRC-100 wire no longer reject every acquireCertificate issuance: result validation required the returned fields to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted. An issuance result is now bound to exactly the requested field names; a direct acquisition is still bound to its requested encrypted values exactly.",
-      "migration": "No API, wire, or wallet-data migration is required."
+      "summary": "AuthFetch no longer sends a request after its response deadline when a wallet prompt is approved late, and a request already sent at the deadline rejects with a distinct unknown-outcome timeout message instead of being reported like one that was never sent. WalletClient and the binary BRC-100 wire no longer reject every acquireCertificate issuance: result validation required the returned fields to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted. An issuance result is now bound to exactly the requested field names; a direct acquisition is still bound to its requested encrypted values exactly.",
+      "migration": "Peer.toPeer accepts an optional third { signal, onSend } argument; existing calls are unchanged. Callers that match 'Timed out waiting for authenticated response.' still match both timeouts, which share it as a prefix; treat the message ending 'The request was sent; its outcome is unknown.' as possibly delivered and reconcile before retrying a non-idempotent write. No API, wire, or wallet-data migration is required."
     },
     {
       "name": "@bsv/simple",

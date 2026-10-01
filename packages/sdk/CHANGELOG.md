@@ -214,6 +214,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Fixed (2.8.12 candidate)
+
+- AuthFetch no longer sends a request after its 30 second response deadline when a wallet prompt (handshake or request signature) is approved late; previously the caller saw a timeout while the request was still sent. A request already handed to the transport when the deadline passes now rejects with `Timed out waiting for authenticated response. The request was sent; its outcome is unknown.`, so callers can tell it apart from one that was never sent. Callers matching the previous message still match. `Peer.toPeer` accepts an optional third `{ signal, onSend }` argument that AuthFetch uses for this; existing calls are unchanged. No wire or wallet-data migration is required.
+
 ### Fixed (2.8.11 candidate)
 
 - `WalletClient` and the binary BRC-100 wire no longer reject every `acquireCertificate` issuance. Result validation required the returned `fields` to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted, so a valid issuance always failed with `Invalid acquireCertificate result certificate.fields: expected the requested certificate fields`. An issuance result is now bound to exactly the requested field names; a direct acquisition, whose request already carries the encrypted values, is still bound to them exactly. No API, wire or wallet-data migration is required.

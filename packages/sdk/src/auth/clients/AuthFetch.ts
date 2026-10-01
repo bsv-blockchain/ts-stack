@@ -262,6 +262,8 @@ export class AuthFetch {
           let listenerId: number | undefined
           let responseTimeout: ReturnType<typeof setTimeout>
           let cleaned = false
+          const deadline = new AbortController()
+          let sent = false
           const cleanup = (): void => {
             if (cleaned) return
             cleaned = true
@@ -296,6 +298,15 @@ export class AuthFetch {
             }
           )
           responseTimeout = setTimeout(() => {
+            deadline.abort()
+            if (sent) {
+              rejectRequest(
+                new Error(
+                  'Timed out waiting for authenticated response. The request was sent; its outcome is unknown.'
+                )
+              )
+              return
+            }
             rejectRequest(new Error('Timed out waiting for authenticated response.'))
           }, AUTH_RESPONSE_TIMEOUT_MS)
 
@@ -311,7 +322,12 @@ export class AuthFetch {
             // A certificate prompt can outlive the request deadline. Never
             // dispatch a request after its caller has already seen a timeout.
             if (cleaned) return
-            await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey)
+            await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey, {
+              signal: deadline.signal,
+              onSend: () => {
+                sent = true
+              }
+            })
           } catch (error) {
             // Late transport/session failures must not start recovery that
             // replays a request after its response deadline has expired.

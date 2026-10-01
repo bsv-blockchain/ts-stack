@@ -174,10 +174,18 @@ export class Peer {
    *
    * @param {number[]} message - The message payload to send.
    * @param {string} [identityKey] - The identity public key of the peer, or an exact session nonce for a transport response. If not provided, uses the peer from the most recent locally initiated handshake (if any). Inbound messages never select this implicit destination.
+   * @param {object} [options] - Optional controls for this message.
+   * @param {AbortSignal} [options.signal] - Once aborted, the message is never handed to the transport.
+   * @param {() => void} [options.onSend] - Called synchronously just before the message is handed to the transport.
    * @returns {Promise<void>}
-   * @throws Will throw an error if the message fails to send.
+   * @throws Will throw an error if the message fails to send, or the signal's abort reason if
+   * `options.signal` is aborted before the message is handed to the transport.
    */
-  async toPeer(message: number[], identityKey?: string): Promise<void> {
+  async toPeer(
+    message: number[],
+    identityKey?: string,
+    options: { signal?: AbortSignal; onSend?: () => void } = {}
+  ): Promise<void> {
     message = copyAuthByteArray(
       message,
       'general.payload',
@@ -205,6 +213,11 @@ export class Peer {
       throw new Error('Cannot send general message before certificate validation is complete')
     }
 
+    const throwIfCancelled = (): void => {
+      if (options.signal?.aborted === true) throw options.signal.reason
+    }
+    // Avoid a pointless signature prompt once the caller has given up.
+    throwIfCancelled()
     const requestNonce = toBase64(Random(32))
     const { signature: signatureResult } = await this.#wallet.createSignature(
       {
@@ -229,6 +242,9 @@ export class Peer {
 
     await this.#touchSession(peerSession.sessionNonce as string)
 
+    // No await may separate this check from the transport handoff below.
+    throwIfCancelled()
+
     try {
       const outbound =
         this.#maxGeneralPayloadBytes === undefined
@@ -236,6 +252,7 @@ export class Peer {
           : snapshotAuthMessage(generalMessage, {
               maxGeneralPayloadBytes: this.#maxGeneralPayloadBytes
             })
+      options.onSend?.()
       await this.#transport.send(outbound)
     } catch (error: unknown) {
       this.propagateTransportError(peerSession.peerIdentityKey, error)

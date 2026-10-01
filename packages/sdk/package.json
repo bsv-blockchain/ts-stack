@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.8.11",
+  "version": "2.8.12",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
