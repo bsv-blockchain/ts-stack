@@ -85,10 +85,13 @@ const authenticateSoon = (): void => {
   setTimeout(() => fire('authenticationSuccess'), 10)
 }
 
-const connected = async (): Promise<InstanceType<typeof MessageBoxClient>> => {
+const connected = async (
+  socketOptions?: Record<string, unknown>
+): Promise<InstanceType<typeof MessageBoxClient>> => {
   const client = new MessageBoxClient({
     walletClient: new WalletClient(),
-    host: 'https://message-box-us-1.bsvb.tech'
+    host: 'https://message-box-us-1.bsvb.tech',
+    socketOptions: socketOptions as any
   })
   await client.init()
   const connecting = client.initializeConnection()
@@ -202,28 +205,28 @@ describe('live-socket reconnection', () => {
 
     expect(socket.disconnect).toHaveBeenCalledTimes(1)
     expect(client.testSocket).toBeUndefined()
+    expect(sockets).toHaveLength(1)
     socket.emit.mockClear()
     fireOn(socket, 'connect')
     fireOn(socket, 'authenticationSuccess')
     expect(joinRoomEmits(socket)).toHaveLength(0)
   })
 
-  /** Socket.IO does not retry a server-forced disconnect; the rebuild must restore handlers too. */
-  it('restores rooms and message handlers on a socket rebuilt after a server disconnect', async () => {
+  /** Socket.IO does not retry a server-forced disconnect, and a listener makes no calls to trigger a rebuild. */
+  it('rebuilds a listener on its own after a server disconnect', async () => {
     const client = await connected()
     const onMessage = jest.fn()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage })
     const dead = latest()
 
-    drop(dead, 'io server disconnect')
-    expect(client.testSocket).toBeUndefined()
-
     authenticateSoon()
-    await client.joinRoom('other_inbox')
+    drop(dead, 'io server disconnect')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     const rebuilt = latest()
     expect(rebuilt).not.toBe(dead)
-    expect(joinRoomEmits(rebuilt).map(call => call[1])).toContain(ROOM)
+    expect(client.testSocket).toBe(rebuilt)
+    expect(joinRoomEmits(rebuilt).map(call => call[1])).toEqual([ROOM])
     const handlers = rebuilt.handlers[`sendMessage-${ROOM}`] ?? []
     expect(handlers).toHaveLength(1)
 
@@ -232,7 +235,56 @@ describe('live-socket reconnection', () => {
     expect(onMessage).toHaveBeenCalledTimes(1)
   })
 
-  /** Reconnection disabled or exhausted leaves a non-null dead socket; a timed-out wait marks it. */
+  it('rebuilds only once when the server keeps dropping the new socket before it authenticates', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+
+    drop(latest(), 'io server disconnect')
+    expect(sockets).toHaveLength(2)
+    drop(latest(), 'io server disconnect')
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    expect(sockets).toHaveLength(2)
+    expect(client.testSocket).toBeUndefined()
+  })
+
+  /** A client-side disconnect, including the wrapper's own after an error, is not retried. */
+  it('does not rebuild on a client-initiated disconnect it did not request', async () => {
+    const client = await connected()
+    drop(latest(), 'io client disconnect')
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    expect(sockets).toHaveLength(1)
+    expect(client.testSocket).toBeUndefined()
+  })
+
+  /** Socket.IO will never retry, so the drop is read as terminal rather than waited out. */
+  it('disposes on a drop when reconnection is disabled, and rebuilds on the next listen', async () => {
+    const client = await connected({ managerOptions: { reconnection: false } })
+    const onMessage = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+    const dead = latest()
+
+    drop(dead, 'io server disconnect')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(sockets).toHaveLength(1)
+    expect(client.testSocket).toBeUndefined()
+    expect(client.getJoinedRooms().size).toBe(0)
+
+    authenticateSoon()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+
+    const rebuilt = latest()
+    expect(rebuilt).not.toBe(dead)
+    expect(joinRoomEmits(rebuilt).map(call => call[1])).toEqual([ROOM])
+    const handlers = rebuilt.handlers[`sendMessage-${ROOM}`] ?? []
+    expect(handlers).toHaveLength(1)
+    handlers[0]({ sender: IDENTITY, messageId: 'm1', body: 'hello' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(onMessage).toHaveBeenCalledTimes(1)
+  })
+
+  /** Bounded attempts running out leave a non-null dead socket; a timed-out wait marks it. */
   it('rebuilds once a wait times out with the socket still down', async () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })

@@ -943,12 +943,19 @@ export class MessageBoxClient {
   private roomHandlers: Array<{
     roomId: string
     event: string
+    onMessage: (message: PeerMessage) => void
     handler: (message: PeerMessage) => void
   }> = []
-  /** A wait timed out with the socket still down: it may be dead, so the next caller rebuilds. */
+  /**
+   * A wait timed out with the socket still down. Covers bounded
+   * `reconnectionAttempts` running out, which the wrapper gives no way to
+   * observe; `reconnection: false` is read up front instead.
+   */
   private socketStale = false
   protected originator?: OriginatorDomainNameStringUnder250Bytes
   private readonly socketOptions: MessageBoxClientOptions['socketOptions']
+  /** False only when the host set `managerOptions.reconnection` to false. */
+  private readonly socketReconnects: boolean
   private readonly expectedServerIdentityByOrigin: ReadonlyMap<string, PubKeyHex>
   private readonly authenticatedServerIdentityByOrigin = new Map<string, PubKeyHex>()
   /**
@@ -958,7 +965,7 @@ export class MessageBoxClient {
    * @param {WalletInterface} options.walletClient - Wallet instance used for authentication, signing, and encryption.
    * @param {boolean} [options.enableLogging=false] - Whether to enable detailed debug logging to the console.
    * @param {'local' | 'mainnet' | 'testnet' | 'teratestnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
-   * @param {MessageBoxSocketOptions} [options.socketOptions] - Options forwarded to the underlying AuthSocketClient, e.g. `{ managerOptions: { transports: ['websocket'] } }`. The client's own wallet and originator always win; deferred connection and Socket.IO message retries are unsupported.
+   * @param {MessageBoxSocketOptions} [options.socketOptions] - Options forwarded to the underlying AuthSocketClient, e.g. `{ managerOptions: { transports: ['websocket'] } }`. With `managerOptions.reconnection: false` a drop disposes the socket and the next call rebuilds it and restores rooms and handlers, but nothing rebuilds on its own, so a pure subscriber never comes back. The client's own wallet and originator always win; deferred connection and Socket.IO message retries are unsupported.
    *
    * @description
    * Constructs a new MessageBoxClient.
@@ -1003,7 +1010,7 @@ export class MessageBoxClient {
     // These options are excluded from the forwarded type; validate JavaScript
     // callers as well so unsupported socket settings fail before authentication.
     const forwardedManagerOptions = socketOptions?.managerOptions as
-      { autoConnect?: boolean; retries?: number } | undefined
+      { autoConnect?: boolean; retries?: number; reconnection?: boolean } | undefined
     if (forwardedManagerOptions?.autoConnect === false) {
       throw new Error(
         '[MB CLIENT ERROR] socketOptions.managerOptions.autoConnect must not be false: deferred connection is unsupported.'
@@ -1015,6 +1022,7 @@ export class MessageBoxClient {
       )
     }
     this.socketOptions = socketOptions
+    this.socketReconnects = forwardedManagerOptions?.reconnection !== false
     this.expectedServerIdentityByOrigin = normalizeServerIdentityPins(serverIdentityKeysByHost)
     this.walletClient = walletClient ?? new WalletClient('auto', originator)
     this.authFetch = new AuthFetch(this.walletClient, undefined, undefined, originator)
@@ -1097,8 +1105,8 @@ export class MessageBoxClient {
    * @method getJoinedRooms
    * @returns {Set<string>} A set of currently joined WebSocket room IDs
    * @description
-   * Returns a live list of WebSocket rooms joined on the current socket. Read
-   * only: mutating it does not cancel a rejoin; use `leaveRoom`.
+   * Returns the live set of WebSocket rooms joined on the current socket.
+   * Mutating it does not cancel a rejoin; use `leaveRoom`.
    * Useful for inspecting state or ensuring no duplicates are joined.
    */
   public getJoinedRooms(): Set<string> {
@@ -1291,8 +1299,10 @@ export class MessageBoxClient {
         }
       })
 
+      let wasAuthenticated = false
       socket.on('authenticationSuccess', () => {
         if (this.socket !== socket) return
+        wasAuthenticated = true
         const serverIdentityKey = canonicalIdentityKey(
           socket.serverIdentityKey,
           `Authenticated Message Box WebSocket identity for ${targetOrigin}`
@@ -1322,10 +1332,21 @@ export class MessageBoxClient {
         // Membership belongs to the server-side socket that joined.
         this.joinedRooms.clear()
         this.socketAuthenticated = false
-        if (reason === 'io client disconnect' || reason === 'io server disconnect') {
+        if (
+          !this.socketReconnects ||
+          reason === 'io client disconnect' ||
+          reason === 'io server disconnect'
+        ) {
           // Socket.IO will not retry these; the object is dead.
           this.socket = undefined
           this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
+          // A listener makes no calls, so nothing else would restore it. Once
+          // only: a socket the server drops before authenticating is not retried,
+          // and a failed rebuild is left to the next caller. `reconnection: false`
+          // stays the host's choice.
+          if (reason === 'io server disconnect' && this.socketReconnects && wasAuthenticated) {
+            this.initializeConnection(targetHost).catch(() => {})
+          }
           return
         }
         // Transient: Socket.IO reconnects and re-emits `connect`. Callers that
@@ -1640,6 +1661,10 @@ export class MessageBoxClient {
     Logger.log('[MB CLIENT] Listening for WebSocket room messages')
 
     const event = `sendMessage-${roomId}`
+    // A rebuild already re-attached this callback; attaching again would deliver twice.
+    if (this.roomHandlers.some(entry => entry.event === event && entry.onMessage === onMessage)) {
+      return
+    }
     const handler = (message: PeerMessage): void => {
       void (async () => {
         Logger.log('[MB CLIENT] Received a WebSocket room message')
@@ -1700,7 +1725,7 @@ export class MessageBoxClient {
         onMessage(message)
       })()
     }
-    this.roomHandlers.push({ roomId, event, handler })
+    this.roomHandlers.push({ roomId, event, onMessage, handler })
     this.socket?.on(event, handler)
   }
 
