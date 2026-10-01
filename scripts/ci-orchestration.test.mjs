@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 import { REPOSITORY_ROOT } from './repository-health.mjs'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { partitionedMutationTargets } from './mutation-partitions.mjs'
 
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
 const MUTATION_PATH = join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml')
@@ -31,6 +33,36 @@ function assertWalletMutationTimeout(job, defaultMinutes) {
   const expected = `    timeout-minutes: \${{ contains(fromJSON('${targets}'), matrix.target) && 90 || ${defaultMinutes} }}`
   assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
 }
+
+test('CI downloads every canonical execution partition before verifying its complete union', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const partitioned = partitionedMutationTargets(Object.keys(targets), targets)
+  assert.ok(partitioned.length > 0)
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const gate = workflowJobBlocks(workflow).find(job => job.name === 'mutation-quality').source
+  const verify = gate.indexOf(
+    '      - name: Require every selected canonical partition target gate'
+  )
+  assert.ok(verify > 0)
+  const downloads = gate
+    .slice(0, verify)
+    .split(/^      - /m)
+    .filter(step => step.startsWith('uses: actions/download-artifact@'))
+  for (const target of partitioned) {
+    const selected = downloads.filter(step =>
+      step.includes(`          path: .mutation-parts/${target}\n`)
+    )
+    assert.equal(selected.length, 1, `${target} requires exactly one artifact download`)
+    assert.ok(
+      selected[0].includes(
+        `        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), '${target}')\n`
+      )
+    )
+    assert.ok(selected[0].includes(`          pattern: mutation-${target}-*\n`))
+    assert.match(selected[0], /^uses: actions\/download-artifact@[a-f0-9]{40} /)
+  }
+  assert.match(gate.slice(verify), /--target "\$target" --directory "\.mutation-parts\/\$target"/)
+})
 
 test('CI shares one audited build across coverage and browser consumer lanes', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')

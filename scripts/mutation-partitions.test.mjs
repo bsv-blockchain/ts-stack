@@ -149,7 +149,7 @@ test('service execution preserves the complete canonical union and all configura
   const parts = partitionMutationTarget('wallet-snapshot-remote-service', canonical)
   assert.deepEqual(
     parts.map(part => part.id),
-    ['persistence', 'controller', 'guard']
+    ['persistence', 'controller', 'guard', 'backend']
   )
   assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
   assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
@@ -164,7 +164,9 @@ test('service execution preserves the complete canonical union and all configura
   ])
   assert.deepEqual(parts[2].target.mutate, [
     'src/storage/snapshot/archive/SnapshotArchiveGuard.ts',
-    'src/storage/snapshot/archive/SnapshotArchiveGuardRegistry.ts',
+    'src/storage/snapshot/archive/SnapshotArchiveGuardRegistry.ts'
+  ])
+  assert.deepEqual(parts[3].target.mutate, [
     'src/storage/snapshot/archive/SnapshotArchiveGuardBackend.ts'
   ])
   const future = {
@@ -186,7 +188,7 @@ test('service execution preserves the complete canonical union and all configura
   const targets = { before: target, 'wallet-snapshot-remote-service': canonical, after: target }
   assert.deepEqual(mutationExecutionMatrix(Object.keys(targets), targets).include, [
     { target: 'before', partition: 'whole' },
-    ...['persistence', 'controller', 'guard'].map(partition => ({
+    ...['persistence', 'controller', 'guard', 'backend'].map(partition => ({
       target: 'wallet-snapshot-remote-service',
       partition
     })),
@@ -254,3 +256,48 @@ test('HTTP execution preserves every canonical range, full configuration and fut
     { target: 'after', partition: 'whole' }
   ])
 })
+
+for (const [id, expected, fallback] of [
+  [
+    'wallet-retained-snapshot',
+    ['lifecycle', 'reader', 'profile-index', 'relation-index', 'storage'],
+    'lifecycle'
+  ],
+  ['wallet-snapshot-archive', ['store', 'capture', 'source'], 'capture'],
+  ['wallet-snapshot-remote-reader', ['admission', 'lease', 'rows', 'page'], 'admission']
+]) {
+  test(`${id} preserves canonical whole-file ownership, configuration and future source coverage`, () => {
+    const canonical = buildMutationTargets(REPOSITORY_ROOT)[id]
+    const parts = partitionMutationTarget(id, canonical)
+    assert.deepEqual(
+      parts.map(part => part.id),
+      expected
+    )
+    assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+    const owners = new Map()
+    for (const part of parts) {
+      const { mutate, ...configuration } = part.target
+      const { mutate: _canonicalMutate, ...canonicalConfiguration } = canonical
+      assert.deepEqual(configuration, canonicalConfiguration)
+      assert.equal(part.target.runnerOptions, canonical.runnerOptions)
+      for (const specification of mutate) {
+        const file = specification.replace(/:\d+(?:-\d+)?$/, '')
+        assert.ok(!owners.has(file) || owners.get(file) === part.id)
+        owners.set(file, part.id)
+      }
+    }
+    const helper = 'src/storage/snapshot/FutureHelper.ts'
+    const extended = { ...canonical, mutate: [...canonical.mutate, helper, `${helper}:1-20`] }
+    const expanded = partitionMutationTarget(id, extended)
+    assert.deepEqual(
+      expanded.flatMap(part => part.target.mutate).sort(),
+      [...extended.mutate].sort()
+    )
+    assert.deepEqual(expanded.find(part => part.id === fallback).target.mutate.slice(-2), [
+      helper,
+      `${helper}:1-20`
+    ])
+    assert.equal(selectedMutationPartition(id, canonical), canonical)
+    assert.throws(() => selectedMutationPartition(id, canonical, 'missing'))
+  })
+}

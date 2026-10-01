@@ -8,6 +8,30 @@ import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 
 afterEach(() => jest.restoreAllMocks())
 
+test('reader admission capacity refusal returns the exact resource-limited offer without opening a capture', async () => {
+  const fixture = await snapshotHttpFixture()
+  const rpc = new KnexSnapshotArchiveRpc(fixture.storage)
+  try {
+    const service = Reflect.get(rpc, 'service') as KnexSnapshotArchiveService
+    const issue = jest.spyOn(service, 'offerReader').mockResolvedValue(undefined)
+    const open = jest.spyOn(fixture.storage, 'openSnapshotArchiveSource')
+    const options = { lifetimeMs: 300000, maxBytes: 32768 }
+    expect(
+      await rpc.dispatch(
+        'getSnapshotArchiveReaderOffer',
+        [{ version: 1, identityKey: fixture.identityKey, options }],
+        fixture.identityKey
+      )
+    ).toEqual({ version: 1, outcome: 'resource-limited' })
+    expect(issue).toHaveBeenCalledTimes(1)
+    expect(issue).toHaveBeenCalledWith(fixture.identityKey, options)
+    expect(open).not.toHaveBeenCalled()
+  } finally {
+    await rpc.close()
+    await fixture.close()
+  }
+})
+
 test.each([Error, WERR_INVALID_OPERATION])(
   'a %p cancellation failure cannot impersonate a pending receipt',
   async ErrorType => {

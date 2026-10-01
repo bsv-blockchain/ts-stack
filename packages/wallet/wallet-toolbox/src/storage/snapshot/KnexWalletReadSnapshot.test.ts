@@ -71,15 +71,23 @@ async function labels(source: StorageKnex, userId: number, count: number): Promi
 
 async function all<T extends WalletSnapshotTable>(
   view: WalletReadSnapshot,
-  table: T
+  table: T,
+  expectedMaximumRows: number
 ): Promise<Array<PackedSnapshotRow<WalletSnapshotTables[T]>>> {
   const rows: Array<PackedSnapshotRow<WalletSnapshotTables[T]>> = []
+  const positions = new Set<string>()
   let cursor: WalletSnapshotCursor | undefined
   for (;;) {
     const page = await view.readPage(table, cursor, { maxRows: 1 })
+    expect(page.rows.length).toBeLessThanOrEqual(1)
     rows.push(...page.rows)
+    expect(rows.length).toBeLessThanOrEqual(expectedMaximumRows)
     if (page.done) return rows
+    expect(page.rows).toHaveLength(1)
     expect(page.cursor).toBeDefined()
+    const position = JSON.stringify(page.cursor!.after)
+    expect(positions.has(position)).toBe(false)
+    positions.add(position)
     cursor = page.cursor
   }
 }
@@ -144,7 +152,7 @@ test('keyset pages pin profile, source metadata, equal timestamps and tombstones
   view.user.userId = otherId
   const next = await view.readPage('txLabels', first.cursor, { maxRows: 3 })
   expect(next.rows).toEqual(expected.slice(3, 6))
-  expect(await all(view, 'txLabels')).toEqual(expected)
+  expect(await all(view, 'txLabels', expected.length)).toEqual(expected)
   await view.close()
   await view.closed
   expect(view.isOpen).toBe(false)
@@ -152,7 +160,7 @@ test('keyset pages pin profile, source metadata, equal timestamps and tombstones
   const fresh = await source.openWalletReadSnapshot(identity)
   expect(fresh.user.activeStorage).toBe('new primary')
   await expect(fresh.readPage('txLabels', first.cursor)).rejects.toThrow('cursor')
-  expect(await all(fresh, 'txLabels')).not.toEqual(expected)
+  expect(await all(fresh, 'txLabels', expected.length)).not.toEqual(expected)
   await fresh.close()
 })
 
@@ -406,7 +414,7 @@ test('all thirteen tables retain original rows, packed binary and composite key 
     ['syncStates', 'syncStateId', [1, 3]]
   ]
   for (const [table, key, ids] of cases) {
-    const rows = (await all(view, table)) as unknown as Array<Record<string, unknown>>
+    const rows = (await all(view, table, ids.length)) as unknown as Array<Record<string, unknown>>
     expect(rows.map(row => row[key])).toEqual(ids)
     for (const row of rows) {
       expect(row.created_at).toEqual(new Date(date))
@@ -434,17 +442,17 @@ test('all thirteen tables retain original rows, packed binary and composite key 
       }
     }
   }
-  expect((await all(view, 'txLabelMaps')).map(row => [row.txLabelId, row.transactionId, row.isDeleted])).toEqual([
+  expect((await all(view, 'txLabelMaps', 3)).map(row => [row.txLabelId, row.transactionId, row.isDeleted])).toEqual([
     [1, 1, false],
     [1, 3, true],
     [3, 3, true]
   ])
-  expect((await all(view, 'outputTagMaps')).map(row => [row.outputTagId, row.outputId, row.isDeleted])).toEqual([
+  expect((await all(view, 'outputTagMaps', 3)).map(row => [row.outputTagId, row.outputId, row.isDeleted])).toEqual([
     [1, 1, false],
     [1, 3, true],
     [3, 3, true]
   ])
-  expect((await all(view, 'certificateFields')).map(row => [row.fieldName, row.certificateId])).toEqual(
+  expect((await all(view, 'certificateFields', 8)).map(row => [row.fieldName, row.certificateId])).toEqual(
     ['Z', 'a', 'é', '😀'].flatMap(field => [
       [field, 1],
       [field, 3]
@@ -491,7 +499,7 @@ test('certificate keys preserve empty, embedded-NUL and 100-code-point names wit
       masterKey: 'key'
     })
   const view = await source.openWalletReadSnapshot(identity)
-  const rows = await all(view, 'certificateFields')
+  const rows = await all(view, 'certificateFields', 12)
   for (const name of names) expect(rows.some(row => row.fieldName === name)).toBe(true)
   expect(rows).toHaveLength(12)
   for (const fieldName of [100, 'a'.repeat(101), '😀'.repeat(101)]) {

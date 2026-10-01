@@ -218,13 +218,32 @@ started 1,357 mutants after 266 passing dry-run tests. Neither produced a comple
 report. Their execution partitions keep every canonical specification exactly
 once. HTTP places all server ranges together, all client ranges together, and
 the whole protocol/RPC/transport sources in the protocol fallback. Service places
-the whole controller in one part, the three whole guard modules in another, and
-all other sources in the persistence fallback. Future canonical files join the
+the whole controller in one part, guard/registry in another, the whole guard
+backend separately, and all other sources in the persistence fallback.
+Future canonical files join the
 fallback automatically. Every execution part keeps the full original tests,
 property suite, input dependencies and runner configuration. The existing
 provenance and aggregate checks require all parts from the same source and
 configuration, then evaluate the complete canonical mutant union; scores are
 not averaged. These execution parts do not create new canonical targets.
+
+The [next complete run](https://github.com/bsv-blockchain/ts-stack/actions/runs/36874901071)
+also reached the 90-minute limit for retained reader/lifecycle, archive, remote
+reader and service guard execution. Retained profile and relation migrations now
+each execute as a whole-file part, alongside reader, storage and the lifecycle
+fallback. Archive groups store/migration, source/closure and the capture fallback.
+Remote reader groups lease, rows, page/open/cursor and the admission fallback.
+These partitions retain every original source specification and full test
+configuration. The single-file retained reader remains one complete part;
+its traversal tests assert fixture bounds and cursor progress so broken paging
+fails promptly. Partitioning and test changes require fresh complete evidence;
+the cancelled run does not qualify these targets.
+
+PR CI downloads each selected target's complete partition artifacts before
+canonical verification. The orchestration regression derives the required
+downloads from the canonical target registry and execution map, preventing a
+new partitioned target from being omitted. Scheduled/manual qualification uses
+its existing target matrix to download and independently verify the same union.
 
 Both workflows use a 45-minute default and the same explicit 90-minute target
 allowance list, including retained snapshots, snapshot sync, archive, remote

@@ -39,11 +39,11 @@ test('a source adapter exists before availability and negotiates the first open 
   client.settings!.snapshotArchiveReaderVersion = undefined
   expect((await client.getSnapshotArchiveTransport(identityKey))!.supportsReader).toBe(true)
   for (const operation of [
-    source.begin(undefined as never, undefined),
-    source.checkpoint('', ''),
-    source.prepare(undefined as never, undefined as never)
+    () => source.begin(undefined as never, undefined),
+    () => source.checkpoint('', ''),
+    () => source.prepare(undefined as never, undefined as never)
   ])
-    await expect(operation).rejects.toThrow('Remote snapshot destination is unavailable')
+    await expect(operation()).rejects.toThrow('Remote snapshot destination is unavailable')
   expect(client.request).toHaveBeenCalledTimes(1)
 })
 

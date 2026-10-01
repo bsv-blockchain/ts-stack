@@ -1,5 +1,6 @@
 import { SnapshotArchiveTransport } from './SnapshotArchiveTransport'
 import { snapshotArchiveRequestId } from './SnapshotArchiveRequest'
+import { snapshotArchiveReaderRequestId } from './SnapshotArchiveReaderRequest'
 import { fixture, expected, now } from '../../../../test/utils/snapshotArchiveDirectoryFixtures'
 
 const fields = { version: 1 as const, nonce: 'a'.repeat(64), notAfter: now + 1000, maxBytes: 32768 }
@@ -35,6 +36,21 @@ const source = () => {
   const transport = new SnapshotArchiveTransport(rpc, expected.identityKey, expected.sourceStorageIdentityKey, 'test')
   return { transport, rpc, ready, offer, directory, payloads }
 }
+
+test.each(['readerOffer', 'admit', 'readerStatus', 'cancelRequest'] as const)(
+  'an archive-only transport refuses %s before network I/O with the negotiated-capability error',
+  async method => {
+    const { transport, rpc } = source()
+    const readerFields = { ...fields, version: 2 as const }
+    const readerRequest = { ...readerFields, requestId: snapshotArchiveReaderRequestId(readerFields) }
+    const operation =
+      method === 'readerOffer'
+        ? transport.readerOffer({ lifetimeMs: 1000, maxBytes: 32768 })
+        : transport[method](readerRequest)
+    await expect(operation).rejects.toThrow(new TypeError('Snapshot archive reader was not negotiated'))
+    expect(rpc).not.toHaveBeenCalled()
+  }
+)
 
 test('auth transport binds exact immutable request/root/profile and forwards cancellation for each operation', async () => {
   const { transport, rpc, ready, offer, payloads } = source()

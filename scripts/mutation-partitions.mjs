@@ -18,8 +18,22 @@ const plans = new Map([
       fallback: 'lifecycle',
       files: new Map([
         ['src/storage/snapshot/KnexWalletReadSnapshot.ts', 'reader'],
+        ['src/storage/schema/snapshotProfileIndexMigration.ts', 'profile-index'],
+        ['src/storage/schema/snapshotRelationIndexMigration.ts', 'relation-index'],
         ['src/storage/StorageKnex.ts', 'storage'],
         ['src/storage/StorageProvider.ts', 'storage']
+      ])
+    }
+  ],
+  [
+    'wallet-snapshot-archive',
+    {
+      fallback: 'capture',
+      files: new Map([
+        ['src/storage/snapshot/archive/KnexSnapshotArchiveStore.ts', 'store'],
+        ['src/storage/schema/snapshotArchiveMigration.ts', 'store'],
+        ['src/storage/snapshot/archive/KnexSnapshotArchiveSource.ts', 'source'],
+        ['src/storage/snapshot/archive/KnexSnapshotArchiveClosure.ts', 'source']
       ])
     }
   ],
@@ -41,7 +55,20 @@ const plans = new Map([
         ['src/storage/snapshot/archive/KnexSnapshotArchiveService.ts', 'controller'],
         ['src/storage/snapshot/archive/SnapshotArchiveGuard.ts', 'guard'],
         ['src/storage/snapshot/archive/SnapshotArchiveGuardRegistry.ts', 'guard'],
-        ['src/storage/snapshot/archive/SnapshotArchiveGuardBackend.ts', 'guard']
+        ['src/storage/snapshot/archive/SnapshotArchiveGuardBackend.ts', 'backend']
+      ])
+    }
+  ],
+  [
+    'wallet-snapshot-remote-reader',
+    {
+      fallback: 'admission',
+      files: new Map([
+        ['src/storage/snapshot/archive/RemoteSnapshotLease.ts', 'lease'],
+        ['src/storage/snapshot/archive/RemoteSnapshotRows.ts', 'rows'],
+        ['src/storage/snapshot/archive/RemoteSnapshotPageReader.ts', 'page'],
+        ['src/storage/snapshot/archive/openRemoteSnapshot.ts', 'page'],
+        ['src/storage/snapshot/SnapshotCursor.ts', 'page']
       ])
     }
   ]
