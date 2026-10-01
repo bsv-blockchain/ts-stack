@@ -193,3 +193,17 @@ but deliberately does not reclaim unproved process loss: backend-bound recovery
 remains required. The client now validates exact pending-cleanup receipts and
 uses fixed, bounded cancellation polling while awaiting I/O settlement. The server reader capability stays
 off and S3 remains open.
+
+The backend-guard checkpoint adds eight persistent slot bindings and a versioned
+owner migration. New service sources bind local SQLite WAL file identities or
+the actual MySQL server/database before their guarded read; old unguarded owners
+remain reserved. Recovery takes the same backend guard, fences the exact expired
+or terminal claim, physically closes its proof connection and only then releases
+ownership. SQLite keeps its guard transaction open through native destruction;
+MySQL waits for the socket close event. Focused and generated tests cover delayed
+acquisition/close, immutable views, foreground writes, stale acknowledgements,
+slot reuse and changed identities. Built-artifact SQLite/MySQL fixtures terminate
+an owned synthetic process and recover its claim. This advances S3 orphan
+recovery but does not qualify distributed filesystems, PXC, global physical-pool
+limits, remote destinations or complete lifecycle/performance behavior. Reader
+advertisement remains disabled and the full program remains incomplete.

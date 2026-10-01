@@ -33,7 +33,7 @@ test.each([StorageClient, StorageMobile])(
       expect(storage.getSettings()).not.toHaveProperty('snapshotArchive')
       let transport = (await client.getSnapshotArchiveTransport(identityKey))!
       const offer = await transport.offer()
-      expect(offer.sourceSchema).toBe('2026-10-01-001 add snapshot archive source owners')
+      expect(offer.sourceSchema).toBe('2026-10-01-002 add snapshot archive source guards')
       expect(Math.abs(offer.serverTime - Date.now())).toBeLessThan(5000)
       const fields = {
         version: 1 as const,
@@ -177,8 +177,8 @@ test('server close fences admission and awaits opening capture, physical pool cl
     const request = { ...fields, requestId: snapshotArchiveRequestId(fields) }
     const entered = gate()
     const original = fixture.storage.openSnapshotArchiveSource.bind(fixture.storage)
-    jest.spyOn(fixture.storage, 'openSnapshotArchiveSource').mockImplementation(async (key, options) => {
-      const source = await original(key, { ...options, signal: undefined })
+    jest.spyOn(fixture.storage, 'openSnapshotArchiveSource').mockImplementation(async (key, options, owner) => {
+      const source = await original(key, { ...options, signal: undefined }, owner)
       entered.resolve()
       await allowOpen.promise
       return source

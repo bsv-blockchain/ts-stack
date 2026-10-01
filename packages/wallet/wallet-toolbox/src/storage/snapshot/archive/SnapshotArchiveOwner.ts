@@ -8,14 +8,18 @@ const table = 'snapshot_archive_owners'
 export { SnapshotArchiveCleanupPendingError } from './SnapshotArchiveCleanup'
 
 /** Call only inside the shared capacity-locked claim transaction. */
-export async function reserveSnapshotArchiveOwner(k: Knex, owner: SnapshotArchiveRequestOwner): Promise<void> {
+export async function reserveSnapshotArchiveOwner(
+  k: Knex,
+  owner: SnapshotArchiveRequestOwner,
+  guarded = false
+): Promise<void> {
   const rows: Array<{ slot: number }> = await k(table).select('slot').limit(snapshotArchiveLimits.archives)
   const occupied = new Set(rows.map(row => row.slot))
   const slot = Array.from({ length: snapshotArchiveLimits.archives }, (_, index) => index).find(
     index => !occupied.has(index)
   )
   if (slot === undefined) throw new SnapshotArchiveAdmissionLimitError('Snapshot archive source capacity is occupied')
-  await k(table).insert({ slot, ...owner, archiveId: null })
+  await k(table).insert({ slot, ...owner, archiveId: null, ...(guarded ? { guardVersion: 1 } : {}) })
 }
 
 /** Associate the source with its archive in the same transaction as begin(). */

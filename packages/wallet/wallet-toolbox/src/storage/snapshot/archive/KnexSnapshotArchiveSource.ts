@@ -5,6 +5,7 @@ import type { StorageKnex } from '../../StorageKnex'
 import { createKnexWalletSnapshotPageReader } from '../KnexWalletReadSnapshot'
 import type { WalletReadSnapshot, WalletReadSnapshotOptions } from '../WalletReadSnapshot'
 import { assertKnexSnapshotArchiveClosure } from './KnexSnapshotArchiveClosure'
+import type { RetainedReadSnapshot } from '../RetainedReadSnapshot'
 
 /** Internal ownership failure; no caller may release its admission as cleaned up. */
 export class SnapshotArchiveSourceCleanupError extends Error {
@@ -41,12 +42,13 @@ export async function readSnapshotArchiveSourceSchema(storage: StorageKnex, k: K
 export async function openKnexSnapshotArchiveSource(
   storage: StorageKnex,
   identityKey: string,
-  options: WalletReadSnapshotOptions = {}
+  options: WalletReadSnapshotOptions = {},
+  openView: () => Promise<RetainedReadSnapshot> = () => storage.openReadSnapshot(options)
 ): Promise<SnapshotArchiveSource> {
   if (typeof identityKey !== 'string' || !/^(02|03)[0-9a-fA-F]{64}$/.test(identityKey)) {
     throw new WERR_INVALID_PARAMETER('identityKey', 'a compressed public identity key')
   }
-  const view = await storage.openReadSnapshot(options)
+  const view = await openView()
   try {
     const header = await view.read(async trx => {
       const sourceStorage = await storage.readSettings(trx)

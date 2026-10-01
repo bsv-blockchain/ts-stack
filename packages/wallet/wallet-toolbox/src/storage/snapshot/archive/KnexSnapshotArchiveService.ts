@@ -36,7 +36,7 @@ export class KnexSnapshotArchiveService {
   private cleanupFailure?: { error: unknown }
 
   constructor(private readonly storage: StorageKnex) {
-    this.requests = new KnexSnapshotArchiveRequestStore(storage.knex, true)
+    this.requests = new KnexSnapshotArchiveRequestStore(storage.knex, true, true)
     this.archives = new KnexSnapshotArchiveStore(storage.knex)
   }
 
@@ -80,6 +80,7 @@ export class KnexSnapshotArchiveService {
     this.assertOpen()
     const options = validateSnapshotArchiveReaderOptions(input)
     if (this.active !== undefined) return undefined
+    await this.storage.recoverSnapshotArchiveSources()
     await this.requests.reap()
     this.assertOpen()
     await this.archives.reap()
@@ -111,6 +112,7 @@ export class KnexSnapshotArchiveService {
     const claim = Promise.resolve().then(async () => {
       assertSnapshotArchiveCaptureActive(job.controller.signal)
       // Reap outside the claim transaction, before reserving or opening a pool.
+      await this.storage.recoverSnapshotArchiveSources()
       await this.requests.reap()
       await this.archives.reap()
       assertSnapshotArchiveCaptureActive(job.controller.signal)
@@ -162,10 +164,11 @@ export class KnexSnapshotArchiveService {
       assertSnapshotArchiveCaptureActive(controller.signal)
       const remaining = request.notAfter - (await snapshotArchiveDatabaseNow(this.storage.knex))
       if (remaining < 1) throw new SnapshotResourceLimitError('Snapshot archive request expired before capture')
-      source = await this.storage.openSnapshotArchiveSource(identityKey, {
-        signal: controller.signal,
-        lifetimeMs: Math.min(300000, remaining)
-      })
+      source = await this.storage.openSnapshotArchiveSource(
+        identityKey,
+        { signal: controller.signal, lifetimeMs: Math.min(300000, remaining) },
+        owner
+      )
       if (source === undefined) throw new WERR_NOT_IMPLEMENTED('Snapshot archive capture requires SQLite WAL or MySQL')
       await captureSnapshotArchiveSource(
         source,
@@ -221,6 +224,7 @@ export class KnexSnapshotArchiveService {
     if (job?.identityKey === identityKey && job.request.requestId === request.requestId) await this.stop(job)
     // A different replica can fence the request, but only proved source cleanup
     // permits release. Its pending outcome must not be acknowledged as complete.
+    await this.storage.recoverSnapshotArchiveSources()
     await this.requests.close(identityKey, request.requestId)
   }
 
@@ -230,6 +234,7 @@ export class KnexSnapshotArchiveService {
     await this.requests.markReaderCancellation(identityKey, request)
     const job = this.active
     if (job?.identityKey === identityKey && job.request.requestId === request.requestId) await this.stop(job)
+    await this.storage.recoverSnapshotArchiveSources()
     await this.requests.close(identityKey, request.requestId)
   }
 
@@ -237,6 +242,7 @@ export class KnexSnapshotArchiveService {
     this.assertOpen()
     const job = this.active
     if (job?.identityKey === identityKey && job.request.requestId === requestId) await this.stop(job)
+    await this.storage.recoverSnapshotArchiveSources()
     await this.requests.close(identityKey, requestId)
   }
 
@@ -245,7 +251,8 @@ export class KnexSnapshotArchiveService {
     this.stopped = true
     if (this.closing === undefined) {
       const job = this.active
-      this.closing = job === undefined ? this.closedWithoutCapture() : this.stop(job)
+      const capture = job === undefined ? this.closedWithoutCapture() : this.stop(job)
+      this.closing = capture.finally(() => this.storage.awaitSnapshotArchiveRecovery())
     }
     return this.closing
   }

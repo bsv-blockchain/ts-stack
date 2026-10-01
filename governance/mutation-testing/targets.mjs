@@ -105,6 +105,13 @@ function snapshotSyncMutationTargets(repositoryRoot) {
       sourceLineRange(
         repositoryRoot,
         'packages/wallet/wallet-toolbox',
+        'src/storage/StorageKnex.ts',
+        'override async destroy(): Promise<void>',
+        'override async migrate('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
         'src/storage/WalletStorageManager.ts',
         'private async runSnapshotCopy(',
         'async syncFromReader('
@@ -487,7 +494,11 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/snapshot/archive/SnapshotArchiveSql.ts',
         'src/storage/schema/snapshotArchiveRequestMigration.ts',
         'src/storage/snapshot/archive/SnapshotArchiveOwner.ts',
-        'src/storage/schema/snapshotArchiveOwnerMigration.ts'
+        'src/storage/schema/snapshotArchiveOwnerMigration.ts',
+        'src/storage/schema/snapshotArchiveGuardMigration.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveGuard.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveGuardRegistry.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveGuardBackend.ts'
       ],
       ...jestTarget(
         'jest.config.cjs',
@@ -496,6 +507,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveStore.test.ts',
           '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.test.ts',
           '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveGuard*.test.ts',
           '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts'
         ],
         {

@@ -7,6 +7,9 @@ import { knex } from 'knex'
 import { addSnapshotArchiveTables } from '../../schema/snapshotArchiveMigration'
 import { addSnapshotArchiveRequestTable } from '../../schema/snapshotArchiveRequestMigration'
 import { addSnapshotArchiveOwnerTable } from '../../schema/snapshotArchiveOwnerMigration'
+import { addSnapshotArchiveGuardTable } from '../../schema/snapshotArchiveGuardMigration'
+import { readGuardedSnapshotArchive, recoverSnapshotArchiveGuards } from './SnapshotArchiveGuard'
+import * as ArchiveSql from './SnapshotArchiveSql'
 import { SnapshotArchiveCleanupPendingError } from './SnapshotArchiveOwner'
 import { KnexSnapshotArchiveStore } from './KnexSnapshotArchiveStore'
 import { KnexSnapshotArchiveRequestStore } from './KnexSnapshotArchiveRequestStore'
@@ -20,6 +23,121 @@ fc.configureGlobal({
   numRuns: Number.isSafeInteger(requestedRuns) ? Math.max(MIN_PROPERTY_RUNS, requestedRuns) : MIN_PROPERTY_RUNS,
   ...(Number.isSafeInteger(requestedSeed) ? { seed: requestedSeed } : {}),
   ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {})
+})
+
+test('generated guarded-owner schedules keep quota through native close and fence each successor claim', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'snapshot-guard-property-'))
+  const config = {
+    client: 'better-sqlite3',
+    connection: { filename: join(directory, 'guards.sqlite') },
+    useNullAsDefault: true,
+    pool: { min: 0, max: 1 }
+  }
+  const db = knex(config)
+  const peer = knex(config)
+  const requests = new KnexSnapshotArchiveRequestStore(db, true, true)
+  const replacement = new KnexSnapshotArchiveRequestStore(peer, true, true)
+  const databaseNow = ArchiveSql.snapshotArchiveDatabaseNow
+  let expiredAt: number | undefined
+  const clock = jest
+    .spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow')
+    .mockImplementation(async k => expiredAt ?? (await databaseNow(k)))
+  const recover = async () => {
+    await recoverSnapshotArchiveGuards(peer, config)
+    await replacement.reap()
+  }
+  const gate = () => {
+    let resolve!: () => void
+    const promise = new Promise<void>(done => {
+      resolve = done
+    })
+    return { promise, resolve }
+  }
+  try {
+    await db.raw('PRAGMA journal_mode = WAL')
+    await addSnapshotArchiveTables(db)
+    await addSnapshotArchiveRequestTable(db)
+    await addSnapshotArchiveOwnerTable(db)
+    await addSnapshotArchiveGuardTable(db)
+    await db.schema.createTable('guard_values', table => {
+      table.integer('id').primary()
+      table.integer('value')
+    })
+    await db('guard_values').insert({ id: 1, value: 0 })
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 1000000 }),
+        fc.boolean(),
+        fc.array(fc.constantFrom('recover', 'wrong-ack', 'write'), { minLength: 0, maxLength: 4 }),
+        async (value, expire, schedule) => {
+          const identityKey = '02' + '77'.repeat(32)
+          const offered = (await requests.offer(identityKey, { lifetimeMs: 300000, maxBytes: 32768 }))!
+          const { owner } = await requests.claimReader(identityKey, offered.request)
+          await db('guard_values').update({ value })
+          const source = knex(config)
+          const opened = gate(),
+            stop = gate(),
+            closing = gate(),
+            finish = gate()
+          const destroy = source.client.destroyRawConnection.bind(source.client)
+          source.client.destroyRawConnection = async connection => {
+            closing.resolve()
+            await finish.promise
+            await destroy(connection)
+          }
+          const work = readGuardedSnapshotArchive(db, source, owner!, async trx => {
+            expect((await trx('guard_values').first()).value).toBe(value)
+            opened.resolve()
+            await stop.promise
+            expect((await trx('guard_values').first()).value).toBe(value)
+          })
+          void work.catch(() => undefined)
+          try {
+            await opened.promise
+            if (expire) expiredAt = offered.request.notAfter
+            else await replacement.markReaderCancellation(identityKey, offered.request)
+            for (const action of schedule) {
+              if (action === 'recover') await recover()
+              else if (action === 'wrong-ack') await replacement.sourceClosed({ ...owner!, claimToken: 'incorrect' })
+              else await peer('guard_values').update({ value: value + 1 })
+              expect(Number((await db('snapshot_archive_capacity').first()).archives)).toBe(1)
+            }
+            stop.resolve()
+            await closing.promise
+            await recover()
+            expect(await db('snapshot_archive_owners').first()).toMatchObject(owner!)
+            expect(Number((await db('snapshot_archive_capacity').first()).archives)).toBe(1)
+            finish.resolve()
+            await work
+            await recover()
+            expect(await db('snapshot_archive_owners')).toHaveLength(0)
+            expect(Number((await db('snapshot_archive_capacity').first()).archives)).toBe(0)
+            await expect(requests.claimReader(identityKey, offered.request)).rejects.toThrow(
+              expire ? 'Invalid snapshot archive reader request' : 'unavailable'
+            )
+            expect((await db('guard_values').first()).value).toBe(schedule.includes('write') ? value + 1 : value)
+            const next = (await requests.offer(identityKey, { lifetimeMs: 300000, maxBytes: 32768 }))!
+            const successor = await requests.claimReader(identityKey, next.request)
+            await replacement.sourceClosed(owner!)
+            expect(await db('snapshot_archive_owners').first()).toMatchObject(successor.owner!)
+            await replacement.markReaderCancellation(identityKey, next.request)
+            await recover()
+            expect(Number((await db('snapshot_archive_capacity').first()).archives)).toBe(0)
+          } finally {
+            stop.resolve()
+            finish.resolve()
+            await work.catch(() => undefined)
+            await source.destroy()
+            expiredAt = undefined
+          }
+        }
+      )
+    )
+  } finally {
+    clock.mockRestore()
+    await Promise.all([db.destroy(), peer.destroy()])
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('generated remote cancellation schedules retain source quota until exact cleanup acknowledgement', async () => {

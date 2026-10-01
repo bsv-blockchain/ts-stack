@@ -596,14 +596,15 @@
         "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",
-        "boundary": "Wallet remote snapshot creation request identity, durable receipt publication, bounded reservation, exact source ownership and cleanup lifecycle",
-        "target": "Generated SQL claim, retry, capture publication, cross-controller cancellation and exact-owner cleanup schedules",
+        "boundary": "Wallet remote snapshot creation request identity, durable receipt publication, bounded reservation, exact source ownership, backend guards and physical cleanup recovery",
+        "target": "Generated SQL claim, retry, capture publication, cross-controller cancellation, delayed native close, guarded recovery and successor ownership schedules",
         "invariants": [
           "A retry returns the original request and immutable ready archive without a second admission or writer token.",
           "Pending requests reserve the same shared capacity used by local archives before source acquisition.",
           "Archive assignment and ready receipt publication commit atomically.",
           "Remote cancellation, repeated reaping and incorrect acknowledgements retain pages and quota while the exact source owner remains.",
-          "Terminal requests retain bounded receipts and release their logical reservation exactly once after the source owner acknowledges physical cleanup."
+          "Terminal requests retain bounded receipts and release their logical reservation exactly once after the source owner acknowledges physical cleanup.",
+          "Backend guards retain quota through native close; recovery fences the exact terminal owner and old acknowledgements cannot release a successor."
         ]
       },
       {

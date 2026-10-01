@@ -71,11 +71,11 @@ test.each([StorageClient, StorageMobile])(
       const open = jest.spyOn(fixture.storage, 'openSnapshotArchiveSource').mockImplementation(async (...args) => {
         const source = (await originalOpen(...args))!
         const owned = Reflect.get(fixture.storage, 'snapshotSyncSource') as StorageKnex
-        const destroy = owned.destroy.bind(owned)
-        jest.spyOn(owned, 'destroy').mockImplementation(async () => {
+        const destroy = owned.knex.client.destroyRawConnection.bind(owned.knex.client)
+        jest.spyOn(owned.knex.client, 'destroyRawConnection').mockImplementation(async connection => {
           destroying.resolve()
           await allowDestroy.promise
-          await destroy()
+          await destroy(connection)
         })
         const read = source.readPage
         source.readPage = async (table, cursor, limits) => {

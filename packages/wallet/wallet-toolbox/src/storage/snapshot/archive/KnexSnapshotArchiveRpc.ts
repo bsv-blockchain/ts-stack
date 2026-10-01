@@ -32,6 +32,7 @@ export class KnexSnapshotArchiveRpc {
     for (const name of [
       'snapshot_archive_requests',
       'snapshot_archive_owners',
+      'snapshot_archive_owner_slots',
       'snapshot_archives',
       'snapshot_archive_pages',
       'snapshot_archive_capacity'

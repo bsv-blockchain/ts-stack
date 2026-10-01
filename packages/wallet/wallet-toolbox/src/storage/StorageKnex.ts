@@ -1,4 +1,6 @@
 import { SnapshotResourceLimitError } from './snapshot/SnapshotResourceLimitError'
+import { readGuardedSnapshotArchive, recoverSnapshotArchiveGuards } from './snapshot/archive/SnapshotArchiveGuard'
+import type { SnapshotArchiveRequestOwner } from './snapshot/archive/SnapshotArchiveRequest'
 import { SnapshotCancelledError } from './snapshot/SnapshotCancelledError'
 import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
 import { KnexSnapshotSyncDestination } from './snapshot/KnexSnapshotSyncDestination'
@@ -136,6 +138,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   private snapshotSyncSource?: StorageKnex
   private snapshotSyncOpening?: Promise<WalletReadSnapshot | undefined>
   private snapshotSyncBusy = false
+  private snapshotArchiveRecovery?: Promise<void>
+  private guardedSnapshotReadFailure?: { error: unknown }
   private retainedReadSnapshot?: RetainedReadSnapshotLifetime
   private retainedReadSnapshotsStopped = false
   readonly preparedBeefPolicy: PreparedBeefPolicy
@@ -229,6 +233,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /** One retained local transaction per provider; it occupies one pool connection until physical cleanup. */
   override async openReadSnapshot(options: RetainedReadSnapshotOptions = {}): Promise<RetainedReadSnapshot> {
+    return await this.openTrackedReadSnapshot(options, read => this.readSnapshot(read))
+  }
+
+  private async openTrackedReadSnapshot(
+    options: RetainedReadSnapshotOptions,
+    transaction: (read: (trx: TrxToken) => Promise<void>) => Promise<void>
+  ): Promise<RetainedReadSnapshot> {
     if (this.retainedReadSnapshotsStopped) {
       throw new WERR_INVALID_OPERATION('Retained read snapshots are unavailable after provider destruction begins')
     }
@@ -237,7 +248,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       throw new WERR_INVALID_OPERATION('This provider already has a retained read snapshot opening or active')
     }
     const lifetime = retainReadSnapshot(
-      read => this.readSnapshot(read),
+      transaction,
       async trx => {
         // Pin SQLite's deferred read view before opening resolves. MySQL also
         // establishes its repeatable-read snapshot on this first data read.
@@ -257,9 +268,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     // Fence admission before any asynchronous cleanup can yield. A view whose
     // close releases the capacity slot must not permit reopening during destroy.
     this.retainedReadSnapshotsStopped = true
-    await this.snapshotSyncOpening?.catch(() => undefined)
-    await this.snapshotSyncSource?.destroy()
-    await this.retainedReadSnapshot?.close()
+    try {
+      await this.snapshotArchiveRecovery
+    } finally {
+      await this.snapshotSyncOpening?.catch(() => undefined)
+      await this.snapshotSyncSource?.destroy()
+      await this.retainedReadSnapshot?.close()
+    }
   }
 
   override supportsWalletReadSnapshot(): boolean {
@@ -322,21 +337,64 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   async supportsSnapshotArchiveSource(): Promise<boolean> {
     if (this.retainedReadSnapshotsStopped) return false
     const config = await this.concurrentSnapshotReaderConfig()
-    return !this.retainedReadSnapshotsStopped && config !== undefined
+    return (
+      !this.retainedReadSnapshotsStopped &&
+      config !== undefined &&
+      (config.client === 'better-sqlite3' || String(config.client).includes('mysql'))
+    )
   }
 
   /** Shares local sync's single owned reader slot and awaited physical cleanup. */
   async openSnapshotArchiveSource(
     identityKey: string,
-    options: WalletReadSnapshotOptions = {}
+    options: WalletReadSnapshotOptions = {},
+    owner?: SnapshotArchiveRequestOwner
   ): Promise<SnapshotArchiveSource | undefined> {
+    const claim = owner === undefined ? undefined : { ...owner }
     try {
-      return await this.openConcurrentSyncSource(identityKey, options, openKnexSnapshotArchiveSource)
+      return await this.openConcurrentSyncSource(identityKey, options, async (reader, identity, settings) => {
+        if (claim === undefined) return await openKnexSnapshotArchiveSource(reader, identity, settings)
+        return await openKnexSnapshotArchiveSource(reader, identity, settings, () =>
+          reader.openTrackedReadSnapshot(settings, async read => {
+            try {
+              await reader.makeAvailable()
+              await readGuardedSnapshotArchive(this.knex, reader.knex, claim, read)
+            } catch (error) {
+              if (!(error instanceof SnapshotArchiveSourceCleanupError)) reader.guardedSnapshotReadFailure = { error }
+              throw error
+            }
+          })
+        )
+      })
     } catch (error) {
+      if (error instanceof SnapshotArchiveSourceCleanupError) throw error
       if (this.retainedReadSnapshotsStopped && this.snapshotSyncSource !== undefined)
         throw new SnapshotArchiveSourceCleanupError(error)
       throw error
     }
+  }
+
+  /** One bounded recovery flight per provider, drained by provider destruction. */
+  recoverSnapshotArchiveSources(): Promise<void> {
+    if (this.retainedReadSnapshotsStopped)
+      return Promise.reject(new WERR_INVALID_OPERATION('Snapshot source recovery is unavailable after destruction'))
+    if (this.snapshotArchiveRecovery !== undefined) return this.snapshotArchiveRecovery
+    const recovery = Promise.resolve()
+      .then(async () => {
+        const config = await this.concurrentSnapshotReaderConfig()
+        if (config === undefined) return
+        await recoverSnapshotArchiveGuards(this.knex, config)
+      })
+      .finally(() => {
+        if (this.snapshotArchiveRecovery === recovery) this.snapshotArchiveRecovery = undefined
+      })
+    this.snapshotArchiveRecovery = recovery
+    return recovery
+  }
+
+  /** Drain an already-started recovery without admitting another one during service shutdown. */
+  awaitSnapshotArchiveRecovery(): Promise<void> {
+    return this.snapshotArchiveRecovery ?? Promise.resolve()
   }
 
   private async openConcurrentSyncSource<T extends WalletReadSnapshot>(
@@ -1927,6 +1985,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async destroy(): Promise<void> {
     try {
       await this.stopRetainedReadSnapshots()
+    } catch (error) {
+      // The retained API preserves its read failure. That same failure does
+      // not mean the private pool's subsequent physical destruction failed.
+      if (this.guardedSnapshotReadFailure === undefined || this.guardedSnapshotReadFailure.error !== error) throw error
     } finally {
       await this.stopPreparedBeefTasks()
       this.knex.off('query', this.onQuery)

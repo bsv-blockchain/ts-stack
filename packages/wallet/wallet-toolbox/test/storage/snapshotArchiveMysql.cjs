@@ -150,7 +150,7 @@ async function captureFixture() {
     assert.equal(manifest.pages, 14)
     assert.equal(manifest.binding.sourceStorage.storageIdentityKey, 'native-source')
     assert.equal(manifest.binding.user.activeStorage, 'historical selection')
-    assert.equal(manifest.binding.sourceSchema, '2026-10-01-001 add snapshot archive source owners')
+    assert.equal(manifest.binding.sourceSchema, '2026-10-01-002 add snapshot archive source guards')
     const store = new KnexSnapshotArchiveStore(writer.knex)
     const first = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 8)).bytes)
     const second = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 9)).bytes)
@@ -169,6 +169,12 @@ async function captureFixture() {
     const requestLifecycle = await requestFixture(writer, reader)
     const remoteReader = await readerFixture(writer, reader)
     const ownerDrain = await ownerDrainFixture(writer, reader)
+    const { qualifyGuardProcessLoss } = require('./snapshotArchiveGuardCrash.cjs')
+    const ownerProcessLoss = await qualifyGuardProcessLoss(writer.knex, {
+      client: 'mysql2',
+      connection,
+      pool: { min: 0, max: 1 }
+    })
     await writer.insertCommission({
       created_at: date,
       updated_at: date,
@@ -193,7 +199,8 @@ async function captureFixture() {
       crossProfileClosureRejected: true,
       requestLifecycle,
       remoteReader,
-      ownerDrain
+      ownerDrain,
+      ownerProcessLoss
     }
   } finally {
     KnexSnapshotArchiveStore.prototype.append = originalAppend
@@ -229,11 +236,11 @@ async function ownerDrainFixture(writer, reader) {
     assert.ok(source)
     const pool = writer.snapshotSyncSource
     assert.ok(pool)
-    const destroy = pool.destroy.bind(pool)
-    pool.destroy = async () => {
+    const destroy = pool.knex.client.destroyRawConnection.bind(pool.knex.client)
+    pool.knex.client.destroyRawConnection = async connection => {
       destroying.resolve()
       await allowDestroy.promise
-      await destroy()
+      await destroy(connection)
     }
     return {
       ...source,
@@ -431,7 +438,7 @@ async function requestFixture(writer, reader) {
       sourceStorageIdentityKey: 'native-source',
       digest: ready.digest
     })
-    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-001 add snapshot archive source owners')
+    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-002 add snapshot archive source guards')
     const page = await replacement.read(identity, ready.archiveId, 8)
     const decoded = decodeSyncTransfer(verifySnapshotArchivePage(page, verified.receipts[8]))
     assert.equal(decoded.rows[0].label, 'replacement')

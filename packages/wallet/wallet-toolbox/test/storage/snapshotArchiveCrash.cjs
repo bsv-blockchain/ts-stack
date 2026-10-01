@@ -159,7 +159,11 @@ async function main() {
   if (process.argv[2] === 'child') {
     assert.equal(typeof process.send, 'function', 'Child execution requires its fixture parent')
     await child(process.cwd(), process.argv[3])
-  } else await parent()
+  } else {
+    await parent()
+    const { qualifySQLiteGuardProcessLoss } = require('./snapshotArchiveGuardCrash.cjs')
+    console.log(JSON.stringify({ ownerProcessLoss: await qualifySQLiteGuardProcessLoss() }))
+  }
 }
 main().catch(error => {
   console.error(error)

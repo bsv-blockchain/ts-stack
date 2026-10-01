@@ -11,8 +11,10 @@ attention to changes that materially alter behavior or extend functionality.
   the owning source and pool have closed. Append checks cancellation atomically;
   direct archive cleanup follows the same fence. The reader validates request-bound
   pending-cleanup receipts and uses a separate fixed deadline, bounded backoff and
-  awaited I/O settlement. Orphan recovery remains incomplete; reader advertisement
-  stays disabled.
+  awaited I/O settlement. Add fixed-slot SQLite WAL/MySQL backend guards and
+  exact-owner recovery only after physical connection closure. Preserve old
+  unguarded reservations and refuse changed backend identities. Reader
+  advertisement stays disabled pending complete qualification.
 
 - Add the unadvertised remote row-reader foundation: immutable server-issued
   offers, exact-request retry, fixed leases, verified packed rows and durable

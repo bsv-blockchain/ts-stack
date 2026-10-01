@@ -13,6 +13,7 @@ import { SnapshotResourceLimitError } from '../SnapshotResourceLimitError'
 import { snapshotArchiveRequestId } from './SnapshotArchiveRequest'
 import { verifySnapshotArchiveDirectory, verifySnapshotArchivePage } from './SnapshotArchiveDirectory'
 import * as ArchiveSql from './SnapshotArchiveSql'
+import * as ArchiveGuard from './SnapshotArchiveGuard'
 
 const identity = '02' + '11'.repeat(32)
 const other = '03' + '22'.repeat(32)
@@ -80,13 +81,13 @@ test('capture reserves before reader acquisition and a replacement server recove
   const { storage, controller, open } = await fixture()
   const input = request()
   const original = storage.openSnapshotArchiveSource.bind(storage)
-  const opening = jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementation(async (key, options) => {
+  const opening = jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementation(async (key, options, owner) => {
     expect(await storage.knex('snapshot_archive_capacity').first()).toMatchObject({ archives: 1, reservedBytes: 32768 })
     expect((await controller.status(identity, input.requestId)).state).toBe('building')
     expect(options?.signal).toBeInstanceOf(AbortSignal)
     expect(options?.lifetimeMs).toBeGreaterThan(0)
     expect(options?.lifetimeMs).toBeLessThanOrEqual(300000)
-    return await original(key, options)
+    return await original(key, options, owner)
   })
   const pending = controller.create(identity, input)
   expect(controller.create(identity, { ...input })).toBe(pending)
@@ -136,9 +137,9 @@ test.each(['cancel', 'shutdown'] as const)(
     const destroying = gate()
     const allowDestroy = gate()
     const original = storage.openSnapshotArchiveSource.bind(storage)
-    jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementation(async (key, options) => {
+    jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementation(async (key, options, owner) => {
       // Acquire the actual view, but withhold it from the controller until cancellation.
-      const source = (await original(key, { ...options, signal: undefined }))!
+      const source = (await original(key, { ...options, signal: undefined }, owner))!
       const reader = Reflect.get(storage, 'snapshotSyncSource') as StorageKnex
       const destroy = reader.destroy.bind(reader)
       jest.spyOn(reader, 'destroy').mockImplementation(async () => {
@@ -227,15 +228,17 @@ test('capture failure closes the reader, records a terminal failure and allows a
   const { storage, controller } = await fixture()
   const input = request()
   const original = storage.openSnapshotArchiveSource.bind(storage)
-  const opening = jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options) => {
-    const source = (await original(key, options))!
-    return {
-      ...source,
-      validateClosure: async () => {
-        throw new Error('fixture closure failure')
+  const opening = jest
+    .spyOn(storage, 'openSnapshotArchiveSource')
+    .mockImplementationOnce(async (key, options, owner) => {
+      const source = (await original(key, options, owner))!
+      return {
+        ...source,
+        validateClosure: async () => {
+          throw new Error('fixture closure failure')
+        }
       }
-    }
-  })
+    })
   await expect(controller.create(identity, input)).rejects.toThrow('fixture closure failure')
   expect(Reflect.get(storage, 'snapshotSyncSource')).toBeUndefined()
   expect((await controller.create(identity, input)).state).toBe('failed')
@@ -250,8 +253,8 @@ test('failed physical cleanup retains the reservation and fences the controller 
   const original = storage.openSnapshotArchiveSource.bind(storage)
   const failure = new Error('physical close failed')
   let source: Awaited<ReturnType<typeof original>>
-  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options) => {
-    source = (await original(key, options))!
+  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options, owner) => {
+    source = (await original(key, options, owner))!
     return {
       ...source,
       close: async () => {
@@ -327,7 +330,9 @@ test('failed cleanup while opening retains admission even though no source was r
   const input = request()
   const failure = new Error('owned pool destruction failed')
   const destroy = StorageKnex.prototype.destroy
-  jest.spyOn(StorageKnex.prototype, 'openReadSnapshot').mockRejectedValueOnce(new Error('reader initialization failed'))
+  jest
+    .spyOn(ArchiveGuard, 'readGuardedSnapshotArchive')
+    .mockRejectedValueOnce(new Error('reader initialization failed'))
   jest.spyOn(StorageKnex.prototype, 'destroy').mockImplementation(async function (this: StorageKnex) {
     if (this !== storage) throw failure
     await destroy.call(this)
@@ -358,10 +363,10 @@ test('start returns a durable receipt before capture completes and repeats only 
   const entered = gate()
   const finish = gate()
   const original = storage.openSnapshotArchiveSource.bind(storage)
-  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options) => {
+  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options, owner) => {
     entered.resolve()
     await finish.promise
-    return await original(key, options)
+    return await original(key, options, owner)
   })
   const accepted = controller.start(identity, input)
   expect(controller.start(identity, { ...input })).toBe(accepted)
@@ -616,14 +621,14 @@ test('cancellation through another controller retains quota until the capturing 
   const destroying = gate()
   const allowDestroy = gate()
   const original = storage.openSnapshotArchiveSource.bind(storage)
-  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options) => {
-    const source = (await original(key, options))!
+  jest.spyOn(storage, 'openSnapshotArchiveSource').mockImplementationOnce(async (key, options, owner) => {
+    const source = (await original(key, options, owner))!
     const reader = Reflect.get(storage, 'snapshotSyncSource') as StorageKnex
-    const destroy = reader.destroy.bind(reader)
-    jest.spyOn(reader, 'destroy').mockImplementation(async () => {
+    const destroy = reader.knex.client.destroyRawConnection.bind(reader.knex.client)
+    jest.spyOn(reader.knex.client, 'destroyRawConnection').mockImplementation(async connection => {
       destroying.resolve()
       await allowDestroy.promise
-      await destroy()
+      await destroy(connection)
     })
     return {
       ...source,

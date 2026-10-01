@@ -73,8 +73,12 @@ until the exact controller acknowledges physical source cleanup. Cross-controlle
 cancellation fences the next page; pending cleanup reports an error and keeps its
 reservation. Do not mix older candidate binaries or remove the owner schema while
 captures remain. The reader now waits for an exact completion acknowledgement through bounded
-pending-cleanup polling, preserving independent failures. Backend-bound orphan
-recovery remains incomplete, and the server reader capability is unadvertised.
+pending-cleanup polling, preserving independent failures. The additive guard
+migration now permits exact-owner recovery after physical source closure, using
+stable local SQLite WAL guard files or a same-server MySQL connection lock.
+Older unguarded owners remain reserved, and changed backend identities fail closed.
+Keep the guard files and bindings intact and drain captures before downgrade.
+The server reader capability remains unadvertised pending complete qualification.
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

@@ -709,9 +709,9 @@ binaries on the same candidate, and stop and drain captures before any downgrade
 Older draft binaries do not enforce this new table; mixed-version capture is
 unsupported. Standard wallet tables and BRC-38/39 bytes are unchanged.
 
-This checkpoint deliberately retains ownership after an unproved process loss.
-Backend-bound orphan recovery remains required before reader advertisement. An elapsed lease is a fence, not
-proof that an old SQL operation stopped. The eight logical slots do not establish
+An elapsed lease is a fence, not proof that an old SQL operation stopped. The
+backend guard implementation below permits recovery only after a separate proof
+of source closure. The eight logical slots do not establish
 a global physical-connection ceiling; per-provider physical admission remains
 occupied until its acquisition and cleanup settle. Actual deployment replica and
 driver limits require separate qualification. The generated two-connection
@@ -724,5 +724,58 @@ observe pending receipts, retained quota and successful foreground writes, then
 confirm cleanup before the opening cancellation settles. Generated pending and
 lost-acknowledgement schedules preserve one signal, bounded attempts, independent
 failure identity and released timers/listeners. Same-server MySQL evidence covers
-the source-side fence and delayed pool destruction; these tests do not establish
-PXC, orphan recovery or a global physical-pool bound.
+the source-side fence and delayed pool destruction. These tests do not establish
+PXC or a global physical-pool bound.
+
+## Backend-bound owner recovery (unadvertised implementation)
+
+Apply `2026-10-01-002 add snapshot archive source guards` through the normal
+SQL migration entry point. It adds a guard version to owners and eight persistent
+slot bindings. Existing owners default to version zero and are never inferred to
+have a guard; they retain their reservation until explicit source cleanup.
+New service captures bind their exact claim before opening a view and recheck
+ownership, deadline and binding under the backend guard before reading wallet
+data. Slot bindings survive release and reuse, preventing a delayed claimant
+from choosing a new independent guard.
+
+For file-backed `better-sqlite3` WAL, each slot uses one private guard database
+beside the canonical wallet database, named `<database>.snapshot-owner-<slot>.sqlite`.
+The binding records both files' device/inode identity and a persistent random
+guard marker. The source holds a guard write lock on the same physical connection
+as its wallet read view; foreground WAL writers remain independent. The private
+pool closes the still-open transaction before acknowledging cleanup. An ordinary
+commit or rollback would release the guard too early. A failed native close keeps
+the guard and ownership pending rather than claiming drainage.
+
+MySQL binds the actual server UUID, database and fixed slot to a named advisory
+lock on the source connection. Its next transaction is read-only repeatable-read.
+Physical cleanup waits for the native socket close event, not just mysql2's
+earlier quit callback or the stream's `destroyed` flag. A different actual backend
+refuses the binding. This is a same-server contract; load-balanced/PXC failover
+requires separate qualification and cannot infer safety from a configured URL.
+
+Admission and cancellation run one bounded recovery flight per provider, visiting
+at most eight expired or terminal owners in sequence. A matching proof connection
+must acquire the same guard, fence the exact claim under the shared capacity lock,
+close physically and then acknowledge that owner. An occupied guard leaves cleanup
+pending. A still-unbound claim can be fenced under the capacity lock before a late
+binder enters. Independent backend and cleanup errors remain observable. Provider
+and service shutdown await an already-started recovery flight.
+
+Run migrations before capture, keep candidate binaries uniform, and drain all
+captures before downgrade. Guard files are persistent coordination state: do not
+unlink, replace or recreate a bound file to clear a reservation. Missing files,
+changed identities and changed markers refuse recovery. This implementation
+qualifies stable local filesystems only; database relocation/restoration and
+shared/distributed filesystems require an explicit binding-transition procedure
+and separate evidence. Standard wallet tables and BRC-38/39 bytes are unchanged.
+
+Synthetic tests cover eight simultaneous views, immutable reads with foreground
+writes, cancellation/expiry, delayed acquisition and native closure, stale-owner
+acknowledgements, missing/changed guard identity and cleanup failure. At least 300
+generated guarded schedules exercise recovery and successor ownership. The
+existing native crash and MySQL fixture commands also terminate an owned child
+process, verify the reservation before loss and recover it afterward while
+preserving foreground writes. These fixtures do not establish deployed limits,
+distributed filesystems, PXC or physical mobile behavior. Reader advertisement
+remains disabled pending complete lifecycle and program qualification.

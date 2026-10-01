@@ -87,7 +87,11 @@ test('unsupported source and a close during capability probing never advertise o
 })
 
 test('unsupported chain is declined and remains checked before an offer', async () => {
-  const storage = { chain: 'mock', knex: {} } as unknown as StorageKnex
+  const storage = {
+    chain: 'mock',
+    knex: {},
+    awaitSnapshotArchiveRecovery: async () => undefined
+  } as unknown as StorageKnex
   const rpc = new KnexSnapshotArchiveRpc(storage)
   expect(await rpc.capabilities()).toBeUndefined()
   jest.spyOn(rpc, 'capabilities').mockResolvedValue(snapshotArchiveCapabilities)

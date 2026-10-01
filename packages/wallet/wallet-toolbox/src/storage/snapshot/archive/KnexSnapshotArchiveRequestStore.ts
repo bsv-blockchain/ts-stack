@@ -71,7 +71,8 @@ function identifier(value: string): void {
 export class KnexSnapshotArchiveRequestStore {
   constructor(
     private readonly knex: Knex,
-    private readonly requireSourceDrain = false
+    private readonly requireSourceDrain = false,
+    private readonly guardedSources = false
   ) {}
 
   private async receipt(k: Knex, row: RequestRow): Promise<SnapshotArchiveRequestReceipt> {
@@ -202,7 +203,7 @@ export class KnexSnapshotArchiveRequestStore {
       }
       if (reader) await trx(table).where({ identityKey, requestId: request.requestId }).update(row)
       else await trx(table).insert(row)
-      if (this.requireSourceDrain) await reserveSnapshotArchiveOwner(trx, owner)
+      if (this.requireSourceDrain) await reserveSnapshotArchiveOwner(trx, owner, this.guardedSources)
       await trx('snapshot_archive_capacity')
         .where({ id: 1 })
         .update({ archives: capacity.archives + 1, reservedBytes: Number(capacity.reservedBytes) + request.maxBytes })
