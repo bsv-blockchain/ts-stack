@@ -328,3 +328,43 @@ it.each([false, true])(
     }
   }
 )
+
+it('refuses compound writers outside an owned write transaction', async () => {
+  const f = setup()
+  expect(() => f.append()).toThrow('requires a write transaction')
+  expect(() => f.domain.transaction(() => f.append(), { write: false })).toThrow(
+    'requires a write transaction'
+  )
+  expect((await f.store.head()).revision).toBe('0')
+  expect((await f.index.head()).sequence).toBe('0')
+  expect(f.rows()).toEqual([])
+})
+
+it('forks an already-staged journal across rollback and successful nested publication', async () => {
+  const f = setup(),
+    failure = new Error('discard successor')
+  const successor = f.lifecycle.put(
+    f.first.next,
+    signed({ revision: '1', previous: f.first.next.proposalId }),
+    author,
+    '11'
+  )
+  const key = proposalChannelKey(f.first.next.proposal.body)
+  f.domain.transaction(() => {
+    f.append()
+    expect(() =>
+      f.domain.savepoint(() => {
+        f.append(successor)
+        expect(f.bridge.channel(key)).toEqual(successor.next)
+        throw failure
+      })
+    ).toThrow(failure)
+    expect(f.bridge.channel(key)).toEqual(f.first.next)
+    f.domain.savepoint(() => f.append(successor))
+    expect(f.bridge.channel(key)).toEqual(successor.next)
+  })
+  expect((await f.store.head()).revision).toBe('2')
+  expect((await f.index.head()).sequence).toBe('2')
+  expect(await f.store.getChannel(key)).toEqual(successor.next)
+  expect(f.rows()).toHaveLength(1)
+})

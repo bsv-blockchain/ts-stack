@@ -550,3 +550,61 @@ it('never returns an intentional conflict result when its rollback failed', () =
   expect(() => domain.transaction(() => domain.rollback('conflict'))).toThrow(rollback)
   expect(() => domain.transaction(() => 1)).toThrow('closed')
 })
+
+it('bounds nested savepoint work and refuses a savepoint during cache construction', () => {
+  const { domain, db, values } = setup()
+  const nested = (depth: number): number =>
+    depth === 0 ? 1 : domain.savepoint(() => nested(depth - 1))
+  expect(domain.transaction(() => nested(32))).toBe(1)
+  expect(() =>
+    domain.transaction(() => {
+      db.exec('INSERT INTO item VALUES (1)')
+      return nested(33)
+    })
+  ).toThrow('nested state scope is unavailable')
+  expect(values()).toEqual([])
+  domain.transaction(() =>
+    domain.stage(
+      Symbol(),
+      () => {
+        expect(() => domain.savepoint(() => 1)).toThrow('nested state scope is unavailable')
+        return 1
+      },
+      () => {}
+    )
+  )
+})
+
+it('retires an uncertain commit when native transaction status cannot be inspected', () => {
+  const { domain, db, path } = setup()
+  const exec = db.exec.bind(db),
+    lost = new Error('commit acknowledgement lost')
+  db.exec = sql => {
+    exec(sql)
+    if (sql === 'COMMIT') {
+      db.close()
+      throw lost
+    }
+  }
+  let published = false
+  expect(() =>
+    domain.transaction(() => {
+      db.exec('INSERT INTO item VALUES (1)')
+      domain.stage(
+        Symbol(),
+        () => 1,
+        () => {
+          published = true
+        }
+      )
+    })
+  ).toThrow(lost)
+  expect(published).toBe(false)
+  expect(() => domain.idle()).toThrow('closed')
+  const reopened = new DatabaseSync(path)
+  try {
+    expect(reopened.prepare('SELECT value FROM item').get()?.value).toBe(1)
+  } finally {
+    reopened.close()
+  }
+})

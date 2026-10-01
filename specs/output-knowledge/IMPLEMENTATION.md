@@ -1707,7 +1707,13 @@ ordinary rejected work; the correction lets it escape so the outer transaction
 cannot commit that work. Both legacy rollback cases and all transaction-domain/
 composition tests pass (28 cases). Root health, lint, formatting and strict
 workspace types pass for the refactor, and the dependency inventory tests preserve
-complete extracted source registration. The exact full-package run remains next.
+complete extracted source registration. The full native package run at `d9d2234b8` passes 1,703 tests in 123 suites,
+with 98.08% statement, 96.23% branch, 99.14% function and 98.45% line
+coverage. All 9,908 frozen authored/compiled inputs and HEAD matched after the
+638-second run. The existing Overlay Express suite passes all 771 tests in
+32 suites; packed output-knowledge consumers and all 40 documentation examples
+across 22 exact tarballs pass. These component results do not establish a
+current-head hosted quality gate or checkpoint-two completion.
 
 The acknowledged application execution maps split whole files only: proposal core
 into worker/state/store/proposal, and native proposal storage into journal/state/
