@@ -8,6 +8,28 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
+## DID serial-token API retirement (3.0 candidate)
+
+The proposed SDK 3.0 release removes `CanonicalDIDToken`, `DID_TOKEN_PROTOCOL`,
+`MAX_DID_SERIAL_BYTES`, `decodeCanonicalDIDToken` and `normalizeDIDSerialNumber`,
+including the `identity/DIDTokenValidation` deep import. Existing wallet,
+certificate and identity-discovery APIs remain supported.
+
+Use `@bsv/did` for validated identity-key `did:key` encoding/resolution and the
+proposed signature-preserving BRC-52 credential adapter. Use BRC-100 wallet
+identity discovery or the existing `tm_identity` / `ls_identity` overlay for
+public certificate candidates. Verify the original derived-key certificate
+signature and apply selected certifier trust independently of discovery. A
+resolved DID establishes its encoded key; live key control requires a separate
+authentication protocol. Historical serial tokens provide no implicit issuer
+or subject binding.
+
+See [identity integration](../../docs/guides/identity-did-vc.md) and
+[migration guidance](../../docs/guides/identity-did-vc-migration.md) before upgrading.
+This is a source candidate; publication and deployment are separate actions.
+
+## Wallet integration
+
 For application-to-wallet integrations, the SDK exposes the BRC-100 `WalletClient` interface. BSV Desktop and BSV Browser are the BSV Association reference implementations for this interface; vendor distributions such as Babbage's Metanet Desktop / Metanet Explorer and Hudos Browser can implement the same interface with their own branding and service defaults.
 
 The BRC-100 `CreateActionResult` permits AtomicBEEF as either `number[]` or
@@ -161,6 +183,23 @@ policy when the HTTP layer owns payload admission.
 The BSV Blockchain Libraries Project aims to structure and maintain a middleware layer of the BSV Blockchain technology stack. By facilitating the development and maintenance of core libraries, it serves as an essential toolkit for developers looking to build on the BSV Blockchain.
 
 ## Getting Started
+
+### Package entry points
+
+The SDK3 retirement candidate removes `identity/DIDTokenValidation`; use the
+[identity/DID/VC migration guide](../../docs/guides/identity-did-vc-migration.md)
+for the identity-key DID and original BRC52 envelope replacements.
+
+`@bsv/sdk/umd` is an ESM entry that installs `globalThis.bsv` with the classic
+bundle's export descriptors and re-exports the canonical SDK constructors.
+`@bsv/sdk/umd.ts` supports ESM and CommonJS through the existing wildcard.
+The explicit `./umd` condition remains import-only. The standalone
+`dist/umd/bundle.js` keeps its classic-script interface. These packaging fixes
+preserve its bytes after the intentional DID-token retirement; they do not
+create a second module class graph. Importing the global facade retains all
+SDK exports, so its size is measured separately from selective module imports.
+Cold BasePoint/JacobianPoint leaf entries retain their initialization wrappers
+and original class identity in Node and browser bundlers.
 
 ### Installation
 

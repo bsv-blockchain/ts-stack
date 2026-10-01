@@ -6,13 +6,7 @@ export type { BrowserWallet, Wallet } from './browser'
 
 // DID & Credentials (browser-safe)
 export { DID } from './modules/did'
-export {
-  CredentialSchema,
-  CredentialIssuer,
-  MemoryRevocationStore,
-  toVerifiableCredential,
-  toVerifiablePresentation
-} from './modules/credentials'
+export { CredentialSchema, CredentialIssuer, MemoryRevocationStore } from './modules/credentials'
 
 // Types
 export type {
@@ -49,30 +43,15 @@ export type {
   PaymentRequest,
   IncomingPayment,
   DirectPaymentResult,
-  DIDDocument,
-  DIDVerificationMethod,
-  DIDParseResult,
-  DIDDocumentV2,
-  DIDVerificationMethodV2,
-  DIDService,
-  DIDCreateOptions,
-  DIDCreateResult,
-  DIDResolutionResult,
-  DIDChainState,
-  DIDUpdateOptions,
   CredentialFieldType,
   CredentialFieldSchema,
   CredentialSchemaConfig,
-  VerifiableCredential,
-  VerifiablePresentation,
-  VerificationResult,
   CredentialIssuerConfig,
   RevocationRecord,
   RevocationStore,
   RegistryEntry,
   IdentityRegistryStore,
   IdentityRegistryConfig,
-  DIDResolverConfig,
   ServerWalletManagerConfig,
   CredentialIssuerHandlerConfig
 } from './core/types'
@@ -84,6 +63,9 @@ export {
   TransactionError,
   MessageBoxError,
   CertificationError,
-  DIDError,
   CredentialError
 } from './core/errors'
+
+export type { DidDocument, DidResolutionResult } from '@bsv/did'
+export type { BRC52Envelope, BRC52VerificationResult } from '@bsv/did/brc52'
+export type { IssuedCredential } from './modules/credentials'

@@ -4,7 +4,7 @@ title: '@bsv/ecpm-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/ecpm-permission-module'
-version: '0.1.1'
+version: '0.1.2'
 last_updated: '2026-08-30'
 last_verified: '2026-08-30'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ecpm
 ---
 
 # @bsv/ecpm-permission-module
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 `@bsv/ecpm-permission-module` is the reference `p ecpm` semantic module for
 BRC-100 wallet hosts. It applies or removes a wallet-derived scalar from an

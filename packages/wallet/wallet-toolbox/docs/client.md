@@ -28663,7 +28663,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Variable: argon2id
 
 ```ts
-argon2id = argon2idWithBackends as typeof argon2Api.argon2id
+argon2id = argon2idWithBackends as typeof import('hash-wasm').argon2id
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

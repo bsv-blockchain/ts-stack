@@ -16,6 +16,10 @@ tags: [templates, scripts, locking, unlocking]
 
 # @bsv/templates
 
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Low-level BSV script templates library — provides reusable locking/unlocking script implementations (OpReturn, MultiPushDrop, P2MSKH) for common and advanced Bitcoin SV patterns without abstracting away control.
 
 The 1.10.3 source candidate fixes the CommonJS build: `require('@bsv/templates')` consumers can construct scripts again instead of failing with `LockingScript.default is not a constructor` ([#571](https://github.com/bsv-blockchain/ts-stack/issues/571)). The ESM build and browser bundle size are unchanged; no API migration is required.

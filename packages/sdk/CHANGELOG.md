@@ -214,6 +214,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Removed (3.0.0 candidate)
+
+- Remove the legacy `identity/DIDTokenValidation` module and its
+  `CanonicalDIDToken`, `DID_TOKEN_PROTOCOL`, `MAX_DID_SERIAL_BYTES`,
+  `decodeCanonicalDIDToken` and `normalizeDIDSerialNumber` exports. Consumers
+  must move identity-key DID operations to `@bsv/did` and public certificate
+  discovery to supported wallet/identity APIs; serial records do not identify
+  issuer or subject. See [migration guidance](../../docs/guides/identity-did-vc-migration.md).
+  This source removal deletes no user records or on-chain outputs.
+
 ### Fixed (2.8.11 candidate)
 
 - `WalletClient` and the binary BRC-100 wire no longer reject every `acquireCertificate` issuance. Result validation required the returned `fields` to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted, so a valid issuance always failed with `Invalid acquireCertificate result certificate.fields: expected the requested certificate fields`. An issuance result is now bound to exactly the requested field names; a direct acquisition, whose request already carries the encrypted values, is still bound to them exactly. No API, wire or wallet-data migration is required.

@@ -3,7 +3,7 @@ id: pkg-auth
 title: '@bsv/auth'
 kind: package
 domain: middleware
-version: '0.1.5'
+version: '0.1.6'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ tags: [middleware, authentication, wallet, replay]
 ---
 
 # @bsv/auth
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 `@bsv/auth` provides framework-neutral, expiry-bound, single-use wallet
 authentication proofs. It separates proof creation and verification from HTTP,

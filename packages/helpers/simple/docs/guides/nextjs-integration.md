@@ -170,14 +170,9 @@ limits with `maxTagsPerIdentity`, `maxEntries`, and `maxLookupResults`. All
 Simple route adapters also stop reading JSON request bodies after 64 MiB (a
 custom `toNextHandlers()` adapter may choose a lower limit).
 
-### DID Resolver
+### Identity-key DID resolution
 
-```typescript
-// app/api/resolve-did/route.ts
-import { createDIDResolverHandler } from '@bsv/simple/server'
-const handler = createDIDResolverHandler()
-export const GET = handler.GET
-```
+Use `DID.resolve(did)` from `@bsv/simple` in the application. It is deterministic and offline; no proxy route or provider configuration is required. See [migration guidance](identity-credential-migration.md).
 
 ### Credential Issuer
 

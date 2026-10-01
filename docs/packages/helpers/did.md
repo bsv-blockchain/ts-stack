@@ -3,10 +3,10 @@ id: pkg-did
 title: '@bsv/did'
 kind: package
 domain: helpers
-version: '0.2.7'
+version: '0.3.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/did'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did'
@@ -16,9 +16,11 @@ tags: [did, sd-jwt, credentials, identity, helpers]
 
 # @bsv/did
 
-> SD-JWT VC and optional `did:key` helpers for BSV SDK identity keys.
+> Identity-key DID resolution, signature-preserving BRC52 credential envelopes, authorized disclosure, and independent SD-JWT helpers.
 
-The 0.2.7 source candidate fixes the CommonJS build of the key, signature and multibase helpers, which failed with `.default is not a constructor` under `require()`. No API migration is required.
+The 0.3.0 source candidate implements the proposed BRC202/203 profiles. See [unified integration guidance](../../guides/identity-did-vc.md) and [breaking API migration](../../guides/identity-did-vc-migration.md). These custom W3C securing/status mechanisms are proposed and unregistered; the helpers do not establish generic W3C interoperability.
+
+The SD-JWT example below issues a separate JOSE credential; it does not convert or preserve a BRC52 issuer signature. Use the optional `@bsv/did/brc52` entry: `exportBRC52Envelope(originalBinary)` for existing BRC52 certificates, `verifyBRC52Envelope('application/json', transport)` for strict original-byte verification, `produceBRC52Disclosure` / `receiveBRC52Disclosure` for consent and authenticated receipt, and `evaluateBRC52Status` with an explicit locally selected evidence/privacy policy. Verification success does not approve issuer trust or application reliance.
 
 ## Install
 
@@ -26,7 +28,7 @@ The 0.2.7 source candidate fixes the CommonJS build of the key, signature and mu
 npm install @bsv/did
 ```
 
-## Quick start
+## Independent SD-JWT quick start
 
 ```typescript
 import { PrivateKey } from '@bsv/sdk'

@@ -4,18 +4,32 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.9.1'
-last_updated: '2026-09-26'
-last_verified: '2026-09-26'
+version: '2.0.0'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
-status: stable
+status: experimental
 tags: ['overlay', 'topics', 'uhrp']
 ---
 
 # @bsv/overlay-topics
 
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Canonical collection of pre-built BSV overlay topic managers and lookup services for identity, tokens, supply chain, messaging, and more.
+
+## DID overlay retirement (2.0 candidate)
+
+The proposed 2.0 release removes the serial-token DID overlay and its exports.
+Use the existing identity overlay for attributed public certificate discovery
+and `@bsv/did` for identity-key encoding/resolution. No service is automatically
+installed, and source removal deletes no historical records or on-chain outputs.
+Historical serial lookups cannot establish subject or issuer identity without
+separately authenticated bindings. See [integration guidance](../../guides/identity-did-vc.md)
+and [migration guidance](../../guides/identity-did-vc-migration.md).
 
 ## Registry topics and publisher authority
 
@@ -53,7 +67,7 @@ const results = await btmsService.lookup({
 
 ## What it provides
 
-- **20+ topic managers** — Pre-built implementations (HelloWorld, DID, BTMS, KVStore, SupplyChain, UHRP, UMP, ProtoMap, and more)
+- **20+ topic managers** — Pre-built implementations (HelloWorld, identity certificates, BTMS, KVStore, SupplyChain, UHRP, UMP, ProtoMap, and more)
 - **Lookup service factories** — Each topic includes MongoDB-backed lookup service
 - **Type-safe queries** — Each topic defines its own Query and Record types
 - **PushDrop encoding** — All topics use standardized data encoding for consistency
@@ -76,8 +90,8 @@ import OverlayExpress from '@bsv/overlay-express'
 import {
   HelloWorldTopicManager,
   createHelloWorldLookupService,
-  DIDTopicManager,
-  createDIDLookupService,
+  IdentityTopicManager,
+  createIdentityLookupService,
   KVStoreTopicManager,
   createKVStoreLookupService,
   BTMSTopicManager,
@@ -87,14 +101,14 @@ import {
 const server = new OverlayExpress('mynode', privateKey, 'example.com')
 
 server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
-server.configureTopicManager('tm_did', new DIDTopicManager())
+server.configureTopicManager('tm_identity', new IdentityTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
 server.configureTopicManager('tm_btms', new BTMSTopicManager())
 
 await server.configureLookupServiceWithMongo('ls_helloworld', db =>
   createHelloWorldLookupService(db)
 )
-await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
+await server.configureLookupServiceWithMongo('ls_identity', db => createIdentityLookupService(db))
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
 await server.configureLookupServiceWithMongo('ls_btms', db => createBTMSLookupService(db))
 
@@ -105,10 +119,19 @@ await server.start()
 ### Query by topic
 
 ```typescript
-// DID query
-const didResults = await didService.lookup({
-  service: 'ls_did',
-  query: { serialNumber: 'c24tMTIzNDU=' }
+import { createIdentityLookupService } from '@bsv/overlay-topics'
+import type { IdentityQuery } from '@bsv/overlay-topics'
+
+// Inputs are compressed identity keys; certifiers come from the application's trust policy.
+const identityService = createIdentityLookupService(mongoDb)
+const identityResults = await identityService.lookup({
+  service: 'ls_identity',
+  query: {
+    identityKey: subjectIdentityKey,
+    certifiers: trustedCertifierKeys,
+    limit: 10,
+    offset: 0
+  } satisfies IdentityQuery
 })
 
 // KVStore query
@@ -130,9 +153,9 @@ const scResults = await scService.lookup({
 ### Manual topic manager use
 
 ```typescript
-const manager = new DIDTopicManager()
+const manager = new IdentityTopicManager()
 const admittance = await manager.identifyAdmissibleOutputs(beef, [])
-// Expects 2-field PushDrop: [serialNumber, signature]
+// Validates the attributed public identity certificate and revelation envelope.
 ```
 
 ## Key concepts
@@ -140,9 +163,9 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - **Topic managers** — Validate which outputs are protocol-valid (implements TopicManager interface)
 - **Lookup services** — Index and query admitted outputs in MongoDB (implements LookupService interface)
 - **PushDrop encoding** — All topics use PushDrop format for structured data + signature/lock
-- **Protocol-specific fields** — Each topic defines what fields it expects (e.g., DID requires [serialNumber, signature])
+- **Protocol-specific fields** — Each topic defines what fields it expects (e.g., identity admission validates the certificate and public revelation)
 - **Query types** — Each topic defines type-safe Query and Record types
-- **Lookup factories** — `create*LookupService(db)` functions are async and return configured services
+- **Lookup factories** — `create*LookupService(db)` factories return configured services
 - **MongoDB indexing** — Services auto-create indices on frequently-queried fields; a failed build is
   logged and skipped so reads keep working, and retried on the next call
 - **`OVERLAY_INDEX_REPAIR`** — Opt-in. When a _unique_ index cannot be built because the collection
@@ -155,7 +178,7 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - Need pre-built, tested topic implementations
 - Want standardized PushDrop encoding
 - Building applications on top of overlay services
-- Need token management (BTMS), identity (DID), or key-value storage
+- Need token management (BTMS), public identity certificate discovery, or key-value storage
 
 ## When NOT to use this
 
@@ -165,9 +188,11 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 
 ## Spec conformance
 
-- **DID** — Legacy serial-number token indexing. The v1 wire token omits issuer
-  and subject, so lookup does not establish either identity relationship;
-  consumers need a separate authenticated binding.
+- **Identity** — Public discovery of attributed certificates under BRC-189
+  semantics. Validate the original certificate signature and selected certifier
+  trust separately from discovering an overlay host. Identity-key `did:key`
+  resolution under the proposed BRC-202 profile is deterministic and uses no
+  lookup service.
 - **BTMS** — Basic Token Management System protocol (issuance, transfer, burn)
 - **KVStore** — Key-value protocol-agnostic storage
 - **ProtoMap** — Registry of wallet protocols with deserialization support
@@ -177,10 +202,10 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 
 ## Common pitfalls
 
-1. **Lookup factories are async** — `create*LookupService()` returns Promise; must await
+1. **Lookup factories** — Construct services with the documented synchronous factory; await their lookup methods
 2. **MongoDB required** — All lookup services assume MongoDB; no Knex fallback
 3. **PushDrop validation** — Each topic validates structure; malformed scripts are rejected
-4. **Field count varies** — DID requires exactly 2 fields; BTMS requires 2-4; violations rejected
+4. **Protocol validation varies** — Use each topic's admission rules; an identity revelation is not a legacy serial token
 5. **BTMS asset semantics** — "ISSUE" = new token; otherwise must match previous issuance txid.outputIndex
 6. **Signature validation** — Most topics verify signatures; invalid signatures cause rejection
 
@@ -192,7 +217,6 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - **basketmap** — Publisher-attributed descriptions of basket identifiers
 - **certmap** — Publisher-attributed certificate-type and field descriptions
 - **desktopintegrity** — Desktop integrity verification
-- **did** — Decentralized Identifiers
 - **fractionalize** — Token fractionalization
 - **hello** — Hello World demo topic
 - **identity** — Identity attributes and claims

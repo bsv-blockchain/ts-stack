@@ -20,7 +20,7 @@ has not been seen before.
 npm install @bsv/auth
 ```
 
-Requires `@bsv/sdk` (>= 2.0).
+Requires `@bsv/sdk` (`^2.1.6 || ^3.0.0`).
 
 ## Usage
 

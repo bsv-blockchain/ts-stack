@@ -22,8 +22,8 @@ Modules (mixed in via Object.assign):
   ├── messagebox    → certifyForMessageBox, sendMessageBoxPayment, ...
   ├── certification → acquireCertificateFrom, listCertificatesFrom, relinquishCert
   ├── overlay       → advertiseSHIP, advertiseSLAP, broadcastAction, withRetry
-  ├── did           → getDID, resolveDID, registerDID
-  └── credentials   → acquireCredential, listCredentials, createPresentation
+  ├── did           → getDID, resolveDID
+  └── credentials   → acquireCredential, listCredentials
 ```
 
 When you call `createWallet()`, the library:
@@ -70,15 +70,15 @@ await wallet.send({
 
 Some classes work independently of any wallet:
 
-| Class                   | Purpose                                              | Import                |
-| ----------------------- | ---------------------------------------------------- | --------------------- |
-| `DID`                   | Generate/parse/validate `did:bsv:` identifiers       | `@bsv/simple/browser` |
-| `Certifier`             | Issue BSV certificates                               | `@bsv/simple/browser` |
-| `Overlay`               | Create topic broadcasters and lookup resolvers       | `@bsv/simple/browser` |
-| `CredentialSchema`      | Define and validate credential field schemas         | `@bsv/simple/browser` |
-| `CredentialIssuer`      | Issue, verify, and revoke W3C Verifiable Credentials | `@bsv/simple/browser` |
-| `MemoryRevocationStore` | In-memory revocation secret storage (browser/tests)  | `@bsv/simple/browser` |
-| `FileRevocationStore`   | File-based revocation secret storage (server only)   | `@bsv/simple/server`  |
+| Class                   | Purpose                                                             | Import                |
+| ----------------------- | ------------------------------------------------------------------- | --------------------- |
+| `DID`                   | Encode/resolve identity-key `did:key` identifiers                   | `@bsv/simple/browser` |
+| `Certifier`             | Issue BSV certificates                                              | `@bsv/simple/browser` |
+| `Overlay`               | Create topic broadcasters and lookup resolvers                      | `@bsv/simple/browser` |
+| `CredentialSchema`      | Define and validate credential field schemas                        | `@bsv/simple/browser` |
+| `CredentialIssuer`      | Issue BRC-52 certificates, export/verify proposed BRC-203 envelopes | `@bsv/simple/browser` |
+| `MemoryRevocationStore` | In-memory revocation secret storage (browser/tests)                 | `@bsv/simple/browser` |
+| `FileRevocationStore`   | File-based revocation secret storage (server only)                  | `@bsv/simple/server`  |
 
 ## Basket System
 
