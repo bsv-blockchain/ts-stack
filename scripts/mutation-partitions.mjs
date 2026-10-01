@@ -13,6 +13,13 @@ const plans = new Map([
     }
   ],
   [
+    'root-eviction-records',
+    {
+      fallback: 'requests',
+      files: new Map([['src/root-eviction/RootEvictionServingRecords.ts', 'serving']])
+    }
+  ],
+  [
     'wallet-retained-snapshot',
     {
       fallback: 'lifecycle',

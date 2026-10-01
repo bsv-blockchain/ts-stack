@@ -142,3 +142,44 @@ test('retained partitions preserve complete lifecycle/reader/storage unions and 
   )
   assert.throws(() => partitionedMutationTargets(['sdk-auth-http', 'sdk-auth-http'], targets))
 })
+
+test('root records keep whole files, original tests and future sources under one canonical gate', () => {
+  const root = {
+    testRunner: 'jest',
+    runnerOptions: { jest: { config: { testMatch: ['all-original-root-tests'] } } },
+    additionalInputs: ['src/root-eviction/**', 'all-original-fixtures'],
+    mutate: [
+      'src/root-eviction/RootEvictionRequests.ts',
+      'src/root-eviction/RootEvictionServingRecords.ts',
+      'src/root-eviction/FutureHelper.ts'
+    ]
+  }
+  const parts = partitionMutationTarget('root-eviction-records', root)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['requests', 'serving']
+  )
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...root.mutate].sort())
+  assert.deepEqual(parts[0].target.mutate, [root.mutate[0], root.mutate[2]])
+  assert.deepEqual(parts[1].target.mutate, [root.mutate[1]])
+  for (const part of parts) {
+    assert.equal(part.target.runnerOptions, root.runnerOptions)
+    assert.equal(part.target.additionalInputs, root.additionalInputs)
+    assert.equal(part.target.testRunner, root.testRunner)
+  }
+  assert.equal(selectedMutationPartition('root-eviction-records', root), root)
+  assert.throws(() => selectedMutationPartition('root-eviction-records', root, 'missing'))
+  for (const specification of ['src/**/*.ts', '!src/Root.ts', '../outside.ts', '/outside.ts'])
+    assert.throws(() =>
+      partitionMutationTarget('root-eviction-records', { mutate: [specification] })
+    )
+  const targets = { 'root-eviction-records': root, other: { mutate: ['src/whole.ts'] } }
+  assert.deepEqual(mutationExecutionMatrix(['other', 'root-eviction-records'], targets).include, [
+    { target: 'other', partition: 'whole' },
+    { target: 'root-eviction-records', partition: 'requests' },
+    { target: 'root-eviction-records', partition: 'serving' }
+  ])
+  assert.deepEqual(partitionedMutationTargets(['other', 'root-eviction-records'], targets), [
+    'root-eviction-records'
+  ])
+})

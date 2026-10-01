@@ -502,7 +502,7 @@ jobs:
     runs-on: ubuntu-latest
     # Preserve the full-source deadline allowances and complete canonical gates.
     # Job time does not change individual mutant/test deadlines or worker counts.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -606,6 +606,11 @@ jobs:
         with:
           pattern: mutation-wallet-retained-snapshot-*
           path: .mutation-parts/wallet-retained-snapshot
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'root-eviction-records')
+        with:
+          pattern: mutation-root-eviction-records-*
+          path: .mutation-parts/root-eviction-records
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
