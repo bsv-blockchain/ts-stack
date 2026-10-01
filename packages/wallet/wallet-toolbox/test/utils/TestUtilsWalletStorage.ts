@@ -706,8 +706,8 @@ export abstract class TestUtilsWalletStorage {
    * connection config whose `database` is used only to create test databases.
    */
   static async createLocalPostgres(database: string): Promise<Knex> {
-    const connection = localPostgresConnection || '{}'
-    const admin = Setup.createPostgresKnex(connection)
+    const connection = JSON.parse(localPostgresConnection || '{}')
+    const admin = makeKnex({ client: 'pg', connection })
     try {
       const existing = await admin('pg_database').where({ datname: database }).first('datname')
       // Not `??`: knex would split a database name containing dots.
@@ -715,7 +715,12 @@ export abstract class TestUtilsWalletStorage {
     } finally {
       await admin.destroy()
     }
-    return Setup.createPostgresKnex(connection, database)
+    const config: Knex.Config = {
+      client: 'pg',
+      connection: { ...connection, database },
+      pool: { min: 0, max: 7, idleTimeoutMillis: 15000 }
+    }
+    return makeKnex(config)
   }
 
   /**

@@ -1,9 +1,7 @@
 import { knex as makeKnex, Knex } from 'knex'
-import { types as pgTypes } from 'pg'
 import { _tu } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageKnex } from '../StorageKnex'
 import { managedChangeOutputFields } from '../methods/managedChange'
-import { CREATE_ACTION_FUNDING_INDEX_MIGRATION, KnexMigrations } from '../schema/KnexMigrations'
 
 const env = _tu.getEnvFlags('test')
 const describePostgres = env.runPostgres ? describe : describe.skip
@@ -57,8 +55,8 @@ describePostgres('StorageKnex on Postgres', () => {
     expect(await storage.countOutputs({ partial: { userId: tx.userId } })).toBe(1)
     expect(await knex.raw('select 1::int8 as v')).toMatchObject({ rows: [{ v: 1 }] })
 
-    // The process-wide pg defaults are untouched.
-    expect(pgTypes.getTypeParser(20, 'text')('5')).toBe('5')
+    // Other knex instances, and the process-wide pg defaults, are untouched.
+    expect(await plainKnex().raw('select 1::int8 as v')).toMatchObject({ rows: [{ v: '1' }] })
   })
 
   test('a duplicate find-or-insert insert does not abort the surrounding transaction', async () => {
@@ -135,34 +133,5 @@ describePostgres('StorageKnex on Postgres', () => {
     } finally {
       if (!lock.isCompleted()) await lock.rollback()
     }
-  })
-  test('migrations build indexes on existing tables concurrently', async () => {
-    const knex = plainKnex()
-    const queries: string[] = []
-    knex.on('query', (q: { sql: string }) => queries.push(q.sql))
-    const storage = await openStorage(knex)
-
-    const concurrent = queries.filter(sql => sql.startsWith('create index concurrently if not exists'))
-    expect(concurrent).toContain(
-      'create index concurrently if not exists "idx_outputs_funding_selection" on "outputs" ' +
-        '("userId", "basketId", "spendable", "spentBy", "satoshis", "outputId")'
-    )
-    expect(concurrent).toContain('create index concurrently if not exists "outputs_spendable_index" on "outputs" ("spendable")')
-    const invalid = await knex('pg_index').where({ indisvalid: false }).count({ count: '*' })
-    expect(invalid[0].count).toBe(0)
-    const migrations = await new KnexMigrations('test', '', '', 1024).getMigrations()
-    expect((await knex('knex_migrations').select('name')).map(r => r.name).sort()).toEqual([...migrations].sort())
-
-    // An interrupted build leaves an invalid index and no journal row; a re-run rebuilds it.
-    await knex.raw("update pg_index set indisvalid = false where indexrelid = 'idx_outputs_funding_selection'::regclass")
-    await knex('knex_migrations').where({ name: CREATE_ACTION_FUNDING_INDEX_MIGRATION }).delete()
-    await storage.migrate('postgres storage test', '1'.repeat(64))
-    const rebuilt = await knex.raw(
-      "select indisvalid from pg_index where indexrelid = 'idx_outputs_funding_selection'::regclass"
-    )
-    expect(rebuilt.rows).toEqual([{ indisvalid: true }])
-    expect(await knex('knex_migrations').where({ name: CREATE_ACTION_FUNDING_INDEX_MIGRATION }).count({ count: '*' })).toEqual([
-      { count: 1 }
-    ])
   })
 })

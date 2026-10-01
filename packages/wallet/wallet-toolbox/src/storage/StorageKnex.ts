@@ -78,7 +78,6 @@ import {
   validatePreparedBeefPolicy
 } from './methods/preparedBeef'
 import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
-import { usePostgresInt8Numbers } from './knexPostgres'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
   /**
@@ -136,7 +135,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     super(options)
     if (options.knex == null) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
-    usePostgresInt8Numbers(this.knex)
+    parsePostgresInt8AsNumber(this.knex)
     this.preparedBeefPolicy = validatePreparedBeefPolicy(options.preparedBeef)
     this.preparedBeefCoordinator = new PreparedBeefCoordinator(this)
     if (this.telemetry.enabled) {
@@ -691,26 +690,16 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   /**
    * Insert one row and return its auto-increment primary key. MySQL and SQLite
    * report the id as the insert result; Postgres requires a RETURNING clause.
-   *
-   * `recoverable` marks inserts that the findOrInsert helpers retry as a find
-   * after a duplicate-key error, in the same transaction; see `inSavepoint`.
    */
-  private async insertReturningId(
-    table: string,
-    idColumn: string,
-    row: object,
-    trx?: TrxToken,
-    recoverable = false
-  ): Promise<number> {
+  private async insertReturningId(table: string, idColumn: string, row: object, trx?: TrxToken): Promise<number> {
     if (this.dbtype !== 'Postgres') {
       const [id] = await this.toDb(trx)(table).insert(row)
       return id
     }
-    const insert = async (db: Knex): Promise<number> => {
+    return await this.inSavepoint(trx, async db => {
       const [r] = await db(table).insert(row).returning(idColumn)
       return r[idColumn]
-    }
-    return recoverable ? await this.inSavepoint(trx, insert) : await insert(this.toDb(trx))
+    })
   }
 
   /**
@@ -727,7 +716,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTx(tx: TableProvenTx, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxId === 0) delete e.provenTxId
-    const id = await this.insertReturningId('proven_txs', 'provenTxId', e, trx, true)
+    const id = await this.insertReturningId('proven_txs', 'provenTxId', e, trx)
     tx.provenTxId = id
     return tx.provenTxId
   }
@@ -886,7 +875,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTxReq(tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
-    const id = await this.insertReturningId('proven_tx_reqs', 'provenTxReqId', e, trx, true)
+    const id = await this.insertReturningId('proven_tx_reqs', 'provenTxReqId', e, trx)
     tx.provenTxReqId = id
     return tx.provenTxReqId
   }
@@ -940,7 +929,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutputBasket(basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(basket, trx, undefined, ['isDeleted'])
     if (e.basketId === 0) delete e.basketId
-    const id = await this.insertReturningId('output_baskets', 'basketId', e, trx, true)
+    const id = await this.insertReturningId('output_baskets', 'basketId', e, trx)
     basket.basketId = id
     return basket.basketId
   }
@@ -948,7 +937,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.transactionId === 0) delete e.transactionId
-    const id = await this.insertReturningId('transactions', 'transactionId', e, trx, true)
+    const id = await this.insertReturningId('transactions', 'transactionId', e, trx)
     tx.transactionId = id
     return tx.transactionId
   }
@@ -986,7 +975,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutputTag(tag: TableOutputTag, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tag, trx, undefined, ['isDeleted'])
     if (e.outputTagId === 0) delete e.outputTagId
-    const id = await this.insertReturningId('output_tags', 'outputTagId', e, trx, true)
+    const id = await this.insertReturningId('output_tags', 'outputTagId', e, trx)
     tag.outputTagId = id
     return tag.outputTagId
   }
@@ -999,7 +988,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertTxLabel(label: TableTxLabel, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(label, trx, undefined, ['isDeleted'])
     if (e.txLabelId === 0) delete e.txLabelId
-    const id = await this.insertReturningId('tx_labels', 'txLabelId', e, trx, true)
+    const id = await this.insertReturningId('tx_labels', 'txLabelId', e, trx)
     label.txLabelId = id
     return label.txLabelId
   }
@@ -1682,31 +1671,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (isSQLite) {
       await this.knex.raw('PRAGMA foreign_keys = OFF;')
     }
-    const isPostgres = this.knex.client.dialect === 'postgresql'
     try {
       const config = {
-        migrationSource: new KnexMigrations(
-          this.chain,
-          storageName,
-          storageIdentityKey,
-          1024,
-          isPostgres ? 'Postgres' : undefined
-        ),
+        migrationSource: new KnexMigrations(this.chain, storageName, storageIdentityKey, 1024),
         // Keep DDL and its migration journal entry in the same transaction.
         disableTransactions: false
       }
-      if (isPostgres) {
-        // Postgres index migrations run outside a transaction (CREATE INDEX
-        // CONCURRENTLY). When any pending migration does, knex's latest()
-        // journals every migration of the batch outside its transaction, so
-        // run one migration per up() to keep the others atomic with their journal row.
-        for (;;) {
-          const [, applied] = (await this.knex.migrate.up(config)) as [number, string[]]
-          if (applied.length === 0) break
-        }
-      } else {
-        await this.knex.migrate.latest(config)
-      }
+      await this.knex.migrate.latest(config)
       return await this.knex.migrate.currentVersion(config)
     } finally {
       // Leaving foreign-key enforcement disabled after a failed migration would
@@ -2259,6 +2230,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
 
+    let reservedConcurrently = false
     const r: TableOutput | undefined = await this.knex.transaction(async trx => {
       const baseQuery = (): Knex.QueryBuilder<TableOutput, TableOutput[]> =>
         trx<TableOutput>('outputs as o')
@@ -2285,44 +2257,36 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .select('o.*')
           .forUpdate()
 
-      const excluded: number[] = []
-      const candidates = (): Knex.QueryBuilder<TableOutput, TableOutput[]> =>
-        excluded.length > 0 ? baseQuery().whereNotIn('o.outputId', excluded) : baseQuery()
-      const selectOutput = async (): Promise<TableOutput | undefined> => {
-        let output: TableOutput | undefined
+      let output: TableOutput | undefined
 
-        if (exactSatoshis !== undefined) {
-          output = await candidates().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
-        }
-
-        output ??= await candidates()
-          .where('o.satoshis', '>=', targetSatoshis)
-          .orderBy('o.satoshis', 'asc')
-          .orderBy('o.outputId', 'asc')
-          .first()
-
-        output ??= await candidates()
-          .where('o.satoshis', '<', targetSatoshis)
-          .orderBy('o.satoshis', 'desc')
-          .orderBy('o.outputId', 'desc')
-          .first()
-        return output
+      if (exactSatoshis !== undefined) {
+        output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
       }
 
-      let output = await selectOutput()
+      output ??= await baseQuery()
+        .where('o.satoshis', '>=', targetSatoshis)
+        .orderBy('o.satoshis', 'asc')
+        .orderBy('o.outputId', 'asc')
+        .first()
+
+      output ??= await baseQuery()
+        .where('o.satoshis', '<', targetSatoshis)
+        .orderBy('o.satoshis', 'desc')
+        .orderBy('o.outputId', 'desc')
+        .first()
+
+      if (output == null) return undefined
+
       // Under Postgres READ COMMITTED the NOT EXISTS above uses the statement's
       // snapshot, so an action batch reservation committed while the statement
-      // waited for the row lock is not visible to it. Re-check with a new statement.
-      while (
-        output != null &&
+      // waited for the row lock is not visible to it. Retry in a new transaction.
+      if (
         this.dbtype === 'Postgres' &&
         (await this.findReservedActionBatchOutputIds([output.outputId], trx)).length > 0
       ) {
-        excluded.push(output.outputId)
-        output = await selectOutput()
+        reservedConcurrently = true
+        return undefined
       }
-
-      if (output == null) return undefined
 
       await this.updateOutput(
         output.outputId,
@@ -2342,6 +2306,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       return output
     })
 
+    if (reservedConcurrently)
+      return await this.allocateChangeInput(
+        userId,
+        basketId,
+        targetSatoshis,
+        exactSatoshis,
+        excludeSending,
+        transactionId
+      )
     return r
   }
 
@@ -2407,8 +2380,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   async adminStats(adminIdentityKey: string): Promise<AdminStatsResult> {
-    if (this.dbtype !== 'MySQL' && this.dbtype !== 'Postgres')
-      throw new WERR_NOT_IMPLEMENTED('adminStats, only MySQL and Postgres are supported')
+    if (this.dbtype !== 'MySQL') throw new WERR_NOT_IMPLEMENTED('adminStats, only MySQL is supported')
 
     const monitorEvent = verifyOneOrNone(
       await this.findMonitorEvents({
@@ -2421,63 +2393,228 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       monitorEvent != null ? JSON.parse(monitorEvent.details as string) : undefined
     const servicesStats = this.getServices().getServicesCallHistory(true)
 
-    const day = 24 * 60 * 60 * 1000
-    const now = Date.now()
-    const periods: Array<[string, Date | undefined]> = [
-      ['Day', new Date(now - day)],
-      ['Week', new Date(now - 7 * day)],
-      ['Month', new Date(now - 30 * day)],
-      ['Total', undefined]
-    ]
-    const k = this.knex
-    const count = (table: string, createdAt = 'created_at') => (since?: Date) => {
-      const q = k(table).count('*')
-      if (since != null) void q.where(createdAt, '>', this.validateDateForWhere(since))
-      return q
-    }
-    const txCount = (status: TransactionStatus) => (since?: Date) => count('transactions')(since).where({ status })
-    const satoshis = (change: boolean) => (since?: Date) => {
-      const q = k('outputs as o')
-        .join('transactions as t', 'o.transactionId', 't.transactionId')
-        .where({ 't.status': 'completed', 'o.spendable': true, 'o.change': change })
-        .sum('o.satoshis')
-      if (!change) void q.whereNotNull('o.basketId')
-      if (since != null) void q.where('o.created_at', '>', this.validateDateForWhere(since))
-      return q
-    }
-    const stats: Array<[string, (since?: Date) => Knex.QueryBuilder]> = [
-      ['users', count('users')],
-      ['transactions', count('transactions')],
-      ['txCompleted', txCount('completed')],
-      ['txFailed', since => txCount('failed')(since).whereNotNull('txid')],
-      ['txAbandoned', since => txCount('failed')(since).whereNull('txid')],
-      ['txUnprocessed', txCount('unprocessed')],
-      ['txSending', txCount('sending')],
-      ['txUnproven', txCount('unproven')],
-      ['txUnsigned', txCount('unsigned')],
-      ['txNosend', txCount('nosend')],
-      ['txNonfinal', txCount('nonfinal')],
-      ['txUnfail', txCount('unfail')],
-      ['satoshisDefault', satoshis(true)],
-      ['satoshisOther', satoshis(false)],
-      ['baskets', count('output_baskets')],
-      ['labels', count('tx_labels')],
-      ['tags', count('output_tags')]
-    ]
-    // One statement of scalar subqueries; knex quotes the camelCase identifiers per dialect.
-    const columns: Record<string, Knex.QueryBuilder> = {}
-    for (const [name, query] of stats) {
-      for (const [period, since] of periods) columns[`${name}${period}`] = query(since)
-    }
-    const [row] = (await k.select(columns)) as Array<Record<string, unknown>>
-    const values = Object.fromEntries(Object.keys(columns).map(name => [name, Number(row[name] ?? 0)]))
-    const r = {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    const [
+      [
+        {
+          usersDay,
+          usersMonth,
+          usersWeek,
+          usersTotal,
+          transactionsDay,
+          transactionsMonth,
+          transactionsWeek,
+          transactionsTotal,
+          txCompletedDay,
+          txCompletedMonth,
+          txCompletedWeek,
+          txCompletedTotal,
+          txFailedDay,
+          txFailedMonth,
+          txFailedWeek,
+          txFailedTotal,
+          txAbandonedDay,
+          txAbandonedMonth,
+          txAbandonedWeek,
+          txAbandonedTotal,
+          txUnprocessedDay,
+          txUnprocessedMonth,
+          txUnprocessedWeek,
+          txUnprocessedTotal,
+          txSendingDay,
+          txSendingMonth,
+          txSendingWeek,
+          txSendingTotal,
+          txUnprovenDay,
+          txUnprovenMonth,
+          txUnprovenWeek,
+          txUnprovenTotal,
+          txUnsignedDay,
+          txUnsignedMonth,
+          txUnsignedWeek,
+          txUnsignedTotal,
+          txNosendDay,
+          txNosendMonth,
+          txNosendWeek,
+          txNosendTotal,
+          txNonfinalDay,
+          txNonfinalMonth,
+          txNonfinalWeek,
+          txNonfinalTotal,
+          txUnfailDay,
+          txUnfailMonth,
+          txUnfailWeek,
+          txUnfailTotal,
+          satoshisDefaultDay,
+          satoshisDefaultMonth,
+          satoshisDefaultWeek,
+          satoshisDefaultTotal,
+          satoshisOtherDay,
+          satoshisOtherMonth,
+          satoshisOtherWeek,
+          satoshisOtherTotal,
+          basketsDay,
+          basketsMonth,
+          basketsWeek,
+          basketsTotal,
+          labelsDay,
+          labelsMonth,
+          labelsWeek,
+          labelsTotal,
+          tagsDay,
+          tagsMonth,
+          tagsWeek,
+          tagsTotal
+        }
+      ]
+    ] = await this.knex.raw(`
+select
+    (select count(*) from users where created_at > '${oneDayAgo}') as usersDay,
+    (select count(*) from users where created_at > '${oneWeekAgo}') as usersWeek,
+    (select count(*) from users where created_at > '${oneMonthAgo}') as usersMonth,
+    (select count(*) from users) as usersTotal,
+    (select count(*) from transactions where created_at > '${oneDayAgo}') as transactionsDay,
+    (select count(*) from transactions where created_at > '${oneWeekAgo}') as transactionsWeek,
+    (select count(*) from transactions where created_at > '${oneMonthAgo}') as transactionsMonth,
+    (select count(*) from transactions) as transactionsTotal,
+    (select count(*) from transactions where status = 'completed' and created_at > '${oneDayAgo}') as txCompletedDay,
+    (select count(*) from transactions where status = 'completed' and created_at > '${oneWeekAgo}') as txCompletedWeek,
+    (select count(*) from transactions where status = 'completed' and created_at > '${oneMonthAgo}') as txCompletedMonth,
+    (select count(*) from transactions where status = 'completed') as txCompletedTotal,
+    (select count(*) from transactions where status = 'failed' and not txid is null and created_at > '${oneDayAgo}') as txFailedDay,
+    (select count(*) from transactions where status = 'failed' and not txid is null and created_at > '${oneWeekAgo}') as txFailedWeek,
+    (select count(*) from transactions where status = 'failed' and not txid is null and created_at > '${oneMonthAgo}') as txFailedMonth,
+    (select count(*) from transactions where status = 'failed' and not txid is null) as txFailedTotal,
+    (select count(*) from transactions where status = 'failed' and txid is null and created_at > '${oneDayAgo}') as txAbandonedDay,
+    (select count(*) from transactions where status = 'failed' and txid is null and created_at > '${oneWeekAgo}') as txAbandonedWeek,
+    (select count(*) from transactions where status = 'failed' and txid is null and created_at > '${oneMonthAgo}') as txAbandonedMonth,
+    (select count(*) from transactions where status = 'failed' and txid is null) as txAbandonedTotal,
+    (select count(*) from transactions where status = 'unprocessed' and created_at > '${oneDayAgo}') as txUnprocessedDay,
+    (select count(*) from transactions where status = 'unprocessed' and created_at > '${oneWeekAgo}') as txUnprocessedWeek,
+    (select count(*) from transactions where status = 'unprocessed' and created_at > '${oneMonthAgo}') as txUnprocessedMonth,
+    (select count(*) from transactions where status = 'unprocessed') as txUnprocessedTotal,
+    (select count(*) from transactions where status = 'sending' and created_at > '${oneDayAgo}') as txSendingDay,
+    (select count(*) from transactions where status = 'sending' and created_at > '${oneWeekAgo}') as txSendingWeek,
+    (select count(*) from transactions where status = 'sending' and created_at > '${oneMonthAgo}') as txSendingMonth,
+    (select count(*) from transactions where status = 'sending') as txSendingTotal,
+    (select count(*) from transactions where status = 'unproven' and created_at > '${oneDayAgo}') as txUnprovenDay,
+    (select count(*) from transactions where status = 'unproven' and created_at > '${oneWeekAgo}') as txUnprovenWeek,
+    (select count(*) from transactions where status = 'unproven' and created_at > '${oneMonthAgo}') as txUnprovenMonth,
+    (select count(*) from transactions where status = 'unproven') as txUnprovenTotal,
+    (select count(*) from transactions where status = 'unsigned' and created_at > '${oneDayAgo}') as txUnsignedDay,
+    (select count(*) from transactions where status = 'unsigned' and created_at > '${oneWeekAgo}') as txUnsignedWeek,
+    (select count(*) from transactions where status = 'unsigned' and created_at > '${oneMonthAgo}') as txUnsignedMonth,
+    (select count(*) from transactions where status = 'unsigned') as txUnsignedTotal,
+    (select count(*) from transactions where status = 'nosend' and created_at > '${oneDayAgo}') as txNosendDay,
+    (select count(*) from transactions where status = 'nosend' and created_at > '${oneWeekAgo}') as txNosendWeek,
+    (select count(*) from transactions where status = 'nosend' and created_at > '${oneMonthAgo}') as txNosendMonth,
+    (select count(*) from transactions where status = 'nosend') as txNosendTotal,
+    (select count(*) from transactions where status = 'nonfinal' and created_at > '${oneDayAgo}') as txNonfinalDay,
+    (select count(*) from transactions where status = 'nonfinal' and created_at > '${oneWeekAgo}') as txNonfinalWeek,
+    (select count(*) from transactions where status = 'nonfinal' and created_at > '${oneMonthAgo}') as txNonfinalMonth,
+    (select count(*) from transactions where status = 'nonfinal') as txNonfinalTotal,
+    (select count(*) from transactions where status = 'unfail' and created_at > '${oneDayAgo}') as txUnfailDay,
+    (select count(*) from transactions where status = 'unfail' and created_at > '${oneWeekAgo}') as txUnfailWeek,
+    (select count(*) from transactions where status = 'unfail' and created_at > '${oneMonthAgo}') as txUnfailMonth,
+    (select count(*) from transactions where status = 'unfail') as txUnfailTotal,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1 and o.created_at > '${oneDayAgo}') as satoshisDefaultDay,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1 and o.created_at > '${oneWeekAgo}') as satoshisDefaultWeek,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1 and o.created_at > '${oneMonthAgo}') as satoshisDefaultMonth,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1) as satoshisDefaultTotal,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null and o.created_at > '${oneDayAgo}') as satoshisOtherDay,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null and o.created_at > '${oneWeekAgo}') as satoshisOtherWeek,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null and o.created_at > '${oneMonthAgo}') as satoshisOtherMonth,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null) as satoshisOtherTotal,
+    (select count(*) from output_baskets where created_at > '${oneDayAgo}') as basketsDay,
+    (select count(*) from output_baskets where created_at > '${oneWeekAgo}') as basketsWeek,
+    (select count(*) from output_baskets where created_at > '${oneMonthAgo}') as basketsMonth,
+    (select count(*) from output_baskets) as basketsTotal,
+    (select count(*) from tx_labels where created_at > '${oneDayAgo}') as labelsDay,
+    (select count(*) from tx_labels where created_at > '${oneWeekAgo}') as labelsWeek,
+    (select count(*) from tx_labels where created_at > '${oneMonthAgo}') as labelsMonth,
+    (select count(*) from tx_labels) as labelsTotal,
+    (select count(*) from output_tags where created_at > '${oneDayAgo}') as tagsDay,
+    (select count(*) from output_tags where created_at > '${oneWeekAgo}') as tagsWeek,
+    (select count(*) from output_tags where created_at > '${oneMonthAgo}') as tagsMonth,
+    (select count(*) from output_tags) as tagsTotal
+      `)
+    const r: AdminStatsResult = {
       monitorStats,
       servicesStats,
       requestedBy: adminIdentityKey,
       when: new Date().toISOString(),
-      ...values
-    } as AdminStatsResult
+      usersDay,
+      usersWeek,
+      usersMonth,
+      usersTotal,
+      transactionsDay,
+      transactionsWeek,
+      transactionsMonth,
+      transactionsTotal,
+      txCompletedDay,
+      txCompletedWeek,
+      txCompletedMonth,
+      txCompletedTotal,
+      txFailedDay,
+      txFailedWeek,
+      txFailedMonth,
+      txFailedTotal,
+      txAbandonedDay,
+      txAbandonedWeek,
+      txAbandonedMonth,
+      txAbandonedTotal,
+      txUnprocessedDay,
+      txUnprocessedWeek,
+      txUnprocessedMonth,
+      txUnprocessedTotal,
+      txSendingDay,
+      txSendingWeek,
+      txSendingMonth,
+      txSendingTotal,
+      txUnprovenDay,
+      txUnprovenWeek,
+      txUnprovenMonth,
+      txUnprovenTotal,
+      txUnsignedDay,
+      txUnsignedWeek,
+      txUnsignedMonth,
+      txUnsignedTotal,
+      txNosendDay,
+      txNosendWeek,
+      txNosendMonth,
+      txNosendTotal,
+      txNonfinalDay,
+      txNonfinalWeek,
+      txNonfinalMonth,
+      txNonfinalTotal,
+      txUnfailDay,
+      txUnfailWeek,
+      txUnfailMonth,
+      txUnfailTotal,
+      satoshisDefaultDay: Number(satoshisDefaultDay),
+      satoshisDefaultWeek: Number(satoshisDefaultWeek),
+      satoshisDefaultMonth: Number(satoshisDefaultMonth),
+      satoshisDefaultTotal: Number(satoshisDefaultTotal),
+      satoshisOtherDay: Number(satoshisOtherDay),
+      satoshisOtherWeek: Number(satoshisOtherWeek),
+      satoshisOtherMonth: Number(satoshisOtherMonth),
+      satoshisOtherTotal: Number(satoshisOtherTotal),
+      basketsDay,
+      basketsWeek,
+      basketsMonth,
+      basketsTotal,
+      labelsDay,
+      labelsWeek,
+      labelsMonth,
+      labelsTotal,
+      tagsDay,
+      tagsWeek,
+      tagsMonth,
+      tagsTotal
+    }
     return r
   }
 }
@@ -2525,5 +2662,25 @@ function pagingKey(table: string): string[] {
       return ['userId']
     default:
       return []
+  }
+}
+
+const pgInt8Parsed = Symbol('pgInt8Parsed')
+
+/**
+ * node-postgres returns int8 values (bigint columns such as satoshis, `count(*)`)
+ * as strings. Set a parser on each connection this knex acquires so they come
+ * back as numbers, as with mysql2 and better-sqlite3. The process-wide `pg.types`
+ * defaults are left unchanged.
+ */
+function parsePostgresInt8AsNumber(knex: Knex): void {
+  const client = knex.client as (Knex.Client & { [pgInt8Parsed]?: true }) | undefined
+  if (client?.dialect !== 'postgresql' || client[pgInt8Parsed] === true) return
+  client[pgInt8Parsed] = true
+  const acquireConnection = client.acquireConnection.bind(client)
+  client.acquireConnection = async () => {
+    const connection = await acquireConnection()
+    connection.setTypeParser(20, (value: string) => Number.parseInt(value, 10))
+    return connection
   }
 }
