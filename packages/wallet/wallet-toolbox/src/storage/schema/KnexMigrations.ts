@@ -43,14 +43,19 @@ export class KnexMigrations implements MigrationSource<string> {
    * @param chain
    * @param storageName human readable name for this storage instance
    * @param maxOutputScriptLength limit for scripts kept in outputs table, longer scripts will be pulled from rawTx
+   * @param dbtype when 'Postgres', migrations that add indexes to existing tables run outside a
+   * transaction and build them with CREATE INDEX CONCURRENTLY. Run them one at a time
+   * (`knex.migrate.up`), as `StorageKnex.migrate` does, so other migrations keep their journal
+   * row in their own transaction.
    */
   constructor(
     public chain: Chain,
     public storageName: string,
     public storageIdentityKey: string,
-    public maxOutputScriptLength: number
+    public maxOutputScriptLength: number,
+    public dbtype?: DBType
   ) {
-    this.migrations = this.setupMigrations(chain, storageName, storageIdentityKey, maxOutputScriptLength)
+    this.migrations = this.setupMigrations(chain, storageName, storageIdentityKey, maxOutputScriptLength, dbtype)
   }
 
   async getMigrations(): Promise<string[]> {
@@ -79,9 +84,12 @@ export class KnexMigrations implements MigrationSource<string> {
     chain: string,
     storageName: string,
     storageIdentityKey: string,
-    maxOutputScriptLength: number
+    maxOutputScriptLength: number,
+    dbtype?: DBType
   ): Record<string, Migration> {
     const migrations: Record<string, Migration> = {}
+    // Index migrations on existing tables run outside a transaction on Postgres; see addIndexes.
+    const indexConfig = dbtype === 'Postgres' ? { transaction: false } : undefined
 
     const addTimeStamps = (knex: Knex<any, any[]>, table: Knex.CreateTableBuilder, dbtype: DBType) => {
       if (dbtype === 'MySQL') {
@@ -186,10 +194,9 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations[MONITOR_CREATED_AT_INDEX_MIGRATION] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('monitor_events', table => {
-          table.index('created_at', 'idx_monitor_events_created_at')
-        })
+        await addIndexes(knex, 'monitor_events', [{ columns: ['created_at'], name: 'idx_monitor_events_created_at' }])
       },
       async down(knex) {
         await knex.schema.alterTable('monitor_events', table => {
@@ -199,13 +206,14 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations[CREATE_ACTION_FUNDING_INDEX_MIGRATION] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('outputs', table => {
-          table.index(
-            ['userId', 'basketId', 'spendable', 'spentBy', 'satoshis', 'outputId'],
-            'idx_outputs_funding_selection'
-          )
-        })
+        await addIndexes(knex, 'outputs', [
+          {
+            columns: ['userId', 'basketId', 'spendable', 'spentBy', 'satoshis', 'outputId'],
+            name: 'idx_outputs_funding_selection'
+          }
+        ])
       },
       async down(knex) {
         await knex.schema.alterTable('outputs', table => {
@@ -243,11 +251,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations[WALLET_SYNC_SOURCE_INDEX_MIGRATION] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('transactions', table => {
-          table.index(['userId', 'provenTxId'], 'idx_transactions_user_proven_tx')
-          table.index(['userId', 'txid'], 'idx_transactions_user_txid')
-        })
+        await addIndexes(knex, 'transactions', [
+          { columns: ['userId', 'provenTxId'], name: 'idx_transactions_user_proven_tx' },
+          { columns: ['userId', 'txid'], name: 'idx_transactions_user_txid' }
+        ])
       },
       async down(knex) {
         // MySQL may discard the automatically-created userId index after one
@@ -273,24 +282,31 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations[BRC177_NO_SEND_EXPIRY_MIGRATION] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('transactions', table => {
-          table.string('noSendExpiryMode', 16).nullable()
-          table.bigInteger('noSendExpiryValue').unsigned().nullable()
-          table.bigInteger('noSendExpiryDeadline').unsigned().nullable()
-          table.string('noSendExpiryState', 24).nullable()
-          table.string('noSendExpiryAnchorTxid', 64).nullable()
-          table.integer('noSendExpiryAnchorVout').unsigned().nullable()
-          table.bigInteger('noSendExpiryReleasedAt').unsigned().nullable()
-          table.bigInteger('noSendExpiryObservedAt').unsigned().nullable()
-          table.string('noSendExpiryReclaimTxid', 64).nullable()
-          table.binary('noSendExpiryReclaimRawTx').nullable()
-          table.string('noSendExpiryReclaimDerivationPrefix', 32).nullable()
-          table.string('noSendExpiryReclaimDerivationSuffix', 32).nullable()
-          table.bigInteger('noSendExpiryReclaimSatoshis').unsigned().nullable()
-          table.index(['noSendExpiryState', 'noSendExpiryDeadline'], 'idx_transactions_nosend_expiry')
-          table.index(['userId', 'noSendExpiryReclaimTxid'], 'idx_transactions_nosend_reclaim')
-        })
+        // Outside a transaction a re-run after an interruption can find the
+        // columns already added by the single ALTER TABLE below.
+        if (!isConcurrentIndexBuild(knex) || !(await knex.schema.hasColumn('transactions', 'noSendExpiryMode'))) {
+          await knex.schema.alterTable('transactions', table => {
+            table.string('noSendExpiryMode', 16).nullable()
+            table.bigInteger('noSendExpiryValue').unsigned().nullable()
+            table.bigInteger('noSendExpiryDeadline').unsigned().nullable()
+            table.string('noSendExpiryState', 24).nullable()
+            table.string('noSendExpiryAnchorTxid', 64).nullable()
+            table.integer('noSendExpiryAnchorVout').unsigned().nullable()
+            table.bigInteger('noSendExpiryReleasedAt').unsigned().nullable()
+            table.bigInteger('noSendExpiryObservedAt').unsigned().nullable()
+            table.string('noSendExpiryReclaimTxid', 64).nullable()
+            table.binary('noSendExpiryReclaimRawTx').nullable()
+            table.string('noSendExpiryReclaimDerivationPrefix', 32).nullable()
+            table.string('noSendExpiryReclaimDerivationSuffix', 32).nullable()
+            table.bigInteger('noSendExpiryReclaimSatoshis').unsigned().nullable()
+          })
+        }
+        await addIndexes(knex, 'transactions', [
+          { columns: ['noSendExpiryState', 'noSendExpiryDeadline'], name: 'idx_transactions_nosend_expiry' },
+          { columns: ['userId', 'noSendExpiryReclaimTxid'], name: 'idx_transactions_nosend_reclaim' }
+        ])
         if ((await determineDBType(knex)) === 'MySQL') {
           await knex.raw('ALTER TABLE transactions MODIFY COLUMN noSendExpiryReclaimRawTx LONGBLOB')
         }
@@ -428,10 +444,9 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-10-13-001 add outputs spendable index'] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('outputs', table => {
-          table.index('spendable')
-        })
+        await addIndexes(knex, 'outputs', [{ columns: ['spendable'] }])
       },
       async down(knex) {
         await knex.schema.alterTable('outputs', table => {
@@ -441,17 +456,18 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2026-02-27-001 add listOutputs path indexes'] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('outputs', table => {
-          table.index(['userId', 'spendable', 'outputId'], 'idx_outputs_user_spendable_outputid')
-          table.index(['userId', 'basketId', 'spendable', 'outputId'], 'idx_outputs_user_basket_spendable_outputid')
-        })
-        await knex.schema.alterTable('output_tags_map', table => {
-          table.index(['outputId', 'isDeleted', 'outputTagId'], 'idx_output_tags_map_output_deleted_tag')
-        })
-        await knex.schema.alterTable('tx_labels_map', table => {
-          table.index(['transactionId', 'isDeleted'], 'idx_tx_labels_map_tx_deleted')
-        })
+        await addIndexes(knex, 'outputs', [
+          { columns: ['userId', 'spendable', 'outputId'], name: 'idx_outputs_user_spendable_outputid' },
+          { columns: ['userId', 'basketId', 'spendable', 'outputId'], name: 'idx_outputs_user_basket_spendable_outputid' }
+        ])
+        await addIndexes(knex, 'output_tags_map', [
+          { columns: ['outputId', 'isDeleted', 'outputTagId'], name: 'idx_output_tags_map_output_deleted_tag' }
+        ])
+        await addIndexes(knex, 'tx_labels_map', [
+          { columns: ['transactionId', 'isDeleted'], name: 'idx_tx_labels_map_tx_deleted' }
+        ])
       },
       async down(knex) {
         // MySQL may discard the automatically-created userId index once one
@@ -480,11 +496,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2026-02-27-002 add createAction path indexes'] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('outputs', table => {
-          table.index(['userId', 'basketId', 'spendable', 'satoshis'], 'idx_outputs_user_basket_spendable_satoshis')
-          table.index(['spentBy'], 'idx_outputs_spentby')
-        })
+        await addIndexes(knex, 'outputs', [
+          { columns: ['userId', 'basketId', 'spendable', 'satoshis'], name: 'idx_outputs_user_basket_spendable_satoshis' },
+          { columns: ['spentBy'], name: 'idx_outputs_spentby' }
+        ])
       },
       async down(knex) {
         // MySQL may discard the automatically-created index that supports the
@@ -508,10 +525,9 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-10-18-002 add proven_tx_reqs txid index'] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('proven_tx_reqs', table => {
-          table.index('txid')
-        })
+        await addIndexes(knex, 'proven_tx_reqs', [{ columns: ['txid'] }])
       },
       async down(knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {
@@ -521,10 +537,9 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-10-18-001 add transactions txid index'] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('transactions', table => {
-          table.index('txid')
-        })
+        await addIndexes(knex, 'transactions', [{ columns: ['txid'] }])
       },
       async down(knex) {
         await knex.schema.alterTable('transactions', table => {
@@ -534,10 +549,9 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-09-06-001 add proven txs blockHash index'] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('proven_txs', table => {
-          table.index('blockHash')
-        })
+        await addIndexes(knex, 'proven_txs', [{ columns: ['blockHash'] }])
       },
       async down(knex) {
         await knex.schema.alterTable('proven_txs', table => {
@@ -547,10 +561,9 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-05-13-001 add monitor events event index'] = {
+      config: indexConfig,
       async up(knex) {
-        await knex.schema.alterTable('monitor_events', table => {
-          table.index('event')
-        })
+        await addIndexes(knex, 'monitor_events', [{ columns: ['event'] }])
       },
       async down(knex) {
         await knex.schema.alterTable('monitor_events', table => {
@@ -886,6 +899,46 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
     return migrations
+  }
+}
+
+interface IndexSpec {
+  columns: string[]
+  /** Defaults to the name knex generates: `${table}_${columns}_index`, lower case. */
+  name?: string
+}
+
+/** Postgres outside a transaction: the migration runs with `config: { transaction: false }`. */
+function isConcurrentIndexBuild(knex: Knex): boolean {
+  return knex.client.dialect === 'postgresql' && knex.isTransaction !== true
+}
+
+/**
+ * Adds indexes to an existing table. On Postgres outside a transaction each
+ * index is built with CREATE INDEX CONCURRENTLY IF NOT EXISTS, which does not
+ * block writes to a populated table and can be re-run after an interruption.
+ * Otherwise the knex schema builder issues the same statements as before.
+ */
+async function addIndexes(knex: Knex, table: string, indexes: IndexSpec[]): Promise<void> {
+  if (!isConcurrentIndexBuild(knex)) {
+    await knex.schema.alterTable(table, t => {
+      for (const { columns, name } of indexes) t.index(columns, name)
+    })
+    return
+  }
+  for (const { columns, name = `${table}_${columns.join('_')}_index`.toLowerCase() } of indexes) {
+    // An interrupted concurrent build leaves an invalid index, which IF NOT EXISTS would keep.
+    const invalid = await knex.raw(
+      `select 1 from pg_index i join pg_class c on c.oid = i.indexrelid
+       where c.relname = ? and c.relnamespace = current_schema()::regnamespace and not i.indisvalid`,
+      [name]
+    )
+    if (invalid.rows.length > 0) await knex.raw('drop index concurrently if exists ??', [name])
+    await knex.raw(`create index concurrently if not exists ?? on ?? (${columns.map(() => '??').join(', ')})`, [
+      name,
+      table,
+      ...columns
+    ])
   }
 }
 

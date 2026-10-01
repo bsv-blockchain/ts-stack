@@ -7,6 +7,7 @@ import {
   MANAGED_CHANGE_POLICY_MIGRATION,
   MONITOR_CREATED_AT_INDEX_MIGRATION,
   StorageKnex,
+  SYNC_TRANSFER_MIGRATION,
   WALLET_SYNC_SOURCE_INDEX_MIGRATION,
   wait
 } from '../../src/index.all'
@@ -456,5 +457,35 @@ describe('KnexMigrations tests', () => {
     await migration.down?.(knex)
 
     expect(dropIndex).toHaveBeenCalled()
+  })
+})
+
+describe('KnexMigrations index migration transactions', () => {
+  const indexMigrations = [
+    MONITOR_CREATED_AT_INDEX_MIGRATION,
+    CREATE_ACTION_FUNDING_INDEX_MIGRATION,
+    WALLET_SYNC_SOURCE_INDEX_MIGRATION,
+    BRC177_NO_SEND_EXPIRY_MIGRATION,
+    '2025-10-13-001 add outputs spendable index',
+    '2026-02-27-001 add listOutputs path indexes',
+    '2026-02-27-002 add createAction path indexes',
+    '2025-10-18-002 add proven_tx_reqs txid index',
+    '2025-10-18-001 add transactions txid index',
+    '2025-09-06-001 add proven txs blockHash index',
+    '2025-05-13-001 add monitor events event index'
+  ]
+
+  test('only Postgres runs index migrations outside a transaction', async () => {
+    const postgres = new KnexMigrations('test', 'name', '1'.repeat(64), 1024, 'Postgres')
+    const others = [undefined, 'SQLite', 'MySQL'] as const
+    for (const name of await postgres.getMigrations()) {
+      const unchanged = name === SYNC_TRANSFER_MIGRATION ? { transaction: true } : undefined
+      const config = (await postgres.getMigration(name)).config
+      expect(config).toEqual(indexMigrations.includes(name) ? { transaction: false } : unchanged)
+      for (const dbtype of others) {
+        const other = new KnexMigrations('test', 'name', '1'.repeat(64), 1024, dbtype)
+        expect((await other.getMigration(name)).config).toEqual(unchanged)
+      }
+    }
   })
 })

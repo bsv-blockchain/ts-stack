@@ -1671,13 +1671,31 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (isSQLite) {
       await this.knex.raw('PRAGMA foreign_keys = OFF;')
     }
+    const isPostgres = this.knex.client.dialect === 'postgresql'
     try {
       const config = {
-        migrationSource: new KnexMigrations(this.chain, storageName, storageIdentityKey, 1024),
+        migrationSource: new KnexMigrations(
+          this.chain,
+          storageName,
+          storageIdentityKey,
+          1024,
+          isPostgres ? 'Postgres' : undefined
+        ),
         // Keep DDL and its migration journal entry in the same transaction.
         disableTransactions: false
       }
-      await this.knex.migrate.latest(config)
+      if (isPostgres) {
+        // Postgres index migrations run outside a transaction (CREATE INDEX
+        // CONCURRENTLY). When any pending migration does, knex's latest()
+        // journals every migration of the batch outside its transaction, so
+        // run one migration per up() to keep the others atomic with their journal row.
+        for (;;) {
+          const [, applied] = (await this.knex.migrate.up(config)) as [number, string[]]
+          if (applied.length === 0) break
+        }
+      } else {
+        await this.knex.migrate.latest(config)
+      }
       return await this.knex.migrate.currentVersion(config)
     } finally {
       // Leaving foreign-key enforcement disabled after a failed migration would
