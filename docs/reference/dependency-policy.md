@@ -120,6 +120,13 @@ public APIs or candidate versions. Frozen installation, root checks, docs tests
 and a built-site browser check qualify the ordinary Mermaid consumer. No service
 or package is deployed by this source change.
 
+Independent qualification on the application-runtime branch also passes the frozen
+installation and high-severity audit with no known vulnerabilities, all seven docs
+unit tests, 140 source-page frontmatter/link checks and 145 built-page link checks.
+Actual Chrome renders all 14 Mermaid diagrams across the wallet lifecycle and LCH
+production guides without page errors. The existing license inventory and root
+health checks pass; no public runtime package or version changes with this update.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:
