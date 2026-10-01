@@ -14,7 +14,7 @@ import { DBType } from '../../../../storage/StorageReader'
 import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
 import { HeightRange } from '../util/HeightRange'
 import { Chain } from '../../../../sdk/types'
-import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
+import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED } from '../../../../sdk/WERR_errors'
 import { determineDBType } from '../../../../storage/schema/KnexMigrations'
 import { normalizeBulkHeaderFileInfo, normalizeBulkHeaderFileSequence } from '../util/BulkFileDataManager'
 
@@ -86,8 +86,19 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     }
   }
 
+  /**
+   * Chaintracks storage has not been tested on Postgres. Reject it before any
+   * migration runs, although `determineDBType` recognizes it for wallet storage.
+   */
+  private assertSupportedDialect(): void {
+    if (this.knex.client.dialect === 'postgresql') {
+      throw new WERR_NOT_IMPLEMENTED('ChaintracksStorageKnex supports SQLite and MySQL only.')
+    }
+  }
+
   override async makeAvailable(): Promise<void> {
     if (this.isAvailable && this.hasMigrated) return
+    this.assertSupportedDialect()
     // Not a base class policy, but we want to ensure migrations are run before getting to business.
     if (!this.hasMigrated) {
       await this.migrateLatest()
@@ -102,6 +113,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
 
   override async migrateLatest(): Promise<void> {
     if (this.hasMigrated) return
+    this.assertSupportedDialect()
     await this.knex.migrate.latest({ migrationSource: new ChaintracksKnexMigrations(this.chain) })
     await super.migrateLatest()
   }
