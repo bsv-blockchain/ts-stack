@@ -40,7 +40,12 @@ again at native enqueue after packet and HTTP signing. Mount before generic
 parsers with the same origin authentication middleware and durable journal.
 Credential-free wildcard CORS is the default; exact origins are opt-in. It does
 not publish capabilities or install a decision scheduler or serving adapters.
-See the root coordination guide for installation and remaining obligations.
+Call `configureRootEviction` before `start()` for native host integration. The
+configured root identity must match the server wallet; root, authenticated lookup
+and admin routes share authentication and host request capacity. Omitted root
+origins inherit the host's edge policy, and byte limits cannot exceed host limits.
+The injected journal and workers retain application ownership. See the root
+coordination guide for installation and remaining obligations.
 
 Overlay Express requires Node.js 22 or newer and a separately installed
 `@bsv/sdk` peer dependency.

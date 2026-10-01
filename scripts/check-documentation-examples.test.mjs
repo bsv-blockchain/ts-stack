@@ -22,7 +22,8 @@ test('compiled examples are scoped through their first-party dependency closure'
       'wallet-storage',
       'durable-lookup-provider',
       'local-wallet-recovery',
-      'root-coordination-http'
+      'root-coordination-http',
+      'root-coordination-host'
     ]
   )
 })

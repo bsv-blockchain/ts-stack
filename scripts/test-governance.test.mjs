@@ -508,6 +508,7 @@ test('root HTTP target covers both full modules and its actual authentication/st
   assert.deepEqual(target.mutate, ['src/RootEvictionRoutes.ts', 'src/RootEvictionHTTPPolicy.ts'])
   for (const input of [
     'src/__tests__/RootEvictionRoutes.fixture.ts',
+    'src/RootEvictionHTTPPorts.ts',
     'src/RootEvictionResponseGuard.ts',
     'src/OutputLookupHTTPPolicy.ts',
     '../../application/output-knowledge/src/root-eviction/**',

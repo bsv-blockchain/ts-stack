@@ -7,6 +7,7 @@ import { ChainTracker } from '@bsv/sdk'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createOutputLookupRouter } from '../OutputLookupRoutes.js'
+import { createRootEvictionRouter } from '../RootEvictionRoutes.js'
 
 // Mock dependencies
 jest.mock('knex')
@@ -19,6 +20,9 @@ jest.mock('@bsv/auth-express-middleware', () => ({
 }))
 jest.mock('../OutputLookupRoutes.js', () => ({
   createOutputLookupRouter: jest.fn(() => jest.fn())
+}))
+jest.mock('../RootEvictionRoutes.js', () => ({
+  createRootEvictionRouter: jest.fn(() => jest.fn())
 }))
 
 /** Creates a mock MongoDB Db object with a collection stub that supports BanService */
@@ -1607,6 +1611,124 @@ describe('OverlayExpress', () => {
       await expect(instance.start()).rejects.toThrow(publicKey === undefined ? 'requires a server wallet' : 'must match')
       expect(use).not.toHaveBeenCalled()
       expect(createOutputLookupRouter).not.toHaveBeenCalled()
+    })
+
+    function rootOptions() {
+      return {
+        identity: '02' + '11'.repeat(32),
+        companion: { submit: jest.fn<any>(), status: jest.fn<any>() },
+        journal: { head: jest.fn<any>(), enqueue: jest.fn<any>() },
+        baseURL: 'https://root.example.test/api',
+        manifest: () => undefined,
+        authorize: () => true
+      }
+    }
+
+    function listenWithoutSocket() {
+      jest.spyOn(instance.app, 'listen').mockImplementation((_port: any, callback: any) => { callback(); return {} as any })
+    }
+
+    it('shares root, authenticated lookup and admin identity/session before generic parsing', async () => {
+      const root = rootOptions()
+      instance.configureRootEviction(root)
+      instance.configureOutputLookup({
+        companion: { open: jest.fn<any>(), read: jest.fn<any>(), close: jest.fn<any>() },
+        service: 'records', baseURL: 'https://root.example.test/lookup', identity: root.identity,
+        chain: { network: 'test', genesisHash: '01'.repeat(32) }, authentication: 'brc103',
+        manifest: () => ({}), now: () => '1000', allowedOrigins: []
+      })
+      instance.serverWallet = { getPublicKey: jest.fn<any>().mockResolvedValue({ publicKey: root.identity }) } as any
+      const use = jest.spyOn(instance.app, 'use')
+      listenWithoutSocket()
+      await instance.start()
+      expect(createAuthMiddleware).toHaveBeenCalledTimes(1)
+      const auth = jest.mocked(createAuthMiddleware).mock.results[0].value
+      expect(createRootEvictionRouter).toHaveBeenCalledWith(expect.objectContaining({
+        companion: root.companion, journal: root.journal, authenticate: auth, handleHandshake: false,
+        maximumRequestBytes: 1048576, maximumResponseBytes: 1048576
+      }))
+      expect(createOutputLookupRouter).toHaveBeenCalledWith(expect.objectContaining({ authenticate: auth }))
+      const rootRouter = jest.mocked(createRootEvictionRouter).mock.results[0].value
+      const routeIndex = use.mock.calls.findIndex(args => args[0] === rootRouter)
+      const parserIndex = use.mock.calls.findIndex(args => {
+        const middleware: unknown = args[0]
+        return typeof middleware === 'function' && middleware.name === 'jsonParser'
+      })
+      expect(routeIndex).toBeGreaterThanOrEqual(0)
+      expect(parserIndex).toBeGreaterThan(routeIndex)
+      expect(use.mock.calls.some(args => args[0] === auth)).toBe(true)
+      expect(() => instance.configureRootEviction(root)).toThrow('before start')
+    })
+
+    it.each([undefined, 'different-key'])('rejects a missing or mismatched root wallet %s before mounting', async publicKey => {
+      instance.configureRootEviction(rootOptions())
+      if (publicKey !== undefined) instance.serverWallet = { getPublicKey: jest.fn<any>().mockResolvedValue({ publicKey }) } as any
+      const use = jest.spyOn(instance.app, 'use')
+      await expect(instance.start()).rejects.toThrow(publicKey === undefined ? 'requires a server wallet' : 'must match')
+      expect(use).not.toHaveBeenCalled()
+      expect(createRootEvictionRouter).not.toHaveBeenCalled()
+    })
+
+    it.each(['public', 'disabled', 'configured', 'explicit'])('preserves %s host browser policy for an explicit root companion', async mode => {
+      const root = rootOptions()
+      const prefix = instance.edgePolicyConfig.environmentPrefix
+      const variable = prefix + '_CORS_MODE'
+      const original = process.env[variable]
+      try {
+        if (mode === 'disabled') process.env[variable] = 'disabled'
+        if (mode === 'public') process.env[variable] = 'public'
+        if (mode === 'configured' || mode === 'explicit') instance.configureEdgePolicy({ allowedOrigins: ['https://host.example'] })
+        const options = { ...root, ...(mode === 'explicit' ? { allowedOrigins: ['https://root.example'] } : {}) }
+        instance.configureRootEviction(options)
+        options.allowedOrigins?.push('https://later.example')
+        instance.serverWallet = { getPublicKey: jest.fn<any>().mockResolvedValue({ publicKey: root.identity }) } as any
+        listenWithoutSocket()
+        await instance.start()
+        expect(createRootEvictionRouter).toHaveBeenCalledWith(expect.objectContaining({
+          handleHandshake: true,
+          allowedOrigins: mode === 'public' ? undefined : mode === 'disabled' ? [] : mode === 'configured' ? ['https://host.example'] : ['https://root.example']
+        }))
+        expect(createAuthMiddleware).toHaveBeenCalledTimes(1)
+      } finally {
+        if (original === undefined) delete process.env[variable]
+        else process.env[variable] = original
+      }
+    })
+
+    it('keeps root integration disabled by default and validates configuration scalars', async () => {
+      expect(() => instance.configureRootEviction({ ...rootOptions(), identity: '' })).toThrow()
+      expect(() => instance.configureRootEviction({ ...rootOptions(), allowedOrigins: '*' as any })).toThrow()
+      listenWithoutSocket()
+      await instance.start()
+      expect(createRootEvictionRouter).not.toHaveBeenCalled()
+    })
+
+    it('clamps root bytes to host limits while an anonymous lookup keeps its existing mode', async () => {
+      const root = rootOptions()
+      const variable = instance.edgePolicyConfig.environmentPrefix + '_MAX_RESPONSE_BYTES'
+      const original = process.env[variable]
+      try {
+        process.env[variable] = '512'
+        instance.configureEdgePolicy({ jsonBodyLimitBytes: 256 })
+        instance.configureRootEviction({ ...root, maximumRequestBytes: 4096, maximumResponseBytes: 4096 })
+        instance.configureOutputLookup({
+          companion: { open: jest.fn<any>(), read: jest.fn<any>(), close: jest.fn<any>() },
+          service: 'records', baseURL: root.baseURL, identity: root.identity,
+          chain: { network: 'test', genesisHash: '01'.repeat(32) }, authentication: 'none',
+          manifest: () => ({}), now: () => '1000', allowedOrigins: []
+        })
+        instance.serverWallet = { getPublicKey: jest.fn<any>().mockResolvedValue({ publicKey: root.identity }) } as any
+        listenWithoutSocket()
+        await instance.start()
+        expect(createRootEvictionRouter).toHaveBeenCalledWith(expect.objectContaining({
+          handleHandshake: true, maximumRequestBytes: 256, maximumResponseBytes: 512
+        }))
+        expect(createOutputLookupRouter).toHaveBeenCalledWith(expect.objectContaining({ authentication: 'none' }))
+        expect(createAuthMiddleware).toHaveBeenCalledTimes(1)
+      } finally {
+        if (original === undefined) delete process.env[variable]
+        else process.env[variable] = original
+      }
     })
 
     it('does not expose internal engine errors in public responses', async () => {

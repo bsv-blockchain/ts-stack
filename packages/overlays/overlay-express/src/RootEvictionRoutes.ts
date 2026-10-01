@@ -7,10 +7,7 @@ import {
   OutputProtocolError,
   parseOutputJSON
 } from '@bsv/sdk'
-import {
-  guardRootAdvertisementResponse,
-  type RootAdvertisementSendJournal
-} from './RootEvictionResponseGuard.js'
+import { guardRootAdvertisementResponse } from './RootEvictionResponseGuard.js'
 import {
   rootHTTPCORS,
   rootHTTPControlHeaders,
@@ -18,56 +15,14 @@ import {
   sendRootHTTPError
 } from './RootEvictionHTTPPolicy.js'
 
-export interface RootEvictionHTTPAccess {
-  operation: 'submit' | 'status'
-  principal: string
-  requester: string
-  requestId: string
-}
-export interface RootEvictionHTTPResponse {
-  body: string
-  headers: Record<string, string>
-  head: { revision: string }
-  access: RootEvictionHTTPAccess
-}
-/** Structural port preserves this package's ESM and CommonJS support. */
-export interface RootEvictionHTTPCompanion {
-  submit(
-    text: string,
-    caller: { principal: string; capabilityDigest: string },
-    manifest: unknown,
-    signal?: AbortSignal
-  ): Promise<RootEvictionHTTPResponse>
-  status(
-    text: string,
-    caller: { principal: string; capabilityDigest: string },
-    signal?: AbortSignal
-  ): Promise<RootEvictionHTTPResponse>
-}
-export interface RootEvictionRouteOptions {
-  /** Share one bounded service instance across requests. */
-  companion: RootEvictionHTTPCompanion
-  /** The same durable journal and gate used by the companion and all serving paths. */
-  journal: RootAdvertisementSendJournal
-  baseURL: string
-  /** Must be the same BRC-103/104 middleware instance used for this origin's handshake. */
-  authenticate: RequestHandler
-  /** Defaults to true; mount the origin's handshake exactly once. */
-  handleHandshake?: boolean
-  /** Synchronous local snapshot only. Return undefined during discovery unavailability. */
-  manifest(): unknown
-  /**
-   * Synchronous current authority at native enqueue, including current policy/context.
-   * Undefined access requests permission for a sanitized control error only.
-   * Coordinate authorization changes with the journal's decision/send gate.
-   */
-  authorize(identity: string, access: Readonly<RootEvictionHTTPAccess> | undefined): boolean
-  /** Omit for public credential-free CORS. An explicit list opts into exact origins. */
-  allowedOrigins?: readonly string[]
-  maximumRequests?: number
-  maximumRequestBytes?: number
-  maximumResponseBytes?: number
-}
+import type { RootEvictionRouteOptions } from './RootEvictionHTTPPorts.js'
+export type {
+  RootEvictionHTTPAccess,
+  RootEvictionHTTPCompanion,
+  RootEvictionHTTPJournal,
+  RootEvictionHTTPResponse,
+  RootEvictionRouteOptions
+} from './RootEvictionHTTPPorts.js'
 
 type Operation = 'submit' | 'status'
 type Route = Operation | 'handshake' | 'unknown'
@@ -277,7 +232,5 @@ class RootHTTPHandler {
  * to the host. Installing these routes alone does not enable the complete profile.
  */
 export function createRootEvictionRouter(options: RootEvictionRouteOptions): Router {
-  return express
-    .Router({ caseSensitive: true, strict: true })
-    .use(new RootHTTPHandler(options).handle)
+  return express.Router().use(new RootHTTPHandler(options).handle)
 }

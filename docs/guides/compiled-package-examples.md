@@ -859,3 +859,20 @@ export function createRootCoordinationHTTP(
   return createRootEvictionRouter({ ...http, journal, companion })
 }
 ```
+
+The same component can be installed through the native host before startup. The
+application keeps the journal and worker shutdown order; neither composition
+automatically publishes the complete profile.
+
+```typescript compile
+// example-id: root-coordination-host
+import NativeRootHost from '@bsv/overlay-express'
+import type { RootEvictionRouteOptions as NativeRootRoutes } from '@bsv/overlay-express/root-eviction'
+
+export function configureRootCoordinationHost(
+  host: NativeRootHost,
+  options: Omit<NativeRootRoutes, 'authenticate' | 'handleHandshake'> & { identity: string }
+): void {
+  host.configureRootEviction(options)
+}
+```

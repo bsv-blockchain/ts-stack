@@ -55,6 +55,7 @@ import { BanAwareTopicManager } from './BanAwareTopicManager.js'
 import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoveryStorage.js'
 import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
 import type { OutputLookupRouteOptions } from './OutputLookupRoutes.js'
+import type { RootEvictionRouteOptions } from './RootEvictionHTTPPorts.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
@@ -75,6 +76,7 @@ import {
   concurrencyLimit,
   configureHttpServer,
   corsPolicy,
+  readCorsOriginSetting,
   initialDoubleSlashCompatibility,
   profileValue,
   readBodyLimitBytes,
@@ -596,6 +598,7 @@ export default class OverlayExpress {
   authSessionManager?: SessionManager | AsyncSessionManager
 
   private outputLookup?: Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>
+  private rootEviction?: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & { identity: string }
 
   // Server start time for uptime tracking
   private startTime?: Date
@@ -975,6 +978,24 @@ export default class OverlayExpress {
       ...options,
       chain: { ...options.chain },
       allowedOrigins: [...options.allowedOrigins]
+    }
+  }
+
+  /**
+   * Explicit root coordination routes sharing this host's authentication wallet.
+   * Configure before start. The caller retains database and worker ownership;
+   * this does not publish capabilities or retrofit existing serving paths.
+   */
+  configureRootEviction(
+    options: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & { identity: string }
+  ): void {
+    if (this.isListening) throw new Error('Configure root coordination before start')
+    assertSingleLineString(options.identity, 'Root coordination identity', 66, false)
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Root origins must be an array')
+    this.rootEviction = {
+      ...options,
+      ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: [...options.allowedOrigins] })
     }
   }
 
@@ -2340,13 +2361,21 @@ export default class OverlayExpress {
   async start(): Promise<void> {
     const engine = this.ensureEngine()
     const knex = this.ensureKnex()
-    let lookupAuth: express.RequestHandler | undefined
-    if (this.outputLookup?.authentication === 'brc103') {
-      if (!this.serverWallet) throw new Error('Authenticated live lookup requires a server wallet')
+    const rootEviction = this.rootEviction
+    const authenticatedLookup = this.outputLookup?.authentication === 'brc103'
+    let companionAuth: express.RequestHandler | undefined
+    if (authenticatedLookup || rootEviction) {
+      if (!this.serverWallet) {
+        throw new Error(authenticatedLookup
+          ? 'Authenticated live lookup requires a server wallet'
+          : 'Root coordination requires a server wallet')
+      }
       const { publicKey } = await this.serverWallet.getPublicKey({ identityKey: true })
-      if (publicKey !== this.outputLookup.identity)
+      if (authenticatedLookup && publicKey !== this.outputLookup!.identity)
         throw new Error('Live lookup identity must match the server authentication wallet')
-      lookupAuth = createAuthMiddleware({
+      if (rootEviction && publicKey !== rootEviction.identity)
+        throw new Error('Root coordination identity must match the server authentication wallet')
+      companionAuth = createAuthMiddleware({
         wallet: this.serverWallet,
         sessionManager: this.authSessionManager,
         allowUnauthenticated: true
@@ -2490,27 +2519,46 @@ export default class OverlayExpress {
         ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
         : edgePolicy.maxConcurrentRequests
     )
-    if (this.outputLookup) {
-      const { createOutputLookupRouter } = await import('./OutputLookupRoutes.js')
-      // Preserve signed raw bytes and keep private payloads ahead of all legacy
-      // body parsers, public CORS, response transformation and verbose logging.
-      // All routes still share one host request capacity, including long polls.
+    if (this.outputLookup || rootEviction) {
+      // All companions share host capacity, including long polls. Raw signed
+      // requests stay before legacy parsers, transformations and payload logging.
       this.app.use(requestCapacity)
       const jsonBytes = readBodyLimitBytes(
         `${edgePolicy.environmentPrefix}_JSON`,
         edgePolicy.jsonBodyLimitBytes
       )
-      this.app.use(
-        createOutputLookupRouter({
-          ...this.outputLookup,
-          authenticate: lookupAuth,
-          maximumRequestBytes: Math.min(this.outputLookup.maximumRequestBytes ?? 1048576, jsonBytes),
-          maximumResponseBytes: Math.min(
-            this.outputLookup.maximumResponseBytes ?? 4194304,
-            maxResponseBytes === -1 ? 4194304 : maxResponseBytes
-          )
-        })
-      )
+      if (this.outputLookup) {
+        const { createOutputLookupRouter } = await import('./OutputLookupRoutes.js')
+        this.app.use(
+          createOutputLookupRouter({
+            ...this.outputLookup,
+            authenticate: companionAuth,
+            maximumRequestBytes: Math.min(this.outputLookup.maximumRequestBytes ?? 1048576, jsonBytes),
+            maximumResponseBytes: Math.min(
+              this.outputLookup.maximumResponseBytes ?? 4194304,
+              maxResponseBytes === -1 ? 4194304 : maxResponseBytes
+            )
+          })
+        )
+      }
+      if (rootEviction) {
+        const { createRootEvictionRouter } = await import('./RootEvictionRoutes.js')
+        const originSetting = rootEviction.allowedOrigins ?? edgePolicy.allowedOrigins ??
+          readCorsOriginSetting(edgePolicy.environmentPrefix)
+        this.app.use(
+          createRootEvictionRouter({
+            ...rootEviction,
+            authenticate: companionAuth!,
+            handleHandshake: !authenticatedLookup,
+            allowedOrigins: originSetting === '*' ? undefined : originSetting,
+            maximumRequestBytes: Math.min(rootEviction.maximumRequestBytes ?? 1048576, jsonBytes),
+            maximumResponseBytes: Math.min(
+              rootEviction.maximumResponseBytes ?? 1048576,
+              maxResponseBytes === -1 ? 1048576 : maxResponseBytes
+            )
+          })
+        )
+      }
     }
     this.app.use(
       corsPolicy({
@@ -2519,7 +2567,7 @@ export default class OverlayExpress {
         methods: ['GET', 'POST', 'OPTIONS']
       })
     )
-    if (!this.outputLookup) this.app.use(requestCapacity)
+    if (!this.outputLookup && !rootEviction) this.app.use(requestCapacity)
     this.app.use(
       bodyParser.json({
         limit: readBodyLimitBytes(
@@ -3083,7 +3131,7 @@ export default class OverlayExpress {
      * are present, allowing Bearer token fallback.
      */
     if (this.serverWallet !== undefined) {
-      const bsvAuth = lookupAuth ?? createAuthMiddleware({
+      const bsvAuth = companionAuth ?? createAuthMiddleware({
         wallet: this.serverWallet,
         sessionManager: this.authSessionManager,
         allowUnauthenticated: true

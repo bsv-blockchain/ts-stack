@@ -839,3 +839,31 @@ uncovered or invalid mutants. The coordination rerun replaces its earlier
 worker recovery occurred three times in the records run and once in the
 coordination run. The independent database, codec, journal, lookup and lineage
 qualification work remains separate from these results.
+
+## Native host integration and HTTP boundary qualification
+
+`configureRootEviction` now installs the optional routes before generic host
+parsing. It verifies the configured identity against the server wallet and shares
+one authentication/session instance and request-capacity limit with authenticated
+lookup and admin routes. The handshake is mounted once. Root origins inherit the
+host policy unless explicitly overridden, and request/response byte limits are
+clamped to the host ceilings. Injected journal and worker lifecycle remains with
+the application. Stable structural declarations keep the lazy main entry usable
+with older SDK peers; no peer floor or strict-consumer check was weakened.
+
+The complete Overlay Express suite passes 667 tests across 25 suites, including
+79 focused HTTP cases and generated schedules. Packed ESM/CommonJS and strict
+SDK 2.8.9 legacy consumers pass, as do all 27 compiled examples against 22 exact
+package tarballs, 23 governance/example regressions, root health/lint/format/types
+and the 145-page documentation build. Exact route matching is performed by the
+handler itself; redundant Express router matching options were removed without
+changing accepted paths.
+
+The first full HTTP mutation run failed its unchanged gate: 75.32% over 393 sites,
+with 281 killed, 96 surviving, 15 detected timeouts and one uncovered site. Added
+assertions now cover complete browser headers, parser-error distinctions, inclusive
+byte ceilings, immutable access binding, cancellation and response/capacity
+lifecycle. A fresh complete 390-site campaign is running; this is not yet passing
+mutation evidence. Independent database and remaining runtime/client/adapter
+qualification also remains outstanding. This increment does not advertise or
+claim complete BRC-199 implementation or the second review checkpoint.

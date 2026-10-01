@@ -632,6 +632,7 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: ['src/RootEvictionRoutes.ts', 'src/RootEvictionHTTPPolicy.ts'],
       additionalInputs: [
         'src/__tests__/RootEvictionRoutes.fixture.ts',
+        'src/RootEvictionHTTPPorts.ts',
         'src/RootEvictionResponseGuard.ts',
         'src/OutputLookupHTTPPolicy.ts',
         '../../application/output-knowledge/src/root-eviction/**',

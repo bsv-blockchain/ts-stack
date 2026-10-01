@@ -76,7 +76,10 @@ The optional `@bsv/overlay-express/root-eviction` entry exposes
 selection and final current access through packet and HTTP signing. Wildcard
 credential-free CORS remains the default; exact origin lists are opt-in. Mount
 before generic parsers with the origin's actual shared authentication middleware.
-Capabilities, scheduling and complete serving/admission/GASP enforcement still
+Alternatively, call `configureRootEviction` before `start()` with the server's
+wallet identity. The host shares authentication, mounts the handshake once, inherits
+its browser policy and clamps byte limits to host bounds. The application retains
+journal and worker lifecycle ownership. Capabilities, scheduling and complete serving/admission/GASP enforcement still
 require separate integration; no existing route is changed automatically.
 
 The unpublished 2.8.0 candidate adds `configureOutputLookup` and the separate

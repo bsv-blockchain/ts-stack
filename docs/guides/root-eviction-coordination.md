@@ -21,7 +21,9 @@ it does not grant administrative access or create agreement among roots.
 The SDK 2.9.0 source candidate includes the request, status and result contracts in
 `@bsv/sdk/overlay-tools/OutputRootEvictionProtocol`, also exported from the root SDK.
 The output-knowledge source candidate also supplies a durable local decision journal.
-HTTP routes, installed evidence policy and complete serving integration remain under implementation. Importing
+Optional authenticated request/status routes are available in the Overlay Express
+source candidate. Installed evidence policy and complete serving integration remain
+under implementation. Importing
 these helpers does not enable the profile or modify existing discovery behavior.
 
 ## Preserve the selected coordination contract
@@ -567,3 +569,30 @@ mutual authentication and the expected root identity, disable payment attempts,
 and validate the signed result against the original signed request and frozen
 policy. The current HTTP fixtures exercise those actual SDK and SQLite boundaries;
 they do not replace a reusable bounded root client or the remaining root adapters.
+
+## Native Overlay Express configuration
+
+Call `server.configureRootEviction({ identity, companion, journal, baseURL,
+manifest, authorize })` before `start()`. Supply the same shared service and
+journal described above. Startup verifies that `identity` matches the configured
+server wallet. Root coordination, authenticated live lookup and admin endpoints
+share one authentication middleware and session manager; the origin handshake is
+mounted once. The root routes are installed before generic parsing and share the
+host's request-capacity limit with the other routes. Their byte ceilings are the
+lower of their configured limits and the host's JSON/response bounds.
+
+Omitted root origins inherit the host's explicit edge policy or its CORS environment
+setting, including disabled mode. With the default public host policy they remain
+credential-free wildcard. An explicit root origin list overrides that inheritance.
+Existing live lookup origin configuration is unchanged. When authenticated
+companions share an origin, its one handshake must admit the browser origins needed
+by both; a route-specific origin setting cannot broaden a different companion's
+handshake policy. Neither CORS nor a successful handshake grants root authority.
+
+Configuration remains opt-in and the legacy main entry loads the new router only
+when configured. Existing SDK consumers need no migration; enabling the root
+companion requires SDK 2.9.0 and the matching middleware candidate. The application
+owns the injected journal and any evaluation workers: stop incoming requests,
+settle physical work, then close its database. `server.close()` does not acquire
+ownership of that injected store. This method does not advertise capabilities,
+install a scheduler or retrofit ordinary discovery, caching, live delivery or GASP.
