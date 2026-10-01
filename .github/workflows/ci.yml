@@ -90,6 +90,7 @@ jobs:
       affected-projects: ${{ steps.scope.outputs.affected-projects }}
       build-projects: ${{ steps.scope.outputs.build-projects }}
       mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
+      mutation-classification: ${{ steps.scope.outputs.mutation-classification }}
       infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
       has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
@@ -105,6 +106,10 @@ jobs:
         with:
           node-version: 24.x
 
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - name: Install pinned dependency parser without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
       - name: Resolve package, mutation, documentation, conformance, and image scope
         id: scope
         env:
@@ -119,13 +124,15 @@ jobs:
              git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             SCOPE=$(node scripts/ci-affected-scope.mjs --base "$BASE_SHA" --head "$HEAD_SHA")
             git diff --name-only "$BASE_SHA"..."$HEAD_SHA" > .ci-changed-files.txt
-            MUTATION_TARGETS=$(node scripts/mutation-testing.mjs \
-              --affected-file .ci-changed-files.txt \
-              --base "$BASE_SHA")
+            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs --base "$BASE_SHA" --head HEAD)
           else
             SCOPE=$(node scripts/ci-affected-scope.mjs --all)
-            MUTATION_TARGETS=$(node scripts/mutation-testing.mjs --list | \
-              jq -R -s -c 'split("\n") | map(select(length > 0))')
+            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs)
+          fi
+          MUTATION_TARGETS=$(jq -c '.required' <<<"$MUTATION_SCOPE")
+          if [ "$(jq -r 'type' <<<"$MUTATION_TARGETS")" != "array" ]; then
+            echo "::error::Mutation classification is missing required targets"
+            exit 1
           fi
 
           echo "direct-projects=$(jq -c '.directProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
@@ -135,6 +142,7 @@ jobs:
           echo "docs=$(jq -r '.docs' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "conformance=$(jq -r '.conformance' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "mutation-targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
+          echo "mutation-classification=$MUTATION_SCOPE" >> "$GITHUB_OUTPUT"
           echo "has-infra=$(jq -r '.infraMatrix.include | length > 0' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
 
           {
@@ -142,7 +150,10 @@ jobs:
             echo
             echo "- Direct test packages: $(jq -c '[.directProjects[].name]' <<<"$SCOPE")"
             echo "- Compatibility packages: $(jq -c '[.affectedProjects[].name]' <<<"$SCOPE")"
-            echo "- Mutation targets: $MUTATION_TARGETS"
+            echo "- Required premerge mutation targets: $MUTATION_TARGETS"
+            echo "- Deferred to complete final qualification (not passed): $(jq -c '.deferred' <<<"$MUTATION_SCOPE")"
+            echo "- Newly deferred from prior selection: $(jq -c '.newlyDeferred' <<<"$MUTATION_SCOPE")"
+            echo "- Critical targets outside this PR scope: $(jq -c '.outside' <<<"$MUTATION_SCOPE")"
             echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -216,6 +227,7 @@ jobs:
       browser-matrix: ${{ steps.scope.outputs.browser-matrix }}
       coverage-required: ${{ steps.scope.outputs.coverage-required }}
       mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
+      mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
@@ -344,6 +356,9 @@ jobs:
               echo "$key=false" >> "$GITHUB_OUTPUT"
             fi
           done
+
+      - name: Verify installed CI qualification integration
+        run: node --test scripts/ci-integration/*.test.mjs
 
       - name: Build workspace
         env:
@@ -478,7 +493,7 @@ jobs:
     runs-on: ubuntu-latest
     # The governed air-gap codec target currently instruments 352 mutants and
     # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: 45
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -527,6 +542,7 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           MUTATION_RESULT: ${{ needs.mutation-tests.result }}
           MUTATION_TARGETS: ${{ needs.prepare.outputs.mutation-targets }}
+          MUTATION_CLASSIFICATION: ${{ needs.prepare.outputs.mutation-classification }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
                 ( "$MUTATION_RESULT" != "success" &&
@@ -534,6 +550,10 @@ jobs:
             echo "::error::Mutation quality failed: prepare=$PREPARE_RESULT mutation=$MUTATION_RESULT"
             exit 1
           fi
+          echo '### Required PR mutation qualification' >> "$GITHUB_STEP_SUMMARY"
+          echo "Required targets: $MUTATION_TARGETS" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deferred, not passed: $(jq -c '.deferred' <<<"$MUTATION_CLASSIFICATION")" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Full qualification is required separately at the exact publication candidate.' >> "$GITHUB_STEP_SUMMARY"
 
   standard-tests:
     name: Tests / non-coverage packages

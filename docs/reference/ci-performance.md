@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.3.2'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+version: '1.3.3'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -212,3 +212,83 @@ Sonar waiting (79 seconds), package checks (71 seconds), and Codecov processing
 package checks now overlap execution; the duplicate external reporting wait is
 outside the merge gate. Verify the new run timings before claiming a measured
 speedup. Shared CI changes still select the complete governed execution graph.
+
+## Required PR scope and complete final qualification
+
+`scripts/ci-mutation-scope.mjs` divides the canonical target registry into
+required premerge targets, demonstrably unaffected noncritical targets deferred
+to final qualification, and critical targets outside this PR's existing scope.
+Deferred means **not passed**. The final merge gate verifies a complete disjoint
+partition and permits only the existing `high` class to defer. Existing critical
+selection remains required, together with affected dependency closure; ordinary
+documentation changes do not create an all-critical campaign.
+
+The selector uses both base and checked-out head package graphs, including
+runtime, dev, optional and peer dependencies, cross-package static imports,
+package helpers, fixtures and manifests. Removed dependency edges remain in the
+union. Computed module inputs, unresolved aliases, unknown ownership, unproved
+lock resolution and shared execution controls retain required qualification.
+Results report newly deferred targets separately from targets the prior selector
+already omitted. Canonical registry order remains stable to avoid moving long
+jobs behind short work in the six-runner queue.
+
+The reviewed air-gap loader is a specific bounded input exception, recorded in
+the selector by the complete helper-file SHA-256 and the exact shared corpus
+`conformance/vectors/transport/air-gap-optical.json`. The helper's parent walk
+selects that fixed relative corpus in ordinary and Stryker sandbox locations.
+Changed loader bytes, a missing corpus or another unknown runtime input remove
+the proof and retain the target. Corpus changes remain required. This exception
+is not permission to treat arbitrary filesystem reads as independent.
+
+The standalone scheduler is not an execution input to PR mutation. A scheduler-
+only change retains existing critical obligations while allowing a proved
+unaffected high target to defer. Other shared controls remain conservative.
+On current main's 33 targets, this demonstrates air-gap deferral for that narrow
+case; it does not promise a reduction for arbitrary code, lock or runner edits.
+Archived air-gap jobs consumed 16.4–18.17 runner-minutes at different heads.
+These are potential avoided execution minutes, neither billed cost nor a
+prediction of elapsed savings. Auth campaigns and other required jobs can still
+dominate the tail.
+
+Complete final qualification runs every canonical target at the exact source
+candidate before npm, general OCI or Marketplace publication. Per-target raw
+reports and receipts bind source SHA, run, attempt, pinned runtime, configuration,
+lock and target union. The final verifier repeats static instrumentation with the
+pinned Stryker engine and checks complete mutant tuple multisets, source bytes,
+execution configuration and every existing score/no-coverage/invalid gate.
+Zero-mutant files may omit report entries; missing mutant-bearing files cannot.
+Static replay checks inventory, not assertion quality or runtime freshness. Fresh
+report-directory removal, successful matrix jobs and same-attempt receipts supply
+execution provenance. `Ignored` is accepted only when the same source directive
+produces the same reason during replay. Timeout remains part of the existing
+detected score; it is not an assertion-killed result.
+
+A manual single-target campaign is explicitly diagnostic and issues no full
+qualification SHA. Partial, stale, cancelled, failed or missing-target campaigns
+cannot authorize publication. Full reruns must rerun every job: receipts from an
+older attempt do not fill gaps. Weekly qualification remains useful trend evidence
+and cannot qualify a different release source. Qualification is exhaustive over
+the **governed registry**, not every production line in the repository.
+
+### What the current scores measure
+
+Changing a minimum score does not make Stryker execute fewer mutants: this
+repository evaluates the governed score after the report completes. Mutation
+checks whether assertions detect injected faults; ordinary line/branch coverage
+only establishes execution. The two are related but do not supply the same
+oracle. Patch coverage combines executable line and branch points and can be
+misclassified by fixture paths; lowering its percentage does not correct a
+missing-file classification error.
+
+Review actual source ranges before relying on a target's broad name. For
+example, current `amount-format` includes currency-converter lines 208–260 but
+omits the later satoshi safety and conversion arithmetic; `overlay-integrity`
+includes BASM 154–190 but omits later Merkle-pair and TAC hash computations.
+These are inventory limitations, not permission to silently omit existing
+checks or claim the full registry proves all funds and hashing behavior.
+Air-gap's frame-loss property has an explicit 120-case override, so a scheduled
+5,000-case input does not make every property run 5,000 cases. Performance and
+assurance reports should distinguish configured inputs from effective cases,
+assertion-killed mutants from timeouts, and measured exact-source evidence from
+historical target names. None of these metrics establishes historical escaped-
+defect yield or an optimal percentage threshold by itself.

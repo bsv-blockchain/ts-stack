@@ -122,7 +122,14 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
-    assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    if (job.name === 'mutation-tests') {
+      assert.match(
+        job.source,
+        /^    timeout-minutes: \$\{\{ contains\(fromJSON\('[^']+'\), matrix\.target\) && 90 \|\| 45 \}\}$/m
+      )
+    } else {
+      assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    }
   }
   assert.match(workflow, /^      has-infra: \$\{\{ steps\.scope\.outputs\.has-infra \}\}$/m)
   assert.match(
@@ -357,7 +364,14 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
   for (const targets of ['[]', '["selected"]', '']) {
     for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
       const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
-        env: { PREPARE_RESULT: 'success', MUTATION_TARGETS: targets, MUTATION_RESULT: result },
+        env: {
+          PREPARE_RESULT: 'success',
+          MUTATION_TARGETS: targets,
+          MUTATION_RESULT: result,
+          MUTATION_CLASSIFICATION: '{"deferred":[]}',
+          GITHUB_STEP_SUMMARY: '/dev/null',
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
+        },
         encoding: 'utf8'
       })
       assert.equal(execution.error, undefined)

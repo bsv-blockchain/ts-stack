@@ -52,7 +52,41 @@ env:
   WAB_DIR: infra/wab
 
 jobs:
+  source:
+    name: Verify Marketplace source without publisher credentials
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify trusted release source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          git fetch origin main
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "::error::Manual Marketplace releases must run from main."
+              exit 1
+            fi
+          elif ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Marketplace release tags must point to a commit reachable from main."
+            exit 1
+          fi
+
+  full-mutation:
+    name: Qualify exact source before Marketplace publication
+    needs: source
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mutation-tests.yml
+
   publish:
+    needs: [source, full-mutation]
+    if: needs.source.result == 'success' && needs.full-mutation.result == 'success' && needs.full-mutation.outputs.qualified-sha == github.sha
     name: Publish WAB to Marketplace
     runs-on: ubuntu-latest
     permissions:
