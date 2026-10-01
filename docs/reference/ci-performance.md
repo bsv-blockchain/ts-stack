@@ -353,3 +353,20 @@ This source proof cannot qualify a newer wallet head: its owner must compare
 the full pinned inventory/configuration on the final source before adoption.
 Registry, runtime, assertions, workers, deadlines and thresholds remain owned
 and unchanged by the partition facility.
+
+### Remote reader execution allowance
+
+The complete `wallet-snapshot-remote-reader` campaign at wallet source
+`de75e1d5150f5f0dda4e81e6631e55c17d5f8a30` passed in 2,691.70 seconds:
+1,248 mutants, 943 killed, 235 timed out and 70 survived, with zero uncovered
+or invalid outcomes and a 94.39% global score. All 785 source/test files and
+13 configuration inputs stayed fixed. Worker exits were recovered by the
+runner and remain in the raw log; their native cause is unconfirmed.
+
+That local execution leaves only 8.30 seconds of the former 45-minute hosted
+job allowance for installation, build restoration and reporting. The reader
+therefore joins the existing bounded 90-minute allowance in both workflows.
+All prior allowances and the 45-minute default remain; source/test unions,
+property settings, workers and the original global gates are unchanged. Record
+actual hosted setup/execution overhead before drawing performance conclusions.
+This is an execution allowance, not a measured speedup or full #544 acceptance.
