@@ -435,6 +435,42 @@ DEV_KEYS = '{
   }
 
   /**
+   * Postgres connections must return bigint columns and counts as numbers, as
+   * mysql2 and better-sqlite3 do. node-postgres returns int8 as a string by
+   * default, so this installs a per-connection parser rather than changing the
+   * process-wide `pg.types` defaults.
+   *
+   * @param connection JSON node-postgres connection config
+   * @param database optional database name overriding `connection.database`
+   * @publicbody
+   */
+  static createPostgresKnex(connection: string, database?: string): Knex {
+    const c: Knex.PgConnectionConfig = JSON.parse(connection)
+    if (database) {
+      c.database = database
+    }
+    const config: Knex.Config = {
+      client: 'pg',
+      connection: c,
+      pool: { min: 0, max: 7, idleTimeoutMillis: 15000, afterCreate: Setup.postgresAfterCreate }
+    }
+    const knex = makeKnex(config)
+    return knex
+  }
+
+  /**
+   * Knex `pool.afterCreate` hook for Postgres pools used by `StorageKnex`.
+   * Parses int8 (bigint, count) values as JavaScript numbers.
+   */
+  static postgresAfterCreate(
+    conn: { setTypeParser: (oid: number, parse: (value: string) => number) => void },
+    done: (err: Error | null, conn: unknown) => void
+  ): void {
+    conn.setTypeParser(20, value => Number.parseInt(value, 10))
+    done(null, conn)
+  }
+
+  /**
    * @publicbody
    */
   static async createWalletMySQL(args: SetupWalletMySQLArgs): Promise<SetupWalletKnex> {

@@ -30,9 +30,10 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
     q: storage
       .toDb(trx)('prepared_beefs')
       .whereRaw(
-        'not exists(select outputId from outputs as o where ' +
-        'o.userId = prepared_beefs.userId and o.txid = prepared_beefs.rootTxid and ' +
-        'o.spendable = 1 and o.spentBy is null)'
+        'not exists(select ?? from outputs as o where ' +
+        '?? = ?? and o.txid = ?? and ' +
+        '?? = ? and ?? is null)',
+        ['o.outputId', 'o.userId', 'prepared_beefs.userId', 'prepared_beefs.rootTxid', 'o.spendable', true, 'o.spentBy']
       )
       .delete()
   }, r)
@@ -42,10 +43,12 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
     q: storage
       .toDb(trx)('proven_txs')
       .whereRaw(
-        'not exists(select * from transactions as t where t.txid = proven_txs.txid or t.provenTxId = proven_txs.provenTxId)'
+        'not exists(select * from transactions as t where t.txid = proven_txs.txid or ?? = ??)',
+        ['t.provenTxId', 'proven_txs.provenTxId']
       )
       .whereRaw(
-        'not exists(select * from proven_tx_reqs as r where r.txid = proven_txs.txid or r.provenTxId = proven_txs.provenTxId)'
+        'not exists(select * from proven_tx_reqs as r where r.txid = proven_txs.txid or ?? = ??)',
+        ['r.provenTxId', 'proven_txs.provenTxId']
       )
       .delete()
   }, r)
@@ -185,9 +188,13 @@ async function purgeSpentData(
     .toDb(trx)<TableTransaction>('transactions')
     .where('updated_at', '<', before)
     .where('status', 'completed')
-    .whereRaw(
-      'not exists(select outputId from outputs as o where o.transactionId = transactions.transactionId and o.spendable = 1)'
-    )
+    .whereRaw('not exists(select ?? from outputs as o where ?? = ?? and ?? = ?)', [
+      'o.outputId',
+      'o.transactionId',
+      'transactions.transactionId',
+      'o.spendable',
+      true
+    ])
   const ids = spentTransactions
     .filter(transaction => !proofTxids.has(transaction.txid ?? ''))
     .map(transaction => transaction.transactionId)

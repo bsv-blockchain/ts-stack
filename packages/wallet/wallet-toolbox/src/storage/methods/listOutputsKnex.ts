@@ -125,7 +125,7 @@ function applyKnexTagFilters(query: Knex.QueryBuilder, k: Knex, tagIds: number[]
       query.whereExists(function () {
         this.select(k.raw('1'))
           .from('output_tags_map as m')
-          .whereRaw('m.outputId = o.outputId')
+          .whereRaw('?? = ??', ['m.outputId', 'o.outputId'])
           .where('m.outputTagId', tagId)
           .whereNot('m.isDeleted', true)
       })
@@ -135,7 +135,7 @@ function applyKnexTagFilters(query: Knex.QueryBuilder, k: Knex, tagIds: number[]
   query.whereExists(function () {
     this.select(k.raw('1'))
       .from('output_tags_map as m')
-      .whereRaw('m.outputId = o.outputId')
+      .whereRaw('?? = ??', ['m.outputId', 'o.outputId'])
       .whereIn('m.outputTagId', tagIds)
       .whereNot('m.isDeleted', true)
   })
