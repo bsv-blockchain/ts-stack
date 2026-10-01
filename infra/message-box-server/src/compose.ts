@@ -42,11 +42,19 @@ import {
   WebSocketMinuteRateLimiter
 } from './security/webSocketConnections.js'
 import { canonicalIdentityKey, isCanonicalMessageId } from './security/messageFields.js'
+import {
+  createLiveDelivery,
+  deliverLiveMessage,
+  withLiveDelivery,
+  type LiveDelivery
+} from './security/liveDelivery.js'
 
 export { createMessageBoxContext } from './context.js'
 export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
 export type { TransactionalPaymentReplayStore } from './security/TransactionalPaymentReplayStore.js'
 export { bindMessageBoxRuntime } from './runtimeDeps.js'
+export { createLiveDelivery } from './security/liveDelivery.js'
+export type { LiveDelivery } from './security/liveDelivery.js'
 
 type HttpMethod = 'get' | 'post' | 'put' | 'delete'
 
@@ -55,6 +63,7 @@ export type MessageBoxRouter = IRouter
 
 interface WebSocketState {
   connections: WebSocketConnectionRegistry
+  liveDelivery: LiveDelivery
 }
 
 const webSocketState = new WeakMap<AuthSocketServer, WebSocketState>()
@@ -165,6 +174,7 @@ export async function closeMessageBoxWebSockets(io: AuthSocketServer | null): Pr
     disconnectAuthenticatedSockets(state?.connections.sockets() ?? [])
   }
   state?.connections.clear()
+  if (state != null) state.liveDelivery.connections = null
   webSocketState.delete(io)
 }
 
@@ -218,7 +228,8 @@ export function registerMessageBoxPostAuthRoutes(
     | 'calculateRequestPrice'
     | 'paymentReplayStore'
     | 'paymentTransactionVerifier'
-  >,
+  > &
+    Partial<Pick<MessageBoxContext, 'liveDelivery'>>,
   routingPrefix: string = '',
   authenticatedRateLimitOptions: Partial<RateLimitOptions> = {}
 ): void {
@@ -259,7 +270,13 @@ export function registerMessageBoxPostAuthRoutes(
     if (route.path === '/sendMessage') {
       router[method](
         `${routingPrefix}${route.path}`,
-        sendMessageRoute.func as unknown as RequestHandler
+        withLiveDelivery(
+          ctx.liveDelivery,
+          sendMessageRoute.func as unknown as (
+            req: ExpressRequest,
+            res: Response
+          ) => Promise<unknown>
+        ) as unknown as RequestHandler
       )
     } else {
       router[method](`${routingPrefix}${route.path}`, route.func as RequestHandler)
@@ -287,7 +304,9 @@ export function attachMessageBoxWebSockets(
   const connections = new WebSocketConnectionRegistry()
   const resources = readMessageBoxResourceConfig()
   const pricing = readMessageBoxPricingConfig()
-  webSocketState.set(io, { connections })
+  const liveDelivery = ctx.liveDelivery ?? createLiveDelivery()
+  liveDelivery.connections = connections
+  webSocketState.set(io, { connections, liveDelivery })
 
   io.on('connection', socket => {
     let activeSendEvents = 0
@@ -508,20 +527,13 @@ export function attachMessageBoxWebSockets(
             messageId: message.messageId
           })
 
-          const recipientSockets = connections.recipientSockets(
-            message.recipient,
+          await deliverLiveMessage(connections, {
+            sender: connections.identityKey(socket.id),
+            recipient: message.recipient,
             roomId,
-            resources.webSocketMaxRecipientConnections
-          )
-          await Promise.all(
-            recipientSockets.map(async recipientSocket => {
-              await recipientSocket.emit(`sendMessage-${roomId}`, {
-                sender: connections.identityKey(socket.id),
-                messageId: message.messageId,
-                body: message.body
-              })
-            })
-          )
+            messageId: message.messageId,
+            body: message.body
+          })
           Logger.log('[WEBSOCKET] Delivered message notification to authenticated recipients.')
         } catch {
           Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler.')
