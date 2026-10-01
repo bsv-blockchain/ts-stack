@@ -139,7 +139,7 @@ describe('createCredentialIssuerHandler POST routing', () => {
     {
       name: 'verify',
       url: 'https://issuer.example/api/credential-issuer?action=verify',
-      body: { credential: { id: 'credential-1' } },
+      body: { credential: '{"id":"credential-1"}' },
       expectedBody: {
         success: true,
         verification: { verified: true, credential: { id: 'credential-1' } }
@@ -175,6 +175,24 @@ describe('createCredentialIssuerHandler POST routing', () => {
     await expect(response.json()).resolves.toEqual({
       success: false,
       error: 'Credential issuer operation failed'
+    })
+  })
+
+  it('keeps certificate requests above the envelope JSON limit supported', async () => {
+    const fields = Object.fromEntries(
+      Array.from({ length: 5 }, (_, index) => [`field${index}`, 'x'.repeat(60_000)])
+    )
+    const response = await handler.POST?.(
+      new Request('https://issuer.example/api/credential-issuer?action=certify', {
+        method: 'POST',
+        body: JSON.stringify({ identityKey: SUBJECT_KEY, fields })
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      subject: SUBJECT_KEY,
+      schemaId: 'test-schema',
+      fields
     })
   })
 

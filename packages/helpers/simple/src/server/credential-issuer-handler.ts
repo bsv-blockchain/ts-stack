@@ -11,6 +11,7 @@
 import { compareCodeUnits } from '../core/code-unit-order'
 import { join } from 'node:path'
 import { PrivateKey } from '@bsv/sdk'
+import { parseStrictJson } from '@bsv/did/validation.ts'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 import {
   canonicalIdentityKey,
@@ -251,8 +252,11 @@ async function verifyCredential(body: unknown, getIssuer: IssuerFactory): Promis
   if (record == null || record.credential == null) {
     return jsonResponse({ success: false, error: 'Missing credential' }, 400)
   }
+  if (typeof record.credential !== 'string') {
+    return jsonResponse({ success: false, error: 'Credential must be original JSON text' }, 400)
+  }
   const issuer = await getIssuer()
-  const result = await issuer.verify(JSON.stringify(record.credential))
+  const result = await issuer.verify(record.credential)
   return jsonResponse({ success: true, verification: result })
 }
 
@@ -421,5 +425,12 @@ export function createCredentialIssuerHandler(
     }
   }
 
-  return toNextHandlers(coreHandlers, { maxRequestBytes: ownedConfig.maxRequestBytes })
+  return toNextHandlers(
+    coreHandlers,
+    { maxRequestBytes: ownedConfig.maxRequestBytes },
+    (text, url) =>
+      getSearchParams(url).get('action') === 'verify'
+        ? parseStrictJson(text, 'Credential verifier request')
+        : (JSON.parse(text) as unknown)
+  )
 }

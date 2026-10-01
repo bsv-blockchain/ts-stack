@@ -109,6 +109,8 @@ sender or transaction.
 
 ## A taste of the API
 
+The proposed BRC-203 HTTP verifier requires `{ credential: originalEnvelopeJson }`, with the original envelope JSON text as a string. Parsed credential objects are rejected. Preserve received text for strict duplicate-member verification; inspect `verification.verified` and apply trust/status policy separately. Web requests receive strict UTF-8 and duplicate-member checks; custom parsed-body adapters must provide their own strict decoding. See the [credential migration guide](docs/guides/identity-credential-migration.md).
+
 ```typescript
 import { createWallet } from '@bsv/simple/browser'
 
