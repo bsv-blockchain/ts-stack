@@ -807,12 +807,6 @@
       "reason": "The deployable browser bundle incorporates @bsv/sdk and must carry its scoped notice archive."
     },
     {
-      "path": "packages/helpers/did-client",
-      "packageName": "@bsv/did-client",
-      "inherits": "packages/sdk",
-      "reason": "UMD bundle incorporates @bsv/sdk"
-    },
-    {
       "path": "packages/messaging/authsocket-client",
       "packageName": "@bsv/authsocket-client",
       "inherits": "packages/sdk",

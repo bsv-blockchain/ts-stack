@@ -346,6 +346,46 @@
       "minimumScore": 80,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "brc202-resolution",
+      "manifest": "packages/helpers/did/package.json",
+      "propertyTest": "packages/helpers/did/tests/brc202.property.test.ts",
+      "risk": "critical",
+      "boundary": "Immutable identity-key DID resolution and strict profile options",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "brc52-envelope",
+      "manifest": "packages/helpers/did/package.json",
+      "propertyTest": "packages/helpers/did/tests/brc52-envelope.property.test.ts",
+      "risk": "critical",
+      "boundary": "Original BRC52 signed byte parsing, derived signature and exact projected graph",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "brc52-status",
+      "manifest": "packages/helpers/did/package.json",
+      "propertyTest": "packages/helpers/did/tests/brc52-status.property.test.ts",
+      "risk": "critical",
+      "boundary": "Locally selected outpoint status evidence, freshness and privacy",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "brc52-disclosure",
+      "manifest": "packages/helpers/did/package.json",
+      "propertyTest": "packages/helpers/did/tests/brc52-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Consent, exact authenticated payload, recipient binding, replay and field decryption",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

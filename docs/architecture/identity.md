@@ -31,44 +31,28 @@ server identity per URL origin for the client lifetime, and supports an
 independently validated identity pin. AuthFetch's unauthenticated compatibility
 fallback is not accepted as Message Box authority.
 
-## BRC-104 — Message-Layer Transport
+## BRC-104 — HTTP Transport Binding
 
-BRC-104 defines the message-framing layer used with BRC-103 Peer sessions. It specifies how messages are encoded, versioned, and transmitted once a BRC-103 session is established.
+BRC-104 binds BRC-103 mutual authentication to HTTP. Use the actual SDK
+AuthFetch or auth middleware implementation and its current encoding; headers
+copied from an old handshake example are insufficient authentication evidence.
+BRC-31 is historical guidance, not the current HTTP integration contract.
 
-## BRC-31 — HTTP Mutual Authentication Handshake
-
-BRC-31 is the **HTTP-specific** profile of the BRC-103/104 mutual auth framework.
-
-It specifies a set of `x-bsv-auth-*` HTTP request and response headers that implement the challenge-response handshake over standard HTTP semantics:
-
-```
-Client request:
-  x-bsv-auth-version: 1
-  x-bsv-auth-identity-key: <client's identity public key>
-  x-bsv-auth-nonce: <random nonce>
-  x-bsv-auth-signature: <signature over nonce + request metadata>
-
-Server response:
-  x-bsv-auth-nonce: <server nonce>
-  x-bsv-auth-signature: <server signature proving its identity>
-```
-
-Both parties emerge from the handshake having verified each other's identity keys. Subsequent requests in the same session use a session token derived from the initial handshake.
-
-`@bsv/auth-express-middleware` installs BRC-103/BRC-104 as Express middleware. Any route wrapped by it requires a valid BRC-103 handshake from the client over the BRC-104 HTTP binding.
+`@bsv/auth-express-middleware` installs BRC-103/BRC-104 for Express routes.
+Application authorization must use the authenticated peer and exact signed
+request context.
 
 The machine-readable spec is at `specs/auth/brc103-mutual-auth.yaml` (AsyncAPI 3.0).
 
 ## Identity Keys
 
-An identity key is a long-lived BRC-42-derived public key representing a user, service, or application. Properties:
+An identity key is a long-lived compressed secp256k1 public key representing a user, service, or application. Properties:
 
 - Stable and reusable (unlike transaction keys, which rotate for privacy)
-- Derived deterministically from the wallet's root key using a stable BRC-42 derivation path
 - Published and discoverable (e.g., via identity registry overlays)
 - Used for: authentication, message routing, certificate issuance, encryption
 
-All BRC-103/104 and BRC-31 handshakes use identity keys for signing. Applications retrieve their identity key via `wallet.getPublicKey({ identityKey: true })`.
+BRC-103 authentication binds peers to identity keys and uses derived signing keys. Applications retrieve their identity key via `wallet.getPublicKey({ identityKey: true })`.
 
 For the BRC-104 v0.1 HTTP binding, that identity authenticates the encoded
 method, path, query, declared signed-header subset, and body—not the transport
@@ -80,7 +64,7 @@ principals should use distinct server identity keys.
 
 ## AuthSocket — Persistent Authenticated Channels
 
-`@bsv/authsocket` and `@bsv/authsocket-client` implement BRC-103/104 over WebSocket:
+`@bsv/authsocket` and `@bsv/authsocket-client` implement BRC-103 over WebSocket:
 
 - Server-side: `authsocket` exposes an authenticated WebSocket server
 - Client-side: `authsocket-client` connects with mutual authentication before any messages are exchanged
@@ -102,26 +86,32 @@ MessageBox is a higher-level messaging substrate built on BRC-103/104:
 
 | Use case                               | Use                                                                    |
 | -------------------------------------- | ---------------------------------------------------------------------- |
-| HTTP API mutual auth (REST/Express)    | BRC-31 via `@bsv/auth-express-middleware`                              |
-| Persistent WebSocket channel           | BRC-103/104 via `@bsv/authsocket`                                      |
+| HTTP API mutual auth (REST/Express)    | BRC-103/BRC-104 via `@bsv/auth-express-middleware`                     |
+| Persistent WebSocket channel           | BRC-103 via `@bsv/authsocket`                                          |
 | Store-and-forward messaging            | MessageBox via `@bsv/message-box-client` (uses BRC-103/104 internally) |
-| Payment + identity in one HTTP request | BRC-121 + BRC-31 together                                              |
+| Payment + identity in one HTTP request | BRC-121 + BRC-103/BRC-104                                              |
 
-## Certificate-Based Identity (BRC-103/104 Extension)
+## Certificate-Based Identity
 
-BRC-100's certificate methods (`acquireCertificate`, `proveCertificate`, `listCertificates`) integrate with the auth framework:
+BRC-100 certificate methods integrate with BRC-103 authentication. The proposed
+BRC-203 adapter in `@bsv/did/brc52` preserves the original BRC-52 signed bytes
+and encrypted fields. Verification derives the BRC-42 certificate signing key;
+it does not verify the certificate directly against the certifier root key.
 
-- **Selective disclosure** — Prove specific certificate fields without revealing others (`proveCertificate`)
-- **Verifiable by counterparty** — Any party with the issuer's public key can verify a disclosed certificate
-- **Revocation** — Supported via revocation overlay services
+`@bsv/simple` exposes `Certifier`, `CredentialSchema`, and `CredentialIssuer`
+for native certificate workflows and signature-preserving envelopes. Trust,
+schema acceptance, selected-field authorization and outpoint status remain
+explicit application decisions. Revocation requires locally selected chain
+status evidence; a missing local secret or overlay discovery result is not
+proof of revocation.
 
-`@bsv/simple` exposes `Certifier`, `CredentialSchema`, and `CredentialIssuer` for W3C Verifiable Credential workflows built on top of BRC certificate primitives.
-Its credential verifier authenticates the embedded BSV certificate and binds
-the surrounding issuer, subject, type, fields, proof, and revocation reference.
-The W3C wrapper's timestamps are not signed claims. The current Simple
-presentation helper creates an unsigned envelope and must not be treated as
-holder authentication; replay-safe presentations require a holder signature
-bound to a verifier challenge and audience.
+The old mutable DID and copied VC/unsigned VP wrapper APIs are removed. BRC-202
+DIDs resolve immutable identity keys offline. Selected fields require explicit
+wallet permission and verifier keyrings; a fresh authenticated interaction must
+bind the holder, recipient, exact envelope and application context. The proposed
+W3C securing/status extensions remain unregistered. See the
+[unified integration guide](../guides/identity-did-vc.md) and
+[migration notes](../guides/identity-did-vc-migration.md).
 
 ## Related
 

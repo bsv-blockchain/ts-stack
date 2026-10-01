@@ -73,16 +73,25 @@ await server.configureKnex('postgresql://user:pass@localhost/db')
 
 ### Register multiple topics
 
+Register services only under an explicit operator choice. The existing identity
+pair serves attributed public certificates under BRC-189 semantics; discovery
+of its host does not establish issuer trust. Identity-key DID resolution is
+local and deterministic. The serial-token DID overlay is removed in the
+proposed `@bsv/overlay-topics` 2.0 release; see the
+[migration guide](../../guides/identity-did-vc-migration.md).
+
 ```typescript
+import { IdentityTopicManager, createIdentityLookupService } from '@bsv/overlay-topics'
+
 server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
-server.configureTopicManager('tm_did', new DIDTopicManager())
+server.configureTopicManager('tm_identity', new IdentityTopicManager())
 
 await server.configureLookupServiceWithMongo('ls_helloworld', db =>
   createHelloWorldLookupService(db)
 )
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
-await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
+await server.configureLookupServiceWithMongo('ls_identity', db => createIdentityLookupService(db))
 
 await server.configureEngine()
 await server.start()

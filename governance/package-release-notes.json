@@ -90,16 +90,9 @@
     {
       "name": "@bsv/did",
       "publishedVersion": "0.2.6",
-      "releaseType": "patch",
-      "summary": "Fixes the CommonJS build of the DID key, signature and multibase helpers. The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged.",
-      "migration": "None. ESM consumers are unaffected."
-    },
-    {
-      "name": "@bsv/did-client",
-      "publishedVersion": "1.3.2",
-      "releaseType": "patch",
-      "summary": "Fixes the CommonJS build so DIDClient can construct SDK lookup, broadcast, PushDrop, transaction and wallet objects. The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged. Raises the @bsv/sdk peer floor from ^2.4.0 to ^2.8.0: the package already requires SDK modules (identity/DIDTokenValidation, wallet/completeBoundAction) that first shipped in 2.8.0, so earlier 2.x SDKs never loaded it.",
-      "migration": "Use @bsv/sdk 2.8.0 or later (earlier 2.x releases were already incompatible). No API migration is required; ESM consumers are otherwise unaffected."
+      "releaseType": "minor",
+      "summary": "Fixes the CommonJS build of the DID key, signature and multibase helpers. The CommonJS build imported @bsv/sdk classes through bundler Node-mode interop, which bound each default import to the whole SDK module, so require() consumers failed at first use with \".default is not a constructor\". SDK classes are now imported by name from the SDK barrels; the ESM build, public API and browser bundle size are unchanged. Adds proposed BRC202 exact compressed identity-key DID resolution and BRC203 original-byte verified envelopes, authorized recipient-bound selected disclosure and explicit status/privacy adapters. Preserves the independently named SD-JWT format. BRC52 adapters use an explicit optional @bsv/did/brc52 entry, preserving the original DID-only browser budget.",
+      "migration": "DID0.3 is a breaking pre-1.0 candidate: compressed identity-key input only; remote document/lifecycle options rejected. Use original signed BRC52 binary for envelopes, or explicitly verified compatible structured core. Wire authenticated BRC103/104 payload/control, durable atomic replay, consent, issuer/schema/purpose reliance and local status policy; callbacks alone are not full transport conformance. See docs/guides/identity-did-vc-migration.md. Proposed custom W3C mechanisms remain unregistered. Import BRC52 APIs/types from @bsv/did/brc52; identity-key DID and independent SD-JWT helpers stay at @bsv/did."
     },
     {
       "name": "@bsv/fund-wallet",
@@ -146,9 +139,9 @@
     {
       "name": "@bsv/overlay-topics",
       "publishedVersion": "1.9.1",
-      "releaseType": "none",
-      "summary": "Accepts SDK StorageDownloader UHRP pages up to 200 rows with deterministic outpoint ordering. Retains selector allowlists and authenticated advertisement admission.",
-      "migration": "No wire, API, or database migration. Deploy the reviewed patch through the protected release workflow; retain existing validation and configured resource bounds."
+      "releaseType": "major",
+      "summary": "Accepts SDK StorageDownloader UHRP pages up to 200 rows with deterministic outpoint ordering. Retains selector allowlists and authenticated advertisement admission. Removes serial-DID topic/lookup/storage exports and tm_did/ls_did registrations. Existing BRC189 identity discovery, UORA and all other legitimate topics remain.",
+      "migration": "Topics2 is a breaking retirement candidate. Remove DIDTopicManager/createDIDLookupService/DIDRecord/DIDQuery and tm_did/ls_did usage. Resolve immutable identity-key DIDs offline; explicitly configured tm_identity/ls_identity supplies certificate discovery, not DID-document mutation or automatic trust. Preserve existing database/history and plan service rollout without automatic replacement installation. See docs/guides/identity-did-vc-migration.md."
     },
     {
       "name": "@bsv/paymail",
@@ -167,16 +160,16 @@
     {
       "name": "@bsv/sdk",
       "publishedVersion": "2.8.10",
-      "releaseType": "patch",
-      "summary": "WalletClient and the binary BRC-100 wire no longer reject every acquireCertificate issuance: result validation required the returned fields to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted. An issuance result is now bound to exactly the requested field names; a direct acquisition is still bound to its requested encrypted values exactly.",
-      "migration": "No API, wire, or wallet-data migration is required."
+      "releaseType": "major",
+      "summary": "WalletClient and the binary BRC-100 wire no longer reject every acquireCertificate issuance: result validation required the returned fields to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted. An issuance result is now bound to exactly the requested field names; a direct acquisition is still bound to its requested encrypted values exactly. Removes the obsolete serial-DID token validation module and deep import. Native identity/certificate, wallet, transaction and authentication behavior is retained.",
+      "migration": "SDK3 is a separate breaking retirement candidate: remove identity/DIDTokenValidation imports and use @bsv/did BRC202 identity-key resolution plus optional @bsv/did/brc52 original-signature envelopes. Retain historical data and recover authenticated identity bindings; do not relabel serial DIDs. Existing acquisition-result validation fixes remain. First-party SDK3 peer alternatives require complete packed qualification and owner coordination; preserved SDK2 ranges are not silently narrowed. See docs/guides/identity-did-vc-migration.md."
     },
     {
       "name": "@bsv/simple",
       "publishedVersion": "0.6.0",
-      "releaseType": "none",
-      "summary": "Corrects PushDrop self-derivation ownership, pins Message Box responses to the authenticated peer, hardens wallet, credential, DID, persistence, and transaction boundaries, preserves explicit offline migration identifiers and historical signature verification for pre-0.6 short certificate types while keeping new issuance, remote metadata, and wallet operations canonical 32-byte, and changes the generated server-wallet handler to require explicit authenticated action-level authorization. Shares one tested UTF-16 code-unit comparator across certificate signing and persisted field ordering, preserving historical ordering independently of locale.",
-      "migration": "Replace createServerWalletHandler() deployments with createServerWalletHandler({ authorize: async ({ action, headers }) => authenticatedSessionCanUseAction(headers, action) }). The callback must return literal true for each status, create, request, receive, balance, outputs, or reset action; omission now returns HTTP 403 for every action. Roll out the authentication layer and callback with the package, update anonymous probes or automation, and apply the same policy to every replica. Do not emulate the old public behavior with an unconditional authorize: () => true callback. Valid recipient derivations and authenticated Message Box peers remain supported; malformed, wrong-owner, or transaction-mutated flows now fail closed. New DID, CredentialSchema, and Certifier records use canonical 32-byte types. Current SDK wallet methods reject historical short types, so do not put migration aliases in wallet list, acquire, prove, or relinquish calls. Export affected records through the storage version that created them, authenticate them offline against the exact locally configured identifier, and reissue/import canonical replacements; no legacy certificate is rewritten automatically. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/. The internal comparator consolidation requires no migration and is included in the existing unpublished 0.6.0 candidate."
+      "releaseType": "minor",
+      "summary": "Corrects PushDrop self-derivation ownership, pins Message Box responses to the authenticated peer, hardens wallet, credential, DID, persistence, and transaction boundaries, preserves explicit offline migration identifiers and historical signature verification for pre-0.6 short certificate types while keeping new issuance, remote metadata, and wallet operations canonical 32-byte, and changes the generated server-wallet handler to require explicit authenticated action-level authorization. Shares one tested UTF-16 code-unit comparator across certificate signing and persisted field ordering, preserving historical ordering independently of locale. Replaces mutable serial DID tooling with offline identity-key DID adapters and copied VC/VP proof wrappers with original-signature-preserving BRC52 envelopes. Retains certificate issuance/acquisition/revocation and persisted data.",
+      "migration": "Simple0.7 is a breaking pre-1.0 candidate. Remove mutable DID/resolver/provider configuration, proxy handlers and DIDError/types; use DID.fromIdentityKey/resolve and wallet.getDID. CredentialIssuer.issue returns {credential,keyringForSubject}; verify accepts exact JSON or UTF8 bytes and returns structured cryptographic results. Local revocation record status is retained/unknown, not inferred chain revocation. See docs/guides/identity-did-vc-migration.md."
     },
     {
       "name": "@bsv/templates",

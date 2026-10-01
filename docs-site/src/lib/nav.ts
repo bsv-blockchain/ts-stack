@@ -108,7 +108,6 @@ export const NAV: NavSection[] = [
           { label: '@bsv/simple', href: '/packages/helpers/simple/' },
           { label: '@bsv/templates', href: '/packages/helpers/templates/' },
           { label: '@bsv/did', href: '/packages/helpers/did/' },
-          { label: '@bsv/did-client', href: '/packages/helpers/did-client/' },
           { label: '@bsv/wallet-helper', href: '/packages/helpers/wallet-helper/' },
           { label: '@bsv/amountinator', href: '/packages/helpers/amountinator/' },
           { label: '@bsv/air-gap', href: '/packages/helpers/air-gap/' },
@@ -162,6 +161,8 @@ export const NAV: NavSection[] = [
     label: 'Guides',
     items: [
       { label: 'Overview', href: '/guides/' },
+      { label: 'Identity, DIDs and credentials', href: '/guides/identity-did-vc/' },
+      { label: 'Identity migration', href: '/guides/identity-did-vc-migration/' },
       { label: 'Build a wallet-aware app', href: '/guides/wallet-aware-app/' },
       { label: 'Run an overlay node', href: '/guides/run-overlay-node/' },
       { label: 'Peer-to-peer messaging', href: '/guides/peer-to-peer-messaging/' },

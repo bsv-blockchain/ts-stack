@@ -1,5 +1,5 @@
 /**
- * Credential Issuer Handler — issue, verify, revoke W3C Verifiable Credentials.
+ * Credential Issuer Handler — issue, verify BRC-203 envelopes and revoke BRC-52 certificates.
  *
  * Handles both:
  *   - Query-param based endpoints (?action=info|schema|certify|issue|verify|revoke|status)
@@ -213,8 +213,8 @@ async function certifyIdentity(
     return jsonResponse({ error: 'Certificate issuance is not authorized' }, 403)
   }
   const issuer = await getIssuer()
-  const vc = await issuer.issue(identityKey, schemaId, fields)
-  return jsonResponse(vc._bsv.certificate)
+  const certificate = await issuer.issueCertificate(identityKey, schemaId, fields)
+  return jsonResponse(certificate)
 }
 
 async function issueCredential(
@@ -242,8 +242,8 @@ async function issueCredential(
     return jsonResponse({ success: false, error: 'Credential issuance is not authorized' }, 403)
   }
   const issuer = await getIssuer()
-  const vc = await issuer.issue(subjectKey, schemaId, fields)
-  return jsonResponse({ success: true, credential: vc })
+  const issued = await issuer.issue(subjectKey, schemaId, fields)
+  return jsonResponse({ success: true, ...issued })
 }
 
 async function verifyCredential(body: unknown, getIssuer: IssuerFactory): Promise<HandlerResponse> {
@@ -252,7 +252,7 @@ async function verifyCredential(body: unknown, getIssuer: IssuerFactory): Promis
     return jsonResponse({ success: false, error: 'Missing credential' }, 400)
   }
   const issuer = await getIssuer()
-  const result = await issuer.verify(record.credential)
+  const result = await issuer.verify(JSON.stringify(record.credential))
   return jsonResponse({ success: true, verification: result })
 }
 
@@ -391,8 +391,13 @@ export function createCredentialIssuerHandler(
           if (sn == null || sn === '')
             return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
           const serialNumber = canonicalSerialNumber(sn)
-          const revoked = await issuer.isRevoked(serialNumber)
-          return jsonResponse({ success: true, serialNumber, revoked })
+          const revocationRecordStatus = await issuer.getRevocationRecordStatus(serialNumber)
+          return jsonResponse({
+            success: true,
+            serialNumber,
+            revocationRecordStatus,
+            status: 'unknown'
+          })
         }
 
         // ?action=certify via GET (used by new acquireCredential URL pattern with query params)

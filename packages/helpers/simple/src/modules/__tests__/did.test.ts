@@ -1,100 +1,41 @@
 import { DID } from '../did'
 
-const TXID = 'a'.repeat(64)
-const PUBKEY = '030dbed53c3613c887ad36e8bde365c2e58f6196735a589cd09d6bc316fa550df4'
+const PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const IDENTIFIER = 'did:key:zQ3shVc2UkAfJCdc1TR8E66J85h48P43r93q8jGPkPpjF9Ef9'
 
-describe('DID utilities', () => {
-  it('parses txid-based did:bsv identifiers', () => {
-    expect(DID.parse(`did:bsv:${TXID}`)).toEqual({
-      method: 'bsv',
-      identifier: TXID
-    })
+describe('Simple BRC-202 identity-key adapter', () => {
+  it('encodes the independent proposed specification vector and resolves offline', () => {
+    expect(DID.fromIdentityKey(PUBLIC_KEY)).toBe(IDENTIFIER)
+    const result = DID.resolve(IDENTIFIER)
+    expect(result.didResolutionMetadata).toEqual({})
+    expect(result.didDocumentMetadata).toEqual({})
+    expect(result.didDocument?.id).toBe(IDENTIFIER)
+    expect(result.didDocument?.verificationMethod[0].publicKeyMultibase).toBe(IDENTIFIER.slice(8))
+    expect(result.didDocument).not.toHaveProperty('service')
+    expect(result.didDocument).not.toHaveProperty('keyAgreement')
   })
 
-  it('parses legacy public-key-based did:bsv identifiers', () => {
-    expect(DID.parse(`did:bsv:${PUBKEY}`)).toEqual({
-      method: 'bsv',
-      identifier: PUBKEY
-    })
-    expect(DID.parse(`did:bsv:${PUBKEY.toUpperCase()}`).identifier).toBe(PUBKEY)
-  })
-
-  it('rejects invalid DID strings', () => {
-    expect(() => DID.parse('did:example:abc')).toThrow('Invalid DID')
-    expect(() => DID.parse('did:bsv:not-hex')).toThrow('identifier must be')
-    // x equal to the secp256k1 field prime is not a valid curve point.
-    expect(() =>
-      DID.parse('did:bsv:02fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f')
-    ).toThrow('secp256k1')
-  })
-
-  it('validates DID strings without throwing', () => {
-    expect(DID.isValid(`did:bsv:${TXID}`)).toBe(true)
-    expect(DID.isValid('did:bsv:not-hex')).toBe(false)
-  })
-
-  it('creates DID strings from lowercase txids', () => {
-    expect(DID.fromTxid(TXID)).toBe(`did:bsv:${TXID}`)
-  })
-
-  it('rejects malformed txids', () => {
-    expect(() => DID.fromTxid('A'.repeat(64))).toThrow('Invalid txid')
-    expect(() => DID.fromTxid('a'.repeat(63))).toThrow('Invalid txid')
-  })
-
-  it('builds a W3C DID document with optional controller and services', () => {
-    const service = {
-      id: `did:bsv:${TXID}#message-box`,
-      type: 'MessageBox',
-      serviceEndpoint: 'https://example.com/messages'
+  it.each(['', 'abcd', '02fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f'])(
+    'rejects invalid compressed identity key %s',
+    key => {
+      expect(() => DID.fromIdentityKey(key)).toThrow()
     }
+  )
 
-    const doc = DID.buildDocument(TXID, PUBKEY, 'did:bsv:controller', [service])
+  it.each([`${IDENTIFIER}#key`, `${IDENTIFIER}?version=1`, `${IDENTIFIER}/path`, ` ${IDENTIFIER}`])(
+    'rejects non-profile identifier %s',
+    value => {
+      expect(DID.resolve(value)).toMatchObject({
+        didResolutionMetadata: { error: 'invalidDid' },
+        didDocument: null
+      })
+    }
+  )
 
-    expect(doc.id).toBe(`did:bsv:${TXID}`)
-    expect(doc.controller).toBe('did:bsv:controller')
-    expect(doc.service).toEqual([service])
-    expect(doc.verificationMethod[0]).toMatchObject({
-      id: `did:bsv:${TXID}#subject-key`,
-      type: 'JsonWebKey2020',
-      controller: `did:bsv:${TXID}`
+  it('does not invent an identity for a legacy transaction identifier', () => {
+    expect(DID.resolve(`did:bsv:${'aa'.repeat(32)}`)).toMatchObject({
+      didResolutionMetadata: { error: 'methodNotSupported' },
+      didDocument: null
     })
-    expect(doc.verificationMethod[0].publicKeyJwk).toMatchObject({
-      kty: 'EC',
-      crv: 'secp256k1'
-    })
-    expect(doc.authentication).toEqual([`did:bsv:${TXID}#subject-key`])
-  })
-
-  it('omits optional DID document fields when not provided', () => {
-    const doc = DID.buildDocument(TXID, PUBKEY)
-
-    expect(doc.controller).toBeUndefined()
-    expect(doc.service).toBeUndefined()
-  })
-
-  it('builds legacy DID documents from identity keys', () => {
-    const doc = DID.fromIdentityKey(PUBKEY)
-
-    expect(doc.id).toBe(`did:bsv:${PUBKEY}`)
-    expect(doc.controller).toBe(`did:bsv:${PUBKEY}`)
-    expect(doc.verificationMethod[0]).toEqual({
-      id: `did:bsv:${PUBKEY}#key-1`,
-      type: 'EcdsaSecp256k1VerificationKey2019',
-      controller: `did:bsv:${PUBKEY}`,
-      publicKeyHex: PUBKEY
-    })
-    expect(doc.authentication).toEqual([`did:bsv:${PUBKEY}#key-1`])
-    expect(doc.assertionMethod).toEqual([`did:bsv:${PUBKEY}#key-1`])
-  })
-
-  it('rejects invalid legacy identity keys', () => {
-    expect(() => DID.fromIdentityKey('')).toThrow('Invalid identity key')
-    expect(() => DID.fromIdentityKey('abcd')).toThrow('Invalid identity key')
-  })
-
-  it('preserves the legacy DID certificate type and exposes the canonical type', () => {
-    expect(DID.getCertificateType()).toBe('ZGlkOmJzdg==')
-    expect(DID.getCanonicalCertificateType()).toBe('27RVS21ckZ2muZPmRwbj1AF1/9kN2U5Ev9YRljZovQ8=')
   })
 })

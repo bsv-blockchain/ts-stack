@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.11'
+version: '3.0.0'
 npm: '@bsv/sdk'
-last_updated: '2026-09-27'
-last_verified: '2026-09-27'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,12 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The isolated SDK3 retirement candidate removes the obsolete serial-DID token
+validation module. Native identity, certificate and authentication APIs remain.
+Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
+[migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
+qualification remains a draft prerequisite; existing SDK2 floors are preserved.
 
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact

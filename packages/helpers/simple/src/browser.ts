@@ -81,10 +81,8 @@ export { Overlay } from './modules/overlay'
 export { Certifier } from './modules/certification'
 export { WalletCore } from './core/WalletCore'
 export { DID } from './modules/did'
-export {
-  CredentialSchema,
-  CredentialIssuer,
-  MemoryRevocationStore,
-  toVerifiableCredential,
-  toVerifiablePresentation
-} from './modules/credentials'
+export { CredentialSchema, CredentialIssuer, MemoryRevocationStore } from './modules/credentials'
+
+export type { DidDocument, DidResolutionResult } from '@bsv/did'
+export type { BRC52Envelope, BRC52VerificationResult } from '@bsv/did/brc52'
+export type { IssuedCredential } from './modules/credentials'

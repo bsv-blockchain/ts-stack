@@ -246,7 +246,72 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: ['src/utils/base64url.ts', 'src/utils/multibase.ts'],
       ...jestTarget(
         'jest.config.js',
-        ['<rootDir>/tests/codec.property.test.ts', '<rootDir>/tests/did.test.ts'],
+        [
+          '<rootDir>/tests/codec.property.test.ts',
+          '<rootDir>/tests/codec-boundaries.test.ts',
+          '<rootDir>/tests/did.test.ts',
+          '<rootDir>/tests/brc202.test.ts',
+          '<rootDir>/tests/brc202.property.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc202-resolution': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc202.property.test.ts',
+      mutate: ['src/did/BsvDid.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc202.property.test.ts',
+          '<rootDir>/tests/brc202.test.ts',
+          '<rootDir>/tests/did.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc52-envelope': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-envelope.property.test.ts',
+      mutate: ['src/brc52/envelope.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc52-envelope.property.test.ts',
+          '<rootDir>/tests/brc52-envelope.test.ts',
+          '<rootDir>/tests/brc52-envelope-boundaries.test.ts',
+          '<rootDir>/tests/brc52-status.test.ts',
+          '<rootDir>/tests/brc52-disclosure.test.ts',
+          '<rootDir>/tests/brc52-auth-interoperability.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc52-status': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-status.property.test.ts',
+      mutate: ['src/brc52/status.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/tests/brc52-status.property.test.ts', '<rootDir>/tests/brc52-status.test.ts'],
+        { esm: true }
+      )
+    },
+    'brc52-disclosure': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-disclosure.property.test.ts',
+      mutate: ['src/brc52/disclosure.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc52-disclosure.property.test.ts',
+          '<rootDir>/tests/brc52-disclosure.test.ts',
+          '<rootDir>/tests/brc52-auth-interoperability.test.ts'
+        ],
         { esm: true }
       )
     },

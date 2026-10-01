@@ -97,3 +97,8 @@ lookup identities, publisher choice, updates and wallet fallback expectations.
 **Want to implement a protocol?** See [Conformance Testing](../conformance/).
 
 **Looking for infrastructure examples?** Check [Infrastructure Components](../infrastructure/).
+
+## Identity, DIDs and credentials
+
+- [Unified integration and implementer guidance](identity-did-vc.md)
+- [Breaking API and service migration](identity-did-vc-migration.md)

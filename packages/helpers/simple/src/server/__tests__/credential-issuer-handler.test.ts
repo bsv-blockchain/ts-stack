@@ -54,20 +54,22 @@ const cases: TestCase[] = [
 const testIssuer = {
   getInfo: jest.fn(() => ({
     publicKey: SUBJECT_KEY,
-    did: `did:bsv:${SUBJECT_KEY}`,
+    did: 'did:key:mock',
     schemas: [{ id: 'test-schema', name: 'Test Schema', certificateTypeBase64: CERTIFICATE_TYPE }]
   })),
-  isRevoked: jest.fn(async () => false),
+  getRevocationRecordStatus: jest.fn(async () => 'unknown'),
+  issueCertificate: jest.fn(
+    async (subject: string, schemaId: string, fields: Record<string, string>) => ({
+      subject,
+      schemaId,
+      fields
+    })
+  ),
   issue: jest.fn(async (subject: string, schemaId: string, fields: Record<string, string>) => ({
-    _bsv: {
-      certificate: {
-        subject,
-        schemaId,
-        fields
-      }
-    }
+    credential: { subject, schemaId, fields },
+    keyringForSubject: {}
   })),
-  verify: jest.fn(async (credential: unknown) => ({ valid: true, credential })),
+  verify: jest.fn(async (input: string) => ({ verified: true, credential: JSON.parse(input) })),
   revoke: jest.fn(async (serialNumber: string) => ({ txid: `revoke-${serialNumber}` }))
 }
 
@@ -130,15 +132,8 @@ describe('createCredentialIssuerHandler POST routing', () => {
       body: { subjectKey: SUBJECT_KEY, fields: { name: 'Issue' } },
       expectedBody: {
         success: true,
-        credential: {
-          _bsv: {
-            certificate: {
-              subject: SUBJECT_KEY,
-              schemaId: 'test-schema',
-              fields: { name: 'Issue' }
-            }
-          }
-        }
+        credential: { subject: SUBJECT_KEY, schemaId: 'test-schema', fields: { name: 'Issue' } },
+        keyringForSubject: {}
       }
     },
     {
@@ -147,7 +142,7 @@ describe('createCredentialIssuerHandler POST routing', () => {
       body: { credential: { id: 'credential-1' } },
       expectedBody: {
         success: true,
-        verification: { valid: true, credential: { id: 'credential-1' } }
+        verification: { verified: true, credential: { id: 'credential-1' } }
       }
     },
     {

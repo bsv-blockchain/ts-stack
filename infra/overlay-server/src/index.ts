@@ -32,8 +32,6 @@ import {
   createAnyLookupService,
   AppsTopicManager,
   createAppsLookupService,
-  DIDTopicManager,
-  createDIDLookupService,
   WalletConfigTopicManager,
   createWalletConfigLookupService,
   TokenDemoTopicManager,
@@ -419,10 +417,6 @@ const main = async () => {
   // Apps
   server.configureTopicManager('tm_apps', new AppsTopicManager())
   server.configureLookupServiceWithMongo('ls_apps', createAppsLookupService)
-
-  // DID
-  server.configureTopicManager('tm_did', new DIDTopicManager())
-  server.configureLookupServiceWithMongo('ls_did', createDIDLookupService)
 
   // WalletConfig
   server.configureTopicManager('tm_walletconfig', new WalletConfigTopicManager())

@@ -38,6 +38,43 @@ export interface DidDocument {
   capabilityInvocation: string[]
 }
 
+export interface DidResolutionOptions {
+  /** Only the BRC-202 JSON-LD representation is supported. */
+  accept?: string
+}
+
+export type DidResolutionError = 'invalidDid' | 'methodNotSupported' | 'representationNotSupported'
+
+export interface DidResolutionMetadata {
+  error?: DidResolutionError
+  contentType?: 'application/did+ld+json'
+}
+
+export interface DidResolutionResult {
+  didResolutionMetadata: DidResolutionMetadata
+  didDocument: DidDocument | null
+  didDocumentMetadata: Record<string, never>
+}
+
+export interface DidRepresentationResult {
+  didResolutionMetadata: DidResolutionMetadata
+  didDocumentStream: Uint8Array | null
+  didDocumentMetadata: Record<string, never>
+}
+
+export interface DidDereferencingResult {
+  dereferencingMetadata: {
+    error?: 'invalidDidUrl' | 'methodNotSupported' | 'notFound'
+  }
+  contentStream: VerificationMethod | null
+  contentMetadata: Record<string, never>
+}
+
+export interface DidUnsupportedOperationResult {
+  supported: false
+  error: 'operationNotSupported'
+}
+
 export interface DisclosureFrame {
   [claimName: string]: boolean | DisclosureFrame
 }

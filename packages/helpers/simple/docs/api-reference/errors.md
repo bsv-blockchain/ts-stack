@@ -12,7 +12,6 @@ SimpleError (base)
 ├── TransactionError
 ├── MessageBoxError
 ├── CertificationError
-├── DIDError
 └── CredentialError
 ```
 
@@ -27,11 +26,11 @@ class SimpleError extends Error {
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `message` | `string` | Human-readable error description |
-| `code` | `string?` | Machine-readable error code |
-| `name` | `string` | `'SimpleError'` |
+| Property  | Type      | Description                      |
+| --------- | --------- | -------------------------------- |
+| `message` | `string`  | Human-readable error description |
+| `code`    | `string?` | Machine-readable error code      |
+| `name`    | `string`  | `'SimpleError'`                  |
 
 ## WalletError
 
@@ -43,12 +42,13 @@ class WalletError extends SimpleError {
 }
 ```
 
-| Property | Value |
-|----------|-------|
-| `name` | `'WalletError'` |
-| `code` | `'WALLET_ERROR'` |
+| Property | Value            |
+| -------- | ---------------- |
+| `name`   | `'WalletError'`  |
+| `code`   | `'WALLET_ERROR'` |
 
 **Example triggers:**
+
 - Failed to connect to wallet extension
 - Invalid identity key
 - Client not available
@@ -63,12 +63,13 @@ class TransactionError extends SimpleError {
 }
 ```
 
-| Property | Value |
-|----------|-------|
-| `name` | `'TransactionError'` |
-| `code` | `'TRANSACTION_ERROR'` |
+| Property | Value                 |
+| -------- | --------------------- |
+| `name`   | `'TransactionError'`  |
+| `code`   | `'TRANSACTION_ERROR'` |
 
 **Example triggers:**
+
 - `createAction()` fails
 - `signAction()` fails
 - Output parsing errors
@@ -83,12 +84,13 @@ class MessageBoxError extends SimpleError {
 }
 ```
 
-| Property | Value |
-|----------|-------|
-| `name` | `'MessageBoxError'` |
-| `code` | `'MESSAGEBOX_ERROR'` |
+| Property | Value                |
+| -------- | -------------------- |
+| `name`   | `'MessageBoxError'`  |
+| `code`   | `'MESSAGEBOX_ERROR'` |
 
 **Example triggers:**
+
 - Failed to anoint MessageBox host
 - Payment send/receive failures
 - Identity registry communication errors
@@ -103,35 +105,20 @@ class CertificationError extends SimpleError {
 }
 ```
 
-| Property | Value |
-|----------|-------|
-| `name` | `'CertificationError'` |
-| `code` | `'CERTIFICATION_ERROR'` |
+| Property | Value                   |
+| -------- | ----------------------- |
+| `name`   | `'CertificationError'`  |
+| `code`   | `'CERTIFICATION_ERROR'` |
 
 **Example triggers:**
+
 - Certificate issuance fails
 - Certificate acquisition from remote server fails
 - Relinquish fails
 
-## DIDError
+## DID resolution errors
 
-DID parsing and registration errors.
-
-```typescript
-class DIDError extends SimpleError {
-  constructor(message: string)
-}
-```
-
-| Property | Value |
-|----------|-------|
-| `name` | `'DIDError'` |
-| `code` | `'DID_ERROR'` |
-
-**Example triggers:**
-- Invalid DID format (not `did:bsv:` prefix)
-- Invalid identity key in DID string
-- DID registration failure
+`DID.resolve` returns explicit `invalidDid` or `methodNotSupported` metadata and a null document. Identity-key encoding throws on invalid keys. The removed mutable DID lifecycle no longer exports `DIDError`.
 
 ## CredentialError
 
@@ -143,12 +130,13 @@ class CredentialError extends SimpleError {
 }
 ```
 
-| Property | Value |
-|----------|-------|
-| `name` | `'CredentialError'` |
-| `code` | `'CREDENTIAL_ERROR'` |
+| Property | Value                |
+| -------- | -------------------- |
+| `name`   | `'CredentialError'`  |
+| `code`   | `'CREDENTIAL_ERROR'` |
 
 **Example triggers:**
+
 - Unknown schema ID
 - Field validation failure
 - Revocation enabled but no wallet provided
@@ -182,4 +170,4 @@ throw new Error(`Token creation failed: ${originalError.message}`)
 throw new Error(`Payment failed: ${originalError.message}`)
 ```
 
-The typed error classes (`DIDError`, `CredentialError`) are used primarily by the DID and credentials modules. You can catch these specifically or catch the generic `Error` type for other modules.
+`CredentialError` wraps credential acquisition and list failures. You can catch these specifically or catch the generic `Error` type for other modules.

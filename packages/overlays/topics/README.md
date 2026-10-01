@@ -3,9 +3,30 @@
 [![npm version](https://img.shields.io/npm/v/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 
-Canonical topic managers and lookup services for the BSV overlay network. Bundles the reference implementations that overlay nodes mount to host first-class on-chain protocols — identity certificates, key/value storage, DIDs, message boxes, app catalogs, and more — without having to write a `TopicManager` / `LookupService` for each one from scratch.
+Canonical topic managers and lookup services for the BSV overlay network. Bundles the reference implementations that overlay nodes mount to host first-class on-chain protocols — identity certificates, key/value storage, message boxes, app catalogs, and more — without having to write a `TopicManager` / `LookupService` for each one from scratch.
 
 UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
+
+## DID overlay retirement (2.0 candidate)
+
+The proposed 2.0 release removes `DIDTopicManager`, `createDIDLookupService`,
+`DIDRecord` and `DIDQuery`, and retires `tm_did` / `ls_did`. The old serial token
+omitted issuer and subject; a historical lookup cannot be converted into an
+identity assertion by guessing those bindings. Existing stored records and
+on-chain outputs are not deleted or spent by this source change.
+
+Use the existing `tm_identity` / `ls_identity` pair for public, attributed
+certificate discovery under BRC-189 semantics. Use `@bsv/did` for deterministic
+identity-key `did:key` resolution and signature-preserving BRC-52 credential
+adapters under the proposed BRC-202/203 profiles. Discovery supplies candidates;
+validate certificate signatures and apply the application's selected certifier
+trust policy before relying on claims. The host is not the certificate issuer,
+and a resolved DID does not prove current key control.
+
+Operators must explicitly choose the services they host and reconcile stale
+advertisements separately; this change installs no replacement service. See
+[identity integration](../../../docs/guides/identity-did-vc.md) and
+[migration guidance](../../../docs/guides/identity-did-vc-migration.md).
 
 ## Install
 
@@ -45,7 +66,6 @@ Each topic ships a matching `*TopicManager` (admission rules for incoming transa
 | `tm_btms` / `ls_btms`                         | `BTMSTopicManager`             | `createBTMSLookupService`             |
 | `tm_certmap` / `ls_certmap`                   | `CertMapTopicManager`          | `createCertMapLookupService`          |
 | `tm_desktopintegrity` / `ls_desktopintegrity` | `DesktopIntegrityTopicManager` | `createDesktopIntegrityLookupService` |
-| `tm_did` / `ls_did`                           | `DIDTopicManager`              | `createDIDLookupService`              |
 | `tm_fractionalize` / `ls_fractionalize`       | `FractionalizeTopicManager`    | `createFractionalizeLookupService`    |
 | `tm_helloworld` / `ls_helloworld`             | `HelloWorldTopicManager`       | `createHelloWorldLookupService`       |
 | `tm_identity` / `ls_identity`                 | `IdentityTopicManager`         | `createIdentityLookupService`         |
@@ -157,11 +177,9 @@ Build the manager and lookup maps before constructing the engine:
 ```ts
 import {
   CertMapTopicManager,
-  DIDTopicManager,
   IdentityTopicManager,
   KVStoreTopicManager,
   createCertMapLookupService,
-  createDIDLookupService,
   createIdentityLookupService,
   createKVStoreLookupService
 } from '@bsv/overlay-topics'
@@ -169,15 +187,13 @@ import {
 const managers = {
   tm_identity: new IdentityTopicManager(),
   tm_kvstore: new KVStoreTopicManager(),
-  tm_certmap: new CertMapTopicManager(),
-  tm_did: new DIDTopicManager()
+  tm_certmap: new CertMapTopicManager()
 }
 
 const lookups = {
   ls_identity: createIdentityLookupService(db),
   ls_kvstore: createKVStoreLookupService(db),
-  ls_certmap: createCertMapLookupService(db),
-  ls_did: createDIDLookupService(db)
+  ls_certmap: createCertMapLookupService(db)
 }
 ```
 
