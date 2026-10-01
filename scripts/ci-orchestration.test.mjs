@@ -27,7 +27,7 @@ function workflowJobBlocks(workflow) {
 
 function assertWalletMutationTimeout(job, defaultMinutes) {
   const targets =
-    '["wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'
+    '["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'
   const expected = `    timeout-minutes: \${{ contains(fromJSON('${targets}'), matrix.target) && 90 || ${defaultMinutes} }}`
   assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
 }
@@ -147,7 +147,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 test('wallet mutation allowances preserve other limits and complete campaign execution', () => {
   for (const [path, defaultMinutes] of [
     [CI_PATH, 45],
-    [MUTATION_PATH, 20]
+    [MUTATION_PATH, 45]
   ]) {
     const job = workflowJobBlocks(readFileSync(path, 'utf8')).find(
       job => job.name === 'mutation-tests'
@@ -388,7 +388,14 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
   for (const targets of ['[]', '["selected"]', '']) {
     for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
       const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
-        env: { PREPARE_RESULT: 'success', MUTATION_TARGETS: targets, MUTATION_RESULT: result },
+        env: {
+          PREPARE_RESULT: 'success',
+          MUTATION_TARGETS: targets,
+          MUTATION_RESULT: result,
+          MUTATION_CLASSIFICATION: '{"deferred":[]}',
+          GITHUB_STEP_SUMMARY: '/dev/null',
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
+        },
         encoding: 'utf8'
       })
       assert.equal(execution.error, undefined)

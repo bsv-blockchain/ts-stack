@@ -113,10 +113,18 @@ jobs:
           echo "Resolved $count component(s) to release:"
           jq -r '.[] | "  - \(.name)@\(.tag)"' <<<"$components"
 
-  release:
-    name: Release ${{ matrix.component.name }}@${{ matrix.component.tag }}
+  full-mutation:
+    name: Qualify exact source before publication
     needs: discover
     if: needs.discover.outputs.count != '0'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mutation-tests.yml
+
+  release:
+    name: Release ${{ matrix.component.name }}@${{ matrix.component.tag }}
+    needs: [discover, full-mutation]
+    if: needs.discover.outputs.count != '0' && needs.full-mutation.result == 'success' && needs.full-mutation.outputs.qualified-sha == github.sha
     runs-on: ubuntu-latest
     permissions:
       artifact-metadata: write

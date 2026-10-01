@@ -2,6 +2,7 @@
 
 import { execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -214,15 +215,23 @@ function runCommand(command, arguments_, options) {
 }
 
 async function runTarget(targetName, target, policy) {
+  // A successful invocation must never stamp a report left by an earlier run.
+  fs.rmSync(path.join(REPOSITORY_ROOT, 'artifacts/mutation', targetName), {
+    recursive: true,
+    force: true
+  })
   const stryker = path.join(REPOSITORY_ROOT, 'node_modules/.bin/stryker')
   const reporters = process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'json'
+  const propertyEnvironment = {
+    FAST_CHECK_NUM_RUNS: process.env.FAST_CHECK_NUM_RUNS ?? String(policy.tool.propertyRuns),
+    FAST_CHECK_SEED: process.env.FAST_CHECK_SEED ?? String(policy.tool.propertySeed),
+    FAST_CHECK_PATH: process.env.FAST_CHECK_PATH ?? ''
+  }
   const exitCode = await runCommand(stryker, ['run', CONFIG_PATH, '--reporters', reporters], {
     cwd: path.join(REPOSITORY_ROOT, target.packageDirectory),
     env: {
       ...process.env,
-      FAST_CHECK_NUM_RUNS: process.env.FAST_CHECK_NUM_RUNS ?? String(policy.tool.propertyRuns),
-      FAST_CHECK_SEED: process.env.FAST_CHECK_SEED ?? String(policy.tool.propertySeed),
-      FAST_CHECK_PATH: process.env.FAST_CHECK_PATH ?? '',
+      ...propertyEnvironment,
       TS_STACK_MUTATION_TARGET: targetName
     }
   })
@@ -237,6 +246,25 @@ async function runTarget(targetName, target, policy) {
   console.log(`  report: ${path.relative(REPOSITORY_ROOT, reportPath)}`)
   const errors = evaluateMutationReport(targetName, metrics, policy)
   if (errors.length > 0) throw new Error(errors.join('\n'))
+  fs.writeFileSync(
+    path.join(path.dirname(reportPath), 'execution.json'),
+    `${JSON.stringify(
+      {
+        targetId: targetName,
+        sourceSha: execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
+          cwd: REPOSITORY_ROOT,
+          encoding: 'utf8'
+        }).trim(),
+        runId: process.env.GITHUB_RUN_ID ?? '',
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? '',
+        nodeVersion: process.version,
+        propertyEnvironment,
+        reportDigest: createHash('sha256').update(fs.readFileSync(reportPath)).digest('hex')
+      },
+      null,
+      2
+    )}\n`
+  )
 }
 
 function requiredArgument(arguments_, index, option) {

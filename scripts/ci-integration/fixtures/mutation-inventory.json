@@ -1,0 +1,162 @@
+[
+  {
+    "fileName": "src/api.ts",
+    "id": "0",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 22
+      },
+      "end": {
+        "line": 1,
+        "column": 42
+      }
+    },
+    "mutatorName": "ArrowFunction",
+    "replacement": "() => undefined"
+  },
+  {
+    "fileName": "src/api.ts",
+    "id": "1",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 37
+      },
+      "end": {
+        "line": 1,
+        "column": 42
+      }
+    },
+    "mutatorName": "ConditionalExpression",
+    "replacement": "true"
+  },
+  {
+    "fileName": "src/api.ts",
+    "id": "2",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 37
+      },
+      "end": {
+        "line": 1,
+        "column": 42
+      }
+    },
+    "mutatorName": "ConditionalExpression",
+    "replacement": "false"
+  },
+  {
+    "fileName": "src/api.ts",
+    "id": "3",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 37
+      },
+      "end": {
+        "line": 1,
+        "column": 42
+      }
+    },
+    "mutatorName": "EqualityOperator",
+    "replacement": "n >= 0"
+  },
+  {
+    "fileName": "src/api.ts",
+    "id": "4",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 37
+      },
+      "end": {
+        "line": 1,
+        "column": 42
+      }
+    },
+    "mutatorName": "EqualityOperator",
+    "replacement": "n <= 0"
+  },
+  {
+    "fileName": "src/other.ts",
+    "id": "5",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 25
+      },
+      "end": {
+        "line": 1,
+        "column": 46
+      }
+    },
+    "mutatorName": "ArrowFunction",
+    "replacement": "() => undefined"
+  },
+  {
+    "fileName": "src/other.ts",
+    "id": "6",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 40
+      },
+      "end": {
+        "line": 1,
+        "column": 46
+      }
+    },
+    "mutatorName": "ConditionalExpression",
+    "replacement": "true"
+  },
+  {
+    "fileName": "src/other.ts",
+    "id": "7",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 40
+      },
+      "end": {
+        "line": 1,
+        "column": 46
+      }
+    },
+    "mutatorName": "ConditionalExpression",
+    "replacement": "false"
+  },
+  {
+    "fileName": "src/other.ts",
+    "id": "8",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 40
+      },
+      "end": {
+        "line": 1,
+        "column": 46
+      }
+    },
+    "mutatorName": "EqualityOperator",
+    "replacement": "n > 1"
+  },
+  {
+    "fileName": "src/other.ts",
+    "id": "9",
+    "location": {
+      "start": {
+        "line": 1,
+        "column": 40
+      },
+      "end": {
+        "line": 1,
+        "column": 46
+      }
+    },
+    "mutatorName": "EqualityOperator",
+    "replacement": "n < 1"
+  }
+]
