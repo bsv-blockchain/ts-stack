@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../src/internal/synchronousPromise.js'
 import { jest } from '@jest/globals'
 import { canonicalOutputJSON, signOutputPacket, type OutputRootEvictionResult } from '@bsv/sdk'
 import {
@@ -39,15 +40,17 @@ export async function rootServiceFixture() {
   const f = await coordinatedFixture()
   const state = { now: '150', policy, access: true, context: true }
   const sign: jest.Mock<RootEvictionServiceOptions['sign']> = jest.fn(
-    async (body: OutputRootEvictionResult, _signal: AbortSignal): Promise<unknown> =>
-      signOutputPacket('root-eviction-result', body, rootContractKey)
+    (body: OutputRootEvictionResult, _signal: AbortSignal): Promise<unknown> =>
+      synchronousPromise(() => signOutputPacket('root-eviction-result', body, rootContractKey))
   )
-  const guard: jest.Mock<RootEvictionServiceOptions['guard']> = jest.fn(async access => ({
-    expectedPolicyDigest: state.policy,
-    clock: () => state.now,
-    authorize: () => state.access && access.principal === requester,
-    contextCurrent: () => state.context
-  }))
+  const guard: jest.Mock<RootEvictionServiceOptions['guard']> = jest.fn(access =>
+    synchronousPromise(() => ({
+      expectedPolicyDigest: state.policy,
+      clock: () => state.now,
+      authorize: () => state.access && access.principal === requester,
+      contextCurrent: () => state.context
+    }))
+  )
   const options: RootEvictionServiceOptions = {
     journal: f.store,
     contracts: f.contracts,

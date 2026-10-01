@@ -16,6 +16,7 @@ import {
   type SourceBatch
 } from '@bsv/output-knowledge'
 import { IndexedDBOperationStateStore } from '@bsv/output-knowledge/operations'
+import { proposalBrowser } from './proposals.js'
 import {
   LiveLookupSource,
   prepareLiveLookupSource,
@@ -243,7 +244,16 @@ async function loseCore() {
     return { code: error.code, requests: [...requests] }
   }
 }
-const api = { initialize, inspect, pull, receive, cas, missing, loseCore }
+const api = {
+  initialize,
+  inspect,
+  pull,
+  receive,
+  cas,
+  missing,
+  loseCore,
+  proposals: proposalBrowser
+}
 declare global {
   interface Window {
     outputKnowledgeBrowser: typeof api

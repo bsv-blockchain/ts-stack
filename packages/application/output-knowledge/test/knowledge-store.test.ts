@@ -1,6 +1,10 @@
 import { describe, expect, it } from '@jest/globals'
 import { OutputProtocolError } from '@bsv/sdk'
-import { KnowledgeStore, type KnowledgeReducer } from '../src/KnowledgeStore.js'
+import {
+  KnowledgeStore,
+  type KnowledgeReducer,
+  type KnowledgeStoreOptions
+} from '../src/KnowledgeStore.js'
 import {
   MemoryJournal,
   knowledgeMutation,
@@ -29,6 +33,87 @@ function wrapper(storage: JournalStorage, overrides: Partial<JournalStorage>): J
 }
 
 describe('knowledge store journal port', () => {
+  it.each<[keyof KnowledgeStoreOptions, number]>([
+    ['maximumEntries', 0],
+    ['maximumEntries', 4097],
+    ['maximumBytes', 64 * 1024 * 1024 + 1],
+    ['deadlineMs', 60001],
+    ['maximumReaders', 65],
+    ['pollMs', 1001],
+    ['pollMs', 1.5],
+    ['maximumEntries', Number.NaN]
+  ])('rejects invalid %s configuration before using its journal', (key, value) => {
+    expect(
+      () => new KnowledgeStore(new MemoryJournal('test'), reducer(), { partition, [key]: value })
+    ).toThrow('store bound')
+  })
+
+  it('fails closed when stable mutation lookup is unavailable and allows an exact retry after recovery', async () => {
+    const storage = new MemoryJournal('test')
+    let available = false
+    const store = new KnowledgeStore(
+      wrapper(storage, {
+        getMutation: key =>
+          available
+            ? storage.getMutation(key)
+            : Promise.resolve({ status: 'unavailable', reason: 'Journal temporarily unreachable' })
+      }),
+      reducer(),
+      { partition }
+    )
+    try {
+      await expect(store.commit('0', initial())).rejects.toMatchObject({
+        code: 'unavailable',
+        retryable: true
+      })
+      expect((await storage.head()).received).toBe('0')
+      available = true
+      expect((await store.commit('0', initial())).status).toBe('committed')
+      expect((await store.commit('0', initial())).status).toBe('replayed')
+    } finally {
+      await store.close()
+    }
+  })
+
+  it('rejects an unrecognized mutation digest and unavailable historical revision without appending', async () => {
+    const storage = new MemoryJournal('test'),
+      store = new KnowledgeStore(storage, reducer(), { partition })
+    try {
+      await expect(store.read()).rejects.toMatchObject({ code: 'revision-unavailable' })
+      await expect(store.commit('0', { ...initial(), key: 'ff'.repeat(32) })).rejects.toMatchObject(
+        { code: 'invalid' }
+      )
+      expect((await storage.head()).received).toBe('0')
+      await store.commit('0', initial())
+      await expect(store.read('0')).rejects.toMatchObject({ code: 'revision-unavailable' })
+      expect((await storage.head()).received).toBe('1')
+    } finally {
+      await store.close()
+    }
+  })
+
+  it('bounds concurrent watches independently of operations and rejects a future watch checkpoint', async () => {
+    const storage = new MemoryJournal('test'),
+      store = new KnowledgeStore(storage, reducer(), { partition, maximumReaders: 1 })
+    const abort = new AbortController()
+    try {
+      await store.commit('0', initial())
+      const future = store.watch('2')[Symbol.asyncIterator]()
+      await expect(future.next()).rejects.toMatchObject({ code: 'reset-required' })
+      const first = store.watch('0', abort.signal)[Symbol.asyncIterator]()
+      expect((await first.next()).value?.revision.accepted).toBe('1')
+      const second = store.watch('1')[Symbol.asyncIterator]()
+      await expect(second.next()).rejects.toMatchObject({ code: 'limited' })
+      abort.abort()
+      await first.return?.()
+      const recovered = store.watch('0')[Symbol.asyncIterator]()
+      expect((await recovered.next()).value?.revision.accepted).toBe('1')
+      await recovered.return?.()
+    } finally {
+      abort.abort()
+      await store.close()
+    }
+  })
   it('persists protocol-generated validation material with its mutation and reconstructs it after reopening the store port', async () => {
     const storage = new MemoryJournal('test'),
       simple = reducer()
@@ -85,7 +170,12 @@ describe('knowledge store journal port', () => {
         { partition }
       )
     const first = initial()
+    expect(await store.getMutation(first.key)).toEqual({ status: 'absent' })
     expect((await store.commit('0', first)).status).toBe('committed')
+    expect(await store.getMutation(first.key)).toMatchObject({
+      status: 'committed',
+      entry: { key: first.key, body: first.body, revision: { received: '1', accepted: '1' } }
+    })
     expect((await store.commit('999', first)).status).toBe('replayed')
     expect(count).toBe(1)
     await expect(store.commit('1', invalidation())).rejects.toThrow('Rejected transition')
@@ -95,6 +185,7 @@ describe('knowledge store journal port', () => {
     const changed = { key: first.key, body: invalidation().body }
     expect((await store.commit('1', changed)).status).toBe('equivocation')
     await store.close()
+    await expect(store.getMutation(first.key)).rejects.toMatchObject({ code: 'cancelled' })
   })
 
   it('admits one of two racing CAS commits and never publishes the losing prospective state', async () => {

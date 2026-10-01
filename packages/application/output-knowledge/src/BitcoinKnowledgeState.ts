@@ -1,3 +1,6 @@
+import type { ProposalLocalState } from './proposals/ProposalLocalState.js'
+import type { ProposalKnowledgeViewBuilder } from './proposals/ProposalKnowledgeView.js'
+import type { ProposalSourcePolicy } from './proposals/ProposalSourcePolicy.js'
 import {
   canonicalOutputJSON,
   closedOutputObject,
@@ -51,6 +54,8 @@ import type {
 } from './ports.js'
 
 export interface BitcoinKnowledgeStateOptions {
+  /** Explicitly opt into a distinct local journal namespace and installed source interpretation. */
+  proposals?: ProposalSourcePolicy
   journalId: string
   partition: OutputPartition
   nonFinal: boolean
@@ -69,6 +74,7 @@ const groupKey = (row: ReceivedSourceGroup): string =>
 
 /** Private deterministic protocol state, reconstructed exclusively from the local journal. */
 export class BitcoinKnowledgeState {
+  readonly proposals?: ProposalLocalState
   readonly pool: EvidencePool
   readonly membership: SourceMembershipLedger
   readonly ledger: VerificationLedger
@@ -82,10 +88,12 @@ export class BitcoinKnowledgeState {
   private revision: StoreRevision = { received: '0', accepted: '0' }
   private planCache?: EvidenceWorkPlan
   private readinessCache?: EvidenceReadiness
+  private proposalViewCache?: ProposalKnowledgeViewBuilder
 
   constructor(readonly options: BitcoinKnowledgeStateOptions) {
     this.partition = parsePartition(options.partition)
     this.limits = runtimeLimits(options.limits)
+    if (options.proposals) this.proposals = options.proposals.createState(this.limits.pendingBytes)
     this.membership = new SourceMembershipLedger({ bytes: this.limits.pendingBytes })
     this.pool = new EvidencePool(options.journalId, {
       retainedBytes: this.limits.pendingBytes,
@@ -104,22 +112,48 @@ export class BitcoinKnowledgeState {
     return selected
   }
   private changed(): void {
+    this.proposalViewCache = undefined
     this.planCache = undefined
     this.readinessCache = undefined
   }
-  applyLocal(local: OutputJSONObject): void {
-    this.ledger.apply(local, this.pool, this.contexts)
-    this.readinessCache = undefined
+  applyLocal(local: OutputJSONObject, kind: Mutation['body']['kind'] = 'reconcile'): void {
+    const bitcoin = this.proposals?.apply(local, kind, this.membership.groups()) ?? local
+    this.ledger.apply(bitcoin, this.pool, this.contexts)
+    this.changed()
+  }
+  proposalView(): ProposalKnowledgeViewBuilder | undefined {
+    if (this.proposals)
+      this.proposalViewCache ??= this.proposals.view(
+        this.membership.groups(),
+        this.membership.publishedGroups()
+      )
+    return this.proposalViewCache
+  }
+  applyProposalWork(
+    work: import('./proposals/ProposalVerificationPool.js').ProposalVerification[]
+  ): void {
+    this.proposals?.pool.apply(work)
+    this.changed()
   }
 
   /** Apply one committed prefix or one already prepared prospective transition. */
-  apply(entry: JournalEntry, local = entry.local): void {
+  apply(
+    entry: JournalEntry,
+    local = entry.local,
+    prepareLocal?: (state: BitcoinKnowledgeState) => OutputJSONObject
+  ): void {
     const { body, revision } = entry
     if (body.kind === 'context') this.applyContext(body, revision, local)
     else this.applyEstablished(body, revision.received, this.context)
+    local = prepareLocal?.(this) ?? local
+    if (this.proposals && local === undefined)
+      throw new OutputProtocolError(
+        'reset-required',
+        'Proposal transition is missing its retained local material'
+      )
     this.revision = { ...revision }
     this.changed()
-    if (local !== undefined) this.applyLocal(local)
+    if (local !== undefined) this.applyLocal(local, body.kind)
     if (body.kind === 'accept' || body.kind === 'reconcile') this.applyAcceptance(body)
   }
 
@@ -316,7 +350,8 @@ export class BitcoinKnowledgeState {
             row.status !== 'quarantined' &&
             (row.status === 'accepted' || this.membership.isCurrent(row.scope, row.generation)) &&
             !slots.some(slot => slot.fault !== undefined) &&
-            !row.group.observations.some(observation => observation.kind.startsWith('proposal'))
+            (this.proposalView()?.decision(row) === 'ready' ||
+              !row.group.observations.some(observation => observation.kind.startsWith('proposal')))
         }
       })
       this.planCache = planKnowledgeEvidence(this.pool, groups)
@@ -343,7 +378,8 @@ export class BitcoinKnowledgeState {
       slots = [...this.slots.values()].filter(slot => slot.receipt.group === id),
       context = this.context,
       results: VerificationResult[] = []
-    let bad = false
+    const proposalDecision = this.proposalView()?.decision(row)
+    let bad = proposalDecision === 'quarantined'
     for (const slot of slots) {
       const bundles = this.plan().slots.get(slot.receipt.id) ?? []
       const verified = bundles.find(
@@ -511,7 +547,16 @@ export class BitcoinKnowledgeState {
       facts,
       assessments,
       reconciled,
-      pendingGroups: this.membership.pending()
+      pendingGroups: this.membership.pending(),
+      ...(this.proposals
+        ? {
+            proposals: this.proposals
+              .view(this.membership.publishedGroups(), this.membership.publishedGroups())
+              .snapshot(this.proposals.evaluatedAt, (scope, generation) =>
+                this.membership.isContinuous(scope, generation)
+              )
+          }
+        : {})
     }
   }
   private appendSourceAssessments(

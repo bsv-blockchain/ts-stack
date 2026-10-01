@@ -87,6 +87,12 @@ submission and GASP behavior remains available to applications that do not opt i
   offline replay and continuation compatibility for existing version-1/2 records.
 - Explicit installed proposal policies, actual author signatures, canonical
   author-document payloads, exact successor and PRP1 finalization relations.
+- Optional client proposal acceptance with exact source/reader/policy selection,
+  first local receipt times, signed-envelope verification and whole-group quarantine.
+  A distinct local frame4 namespace preserves accepted decisions and monotonic
+  expiry; default Bitcoin journals retain their existing formats and behavior.
+  Authenticated intent and provider reports remain separate from Bitcoin facts,
+  current-channel selection, full predecessor history and authorized effects.
 - Pure proposal lifecycle plans with whole-record CAS, exact admission jobs,
   terminal outcomes and serialized expiry/finalization.
 - Separate bounded Memory/SQLite proposal journals, immutable service configuration,
@@ -1585,3 +1591,62 @@ delivery validation batch. Proposal client acceptance and its replay profile,
 private query and projection composition, remaining application integrations,
 and exact-head remote CI still require implementation or qualification before
 checkpoint two can be approved.
+
+### Opt-in proposal client and analyzer follow-up
+
+The client increment composes installed source policy, bounded exact-envelope
+verification, local frame4 replay and the existing Bitcoin worker/store. Its first
+integrated run passes 286 tests across 20 suites, including 300 generated client
+receipt histories and 300 generated core/restart/expiry histories. The core property
+retains four real signed fixture bodies and copies them per generated schedule;
+signature verification still runs through the actual core for each case. This
+avoids repeatedly signing identical test inputs without reducing schedules or
+verification. The isolated property passes in 86.2 seconds.
+
+The exact packed Chrome test now also commits a proposal receipt to native
+IndexedDB, closes the browser before acceptance, recovers it, accepts the signed
+intent without Bitcoin verification, persists exclusive expiry and reopens with
+a rolled-back clock. Its original lookup/cursor and cross-tab tests remain. The
+first three browser builds exceeded the unchanged 140,000-byte gzip limit. Moving
+optional state construction behind the proposal policy entry keeps the default
+graph at 137,250 gzip bytes; complete browser artifact and native tests now pass.
+The final entry refactor also passes 83 focused core/client cases and strict types.
+Forty examples compile against 22 exact tarballs. The new client guide distinguishes
+historical signed variants from current-channel interpretation and documents the
+new namespace requirement. Private query/projection composition remains separate.
+
+Hosted analysis of pushed `2d4379c86` reports missing proposal-guide metadata,
+35 Sonar findings and two CodeQL findings in malformed-input test construction.
+The metadata correction passes all 142 frontmatter/link checks. Local follow-ups
+preserve validation while extracting response/reference checks, declaring actual
+helper dependencies and expressing serial maintenance work explicitly. A first
+scheduler refactor introduced an extra yield before an expiry callback; its
+existing queued-recovery shutdown regression failed. The corrected iterator yields
+only at real expiry work boundaries and all 30 scheduler tests pass. The failed
+242-case run remains recorded alongside its 241 passing cases; it is not a complete
+qualification. New whole-source mutation registrations cover the client and core,
+and the existing runtime selection gains its cross-layer expiry regressions.
+The exact 104-target inventory preserves all previous 102 source/test unions and
+all original score, coverage, worker, seed and deadline gates. Complete current
+package, mutation and exact-head hosted qualification remain pending.
+
+The complete current native run passes 1,592 tests across 120 suites in 599 seconds,
+with 97.61% statement, 95.43% branch, 99.11% function and 98.06% line coverage.
+All 4,791 authored source/configuration hashes match the frozen inputs afterward.
+The complete Overlay Express suite passes 771 tests across 32 suites. Both changed
+packages pass their packed-consumer checks, including legacy SDK 2.8.9 with optional
+features disabled. The documentation site validates 147 built HTML pages, the
+security audit reports no known vulnerabilities, and all seven reference-app tests
+plus its two-host native browser demonstration pass.
+
+Subsequent focused regressions exercise isolated proposal journals sharing an
+installation, multiple installed policy selections, retained transition boundaries,
+provider removals without erasing signed history, bounded journal watches, stable
+mutation lookup, cancelled/concurrent workers and recoverable CAS contention.
+The selected client/core diagnostic passes all 309 tests in 19 suites, but its
+package-wide coverage command exits unsuccessfully because unrelated suites were
+not selected; that result is retained as diagnostic evidence, not a replacement for
+the complete package gate. Additional malformed-policy, quarantine and lookup
+regressions pass 63 tests in three suites. No mutation threshold, test selection,
+runtime budget or coverage requirement was lowered. The new complete mutation
+campaigns and exact-head hosted analysis remain pending.

@@ -1,3 +1,5 @@
+import { proposalViewDeadline } from './proposals/ProposalKnowledgeView.js'
+import type { ProposalVerification } from './proposals/ProposalVerificationPool.js'
 import { asyncValues } from './internal/asyncValues.js'
 import { pendingWork } from './internal/pendingWork.js'
 import {
@@ -66,13 +68,36 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     this.options.partition = initial.partition
     this.options.sourceCurrentness = initial.sourceCurrentness.rules
   }
-  private localFrame(state: BitcoinKnowledgeState, work: VerifiedWork[]): OutputJSONObject {
-    return knowledgeLocalFrame(
+  private clockSeconds(): string {
+    const now = this.now()
+    if (!Number.isSafeInteger(now) || now < 0)
+      throw new OutputProtocolError('invalid', 'Invalid proposal clock')
+    return BigInt(Math.floor(now / 1000)).toString()
+  }
+  nextInvalidation(input: AcceptedInput): string | undefined {
+    return input.proposals ? proposalViewDeadline(input.proposals) : undefined
+  }
+  private localFrame(
+    state: BitcoinKnowledgeState,
+    work: VerifiedWork[],
+    proposals: ProposalVerification[] = [],
+    kind: JournalEntry['body']['kind'] = 'reconcile'
+  ): OutputJSONObject {
+    const bitcoin = knowledgeLocalFrame(
       this.options.nonFinal,
       work,
       this.options.sourceCurrentness,
       state.ledger.version ?? 3
     )
+    return state.proposals
+      ? state.proposals.frame(
+          bitcoin,
+          kind,
+          state.membership.groups(),
+          this.clockSeconds(),
+          proposals
+        )
+      : bitcoin
   }
   private ready(signal: AbortSignal): void {
     if (signal.aborted)
@@ -116,17 +141,23 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     const prior = entries.slice(0, -1),
       state = await this.replay(prior, signal)
     let local: OutputJSONObject | undefined
-    if (entry.body.kind === 'context') local = this.localFrame(state, [])
+    if (entry.body.kind === 'context' || (entry.body.kind === 'invalidate' && state.proposals))
+      local = this.localFrame(state, [], [], entry.body.kind)
     if (entry.body.kind === 'accept' || entry.body.kind === 'reconcile') {
       const staged = this.staged.get(entry.key)
       if (staged?.parent === this.parent(prior)) local = staged.local
       else {
         const work = await this.collect(state, signal)
-        local = this.localFrame(state, work.additions)
+        local = this.localFrame(state, work.additions, work.proposals)
       }
     }
     this.ready(signal)
-    state.apply(entry, local)
+    if (entry.body.kind === 'receive' && state.proposals)
+      state.apply(entry, local, received => {
+        local = this.localFrame(received, [], [], 'receive')
+        return local
+      })
+    else state.apply(entry, local)
     return { input: state.snapshot(), ...(local ? { local } : {}) }
   }
 
@@ -134,20 +165,33 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     state: BitcoinKnowledgeState,
     signal: AbortSignal,
     until = this.now() + state.limits.deadlineMs
-  ): Promise<{ additions: VerifiedWork[]; exhausted: boolean }> {
+  ): Promise<{ additions: VerifiedWork[]; proposals: ProposalVerification[]; exhausted: boolean }> {
     const additions: VerifiedWork[] = [],
-      plan = state.plan(),
+      proposals: ProposalVerification[] = [],
       budget = {
         checks: 0,
         limited: false,
         deadline: Math.min(until, this.now() + state.limits.deadlineMs)
       }
+    for await (const stamp of asyncValues(state.proposals?.pool.pending() ?? [])) {
+      this.ready(signal)
+      if (budget.checks >= this.maximumChecks || this.now() >= budget.deadline) {
+        state.applyProposalWork(proposals)
+        return { additions, proposals, exhausted: true }
+      }
+      budget.checks++
+      proposals.push(state.proposals!.pool.verify(stamp))
+    }
+    state.applyProposalWork(proposals)
+    const plan = state.plan(),
+      enabledGroups = new Set(plan.groups.filter(group => group.enabled).map(group => group.id))
     for (const support of plan.proofs.values()) {
+      if (state.proposals && !support.groups.every(group => enabledGroups.has(group))) continue
       const result = await this.collectProof(state, support, signal, budget)
       if (result.work.checks.length) additions.push(result.work)
-      if (result.exhausted) return { additions, exhausted: true }
+      if (result.exhausted) return { additions, proposals, exhausted: true }
     }
-    return { additions, exhausted: plan.limited || budget.limited }
+    return { additions, proposals, exhausted: plan.limited || budget.limited }
   }
 
   private async collectProof(
@@ -237,7 +281,10 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
     const history = await store.inspect(signal),
       state = await this.replay(history.entries, signal),
       work = await this.collect(state, signal, deadline),
-      local = this.localFrame(state, work.additions)
+      local = this.localFrame(state, work.additions, work.proposals),
+      proposalDeadline = this.nextInvalidation(state.snapshot()),
+      proposalExpiry =
+        proposalDeadline !== undefined && BigInt(this.clockSeconds()) >= BigInt(proposalDeadline)
     state.applyLocal(local)
     const row = state.membership
       .groups()
@@ -249,6 +296,8 @@ export class BitcoinKnowledge implements KnowledgeReducer, OutputKnowledgeWorker
       )
     if (
       work.additions.length ||
+      work.proposals.length ||
+      proposalExpiry ||
       row ||
       state.membership.hasPendingCompletion() ||
       state.membership.hasPendingContinuity()

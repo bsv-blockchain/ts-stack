@@ -139,7 +139,7 @@ it('keeps strict parsing, authenticated attribution, manifest validity and globa
   const f = await rootServiceFixture()
   try {
     const service = f.service()
-    for (const text of [f.text.replace('{', '{"body":null,'), ' '.repeat(1048577), '{}'])
+    for (const text of ['{"body":null,' + f.text.slice(1), ' '.repeat(1048577), '{}'])
       await expect(service.submit(text, f.caller, f.selection.manifest)).rejects.toBeDefined()
     await expect(service.submit(f.text, f.caller, undefined)).rejects.toBeDefined()
     await expect(

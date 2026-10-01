@@ -1,3 +1,4 @@
+import { asyncValues } from '../internal/asyncValues.js'
 import {
   closedOutputObject,
   outputAssert,
@@ -53,12 +54,7 @@ export class ProposalJournalMaintenance implements ProposalMaintenanceSource {
       identity: outputString(journal.identity)
     })
   }
-  async page(maximum: number, after?: string): Promise<ProposalMaintenancePage> {
-    outputAssert(
-      Number.isSafeInteger(maximum) && maximum >= 1 && maximum <= 256,
-      'Invalid proposal maintenance page bound'
-    )
-    const head = outputU64((await this.journal.head()).revision)
+  private continuation(head: bigint, after?: string): { through: bigint; position: bigint } {
     let through = head,
       position = 0n
     if (after !== undefined) {
@@ -81,6 +77,15 @@ export class ProposalJournalMaintenance implements ProposalMaintenanceSource {
         'context-changed'
       )
     }
+    return { through, position }
+  }
+  async page(maximum: number, after?: string): Promise<ProposalMaintenancePage> {
+    outputAssert(
+      Number.isSafeInteger(maximum) && maximum >= 1 && maximum <= 256,
+      'Invalid proposal maintenance page bound'
+    )
+    const head = outputU64((await this.journal.head()).revision)
+    let { through, position } = this.continuation(head, after)
     if (position === through) return { items: [] }
     const page = await this.journal.read(String(position), maximum)
     outputAssert(
@@ -90,7 +95,7 @@ export class ProposalJournalMaintenance implements ProposalMaintenanceSource {
     )
     const items: ProposalMaintenanceItem[] = [],
       seen = new Set<string>()
-    for (const entry of page) {
+    for await (const entry of asyncValues(page)) {
       const revision = outputU64(entry.revision)
       outputAssert(revision > position, 'Proposal maintenance history is unordered', 'unavailable')
       if (revision > through) {

@@ -1,6 +1,5 @@
 import { OverlayProposalAdmission } from '../ProposalAdmission.js'
 import type { Engine } from '../Engine.js'
-import type { AdmissionHistoryResult } from '../storage/AdmissionStorage.js'
 import {
   Transaction,
   Utils,
@@ -16,6 +15,7 @@ import { type OverlayProposalAdmissionJob } from '../ProposalAdmission.js'
 import {
   admissionSemanticDigest,
   type RetainedAdmission,
+  type AdmissionHistoryResult,
   type StorageScope
 } from '../storage/AdmissionStorage.js'
 import { OVERLAY_ENGINE_POLICY_ID, overlayAdmissionContextDigest } from '../EngineAdmission.js'

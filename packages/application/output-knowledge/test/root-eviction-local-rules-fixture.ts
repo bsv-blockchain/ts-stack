@@ -1,3 +1,4 @@
+import { asyncValues } from '../src/internal/asyncValues.js'
 import { SQLiteRootEvictionLocalRules } from '../src/root-eviction/SQLiteRootEvictionLocalRules.js'
 import type {
   RootEvictionLocalRule,
@@ -66,10 +67,11 @@ export async function localRulesFixture(options: Partial<RootEvictionConfigurati
       return { input, result }
     },
     async project() {
-      for (const intent of await f.store.projections(64)) await f.store.projected(intent)
+      for await (const intent of asyncValues(await f.store.projections(64)))
+        await f.store.projected(intent)
     },
     async cleanup() {
-      for (const connection of connections) await connection.close()
+      for await (const connection of asyncValues(connections)) await connection.close()
       await f.cleanup()
     }
   }

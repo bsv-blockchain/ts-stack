@@ -66,11 +66,10 @@ export function guardOutputLookupResponse(
   const original = 'operation' in options.initial ? { ...options.initial } : undefined
   let control =
     'error' in options.initial ? lookupResponseControl(options.initial.error) : undefined
-  let binding = original
-    ? original.operation === 'close'
-      ? disclosure.control(original.body, caller)
-      : disclosure.bind(original.operation, original.body, caller)
-    : disclosure.control(new TextDecoder().decode(control!.body), caller)
+  let binding: OutputLookupResponseBinding
+  if (!original) binding = disclosure.control(new TextDecoder().decode(control!.body), caller)
+  else if (original.operation === 'close') binding = disclosure.control(original.body, caller)
+  else binding = disclosure.bind(original.operation, original.body, caller)
   const controlHeaders = {
     ...options.controlHeaders,
     'content-type': 'application/json',

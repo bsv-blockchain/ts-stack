@@ -297,18 +297,22 @@ class LookupHTTPHandler {
     else execute()
   }
 
-  private async execute(req: Request, res: Response, operation: LookupOperation): Promise<void> {
-    const who = selection(req)
-    res.set({
-      'x-bsv-overlay-capability': who.capabilityDigest,
-      'x-bsv-overlay-profile': OUTPUT_LOOKUP_PROFILE
-    })
+  private authenticatePrincipal(req: Request, who: OutputLookupCaller): void {
     if (this.options.authentication === 'brc103') {
       const auth = (req as Request & { auth?: { identityKey?: string } }).auth
       if (auth?.identityKey === undefined || auth.identityKey === 'unknown')
         throw new OutputProtocolError('unauthorized', 'Lookup requires an authenticated principal')
       who.principal = outputIdentity(auth?.identityKey)
     }
+  }
+
+  private async execute(req: Request, res: Response, operation: LookupOperation): Promise<void> {
+    const who = selection(req)
+    res.set({
+      'x-bsv-overlay-capability': who.capabilityDigest,
+      'x-bsv-overlay-profile': OUTPUT_LOOKUP_PROFILE
+    })
+    this.authenticatePrincipal(req, who)
     const controller = new AbortController(),
       cancel = () => controller.abort()
     req.once('aborted', cancel)

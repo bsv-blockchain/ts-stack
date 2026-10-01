@@ -1,3 +1,4 @@
+import type { ProposalKnowledgeView } from './proposals/ProposalKnowledgeView.js'
 import type {
   OutputChain,
   OutputPartition,
@@ -187,6 +188,8 @@ export type CommitResult =
   | { status: 'committed' | 'replayed'; revision: StoreRevision }
   | { status: 'conflict' | 'equivocation' | 'limited' | 'context-changed'; reason: string }
 export interface AcceptedInput {
+  /** Optional authenticated intent and provider reports; never Bitcoin spend eligibility. */
+  proposals?: ProposalKnowledgeView
   partition: OutputPartition
   generation: OutputU64
   revision: StoreRevision

@@ -1,3 +1,4 @@
+import { pendingWork } from '../internal/pendingWork.js'
 import {
   OutputProtocolError,
   canonicalOutputJSON,
@@ -114,17 +115,16 @@ export class ProposalScheduler {
   /** Concurrent callers share one bounded page; source/expiry failures never turn into empty success. */
   async runOnce(): Promise<ProposalScheduleReport> {
     outputAssert(!this.stopped, stopped, 'cancelled')
-    if (!this.scanning)
-      this.scanning = this.scan().finally(() => {
-        this.scanning = undefined
-      })
+    this.scanning ??= this.scan().finally(() => {
+      this.scanning = undefined
+    })
     return await this.scanning
   }
 
   /** Observe completion; scan or observer failure stops intake. The observer must not await stop(). */
   async start(onPass: (report: ProposalScheduleReport) => void | Promise<void>): Promise<void> {
     outputAssert(!this.stopped, stopped, 'cancelled')
-    if (!this.loop) this.loop = this.runLoop(onPass).finally(() => this.halt())
+    this.loop ??= this.runLoop(onPass).finally(() => this.halt())
     await this.loop
   }
   /** Coalesced hint only. Startup and periodic scans independently recover lost hints. */
@@ -209,31 +209,51 @@ export class ProposalScheduler {
     // Keep completed outcomes queued if inventory fails; only consume them once
     // this pass can return a report to its observer.
     this.collect(report)
+    for await (const completed of this.scanItems(items, report)) report.expiryChecks += completed
+    this.cursor = next
+    this.collect(report)
+    return report
+  }
+  /** Pull through synchronous launches until the next real expiry boundary.
+   * Yielding between every item would invoke a deferred recovery before an
+   * immediately following expiry callback can begin shutdown.
+   */
+  private *scanItems(
+    items: ProposalMaintenanceItem[],
+    report: ProposalScheduleReport
+  ): Generator<Promise<number>, void, undefined> {
     for (const candidate of items) {
       if (this.stopped) break
       report.scanned++
       if (candidate.state === 'active') {
-        try {
-          await this.service.expire(candidate.channelKey)
-          report.expiryChecks++
-        } catch (error) {
-          report.failures.push({ key: candidate.channelKey, phase: 'expiry', error })
-        }
+        yield this.expire(candidate.channelKey, report)
       } else if (this.jobs.size < this.maximum && !this.jobs.has(candidate.proposalId)) {
         this.launch(candidate.proposalId)
         report.recoveriesStarted++
       }
     }
-    this.cursor = next
-    this.collect(report)
-    return report
+  }
+  private async expire(channelKey: string, report: ProposalScheduleReport): Promise<number> {
+    try {
+      await this.service.expire(channelKey)
+      return 1
+    } catch (error) {
+      report.failures.push({ key: channelKey, phase: 'expiry', error })
+      return 0
+    }
   }
   private async runLoop(
     onPass: (report: ProposalScheduleReport) => void | Promise<void>
   ): Promise<void> {
-    while (!this.stopped) {
-      this.wakeRequested = false
-      await onPass(await this.runOnce())
+    const passes = pendingWork(
+      () => !this.stopped,
+      () => {
+        this.wakeRequested = false
+        return this.runOnce()
+      }
+    )
+    for await (const report of passes) {
+      await onPass(report)
       if (!this.stopped && !this.wakeRequested)
         await new Promise<void>(resolve => {
           const finish = (): void => {

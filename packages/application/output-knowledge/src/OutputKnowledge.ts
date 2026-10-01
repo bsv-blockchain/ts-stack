@@ -308,8 +308,20 @@ export class OutputKnowledge {
       () => this.dirty && !this.abort.signal.aborted,
       async () => {
         this.dirty = false
-        await this.operation(signal => this.options.worker.advance(this.options.store, signal))
-        return this.options.store.read(undefined, this.abort.signal)
+        return this.operation(async signal => {
+          await this.options.worker.advance(this.options.store, signal)
+          try {
+            return await this.options.store.read(undefined, signal)
+          } catch (error) {
+            if (!(error instanceof OutputProtocolError) || error.code !== 'expired') throw error
+            this.projection = undefined
+            // Time may cross an expiry after the worker returns. Allow one
+            // recovery pass within this operation's original deadline; a worker
+            // that still cannot invalidate must fail closed without a retry loop.
+            await this.options.worker.advance(this.options.store, signal)
+            return this.options.store.read(undefined, signal)
+          }
+        })
       }
     )
     for await (const input of inputs) {

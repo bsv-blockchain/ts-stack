@@ -87,6 +87,28 @@ export class ProposalPolicyRegistry {
     )
   }
 
+  /** Validate once and require installed policy permission; current host access remains separate. */
+  authorize(
+    action: ProposalAction,
+    input: unknown,
+    scope: ProposalScope,
+    caller: string
+  ): OutputSignedProposal {
+    const proposal = this.validate(input, scope)
+    if (
+      !this.resolve(proposal.body).policy.permits(
+        action,
+        structuredClone(proposal.body),
+        outputIdentity(caller)
+      )
+    )
+      throw new OutputProtocolError(
+        'unauthorized',
+        'Installed proposal policy does not permit this caller'
+      )
+    return proposal
+  }
+
   /** Validate the signed successor relation; durable storage must still serialize the active head. */
   successor(previous: OutputSignedProposal, next: OutputSignedProposal): void {
     const prior = this.validate(previous, previous.body)

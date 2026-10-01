@@ -13,7 +13,7 @@ import type { LookupProviderCaller, LookupAuthorizationContext } from './LookupP
 import type { LookupProviderContracts } from './LookupProviderContracts.js'
 import type { LookupSessionStorage, LookupSessionAuthorization } from './LookupSessionStorage.js'
 import type { LookupSessionSend } from './LookupSessionSend.js'
-import { normalizeLookupDisclosureGuards } from './LookupSessionCodec.js'
+import { normalizeLookupDisclosureGuards, type LookupSessionHeader } from './LookupSessionCodec.js'
 
 export interface LookupResponseDisclosureOptions {
   /** Shared or dedicated physical work budget; cancellation retains its slot until settlement. */
@@ -36,6 +36,28 @@ export interface BoundLookupResponse {
     enqueue: (bytes: Uint8Array) => undefined,
     signal: AbortSignal
   ): Promise<void>
+}
+
+function requireCurrentAuthorization(
+  header: LookupSessionHeader | undefined,
+  principal: string | null,
+  auth: Omit<LookupSessionAuthorization, 'principal'>
+): void {
+  if (
+    header?.principal !== principal ||
+    header.access !== auth.access ||
+    header.guards.length !== auth.guards.length ||
+    header.guards.some(
+      original =>
+        !auth.guards.some(
+          current =>
+            current.id === original.id &&
+            current.revision === original.revision &&
+            current.failure === original.failure
+        )
+    )
+  )
+    throw new OutputProtocolError('unauthorized', 'Lookup response authorization partition changed')
 }
 
 /**
@@ -116,25 +138,7 @@ export class LookupResponseDisclosure {
             },
             (header, owned) => {
               this.check(owned, expected, identity, who, signal)
-              if (
-                !header ||
-                header.principal !== who.principal ||
-                header.access !== auth.access ||
-                header.guards.length !== auth.guards.length ||
-                header.guards.some(
-                  original =>
-                    !auth.guards.some(
-                      current =>
-                        current.id === original.id &&
-                        current.revision === original.revision &&
-                        current.failure === original.failure
-                    )
-                )
-              )
-                throw new OutputProtocolError(
-                  'unauthorized',
-                  'Lookup response authorization partition changed'
-                )
+              requireCurrentAuthorization(header, who.principal, auth)
               return true
             },
             enqueue

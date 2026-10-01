@@ -599,7 +599,9 @@ export default class OverlayExpress {
   authSessionManager?: SessionManager | AsyncSessionManager
 
   private outputLookup?: Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>
-  private rootEviction?: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & { identity: string }
+  private rootEviction?: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & {
+    identity: string
+  }
   private proposalIdentity?: string
   private proposalRoutes?: (
     authenticate: express.RequestHandler,
@@ -994,7 +996,9 @@ export default class OverlayExpress {
    * this does not publish capabilities or retrofit existing serving paths.
    */
   configureRootEviction(
-    options: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & { identity: string }
+    options: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & {
+      identity: string
+    }
   ): void {
     if (this.isListening) throw new Error('Configure root coordination before start')
     assertSingleLineString(options.identity, 'Root coordination identity', 66, false)
@@ -1002,7 +1006,9 @@ export default class OverlayExpress {
       throw new TypeError('Root origins must be an array')
     this.rootEviction = {
       ...options,
-      ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: [...options.allowedOrigins] })
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
     }
   }
 
@@ -1012,7 +1018,9 @@ export default class OverlayExpress {
    * host declarations. No proposal enters ordinary admission except explicit finalize.
    */
   configureProposals<Entry>(
-    options: Omit<ProposalRouteOptions<Entry>, 'authenticate' | 'handleHandshake'> & { identity: string }
+    options: Omit<ProposalRouteOptions<Entry>, 'authenticate' | 'handleHandshake'> & {
+      identity: string
+    }
   ): void {
     if (this.isListening) throw new Error('Configure proposals before start')
     assertSingleLineString(options.identity, 'Proposal identity', 66, false)
@@ -1020,7 +1028,9 @@ export default class OverlayExpress {
       throw new TypeError('Proposal origins must be an array')
     const owned = {
       ...options,
-      ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: [...options.allowedOrigins] })
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
     }
     this.proposalIdentity = options.identity
     this.proposalRoutes = async (authenticate, handleHandshake, limits) => {
@@ -2405,9 +2415,10 @@ export default class OverlayExpress {
     let companionAuth: express.RequestHandler | undefined
     if (authenticatedLookup || rootEviction || proposalRoutes) {
       if (!this.serverWallet) {
-        throw new Error(authenticatedLookup
-          ? 'Authenticated live lookup requires a server wallet'
-          : rootEviction ? 'Root coordination requires a server wallet' : 'Proposals require a server wallet')
+        if (authenticatedLookup)
+          throw new Error('Authenticated live lookup requires a server wallet')
+        if (rootEviction) throw new Error('Root coordination requires a server wallet')
+        throw new Error('Proposals require a server wallet')
       }
       const { publicKey } = await this.serverWallet.getPublicKey({ identityKey: true })
       if (authenticatedLookup && publicKey !== this.outputLookup!.identity)
@@ -2574,7 +2585,10 @@ export default class OverlayExpress {
           createOutputLookupRouter({
             ...this.outputLookup,
             authenticate: companionAuth,
-            maximumRequestBytes: Math.min(this.outputLookup.maximumRequestBytes ?? 1048576, jsonBytes),
+            maximumRequestBytes: Math.min(
+              this.outputLookup.maximumRequestBytes ?? 1048576,
+              jsonBytes
+            ),
             maximumResponseBytes: Math.min(
               this.outputLookup.maximumResponseBytes ?? 4194304,
               maxResponseBytes === -1 ? 4194304 : maxResponseBytes
@@ -2584,7 +2598,9 @@ export default class OverlayExpress {
       }
       if (rootEviction) {
         const { createRootEvictionRouter } = await import('./RootEvictionRoutes.js')
-        const originSetting = rootEviction.allowedOrigins ?? edgePolicy.allowedOrigins ??
+        const originSetting =
+          rootEviction.allowedOrigins ??
+          edgePolicy.allowedOrigins ??
           readCorsOriginSetting(edgePolicy.environmentPrefix)
         this.app.use(
           createRootEvictionRouter({
@@ -2601,11 +2617,14 @@ export default class OverlayExpress {
         )
       }
       if (proposalRoutes) {
-        this.app.use(await proposalRoutes(companionAuth!, !authenticatedLookup && !rootEviction, {
-          request: jsonBytes,
-          response: maxResponseBytes === -1 ? 4194304 : maxResponseBytes,
-          origins: edgePolicy.allowedOrigins ?? readCorsOriginSetting(edgePolicy.environmentPrefix)
-        }))
+        this.app.use(
+          await proposalRoutes(companionAuth!, !authenticatedLookup && !rootEviction, {
+            request: jsonBytes,
+            response: maxResponseBytes === -1 ? 4194304 : maxResponseBytes,
+            origins:
+              edgePolicy.allowedOrigins ?? readCorsOriginSetting(edgePolicy.environmentPrefix)
+          })
+        )
       }
     }
     this.app.use(
@@ -3179,11 +3198,13 @@ export default class OverlayExpress {
      * are present, allowing Bearer token fallback.
      */
     if (this.serverWallet !== undefined) {
-      const bsvAuth = companionAuth ?? createAuthMiddleware({
-        wallet: this.serverWallet,
-        sessionManager: this.authSessionManager,
-        allowUnauthenticated: true
-      })
+      const bsvAuth =
+        companionAuth ??
+        createAuthMiddleware({
+          wallet: this.serverWallet,
+          sessionManager: this.authSessionManager,
+          allowUnauthenticated: true
+        })
       this.app.use(bsvAuth as any)
       this.logger.log(chalk.blue('BSV mutual authentication middleware enabled.'))
     }

@@ -89,6 +89,18 @@ describe('installed BRC-194 proposal policies', () => {
     ).toThrow('Invalid')
   })
 
+  it.each([null, false, 1, 'parameters', []])(
+    'rejects a malformed local policy parameter result before installation: %j',
+    result => {
+      const malformed = Object.assign(new AuthorDocumentPolicy(), {
+        parameters: () => result as unknown as ReturnType<ProposalPolicy['parameters']>
+      })
+      expect(() => new ProposalPolicyRegistry([{ policy: malformed, parameters: {} }])).toThrow(
+        'parameters must be an object'
+      )
+    }
+  )
+
   it('does not transfer support for a critical extension from a different installed policy', () => {
     const extended: ProposalPolicy = Object.assign(new AuthorDocumentPolicy(), {
       id: 'urn:example:extended-document:1',

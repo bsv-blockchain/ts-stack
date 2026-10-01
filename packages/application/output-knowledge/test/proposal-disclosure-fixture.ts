@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../src/internal/synchronousPromise.js'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -60,10 +61,15 @@ export async function proposalDisclosureFixture(
     now: () => state.now,
     access: () => state.allowed,
     // These test ports isolate response authority, not Script or Engine verification.
-    evidence: { verify: async () => Utils.toBase64(transaction.toBinary()) },
+    evidence: { verify: () => synchronousPromise(() => Utils.toBase64(transaction.toBinary())) },
     admission: {
       maximumOutcomeBytes: 4096,
-      recover: async job => ({ status: 'unresolved', operationId: job.operationId, txid: job.txid })
+      recover: job =>
+        synchronousPromise(() => ({
+          status: 'unresolved' as const,
+          operationId: job.operationId,
+          txid: job.txid
+        }))
     }
   }
   const service = new ProposalService(options)

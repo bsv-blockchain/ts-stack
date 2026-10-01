@@ -1274,6 +1274,30 @@
           "Only durable worker invalidation permits publication to resume; a late timer does not renew state.",
           "Existing Bitcoin assessment expiry and omitted-hook behavior remain unchanged."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-client-verification.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Explicit source-policy permission, exact signed-envelope receipt qualification and sealed local proposal replay",
+        "target": "At least 300 generated duplicate, receipt-clock, exact-envelope and replay histories",
+        "invariants": [
+          "A verified proposal binds the exact source, reader, policy and signature variant.",
+          "Duplicate delivery cannot replace the first local receipt time or move a check to a different source generation.",
+          "Replayed local frames preserve exact authenticated decisions without accepting changed signatures or configuration."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-core.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Opt-in whole-group proposal acceptance, isolated Bitcoin evidence and durable exclusive expiry across local storage and runtime publication",
+        "target": "At least 300 generated receipt, bounded-worker, duplicate, restart and monotonic-expiry schedules",
+        "invariants": [
+          "Proposal-only input cannot create Bitcoin verification work or effects.",
+          "Count-limited work commits partial verification but publishes only complete source groups.",
+          "First local receipt times and accepted expiry survive duplicate receipt, storage reopen and clock rollback."
+        ]
       }
     ],
     "exclusions": [

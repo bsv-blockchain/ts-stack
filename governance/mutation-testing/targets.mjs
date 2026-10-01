@@ -82,6 +82,9 @@ function rootEvictionTarget(property, files) {
     manifest: 'packages/application/output-knowledge/package.json',
     propertyTest: `packages/application/output-knowledge/test/${property}`,
     additionalInputs: [
+      'src/internal/asyncValues.ts',
+      'src/internal/pendingWork.ts',
+      'src/internal/synchronousPromise.ts',
       'src/root-eviction/**',
       'src/internal/BoundedOutputWork.ts',
       'test/root-eviction-service-fixture.ts',
@@ -140,7 +143,7 @@ function lineageGraphTargets(repositoryRoot) {
     resolve(repositoryRoot, 'packages/application/output-knowledge', file),
     'utf8'
   ).split('\n')
-  const traversalStart = lines.findIndex(line => line === 'interface Traversal {') + 1
+  const traversalStart = lines.indexOf('interface Traversal {') + 1
   if (traversalStart < 2 || traversalStart >= lines.length)
     throw new Error('Unable to partition lineage layout and traversal responsibilities')
   return {
@@ -622,7 +625,13 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/application/output-knowledge/package.json',
       propertyTest:
         'packages/application/output-knowledge/test/proposal-disclosure.property.test.ts',
-      additionalInputs: ['src/proposals/**', 'test/proposal-*.ts'],
+      additionalInputs: [
+        'src/internal/asyncValues.ts',
+        'src/internal/pendingWork.ts',
+        'src/internal/synchronousPromise.ts',
+        'src/proposals/**',
+        'test/proposal-*.ts'
+      ],
       mutate: ['src/proposals/ProposalResponseDisclosure.ts'],
       ...jestTarget('jest.config.js', ['<rootDir>/test/proposal-disclosure*.test.ts'], {
         esm: true
@@ -638,7 +647,13 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/application/output-knowledge/package.json',
       propertyTest:
         'packages/application/output-knowledge/test/proposal-maintenance.property.test.ts',
-      additionalInputs: ['src/proposals/**', 'test/proposal-*.ts'],
+      additionalInputs: [
+        'src/internal/asyncValues.ts',
+        'src/internal/pendingWork.ts',
+        'src/internal/synchronousPromise.ts',
+        'src/proposals/**',
+        'test/proposal-*.ts'
+      ],
       mutate: ['src/proposals/ProposalMaintenance.ts', 'src/proposals/ProposalScheduler.ts'],
       ...jestTarget(
         'jest.config.js',
@@ -655,7 +670,14 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
       propertyTest: 'packages/application/output-knowledge/test/proposal-send.property.test.ts',
-      additionalInputs: ['src/proposals/**', 'test/proposal-*.ts', 'test/fixtures/proposal*.mjs'],
+      additionalInputs: [
+        'src/internal/asyncValues.ts',
+        'src/internal/pendingWork.ts',
+        'src/internal/synchronousPromise.ts',
+        'src/proposals/**',
+        'test/proposal-*.ts',
+        'test/fixtures/proposal*.mjs'
+      ],
       mutate: ['src/proposals/SQLiteProposalJournal.ts'],
       ...jestTarget(
         'jest.config.js',
@@ -969,12 +991,86 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'proposal-client-verification': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/proposal-client-verification.property.test.ts',
+      additionalInputs: [
+        'src/*.ts',
+        'src/proposals/**',
+        'src/storage/**',
+        'src/internal/**',
+        'test/*fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: [
+        'src/proposals/ProposalSourcePolicy.ts',
+        'src/proposals/ProposalVerificationPool.ts',
+        'src/proposals/ProposalLocalFrame.ts',
+        'src/proposals/ProposalPolicyRegistry.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/proposal-policy.test.ts',
+          '<rootDir>/test/proposal-source-policy.test.ts',
+          '<rootDir>/test/proposal-verification-pool.test.ts',
+          '<rootDir>/test/proposal-local-frame.test.ts',
+          '<rootDir>/test/proposal-client-verification.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
+    'output-knowledge-proposal-core': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/proposal-core.property.test.ts',
+      additionalInputs: [
+        'src/*.ts',
+        'src/proposals/**',
+        'src/storage/**',
+        'src/internal/**',
+        'test/*fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: [
+        'src/BitcoinKnowledge.ts',
+        'src/BitcoinKnowledgeState.ts',
+        'src/KnowledgeStore.ts',
+        'src/proposals/ProposalLocalState.ts',
+        'src/proposals/ProposalKnowledgeView.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/bitcoin-knowledge.test.ts',
+          '<rootDir>/test/knowledge-store.test.ts',
+          '<rootDir>/test/local-replay-compatibility.test.ts',
+          '<rootDir>/test/currentness.test.ts',
+          '<rootDir>/test/runtime.test.ts',
+          '<rootDir>/test/runtime-publication.property.test.ts',
+          '<rootDir>/test/membership.test.ts',
+          '<rootDir>/test/quarantine.test.ts',
+          '<rootDir>/test/verification-ledger.test.ts',
+          '<rootDir>/test/reconciliation.test.ts',
+          '<rootDir>/test/proposal-bitcoin-core.test.ts',
+          '<rootDir>/test/proposal-knowledge-view.test.ts',
+          '<rootDir>/test/knowledge-read-window.test.ts',
+          '<rootDir>/test/proposal-core.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'output-knowledge-runtime': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
       propertyTest:
         'packages/application/output-knowledge/test/runtime-publication.property.test.ts',
       additionalInputs: [
+        'src/*.ts',
+        'src/proposals/**',
+        'test/proposal-fixture.ts',
         'src/ports.ts',
         'src/KnowledgeStore.ts',
         'src/RuntimeEvents.ts',
@@ -988,7 +1084,11 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: ['src/OutputKnowledge.ts'],
       ...jestTarget(
         'jest.config.js',
-        ['<rootDir>/test/runtime.test.ts', '<rootDir>/test/runtime-publication.property.test.ts'],
+        [
+          '<rootDir>/test/runtime.test.ts',
+          '<rootDir>/test/runtime-publication.property.test.ts',
+          '<rootDir>/test/proposal-bitcoin-core.test.ts'
+        ],
         { esm: true, buildCommand: 'pnpm build' }
       )
     },

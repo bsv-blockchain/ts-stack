@@ -36,6 +36,30 @@ function decimal(value: unknown): string {
   return BigInt('0x' + value).toString()
 }
 
+function responseReference(
+  reference: ProposalJournalResponseReference
+): ProposalJournalResponseReference {
+  closedOutputObject(reference, ['kind'], ['channelKey', 'proposalId'])
+  if (reference.kind === 'channel') {
+    closedOutputObject(reference, ['kind', 'channelKey'])
+    outputString(reference.channelKey)
+  } else if (reference.kind === 'proposal') {
+    closedOutputObject(reference, ['kind', 'proposalId'])
+    outputHex32(reference.proposalId)
+  } else if (reference.kind === 'control') closedOutputObject(reference, ['kind'])
+  else throw new OutputProtocolError('invalid', 'Invalid proposal response reference')
+  return reference
+}
+function responseCallbacks(validate: unknown, enqueue: unknown): void {
+  if (
+    typeof validate !== 'function' ||
+    typeof enqueue !== 'function' ||
+    validate.constructor.name === 'AsyncFunction' ||
+    enqueue.constructor.name === 'AsyncFunction'
+  )
+    throw new OutputProtocolError('invalid', 'Proposal response callbacks must be synchronous')
+}
+
 export type SQLiteProposalJournalMode = 'create-or-open' | 'create' | 'open'
 
 /**
@@ -248,6 +272,14 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
     })
   }
 
+  private responseEntry(
+    reference: ProposalJournalResponseReference
+  ): ProposalJournalEntry | undefined {
+    if (reference.kind === 'channel') return this.state.channelEntry(reference.channelKey)
+    if (reference.kind === 'proposal') return this.state.proposalEntry(reference.proposalId)
+    return undefined
+  }
+
   enqueueResponse(
     candidate: { reference: ProposalJournalResponseReference; bytes: Uint8Array },
     validate: (entry: ProposalJournalEntry | undefined, bytes: Uint8Array) => boolean,
@@ -258,23 +290,8 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
       closedOutputObject(candidate, ['reference', 'bytes'])
       if (!(candidate.bytes instanceof Uint8Array) || candidate.bytes.byteLength > 4194304)
         throw new OutputProtocolError('invalid', 'Invalid proposal response byte capacity')
-      const reference = candidate.reference
-      closedOutputObject(reference, ['kind'], ['channelKey', 'proposalId'])
-      if (reference.kind === 'channel') {
-        closedOutputObject(reference, ['kind', 'channelKey'])
-        outputString(reference.channelKey)
-      } else if (reference.kind === 'proposal') {
-        closedOutputObject(reference, ['kind', 'proposalId'])
-        outputHex32(reference.proposalId)
-      } else if (reference.kind === 'control') closedOutputObject(reference, ['kind'])
-      else throw new OutputProtocolError('invalid', 'Invalid proposal response reference')
-      if (
-        typeof validate !== 'function' ||
-        typeof enqueue !== 'function' ||
-        validate.constructor.name === 'AsyncFunction' ||
-        enqueue.constructor.name === 'AsyncFunction'
-      )
-        throw new OutputProtocolError('invalid', 'Proposal response callbacks must be synchronous')
+      const reference = responseReference(candidate.reference)
+      responseCallbacks(validate, enqueue)
       const bytes = new Uint8Array(candidate.bytes)
       try {
         this.database.exec('BEGIN IMMEDIATE')
@@ -291,12 +308,7 @@ export class SQLiteProposalJournal implements ProposalJournalStorage, ProposalJo
       this.sending = true
       try {
         this.refresh()
-        const entry =
-          reference.kind === 'channel'
-            ? this.state.channelEntry(reference.channelKey)
-            : reference.kind === 'proposal'
-              ? this.state.proposalEntry(reference.proposalId)
-              : undefined
+        const entry = this.responseEntry(reference)
         if (validate(entry, bytes.slice()) !== true)
           throw new OutputProtocolError('unauthorized', 'Proposal response is no longer authorized')
         if (enqueue(bytes) !== undefined)

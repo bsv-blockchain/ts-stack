@@ -1,6 +1,13 @@
 ---
 id: non-final-proposals
 title: Authenticated Non-Final Proposals
+kind: guide
+version: '1.0.0'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
+review_cadence_days: 30
+status: experimental
+tags: [overlays, sdk, proposals, application-state]
 ---
 
 # Authenticated Non-Final Proposals
@@ -166,6 +173,73 @@ fences and operation identities. This scheduler does not implement compaction,
 configuration migration, a remotely resumable private subscription, or a new
 protocol profile. Reaching capacity must remain explicit until a qualified
 retention/compaction adapter preserves those contracts.
+
+## Receive proposals in an application journal
+
+Install `ProposalSourcePolicy` from `@bsv/output-knowledge/proposals` and pass it
+as the optional `proposals` setting of `BitcoinKnowledge`. Each rule selects one
+exact chain, provider, service, query digest, rules digest and access partition,
+plus the installed proposal policy, maximum signed lifetime and permitted future
+clock skew. The configured reader must be permitted by that policy. Epoch remains
+part of each received observation's identity; changing an epoch does not silently
+select a different policy. Current provider authorization is still enforced by
+the authenticated source and private service.
+
+The current observation contract requires the lookup source's service name and
+the proposal service name to agree. A capability may advertise the same name for
+different service kinds. The core rejects a different-name mapping before opening
+proposal state; it does not reinterpret an existing wire contract. A later query
+profile may define richer relationships through an explicit compatible extension.
+
+Receipt and acceptance are separate commits. Receipt retains the exact signed
+envelope variant and its first local receipt time, independently of the provider's
+reported arrival time. Bounded worker passes check signatures and installed
+permission under the same count, cancellation and deadline budget as Bitcoin
+verification. Each retained result binds the source group, observation and exact
+envelope. Replaying a committed result checks those bindings without repeating
+signature verification. Invalid, unsupported or unauthorized proposals quarantine
+the whole group, including any Bitcoin observations alongside them. Operational
+failures remain failures rather than becoming negative signature results.
+
+Accepted snapshots expose `input.proposals` alongside the existing Bitcoin facts
+and assessments. `heads` contains authenticated signed variants with their source,
+generation, first local receipt time, lifetime and continuity. The name does not
+mean that any variant is the channel's current head. Historical lookups may return
+earlier proposals. `states` and `removals` remain attributable provider reports;
+each must refer to an authenticated proposal in the same source generation,
+either within its atomic group or an already published accepted group. Acceptance
+behind an unresolved membership gap does not establish that supporting publication.
+Contradictory signed withdrawal or expiry assertions quarantine the group.
+
+This generic view selects no global winner, reconstructs no complete predecessor
+history and authorizes no wallet, admission or private-release effect. A current
+channel view requires a separately installed query contract that defines its
+snapshot, ordering, replacement and removal semantics. Applications must not infer
+currentness from lexical ordering of IDs or from a provider reporting `active`.
+
+Proposal-enabled journals use a distinct local frame version 4 containing the
+unchanged version-3 Bitcoin frame, sealed source/reader/policy configuration,
+receipt times, verification results and a monotonic evaluation time. Use a new
+journal namespace when adopting this mode or changing that installation. Retain
+the old journal for audit and recovery; neither enabling nor disabling this option
+silently rewrites existing history. Omitted `proposals` retains the existing local
+formats and behavior, including leaving proposal groups unaccepted.
+
+Signed expiry is exclusive. A durable accepted reevaluation changes `unexpired`
+to `expired`; a backward clock adjustment cannot revive it. `KnowledgeStore.read`
+and `watch` reject stale current or historical publication until that reevaluation
+commits. Raw journal inspection remains available for audit. The runtime schedules
+the worker's earliest deadline, and allows one bounded recovery pass if expiry
+crosses between worker completion and the read. A worker that cannot establish a
+fresh view fails explicitly; it does not trigger an unbounded retry loop. Expiry
+never cancels an already reserved finalization or converts a provider report into
+a locally verified admission result. Applications must also retire activity that
+they have already rendered when its displayed deadline passes.
+
+The [compiled client example](./compiled-package-examples.md#receive-authenticated-proposal-observations)
+shows this composition with injected source selection, storage and Bitcoin
+verification. A registered private query, its projection producer and native
+disclosure bridge are separate host integrations.
 
 ## Validation and remaining integration
 

@@ -1295,3 +1295,55 @@ export function createDeadlineAwareRuntime(
   return new OutputKnowledge({ store, worker, projector })
 }
 ```
+
+## Receive authenticated proposal observations
+
+Use a new journal namespace for this opt-in mode. The source rule must be derived
+from an independently authenticated selection; this example does not discover a
+provider, define a current-channel query, or authorize an application effect.
+The store, worker and runtime share the same clock and account partition.
+
+```ts compile
+// example-id: output-proposal-client-acceptance
+import {
+  BitcoinKnowledge,
+  KnowledgeStore as ProposalJournalStore,
+  OutputKnowledge as ProposalRuntime,
+  type EvidenceVerifier,
+  type JournalStorage
+} from '@bsv/output-knowledge'
+import {
+  ProposalSourcePolicy,
+  type ProposalPolicyRegistry,
+  type ProposalSourceRule
+} from '@bsv/output-knowledge/proposals'
+import type { OutputPartition } from '@bsv/sdk'
+
+export function receiveProposalObservations(options: {
+  storage: JournalStorage
+  partition: OutputPartition
+  verifier: EvidenceVerifier
+  policies: ProposalPolicyRegistry
+  reader: string
+  source: ProposalSourceRule
+  now: () => number
+}): { store: ProposalJournalStore; runtime: ProposalRuntime } {
+  const proposals = new ProposalSourcePolicy(options.policies, options.reader, [options.source])
+  const worker = new BitcoinKnowledge({
+    journalId: options.storage.namespace,
+    partition: options.partition,
+    nonFinal: true,
+    proposals,
+    verifier: options.verifier,
+    now: options.now
+  })
+  const store = new ProposalJournalStore(options.storage, worker, {
+    partition: options.partition,
+    now: options.now
+  })
+  const runtime = new ProposalRuntime({ store, worker, now: options.now })
+  // Commit the verification context, then add explicitly authenticated sources.
+  // Render accepted proposals separately from Bitcoin facts and retire expired UI.
+  return { store, runtime }
+}
+```

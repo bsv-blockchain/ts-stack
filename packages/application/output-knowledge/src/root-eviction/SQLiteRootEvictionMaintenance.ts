@@ -77,7 +77,7 @@ export class SQLiteRootEvictionMaintenance implements RootEvictionMaintenanceSto
       const digests = rows.slice(0, input.maximum).map(row => outputHex32(row.digest))
       return {
         digests,
-        ...(rows.length > input.maximum ? { next: digests[digests.length - 1] } : {})
+        ...(rows.length > input.maximum ? { next: digests.at(-1) } : {})
       }
     })
   }

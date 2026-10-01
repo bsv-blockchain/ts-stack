@@ -1,3 +1,5 @@
+import { asyncValues } from '../internal/asyncValues.js'
+import { pendingWork } from '../internal/pendingWork.js'
 import { outputAssert, outputHex32, outputString } from '@bsv/sdk'
 import { BoundedOutputWork, checkOutputWork } from '../internal/BoundedOutputWork.js'
 import type { RootEvictionContracts } from './RootEvictionContracts.js'
@@ -130,10 +132,9 @@ export class RootEvictionScheduler {
   /** One bounded pass; concurrent callers share that pass instead of queuing scans. */
   async runOnce(): Promise<RootEvictionScheduleReport> {
     outputAssert(!this.stopped, cancelled, 'cancelled')
-    if (!this.scanning)
-      this.scanning = this.scan().finally(() => {
-        this.scanning = undefined
-      })
+    this.scanning ??= this.scan().finally(() => {
+      this.scanning = undefined
+    })
     return await this.scanning
   }
 
@@ -145,7 +146,7 @@ export class RootEvictionScheduler {
    */
   async start(onPass: (report: RootEvictionScheduleReport) => void | Promise<void>): Promise<void> {
     outputAssert(!this.stopped, cancelled, 'cancelled')
-    if (!this.loop) this.loop = this.runLoop(onPass).finally(() => this.halt())
+    this.loop ??= this.runLoop(onPass).finally(() => this.halt())
     await this.loop
   }
 
@@ -175,9 +176,15 @@ export class RootEvictionScheduler {
   private async runLoop(
     onPass: (report: RootEvictionScheduleReport) => void | Promise<void>
   ): Promise<void> {
-    while (!this.stopped) {
-      this.wakeRequested = false
-      await onPass(await this.runOnce())
+    const passes = pendingWork(
+      () => !this.stopped,
+      () => {
+        this.wakeRequested = false
+        return this.runOnce()
+      }
+    )
+    for await (const report of passes) {
+      await onPass(report)
       if (!this.stopped && !this.wakeRequested)
         await new Promise<void>(resolve => {
           const finish = (): void => {
@@ -203,7 +210,7 @@ export class RootEvictionScheduler {
       { maximum: this.pageSize, after: this.expiryCursor },
       maintenanceGuard
     )
-    for (const digest of page.value.digests) {
+    for await (const digest of asyncValues(page.value.digests)) {
       if (this.stopped) return report
       report.scanned++
       await this.expire(digest, report)
@@ -218,7 +225,7 @@ export class RootEvictionScheduler {
       maintenanceGuard
     )
     const launched: Promise<void>[] = []
-    for (const digest of pending.value.digests) {
+    for await (const digest of asyncValues(pending.value.digests)) {
       if (this.stopped) break
       if (this.jobs.has(digest)) continue
       const remaining = await this.expire(digest, report)

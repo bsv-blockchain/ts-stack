@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 102)
+  assert.equal(result.summary.propertySuites, 104)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 102)
+  assert.equal(result.summary.mutationTargets, 104)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -667,7 +667,13 @@ test('proposal disclosure qualification retains its entire authority boundary an
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/proposal-disclosure*.test.ts'
   ])
-  assert.deepEqual(target.additionalInputs, ['src/proposals/**', 'test/proposal-*.ts'])
+  assert.deepEqual(target.additionalInputs, [
+    'src/internal/asyncValues.ts',
+    'src/internal/pendingWork.ts',
+    'src/internal/synchronousPromise.ts',
+    'src/proposals/**',
+    'test/proposal-*.ts'
+  ])
   const policy = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
@@ -731,7 +737,13 @@ test('proposal maintenance qualifies whole inventory and scheduler modules with 
     '<rootDir>/test/proposal-recovery.test.ts',
     '<rootDir>/test/proposal-open.test.ts'
   ])
-  assert.deepEqual(target.additionalInputs, ['src/proposals/**', 'test/proposal-*.ts'])
+  assert.deepEqual(target.additionalInputs, [
+    'src/internal/asyncValues.ts',
+    'src/internal/pendingWork.ts',
+    'src/internal/synchronousPromise.ts',
+    'src/proposals/**',
+    'test/proposal-*.ts'
+  ])
   const registration = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   ).targets.find(value => value.id === 'proposal-maintenance')

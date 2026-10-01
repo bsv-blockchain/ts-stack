@@ -1,3 +1,4 @@
+import { synchronousPromise } from '../src/internal/synchronousPromise.js'
 import { jest } from '@jest/globals'
 import type { RootEvictionCommitGuard } from '../src/root-eviction/RootEvictionCommitContext.js'
 import {
@@ -17,24 +18,28 @@ export async function schedulerFixture() {
   const f = await coordinatedFixture()
   const state = { now: '150', context: true, access: true, policy }
   const maintenance = SQLiteRootEvictionMaintenance.open(f.path, f.configuration)
-  const guard: jest.Mock<() => Promise<RootEvictionCommitGuard>> = jest.fn(async () => ({
-    expectedPolicyDigest: state.policy,
-    clock: () => state.now,
-    authorize: () => state.access,
-    contextCurrent: () => state.context
-  }))
-  const evaluate: jest.Mock<RootEvictionAutomaticEvaluation['evaluate']> = jest.fn(async observed =>
-    observed.value.result.outcomes.flatMap((outcome, index) =>
-      outcome.actionStatus === 'pending'
-        ? [
-            {
-              index,
-              disposition: 'reject' as const,
-              reasonCode: 'installed-review',
-              eligible: false
-            }
-          ]
-        : []
+  const guard: jest.Mock<() => Promise<RootEvictionCommitGuard>> = jest.fn(() =>
+    synchronousPromise(() => ({
+      expectedPolicyDigest: state.policy,
+      clock: () => state.now,
+      authorize: () => state.access,
+      contextCurrent: () => state.context
+    }))
+  )
+  const evaluate: jest.Mock<RootEvictionAutomaticEvaluation['evaluate']> = jest.fn(observed =>
+    synchronousPromise(() =>
+      observed.value.result.outcomes.flatMap((outcome, index) =>
+        outcome.actionStatus === 'pending'
+          ? [
+              {
+                index,
+                disposition: 'reject' as const,
+                reasonCode: 'installed-review',
+                eligible: false
+              }
+            ]
+          : []
+      )
     )
   )
   const automatic: RootEvictionAutomaticEvaluation = {

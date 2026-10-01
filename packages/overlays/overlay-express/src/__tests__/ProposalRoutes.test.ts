@@ -186,7 +186,7 @@ it('preserves actual framing, rejects earlier body parsing and supports explicit
     (await fetch(origin, { method: 'OPTIONS', headers: { origin: 'https://other.example' } }))
       .status
   ).toBe(403)
-  const duplicate = await f.fetch('get', f.query.replace('{', '{"version":1,'))
+  const duplicate = await f.fetch('get', '{"version":1,' + f.query.slice(1))
   expect(duplicate.status).toBe(400)
   expect((await duplicate.json()).error.code).toBe('invalid')
   const before = await fixture({}, true)

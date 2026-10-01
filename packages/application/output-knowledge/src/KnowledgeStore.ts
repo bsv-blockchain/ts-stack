@@ -35,6 +35,8 @@ import type {
  * A read replay must reproduce recorded decisions, not assign new arrival order.
  */
 export interface KnowledgeReducer {
+  /** Pure local exclusive read deadline; prepare/worker still owns durable invalidation. */
+  nextInvalidation?(input: AcceptedInput): string | undefined
   reduce(entries: readonly JournalEntry[], signal: AbortSignal): Promise<AcceptedInput>
   /** Validate a new transition and retain its local cryptographic replay material atomically. */
   prepare?(
@@ -74,6 +76,7 @@ export class KnowledgeStore {
   private readonly maximumReaders: number
   private readonly pollMs: number
   private readonly now: () => number
+  private readonly nextInvalidation: KnowledgeReducer['nextInvalidation']
   private readonly shutdown = new AbortController()
   private readonly wake = new Set<() => void>()
   private readers = 0
@@ -95,6 +98,7 @@ export class KnowledgeStore {
     this.maximumReaders = options.maximumReaders ?? 16
     this.pollMs = options.pollMs ?? 250
     this.now = options.now ?? Date.now
+    this.nextInvalidation = reducer.nextInvalidation?.bind(reducer)
     for (const [value, maximum] of [
       [this.maximumEntries, 4096],
       [this.maximumBytes, 64 * 1024 * 1024],
@@ -365,7 +369,20 @@ export class KnowledgeStore {
       if (entries.at(-1)?.revision.accepted !== requested)
         throw new OutputProtocolError('revision-unavailable', 'Accepted revision is unavailable')
       const input = await this.reduce(entries, abort)
-      const now = BigInt(Math.floor(this.now() / 1000))
+      const milliseconds = this.now(),
+        deadline = this.nextInvalidation?.(clone(input))
+      if (deadline !== undefined) {
+        const seconds = outputU64(deadline)
+        if (!Number.isSafeInteger(milliseconds) || milliseconds < 0)
+          throw new OutputProtocolError('invalid', 'Invalid knowledge publication clock')
+        if (BigInt(milliseconds) >= seconds * 1000n)
+          throw new OutputProtocolError(
+            'expired',
+            'Knowledge requires local expiry invalidation',
+            true
+          )
+      }
+      const now = BigInt(Math.floor(milliseconds / 1000))
       // A timer delayed by a suspended tab cannot expose expired assessments as
       // current. The runtime persists an invalidate event before the next read.
       if (

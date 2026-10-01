@@ -11,3 +11,9 @@ export * from './ProposalResponseDisclosure.js'
 export * from './SDKProposalEvidence.js'
 export * from './ProposalMaintenance.js'
 export * from './ProposalScheduler.js'
+export * from './ProposalSourcePolicy.js'
+export type {
+  ProposalObservationLocation,
+  AuthenticatedProposalHead,
+  ProposalKnowledgeView
+} from './ProposalKnowledgeView.js'

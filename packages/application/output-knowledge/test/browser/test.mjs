@@ -65,7 +65,7 @@ async function createConsumer(root) {
   )
   await mkdir(path.join(directory, 'browser'))
   await Promise.all(
-    ['index.html', 'main.ts'].map(file =>
+    ['index.html', 'main.ts', 'proposals.ts'].map(file =>
       cp(path.join(packageDirectory, 'test/browser', file), path.join(directory, 'browser', file))
     )
   )
@@ -177,9 +177,44 @@ try {
   assert.equal(missing.databases.includes('missing-control'), false)
   const lostCore = await page.evaluate(() => window.outputKnowledgeBrowser.loseCore())
   assert.deepEqual(lostCore, { code: 'reset-required', requests: [] })
+  const proposalReceipt = await page.evaluate(() =>
+    window.outputKnowledgeBrowser.proposals.initialize(true)
+  )
+  assert.equal(proposalReceipt.input.revision.received, '2')
+  assert.deepEqual(proposalReceipt.input.proposals.heads, [])
+  await page.close()
+  await browser.close()
+  browser = await puppeteer.launch(launch)
+  page = await openPage(browser, baseURL, errors)
+  assert.deepEqual(
+    await page.evaluate(() => window.outputKnowledgeBrowser.proposals.initialize(false)),
+    proposalReceipt
+  )
+  const intent = await page.evaluate(() => window.outputKnowledgeBrowser.proposals.accept())
+  assert.equal(intent.bitcoinChecks, 0)
+  assert.deepEqual(intent.input.facts, [])
+  assert.equal(intent.input.proposals.heads.length, 1)
+  assert.equal(intent.input.proposals.heads[0].firstReceivedAt, '1000')
+  assert.equal(intent.input.proposals.heads[0].lifetime, 'unexpired')
+  assert.deepEqual(
+    await page.evaluate(() => window.outputKnowledgeBrowser.proposals.read(1100000)),
+    {
+      code: 'expired',
+      bitcoinChecks: 0
+    }
+  )
+  const expired = await page.evaluate(() => window.outputKnowledgeBrowser.proposals.accept())
+  assert.equal(expired.input.proposals.heads[0].lifetime, 'expired')
+  await page.close()
+  page = await openPage(browser, baseURL, errors)
+  assert.deepEqual(
+    await page.evaluate(() => window.outputKnowledgeBrowser.proposals.initialize(false)),
+    expired,
+    'offline reopen with a rolled-back clock retains accepted expiry'
+  )
   assert.deepEqual(errors, [])
   console.log(
-    'ok - exact packed browser imports, strict CSP, native IndexedDB, browser/page restart, receipt-before-cursor, cross-tab CAS, missing-store recovery and lost-core fence'
+    'ok - exact packed browser imports, strict CSP, native IndexedDB, browser/page restart, receipt-before-cursor, cross-tab CAS, missing-store recovery, lost-core fence, proposal receipt/replay and durable exclusive expiry'
   )
 } finally {
   await browser?.close()

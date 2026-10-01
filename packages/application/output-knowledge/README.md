@@ -883,6 +883,32 @@ not point an existing service identity at an empty replacement database: loss of
 terminal fences requires retiring that identity, while existing finalization and
 recovery obligations still need recovery from the original retained storage.
 
+### Optional client acceptance
+
+Install `ProposalSourcePolicy` from the proposals entry and pass it as
+`BitcoinKnowledge`'s optional `proposals` setting. Rules bind the exact source
+partition, reader, installed policy and finite clock limits. Source and proposal
+service names must agree under the current observation codec. Use a new journal
+namespace: the opt-in local frame version 4 seals that installation and retains
+first local receipt times and exact signed-envelope verification decisions.
+Omitting the option preserves existing replay formats and behavior.
+
+Accepted input then includes a separate `proposals` view. Its authenticated
+`heads` are signed variants, not a current-channel winner; historical queries
+remain valid. State and removal reports are attributable provider claims bound
+to an authenticated head in the same atomic or already published source group.
+Invalid proposal material quarantines the whole group. Neither these records nor
+expiry authorize a Bitcoin spend, cancel finalization or establish admission.
+
+The worker durably reevaluates signed expiry, and the store's optional pure
+`nextInvalidation` hook closes stale direct reads as well as runtime publication.
+Expiry between worker return and read permits one recovery pass under the same
+deadline. Previously displayed UI activity still needs its own expiry handling.
+See the [client guide](../../../docs/guides/non-final-proposals.md#receive-proposals-in-an-application-journal)
+for source binding, currentness limits, restart behavior and migration rules.
+Private query/projection composition and complete-profile qualification remain
+separate work.
+
 ### Durable proposal service composition
 
 The SQLite journal also implements the optional `ProposalJournalSend` companion,

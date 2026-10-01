@@ -18,6 +18,56 @@ const targets = {
   two: { packageDirectory: 'packages/two' }
 }
 
+test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  assert.equal(Object.keys(configured).length, 104)
+  const client = configured['proposal-client-verification']
+  assert.deepEqual(client.mutate, [
+    'src/proposals/ProposalSourcePolicy.ts',
+    'src/proposals/ProposalVerificationPool.ts',
+    'src/proposals/ProposalLocalFrame.ts',
+    'src/proposals/ProposalPolicyRegistry.ts'
+  ])
+  const core = configured['output-knowledge-proposal-core']
+  assert.deepEqual(core.mutate, [
+    'src/BitcoinKnowledge.ts',
+    'src/BitcoinKnowledgeState.ts',
+    'src/KnowledgeStore.ts',
+    'src/proposals/ProposalLocalState.ts',
+    'src/proposals/ProposalKnowledgeView.ts'
+  ])
+  const runtime = configured['output-knowledge-runtime']
+  assert.deepEqual(runtime.mutate, ['src/OutputKnowledge.ts'])
+  for (const name of ['runtime', 'runtime-publication.property', 'proposal-bitcoin-core'])
+    assert.ok(
+      runtime.runnerOptions.jest.config.testMatch.includes(`<rootDir>/test/${name}.test.ts`)
+    )
+  for (const name of [
+    'bitcoin-knowledge',
+    'knowledge-store',
+    'local-replay-compatibility',
+    'currentness',
+    'runtime',
+    'runtime-publication.property',
+    'membership',
+    'quarantine',
+    'verification-ledger',
+    'reconciliation',
+    'proposal-bitcoin-core',
+    'proposal-knowledge-view',
+    'knowledge-read-window',
+    'proposal-core.property'
+  ])
+    assert.ok(core.runnerOptions.jest.config.testMatch.includes(`<rootDir>/test/${name}.test.ts`))
+  for (const target of [client, core, runtime])
+    assert.ok(target.additionalInputs.includes('src/proposals/**'))
+  const selected = selectAffectedMutationTargets(configured, [
+    'packages/application/output-knowledge/test/proposal-bitcoin-core.test.ts'
+  ])
+  assert.ok(selected.includes('output-knowledge-runtime'))
+  assert.ok(selected.includes('output-knowledge-proposal-core'))
+})
+
 test('mutation metrics follow Stryker valid-mutant semantics', () => {
   const metrics = calculateMutationMetrics([
     { status: 'Killed' },
@@ -284,7 +334,8 @@ test('runtime publication qualification covers the complete runtime and its publ
   )
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/runtime.test.ts',
-    '<rootDir>/test/runtime-publication.property.test.ts'
+    '<rootDir>/test/runtime-publication.property.test.ts',
+    '<rootDir>/test/proposal-bitcoin-core.test.ts'
   ])
   const selected = selectAffectedMutationTargets(buildMutationTargets(REPOSITORY_ROOT), [
     'packages/application/output-knowledge/src/OutputKnowledge.ts'
