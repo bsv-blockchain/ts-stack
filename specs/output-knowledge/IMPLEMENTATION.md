@@ -867,3 +867,12 @@ lifecycle. A fresh complete 390-site campaign is running; this is not yet passin
 mutation evidence. Independent database and remaining runtime/client/adapter
 qualification also remains outstanding. This increment does not advertise or
 claim complete BRC-199 implementation or the second review checkpoint.
+
+The strengthened complete HTTP run now passes 93.59% across 390 mutations:
+348 killed, 25 surviving and 17 detected timeouts, with zero uncovered or invalid
+sites. Both complete production source files match the saved report exactly.
+This supersedes the failed 393-site run after the documented source simplification
+and stronger boundary tests. Detected timeouts are retained explicitly; they are
+not presented as assertion kills. Independent database qualification remains
+active, and the SDK client and remaining root integration obligations are still
+unfinished.
