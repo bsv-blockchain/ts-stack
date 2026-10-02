@@ -30,20 +30,24 @@ test('every publisher requires complete exact-source qualification before publis
   for (const { file, workflow } of await releaseWorkflows()) {
     const publisher = workflow.jobs[file === 'infra-release.yaml' ? 'release' : 'publish']
     const campaign = workflow.jobs['full-mutation']
+    // infra-release resolves its own campaign or the release.yaml caller's
+    // same-run campaign into one exact-source qualification job.
+    const gate = file === 'infra-release.yaml' ? 'qualification' : 'full-mutation'
     assert.equal(campaign.uses, './.github/workflows/mutation-tests.yml')
     assert.deepEqual(campaign.permissions, { contents: 'read' })
     assert.equal(campaign.with, undefined)
-    assert.ok(publisher.needs.includes('full-mutation'))
+    assert.ok(publisher.needs.includes(gate))
     assert.ok(publisher.permissions['id-token'] === 'write')
     for (const result of ['success', 'failure', 'cancelled', 'skipped', undefined]) {
       for (const qualified of ['a'.repeat(40), 'b'.repeat(40), '', undefined]) {
         const context = {
           github: { sha: 'a'.repeat(40) },
           needs: {
+            approve: { result: 'success' },
             prepare: { outputs: { count: '1' } },
             discover: { outputs: { count: '1' } },
             source: { result: 'success' },
-            'full-mutation': { result, outputs: { 'qualified-sha': qualified } }
+            [gate]: { result, outputs: { 'qualified-sha': qualified } }
           }
         }
         assert.equal(
@@ -63,12 +67,23 @@ test('every publisher requires complete exact-source qualification before publis
       const context = {
         github: { sha: 'a'.repeat(40) },
         needs: {
-          [prerequisite]: { outputs: { count: '0' } },
-          'full-mutation': { result: 'success', outputs: { 'qualified-sha': 'a'.repeat(40) } }
+          approve: { result: 'success' },
+          [prerequisite]: { outputs: { count: '0', called: 'false' } },
+          [gate]: { result: 'success', outputs: { 'qualified-sha': 'a'.repeat(40) } }
         }
       }
       assert.equal(conjunctionPasses(publisher.if, context), false)
-      assert.equal(conjunctionPasses(campaign.if, context), false)
+      if (file === 'release.yaml') {
+        // The npm campaign starts at t=0 beside prepare; it also qualifies the
+        // infrastructure images, so an empty npm set does not skip it.
+        assert.equal(campaign.needs, undefined)
+        assert.equal(campaign.if, undefined)
+      } else {
+        assert.equal(conjunctionPasses(campaign.if, context), false)
+        // A release.yaml call reuses the caller's qualification of github.sha.
+        context.needs.discover.outputs = { count: '1', called: 'true' }
+        assert.equal(conjunctionPasses(campaign.if, context), false)
+      }
     }
   }
 })
@@ -153,8 +168,10 @@ test('partition jobs cannot replace each original canonical global gate or the f
     readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
   )
   const ci = parse(readFileSync(CI_PATH, 'utf8'))
+  assert.equal(ci.jobs['mutation-tests'].strategy['max-parallel'], 6)
+  // Release qualification runs every target at once; one target bounds wall time.
+  assert.equal(full.jobs['mutation-tests'].strategy['max-parallel'], 20)
   for (const workflow of [ci, full]) {
-    assert.equal(workflow.jobs['mutation-tests'].strategy['max-parallel'], 6)
     assert.match(workflow.jobs['mutation-tests'].strategy.matrix, /mutation-matrix/)
     assert.match(
       workflow.jobs['mutation-tests'].steps.find(step =>
