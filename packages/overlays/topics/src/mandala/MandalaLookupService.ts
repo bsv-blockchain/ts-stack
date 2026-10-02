@@ -128,7 +128,7 @@ function admittedOutput(tx: Transaction, outputIndex: number): Admitted | undefi
 }
 
 // The journal row is the owner only when it describes this very script.
-const journalAgrees = (journal: MandalaOwnerRecord, output: Brc162Output): boolean =>
+export const journalAgrees = (journal: MandalaOwnerRecord, output: Brc162Output): boolean =>
   journal.tokenId === output.tokenId &&
   journal.role === output.role &&
   Number.isSafeInteger(journal.amount) &&
@@ -149,13 +149,20 @@ interface Action {
   commitment: string
 }
 
-/** The admin action an authority output commits to, read from its envelope entry. */
-function committedAction(output: Brc162Output, env: MandalaEnvelope): Action | undefined {
+/**
+ * The admin action an authority output commits to, read from its envelope entry. `kinds` are the
+ * kinds the topic allows (the registry topic reads its own).
+ */
+export function committedAction(
+  output: Brc162Output,
+  env: MandalaEnvelope,
+  kinds: readonly string[] = ADMIN_KINDS
+): Action | undefined {
   if (output.role !== 'authority') return undefined
   if (commitmentOf(output.payload, output.payloadCanonical) === undefined) return undefined
   const entry = env.admin.find(e => e.index === output.index)
   if (entry === undefined) return undefined
-  const { details, commitment } = decodeAdminDetails(entry.details, ADMIN_KINDS, output.index)
+  const { details, commitment } = decodeAdminDetails(entry.details, kinds, output.index)
   return { details, detailsHex: entry.details, commitment: toHex(commitment) }
 }
 

@@ -56,20 +56,23 @@ function isCanonicalKey(key: unknown): key is string {
   }
 }
 
-/** A configuration fault, so a plain Error at construction rather than a reject per transaction. */
-function trustedSet(keys: readonly string[]): ReadonlySet<string> {
+/**
+ * A configuration fault, so a plain Error at construction rather than a reject per transaction.
+ * `owner` names the manager class in the message (the registry manager shares this check).
+ */
+export function trustedSet(keys: readonly string[], owner: string): ReadonlySet<string> {
   if (!Array.isArray(keys) || keys.length === 0) {
-    throw new Error('MandalaTopicManager: trustedIssuers must be a non-empty array')
+    throw new Error(`${owner}: trustedIssuers must be a non-empty array`)
   }
   const trusted = new Set<string>()
   for (const key of keys) {
     if (!isCanonicalKey(key)) {
       throw new Error(
-        `MandalaTopicManager: trusted issuer ${String(key)} is not a compressed lowercase public key`
+        `${owner}: trusted issuer ${String(key)} is not a compressed lowercase public key`
       )
     }
     if (trusted.has(key)) {
-      throw new Error(`MandalaTopicManager: trusted issuer ${key} is listed more than once`)
+      throw new Error(`${owner}: trusted issuer ${key} is listed more than once`)
     }
     trusted.add(key)
   }
@@ -77,6 +80,7 @@ function trustedSet(keys: readonly string[]): ReadonlySet<string> {
 }
 
 const journalRows = (
+  topic: string,
   txid: string,
   owners: readonly VerifiedOwner[],
   createdAt: Date
@@ -84,7 +88,7 @@ const journalRows = (
   owners.map(o => ({
     txid,
     outputIndex: o.index,
-    topic: MANDALA_TOPIC,
+    topic,
     tokenId: o.tokenId,
     role: o.role,
     // layer B caps every amount at 2^53-1, so this is exact
@@ -93,23 +97,44 @@ const journalRows = (
     createdAt
   }))
 
-const ascendingIndices = (outputs: readonly Brc162Output[]): number[] =>
+export const ascendingIndices = (outputs: readonly Brc162Output[]): number[] =>
   outputs.map(o => o.index).sort((a, b) => a - b)
 
-const logOwnerRepair = (outpoint: string, inserted: boolean): void => {
-  const what = inserted ? 'row inserted' : 'row corrected'
-  console.warn(
-    `[MandalaTopicManager] owner index repaired for ${outpoint} from the owner journal (${what})`
-  )
+/** The default §4.2a rule 3 repair log, labelled with the manager that repaired. */
+export const logOwnerRepair =
+  (label: string) =>
+  (outpoint: string, inserted: boolean): void => {
+    const what = inserted ? 'row inserted' : 'row corrected'
+    console.warn(`[${label}] owner index repaired for ${outpoint} from the owner journal (${what})`)
+  }
+
+/**
+ * §4.2a rule 1: the append-only owner journal, the source every owner-row repair reads. A failed
+ * write keeps the store's error as `cause`, since the engine logs only what is thrown.
+ */
+export async function journalOwners(
+  store: MandalaStateStore,
+  topic: string,
+  txid: string,
+  owners: readonly VerifiedOwner[]
+): Promise<void> {
+  try {
+    await store.recordOwners(journalRows(topic, txid, owners, new Date()))
+  } catch (cause) {
+    const { code, reason } = Reasons.storeUnavailable('the owner journal')
+    throw new MandalaReject(code, reason, { cause })
+  }
 }
 
 export class MandalaTopicManager implements TopicManager {
   private readonly deps: MandalaTopicManagerDeps
   private readonly trusted: ReadonlySet<string>
   private readonly exempt: ReadonlySet<string>
+  private readonly onRepair: (outpoint: string, inserted: boolean) => void
 
   constructor(deps: MandalaTopicManagerDeps) {
-    this.trusted = trustedSet(deps.trustedIssuers)
+    this.trusted = trustedSet(deps.trustedIssuers, 'MandalaTopicManager')
+    this.onRepair = deps.onOwnerRepair ?? logOwnerRepair('MandalaTopicManager')
     this.exempt = new Set([...this.trusted, ...(deps.membershipExempt ?? [])])
     this.deps = deps
   }
@@ -139,7 +164,7 @@ export class MandalaTopicManager implements TopicManager {
       engine,
       verifierWallet,
       topic: MANDALA_TOPIC,
-      onRepair: this.deps.onOwnerRepair ?? logOwnerRepair
+      onRepair: this.onRepair
     })
 
     // layers C and D
@@ -155,21 +180,10 @@ export class MandalaTopicManager implements TopicManager {
       exempt: this.exempt
     })
 
-    if (outputs.length > 0 && context?.dryRun !== true) await this.journal(txid, owners)
-    return { outputsToAdmit: ascendingIndices(outputs), coinsToRetain: previousCoins }
-  }
-
-  /**
-   * §4.2a rule 1: the append-only owner journal, the source every owner-row repair reads. A failed
-   * write keeps the store's error as `cause`, since the engine logs only what is thrown.
-   */
-  private async journal(txid: string, owners: readonly VerifiedOwner[]): Promise<void> {
-    try {
-      await this.deps.stateStore.recordOwners(journalRows(txid, owners, new Date()))
-    } catch (cause) {
-      const { code, reason } = Reasons.storeUnavailable('the owner journal')
-      throw new MandalaReject(code, reason, { cause })
+    if (outputs.length > 0 && context?.dryRun !== true) {
+      await journalOwners(store, MANDALA_TOPIC, txid, owners)
     }
+    return { outputsToAdmit: ascendingIndices(outputs), coinsToRetain: previousCoins }
   }
 
   async getDocumentation(): Promise<string> {
