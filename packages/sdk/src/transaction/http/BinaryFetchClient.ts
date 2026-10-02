@@ -107,7 +107,7 @@ export class BinaryFetchClient implements HttpClient {
 
 export function binaryHttpClient(): HttpClient {
   const noHttpClient: HttpClient = {
-    async request(..._): Promise<HttpClientResponse> {
+    async request(): Promise<HttpClientResponse> {
       throw new Error('No method available to perform HTTP request')
     }
   }
