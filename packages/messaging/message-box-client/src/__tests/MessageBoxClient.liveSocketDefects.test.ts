@@ -436,6 +436,16 @@ describe('live-socket reconnection', () => {
       expect(client.getJoinedRooms().has(ROOM)).toBe(true)
     })
 
+    it('records a room the server confirms', async () => {
+      const client = await listening()
+      // A refusal the server then reverses: the confirmation is what restores it.
+      fire('joinFailed', { roomId: ROOM, code: 'ERR_WEBSOCKET_ROOM_LIMIT' })
+      expect(client.getJoinedRooms().has(ROOM)).toBe(false)
+
+      fire('joinedRoom', { roomId: ROOM })
+      expect(client.getJoinedRooms().has(ROOM)).toBe(true)
+    })
+
     it('ignores a confirmation for a room it never asked for', async () => {
       const client = await listening()
       fire('joinedRoom', { roomId: `${IDENTITY}-somewhere_else` })
@@ -508,6 +518,36 @@ describe('live-socket reconnection', () => {
 
     expect(socket.handlers[ackEvent] ?? []).toHaveLength(1)
   }, 30000)
+
+  /** A body the client cannot read is delivered as an error, not thrown away. */
+  it('delivers a message whose ciphertext is unreadable', async () => {
+    const client = await connected()
+    const onMessage = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+    const socket = latest()
+
+    const handlers = socket.handlers[`sendMessage-${ROOM}`] ?? []
+    handlers[0]({
+      sender: IDENTITY,
+      messageId: 'm1',
+      body: JSON.stringify({ encryptedMessage: { not: 'a string' } })
+    })
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(onMessage).toHaveBeenCalledTimes(1)
+    expect(onMessage.mock.calls[0][0]).toMatchObject({
+      body: '[Error: Failed to decrypt or parse message]'
+    })
+  })
+
+  /** A socket-level error is reported, not thrown into Socket.IO's dispatch. */
+  it('survives a socket error event', async () => {
+    const client = await connected()
+    const socket = latest()
+
+    expect(() => fireOn(socket, 'error')).not.toThrow()
+    expect(client.testSocket).toBe(socket)
+  })
 
   /** A room left is a room no longer delivered to, on the socket that stays. */
   it('stops delivering to a room it has left', async () => {
