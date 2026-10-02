@@ -376,3 +376,13 @@ storage and a trapped broadcast port. Wallet source, manifest, TypeScript build
 configuration and fixtures are affected inputs. Existing four-worker/reuse-eight,
 45-minute-part and complete aggregate 90/zero-uncovered/invalid requirements stay
 unchanged. Cross-package HTTP qualification is a separate subsequent registration.
+
+`private-acquisition-http` retains five complete modules across routes (including
+ports), policy, guard and host parts. Every part keeps the full acquisition and
+private-host suites, seeded 300-case authenticated signing/recovery schedules and
+all private-publication HTTP/engine compatibility suites. Native wallet,
+application, SDK, authentication and host inputs remain dependencies; the build
+uses the same-head wallet and application packages. Existing four workers,
+reuse eight, 45-minute parts and complete aggregate 90/zero-uncovered/invalid gates
+remain unchanged. Independent legacy host and packed SDK-floor checks remain
+required; this registration does not imply their success.

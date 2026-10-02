@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 116)
+  assert.equal(Object.keys(configured).length, 117)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -729,6 +729,35 @@ test('acquisition coordination preserves every source, canonical state test and 
     '../../wallet/wallet-toolbox/package.json',
     '../../wallet/wallet-toolbox/tsconfig*.json',
     'test/private-acquisition-wallet.fixture.ts'
+  ])
+    assert.ok(target.additionalInputs.includes(input))
+})
+
+test('acquisition HTTP retains complete modules, native dependencies and every publication compatibility suite', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['private-acquisition-http']
+  assert.deepEqual(target.mutate, [
+    'src/PrivateAcquisitionHTTPPorts.ts',
+    'src/PrivateAcquisitionHTTPPolicy.ts',
+    'src/PrivateAcquisitionResponseGuard.ts',
+    'src/PrivateAcquisitionRoutes.ts',
+    'src/PrivateOverlayHost.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/__tests__/PrivateAcquisition*.test.ts',
+    '<rootDir>/src/__tests__/PrivateOverlayHost*.test.ts',
+    '<rootDir>/src/__tests__/PrivatePublication*.test.ts'
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  assert.equal(
+    target.runnerOptions.buildCommand,
+    'pnpm --filter @bsv/wallet-toolbox build && pnpm --filter @bsv/output-knowledge build && pnpm build'
+  )
+  for (const input of [
+    'src/OverlayExpress.ts',
+    '../../wallet/wallet-toolbox/src/**',
+    '../../wallet/wallet-toolbox/package.json',
+    '../../wallet/wallet-toolbox/tsconfig*.json',
+    '../../application/output-knowledge/src/**'
   ])
     assert.ok(target.additionalInputs.includes(input))
 })

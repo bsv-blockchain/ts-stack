@@ -1431,6 +1431,17 @@
           "The original acquisition and received payment survive interruption, catalogue withdrawal and recovery expiry without another quote or charge.",
           "Only verified release evidence and the exact native wallet receipt permit delivery; current caller/domain authority and final native enqueue remain independently required."
         ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/PrivateAcquisitionRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated private paid acquisition and recovery HTTP, original seller/buyer/quote binding, native final response ownership, bounded BRC-105 headers and opt-in shared host composition",
+        "target": "At least 300 authenticated response-signing, private-data/control permission and recovery histories",
+        "invariants": [
+          "A current original buyer recovers the same retained paid result without another payment or wallet credit.",
+          "Changed data authority withholds the private body; changed control authority closes without a replacement body, and recovery never emits payment headers."
+        ]
       }
     ],
     "exclusions": [

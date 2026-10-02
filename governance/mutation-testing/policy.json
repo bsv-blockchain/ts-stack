@@ -1176,6 +1176,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-acquisition-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/PrivateAcquisitionRoutes.property.test.ts",
+      "boundary": "Authenticated private paid acquisition and recovery HTTP, original seller/buyer/quote binding, native final response ownership, bounded BRC-105 headers and opt-in shared host composition",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

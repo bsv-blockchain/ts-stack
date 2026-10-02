@@ -511,3 +511,19 @@ keeps physical service work counted through settlement, clamps byte limits and
 inherits host CORS policy unless explicitly overridden. Storage, capability
 publication, verified recovery, expiry and admission workers remain host-owned.
 See the [proposal guide](../../../docs/guides/non-final-proposals.md) for composition and recovery contracts.
+
+### Private acquisition and publication
+
+Explicit `configurePrivateAcquisition` and `configurePrivatePublication` methods
+compose the installed private services with the host's single authenticated
+wallet/session. Private acquisition routes precede publication's namespace
+fallback and ordinary body parsers. The default public CORS policy remains
+credential-free; explicit origins and host byte ceilings are preserved.
+Acquisition-configured listeners alone select a bounded 128-KiB HTTP header
+allowance for BRC-105 payment evidence. Standalone applications can import
+`createPrivateAcquisitionRouter` from `@bsv/overlay-express/private-acquisition`.
+The application owns durable custody, permissions, wallet recovery and worker
+shutdown. See [acquisition and recovery](../../../docs/guides/private-acquisition-recovery.md)
+for composition, original-obligation semantics, payment/recovery requests and
+proxy limits. These opt-in profiles need the new SDK output APIs; legacy startup
+retains its supported SDK floor.

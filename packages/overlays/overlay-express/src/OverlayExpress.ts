@@ -1,3 +1,10 @@
+import { createServer } from 'node:http'
+import type {
+  PrivateOverlayHost,
+  PrivateOverlayHostOptions,
+  PrivateAcquisitionHostOptions,
+  PrivatePublicationHostOptions
+} from './PrivateOverlayHost.js'
 import { Reader, Writer } from '@bsv/sdk/primitives/utils'
 import express, { type Request, type Response } from 'express'
 import bodyParser from 'body-parser'
@@ -602,6 +609,7 @@ export default class OverlayExpress {
   private rootEviction?: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & {
     identity: string
   }
+  private readonly privateOverlayOptions: PrivateOverlayHostOptions = {}
   private proposalIdentity?: string
   private proposalRoutes?: (
     authenticate: express.RequestHandler,
@@ -1044,6 +1052,31 @@ export default class OverlayExpress {
         maximumRequestBytes: Math.min(owned.maximumRequestBytes ?? 1048576, limits.request),
         maximumResponseBytes: Math.min(owned.maximumResponseBytes ?? 4194304, limits.response)
       })
+    }
+  }
+
+  /** Optional private acquisition; the application owns durable storage and workers. */
+  configurePrivateAcquisition(options: PrivateAcquisitionHostOptions): void {
+    if (this.isListening) throw new Error('Configure private acquisition before start')
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Private overlay origins must be an array')
+    this.privateOverlayOptions.acquisition = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
+    }
+  }
+  /** Optional private publication using the same authentication and native response gate. */
+  configurePrivatePublication(options: PrivatePublicationHostOptions): void {
+    if (this.isListening) throw new Error('Configure private publication before start')
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Private overlay origins must be an array')
+    this.privateOverlayOptions.publication = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
     }
   }
 
@@ -2411,13 +2444,19 @@ export default class OverlayExpress {
     const knex = this.ensureKnex()
     const rootEviction = this.rootEviction
     const proposalRoutes = this.proposalRoutes
+    let privateOverlay: PrivateOverlayHost | undefined
+    if (this.privateOverlayOptions.acquisition || this.privateOverlayOptions.publication) {
+      const { PrivateOverlayHost } = await import('./PrivateOverlayHost.js')
+      privateOverlay = new PrivateOverlayHost(this.privateOverlayOptions)
+    }
     const authenticatedLookup = this.outputLookup?.authentication === 'brc103'
     let companionAuth: express.RequestHandler | undefined
-    if (authenticatedLookup || rootEviction || proposalRoutes) {
+    if (authenticatedLookup || rootEviction || proposalRoutes || privateOverlay) {
       if (!this.serverWallet) {
         if (authenticatedLookup)
           throw new Error('Authenticated live lookup requires a server wallet')
         if (rootEviction) throw new Error('Root coordination requires a server wallet')
+        if (privateOverlay) throw new Error('Private overlays require a server wallet')
         throw new Error('Proposals require a server wallet')
       }
       const { publicKey } = await this.serverWallet.getPublicKey({ identityKey: true })
@@ -2427,6 +2466,7 @@ export default class OverlayExpress {
         throw new Error('Root coordination identity must match the server authentication wallet')
       if (proposalRoutes && publicKey !== this.proposalIdentity)
         throw new Error('Proposal identity must match the server authentication wallet')
+      privateOverlay?.requireIdentity(publicKey)
       companionAuth = createAuthMiddleware({
         wallet: this.serverWallet,
         sessionManager: this.authSessionManager,
@@ -2571,7 +2611,7 @@ export default class OverlayExpress {
         ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
         : edgePolicy.maxConcurrentRequests
     )
-    if (this.outputLookup || rootEviction || proposalRoutes) {
+    if (this.outputLookup || rootEviction || proposalRoutes || privateOverlay) {
       // All companions share host capacity, including long polls. Raw signed
       // requests stay before legacy parsers, transformations and payload logging.
       this.app.use(requestCapacity)
@@ -2626,6 +2666,19 @@ export default class OverlayExpress {
           })
         )
       }
+      if (privateOverlay) {
+        for (const router of privateOverlay.routes(
+          companionAuth!,
+          !authenticatedLookup && !rootEviction && !proposalRoutes,
+          {
+            request: jsonBytes,
+            response: maxResponseBytes === -1 ? 4194304 : maxResponseBytes,
+            origins:
+              edgePolicy.allowedOrigins ?? readCorsOriginSetting(edgePolicy.environmentPrefix)
+          }
+        ))
+          this.app.use(router)
+      }
     }
     this.app.use(
       corsPolicy({
@@ -2634,7 +2687,8 @@ export default class OverlayExpress {
         methods: ['GET', 'POST', 'OPTIONS']
       })
     )
-    if (!this.outputLookup && !rootEviction && !proposalRoutes) this.app.use(requestCapacity)
+    if (!this.outputLookup && !rootEviction && !proposalRoutes && !privateOverlay)
+      this.app.use(requestCapacity)
     this.app.use(
       bodyParser.json({
         limit: readBodyLimitBytes(
@@ -3804,12 +3858,19 @@ export default class OverlayExpress {
     await this.runStartupSync()
 
     // Start listening on the configured port
-    this.server = this.app.listen(this.port, () => {
+    const listening = () => {
       this.isListening = true
       this.logger.log(
         chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`)
       )
-    })
+    }
+    this.server =
+      privateOverlay?.maximumHeaderBytes === undefined
+        ? this.app.listen(this.port, listening)
+        : createServer({ maxHeaderSize: privateOverlay.maximumHeaderBytes }, this.app).listen(
+            this.port,
+            listening
+          )
     configureHttpServer(this.server, edgePolicy.environmentPrefix, edgePolicy.http)
   }
 

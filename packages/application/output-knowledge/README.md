@@ -1216,7 +1216,15 @@ release evidence, exact durable wallet receipts and final native disclosure.
 Optional local workers recover retained obligations without initiating another
 payment and drain physical work before custody closes. The application supplies
 its domain semantics, immutable chain policy and actual wallet controller.
-Public acquisition entries and authenticated HTTP integration remain under
-qualification; these internal helpers are not yet a completed paid lookup API.
+The explicit `private/node` entry exposes this composition, including native
+custody, coordinator, release verification, wallet bridge and recovery workers.
+[Authenticated acquisition and recovery](../../../docs/guides/private-acquisition-recovery.md)
+connects it to the opt-in Overlay Express host/router. Concrete domain adapters,
+the durable buyer client and complete mutation/hosted qualification remain open.
 The [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md) tracks
 that work and the distinction between native checks and complete qualification.
+
+The Node test typecheck uses NodeNext resolution so native CommonJS wallet
+fixtures and SDK declarations follow their actual runtime import conditions.
+The production portable build keeps its existing bundler resolution; package
+and browser checks continue to validate the published runtime boundaries.

@@ -2433,5 +2433,28 @@ wallet tests use public CJS exports with disposable synthetic SQLite storage and
 no broadcast. Generated interruption histories preserve the original quote and
 single funding operation through recovery. Worker authority is distinct from
 current buyer/domain permission; final HTTP authentication remains a separate
-boundary. Public entries, HTTP qualification, concrete application/LCH domain
-adapters and complete mutation/hosted qualification remain open.
+boundary. The following HTTP layer exposes those entries and provides native
+transport tests; concrete domain/LCH adapters and complete mutation/hosted
+qualification remain open.
+
+### Authenticated acquisition HTTP and host composition
+
+The explicit Node-only public entry now exposes acquisition custody, contracts,
+coordination, release checks, wallet adaptation, disclosure and recovery workers.
+The opt-in acquisition router binds both challenge and recovery to the original
+seller/buyer, preserves payment headers only on an unpaid challenge and repeats
+native authority checks after signing. Overlay Express lazily composes private
+publication/acquisition with existing authentication and host policy. Native
+HTTP tests include one actual SQLite wallet credit through repeated recovery;
+host and generated signing tests cover composition and changing permissions.
+The full mutation/hosted gates, durable buyer client, concrete domain/LCH adapters
+and purchase/POTATOES implementation remain open.
+
+The current local HTTP batch passes the complete 85-test/11-suite canonical
+acquisition/private-publication selection, all 156 legacy host tests and 102
+mutation/property/governance assertions. Native wallet/recovery tests pass ten
+cases after an explicit CJS type import and NodeNext Node-test resolution;
+production portable compilation is unchanged. Packed application ESM and host
+ESM/CJS consumers, strict SDK-2.8.9 legacy host consumers, 29 compiled examples
+from ten exact package tarballs, and the four required root checks pass. These
+are local batch results, not complete mutation or exact-head hosted acceptance.

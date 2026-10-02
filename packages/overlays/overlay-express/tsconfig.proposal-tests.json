@@ -11,7 +11,11 @@
     "src/Proposal*.ts",
     "src/__tests__/Proposal*.ts",
     "src/PrivatePublication*.ts",
-    "src/__tests__/PrivatePublication*.ts"
+    "src/__tests__/PrivatePublication*.ts",
+    "src/PrivateAcquisition*.ts",
+    "src/__tests__/PrivateAcquisition*.ts",
+    "src/PrivateOverlayHost.ts",
+    "src/__tests__/PrivateOverlayHost*.ts"
   ],
   "exclude": ["dist", "node_modules", ".stryker-tmp"]
 }

@@ -1606,3 +1606,47 @@ headers. Default CORS remains credential-free and cross-domain; an explicit
 origin list is deployment policy. The router never installs a payment handler or
 returns protected material. Its final guard checks the signed response bytes,
 original selector, current publisher and native record state after signing.
+
+## Private acquisition host
+
+Install the original-obligation domain, release policy, native wallet and custody
+ports explicitly before composing the HTTP host. This helper preserves the
+application’s storage and worker lifecycle ownership. See
+[acquisition and recovery](./private-acquisition-recovery.md) for wire limits,
+shutdown and retry behavior.
+
+```ts compile
+// example-id: private-acquisition-host
+import AcquisitionHost from '@bsv/overlay-express'
+import {
+  PrivateAcquisitionCoordinator as AcquisitionCoordinator,
+  PrivateAcquisitionDisclosure as AcquisitionDisclosure,
+  type PrivateAcquisitionCoordinatorOptions as AcquisitionCoordinatorOptions,
+  type PrivateServiceDomain as AcquisitionCustody
+} from '@bsv/output-knowledge/private/node'
+
+export function installAcquisition(
+  host: AcquisitionHost,
+  custody: AcquisitionCustody,
+  options: AcquisitionCoordinatorOptions,
+  authorizeControl: (buyer: string) => boolean
+) {
+  const coordinator = new AcquisitionCoordinator(options)
+  const disclosure = new AcquisitionDisclosure(
+    custody,
+    options.store,
+    options.contracts,
+    options.access,
+    options.clock,
+    authorizeControl
+  )
+  const installed = options.contracts.configuration()
+  host.configurePrivateAcquisition({
+    identity: installed.seller,
+    baseURL: installed.baseURL,
+    service: coordinator,
+    disclosure
+  })
+  return coordinator
+}
+```

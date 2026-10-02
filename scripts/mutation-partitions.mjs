@@ -17,6 +17,17 @@ const plans = new Map([
     }
   ],
   [
+    'private-acquisition-http',
+    {
+      fallback: 'routes',
+      files: new Map([
+        ['src/PrivateAcquisitionHTTPPolicy.ts', 'policy'],
+        ['src/PrivateAcquisitionResponseGuard.ts', 'guard'],
+        ['src/PrivateOverlayHost.ts', 'host']
+      ])
+    }
+  ],
+  [
     'private-publication-http',
     {
       fallback: 'routes',

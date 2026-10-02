@@ -1235,6 +1235,66 @@ export function buildMutationTargets(repositoryRoot) {
         }
       })
     },
+    'private-acquisition-http': {
+      packageDirectory: 'packages/overlays/overlay-express',
+      manifest: 'packages/overlays/overlay-express/package.json',
+      propertyTest:
+        'packages/overlays/overlay-express/src/__tests__/PrivateAcquisitionRoutes.property.test.ts',
+      additionalInputs: [
+        'src/__tests__/PrivatePublication*.ts',
+        'src/__tests__/PrivateAcquisition*.ts',
+        'src/__tests__/PrivateOverlayHost*.ts',
+        'src/OverlayExpress.ts',
+        '../../wallet/wallet-toolbox/src/**',
+        '../../wallet/wallet-toolbox/package.json',
+        '../../wallet/wallet-toolbox/tsconfig*.json',
+        'src/RootEvictionHTTPPolicy.ts',
+        'src/OutputLookupHTTPPolicy.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/private-*.ts',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/**',
+        '../overlay/src/**',
+        '../../sdk/src/**',
+        '../../middleware/auth-express-middleware/src/**'
+      ],
+      mutate: [
+        'src/PrivateAcquisitionHTTPPorts.ts',
+        'src/PrivateAcquisitionHTTPPolicy.ts',
+        'src/PrivateAcquisitionResponseGuard.ts',
+        'src/PrivateAcquisitionRoutes.ts',
+        'src/PrivateOverlayHost.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/__tests__/PrivateAcquisition*.test.ts',
+          '<rootDir>/src/__tests__/PrivateOverlayHost*.test.ts',
+          '<rootDir>/src/__tests__/PrivatePublication*.test.ts'
+        ],
+        {
+          esm: true,
+          maxTestRunnerReuse: 8,
+          buildCommand:
+            'pnpm --filter @bsv/wallet-toolbox build && pnpm --filter @bsv/output-knowledge build && pnpm build',
+          config: {
+            moduleNameMapper: {
+              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
+                repositoryRoot,
+                'packages/application/output-knowledge/$1.ts'
+              ),
+              [String.raw`^\.\./\.\./\.\./overlay/src/__tests/mongo/MongoReplicaFixture\.js$`]:
+                resolve(
+                  repositoryRoot,
+                  'packages/overlays/overlay/src/__tests/mongo/MongoReplicaFixture.ts'
+                ),
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+            }
+          }
+        }
+      )
+    },
     'private-acquisition-foundation': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',

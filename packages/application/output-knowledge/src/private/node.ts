@@ -1,4 +1,4 @@
-/** Explicit Node-only private publication composition; ordinary root imports stay portable. */
+/** Explicit Node-only private publication and acquisition composition; ordinary root imports stay portable. */
 export {
   PrivateServiceDomain,
   type PrivateServiceDomainConfiguration
@@ -70,3 +70,60 @@ export type {
   ProtectedLedgerView,
   ProtectedLedgerConfiguration
 } from './ProtectedLedgerCodec.js'
+
+export { SQLitePrivateAcquisitionStore } from './SQLitePrivateAcquisitionStore.js'
+export {
+  PrivateAcquisitionContracts,
+  type PrivateAcquisitionInstallation,
+  type PrivateAcquisitionQuoteTerms,
+  type PrivateAcquisitionTrust
+} from './PrivateAcquisitionContracts.js'
+export { PrivateAcquisitionAccess } from './PrivateAcquisitionAccess.js'
+export {
+  PrivateAcquisitionCoordinator,
+  type PrivateAcquisitionCoordinatorOptions
+} from './PrivateAcquisitionCoordinator.js'
+export { PrivateAcquisitionDisclosure } from './PrivateAcquisitionDisclosure.js'
+export {
+  PrivateAcquisitionWork,
+  type PrivateAcquisitionWorkItem
+} from './PrivateAcquisitionWork.js'
+export {
+  PrivateAcquisitionReconciler,
+  type PrivateAcquisitionReconciliationReport
+} from './PrivateAcquisitionReconciler.js'
+export {
+  SDKPrivateAcquisitionFunding,
+  type VerifiedPrivateAcquisitionFunding
+} from './SDKPrivateAcquisitionFunding.js'
+export {
+  SDKPrivateReleaseEvidence,
+  type PrivateReleasePremises,
+  type PrivateReleaseAssessment
+} from './SDKPrivateReleaseEvidence.js'
+export {
+  WalletToolboxAcquisitionFunding,
+  type RecoverableAcquisitionFundingController
+} from './WalletToolboxAcquisitionFunding.js'
+export type {
+  PrivateAcquisitionCaller,
+  PrivateAcquisitionPreparation,
+  PrivateAcquisitionDomain,
+  PrivateAcquisitionRelease
+} from './PrivateAcquisitionPorts.js'
+export type {
+  PrivateAcquisitionOriginal,
+  PrivateAcquisitionRecordInstallation
+} from './PrivateAcquisitionRecords.js'
+export type { PrivateAcquisitionState } from './PrivateAcquisitionState.js'
+export type {
+  PrivateAcquisitionProgress,
+  PrivateAcquisitionEvent,
+  PrivateAcquisitionCandidate,
+  PrivateAcquisitionFunding,
+  PrivateAcquisitionWalletReceipt
+} from './PrivateAcquisitionProgress.js'
+export type {
+  PrivateAcquisitionWallet,
+  PrivateAcquisitionWalletOutcome
+} from './PrivateAcquisitionWallet.js'

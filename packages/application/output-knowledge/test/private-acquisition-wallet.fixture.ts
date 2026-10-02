@@ -8,7 +8,9 @@ import { WalletToolboxAcquisitionFunding } from '../src/private/WalletToolboxAcq
 // Canonical integration uses the installed workspace development dependency.
 // Wallet receipt ownership uses its public CJS exports and fresh local SQLite.
 const requireWallet = createRequire(import.meta.url)
-const { PrivateKey, CachedKeyDeriver } = requireWallet('@bsv/sdk') as typeof import('@bsv/sdk')
+const { PrivateKey, CachedKeyDeriver } = requireWallet('@bsv/sdk') as typeof import('@bsv/sdk', {
+  with: { 'resolution-mode': 'require' }
+})
 const { StorageKnex } = requireWallet(
   '@bsv/wallet-toolbox/out/src/storage/StorageKnex'
 ) as typeof import('@bsv/wallet-toolbox/out/src/storage/StorageKnex')

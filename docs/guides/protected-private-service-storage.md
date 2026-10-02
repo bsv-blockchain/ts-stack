@@ -180,5 +180,7 @@ current native authority/revision again during one synchronous enqueue. Only an
 unpinned quote before its construction deadline can become a 402 challenge.
 Recovery never requests another payment. The HTTP transport owns authentication
 headers and must compare the final signed seller with the original challenge;
-applications must not set transport identity headers themselves. The HTTP adapter
-and public entry are still under separate integration and qualification.
+applications must not set transport identity headers themselves. The explicit
+Node-only entry and authenticated HTTP composition are documented in
+[acquisition and recovery](./private-acquisition-recovery.md). Complete mutation
+and exact-head hosted qualification remain required.

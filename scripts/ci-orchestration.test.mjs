@@ -660,6 +660,7 @@ test('acquisition and proposal HTTP aggregation require every selected part arti
     'private-acquisition-foundation',
     'private-acquisition-state',
     'private-acquisition-coordination',
+    'private-acquisition-http',
     'overlay-proposal-http'
   ]) {
     assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
