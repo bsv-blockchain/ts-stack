@@ -4,11 +4,21 @@ import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
 import { brc29ProtocolID, ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
 
+/** Optional authority applies to new managed signing, not recovery of an earlier final. */
 export async function completeSignedTransaction(
   prior: PendingSignAction,
   spends: Record<number, SignActionSpend>,
-  wallet: Wallet
+  wallet: Wallet,
+  checkNewSigning?: () => void
 ): Promise<Transaction> {
+  if (checkNewSigning !== undefined && (typeof checkNewSigning !== 'function' || checkNewSigning.constructor.name === 'AsyncFunction'))
+    throw new WERR_INVALID_PARAMETER('checkNewSigning', 'must be synchronous')
+  const guard = checkNewSigning === undefined ? undefined : () => {
+    const result: unknown = checkNewSigning()
+    if (result instanceof Promise) void result.catch(() => undefined)
+    if (result !== undefined) throw new WERR_INVALID_PARAMETER('checkNewSigning', 'must return void synchronously')
+  }
+  guard?.()
   /// //////////////////
   // Insert the user provided unlocking scripts from "spends" arg
   /// //////////////////
@@ -38,6 +48,7 @@ export async function completeSignedTransaction(
   const prepareUnlockingTemplates = (
     keys: ReturnType<Wallet['getClientChangeKeyPair']>
   ): void => {
+    guard?.()
     const counterparties = new Map<string, PublicKey>()
     const counterparty = (publicKey: string): PublicKey => {
       let parsed = counterparties.get(publicKey)
@@ -75,7 +86,15 @@ export async function completeSignedTransaction(
         asBsvSdkScript(pdi.lockingScript)
       )
       const input = prior.tx.inputs[pdi.vin]
-      input.unlockingScriptTemplate = unlockTemplate
+      input.unlockingScriptTemplate = guard === undefined ? unlockTemplate : {
+        estimateLength: async (transaction, inputIndex) => await unlockTemplate.estimateLength(transaction, inputIndex),
+        sign: async (transaction, inputIndex) => {
+          guard()
+          const script = await unlockTemplate.sign(transaction, inputIndex)
+          guard()
+          return script
+        }
+      }
     }
   }
 
@@ -96,7 +115,7 @@ export async function completeSignedTransaction(
         const keys = await wallet.telemetry.withSpan(
           'wallet.crypto.client_change_key',
           { component: 'wallet-toolbox', parent: span.context },
-          () => wallet.getClientChangeKeyPair()
+          () => { guard?.(); return wallet.getClientChangeKeyPair() }
         )
         await wallet.telemetry.withSpan(
           'wallet.crypto.derive_unlocking_templates',
@@ -110,6 +129,7 @@ export async function completeSignedTransaction(
       }
     )
   } else if (prior.pdi.length > 0) {
+    guard?.()
     prepareUnlockingTemplates(wallet.getClientChangeKeyPair())
   }
 
@@ -126,11 +146,13 @@ export async function completeSignedTransaction(
           'crypto.input_count': prior.tx.inputs.length
         }
       },
-      async () => await prior.tx.sign()
+      async () => { guard?.(); await prior.tx.sign(); guard?.() }
     )
   } else {
+    guard?.()
     await prior.tx.sign()
   }
+  guard?.()
 
   return prior.tx
 }

@@ -2458,3 +2458,20 @@ production portable compilation is unchanged. Packed application ESM and host
 ESM/CJS consumers, strict SDK-2.8.9 legacy host consumers, 29 compiled examples
 from ten exact package tarballs, and the four required root checks pass. These
 are local batch results, not complete mutation or exact-head hosted acceptance.
+
+### Finite buyer transport and protected control state
+
+The SDK paid-lookup transport implements an immutable authenticated quote,
+explicit paid request or original recovery operation. Actual HTTP tests cover
+lost replies, bounded payment framing and one native seller-wallet credit.
+Protected operation state composes selected-wallet self-encryption above the
+existing native/browser atomic CAS stores, with explicit initialization, complete
+ciphertext capacity and original revision recovery. Native process-kill and
+packed browser tests exercise durable state, browser restart and concurrent tabs.
+The native action recovery controller's optional synchronous authority callback
+guards new signing while retaining exact-first-final reconciliation after expiry.
+
+These additions do not complete the durable buyer: full delivered-result custody,
+its orchestration, application material validation and end-to-end reference flows
+remain required. They neither widen the four-MiB wire bounds nor alter existing
+AuthFetch payment defaults, operation-store schemas or unguarded wallet callers.

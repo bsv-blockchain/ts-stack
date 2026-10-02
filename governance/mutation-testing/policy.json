@@ -1186,6 +1186,26 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-paid-lookup-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupTransport.property.test.ts",
+      "boundary": "Explicit authenticated selected-host paid lookup, original request/challenge/payment ownership and recovery without automatic payment",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "protected-operation-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/protected-operation.property.test.ts",
+      "boundary": "Wallet-protected durable workflow state, exact original binding, ciphertext capacity and lost-ack native/browser CAS recovery",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

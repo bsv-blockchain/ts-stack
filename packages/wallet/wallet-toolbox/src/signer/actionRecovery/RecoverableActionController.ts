@@ -44,7 +44,19 @@ export class RecoverableActionController {
     })
   }
 
-  async finalize(operationId: string, request: CreateActionArgs, signing: SignActionArgs): Promise<SignActionResult> {
+  /**
+   * Optional local authority for NEW construction only. It must synchronously
+   * return void or throw; a retained final is reconciled without invoking it.
+   * Checks surrounding awaits cannot undo an already-started external effect
+   * or establish its commit time. Recover the same operation after uncertainty.
+   */
+  async finalize(operationId: string, request: CreateActionArgs, signing: SignActionArgs, checkNewSigning?: () => void): Promise<SignActionResult> {
+    requireAction(checkNewSigning === undefined || (typeof checkNewSigning === 'function' && checkNewSigning.constructor.name !== 'AsyncFunction'), 'New signing authority must be synchronous')
+    const guard = checkNewSigning === undefined ? undefined : () => {
+      const result: unknown = checkNewSigning()
+      if (result instanceof Promise) void result.catch(() => undefined)
+      requireAction(result === undefined, 'New signing authority must return void synchronously')
+    }
     const signed = ownSigning(signing)
     const digest = createHash('sha256').update(actionRecoveryJSON(signed)).digest('hex')
     return await this.operation(operationId, request, async operation => {
@@ -59,16 +71,18 @@ export class RecoverableActionController {
       }
       const allocated = await this.store.storage.findTransactions({ partial: { userId: operation.auth.userId, reference: signed.reference }, noRawTx: true })
       requireAction(allocated.length === 1 && allocated[0].status === 'unsigned', 'Recoverable allocation is no longer available for signing')
+      guard?.()
       const prior = this.pending(operation.args, retained.completed)
       requireAction(prior.tx.toHex() === Transaction.fromAtomicBEEF(state.prepared).toHex(), 'Recovered signable transaction changed')
       for (const [index, spend] of Object.entries(signed.spends)) requireAction(spend.sequenceNumber === undefined || spend.sequenceNumber === prior.tx.inputs[Number(index)]?.sequence, 'Signing request changed funded sequence')
       const before = Transaction.fromBinary(prior.tx.toBinary())
-      prior.tx = await completeSignedTransaction(prior, signed.spends, this.wallet)
+      prior.tx = await completeSignedTransaction(prior, signed.spends, this.wallet, guard)
       requireAction(sameRecoveryLayout(before, prior.tx), 'Final action changed funded layout')
       const beef = Beef.fromBinaryStrict(retained.completed.inputBeef!)
       beef.mergeTransaction(prior.tx)
       const checked = await verifyUnlockScripts(prior.tx.id('hex'), beef, this.wallet.scriptVerifier)
       requireAction(checked.skippedInputs === 0 && checked.verifiedInputs === prior.tx.inputs.length, 'Full input evidence is required for recoverable finalization')
+      guard?.()
       const bytes = await operation.record.retainFinal(digest, beef.toBinaryAtomic(prior.tx.id('hex')))
       return await this.process(operation, digest, bytes)
     })

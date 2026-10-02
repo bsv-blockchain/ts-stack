@@ -1442,6 +1442,28 @@
           "A current original buyer recovers the same retained paid result without another payment or wallet credit.",
           "Changed data authority withholds the private body; changed control authority closes without a replacement body, and recovery never emits payment headers."
         ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Explicit authenticated selected-host paid lookup, original request/challenge/payment ownership and recovery without automatic payment",
+        "target": "At least 300 original-operation ownership, recovery and conflicting-caller histories",
+        "invariants": [
+          "Every operation remains bound to the original selected seller, buyer, request and retained explicit payment.",
+          "Recovery and authentication never construct another payment or reinterpret a changed challenge as original."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/protected-operation.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Wallet-protected durable workflow state, exact original binding, ciphertext capacity and lost-ack native/browser CAS recovery",
+        "target": "At least 300 original-operation ownership, recovery and conflicting-caller histories",
+        "invariants": [
+          "Only the original custody and complete namespace/configuration/revision binding recover retained private state.",
+          "A lost CAS acknowledgement can replay only the immediately following exact plaintext; competing later state remains a conflict."
+        ]
       }
     ],
     "exclusions": [

@@ -204,7 +204,9 @@ function walletRecoveryTarget(repositoryRoot, source, property) {
       '<rootDir>/src/storage/actionRecovery/__test/*.test.ts',
       '<rootDir>/src/signer/actionRecovery/__test/*.test.ts',
       '<rootDir>/src/storage/methods/__test/createActionInputResolution.test.ts',
-      '<rootDir>/src/storage/__test/createActionPerformance.test.ts'
+      '<rootDir>/src/storage/__test/createActionPerformance.test.ts',
+      '<rootDir>/src/signer/methods/__tests/completeSignedTransaction*.test.ts',
+      '<rootDir>/src/utility/__tests__/ScriptTemplateBRC29.test.ts'
     ],
     {
       buildCommand: 'pnpm build',
@@ -230,7 +232,9 @@ function walletRecoveryTarget(repositoryRoot, source, property) {
     additionalInputs: [
       'src/storage/actionRecovery/**',
       'src/signer/actionRecovery/**',
-      'src/storage/methods/createAction.ts'
+      'src/storage/methods/createAction.ts',
+      'src/signer/methods/**',
+      'src/utility/ScriptTemplateBRC29.ts'
     ],
     mutate: [source],
     ...runner
@@ -376,11 +380,17 @@ export function buildMutationTargets(repositoryRoot) {
       `${actionStoreFile}:${transitionsStart}-${actionStoreLines.length}`,
       'src/storage/actionRecovery/__test/SQLiteActionRecoveryTransitions.property.test.ts'
     ),
-    'wallet-recovery-controller': walletRecoveryTarget(
-      repositoryRoot,
-      'src/signer/actionRecovery/RecoverableActionController.ts',
-      'src/signer/actionRecovery/__test/RecoverableActionController.property.test.ts'
-    ),
+    'wallet-recovery-controller': {
+      ...walletRecoveryTarget(
+        repositoryRoot,
+        'src/signer/actionRecovery/RecoverableActionController.ts',
+        'src/signer/actionRecovery/__test/RecoverableActionController.property.test.ts'
+      ),
+      mutate: [
+        'src/signer/actionRecovery/RecoverableActionController.ts',
+        'src/signer/methods/completeSignedTransaction.ts'
+      ]
+    },
     'wallet-recovery-plan': {
       ...walletRecoveryTarget(
         repositoryRoot,
@@ -1701,6 +1711,31 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'protected-operation-state': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/protected-operation.property.test.ts',
+      additionalInputs: [
+        'src/operations/**',
+        'src/storage/SQLiteTransactionDomain.ts',
+        'src/internal/synchronousPromise.ts',
+        'test/fixtures/protected-operation-worker.mjs',
+        '../../sdk/src/primitives/**',
+        '../../sdk/src/wallet/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      mutate: [
+        'src/operations/ProtectedOperationPayload.ts',
+        'src/operations/WalletProtectedOperationPayload.ts',
+        'src/operations/ProtectedOperationStateStore.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/protected-operation*.test.ts', '<rootDir>/test/operation-state*.test.ts'],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
     'output-knowledge-journal': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -1926,7 +1961,9 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.authenticationPolicy.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.paymentPolicy.test.ts',
           '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts',
-          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
+          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
         ],
         { esm: true }
       )
@@ -1945,7 +1982,9 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
-          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
+          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
         ],
         { esm: true }
       )
@@ -1965,9 +2004,33 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/src/overlay-tools/__tests/OutputProposalTransport*.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
-          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts'
+          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
         ],
         { esm: true }
+      )
+    },
+    'sdk-paid-lookup-http': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputPaidLookupTransport.property.test.ts',
+      mutate: [
+        'src/overlay-tools/OutputPaidLookupTransport.ts',
+        'src/overlay-tools/internal/OutputFiniteHTTP.ts'
+      ],
+      additionalInputs: ['src/overlay-tools/**', 'src/auth/**', 'src/wallet/Wallet.interfaces.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/overlay-tools/__tests/OutputProposalTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
+        ],
+        { esm: true, maxTestRunnerReuse: 8 }
       )
     },
     'wallet-action-batch': {

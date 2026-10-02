@@ -716,3 +716,14 @@ Finalization reports whether a returned reservation matches that saved operation
 and transaction. See the [proposal guide](../../docs/guides/non-final-proposals.md)
 before adopting it; storage, current authority, domain acceptance and Bitcoin
 verification remain separate responsibilities.
+
+### Explicit paid lookup operations
+
+`OutputPaidLookupTransport` performs one selected-host BRC-195 quote, explicit
+payment or original-acquisition recovery. It owns the original request and
+retained contract, disables automatic AuthFetch payments, checks authenticated
+challenge/result binding, and never constructs or persists a wallet action.
+`OutputPaidLookupServiceError` preserves a validated service error packet.
+Existing AuthFetch defaults are unchanged. See
+[paid lookup clients](../../docs/guides/paid-lookup-client.md) for response bounds,
+recovery, private custody and the separate durable buyer responsibilities.

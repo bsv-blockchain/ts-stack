@@ -1650,3 +1650,104 @@ export function installAcquisition(
   return coordinator
 }
 ```
+
+## Explicit selected-host paid lookup
+
+The caller has already durably retained the original selection, Acquire and
+challenge. This example proves public types compose for one recovery operation;
+it does not initialize a new quote or construct another payment.
+
+```ts compile
+// example-id: explicit-paid-lookup-recovery
+import {
+  OutputPaidLookupTransport,
+  type OutputCapabilityRecoveryRequest,
+  type WalletInterface as PaidLookupWallet
+} from '@bsv/sdk'
+
+function recoverOriginalAcquisition(
+  contract: unknown,
+  trust: OutputCapabilityRecoveryRequest,
+  request: unknown,
+  challenge: unknown,
+  wallet: PaidLookupWallet
+) {
+  return new OutputPaidLookupTransport({
+    operation: 'recover',
+    contract,
+    trust,
+    request,
+    challenge,
+    wallet
+  }).send()
+}
+void recoverOriginalAcquisition
+```
+
+## Selected-wallet protected browser control state
+
+Production callers provide the original wallet and identity. The public binding
+contains no private request, and explicit initialization is separate from reopen.
+The small control cell is not a complete large delivered-result store.
+
+```ts compile
+// example-id: protected-operation-control
+import { IndexedDBOperationStateStore } from '@bsv/output-knowledge/operations'
+import type { WalletInterface as ProtectedControlWallet } from '@bsv/sdk'
+import {
+  ProtectedOperationStateStore,
+  WalletProtectedOperationPayload,
+  protectedOperationBinding,
+  PROTECTED_OPERATION_INITIAL
+} from '@bsv/output-knowledge/operations/protected'
+
+async function openProtectedControl(
+  wallet: ProtectedControlWallet,
+  originalIdentity: string,
+  create: boolean
+) {
+  const codec = new WalletProtectedOperationPayload(wallet, originalIdentity, 65536)
+  const options = { binding: { operation: 'original-operation' }, maximumValueBytes: 60000 }
+  const binding = protectedOperationBinding(options, codec)
+  const base = create
+    ? await IndexedDBOperationStateStore.create(
+        'private-control',
+        'buyer',
+        binding,
+        PROTECTED_OPERATION_INITIAL
+      )
+    : await IndexedDBOperationStateStore.open('private-control', 'buyer', binding)
+  return create
+    ? await ProtectedOperationStateStore.initialize(base, codec, options, { phase: 'selected' })
+    : await ProtectedOperationStateStore.open(base, codec, options)
+}
+void openProtectedControl
+```
+
+## Current authority for an original noSend transaction
+
+The callback checks current authority each time it is invoked. A retained final
+is returned after expiry without another signature. A lost reply requires status
+recovery of the same operation; it does not authorize replacement construction.
+
+```ts compile
+// example-id: original-signing-authority
+import type { CreateActionArgs, SignActionArgs } from '@bsv/sdk'
+import type { RecoverableActionController as OriginalActionController } from '@bsv/wallet-toolbox/out/src/signer/actionRecovery/RecoverableActionController'
+
+async function finalizeOriginal(
+  actions: OriginalActionController,
+  operationId: string,
+  original: CreateActionArgs,
+  signing: SignActionArgs,
+  payableUntil: bigint,
+  now: () => bigint,
+  authorized: () => boolean
+) {
+  return await actions.finalize(operationId, original, signing, () => {
+    if (now() >= payableUntil || !authorized())
+      throw new Error('Original signing authority expired')
+  })
+}
+void finalizeOriginal
+```

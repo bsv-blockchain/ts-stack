@@ -153,3 +153,24 @@ and recovery semantics are unchanged; no database or caller migration is needed.
 Its mutation campaign retains the complete source and test union across both
 execution parts. This internal division does not change wallet authority or make
 local recovery journals portable between custodians.
+
+## Current authority for new signing
+
+`finalize(operationId, originalRequest, signing, checkNewSigning?)` accepts an
+optional synchronous callback for current local authority. It must return void
+or throw. Read the current deadline and authorization on every invocation; a
+previously captured approval does not account for delayed authorization,
+telemetry, template signing, verification or storage. Async and non-void callbacks
+are refused. The shared signer preserves default behavior when no callback is
+provided, original template receivers, batching and telemetry.
+
+The callback guards new construction, including the path immediately before
+requesting durable retention. It cannot establish the commit time of an
+already-started storage operation or undo external effects. A lost retention or
+processing reply must be reconciled using the same original operation. Retained
+final bytes remain recoverable after expiry with no new signature; `finalize`
+returns an existing matching final without invoking the callback. Recovering a
+prepared allocation can reconstruct its unsigned transaction, which reads change
+keys but does not sign it. This capability continues to enforce full-evidence
+`noSend`. See [paid lookup clients](./paid-lookup-client.md) for deadline semantics
+and the separate buyer control/result custody responsibilities.

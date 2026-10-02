@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 117)
+  assert.equal(Object.keys(configured).length, 119)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -418,7 +418,9 @@ test('wallet recovery encoding covers every extracted implementation with the or
     '<rootDir>/src/storage/actionRecovery/__test/*.test.ts',
     '<rootDir>/src/signer/actionRecovery/__test/*.test.ts',
     '<rootDir>/src/storage/methods/__test/createActionInputResolution.test.ts',
-    '<rootDir>/src/storage/__test/createActionPerformance.test.ts'
+    '<rootDir>/src/storage/__test/createActionPerformance.test.ts',
+    '<rootDir>/src/signer/methods/__tests/completeSignedTransaction*.test.ts',
+    '<rootDir>/src/utility/__tests__/ScriptTemplateBRC29.test.ts'
   ])
 })
 
@@ -760,4 +762,60 @@ test('acquisition HTTP retains complete modules, native dependencies and every p
     '../../application/output-knowledge/src/**'
   ])
     assert.ok(target.additionalInputs.includes(input))
+})
+
+test('paid lookup and protected state retain whole-source and complete compatibility selections', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const paid = targets['sdk-paid-lookup-http']
+  assert.deepEqual(paid.mutate, [
+    'src/overlay-tools/OutputPaidLookupTransport.ts',
+    'src/overlay-tools/internal/OutputFiniteHTTP.ts'
+  ])
+  for (const name of [
+    'OutputPaidLookupTransport*.test.ts',
+    'OutputPaidLookupFunding*.test.ts',
+    'OutputProposalTransport*.test.ts',
+    'OutputRootEvictionTransport*.test.ts',
+    'OutputLookupTransport.test.ts'
+  ])
+    assert.ok(
+      paid.runnerOptions.jest.config.testMatch.includes(
+        `<rootDir>/src/overlay-tools/__tests/${name}`
+      )
+    )
+  for (const id of ['sdk-auth-http', 'sdk-root-eviction-http', 'output-proposal-http'])
+    assert.ok(
+      targets[id].runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts'
+      )
+    )
+  const protectedState = targets['protected-operation-state']
+  assert.deepEqual(protectedState.mutate, [
+    'src/operations/ProtectedOperationPayload.ts',
+    'src/operations/WalletProtectedOperationPayload.ts',
+    'src/operations/ProtectedOperationStateStore.ts'
+  ])
+  assert.deepEqual(protectedState.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/protected-operation*.test.ts',
+    '<rootDir>/test/operation-state*.test.ts'
+  ])
+  assert.ok(
+    protectedState.additionalInputs.includes('test/fixtures/protected-operation-worker.mjs')
+  )
+  assert.equal(protectedState.runnerOptions.buildCommand, 'pnpm build')
+  const recovery = targets['wallet-recovery-controller']
+  assert.deepEqual(recovery.mutate, [
+    'src/signer/actionRecovery/RecoverableActionController.ts',
+    'src/signer/methods/completeSignedTransaction.ts'
+  ])
+  assert.ok(
+    recovery.runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/src/signer/methods/__tests/completeSignedTransaction*.test.ts'
+    )
+  )
+  assert.ok(
+    recovery.runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/src/utility/__tests__/ScriptTemplateBRC29.test.ts'
+    )
+  )
 })

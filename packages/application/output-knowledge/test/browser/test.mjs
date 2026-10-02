@@ -65,7 +65,7 @@ async function createConsumer(root) {
   )
   await mkdir(path.join(directory, 'browser'))
   await Promise.all(
-    ['index.html', 'main.ts', 'proposals.ts'].map(file =>
+    ['index.html', 'main.ts', 'proposals.ts', 'protected.ts'].map(file =>
       cp(path.join(packageDirectory, 'test/browser', file), path.join(directory, 'browser', file))
     )
   )
@@ -212,9 +212,49 @@ try {
     expired,
     'offline reopen with a rolled-back clock retains accepted expiry'
   )
+  const protectedInitial = await page.evaluate(() =>
+    window.outputKnowledgeBrowser.protected.initialize(true)
+  )
+  assert.equal(protectedInitial.saved.revision, '1')
+  assert.equal(protectedInitial.saved.value.privateRequest, 'synthetic-recipient-context')
+  assert.ok(!protectedInitial.raw.includes('synthetic-recipient-context'))
+  assert.ok(!protectedInitial.raw.includes('privateRequest'))
+  assert.deepEqual(
+    await page.evaluate(() => window.outputKnowledgeBrowser.protected.cas('1', 'signed')),
+    { status: 'updated', revision: '2' }
+  )
+  await page.close()
+  await browser.close()
+  browser = await puppeteer.launch(launch)
+  page = await openPage(browser, baseURL, errors)
+  const protectedReopened = await page.evaluate(() =>
+    window.outputKnowledgeBrowser.protected.initialize(false)
+  )
+  assert.equal(protectedReopened.saved.revision, '2')
+  assert.equal(protectedReopened.saved.value.phase, 'signed')
+  const protectedPeer = await openPage(browser, baseURL, errors)
+  await protectedPeer.evaluate(() => window.outputKnowledgeBrowser.protected.initialize(false))
+  const protectedWriters = await Promise.all([
+    page.evaluate(() => window.outputKnowledgeBrowser.protected.cas('2', 'left')),
+    protectedPeer.evaluate(() => window.outputKnowledgeBrowser.protected.cas('2', 'right'))
+  ])
+  assert.deepEqual(protectedWriters.map(result => result.status).sort(), ['conflict', 'updated'])
+  const protectedFinal = await protectedPeer.evaluate(() =>
+    window.outputKnowledgeBrowser.protected.inspect()
+  )
+  assert.equal(protectedFinal.saved.revision, '3')
+  assert.equal(
+    protectedFinal.saved.value.phase,
+    protectedWriters[0].status === 'updated' ? 'left' : 'right'
+  )
+  assert.ok(!protectedFinal.raw.includes('synthetic-recipient-context'))
+  assert.equal(
+    await page.evaluate(() => window.outputKnowledgeBrowser.protected.wrongWallet()),
+    'context-changed'
+  )
   assert.deepEqual(errors, [])
   console.log(
-    'ok - exact packed browser imports, strict CSP, native IndexedDB, browser/page restart, receipt-before-cursor, cross-tab CAS, missing-store recovery, lost-core fence, proposal receipt/replay and durable exclusive expiry'
+    'ok - exact packed browser imports, strict CSP, native IndexedDB, browser/page restart, receipt-before-cursor, cross-tab CAS, missing-store recovery, lost-core fence, proposal receipt/replay, durable exclusive expiry and protected recipient custody/restart/concurrent CAS'
   )
 } finally {
   await browser?.close()

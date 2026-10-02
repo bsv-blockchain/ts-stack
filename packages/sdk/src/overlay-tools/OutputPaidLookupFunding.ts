@@ -5,7 +5,7 @@ import { toBase64 } from '../primitives/utils.js'
 import * as s from './OutputProtocolSchema.js'
 import { parseOutputChain } from './OutputObservation.js'
 import { decodeOutputBytes, outputIdentity, outputPacketDigest } from './OutputProtocol.js'
-import { outputAssert } from './OutputProtocolError.js'
+import { OutputProtocolError, outputAssert } from './OutputProtocolError.js'
 import { parseOutputPaidLookupChallenge } from './OutputPaidLookupProtocol.js'
 
 const derivation = (input: unknown): string => {
@@ -66,7 +66,15 @@ export function inspectOutputPaidLookupFunding(
     submitted.derivationPrefix === challenge.derivationPrefix,
     'Payment prefix differs from frozen challenge'
   )
-  const beef = Beef.fromBinaryStrict(decodeOutputBytes(submitted.transaction, 65536))
+  const bytes = decodeOutputBytes(submitted.transaction, 65536)
+  let beef: Beef
+  try {
+    beef = Beef.fromBinaryStrict(bytes)
+  } catch {
+    // Parsing bounded supplied bytes is a deterministic representation decision,
+    // not a temporary wallet or chain-service failure. Do not expose parser text.
+    throw new OutputProtocolError('invalid', 'Payment Atomic BEEF is malformed')
+  }
   outputAssert(
     beef.atomicTxid !== undefined && beef.isAtomic(),
     'Payment requires one Atomic BEEF dependency graph'

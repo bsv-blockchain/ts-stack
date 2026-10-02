@@ -1,3 +1,4 @@
+import { protectedBrowser } from './protected.js'
 import {
   PrivateKey,
   OUTPUT_LOOKUP_PROFILE,
@@ -252,7 +253,8 @@ const api = {
   cas,
   missing,
   loseCore,
-  proposals: proposalBrowser
+  proposals: proposalBrowser,
+  protected: protectedBrowser
 }
 declare global {
   interface Window {

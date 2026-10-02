@@ -603,7 +603,7 @@ describe('retained BRC-193 lookup transport', () => {
     await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
     await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'limited' })
     expect(f.fetchClient).toHaveBeenCalledTimes(1)
-    const cancelBody = jest.fn()
+    const cancelBody = jest.fn<() => void>()
     const late = new Response(new ReadableStream({ cancel: cancelBody }), {
       headers: { 'content-type': 'application/json' }
     })
@@ -634,7 +634,7 @@ describe('retained BRC-193 lookup transport', () => {
 
   it('cancels a stalled response stream rather than buffering or advancing a cursor', async () => {
     const f = setup()
-    const cancel = jest.fn()
+    const cancel = jest.fn<() => void>()
     f.fetchClient.mockImplementationOnce(
       async () =>
         new Response(new ReadableStream({ cancel }), {

@@ -27,7 +27,8 @@ test('compiled examples are scoped through their first-party dependency closure'
       'root-coordination-host',
       'proposal-http-composition',
       'private-publication-http-composition',
-      'private-acquisition-host'
+      'private-acquisition-host',
+      'original-signing-authority'
     ]
   )
 })

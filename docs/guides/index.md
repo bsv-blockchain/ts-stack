@@ -114,3 +114,11 @@ disclosure layers behind explicitly selected BRC-194 endpoints.
 
 - [Unified integration and implementer guidance](identity-did-vc.md)
 - [Breaking API and service migration](identity-did-vc-migration.md)
+
+## Private acquisition and recovery
+
+- [Authenticated seller acquisition and recovery](./private-acquisition-recovery.md):
+  compose durable obligations, wallet credits, disclosure and the optional host.
+- [Explicit paid lookup clients and protected workflow state](./paid-lookup-client.md):
+  retain original requests, use finite selected-host payment/recovery calls,
+  encrypt durable control state and guard new wallet signing after delays.

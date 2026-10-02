@@ -1228,3 +1228,14 @@ The Node test typecheck uses NodeNext resolution so native CommonJS wallet
 fixtures and SDK declarations follow their actual runtime import conditions.
 The production portable build keeps its existing bundler resolution; package
 and browser checks continue to validate the published runtime boundaries.
+
+### Protected workflow control state
+
+The portable `operations/protected` entry includes `ProtectedOperationStateStore`,
+`WalletProtectedOperationPayload`, `protectedOperationBinding` and the explicit
+`PROTECTED_OPERATION_INITIAL` sentinel. They add selected-wallet encryption above
+existing durable SQLite/IndexedDB CAS stores, preserve exact initialization and
+revision bindings, and recover lost acknowledgements without treating later
+state as rollback. Reserve ciphertext capacity before financial effects; this
+small control cell does not store an arbitrary four-MiB delivered response.
+See [paid lookup clients and protected state](../../../docs/guides/paid-lookup-client.md).

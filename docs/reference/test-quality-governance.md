@@ -386,3 +386,20 @@ uses the same-head wallet and application packages. Existing four workers,
 reuse eight, 45-minute parts and complete aggregate 90/zero-uncovered/invalid gates
 remain unchanged. Independent legacy host and packed SDK-floor checks remain
 required; this registration does not imply their success.
+
+`sdk-paid-lookup-http` mutates the complete transport and shared finite HTTP owner
+in disjoint whole-file parts, retaining all new transport/funding tests and all
+existing proposal, root-eviction and lookup compatibility suites in every part.
+The same new complete test union is added to `sdk-auth-http`,
+`sdk-root-eviction-http` and `output-proposal-http`. `protected-operation-state`
+mutates all three complete modules in wallet/interface and state parts, retaining
+all protected/native/property/process and original operation-state tests. Both
+new targets keep four workers, reuse eight, 300 cases/seed3242026/replay and
+45-minute parts with aggregate90/zero uncovered/invalid. Explicit native-worker,
+SDK and original store inputs select the same-head prerequisite builds.
+
+The existing `wallet-recovery-controller` retains its complete controller plus
+the complete managed signer, every original recovery test, added deadline
+histories and shared signing/template compatibility tests. Its existing deadline
+and target/property count remain unchanged. These inventories describe required
+qualification, not an assertion that a particular head has passed it.
