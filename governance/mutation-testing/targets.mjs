@@ -507,20 +507,26 @@ export function buildMutationTargets(repositoryRoot) {
     'root-eviction-commit': rootEvictionTarget('root-eviction-commit.property.test.ts', [
       'RootEvictionCommitContext'
     ]),
-    'root-eviction-journal': rootEvictionTarget('root-eviction.property.test.ts', [
-      'SQLiteRootEvictionStore'
-    ]),
-    'root-eviction-records': rootEvictionTarget('root-eviction-records.property.test.ts', [
-      'RootEvictionRequests',
-      'RootEvictionServingRecords'
-    ]),
-    'root-eviction-codec': rootEvictionTarget('root-eviction-codec.property.test.ts', [
-      'RootEvictionCodec'
-    ]),
-    'root-eviction-storage': rootEvictionTarget('root-eviction-storage.property.test.ts', [
-      'SQLiteRootEvictionDatabase',
-      'RootEvictionStorage'
-    ]),
+    'root-eviction-journal': rootEvictionTarget(
+      'root-eviction.property.test.ts',
+      ['SQLiteRootEvictionStore'],
+      { maxTestRunnerReuse: 8 }
+    ),
+    'root-eviction-records': rootEvictionTarget(
+      'root-eviction-records.property.test.ts',
+      ['RootEvictionRequests', 'RootEvictionServingRecords'],
+      { maxTestRunnerReuse: 8 }
+    ),
+    'root-eviction-codec': rootEvictionTarget(
+      'root-eviction-codec.property.test.ts',
+      ['RootEvictionCodec'],
+      { maxTestRunnerReuse: 8 }
+    ),
+    'root-eviction-storage': rootEvictionTarget(
+      'root-eviction-storage.property.test.ts',
+      ['SQLiteRootEvictionDatabase', 'RootEvictionStorage'],
+      { maxTestRunnerReuse: 8 }
+    ),
     'sdk-root-eviction': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',

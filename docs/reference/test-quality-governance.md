@@ -307,3 +307,12 @@ the complete graph aggregate and independent traversal gate remain required.
 Source-union and selected-artifact assertions prevent either helper from being
 omitted. No public API or verification rule changes, and the cancelled hosted
 attempt remains failed evidence.
+
+The root journal, records, codec and storage targets also use the optional
+eight-execution worker recycling setting. Their earlier hosted runs passed all296
+baseline tests but reached the unchanged90-minute limit without complete reports;
+those logs do not establish memory exhaustion as the cause. The setting is a
+measured execution remedy, subject to complete qualification. Every complete
+source, canonical test, seed, property budget, four-worker bound, existing records
+partition and final critical gate remains unchanged. No cancelled report counts
+as a passing result.

@@ -2297,3 +2297,9 @@ retains all five original source files and adds the verified native tests. Compl
 fresh state/service mutation qualification and exact-head hosted CI are pending.
 The authenticated coordinator, reconciler and HTTP drafts remain outside checkout;
 this foundation does not claim a finished private service or the second checkpoint.
+
+The separately acknowledged root journal/records/codec/storage runner follow-up
+now recycles workers after eight executions, retaining every canonical input,
+existing records partition, budget, worker bound, deadline and critical gate.
+This is a measurement change, not a claim about the cause of the five hosted
+cancellations or acceptance of those targets. Complete frozen-source reruns follow.

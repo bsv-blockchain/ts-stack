@@ -494,7 +494,7 @@ test('private publication retains every complete implementation and native resta
   assert.ok(target.additionalInputs.includes('test/private-publication-fixture.ts'))
 })
 
-test('root coordination alone recycles workers while retaining complete canonical source and tests', () => {
+test('measured root targets recycle workers while retaining complete canonical source and tests', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const selected = targets['root-eviction-coordination']
   assert.equal(selected.runnerOptions.maxTestRunnerReuse, 8)
@@ -506,9 +506,21 @@ test('root coordination alone recycles workers while retaining complete canonica
   assert.deepEqual(selected.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/root-eviction*.test.ts'
   ])
+  const recycled = new Set([
+    'root-eviction-coordination',
+    'root-eviction-journal',
+    'root-eviction-records',
+    'root-eviction-codec',
+    'root-eviction-storage'
+  ])
   for (const [id, target] of Object.entries(targets)) {
-    if (id.startsWith('root-eviction-') && id !== 'root-eviction-coordination') {
-      assert.equal(target.runnerOptions.maxTestRunnerReuse, undefined, id)
+    if (id.startsWith('root-eviction-')) {
+      assert.equal(target.runnerOptions.maxTestRunnerReuse, recycled.has(id) ? 8 : undefined, id)
+      if (recycled.has(id))
+        assert.deepEqual(
+          target.runnerOptions.jest.config.testMatch,
+          selected.runnerOptions.jest.config.testMatch
+        )
     }
   }
   assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
