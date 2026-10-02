@@ -1,6 +1,9 @@
 import { knex, type Knex } from 'knex'
 import { createHash } from 'node:crypto'
+import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
+import * as ArchiveClock from '../archive/SnapshotArchiveSql'
 import {
+  snapshotJournalReceiptPolicy,
   snapshotJournalReceiptBinding,
   snapshotJournalReceiptDdl,
   recordSnapshotJournalReceipt,
@@ -246,4 +249,166 @@ test('a receipt whose captured floor exceeds the current floor refuses inconsist
   await k('snapshot_journal_retention').update({ floor: '9' })
   await expect(k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).rejects.toThrow()
   await expect(k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))).rejects.toThrow()
+})
+
+test('policy rejects non-record inputs with the stable receipt error identity', () => {
+  const fields = { receiptLimit: 1, receiptLifetimeMs: 1 }
+  const malformed: unknown[] = [null, undefined, 1, 'policy', Object.assign([], fields), Object.assign(() => 0, fields)]
+  for (const value of malformed) {
+    const call = () => snapshotJournalReceiptPolicy(value as typeof fields)
+    expect(call).toThrow(WERR_INVALID_OPERATION)
+    expect(call).toThrow('Invalid, unavailable or expired snapshot journal receipt')
+  }
+  expect(snapshotJournalReceiptPolicy(fields)).toEqual(fields)
+  expect(snapshotJournalReceiptPolicy(fields)).not.toBe(fields)
+  expect(snapshotJournalReceiptPolicy({ receiptLimit: 128, receiptLifetimeMs: 2592000000 })).toEqual({
+    receiptLimit: 128,
+    receiptLifetimeMs: 2592000000
+  })
+})
+
+test('binding refuses non-record values and textual lookalikes before hashing', () => {
+  for (const value of [null, undefined, 1, 'binding', Object.assign(() => 0, binding)])
+    expect(() => snapshotJournalReceiptBinding(value as unknown as SnapshotJournalReceiptBinding)).toThrow(
+      WERR_INVALID_OPERATION
+    )
+  for (const field of ['backend', 'source', 'schema', 'epoch', 'identityKey', 'storageIdentity'] as const) {
+    const text = binding[field]
+    expect(() => snapshotJournalReceiptBinding({ ...binding, [field]: { toString: () => text } })).toThrow(
+      WERR_INVALID_OPERATION
+    )
+  }
+  for (const field of ['epoch', 'identityKey'] as const)
+    for (const text of ['x' + binding[field], binding[field] + 'x'])
+      expect(() => snapshotJournalReceiptBinding({ ...binding, [field]: text })).toThrow(WERR_INVALID_OPERATION)
+})
+
+test('all supported chains and exact UTF-8 storage identity boundaries bind distinctly', () => {
+  const chains = ['main', 'test', 'stn', 'ttn', 'tstn', 'mock']
+  expect(new Set(chains.map(chain => snapshotJournalReceiptBinding({ ...binding, chain }))).size).toBe(chains.length)
+  const identities = ['x', 'x'.repeat(256), 'é'.repeat(128), '😀'.repeat(64)]
+  const hashes = identities.map(storageIdentity => snapshotJournalReceiptBinding({ ...binding, storageIdentity }))
+  expect(new Set(hashes).size).toBe(identities.length)
+  for (const hash of hashes) expect(hash).toMatch(/^[0-9a-f]{64}$/)
+})
+
+test('exact floor and lifetime boundaries remain readable until the database expiry instant', async () => {
+  let time = 1000000
+  const clock = jest.spyOn(ArchiveClock, 'snapshotArchiveDatabaseNow').mockImplementation(async () => time)
+  try {
+    const input = { ...request(1), highWater: snapshotJournalRevision('7'), expiresAt: time + 1000 }
+    await k('snapshot_journal_retention').update({ floor: '7', receiptLifetimeMs: 1000 })
+    const expected = { ...input, binding: snapshotJournalReceiptBinding(binding), floor: '7' }
+    expect(await k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))).toEqual(expected)
+    expect(await k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))).toEqual(expected)
+    expect(await k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).toEqual(expected)
+    for (const changed of [
+      { ...input, highWater: snapshotJournalRevision('8') },
+      { ...input, expiresAt: input.expiresAt + 1 }
+    ])
+      await expect(k.transaction(t => readSnapshotJournalReceipt(t, binding, changed))).rejects.toThrow(
+        WERR_INVALID_OPERATION
+      )
+    time = input.expiresAt - 1
+    expect(await k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).toEqual(expected)
+    expect(await k.transaction(t => collectSnapshotJournalReceipts(t))).toBe(0)
+    time = input.expiresAt
+    await expect(k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).rejects.toThrow(
+      WERR_INVALID_OPERATION
+    )
+    await expect(k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))).rejects.toThrow(
+      WERR_INVALID_OPERATION
+    )
+    expect(await k.transaction(t => collectSnapshotJournalReceipts(t))).toBe(1)
+    expect(await k('snapshot_journal_receipts')).toEqual([])
+  } finally {
+    clock.mockRestore()
+  }
+})
+
+test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
+  'invalid database time %s refuses allocation, lookup and collection without changing rows',
+  async time => {
+    const input = request(1)
+    await k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))
+    const before = await k('snapshot_journal_receipts')
+    const clock = jest.spyOn(ArchiveClock, 'snapshotArchiveDatabaseNow').mockResolvedValue(time)
+    try {
+      await expect(k.transaction(t => recordSnapshotJournalReceipt(t, binding, request(2)))).rejects.toThrow(
+        WERR_INVALID_OPERATION
+      )
+      await expect(k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).rejects.toThrow(
+        WERR_INVALID_OPERATION
+      )
+      await expect(k.transaction(t => collectSnapshotJournalReceipts(t))).rejects.toThrow(WERR_INVALID_OPERATION)
+      expect(await k('snapshot_journal_receipts')).toEqual(before)
+    } finally {
+      clock.mockRestore()
+    }
+  }
+)
+
+test('malformed singleton retention metadata refuses every operation without partial writes', async () => {
+  const input = request(1)
+  await k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))
+  const retained = await k('snapshot_journal_retention').first()
+  const before = await k('snapshot_journal_receipts')
+  await k.raw('PRAGMA ignore_check_constraints=ON')
+  const malformed = [
+    [],
+    [{ ...retained, id: 2 }],
+    [retained, { ...retained, id: 2 }],
+    [{ ...retained, receiptLimit: 0 }],
+    [{ ...retained, receiptLimit: 129 }],
+    [{ ...retained, receiptLifetimeMs: 0 }],
+    [{ ...retained, receiptLifetimeMs: 2592000001 }]
+  ]
+  for (const rows of malformed) {
+    await k('snapshot_journal_retention').delete()
+    if (rows.length) await k('snapshot_journal_retention').insert(rows)
+    await expect(k.transaction(t => recordSnapshotJournalReceipt(t, binding, request(2)))).rejects.toThrow(
+      WERR_INVALID_OPERATION
+    )
+    await expect(k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).rejects.toThrow(
+      WERR_INVALID_OPERATION
+    )
+    await expect(k.transaction(t => collectSnapshotJournalReceipts(t))).rejects.toThrow(WERR_INVALID_OPERATION)
+    expect(await k('snapshot_journal_receipts')).toEqual(before)
+  }
+})
+
+test('malformed stored receipt revisions and collector identities refuse without deleting data', async () => {
+  const input = request(1)
+  await k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))
+  const stored = await k('snapshot_journal_receipts').first()
+  for (const highWater of ['0', '-1', '9223372036854775808']) {
+    await k('snapshot_journal_receipts').update({ highWater })
+    await expect(k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).rejects.toThrow()
+    await expect(k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))).rejects.toThrow()
+  }
+  await k('snapshot_journal_receipts').update({ ...stored, requestId: 'not-a-digest', expiresAt: 1 })
+  await expect(k.transaction(t => collectSnapshotJournalReceipts(t))).rejects.toThrow(WERR_INVALID_OPERATION)
+  expect(await k('snapshot_journal_receipts')).toHaveLength(1)
+})
+
+test('SQLite alias is supported while unrecognized database drivers refuse explicitly', async () => {
+  k.client.config.client = 'sqlite3'
+  const input = request(1)
+  expect(await k.transaction(t => recordSnapshotJournalReceipt(t, binding, input))).toMatchObject(input)
+  for (const client of ['pg', 'mysql-compatible', '', undefined]) {
+    k.client.config.client = client
+    expect(() => snapshotJournalReceiptDdl(k)).toThrow(WERR_INVALID_OPERATION)
+    await expect(k.transaction(t => readSnapshotJournalReceipt(t, binding, input))).rejects.toThrow(
+      WERR_INVALID_OPERATION
+    )
+  }
+})
+
+test('request expiry must be an exact primitive number before database work', async () => {
+  const input = request(1)
+  for (const expiresAt of [String(input.expiresAt), { valueOf: () => input.expiresAt }, null, undefined, Number.NaN])
+    await expect(
+      k.transaction(t => recordSnapshotJournalReceipt(t, binding, { ...input, expiresAt } as typeof input))
+    ).rejects.toThrow(WERR_INVALID_OPERATION)
+  expect(await k('snapshot_journal_receipts')).toEqual([])
 })

@@ -53,9 +53,13 @@ function transaction(k: Knex): void {
 const boundedInteger = (value: unknown, max: number): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= max
 
+function isObject(value: unknown): value is object {
+  return value !== null && typeof value === 'object'
+}
+
 /** Detached installation policy; a generation cannot silently change it on resume. */
 export function snapshotJournalReceiptPolicy(value: SnapshotJournalReceiptPolicy): SnapshotJournalReceiptPolicy {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return invalid()
+  if (!isObject(value) || Array.isArray(value)) return invalid()
   const { receiptLimit, receiptLifetimeMs } = value
   if (
     !boundedInteger(receiptLimit, SNAPSHOT_JOURNAL_RECEIPT_LIMIT) ||
@@ -68,8 +72,7 @@ export function snapshotJournalReceiptPolicy(value: SnapshotJournalReceiptPolicy
 /** An exact, bounded digest binds a receipt without retaining profile metadata in it. */
 export function snapshotJournalReceiptBinding(value: SnapshotJournalReceiptBinding): string {
   if (
-    value === null ||
-    typeof value !== 'object' ||
+    !isObject(value) ||
     ![value.backend, value.source, value.schema].every(part => typeof part === 'string' && digestPattern.test(part)) ||
     typeof value.epoch !== 'string' ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.epoch) ||
@@ -225,7 +228,7 @@ export async function recordSnapshotJournalReceipt(
   }
   // Capacity includes expired rows until a bounded collector actually commits deletion.
   const occupiedQuery = k('snapshot_journal_receipts')
-    .select(k.raw('1 AS occupied'))
+    .select({ occupied: 1 })
     .orderBy('requestId')
     .limit(state.receiptLimit + 1)
   if (!local(k)) occupiedQuery.forUpdate().noWait()
@@ -246,7 +249,7 @@ export async function readSnapshotJournalReceipt(
   const requested = receipt({ ...expected, binding: bound, floor: '0' })
   const state = await retention(k, false),
     time = await now(k)
-  const [stored] = await sharedRows(k, receiptQuery(k).where('requestId', requested.requestId).limit(1))
+  const stored = (await sharedRows(k, receiptQuery(k).where('requestId', requested.requestId).limit(1))).at(0)
   if (stored === undefined) return invalid()
   const result = receipt(stored, true)
   if (

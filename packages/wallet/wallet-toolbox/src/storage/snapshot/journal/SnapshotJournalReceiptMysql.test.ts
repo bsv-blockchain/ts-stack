@@ -1,4 +1,5 @@
 import { knex, type Knex } from 'knex'
+import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 import {
   snapshotJournalReceiptDdl,
   snapshotJournalReceiptBinding,
@@ -38,6 +39,15 @@ function stringifyBigints(rows: Array<Record<string, unknown>>): void {
       if (row[field] !== undefined) row[field] = String(row[field])
 }
 
+function overrideBigints(
+  rows: Array<Record<string, unknown>>,
+  values: Partial<Record<'expiresAt' | 'receiptLifetimeMs', unknown>>
+): void {
+  for (const row of rows)
+    for (const field of ['expiresAt', 'receiptLifetimeMs'] as const)
+      if (row[field] !== undefined && Object.hasOwn(values, field)) row[field] = values[field]
+}
+
 // Real MySQL query compilation/response processing, backed by SQLite for DML
 // and rollback. The independent native fixture proves MySQL isolation/locks.
 async function fixture(strings: boolean) {
@@ -46,7 +56,11 @@ async function fixture(strings: boolean) {
   for (const sql of snapshotJournalReceiptDdl(db)) await db.raw(sql)
   await db('snapshot_journal_retention').insert({ id: 1, floor: '0', receiptLimit: 2, receiptLifetimeMs: 2592000000 })
   const queries: Query[] = [],
-    state = { failLock: false, now: time }
+    state = {
+      failLock: false,
+      now: time,
+      storedBigints: {} as Partial<Record<'expiresAt' | 'receiptLifetimeMs', unknown>>
+    }
   const connection = {
     __knexUid: 'receipt-driver',
     query: (
@@ -76,6 +90,7 @@ async function fixture(strings: boolean) {
     const result = await db.raw(sql, q.bindings)
     if (Array.isArray(result)) {
       if (strings) stringifyBigints(result)
+      overrideBigints(result, state.storedBigints)
       return respond(result)
     }
     return respond({ affectedRows: result?.changes ?? 0, insertId: result?.lastInsertRowid ?? 0 })
@@ -146,11 +161,10 @@ test('MySQL expired capacity remains charged until collection commits', async ()
     expect(await f.k.transaction(t => collectSnapshotJournalReceipts(t))).toBe(1)
     await f.k.transaction(t => recordSnapshotJournalReceipt(t, binding, c))
     expect(await f.k.transaction(t => readSnapshotJournalReceipt(t, binding, b))).toMatchObject(b)
-    expect(
-      f.queries
-        .filter(q => q.sql.startsWith('select 1 AS occupied'))
-        .every(q => /limit \? for update nowait$/i.test(q.sql))
-    ).toBe(true)
+    const capacityQueries = f.queries.filter(q => q.sql.startsWith('select 1 as `occupied`'))
+    expect(capacityQueries.length).toBeGreaterThan(0)
+    expect(capacityQueries.every(q => /order by `requestId` asc limit \? for update nowait$/i.test(q.sql))).toBe(true)
+    expect(capacityQueries.every(q => q.bindings.at(-1) === 3)).toBe(true)
     expect(
       f.queries.some(
         q =>
@@ -216,5 +230,86 @@ test('MySQL receipt tables carry the expiry index in the atomic table definition
     ).toBe(true)
   } finally {
     await k.destroy()
+  }
+})
+
+test('MySQL legacy alias retains current-read receipt and retention semantics', async () => {
+  const f = await fixture(true)
+  try {
+    f.k.client.config.client = 'mysql'
+    const a = input(1)
+    expect(snapshotJournalReceiptDdl(f.k)).toHaveLength(2)
+    await f.k.transaction(t => recordSnapshotJournalReceipt(t, binding, a))
+    expect(await f.k.transaction(t => readSnapshotJournalReceipt(t, binding, a))).toMatchObject(a)
+    f.state.now = a.expiresAt
+    expect(await f.k.transaction(t => collectSnapshotJournalReceipts(t))).toBe(1)
+    expect(await f.db('snapshot_journal_receipts')).toEqual([])
+  } finally {
+    await f.close()
+  }
+})
+
+test('MySQL driver BIGINT responses reject noncanonical strings and nonprimitive numeric lookalikes', async () => {
+  const f = await fixture(true)
+  try {
+    const a = input(1)
+    await f.k.transaction(t => recordSnapshotJournalReceipt(t, binding, a))
+    for (const field of ['expiresAt', 'receiptLifetimeMs'] as const) {
+      const value = field === 'expiresAt' ? a.expiresAt : 2592000000
+      const invalid: unknown[] = [
+        '0' + value,
+        '+' + value,
+        ' ' + value,
+        value + ' ',
+        value / 1000 + 'e3',
+        value + '.0',
+        0,
+        -1,
+        1.5,
+        Number.MAX_SAFE_INTEGER + 1,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        { valueOf: () => value, toString: () => String(value) }
+      ]
+      for (const response of invalid) {
+        f.state.storedBigints = { [field]: response }
+        await expect(f.k.transaction(t => readSnapshotJournalReceipt(t, binding, a))).rejects.toThrow(
+          WERR_INVALID_OPERATION
+        )
+        await expect(f.k.transaction(t => recordSnapshotJournalReceipt(t, binding, a))).rejects.toThrow(
+          WERR_INVALID_OPERATION
+        )
+      }
+      f.state.storedBigints = { [field]: String(value) }
+      expect(await f.k.transaction(t => readSnapshotJournalReceipt(t, binding, a))).toMatchObject(a)
+      f.state.storedBigints = {}
+    }
+    expect(await f.db('snapshot_journal_receipts')).toHaveLength(1)
+  } finally {
+    await f.close()
+  }
+})
+
+test('MySQL receipt reads acquire shared nonwaiting locks and preserve the recorded expiry', async () => {
+  const f = await fixture(false)
+  try {
+    const a = input(1)
+    await f.k.transaction(t => recordSnapshotJournalReceipt(t, binding, a))
+    f.queries.length = 0
+    expect(await f.k.transaction(t => readSnapshotJournalReceipt(t, binding, a))).toMatchObject(a)
+    const retentionReads = f.queries.filter(q => q.sql.includes('from `snapshot_journal_retention`'))
+    expect(retentionReads).toHaveLength(1)
+    expect(retentionReads[0].sql.endsWith('FOR SHARE NOWAIT')).toBe(true)
+    await f.db('snapshot_journal_receipts').update({ expiresAt: a.expiresAt + 1 })
+    await expect(f.k.transaction(t => readSnapshotJournalReceipt(t, binding, a))).rejects.toThrow(
+      WERR_INVALID_OPERATION
+    )
+    await f.db('snapshot_journal_receipts').update({ expiresAt: a.expiresAt })
+    f.state.now = a.expiresAt
+    await expect(f.k.transaction(t => readSnapshotJournalReceipt(t, binding, a))).rejects.toThrow(
+      WERR_INVALID_OPERATION
+    )
+  } finally {
+    await f.close()
   }
 })

@@ -230,21 +230,21 @@ function projectPage(k: Knex, query: Knex.QueryBuilder, stream: Stream, local: b
   }
   if (stream.extra) query.select('s.' + stream.extra)
 }
-function afterCursor(query: Knex.QueryBuilder, stream: Stream, cursor: Array<number | string>, local: boolean): void {
-  if (local)
-    query.whereRaw('(' + stream.keys.map(() => '??').join(',') + ') > (' + stream.keys.map(() => '?').join(',') + ')', [
-      ...stream.keys.map(key => 's.' + key),
-      ...cursor
-    ])
-  else
-    query.where(function () {
-      stream.keys.forEach((key, index) => {
-        this.orWhere(function () {
-          for (let i = 0; i < index; i++) this.where('s.' + stream.keys[i], cursor[i])
-          this.where('s.' + key, '>', cursor[index])
-        })
+function afterSqliteCursor(query: Knex.QueryBuilder, stream: Stream, cursor: Array<number | string>): void {
+  query.whereRaw('(' + stream.keys.map(() => '??').join(',') + ') > (' + stream.keys.map(() => '?').join(',') + ')', [
+    ...stream.keys.map(key => 's.' + key),
+    ...cursor
+  ])
+}
+function afterMysqlCursor(query: Knex.QueryBuilder, stream: Stream, cursor: Array<number | string>): void {
+  query.where(function () {
+    stream.keys.forEach((key, index) => {
+      this.orWhere(function () {
+        for (let i = 0; i < index; i++) this.where('s.' + stream.keys[i], cursor[i])
+        this.where('s.' + key, '>', cursor[index])
       })
     })
+  })
 }
 async function queryPage(
   k: Knex,
@@ -255,7 +255,10 @@ async function queryPage(
   const query = local ? k.from({ s: stream.table }) : (await mysqlSourceQuery(k, stream)).query
   projectPage(k, query, stream, local)
   query.orderBy(stream.keys.map(key => 's.' + key)).limit(256)
-  if (cursor) afterCursor(query, stream, cursor, local)
+  if (cursor) {
+    if (local) afterSqliteCursor(query, stream, cursor)
+    else afterMysqlCursor(query, stream, cursor)
+  }
   const sql = query.toSQL()
   const plan = await k.raw((local ? 'EXPLAIN QUERY PLAN ' : 'EXPLAIN ') + sql.sql, sql.bindings as Knex.RawBinding[])
   if (
@@ -358,7 +361,11 @@ export async function copySnapshotJournalBootstrapPage(
   k: Knex,
   rowLimit: number
 ): Promise<SnapshotJournalBootstrapPage> {
-  if (k.isTransaction || !validSnapshotJournalBootstrapBudget({ rowLimit, rowsUsed: 0 }) || rowLimit === null)
+  if (
+    k.isTransaction ||
+    !Number.isSafeInteger(rowLimit) ||
+    !validSnapshotJournalBootstrapBudget({ rowLimit, rowsUsed: 0 })
+  )
     return invalid()
   const local = sqlite(k),
     all = streams(local)

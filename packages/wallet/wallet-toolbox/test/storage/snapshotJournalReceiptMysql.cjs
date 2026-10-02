@@ -53,7 +53,7 @@ async function qualify(isolation, bigNumberStrings) {
     await assert.rejects(
       k.transaction(async t => {
         await recordSnapshotJournalReceipt(t, binding, b)
-        throw Error('before-commit')
+        throw new Error('before-commit')
       }),
       /before-commit/
     )
@@ -61,7 +61,7 @@ async function qualify(isolation, bigNumberStrings) {
     await assert.rejects(
       (async () => {
         await k.transaction(t => recordSnapshotJournalReceipt(t, binding, b))
-        throw Error('lost-ack')
+        throw new Error('lost-ack')
       })(),
       /lost-ack/
     )
@@ -159,7 +159,7 @@ async function crashChild() {
       if (phase.endsWith('before-commit')) die()
     })
     if (phase.endsWith('after-commit')) die()
-    throw Error('Unreached owned crash boundary')
+    throw new Error('Unreached owned crash boundary')
   } finally {
     await k.destroy()
   }
