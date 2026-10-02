@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-27",
+  "lastReviewed": "2026-10-02",
   "owner": "ts-stack-maintainers",
   "distribution": "docs-site/dist",
   "derivation": "Vite client source-map modules plus Pagefind-generated search runtime",
@@ -20,8 +20,50 @@
       ]
     },
     {
+      "name": "@chevrotain/gast",
+      "version": "11.1.2",
+      "kind": "vite",
+      "packageLicense": "Apache-2.0",
+      "licenseExpression": "Apache-2.0",
+      "source": "https://github.com/Chevrotain/chevrotain",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ]
+    },
+    {
+      "name": "@chevrotain/regexp-to-ast",
+      "version": "11.1.2",
+      "kind": "vite",
+      "packageLicense": "Apache-2.0",
+      "licenseExpression": "Apache-2.0",
+      "source": "https://github.com/Chevrotain/chevrotain",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ]
+    },
+    {
+      "name": "@chevrotain/utils",
+      "version": "11.1.2",
+      "kind": "vite",
+      "packageLicense": "Apache-2.0",
+      "licenseExpression": "Apache-2.0",
+      "source": "https://github.com/Chevrotain/chevrotain",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ]
+    },
+    {
       "name": "@iconify/utils",
-      "version": "3.1.4",
+      "version": "3.1.7",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -49,7 +91,7 @@
     },
     {
       "name": "@mermaid-js/parser",
-      "version": "1.2.0",
+      "version": "2.0.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -72,6 +114,20 @@
         {
           "path": "LICENSE",
           "sha256": "6a3508febf2cfccfee96597394543a6154a4bb0b1f91f28404be42c09e9fcb54"
+        }
+      ]
+    },
+    {
+      "name": "chevrotain",
+      "version": "11.1.2",
+      "kind": "vite",
+      "packageLicense": "Apache-2.0",
+      "licenseExpression": "Apache-2.0",
+      "source": "https://github.com/Chevrotain/chevrotain",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
         }
       ]
     },
@@ -133,7 +189,7 @@
     },
     {
       "name": "cytoscape",
-      "version": "3.34.0",
+      "version": "3.34.3",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -483,7 +539,7 @@
     },
     {
       "name": "dayjs",
-      "version": "1.11.21",
+      "version": "1.11.23",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -497,7 +553,7 @@
     },
     {
       "name": "dompurify",
-      "version": "3.4.13",
+      "version": "3.4.15",
       "kind": "vite",
       "packageLicense": "(MPL-2.0 OR Apache-2.0)",
       "licenseExpression": "Apache-2.0",
@@ -510,8 +566,22 @@
       ]
     },
     {
+      "name": "elkjs",
+      "version": "0.9.3",
+      "kind": "vite",
+      "packageLicense": "EPL-2.0",
+      "licenseExpression": "EPL-2.0",
+      "source": "https://github.com/kieler/elkjs",
+      "licenseFiles": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "89591d4578fb1ebd91501312a3d25f021bd865a2e436641c1cf7b1bc7e3c1617"
+        }
+      ]
+    },
+    {
       "name": "es-toolkit",
-      "version": "1.50.0",
+      "version": "1.52.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -637,7 +707,7 @@
     },
     {
       "name": "mermaid",
-      "version": "11.16.1",
+      "version": "12.0.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -669,7 +739,7 @@
     },
     {
       "name": "react-dom",
-      "version": "19.2.8",
+      "version": "19.3.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -683,7 +753,7 @@
     },
     {
       "name": "react-router",
-      "version": "8.3.0",
+      "version": "8.4.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -697,7 +767,7 @@
     },
     {
       "name": "react",
-      "version": "19.2.8",
+      "version": "19.3.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -725,7 +795,7 @@
     },
     {
       "name": "scheduler",
-      "version": "0.27.0",
+      "version": "0.28.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -767,7 +837,7 @@
     },
     {
       "name": "uuid",
-      "version": "14.0.1",
+      "version": "14.0.2",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",

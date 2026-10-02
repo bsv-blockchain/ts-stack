@@ -27,13 +27,14 @@ tx.addOutput({
 
 ## Current Templates
 
-| Name                                    | Description                                          |
-| --------------------------------------- | ---------------------------------------------------- |
-| [OpReturn](./src/OpReturn.ts)           | Tag data in a non-spendable script                   |
-| [Metant](./src/Metanet.ts)              | Create transactions that follow the Metanet protocol |
-| [MultiPushDrop](./src/MultiPushDrop.ts) | Create data tokens with multiple trusted owners      |
-| [P2MSKH](./src/P2MSKH.ts)               | Spend with an M-of-N public-key threshold            |
-| [R1K1Wallet](./src/R1K1Wallet.ts)       | Use P-256 hardware normally and a K1 recovery key    |
+| Name                                    | Description                                           |
+| --------------------------------------- | ----------------------------------------------------- |
+| [Bsv21Binary](./src/Bsv21Binary.ts)     | Lock and decode BRC-162 (BSV-21 binary) token outputs |
+| [OpReturn](./src/OpReturn.ts)           | Tag data in a non-spendable script                    |
+| [Metant](./src/Metanet.ts)              | Create transactions that follow the Metanet protocol  |
+| [MultiPushDrop](./src/MultiPushDrop.ts) | Create data tokens with multiple trusted owners       |
+| [P2MSKH](./src/P2MSKH.ts)               | Spend with an M-of-N public-key threshold             |
+| [R1K1Wallet](./src/R1K1Wallet.ts)       | Use P-256 hardware normally and a K1 recovery key     |
 
 ### Signing trust boundary
 
@@ -54,9 +55,75 @@ list. Preserve the same ordered list while gathering incremental signatures;
 an address, key list, or partial unlocking script from an untrusted party is
 validated but is not itself proof that the intended payment policy is safe.
 
-`MandalaToken` accepts only positive JavaScript safe-integer token amounts and
-decodes the same exact range. Applications must also check aggregate arithmetic;
-the companion Overlay Topics manager performs checked per-asset conservation.
+### BRC-162 tokens: `Bsv21Binary`
+
+`Bsv21Binary` builds and reads [BRC-162](https://brc.dev/162) (BSV-21 binary)
+token outputs. A token output is a fixed prefix on an ordinary locking script:
+
+```
+<token id | OP_0> <amount> OP_2DROP [<payload> OP_DROP] OP_DUP OP_HASH160 <pkh> OP_EQUALVERIFY OP_CHECKSIG
+```
+
+```ts
+import { PrivateKey } from '@bsv/sdk'
+import { Bsv21Binary, encodeStrictCbor, tokenIdFromString, tokenIdToString } from '@bsv/templates'
+
+const owner = PrivateKey.fromRandom()
+const pubKeyHash = owner.toPublicKey().toHash() as number[]
+
+// A deploy output has a null token id; its payload is a strict-CBOR map.
+const template = new Bsv21Binary()
+const deployScript = template.lock(null, 0n, pubKeyHash, encodeStrictCbor({ sym: 'USD', dec: 2n }))
+console.log(Bsv21Binary.decode(deployScript).role) // 'deploy'
+
+// Later outputs name the token by `<deploy txid, 64 lowercase hex>_0`.
+const tokenId = `${'ab'.repeat(32)}_0`
+const lockingScript = template.lock(tokenId, 1_000_000n, pubKeyHash) // amounts are bigint
+
+const decoded = Bsv21Binary.decode(lockingScript)
+console.log(decoded.role) // 'value' ('authority' when the amount is 0n)
+console.log(decoded.amount) // 1000000n
+console.log(decoded.tokenId !== undefined && tokenIdToString(decoded.tokenId) === tokenId) // true
+console.log(tokenIdFromString(tokenId).length) // 32 wire bytes, natural order
+```
+
+Every value has exactly one accepted encoding, so every engine that reads the
+same bytes reads the same token output:
+
+- **Token id:** a direct push of exactly 32 bytes (the deploy txid in natural
+  byte order), or `OP_0` on a deploy. `OP_PUSHDATA*` is not accepted.
+- **Amount:** `bigint`, `0` to `2^64 - 1`. `0` is `OP_0`, `1` to `16` are
+  `OP_1` to `OP_16`, anything larger is a direct push (`0x01` to `0x09`) of the
+  minimal little-endian script number. Policy caps below `2^64 - 1`, aggregate
+  arithmetic and conservation across inputs and outputs belong to the caller.
+- **Role:** `deploy` (no id), `authority` (id, amount `0`) or `value`.
+- **Invalid vs. not a token:** `isTokenShaped(script)` tells a script that
+  starts `<push> <push> OP_2DROP` from any other script. `Bsv21Binary.decode`
+  throws `Bsv21BinaryError` for a token-shaped script that is not canonical
+  (for example amount `5` pushed as `01 05`), so it is never silently read as
+  "not a token".
+
+### Strict CBOR payloads
+
+Payload attributes are read from a small, dependency-free subset of
+[DAG-CBOR](https://ipld.io/specs/codecs/dag-cbor/spec/), so two decoders cannot
+read different attributes from the same bytes. `encodeStrictCbor` writes it,
+`decodeStrictCbor` throws `StrictCborError` and `tryDecodeStrictCbor` returns
+`undefined` for anything outside it:
+
+- the top level is a map with text keys, strictly increasing by encoded bytes
+  (no duplicates);
+- values are unsigned integers up to `2^64 - 1` (`bigint`), byte strings
+  (`Uint8Array`), strict UTF-8 text, `null`, booleans and nested maps;
+- headers are definite and minimal-length;
+- nesting depth is at most `STRICT_CBOR_MAX_DEPTH` (4), the encoding is at most
+  `STRICT_CBOR_MAX_BYTES` (4096) and there are no trailing bytes.
+
+Floats, tags (including 42), negative integers, arrays and indefinite lengths
+are refused.
+
+Version 2.0.0 removes `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL`;
+BRC-162 `Bsv21Binary` outputs replace them and are not wire-compatible.
 
 ### R1-K1 hardware wallet
 

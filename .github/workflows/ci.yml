@@ -108,10 +108,6 @@ jobs:
         with:
           node-version: 24.x
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-      - name: Install pinned dependency parser without lifecycle scripts
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
       - name: Resolve package, mutation, documentation, conformance, and image scope
         id: scope
         env:
@@ -125,11 +121,13 @@ jobs:
              [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ] &&
              git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             SCOPE=$(node scripts/ci-affected-scope.mjs --base "$BASE_SHA" --head "$HEAD_SHA")
-            git diff --name-only "$BASE_SHA"..."$HEAD_SHA" > .ci-changed-files.txt
+            # Mutation is a full-suite qualification: ordinary pull requests and
+            # pushes select no targets. Dispatch CI, or the scheduled Mutation
+            # quality workflow, to run the complete governed registry.
             MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs --base "$BASE_SHA" --head HEAD)
           else
             SCOPE=$(node scripts/ci-affected-scope.mjs --all)
-            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs)
+            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs --all)
           fi
           MUTATION_TARGETS=$(jq -c '.required' <<<"$MUTATION_SCOPE")
           if [ "$(jq -r 'type' <<<"$MUTATION_TARGETS")" != "array" ]; then
@@ -156,10 +154,9 @@ jobs:
             echo
             echo "- Direct test packages: $(jq -c '[.directProjects[].name]' <<<"$SCOPE")"
             echo "- Compatibility packages: $(jq -c '[.affectedProjects[].name]' <<<"$SCOPE")"
-            echo "- Required premerge mutation targets: $MUTATION_TARGETS"
-            echo "- Deferred to complete final qualification (not passed): $(jq -c '.deferred' <<<"$MUTATION_SCOPE")"
-            echo "- Newly deferred from prior selection: $(jq -c '.newlyDeferred' <<<"$MUTATION_SCOPE")"
-            echo "- Critical targets outside this PR scope: $(jq -c '.outside' <<<"$MUTATION_SCOPE")"
+            echo "- Mutation targets in this run (full campaigns only): $MUTATION_TARGETS"
+            echo "- Deferred to the scheduled or dispatched full campaign (not passed): $(jq -c '.deferred' <<<"$MUTATION_SCOPE")"
+            echo "- Critical targets awaiting the full campaign (not passed): $(jq -c '.outside' <<<"$MUTATION_SCOPE")"
             echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -247,7 +244,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Use Node.js 24.18.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -510,7 +507,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
@@ -634,7 +631,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -680,7 +677,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.dependent-test-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -744,7 +741,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.browser-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -805,7 +802,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -839,7 +836,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -878,7 +875,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -929,7 +926,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -972,9 +969,22 @@ jobs:
           - { id: shard-4, shard: 4 }
           - { id: sync-http-0, latency: 0 }
           - { id: sync-http-1000, latency: 1000 }
+    services:
+      # The Knex storage suites also run against Postgres (RUNPOSTGRES).
+      postgres:
+        image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef # 17-alpine
+        env:
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -992,11 +1002,16 @@ jobs:
         env:
           WALLET_SHARD: ${{ matrix.shard }}
           SYNC_LATENCY: ${{ matrix.latency }}
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           # The two real-HTTP latency scenarios run in independent processes;
           # their global transport spies must never overlap in one Jest worker.
           args=(--coverage --coverageDirectory=coverage/${{ matrix.id }})
           if [ -n "$WALLET_SHARD" ]; then
+            export RUNPOSTGRES=1
+            POSTGRES_CONNECTION="$(jq -cn --arg password "$POSTGRES_PASSWORD" \
+              '{host: "127.0.0.1", port: 5432, user: "postgres", password: $password, database: "postgres"}')"
+            export POSTGRES_CONNECTION
             args+=(--testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test|src/storage/sync/syncTransferHttp.test.ts')
             args+=(--shard="$WALLET_SHARD/4")
           else
@@ -1028,7 +1043,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -1073,7 +1088,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -1128,7 +1143,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.coverage-other-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -1313,7 +1328,7 @@ jobs:
       # status must be produced just like same-repository PRs.
       - name: Upload coverage to Codecov
         if: steps.cov.outputs.has-coverage == 'true'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.cov.outputs.files }}
@@ -1356,7 +1371,7 @@ jobs:
 
       - name: Publish finalized Codecov notifications
         if: steps.cov.outputs.has-coverage == 'true'
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: bsv-blockchain/ts-stack
@@ -1523,7 +1538,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -1569,7 +1584,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24

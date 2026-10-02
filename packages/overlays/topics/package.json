@@ -27,9 +27,9 @@
   ],
   "scripts": {
     "build": "tsc",
-    "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/topics/{README.md,jest.config.js,package.json,tsconfig.json}\" \"packages/overlays/topics/src/index.ts\"",
-    "lint": "oxlint src jest.config.js --deny-warnings",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports AnyTopicManager,AppsTopicManager,BTMSTopicManager,BasketMapTopicManager,Bsv21LookupService,Bsv21StorageManager,Bsv21TopicManager,CertMapTopicManager,DesktopIntegrityTopicManager,DstasLookupService,DstasStorageManager,DstasTopicManager,FractionalizeTopicManager,HelloWorldTopicManager,IdentityTopicManager,InMemoryScreeningProvider,KVStoreTopicManager,MandalaLookupService,MandalaStorageManager,MandalaTopicManager,MessageBoxTopicManager,MonsterBattleTopicManager,ProtoMapTopicManager,SlackThreadsTopicManager,StasLookupService,StasStorageManager,StasTopicManager,SupplyChainTopicManager,TokenDemoTopicManager,UHRPTopicManager,UMPTopicManager,UORA_ANCHOR_PREFIX,UORA_ANCHOR_PROTOCOL,UoraDppTopicManager,WalletConfigTopicManager,allowlistIssuerPolicy,anchorSigningPreimage,assertAnchorSignature,btmsProtocol,createAnyLookupService,createAppsLookupService,createBTMSLookupService,createBasketMapLookupService,createBsv21LookupService,createCertMapLookupService,createDesktopIntegrityLookupService,createDstasLookupService,createFractionalizeLookupService,createHelloWorldLookupService,createIdentityLookupService,createKVStoreLookupService,createMandalaLookupService,createMessageBoxLookupService,createMonsterBattleLookupService,createProtoMapLookupService,createSlackThreadsLookupService,createStasLookupService,createSupplyChainLookupService,createTokenDemoLookupService,createUHRPLookupService,createUMPLookupService,createUoraDppLookupService,createWalletConfigLookupService,deserializeWalletProtocol,didKeyFromIdentityKey,expectedLockingKey,identityKeyFromDidKey,kvProtocol,readUoraAnchor,verifyKeyLinkage",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/topics/{README.md,jest.config.js,package.json,tsconfig.json}\" \"packages/overlays/topics/src/index.ts\" \"packages/overlays/topics/test/**/*.ts\"",
+    "lint": "oxlint src test jest.config.js --deny-warnings",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports AnyTopicManager,AppsTopicManager,BTMSTopicManager,BasketMapTopicManager,Bsv21LookupService,Bsv21StorageManager,Bsv21TopicManager,CertMapTopicManager,DesktopIntegrityTopicManager,DstasLookupService,DstasStorageManager,DstasTopicManager,FractionalizeTopicManager,HelloWorldTopicManager,IdentityTopicManager,InMemoryScreeningProvider,KVStoreTopicManager,MandalaLookupService,MandalaReject,MandalaStorageManager,MandalaTopicManager,MessageBoxTopicManager,MonsterBattleTopicManager,ProtoMapTopicManager,RegistryLookupService,RegistryTopicManager,SlackThreadsTopicManager,StasLookupService,StasStorageManager,StasTopicManager,SupplyChainTopicManager,TokenDemoTopicManager,UHRPTopicManager,UMPTopicManager,UORA_ANCHOR_PREFIX,UORA_ANCHOR_PROTOCOL,UoraDppTopicManager,WalletConfigTopicManager,allowlistIssuerPolicy,anchorSigningPreimage,assertAnchorSignature,btmsProtocol,classifyOutputs,createAnyLookupService,createAppsLookupService,createBTMSLookupService,createBasketMapLookupService,createBsv21LookupService,createCertMapLookupService,createDesktopIntegrityLookupService,createDstasLookupService,createFractionalizeLookupService,createHelloWorldLookupService,createIdentityLookupService,createKVStoreLookupService,createMandalaLookupService,createMessageBoxLookupService,createMonsterBattleLookupService,createProtoMapLookupService,createSlackThreadsLookupService,createStasLookupService,createSupplyChainLookupService,createTokenDemoLookupService,createUHRPLookupService,createUMPLookupService,createUoraDppLookupService,createWalletConfigLookupService,deserializeWalletProtocol,didKeyFromIdentityKey,expectedLockingKey,identityKeyFromDidKey,kvProtocol,readUoraAnchor,reconcileOwnerIndex,verifyKeyLinkage",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
     "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false --runTestsByPath src/mandala/__tests/types.property.test.ts",
@@ -39,18 +39,18 @@
   "dependencies": {
     "@bsv/overlay": "workspace:^",
     "@bsv/templates": "workspace:^",
-    "mongodb": "^7.5.0"
+    "mongodb": "^7.6.0"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
-    "@jest/globals": "^30.4.1",
+    "@jest/globals": "^30.5.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "fast-check": "^4.9.0",
-    "jest": "^30.4.2",
+    "jest": "^30.5.1",
     "mongodb-memory-server": "^11.2.0",
-    "oxlint": "^1.76.0",
+    "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },

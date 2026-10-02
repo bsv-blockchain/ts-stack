@@ -15,6 +15,7 @@ describe('internalizeAction tests', () => {
   beforeAll(async () => {
     if (includeTestChaintracks) {
       if (env.runMySQL) gctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeActionTests'))
+      if (env.runPostgres) gctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeActionTests'))
       gctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeActionTests'))
     }
   })
@@ -50,6 +51,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction1Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction1Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction1Tests'))
     }
     for (const { wallet } of ctxs) {
@@ -148,6 +150,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction2Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction2Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction2Tests'))
     }
     for (const { wallet } of ctxs) {
@@ -283,6 +286,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction3Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction3Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction3Tests'))
     }
     for (const { wallet, identityKey: senderIdentityKey } of ctxs) {
@@ -374,6 +378,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction4Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction4Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction4Tests'))
     }
     for (const { wallet, identityKey: senderIdentityKey } of ctxs) {
@@ -492,6 +497,7 @@ describe('internalizeAction tests', () => {
     if (!includeTestChaintracks) return
     const ctxs: TestWalletNoSetup[] = []
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction5Tests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction5Tests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction5Tests'))
     for (const { wallet, identityKey: senderIdentityKey } of ctxs) {
       const fred = await _tu.createSQLiteTestWallet({
