@@ -1649,6 +1649,13 @@ export class MessageBoxClient {
    * If the WebSocket connection is not already established, this method will first initialize the connection.
    * It also ensures the room is only joined once, and tracks all joined rooms in an internal set.
    *
+   * Resolving means the request was sent, not that the server granted it. The
+   * room is recorded at once so that a server which answers nothing behaves as
+   * it always has; a server that answers corrects the record, dropping a room
+   * it refused and, when the refusal is one that re-emitting can never clear,
+   * no longer asking for it on reconnect. The room is requested again whenever
+   * a socket authenticates, since membership belongs to the socket that joined.
+   *
    * Room ID format: `${identityKey}-${messageBox}`
    *
    * @example
@@ -1705,6 +1712,18 @@ export class MessageBoxClient {
    * - Listens for messages broadcast to the room.
    * - Automatically attempts to parse and decrypt message bodies.
    * - Emits the final message (as a `PeerMessage`) to the supplied `onMessage` handler.
+   *
+   * The subscription is restored on a socket rebuilt after a disconnect, and
+   * calling this again with the same `onMessage` for the same box is a no-op
+   * rather than a second subscription. Every subscriber to a room shares one
+   * socket listener, so the body is parsed and decrypted once per arrival and
+   * `onMessage` is called a tick after the message arrives. A subscriber that
+   * throws is reported and does not stop the others.
+   *
+   * Live delivery is not complete delivery: a message reaches only the sockets
+   * held by the server process that served the send, and a message carrying a
+   * payment is never pushed. Keep polling with `listMessages`, which is also
+   * the only call that internalizes a recipient payment.
    *
    * If the incoming message is encrypted, the client decrypts it using AES-256-GCM via
    * ECDH shared secrets derived from identity keys as defined in [BRC-2](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0002.md).
@@ -1989,7 +2008,10 @@ export class MessageBoxClient {
    * Leaves a previously joined WebSocket room associated with the authenticated identity key.
    * This helps reduce unnecessary message traffic and memory usage.
    *
-   * If the WebSocket is not connected or the identity key is missing, the method exits gracefully.
+   * The room is released whether or not the socket is up, so leaving while
+   * disconnected does not leave a claim the next connection rejoins. Its
+   * subscribers stop being delivered to immediately. The identity key must be
+   * known; without one this throws.
    *
    * @example
    * await client.leaveRoom('payment_inbox')
