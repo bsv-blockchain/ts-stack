@@ -2005,3 +2005,16 @@ runner invocation used an absent root Jest path and ran no tests; the successful
 run uses the package-local installation. All 29 mutation-registry/partition
 regressions, root health/lint/format/types and strict package types pass. Complete
 fresh mutation parts and their unchanged-policy aggregate remain required.
+
+Fresh complete qualification on eaef85bb1 passes the unchanged protected-ledger
+policy. The store part finished all 335 mutants in 7m33s (314 killed, 21 survived,
+93.73%); the codec part finished all 274 in 5m59s (258 killed, 16 survived,
+94.16%). The disjoint complete three-file union scores 93.92% across 609 mutants,
+with zero uncovered and invalid outcomes. Both ran the same 168 canonical tests,
+kept all 9,983 captured inputs and HEAD unchanged, and passed the local aggregate
+using the repository's actual metric/policy functions. This is complete local
+storage qualification; it is not a hosted execution receipt or final program CI.
+One remaining meaningful survivor suggests a further full-inventory boundary
+case: reject another insertion after a separately committed full store. That
+case belongs in the next native publication/work-discovery integration batch;
+no source condition was weakened or excluded to obtain this score.
