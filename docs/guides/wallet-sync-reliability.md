@@ -454,7 +454,9 @@ schema/progress after interruption. Recover a stale Knex lock only after proving
 the migrator stopped. The real migrator publishes its journal after copy and
 retirement; partial state uses source-query fallback in new readers. Complete
 journal/progress state selects v2 indexes inside the same retained view as all
-pages. An already-pinned WAL reader retains its original view across retirement.
+pages. Publication lookup uses the explicitly configured SQLite migration-journal
+schema; an identically named journal in another attached database cannot publish
+this generation. An already-pinned WAL reader retains its original view across retirement.
 Older binaries cannot adopt invalidated progress: do not downgrade their snapshot
 implementation against this schema. Ordinary migration rollback refuses without
 deleting source rows; use a separately designed forward migration. The explicit

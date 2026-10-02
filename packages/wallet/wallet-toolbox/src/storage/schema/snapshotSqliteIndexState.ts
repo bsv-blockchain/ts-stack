@@ -17,10 +17,12 @@ export async function readGenerationIndexState(
     throw new WERR_INVALID_OPERATION('Invalid generation progress')
   const state = await k(metadata).where('id', 0).first('complete')
   const journal = config?.tableName ?? 'knex_migrations'
-  const journalSchema = k.schema
-  if (config?.schemaName !== undefined) void journalSchema.withSchema(config.schemaName)
+  // SQLite's Knex hasTable query ignores withSchema; inspect the selected
+  // database catalog explicitly before reading its migration journal.
+  const catalog = k('sqlite_master').where({ type: 'table', name: journal }).first('name')
+  if (config?.schemaName !== undefined) void catalog.withSchema(config.schemaName)
   let published = false
-  if (await journalSchema.hasTable(journal)) {
+  if ((await catalog) !== undefined) {
     const query = k(journal).where('name', migration)
     if (config?.schemaName !== undefined) void query.withSchema(config.schemaName)
     published = (await query.first('name')) !== undefined

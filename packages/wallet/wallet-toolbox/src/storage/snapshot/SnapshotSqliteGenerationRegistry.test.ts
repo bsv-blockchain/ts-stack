@@ -114,3 +114,15 @@ test('MySQL retains its existing migration and deletion behavior without SQLite 
   await refuseGenerationDowngrade(database)
   await dropGenerationForDataDeletion(database)
 })
+
+test('empty migration adapters without a dialect label do not issue SQLite cleanup commands', async () => {
+  const currentVersion = jest.fn(async (_config: Knex.MigratorConfig) => 'none')
+  const down = jest.fn(),
+    raw = jest.fn()
+  const database = { client: { config: {} }, migrate: { currentVersion, down }, raw } as unknown as Knex
+  await StorageKnex.prototype.dropAllData.call({ knex: database } as StorageKnex)
+  expect(currentVersion).toHaveBeenCalledTimes(1)
+  expect(currentVersion.mock.calls[0][0].disableTransactions).toBe(false)
+  expect(down).not.toHaveBeenCalled()
+  expect(raw).not.toHaveBeenCalled()
+})

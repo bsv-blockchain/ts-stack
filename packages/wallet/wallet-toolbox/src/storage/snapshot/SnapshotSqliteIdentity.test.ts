@@ -310,3 +310,186 @@ test.each([false, true])('nested ownership changes retain every displaced owner,
     }
   }
 })
+
+function openIdentitySchema() {
+  return knex({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
+}
+
+test.each([
+  'id INTEGER,owner INTEGER,label VARCHAR(100)',
+  'id INTEGER,owner INTEGER,label VARCHAR(100),PRIMARY KEY(id,owner)',
+  'id INTEGER,owner INTEGER PRIMARY KEY,label VARCHAR(100)',
+  'id BIGINT PRIMARY KEY,owner INTEGER,label VARCHAR(100)'
+])('unsupported native numeric identity refuses before creating witnesses: %s', async columns => {
+  const k = openIdentitySchema()
+  try {
+    await k.raw(`CREATE TABLE candidate_identity(${columns})`)
+    await expect(readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })).rejects.toThrow(
+      'Unsupported numeric identity'
+    )
+    expect(await k.schema.hasTable('snapshot_identity_candidate_identity')).toBe(false)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('partial unique constraints cannot establish complete conflict witnesses', async () => {
+  const k = openIdentitySchema()
+  try {
+    await k.raw('CREATE TABLE candidate_identity(id INTEGER PRIMARY KEY,owner INTEGER,label VARCHAR(100))')
+    await k.raw('CREATE UNIQUE INDEX conditional_identity ON candidate_identity(label) WHERE owner=1')
+    await expect(readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })).rejects.toThrow(
+      'Unsupported partial unique identity'
+    )
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('mixed expression and column unique keys refuse unsupported comparison semantics', async () => {
+  const k = openIdentitySchema()
+  try {
+    await k.raw('CREATE TABLE candidate_identity(id INTEGER PRIMARY KEY,owner INTEGER,label VARCHAR(100))')
+    await k.raw('CREATE UNIQUE INDEX expression_identity ON candidate_identity(owner,LOWER(label))')
+    await expect(readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })).rejects.toThrow(
+      'Unsupported unique identity comparison'
+    )
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each([
+  'label TEXT',
+  'label BLOB',
+  'label REAL',
+  'label VARCHAR(0)',
+  'label UNSIGNED BIGINT',
+  'label INTEGER UNSIGNED',
+  'label VARCHAR(100) GENERATED ALWAYS AS (CAST(id AS TEXT)) VIRTUAL',
+  'label VARCHAR(100) GENERATED ALWAYS AS (CAST(id AS TEXT)) STORED'
+])('unsupported or generated unique column refuses witness adoption: %s', async column => {
+  const k = openIdentitySchema()
+  try {
+    await k.raw(`CREATE TABLE candidate_identity(id INTEGER PRIMARY KEY,owner INTEGER,${column},UNIQUE(label))`)
+    await expect(readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })).rejects.toThrow(
+      'Unsupported identity column'
+    )
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('a missing ownership column refuses metadata adoption with its stable error', async () => {
+  const k = openIdentitySchema()
+  try {
+    await k.raw('CREATE TABLE candidate_identity(id INTEGER PRIMARY KEY,label VARCHAR(100) UNIQUE)')
+    await expect(readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })).rejects.toThrow(
+      'Unsupported identity column'
+    )
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('witness primary components are explicitly non-nullable', async () => {
+  const k = openIdentitySchema()
+  try {
+    await k.raw('CREATE TABLE candidate_identity(id INTEGER PRIMARY KEY,owner INTEGER,label VARCHAR(100) UNIQUE)')
+    const identity = await readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })
+    for (const sql of identityDDL(identity)) await k.raw(sql)
+    const columns: Array<{ name: string; notnull: number }> = await k.raw('PRAGMA table_info(??)', [identity.table])
+    expect(columns.map(column => ({ name: column.name, notnull: column.notnull }))).toEqual([
+      { name: 'id', notnull: 1 },
+      { name: 'owner', notnull: 1 },
+      { name: 'label', notnull: 0 }
+    ])
+    await expect(k(identity.table).insert({ id: 1, owner: null, label: 'a' })).rejects.toThrow('NOT NULL')
+    await expect(k(identity.table).insert({ id: null, owner: 1, label: 'a' })).rejects.toThrow('NOT NULL')
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('quoted native identifiers retain exact ownership and conflict comparison', async () => {
+  const k = openIdentitySchema()
+  const table = 'records"archive',
+    key = 'numeric"id',
+    owner = 'owner"id',
+    label = 'exact"label'
+  try {
+    await k.raw('CREATE TABLE ??(?? INTEGER PRIMARY KEY,?? INTEGER,?? VARCHAR(100) COLLATE NOCASE UNIQUE)', [
+      table,
+      key,
+      owner,
+      label
+    ])
+    const identity = await readIdentity(k, { table, key, owner })
+    for (const sql of identityDDL(identity)) await k.raw(sql)
+    await k.raw(`CREATE TRIGGER quoted_before BEFORE INSERT ON ?? BEGIN ${observeIdentity(identity, false)} END`, [
+      table
+    ])
+    await k.raw(`CREATE TRIGGER quoted_after AFTER INSERT ON ?? BEGIN ${finishIdentity(identity, 'INSERT')} END`, [
+      table
+    ])
+    await k(table).insert({ [key]: 1, [owner]: 1, [label]: 'A' })
+    const query = k(table)
+      .insert({ [key]: 2, [owner]: 2, [label]: 'a' })
+      .toSQL()
+    await k.raw(query.sql.replace(/^insert/i, 'INSERT OR REPLACE'), query.bindings)
+    expect(await k(identity.table)).toEqual([{ [key]: 2, [owner]: 2, [label]: 'a' }])
+    expect(await k(table)).toEqual(await k(identity.table))
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each(['no key parts', 'unknown collation'])(
+  'unexpected driver index metadata refuses before adoption: %s',
+  async kind => {
+    const k = openIdentitySchema()
+    const client = Object.getPrototypeOf(k.client) as { processResponse: (...args: unknown[]) => unknown }
+    const original = client.processResponse
+    let response: ReturnType<typeof jest.spyOn> | undefined
+    try {
+      await k.raw(
+        'CREATE TABLE candidate_identity(id INTEGER PRIMARY KEY,owner INTEGER,label VARCHAR(100),UNIQUE(owner,label))'
+      )
+      let injected = 0
+      response = jest.spyOn(client, 'processResponse').mockImplementation(function (this: unknown, ...args: unknown[]) {
+        const result = original.apply(this, args)
+        const query = args[0]
+        if (
+          typeof query === 'object' &&
+          query !== null &&
+          'sql' in query &&
+          typeof query.sql === 'string' &&
+          query.sql.startsWith('PRAGMA index_xinfo(')
+        ) {
+          const parts = result as Array<{ name: string | null; key: number; coll: string }>
+          expect(parts.filter(part => part.key !== 0).map(part => part.name)).toEqual(['owner', 'label'])
+          injected++
+          return kind === 'no key parts'
+            ? parts.filter(part => part.key === 0)
+            : parts.map(part => (part.name === 'label' ? { ...part, coll: 'UNSUPPORTED_COLLATION' } : part))
+        }
+        return result
+      })
+      await expect(readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })).rejects.toThrow(
+        'Unsupported unique identity comparison'
+      )
+      expect(injected).toBe(1)
+      response.mockRestore()
+      response = undefined
+      expect((await readIdentity(k, { table: 'candidate_identity', key: 'id', owner: 'owner' })).unique).toEqual([
+        [
+          { name: 'owner', collation: 'BINARY' },
+          { name: 'label', collation: 'BINARY' }
+        ]
+      ])
+    } finally {
+      response?.mockRestore()
+      await k.destroy()
+    }
+  }
+)

@@ -1,3 +1,4 @@
+import { WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
 import { migrateBeforeSqliteGeneration } from '../../../test/utils/snapshotHistoricalMigrations'
 import {
   removeSnapshotCertificateIndexes,
@@ -684,4 +685,23 @@ test('a page query failure is observed through read and cleanup before the provi
   const fresh = await source.openWalletReadSnapshot(identity)
   expect((await fresh.readPage('txLabels')).rows).toHaveLength(1)
   await fresh.close()
+})
+
+test('a Knex provider that disables packed snapshots refuses before opening or querying', async () => {
+  const k = knex({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
+  const source = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: k })
+  try {
+    jest.spyOn(source, 'supportsWalletReadSnapshot').mockReturnValue(false)
+    const available = jest
+      .spyOn(source, 'makeAvailable')
+      .mockRejectedValue(new Error('unexpected database acquisition'))
+    const open = jest.spyOn(source, 'openReadSnapshot').mockRejectedValue(new Error('unexpected snapshot acquisition'))
+    const request = source.openWalletReadSnapshot('02' + '11'.repeat(32))
+    await expect(request).rejects.toBeInstanceOf(WERR_NOT_IMPLEMENTED)
+    await expect(request).rejects.toThrow('Wallet read snapshot pages are not supported by this provider')
+    expect(available).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+  } finally {
+    await source.destroy()
+  }
 })
