@@ -35,7 +35,12 @@ const makeSocket = (): MockSocket => {
       ;(socket.handlers[event] ??= []).push(callback)
     }),
     emit: jest.fn(),
-    disconnect: jest.fn(),
+    // Socket.IO reports an explicit close on the socket's own handlers.
+    disconnect: jest.fn(() => {
+      if (!socket.connected) return
+      socket.connected = false
+      fireOn(socket, 'disconnect', 'io client disconnect')
+    }),
     connected: true,
     serverIdentityKey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
   }
@@ -302,9 +307,100 @@ describe('live-socket reconnection', () => {
   }, 15000)
 
   /**
-   * Not covered here: `leaveRoom` drops the room before its connected guard,
-   * so leaving while disconnected clears the claim. Reaching it needs
-   * `assertInitialized` to pass after a disconnect, and stubbing that far pulls
-   * in a server-identity check this harness does not model.
+   * A replaced socket keeps its handlers — there is no `off` to take them away.
+   * Everything it reports afterwards belongs to a connection the client no
+   * longer uses, and must not reach the one that took its place.
    */
+  it('ignores a replaced socket that reports again', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    const orphan = latest()
+    expect(joinRoomEmits(orphan)).toHaveLength(1)
+
+    authenticateSoon()
+    drop(orphan, 'io server disconnect')
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    const live = latest()
+    expect(live).not.toBe(orphan)
+    expect(client.testSocket).toBe(live)
+
+    // The orphan comes back underneath and runs its own handlers.
+    orphan.connected = true
+    fireOn(orphan, 'connect')
+    fireOn(orphan, 'authenticationSuccess')
+    expect(joinRoomEmits(orphan)).toHaveLength(1)
+    expect(client.testSocket).toBe(live)
+
+    // And its next drop must not take the live socket with it.
+    drop(orphan, 'io server disconnect')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(client.testSocket).toBe(live)
+    expect(sockets).toHaveLength(2)
+  })
+
+  /** A socket can stop carrying without ever reporting a disconnect. */
+  it('does not report ready on a socket that is no longer connected', async () => {
+    const client = await connected()
+    const socket = latest()
+    socket.connected = false
+
+    let ready = false
+    const connecting = client.initializeConnection().then(() => {
+      ready = true
+    })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(ready).toBe(false)
+
+    socket.connected = true
+    fireOn(socket, 'authenticationSuccess')
+    await connecting
+    expect(sockets).toHaveLength(1)
+  })
+
+  /** Leaving while down must not leave a claim that the next connect rejoins. */
+  it('leaves a room while disconnected', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    const socket = latest()
+
+    drop(socket)
+    await client.leaveRoom(BOX)
+    socket.emit.mockClear()
+
+    reconnect(socket)
+    expect(joinRoomEmits(socket)).toHaveLength(0)
+    expect(client.getJoinedRooms().has(ROOM)).toBe(false)
+  })
+
+  it('rejects the wait when the server refuses authentication', async () => {
+    const client = new MessageBoxClient({
+      walletClient: new WalletClient(),
+      host: 'https://message-box-us-1.bsvb.tech'
+    })
+    await client.init()
+    const connecting = client.initializeConnection()
+    setTimeout(() => fire('authenticationFailed'), 10)
+
+    await expect(connecting).rejects.toThrow(/authentication failed/)
+    expect(sockets).toHaveLength(1)
+  })
+
+  /** Socket.IO got it back on its own; nothing needs rebuilding. */
+  it('reuses a socket that reconnects after its wait timed out', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    const socket = latest()
+
+    drop(socket)
+    await expect(client.initializeConnection()).rejects.toThrow(/timed out/)
+
+    socket.emit.mockClear()
+    reconnect(socket)
+    await client.joinRoom(BOX)
+
+    expect(sockets).toHaveLength(1)
+    expect(client.testSocket).toBe(socket)
+    expect(joinRoomEmits(socket).map(call => call[1])).toEqual([ROOM])
+  }, 15000)
 })

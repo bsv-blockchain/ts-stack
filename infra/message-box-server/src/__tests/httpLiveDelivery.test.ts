@@ -240,6 +240,33 @@ describe('HTTP sendMessage live delivery', () => {
     await closeMessageBoxWebSockets(io)
   })
 
+  it('does not push a send the route rejected', async () => {
+    const ctx = newContext(true)
+    const app = buildApp(ctx, senderKey)
+    httpServer = createServer(app)
+    const io = attachMessageBoxWebSockets(httpServer, ctx)
+    const pushes: Push[] = []
+    const recipientKey = await joinRecipient(await listen(httpServer), pushes)
+
+    const send = async () =>
+      await request(app)
+        .post('/sendMessage')
+        .send({
+          message: { recipient: recipientKey, messageBox: BOX, messageId: 'm-dup', body: 'hi' }
+        })
+    expect((await send()).status).toBe(200)
+    await settle(pushes)
+
+    const duplicate = await send()
+    expect(duplicate.status).not.toBe(200)
+    expect(duplicate.body.status).toBe('error')
+
+    // Only the stored send is announced; the refusal stored nothing to announce.
+    await new Promise(resolve => setTimeout(resolve, QUIET_MS))
+    expect(pushes).toHaveLength(1)
+    await closeMessageBoxWebSockets(io)
+  })
+
   it('does not push an HTTP-stored message that carries a recipient payment', async () => {
     // The push carries the request body, which has no payment in it, and the
     // live handler never internalizes one. A consumer that acknowledges on the
