@@ -2232,3 +2232,43 @@ resolution and source maps. Root health, lint, format and type checks pass. The
 release-document generator changes only the output-knowledge summary/migration
 content; the wider table diff is formatting. Complete frozen mutation campaigns
 for both graph parts, traversal and root coordination remain the next boundary.
+
+### Complete root coordination and lineage extraction qualification
+
+On local7fb637172, one sequential four-worker pipeline completes root coordination,
+lineage layout, lineage transition and traversal. All four runs preserve the same
+10020 captured inputs and HEAD; the source freeze ends only after traversal settles.
+Root coordination accounts for97 mutants:89 killed/eight survived,91.75%,zero
+uncovered/invalid,688.073 seconds within its unchanged2700-second bound. Both graph
+parts retain all99 canonical tests and all300-case property budgets/seed3242026:
+layout has125 mutants (123 killed/two survived) in865.741 seconds; transition has119
+(116 killed/three survived) in845.156 seconds. Their complete disjoint two-file
+aggregate is244 mutants,239 killed/five survived,97.95%,zero uncovered/invalid.
+The independent complete traversal file has76 mutants:68 killed,one timeout and
+seven survived,90.79%,zero uncovered/invalid,417.236 seconds. The unchanged policy
+counts timeout as detected; it is reported separately from killed. No source file,
+canonical test or invalid result is omitted. These are local qualification receipts,
+not final exact-head hosted CI acceptance.
+
+The earlier pushed336bf9fd1 hosted run also cancels root journal, record requests,
+record serving, codec and storage at their90-minute bounds after all296 baseline
+tests pass. They generate255,227,257,182 and357 mutants respectively, but no complete
+reports. These logs show no workerOOM. Bounded worker recycling for those targets
+is a separately coordinated measurement proposal, not an established cause or fix.
+The UHRP infrastructure failure and incomplete hosted run also remain unresolved.
+
+Outside-checkout service drafts now additionally include current publisher guards,
+full-context admission leases, bounded publication orchestration, original-contract
+reconciliation and a native final response gate. The207-test verified native draft,
+32 authority tests and37 coordinator/disclosure/reconciler tests pass separately.
+One actual SDK/Engine/three-member Mongo/SQLite integration passes in10.223 seconds;
+three actual BRC103/104 HTTP integrations pass in11.247 seconds. They demonstrate
+lost Engine reply recovery, original context after restart/manifest expiry, current
+access after signing, fixed public error messages and existing public lookup/CORS.
+HTTP's initial strict media-type check incorrectly omitted Express's UTF-8 charset;
+the corrected guard requires its exact emitted value. A following test wrongly
+looked for cache headers on AuthFetch's reconstructed response; actual wire-header
+capture verifies the server's no-store/CORS behavior. Both earlier failures remain
+recorded. A300-schedule native coordination property passes in120.045 seconds.
+These drafts are not yet adopted or fully qualified, and they do not complete
+private acquisition/purchase/wallet composition or the remaining demonstrations.
