@@ -622,6 +622,181 @@ describe('live-socket reconnection', () => {
     }, 15000)
   })
 
+  /**
+   * Before this, a consumer could only learn the socket's state by sending and
+   * seeing what happened, which is why group-messaging manufactured the traffic
+   * with a self-addressed ping.
+   */
+  describe('reported live status', () => {
+    const record = (
+      client: InstanceType<typeof MessageBoxClient>
+    ): Array<{ state: string; rooms: readonly string[]; reason?: string }> => {
+      const seen: Array<{ state: string; rooms: readonly string[]; reason?: string }> = []
+      client.onLiveStatus(status => seen.push(status))
+      return seen
+    }
+
+    it('reports the current status to a new subscriber at once', async () => {
+      const client = await connected()
+      const seen = record(client)
+      expect(seen).toEqual([{ state: 'live', rooms: [] }])
+      expect(client.liveStatus.state).toBe('live')
+    })
+
+    it('names the rooms once they are joined', async () => {
+      const client = await connected()
+      const seen = record(client)
+      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+      expect(seen.at(-1)).toEqual({ state: 'live', rooms: [ROOM] })
+    })
+
+    it('separates a drop that recovers from one that does not', async () => {
+      const client = await connected()
+      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+      const socket = latest()
+      const seen = record(client)
+
+      drop(socket, 'transport close')
+      expect(seen.at(-1)).toEqual({
+        state: 'reconnecting',
+        rooms: [],
+        reason: 'transport close'
+      })
+
+      reconnect(socket)
+      expect(seen.at(-1)).toEqual({ state: 'live', rooms: [ROOM] })
+    })
+
+    it('reports closed when the consumer disconnects', async () => {
+      const client = await connected()
+      const seen = record(client)
+      await client.disconnectWebSocket()
+      expect(seen.at(-1)?.state).toBe('closed')
+      expect(client.liveStatus.state).toBe('closed')
+    })
+
+    it('reports closed when reconnection is disabled and the socket drops', async () => {
+      const client = await connected({ managerOptions: { reconnection: false } })
+      const seen = record(client)
+      drop(latest(), 'transport close')
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(seen.at(-1)).toEqual({
+        state: 'closed',
+        rooms: [],
+        reason: 'transport close'
+      })
+    })
+
+    it('stops reporting once the subscription is dropped', async () => {
+      const client = await connected()
+      const seen: string[] = []
+      const stop = client.onLiveStatus(status => seen.push(status.state))
+      expect(seen).toEqual(['live'])
+      stop()
+      await client.disconnectWebSocket()
+      expect(seen).toEqual(['live'])
+    })
+
+    it('delivers to the other subscribers when one throws', async () => {
+      const client = await connected()
+      client.onLiveStatus(() => {
+        throw new Error('status subscriber blew up')
+      })
+      const after = jest.fn()
+      client.onLiveStatus(after)
+      after.mockClear()
+
+      await client.disconnectWebSocket()
+      expect(after).toHaveBeenCalledWith(expect.objectContaining({ state: 'closed' }))
+    })
+  })
+
+  /** Each room's subscribers get their own messages and nobody else's. */
+  it('keeps two rooms apart on one socket', async () => {
+    const client = await connected()
+    const inbox = jest.fn()
+    const other = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: inbox })
+    await client.listenForLiveMessages({ messageBox: 'other_inbox', onMessage: other })
+    const socket = latest()
+
+    fireOn(socket, `sendMessage-${ROOM}`, { sender: IDENTITY, messageId: 'm1', body: 'a' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(inbox).toHaveBeenCalledTimes(1)
+    expect(other).not.toHaveBeenCalled()
+  })
+
+  /** A replaced socket reports room answers and messages too; none may land. */
+  it('ignores room traffic from a replaced socket', async () => {
+    const client = await connected()
+    const onMessage = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+    const orphan = latest()
+
+    authenticateSoon()
+    drop(orphan, 'io server disconnect')
+    await new Promise(resolve => setTimeout(resolve, 50))
+    const live = latest()
+    expect(live).not.toBe(orphan)
+
+    fireOn(orphan, 'joinFailed', { roomId: ROOM, code: 'ERR_WEBSOCKET_ROOM_NOT_OWNED' })
+    fireOn(orphan, 'joinedRoom', { roomId: `${IDENTITY}-somewhere_else` })
+    fireOn(orphan, `sendMessage-${ROOM}`, { sender: IDENTITY, messageId: 'm1', body: 'a' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(onMessage).not.toHaveBeenCalled()
+    expect(client.getJoinedRooms().has(ROOM)).toBe(true)
+  })
+
+  /** The identity key is needed before a socket is worth building. */
+  it('refuses to connect without an identity key', async () => {
+    const client = new MessageBoxClient({
+      walletClient: new WalletClient(),
+      host: 'https://message-box-us-1.bsvb.tech'
+    })
+    await client.init()
+    ;(client as unknown as { myIdentityKey?: string }).myIdentityKey = undefined
+    jest
+      .spyOn(client as unknown as { getIdentityKey: () => Promise<string> }, 'getIdentityKey')
+      .mockResolvedValue('')
+
+    await expect(client.initializeConnection()).rejects.toThrow(/Identity key is missing/)
+    expect(sockets).toHaveLength(0)
+  })
+
+  /** Two pins for one origin cannot both be right, so neither is used. */
+  it('refuses a socket whose pinned identity conflicts with the shared one', async () => {
+    const other = '03a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'
+    const client = new MessageBoxClient({
+      walletClient: new WalletClient(),
+      host: 'https://message-box-us-1.bsvb.tech',
+      serverIdentityKeysByHost: { 'https://message-box-us-1.bsvb.tech': other },
+      socketOptions: {
+        expectedServerIdentityKey:
+          '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+      } as never
+    })
+    await client.init()
+
+    await expect(client.initializeConnection()).rejects.toThrow(/Conflicting/)
+    expect(sockets).toHaveLength(0)
+  })
+
+  /** A reconnect cannot authenticate with an identity the client has lost. */
+  it('does not authenticate a reconnect without an identity key', async () => {
+    const client = await connected()
+    const socket = latest()
+    drop(socket)
+    socket.emit.mockClear()
+    ;(client as unknown as { myIdentityKey?: string }).myIdentityKey = undefined
+
+    socket.connected = true
+    fireOn(socket, 'connect')
+
+    expect(socket.emit).not.toHaveBeenCalledWith('authenticated', expect.anything())
+  })
+
   /** Socket.IO got it back on its own; nothing needs rebuilding. */
   it('reuses a socket that reconnects after its wait timed out', async () => {
     const client = await connected()

@@ -61,7 +61,9 @@ import {
   SendMessageResponse,
   DeviceRegistrationParams,
   DeviceRegistrationResponse,
-  RegisteredDevice
+  RegisteredDevice,
+  LiveStatus,
+  LiveConnectionState
 } from './types.js'
 import {
   SetMessageBoxPermissionParams,
@@ -961,6 +963,9 @@ export class MessageBoxClient {
    * room could never be taken off again, and would deliver every message twice.
    */
   private readonly dispatchedEvents: Set<string> = new Set()
+  /** Live-status subscribers. Isolated from each other when notified. */
+  private readonly liveStatusListeners = new Set<(status: LiveStatus) => void>()
+  private lastLiveStatus: LiveStatus = { state: 'closed', rooms: [] }
   /**
    * Sends waiting on an acknowledgement, oldest first, by ack event. A refusal
    * carries no messageId, so the ack can only go to the oldest send in flight;
@@ -1125,6 +1130,68 @@ export class MessageBoxClient {
   private async assertInitialized(): Promise<void> {
     if (!this.initialized || this.host == null || this.host.trim() === '') {
       await this.init()
+    }
+  }
+
+  /**
+   * @method onLiveStatus
+   * @param listener - Called on every live-socket transition, and once
+   *   immediately with the current status.
+   * @returns A function that removes the listener.
+   *
+   * @description
+   * Reports what the live socket is doing: connecting, live, reconnecting after
+   * a drop something will recover from, or closed with nothing coming. Before
+   * this, a consumer could only find out by sending and seeing what happened.
+   *
+   * A listener that throws is reported and does not stop the others. Status is
+   * about the socket only; `listMessages` polling is required for correctness
+   * whatever it says, because a live message reaches only the sockets held by
+   * the server process that served the send, and a paid message is never
+   * pushed.
+   *
+   * @example
+   * const stop = client.onLiveStatus(({ state, rooms }) => {
+   *   poller.setInterval(state === 'live' ? 60_000 : 5_000)
+   * })
+   */
+  public onLiveStatus(listener: (status: LiveStatus) => void): () => void {
+    this.liveStatusListeners.add(listener)
+    try {
+      listener(this.liveStatus)
+    } catch {
+      Logger.error('[MB CLIENT ERROR] A live status subscriber threw')
+    }
+    return () => {
+      this.liveStatusListeners.delete(listener)
+    }
+  }
+
+  /** The last reported live status. */
+  public get liveStatus(): LiveStatus {
+    return this.lastLiveStatus
+  }
+
+  /** Reports a transition, and nothing when the status is unchanged. */
+  private reportLiveStatus(state: LiveConnectionState, reason?: string): void {
+    const rooms = state === 'live' ? [...this.joinedRooms] : []
+    const previous = this.lastLiveStatus
+    const unchanged =
+      previous.state === state &&
+      previous.reason === reason &&
+      previous.rooms.length === rooms.length &&
+      rooms.every(room => previous.rooms.includes(room))
+    if (unchanged) return
+    const status: LiveStatus = reason === undefined ? { state, rooms } : { state, rooms, reason }
+    this.lastLiveStatus = status
+    // A Set skips entries deleted mid-iteration, so a listener that
+    // unsubscribes itself here does not disturb the rest.
+    for (const listener of this.liveStatusListeners) {
+      try {
+        listener(status)
+      } catch {
+        Logger.error('[MB CLIENT ERROR] A live status subscriber threw')
+      }
     }
   }
 
@@ -1326,6 +1393,7 @@ export class MessageBoxClient {
     this.pendingAcks.clear()
     for (const { event } of this.roomHandlers) this.dispatchLive(socket, event)
     this.attachSocketHandlers(socket, targetHost, targetOrigin)
+    this.reportLiveStatus('connecting')
   }
 
   /** Sockets that reached `authenticationSuccess`, so a drop knows whether to rebuild. */
@@ -1396,6 +1464,7 @@ export class MessageBoxClient {
       socket.emit('joinRoom', roomId)
       this.joinedRooms.add(roomId)
     }
+    this.reportLiveStatus('live')
     this.settleAuthWait?.()
   }
 
@@ -1427,6 +1496,7 @@ export class MessageBoxClient {
       if (this.connectionInitPromise == null) {
         this.beginAuthWait().catch(() => {})
       }
+      this.reportLiveStatus('reconnecting', reason)
       return
     }
 
@@ -1438,6 +1508,8 @@ export class MessageBoxClient {
     if (reason === 'io server disconnect' && this.socketReconnects) {
       this.scheduleRebuild(socket, targetHost)
     }
+    // `scheduleRebuild` reports `reconnecting` when it takes the socket on.
+    if (this.rebuildTimer === undefined) this.reportLiveStatus('closed', reason)
   }
 
   private onRoomJoined(
@@ -1448,6 +1520,7 @@ export class MessageBoxClient {
     const roomId = data?.roomId
     if (typeof roomId !== 'string' || !this.requestedRooms.has(roomId)) return
     this.joinedRooms.add(roomId)
+    if (this.socketAuthenticated) this.reportLiveStatus('live')
   }
 
   private onRoomJoinFailed(
@@ -1492,8 +1565,12 @@ export class MessageBoxClient {
     this.rebuildAttempts += 1
     clearTimeout(this.rebuildTimer)
     this.rebuildTimer = setTimeout(() => {
-      this.initializeConnection(targetHost).catch(() => {})
+      this.rebuildTimer = undefined
+      this.initializeConnection(targetHost).catch(() => {
+        this.reportLiveStatus('closed')
+      })
     }, delay)
+    this.reportLiveStatus('reconnecting')
   }
   /**
    * Starts an authentication attempt and registers it as `connectionInitPromise`.
@@ -1744,6 +1821,7 @@ export class MessageBoxClient {
       this.socket?.emit('joinRoom', roomId)
       this.joinedRooms.add(roomId)
       Logger.log('[MB CLIENT] WebSocket room joined')
+      if (this.socketAuthenticated) this.reportLiveStatus('live')
     } catch {
       Logger.error('[MB CLIENT ERROR] Failed to join WebSocket room')
     }
@@ -2084,6 +2162,7 @@ export class MessageBoxClient {
     // disconnected must not be left claiming a room it will never rejoin.
     this.joinedRooms.delete(roomId)
     this.requestedRooms.delete(roomId)
+    if (this.socketAuthenticated) this.reportLiveStatus('live')
     // The live socket keeps its copy (it cannot detach), but a rebuild will not.
     this.roomHandlers = this.roomHandlers.filter(entry => entry.roomId !== roomId)
 
@@ -2137,6 +2216,7 @@ export class MessageBoxClient {
     this.rebuildTimer = undefined
     this.rebuildHoldTimer = undefined
     this.rebuildAttempts = 0
+    this.reportLiveStatus('closed')
   }
 
   /**

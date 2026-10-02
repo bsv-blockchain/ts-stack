@@ -24,7 +24,7 @@ before adopting it.
 > live WebSockets, peer payments, token settlement, permissions, quotes, and
 > push-device registration.
 
-The 2.5.5 release repairs live WebSocket delivery. A dropped socket is kept while Socket.IO reconnects it instead of being abandoned while it reconnects underneath, and the rooms a caller asked for are joined again once the new connection authenticates, because membership belongs to the server-side socket that joined. A server-forced disconnect, which Socket.IO never retries, triggers a rebuild: immediately the first time, then doubling from one second to a thirty-second cap. One listener per room serves every subscriber and one acknowledgement listener serves every send, in place of listeners that accumulated because the socket wrapper has no `off`. The client now reads the server's `joinedRoom` and `joinFailed`, so a refused join no longer leaves it certain of a room it was never given; correcting the record needs a server that names the refused room, which ships alongside this release, and against any other server the client records joins as it always did. A live message is delivered a tick after it arrives rather than synchronously, which was already true whenever it was encrypted.
+The 2.6.0 release repairs live WebSocket delivery. A dropped socket is kept while Socket.IO reconnects it instead of being abandoned while it reconnects underneath, and the rooms a caller asked for are joined again once the new connection authenticates, because membership belongs to the server-side socket that joined. A server-forced disconnect, which Socket.IO never retries, triggers a rebuild: immediately the first time, then doubling from one second to a thirty-second cap. One listener per room serves every subscriber and one acknowledgement listener serves every send, in place of listeners that accumulated because the socket wrapper has no `off`. The client now reads the server's `joinedRoom` and `joinFailed`, so a refused join no longer leaves it certain of a room it was never given; correcting the record needs a server that names the refused room, which ships alongside this release, and against any other server the client records joins as it always did. A live message is delivered a tick after it arrives rather than synchronously, which was already true whenever it was encrypted.
 
 The 2.5.4 release raised the `@bsv/sdk` peer floor to `^2.8.6`: SDK 2.8.0 through 2.8.5 reject every valid incoming BRC-29 payment in `PeerPayClient.acceptPayment()` and `rejectPayment()` because the recipient key is derived without `forSelf`. That release changed peer metadata without changing source.
 
@@ -74,8 +74,9 @@ is useful.
 ## What it provides
 
 - `MessageBoxClient` — authenticated HTTP polling and live WebSocket delivery,
-  with selectable socket transports, rooms restored across reconnects, and a
-  bounded rebuild after a server-forced disconnect
+  with selectable socket transports, rooms restored across reconnects, a
+  bounded rebuild after a server-forced disconnect, and `onLiveStatus` for
+  observing all of it
 - encryption through the BRC-100 wallet protocol, enabled by default
 - overlay host advertisement and public-HTTPS discovery
 - sender-specific and box-wide permissions with fee quotes
@@ -93,6 +94,11 @@ the push carries the request body, which holds no payment, and only
 `listMessages()` internalizes a recipient payment. A consumer that
 acknowledges on the push would delete the stored row before its wallet had the
 output.
+
+`onLiveStatus(listener)` reports the socket's state — `connecting`, `live`
+with its joined rooms, `reconnecting` when something will restore it, or
+`closed` when nothing will — and returns a function that unsubscribes. It
+describes the socket, not delivery.
 
 `listMessages()` therefore remains required for correctness rather than as a
 fallback. `getJoinedRooms()` reports the rooms joined on the current socket;

@@ -163,8 +163,29 @@ Two things follow for a caller:
   rejoin — call `leaveRoom()`, which releases the room whether or not the
   socket is up.
 
-There is no connect/disconnect event to subscribe to. A client that must know
-it is live has to find out by sending.
+### Knowing what the socket is doing
+
+```ts
+const stop = messages.onLiveStatus(({ state, rooms, reason }) => {
+  // 'connecting' | 'live' | 'reconnecting' | 'closed'
+  poller.setInterval(state === 'live' ? 60_000 : 5_000)
+})
+```
+
+The listener is called once immediately with the current status and on every
+transition after that; `onLiveStatus` returns a function that removes it, and
+`messages.liveStatus` reads the same value without subscribing.
+
+`reconnecting` means something will restore the socket — Socket.IO's own retry,
+or a rebuild the client has scheduled. `closed` means nothing will: a deliberate
+`disconnectWebSocket()`, a drop under `managerOptions.reconnection: false`, or a
+rebuild that failed. The next call that needs a socket still builds one.
+
+`rooms` lists the rooms joined on the current socket, and is empty unless the
+state is `live`. A listener that throws is logged and does not stop the others.
+
+The status describes this socket. It is not a delivery guarantee: keep polling
+`listMessages()` whatever it says.
 
 ### Socket options
 

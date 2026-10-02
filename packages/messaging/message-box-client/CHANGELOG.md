@@ -13,7 +13,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.5.5 candidate — live socket reconnection and room restoration
+### 2.6.0 candidate — live socket reconnection, room restoration and reported status
+
+- **New: `onLiveStatus(listener)`.** Reports what the live socket is doing:
+  `connecting`, `live` with the rooms joined on it, `reconnecting` after a drop
+  something will recover from, or `closed` with nothing coming. Returns an
+  unsubscribe function and calls the listener once immediately with the current
+  status; `liveStatus` reads it without subscribing. A consumer previously had
+  to send a message to find out, which is why one downstream package kept a
+  self-addressed ping purely to manufacture that traffic. A listener that throws
+  is reported and does not stop the others. The status describes the socket
+  only: `listMessages` polling stays required for correctness whatever it says.
 
 - Keep a socket Socket.IO is still reconnecting. A transient `disconnect` used
   to drop the client's reference without closing the socket, leaving an orphan
