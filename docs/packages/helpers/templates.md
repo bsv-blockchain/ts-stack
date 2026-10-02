@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '1.10.3'
+version: '2.0.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -21,6 +21,8 @@ a coordinated proposal; see the [qualification and migration limits](../../guide
 before adopting it.
 
 > Low-level BSV script templates library — provides reusable locking/unlocking script implementations (OpReturn, MultiPushDrop, P2MSKH) for common and advanced Bitcoin SV patterns without abstracting away control.
+
+The 2.0.0 source candidate is a breaking release: `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL` are removed, and [BRC-162](https://brc.dev/162) token outputs and their strict CBOR payloads move to `Bsv21Binary`. The SDK peer range is unchanged in source, and 2.0.0 is the first release to publish `^3.0.0` alongside `^2.1.6`.
 
 The 1.10.3 source candidate fixes the CommonJS build: `require('@bsv/templates')` consumers can construct scripts again instead of failing with `LockingScript.default is not a constructor` ([#571](https://github.com/bsv-blockchain/ts-stack/issues/571)). The ESM build and browser bundle size are unchanged; no API migration is required.
 
@@ -49,6 +51,7 @@ console.log(decodedData) // ['APP', '{"action":"vote"}']
 - **OpReturn** — Non-spendable data storage; create and decode OP_RETURN scripts
 - **MultiPushDrop** — Encrypted data tokens with multiple trusted owners; BRC-95 format
 - **P2MSKH** — Pay-to-Multisig-Key-Hash; M-of-N threshold signing with wallet support
+- **Bsv21Binary** — BRC-162 (BSV-21 binary) token outputs with one canonical encoding per value, `bigint` amounts, and a strict CBOR payload codec (`encodeStrictCbor`, `decodeStrictCbor`, `tryDecodeStrictCbor`)
 - **R1K1Wallet** — Salted P-256 hardware signing with independent secp256k1 recovery
 - **Script utilities** — Type detection, parsing, serialization helpers
 - **Wallet integration** — Templates accept WalletInterface for BRC-29/BRC-42 derivation
@@ -97,6 +100,28 @@ console.log(decoded.lockingPublicKeys.length) // 2
 const { publicKey: creatorIdentityKey } = await creatorWallet.getPublicKey({ identityKey: true })
 const unlocker = new MultiPushDrop(ownerWallet).unlock(protocolID, keyID, creatorIdentityKey)
 ```
+
+### Lock and decode a BRC-162 token output
+
+```typescript
+import { PrivateKey } from '@bsv/sdk'
+import { Bsv21Binary, encodeStrictCbor, tokenIdToString } from '@bsv/templates'
+
+const pubKeyHash = PrivateKey.fromRandom().toPublicKey().toHash() as number[]
+const template = new Bsv21Binary()
+
+// A deploy output has a null token id and carries a strict-CBOR payload.
+const deploy = template.lock(null, 0n, pubKeyHash, encodeStrictCbor({ sym: 'USD', dec: 2n }))
+console.log(Bsv21Binary.decode(deploy).role) // 'deploy'
+
+// Later outputs name the token by `<deploy txid>_0`; amounts are bigint.
+const tokenId = `${'ab'.repeat(32)}_0`
+const decoded = Bsv21Binary.decode(template.lock(tokenId, 1_000_000n, pubKeyHash))
+console.log(decoded.role, decoded.amount) // 'value' 1000000n
+console.log(decoded.tokenId !== undefined && tokenIdToString(decoded.tokenId) === tokenId) // true
+```
+
+`decode` throws `Bsv21BinaryError` for a script that starts `<push> <push> OP_2DROP` but is not canonical (for example amount `5` pushed as `01 05`); `isTokenShaped` distinguishes that from an ordinary script. `decodeStrictCbor` throws `StrictCborError` on floats, tags, negative integers, arrays, unsorted keys, non-minimal headers, trailing bytes, nesting deeper than 4 or more than 4096 bytes; `tryDecodeStrictCbor` returns `undefined` instead.
 
 ### Create 2-of-3 multisig
 

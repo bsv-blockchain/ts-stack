@@ -5,8 +5,8 @@ kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
 version: '2.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: experimental
@@ -221,6 +221,8 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - **hello** — Hello World demo topic
 - **identity** — Identity attributes and claims
 - **kvstore** — Key-value store
+- **mandala** — Regulated fungible tokens on BRC-162 (`tm_mandala` / `ls_mandala`)
+- **mandala-registry** — Mandala issuer identity registry (`tm_mandala_registry` / `ls_mandala_registry`)
 - **message-box** — Inbox/messaging
 - **monsterbattle** — Game state (demo)
 - **protomap** — Publisher-attributed descriptions of wallet protocol tuples
@@ -259,32 +261,68 @@ Repository fixtures establish format compatibility; they do not establish an
 inventory of every deployed or historical anchor. Other topics, lookup query
 shapes and persisted schemas are unchanged.
 
-### Mandala admission and the 1.8.0 upgrade
+### Mandala on BRC-162
 
-Use the same `MandalaStorageManager` for Mandala admission and lookup. The
-reference store now implements `isAdminOutpoint(assetId, txid, outputIndex)`
-against admitted admin history. Custom adapters must implement that predicate;
-a missing verifier rejects non-genesis admin actions. Its optional TypeScript
-member preserves source compatibility, not permission to bypass verification.
-Never implement it as a constant `true`.
+`tm_mandala` / `ls_mandala` admit and index Mandala regulated fungible tokens
+written in BRC-162 (BSV-21 binary, authority supply). The 2.0.0 candidate
+replaces the earlier `MandalaToken` / `MandalaAdmin` admission and storage API,
+and `@bsv/templates` 2.0.0 no longer exports those templates. Each manager and
+lookup service serves its full contract through `getDocumentation()`.
 
-Registration must omit `assetId` or use an empty string: the registration's own
-outpoint defines its asset. Subsequent admin actions must spend a previously
-admitted admin output for that same asset. Token spends require a stored owner
-row matching the source outpoint, asset and amount. Optional input linkage
-corroborates that owner and the source locking key; it cannot replace missing
-state. Sender blinding and transfers without input linkage remain supported
-when authoritative owner state is present. Linkage arrays require unique,
-non-negative integer indices.
+**Roles and format.** Every token output is one satoshi to a P2PKH script behind
+`<id> <amount> OP_2DROP` and an optional strict DAG-CBOR payload. A deploy (id
+and amount `OP_0`, output 0 only) carries `{sym, dec, label, feeRatePerKb?}`; an
+authority output (amount `OP_0`) carries nothing or an `{adm}` commitment to one
+admin action; a value output has an amount above zero. The token id is
+`<deploy txid>_0`. Pushes must be canonical: an output shaped like a token whose
+encoding is not canonical is refused, never skipped. Amounts and the circulating
+supply stay at or below 2^53-1, and a fixed-supply deploy is refused.
 
-Before upgrading an existing Mandala deployment, back up and audit its admin
-history and token-owner records. Restore missing rows from verified admission
-evidence before historical replay; do not infer authority from a submitted
-payload. The engine identifies admissible outputs before sending spend
-notifications, so normal admission can read the owner before lookup removes
-the spent row. Custom replay adapters must preserve that ordering. These checks
-do not retroactively validate old records.
+**Envelope v3.** The off-chain values are UTF-8 JSON
+`{ inputs, outputs, admin, deploySig }`. `outputs` carries a verified key linkage
+for every token output, `inputs` optionally proves the stored owner controls the
+coin being spent, and `admin` carries the strict DAG-CBOR details (lowercase hex)
+that the authority output's `adm` commits to. `deploySig` is the deploy owner's
+signature over `mandala-deploy:<txid>`, so a replayed deploy cannot reuse an
+earlier linkage.
 
-Coordinate the admission and lookup upgrade. Existing valid wire fields and
-encodings are unchanged, and no database collection migration is required.
-Keep the new admission checks enabled while repairing historical data.
+**Validation and codes.** Four layers run in order: A (the BRC-162 ledger), B
+(ownership), C (issuer authority) and D (pause, freeze, access mode, sanctions and
+registry membership). A refusal throws a typed `MandalaReject { code, reason }`.
+Codes are `ERR_SHAPE`, `ERR_SATOSHIS`, `ERR_LINKAGE`, `ERR_AUTHORITY`,
+`ERR_CONSERVATION`, `ERR_UNTRUSTED`, `ERR_FROZEN`, `ERR_PAUSED`, `ERR_ACCESS`,
+`ERR_SANCTIONED`, `ERR_MEMBERSHIP` and `ERR_UNAVAILABLE`. Infrastructure faults
+(`ERR_UNAVAILABLE`) and untrusted owners (`ERR_UNTRUSTED`) are retryable and must
+never be persisted as a verdict on the transaction.
+
+**Trusted issuers.** `MandalaTopicManager` requires `trustedIssuers`, a non-empty
+list of unique, compressed, lowercase identity keys; construction throws
+otherwise. Every deploy and authority output must be owned and proven by a
+trusted issuer. The set is configuration, never asset state. Sanctions come from a
+`ScreeningProvider` that must return exact booleans, and registry membership from
+an optional `MembershipProvider`.
+
+**Owner journal and repair.** Before returning admittance, the manager appends
+the verified owner of every admitted token output to the append-only
+`mandalaOwners` journal; if that write fails nothing is admitted. The
+`mandalaTokens` and `mandalaAuthorities` rows written by lookup are an index of
+the journal. A spend whose owner row is missing or disagrees with the coin's
+script is repaired inline from the journal and the engine's admitted output
+(`engineOutputs`), once, and admitted. A row that cannot be repaired answers
+`ERR_UNAVAILABLE`, never `ERR_SHAPE` or `ERR_LINKAGE`. `reconcileOwnerIndex`
+repairs the same rows for every unspent admitted output of a topic at boot and on
+an interval, and reports the ones it cannot repair. `MandalaLookupService`
+carries the eviction API (`outputEvicted`, `purgeAndRefold`, `restoreInputRow`);
+`mandalaOwners` is never purged.
+
+**Registry.** `tm_mandala_registry` / `ls_mandala_registry` keep the issuer
+identity registry as its own authority-only token, admitting only
+`admitIdentity` and `revokeIdentity` actions. `registryMembership` exposes its
+cache to `tm_mandala` as the membership provider.
+
+**Upgrading.** This is a clean break with no data migration. The persisted schema
+changes (`mandalaOwners` and `mandalaAuthorities` are new; `mandalaTokens`,
+`mandalaMetadata`, `mandalaAssetStates` and `mandalaAdminHistory` change shape
+and key by `tokenId`), so a 2.0.0 Mandala topic starts on a new database with new
+deploys. Use one `MandalaStorageManager` for admission and lookup. The package
+`CHANGELOG.md` lists the replaced API.

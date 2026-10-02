@@ -234,10 +234,21 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',
       propertyTest: 'packages/overlays/topics/src/mandala/__tests/types.property.test.ts',
-      mutate: ['src/mandala/types.ts:72-97', 'src/admission/issuerPolicy.ts:36-39'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/mandala/__tests/types*.test.ts'], {
-        esm: true
-      })
+      mutate: [
+        'src/mandala/types.ts',
+        'src/mandala/details.ts',
+        'src/admission/issuerPolicy.ts:36-39'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/mandala/__tests/types*.test.ts',
+          '<rootDir>/src/mandala/__tests/details*.test.ts'
+        ],
+        {
+          esm: true
+        }
+      )
     },
     'did-codecs': {
       packageDirectory: 'packages/helpers/did',
@@ -319,8 +330,12 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/helpers/ts-templates',
       manifest: 'packages/helpers/ts-templates/package.json',
       propertyTest: 'packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts',
-      mutate: ['src/mandala-encoding.ts'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/mandala-encoding*.test.ts'])
+      mutate: ['src/mandala-encoding.ts', 'src/strictCbor.ts', 'src/Bsv21Binary.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests/mandala-encoding*.test.ts',
+        '<rootDir>/src/__tests/strictCbor*.test.ts',
+        '<rootDir>/src/__tests/Bsv21Binary*.test.ts'
+      ])
     },
     'paymail-address': {
       packageDirectory: 'packages/messaging/ts-paymail',
