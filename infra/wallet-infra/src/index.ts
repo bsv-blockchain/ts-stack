@@ -16,7 +16,7 @@ import {
   type WalletLoggerLevel,
   type WalletArgs
 } from '@bsv/wallet-toolbox'
-import EventSource from 'eventsource'
+import { EventSource } from 'eventsource'
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'

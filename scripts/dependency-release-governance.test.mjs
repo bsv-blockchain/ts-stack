@@ -22,7 +22,7 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 25)
+  assert.equal(overrides.length, 26)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
@@ -34,16 +34,8 @@ test('dependency and release governance is internally complete', () => {
   assert.equal(overrides.filter(entry => entry.selector === 'toml@<4.2.0').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml@<3.15.2').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml').length, 1)
-  assert.deepEqual(
-    overrides.filter(entry => entry.selector === 'metro@0.87.0>image-size'),
-    [
-      {
-        source: 'pnpm-workspace.yaml',
-        selector: 'metro@0.87.0>image-size',
-        value: '2.0.4'
-      }
-    ]
-  )
+  assert.equal(overrides.find(entry => entry.selector === 'lodash-es@<4.18.0')?.value, '4.18.1')
+  assert.equal(overrides.filter(entry => entry.selector.includes('image-size')).length, 0)
 })
 
 test('pnpm override parsing preserves scoped parent selectors', () => {

@@ -1,6 +1,7 @@
 import { SHIPStorage } from '../SHIP/SHIPStorage.js'
 import { SLAPStorage } from '../SLAP/SLAPStorage.js'
 import { MongoClient, ObjectId, type Db } from 'mongodb'
+import * as os from 'node:os'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 
 const shipFilter = {
@@ -171,7 +172,10 @@ describe('discovery storage MongoDB invariants', () => {
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create()
-    client = new MongoClient(mongo.getUri())
+    // mongodb 7.6 loads `os` with a dynamic import that Jest's CommonJS VM
+    // cannot serve, leaving the handshake without driver metadata. Supply the
+    // Node module directly so the test client completes its handshake.
+    client = new MongoClient(mongo.getUri(), { runtimeAdapters: { os } })
     await client.connect()
     db = client.db('overlay_discovery_storage_test')
   })

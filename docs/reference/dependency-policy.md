@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.3'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+version: '1.3.4'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -200,9 +200,9 @@ compatibility checks, not a throughput or memory benchmark. No public npm
 version or consumer migration changes; protected Linux image and exact-head
 analysis gates still qualify the eventual service artifacts before promotion.
 
-The root workspace carries seven narrow audited dependency overrides:
+The root workspace carries 26 audited dependency overrides, including:
 
-- Jest 30.4.2 and Stryker still constrain parts of their reporting and coverage graphs to
+- Jest 30.5.1 and Stryker still constrain parts of their reporting and coverage graphs to
   minimatch releases with older `brace-expansion` ranges. The follow-up
   advisories GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p and
   GHSA-q2hr-2g5m-vwhr require `brace-expansion` 5.0.12, so the workspace
@@ -229,11 +229,6 @@ The root workspace carries seven narrow audited dependency overrides:
 - Jest's Istanbul reporting chain and the standalone WAB server can still
   select `js-yaml` 3.15.1. The workspace and WAB lock select the compatible
   3.15.2 security release until those parent ranges advance naturally.
-- Metro 0.87 still declares vulnerable `image-size` 1.x. A parent-scoped
-  substitution selects 2.0.4, which retains Metro's CommonJS default-function
-  call shape while moving past the malformed HEIF/JXL and ICNS parser
-  advisories. The child-process regression plus Metro and Hermes mobile gates
-  verify the substitution.
 
 These substitutions are verified through their affected Jest, mutation,
 documentation, and build paths and have owners, evidence, review dates, and
@@ -247,15 +242,16 @@ changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
 produce maintenance reminders in source CI and fail the separate weekly
 maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
-The 2026-09-16 review rechecked all 24 selectors against the frozen graphs,
-current upstream manifests, and the advisory audit. The supported graphs still
-select exact `gaxios@7.1.3`, admit `uuid@9`, and pin `qs@6.15.1` without their
-registered substitutions, while the current frontmatter plugin still requests
-TOML 3.x and Metro 0.87 still requests `image-size` 1.x. New upstream majors can
-remove some legacy paths only through a coordinated Stryker or Google Cloud
-migration. The Metro-scoped `image-size` substitution is independently verified
-through the mobile platform contract. The method, result, count, and next
-rehearsal are enforced in `governance/dependency-release-policy.json`.
+The 2026-10-02 reconciliation retains 26 selectors from the reviewed main
+updates, including the Mermaid/chevrotain `lodash-es` remediation and the
+Yamux-scoped stream-interface compatibility substitution. It preserves the
+qualified `brace-expansion` 5.0.12 workspace and standalone floor for
+GHSA-q2hr-2g5m-vwhr; Jest and Stryker still admit vulnerable earlier ranges.
+The `engine.io` substitution remains. Metro 0.87.1 replaced its `image-size`
+dependency with an in-tree parser, so the former Metro-scoped substitution
+was retired; the mobile platform contract verifies that boundary. The method,
+result, count and next rehearsal are enforced in
+`governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly
 compatibility override. It is isolated from runtime packages, registered with

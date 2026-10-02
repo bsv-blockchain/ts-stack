@@ -54,16 +54,16 @@ example documents `DEPLOY_ENV`, `LOG_LEVEL`, `OTEL_CONSOLE_EXPORTERS`, `OTEL_DIA
 | Dependency                                    | Aligned direct range |
 | --------------------------------------------- | -------------------- |
 | `@opentelemetry/api`                          | `^1.9.1`             |
-| `@opentelemetry/api-logs`                     | `^0.221.0`           |
-| `@opentelemetry/auto-instrumentations-node`   | `^0.79.0`            |
-| `@opentelemetry/exporter-logs-otlp-http`      | `^0.221.0`           |
-| `@opentelemetry/exporter-metrics-otlp-http`   | `^0.221.0`           |
-| `@opentelemetry/exporter-trace-otlp-http`     | `^0.221.0`           |
-| `@opentelemetry/instrumentation-runtime-node` | `^0.34.0`            |
-| `@opentelemetry/resources`                    | `^2.10.0`            |
-| `@opentelemetry/sdk-logs`                     | `^0.221.0`           |
-| `@opentelemetry/sdk-metrics`                  | `^2.10.0`            |
-| `@opentelemetry/sdk-node`                     | `^0.221.0`           |
+| `@opentelemetry/api-logs`                     | `^0.222.0`           |
+| `@opentelemetry/auto-instrumentations-node`   | `^0.80.0`            |
+| `@opentelemetry/exporter-logs-otlp-http`      | `^0.222.0`           |
+| `@opentelemetry/exporter-metrics-otlp-http`   | `^0.222.0`           |
+| `@opentelemetry/exporter-trace-otlp-http`     | `^0.222.0`           |
+| `@opentelemetry/instrumentation-runtime-node` | `^0.35.0`            |
+| `@opentelemetry/resources`                    | `^2.11.0`            |
+| `@opentelemetry/sdk-logs`                     | `^0.222.0`           |
+| `@opentelemetry/sdk-metrics`                  | `^2.11.0`            |
+| `@opentelemetry/sdk-node`                     | `^0.222.0`           |
 | `@opentelemetry/sdk-trace-base`               | `^2.10.0`            |
 | `@opentelemetry/semantic-conventions`         | `^1.43.0`            |
 | `pino`                                        | `^10.3.1`            |

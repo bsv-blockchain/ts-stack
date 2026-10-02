@@ -15,16 +15,16 @@ describe('BanService', () => {
     jest.clearAllMocks()
 
     mockCollection = {
-      createIndex: jest.fn<any>().mockResolvedValue(undefined),
-      updateOne: jest.fn<any>().mockResolvedValue({}),
-      deleteOne: jest.fn<any>().mockResolvedValue({}),
-      findOne: jest.fn<any>().mockResolvedValue(null),
-      find: jest.fn<any>().mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue([])
+      createIndex: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      updateOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({}),
+      deleteOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({}),
+      findOne: jest.fn<(...args: any[]) => any>().mockResolvedValue(null),
+      find: jest.fn<(...args: any[]) => any>().mockReturnValue({
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([])
         })
       }),
-      countDocuments: jest.fn<any>().mockResolvedValue(0)
+      countDocuments: jest.fn<(...args: any[]) => any>().mockResolvedValue(0)
     }
 
     mockDb = {
@@ -232,8 +232,8 @@ describe('BanService', () => {
         { type: 'outpoint', value: 'tx.0', bannedAt: new Date() }
       ]
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue(mockBans)
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue(mockBans)
         })
       })
 
@@ -245,8 +245,8 @@ describe('BanService', () => {
 
     it('should filter by type when provided', async () => {
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue([])
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([])
         })
       })
 
@@ -257,8 +257,8 @@ describe('BanService', () => {
 
     it('should filter by outpoint type', async () => {
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue([])
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([])
         })
       })
 
@@ -268,11 +268,11 @@ describe('BanService', () => {
     })
 
     it('should apply bounded pagination to MongoDB', async () => {
-      const toArray = jest.fn<any>().mockResolvedValue([])
-      const limit = jest.fn<any>().mockReturnValue({ toArray, limit: jest.fn(), skip: jest.fn() })
-      const skip = jest.fn<any>().mockReturnValue({ limit, toArray, skip: jest.fn() })
+      const toArray = jest.fn<(...args: any[]) => any>().mockResolvedValue([])
+      const limit = jest.fn<(...args: any[]) => any>().mockReturnValue({ toArray, limit: jest.fn(), skip: jest.fn() })
+      const skip = jest.fn<(...args: any[]) => any>().mockReturnValue({ limit, toArray, skip: jest.fn() })
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({ skip, limit, toArray })
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({ skip, limit, toArray })
       })
 
       await banService.listBans('domain', 25, 50)
