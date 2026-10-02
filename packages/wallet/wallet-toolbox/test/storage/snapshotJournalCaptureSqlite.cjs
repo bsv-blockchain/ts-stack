@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const { fork } = require('node:child_process')
-const { mkdtemp, rm, readFile } = require('node:fs/promises')
+const { mkdtemp, rm, readFile, open: openFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 const {
@@ -25,9 +25,9 @@ const identity = '02' + '11'.repeat(32)
 const request = { ceiling: '9223372036854775807', receiptPolicy: { receiptLimit: 128, receiptLifetimeMs: 600000 } }
 const open = filename =>
   knex({ client: 'better-sqlite3', connection: { filename }, useNullAsDefault: true, pool: { min: 1, max: 1 } })
-async function child(filename, phase, marker) {
+async function child(filename, phase) {
   const storage = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: open(filename) })
-  const injection = require('./snapshotJournalCaptureProcessLoss.cjs')(phase, marker)
+  const injection = require('./snapshotJournalCaptureProcessLoss.cjs')(phase)
   process.once('disconnect', () => process.exit(1))
   const deadline = setTimeout(() => process.exit(2), 20000)
   deadline.unref()
@@ -35,13 +35,14 @@ async function child(filename, phase, marker) {
     const view = await storage.openSnapshotJournalSource(identity, request)
     if (phase === 'opened') injection.park()
     await view.close()
-    throw Error('Did not reach capture boundary: ' + JSON.stringify({ phase, pools: injection.pools }))
+    throw new Error('Did not reach capture boundary: ' + JSON.stringify({ phase, pools: injection.pools }))
   } finally {
     await storage.destroy()
   }
 }
 async function killAt(filename, phase, marker) {
-  const killed = fork(__filename, ['child', filename, phase, marker], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+  const output = await openFile(marker, 'wx', 0o600)
+  const killed = fork(__filename, ['child', filename, phase], { stdio: ['ignore', 'ignore', 'pipe', 'ipc', output.fd] })
   let stderr = ''
   killed.stderr.on('data', data => {
     stderr += data
@@ -56,6 +57,7 @@ async function killAt(filename, phase, marker) {
     assert.equal(await readFile(marker, 'utf8'), phase)
   } finally {
     clearTimeout(timer)
+    await output.close()
   }
 }
 async function main() {

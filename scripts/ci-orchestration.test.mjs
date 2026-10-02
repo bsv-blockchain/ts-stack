@@ -3,7 +3,6 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
-import YAML from 'yaml'
 
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
@@ -434,20 +433,17 @@ function assertNativeWalletJob(wallet) {
   assert.match(wallet, /^    timeout-minutes: 40$/m)
   assert.match(wallet, /^    permissions:\n      contents: read\n    strategy:/m)
   assert.doesNotMatch(wallet, /continue-on-error/)
-  const job = YAML.parse(wallet)['coverage-wallet']
-  assert.deepEqual(job.strategy.matrix.include, [
-    { id: 'shard-1', shard: 1 },
-    { id: 'shard-2', shard: 2 },
-    { id: 'shard-3', shard: 3 },
-    { id: 'shard-4', shard: 4 },
-    { id: 'sync-http-0', latency: 0 },
-    { id: 'sync-http-1000', latency: 1000 }
-  ])
-  assert.equal(
-    job.services.postgres.image,
-    'postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef'
+  // This gate runs before dependency installation; validate the governed native
+  // job's explicit matrix and service block without loading a workspace parser.
+  assert.match(
+    wallet,
+    /^    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - \{ id: shard-1, shard: 1 \}\n          - \{ id: shard-2, shard: 2 \}\n          - \{ id: shard-3, shard: 3 \}\n          - \{ id: shard-4, shard: 4 \}\n          - \{ id: sync-http-0, latency: 0 \}\n          - \{ id: sync-http-1000, latency: 1000 \}\n    services:$/m
   )
-  assert.deepEqual(job.services.postgres.ports, ['5432:5432'])
+  assert.match(
+    wallet,
+    /^      postgres:\n        image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef(?: #[^\n]*)?$/m
+  )
+  assert.match(wallet, /^        ports:\n          - 5432:5432\n        options: >-$/m)
 }
 
 test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', () => {

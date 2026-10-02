@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const { fork } = require('node:child_process')
-const { mkdtemp, rm, readFile } = require('node:fs/promises')
+const { mkdtemp, rm, readFile, open: openFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 const {
@@ -24,8 +24,9 @@ const { snapshotArchiveTables } = require('../../out/src/storage/snapshot/archiv
 const identity = '02' + '11'.repeat(32)
 const request = { ceiling: '9223372036854775807', receiptPolicy: { receiptLimit: 128, receiptLifetimeMs: 600000 } }
 async function killAt(phase, marker) {
-  const child = fork(join(__dirname, 'snapshotJournalCaptureMysqlChild.cjs'), [phase, marker], {
-    stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+  const output = await openFile(marker, 'wx', 0o600)
+  const child = fork(join(__dirname, 'snapshotJournalCaptureMysqlChild.cjs'), [phase], {
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc', output.fd],
     env: process.env
   })
   let stderr = ''
@@ -42,6 +43,7 @@ async function killAt(phase, marker) {
     assert.equal(await readFile(marker, 'utf8'), phase)
   } finally {
     clearTimeout(timer)
+    await output.close()
   }
 }
 async function main() {

@@ -101,17 +101,19 @@ async function prepareReader(writer: Knex, write: unknown, reader: Knex, read: u
     await reader.raw('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY').connection(read)
   }
 }
-async function capture(
-  storage: StorageKnex,
-  writer: Knex,
-  write: unknown,
-  read: unknown,
-  backend: string,
-  identityKey: string,
-  request: SnapshotJournalCaptureRequest,
-  assertActive: () => void,
+interface CaptureOptions {
+  storage: StorageKnex
+  writer: Knex
+  write: unknown
+  read: unknown
+  backend: string
+  identityKey: string
+  request: SnapshotJournalCaptureRequest
+  assertActive: () => void
   hold: (trx: Knex.Transaction, captured: Captured) => Promise<void>
-): Promise<void> {
+}
+async function capture(options: CaptureOptions): Promise<void> {
+  const { storage, writer, write, read, backend, identityKey, request, assertActive, hold } = options
   const reader = storage.knex,
     transactions: Knex.Transaction[] = []
   try {
@@ -218,20 +220,20 @@ export function retainSnapshotJournalCapture(
           async (write, read) => {
             const backend = await bindSnapshotJournalCaptureBackend(writer!, write, storage!.knex, read, expected)
             assertActive()
-            await capture(
-              storage!,
-              writer!,
+            await capture({
+              storage: storage!,
+              writer: writer!,
               write,
               read,
               backend,
               identityKey,
               request,
               assertActive,
-              async (trx, value) => {
+              hold: async (trx, value) => {
                 captured = value
                 await hold(trx)
               }
-            )
+            })
           },
           closeSnapshotJournalCapturePool
         )
@@ -241,8 +243,8 @@ export function retainSnapshotJournalCapture(
         let cancelled = false
         try {
           assertActive()
-        } catch (stop) {
-          cancelled = stop === error
+        } catch (error_) {
+          cancelled = error_ === error
         }
         if (!cancelled) failure = { error }
       }

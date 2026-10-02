@@ -275,3 +275,11 @@ integration remain required. The other acceptance rows remain open.
 Main's Postgres storage contract is preserved through the legacy path. Snapshot
 auxiliary migrations are explicit no-ops there and the associated capabilities
 remain unavailable; future support requires new forward migrations.
+
+The first hosted capture head exposed a dependency-installation mismatch in the
+pre-install native-job contract and five analyzer findings. The contract now
+checks the exact six-row matrix and pinned Postgres service without a workspace
+YAML dependency. Disposable process-cut children receive an exclusive inherited
+marker descriptor and cannot choose a filesystem write path through CLI input.
+Local source controls and the native capture cuts qualify this remediation;
+complete exact-head hosted success is still required before any ready claim.
