@@ -656,7 +656,11 @@ test('private publication HTTP aggregation requires selected complete execution 
 })
 
 test('acquisition and proposal HTTP aggregation require every selected part artifact', () => {
-  for (const id of ['private-acquisition-foundation', 'overlay-proposal-http']) {
+  for (const id of [
+    'private-acquisition-foundation',
+    'private-acquisition-state',
+    'overlay-proposal-http'
+  ]) {
     assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
     const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
       job => job.name === 'mutation-quality'

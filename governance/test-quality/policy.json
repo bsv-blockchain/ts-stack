@@ -1409,6 +1409,17 @@
           "A candidate received before recovery expiry retains its original quote and validation obligation without another payment or invoice.",
           "Wallet uncertainty never fabricates credit, funded undelivered work cannot expire, and each actual delivery retains at least one day of recovery."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-acquisition-state.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic private acquisition quote/material/result reservations, original contract custody, permanent invoice prefixes, native funding association and guarded recovery disclosure",
+        "target": "At least 300 native quote, pin, funding, delivery, late processing and reopen histories",
+        "invariants": [
+          "Original quote, material and future response capacity commit together; failed capacity or authority checks leave no partial obligation.",
+          "A retained payment and its funding fence advance atomically, and delivery bytes commit with their state without changing original rights or charging again."
+        ]
       }
     ],
     "exclusions": [

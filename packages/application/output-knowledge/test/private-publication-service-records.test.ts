@@ -1,5 +1,5 @@
 import { expect, it } from '@jest/globals'
-import { canonicalOutputJSON } from '@bsv/sdk'
+import { canonicalOutputJSON, PrivateKey } from '@bsv/sdk'
 import { PrivatePublicationServiceRecords } from '../src/private/PrivatePublicationServiceRecords.js'
 import {
   createPrivatePublicationRecords,
@@ -132,6 +132,100 @@ it('requires the selected lookup service and rules before retaining a new origin
   )
   expect(() => different.bindingAddress(records.fence.state)).toThrow(
     expect.objectContaining({ code: 'context-changed' })
+  )
+  expect(native.rows()).toHaveLength(0)
+})
+
+it.each(['seller', 'chain'] as const)(
+  'rejects an independent %s mismatch without creating custody rows',
+  field => {
+    const { f, options } = prepared(),
+      configuration = config()
+    configuration.identity = { chain: { ...f.installation.chain }, seller: f.installation.seller }
+    if (field === 'seller')
+      configuration.identity.seller = new PrivateKey(99).toPublicKey().toString()
+    else configuration.identity.chain.genesisHash = 'ff'.repeat(32)
+    const other = fixture(configuration)
+    expect(() => new PrivatePublicationServiceRecords(other.owner, options)).toThrow(
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Private service and native custody domain differ'
+      })
+    )
+    expect(other.rows()).toHaveLength(0)
+  }
+)
+it('bounds and owns the installed extension vocabulary before accepting an original', () => {
+  const { native, options, records, f } = prepared()
+  const extensions = Array.from({ length: 32 }, (_, i) => 'urn:test:extension:' + i)
+  const exact = new PrivatePublicationServiceRecords(native.owner, {
+    ...options,
+    supportedExtensions: extensions
+  })
+  extensions.push('urn:test:extension:overflow')
+  expect(exact.prepare(records, f.record).fence.format).toBe('private-publication-fence/2')
+  expect(
+    () =>
+      new PrivatePublicationServiceRecords(native.owner, {
+        ...options,
+        supportedExtensions: extensions
+      })
+  ).toThrow('Invalid private service extensions')
+  expect(
+    () =>
+      new PrivatePublicationServiceRecords(native.owner, { ...options, supportedExtensions: [''] })
+  ).toThrow()
+  expect(
+    () =>
+      new PrivatePublicationServiceRecords(native.owner, {
+        ...options,
+        supportedExtensions: ['x'.repeat(16384)]
+      })
+  ).toThrow()
+  expect(native.rows()).toHaveLength(0)
+})
+it('reports legacy metadata as unavailable without inventing an original contract', () => {
+  const { service, records, native } = prepared()
+  expect(() => service.restoreStatus(records.fence)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Original private publication service contract is unavailable'
+    })
+  )
+  expect(() => service.restore(records.fence, records.blob)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Original private publication service contract is unavailable'
+    })
+  )
+  expect(native.rows()).toHaveLength(0)
+})
+it('requires the original lookup rules for fresh preparation and both recovery projections', () => {
+  const { f, service, native, options, records } = prepared(),
+    plan = service.prepare(records, f.record)
+  const changed = new PrivatePublicationServiceRecords(native.owner, {
+    ...options,
+    lookup: { ...options.lookup, rulesDigest: 'ff'.repeat(32) }
+  })
+  for (const call of [
+    () => changed.prepare(records, f.record),
+    () => changed.restore(plan.fence, plan.blob),
+    () => changed.restoreStatus(plan.fence),
+    () => changed.bindingAddress(plan.fence.state)
+  ])
+    expect(call).toThrow(
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Private publication lookup installation differs'
+      })
+    )
+  expect(native.rows()).toHaveLength(0)
+})
+it('rejects oversized original envelopes at the one-MiB boundary before parsing or storing their content', () => {
+  const { f, service, native, records } = prepared()
+  const oversized = { ...f.record, unrecognized: 'x'.repeat(1048576) }
+  expect(() => service.prepare(records, oversized)).toThrow(
+    expect.objectContaining({ code: 'limited' })
   )
   expect(native.rows()).toHaveLength(0)
 })

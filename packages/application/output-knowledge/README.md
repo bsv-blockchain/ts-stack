@@ -1205,8 +1205,14 @@ Exact retries use the original acquisition; an uncertain wallet outcome cannot
 authorize a second credit or secret release. The funding slot and progress change
 require one atomic commit, and funded undelivered obligations do not expire.
 
-These helpers are not exposed as a complete paid lookup service. The native
-quote/material/result owner, current buyer authorization, wallet recovery, domain
-release policy and final guarded HTTP disclosure remain integration obligations.
+The native acquisition owner reserves original contracts and evidence, immutable
+material, future response capacity, permanent invoice prefixes and funding slots
+before a quote becomes visible. Payment association and progress commit together;
+result bytes and delivered state also commit together. Reopening preserves the
+original obligation, including processing after a pinned candidate's deadline.
+
+These internal helpers are not yet exposed as a complete paid lookup service.
+Current buyer authorization, native wallet recovery, domain/release policy and
+final guarded HTTP disclosure remain integration obligations.
 The [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md) tracks
 that work and the distinction between native checks and complete qualification.

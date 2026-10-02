@@ -9,6 +9,7 @@ import {
   UnlockingScript,
   Utils,
   outputPacketDigest,
+  type OutputChain,
   type OutputPaidLookupAcquire,
   type OutputPaidLookupChallenge
 } from '@bsv/sdk'
@@ -19,7 +20,9 @@ import {
 } from '../src/private/PrivateAcquisitionProgress.js'
 
 /** Real BRC-29/Atomic encoding, synthetic unproved inputs: lifecycle tests only. */
-export async function acquisitionFixture() {
+export async function acquisitionFixture(
+  chain: OutputChain = { network: 'acquisition-lifecycle-fixture', genesisHash: '66'.repeat(32) }
+) {
   const sellerWallet = new ProtoWallet(new PrivateKey(83)),
     buyerWallet = new ProtoWallet(new PrivateKey(84))
   const seller = (await sellerWallet.getPublicKey({ identityKey: true })).publicKey
@@ -34,7 +37,6 @@ export async function acquisitionFixture() {
       forSelf: true
     })
   ).publicKey
-  const chain = { network: 'acquisition-lifecycle-fixture', genesisHash: '66'.repeat(32) }
   const script = new P2PKH().lock(PublicKey.fromString(sellerPaymentKey).toAddress())
   const source = new Transaction(
     1,

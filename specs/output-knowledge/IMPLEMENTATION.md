@@ -2405,3 +2405,21 @@ regressions and four root checks pass. An earlier direct Jest invocation omitted
 the package's required VM-module flag: four suites passed, three failed at
 TypeScript setup. The corrected native command uses the package's actual Node
 entry and flag; the earlier setup failure is not counted as test evidence.
+
+### Native paid-acquisition owner
+
+The internal four-module state layer now reserves the original signed contract,
+complete future envelope allowance, immutable material and future result slots
+in one native transaction with permanent invoice/funding capacity. Funding fences
+advance atomically with payment progress, and delivery bytes with delivered state.
+Retained originals survive catalogue/manifest expiry. Current native reads,
+revisions, complete capacity, fixed missing-principal behavior and synchronous
+disclosure gates remain separate from application-domain and release verdicts.
+The optional larger local ledger plan preserves default four-MiB behavior and all
+SDK wire bounds. There is no public route, new public export or format migration.
+
+The draft native qualification includes 300 generated histories and six actual
+SIGKILL/reopen boundaries. Full canonical mutation/hosted qualification and paid
+service composition remain required; these checks are not a completed acquisition,
+POTATOES or application-integration claim. The current-buyer, native wallet,
+release/coordinator and HTTP integrations are tracked as subsequent layers.

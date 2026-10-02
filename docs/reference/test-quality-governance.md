@@ -356,3 +356,13 @@ reuse8 setting; every other lookup factory default stays unchanged. Its earlier
 proposal channel inventory cancellation already used reuse8 and is not resolved
 by these changes. Every cancellation remains incomplete qualification until a
 complete fresh run satisfies the unchanged gates.
+
+`private-acquisition-state` qualifies all four complete payload, original-record,
+state and native-owner modules in four disjoint whole-file execution parts.
+Every part runs the complete canonical acquisition foundation and native-owner
+suites, including the 300 generated native histories, process-loss boundaries,
+private domain/identity and protected-ledger compatibility tests. The explicit
+local batch tests also remain in the protected-ledger target. Execution uses
+four workers, optional runner reuse of eight and the existing 45-minute part
+bound. Complete aggregate score 90, zero uncovered and zero invalid remain
+required; no individual part is substituted for the complete target.

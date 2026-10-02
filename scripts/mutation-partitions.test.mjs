@@ -372,6 +372,7 @@ test('private publication coordination and HTTP partitions retain complete canon
 test('paid acquisition and proposal HTTP parts preserve exact whole-source/test unions', () => {
   for (const [id, expected] of [
     ['private-acquisition-foundation', ['progress', 'result', 'index', 'contracts', 'evidence']],
+    ['private-acquisition-state', ['payloads', 'original', 'state', 'store']],
     ['overlay-proposal-http', ['routes', 'guard', 'policy']]
   ]) {
     const canonical = buildMutationTargets(REPOSITORY_ROOT)[id]

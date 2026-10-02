@@ -93,6 +93,17 @@ const plans = new Map([
     }
   ],
   [
+    'private-acquisition-state',
+    {
+      fallback: 'payloads',
+      files: new Map([
+        ['src/private/PrivateAcquisitionRecords.ts', 'original'],
+        ['src/private/PrivateAcquisitionState.ts', 'state'],
+        ['src/private/SQLitePrivateAcquisitionStore.ts', 'store']
+      ])
+    }
+  ],
+  [
     'private-acquisition-foundation',
     {
       fallback: 'progress',

@@ -32,6 +32,11 @@ import {
   type ProtectedLedgerView
 } from './ProtectedLedgerCodec.js'
 
+/** Explicit local storage-plan capacity; never widens protocol JSON packets. */
+export interface ProtectedLedgerCommitOptions {
+  maximumBatchBytes: number
+}
+
 const FORMAT = 'output-protected-ledger/1'
 const HEAD_BYTES = 16384
 const HEADER_COLUMNS = `CASE WHEN length(kind)<=32 THEN kind END AS kind,
@@ -402,14 +407,63 @@ export class SQLiteProtectedLedger {
     )
     return owned.map(protectedAddress)
   }
+  private ownLocalBatch(
+    changes: readonly ProtectedLedgerChange[],
+    input: ProtectedLedgerCommitOptions
+  ) {
+    const options = parseOutputJSON(canonicalOutputJSON(input, { bytes: 1024 }))
+    closedOutputObject(options, ['maximumBatchBytes'])
+    const maximum = protectedInteger(
+      options.maximumBatchBytes,
+      this.configuration.maximumReservedBytes + 65536
+    )
+    outputAssert(
+      Array.isArray(changes) && changes.length >= 1 && changes.length <= 64,
+      'Protected ledger commit must contain 1–64 records'
+    )
+    outputAssert(
+      Object.getPrototypeOf(changes) === Array.prototype,
+      'Protected ledger commit array has an unexpected prototype'
+    )
+    outputAssert(
+      Reflect.ownKeys(changes).length === changes.length + 1 &&
+        Object.keys(changes).length === changes.length,
+      'Protected ledger commit array is decorated or sparse'
+    )
+    let bytes = 2 + changes.length - 1
+    const result = []
+    // Each complete record plan stays below the protocol JSON ceiling. Only this
+    // local atomic batch can be larger; own all entries before any clock/effect.
+    for (let i = 0; i < changes.length; i++) {
+      const descriptor = Object.getOwnPropertyDescriptor(changes, i)
+      outputAssert(
+        descriptor?.enumerable && 'value' in descriptor,
+        'Protected ledger commit array contains an accessor or hole'
+      )
+      const limits = { bytes: this.configuration.maximumRecordBytes + 1024, depth: 31 }
+      const text = canonicalOutputJSON(descriptor.value, limits)
+      bytes += Buffer.byteLength(text, 'utf8')
+      outputAssert(
+        bytes <= maximum,
+        'Protected ledger local batch exceeds its byte allowance',
+        'limited'
+      )
+      result.push(parseOutputJSON(text, limits))
+    }
+    return result
+  }
   commit(
     expectedRevision: string,
     changes: readonly ProtectedLedgerChange[],
     clock: () => string,
-    guard: ProtectedLedgerGuard
+    guard: ProtectedLedgerGuard,
+    options?: ProtectedLedgerCommitOptions
   ): string {
     const expected = outputU64(expectedRevision).toString()
-    const inputs = parseOutputJSON(canonicalOutputJSON(changes))
+    const inputs =
+      options === undefined
+        ? parseOutputJSON(canonicalOutputJSON(changes))
+        : this.ownLocalBatch(changes, options)
     outputAssert(
       Array.isArray(inputs) && inputs.length >= 1 && inputs.length <= 64,
       'Protected ledger commit must contain 1–64 records'

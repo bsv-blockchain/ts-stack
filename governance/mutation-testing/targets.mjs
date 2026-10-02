@@ -1272,6 +1272,58 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/protected-ledger-boundaries.test.ts',
           '<rootDir>/test/protected-ledger-enumeration.test.ts',
           '<rootDir>/test/protected-ledger.test.ts',
+          '<rootDir>/test/protected-ledger-batch.test.ts',
+          '<rootDir>/test/protected-ledger.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
+    'private-acquisition-state': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-acquisition-state.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/private-acquisition.fixture.ts',
+        'test/private-acquisition-records.fixture.ts',
+        'test/private-acquisition-store.fixture.ts',
+        'test/private-publication-fixture.ts',
+        'test/protected-ledger-fixture.ts',
+        'test/protected-ledger-restoration-fixture.ts',
+        'test/evidence-fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: [
+        'src/private/PrivateAcquisitionPayloads.ts',
+        'src/private/PrivateAcquisitionRecords.ts',
+        'src/private/PrivateAcquisitionState.ts',
+        'src/private/SQLitePrivateAcquisitionStore.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-acquisition-payloads.test.ts',
+          '<rootDir>/test/private-acquisition-records.test.ts',
+          '<rootDir>/test/private-acquisition-state.test.ts',
+          '<rootDir>/test/private-acquisition-store.test.ts',
+          '<rootDir>/test/private-acquisition-process.test.ts',
+          '<rootDir>/test/private-acquisition-state.property.test.ts',
+          '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/private-acquisition-progress.test.ts',
+          '<rootDir>/test/private-acquisition-result.test.ts',
+          '<rootDir>/test/private-acquisition-funding-index.test.ts',
+          '<rootDir>/test/private-acquisition-contracts.test.ts',
+          '<rootDir>/test/private-acquisition-funding-evidence.test.ts',
+          '<rootDir>/test/private-acquisition.property.test.ts',
+          '<rootDir>/test/private-domain.test.ts',
+          '<rootDir>/test/private-identity.test.ts',
+          '<rootDir>/test/protected-ledger-codec.test.ts',
+          '<rootDir>/test/protected-ledger-integrity.test.ts',
+          '<rootDir>/test/protected-ledger-boundaries.test.ts',
+          '<rootDir>/test/protected-ledger-enumeration.test.ts',
+          '<rootDir>/test/protected-ledger.test.ts',
+          '<rootDir>/test/protected-ledger-batch.test.ts',
           '<rootDir>/test/protected-ledger.property.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
@@ -1301,6 +1353,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/protected-ledger-boundaries.test.ts',
           '<rootDir>/test/protected-ledger-enumeration.test.ts',
           '<rootDir>/test/protected-ledger.test.ts',
+          '<rootDir>/test/protected-ledger-batch.test.ts',
           '<rootDir>/test/protected-ledger.property.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }

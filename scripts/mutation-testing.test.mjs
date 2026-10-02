@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 114)
+  assert.equal(Object.keys(configured).length, 115)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -456,6 +456,7 @@ test('protected ledger retains complete storage and custody source with native c
     '<rootDir>/test/protected-ledger-boundaries.test.ts',
     '<rootDir>/test/protected-ledger-enumeration.test.ts',
     '<rootDir>/test/protected-ledger.test.ts',
+    '<rootDir>/test/protected-ledger-batch.test.ts',
     '<rootDir>/test/protected-ledger.property.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
@@ -631,6 +632,7 @@ test('acquisition foundations retain five complete modules and native recovery/f
     '<rootDir>/test/protected-ledger-boundaries.test.ts',
     '<rootDir>/test/protected-ledger-enumeration.test.ts',
     '<rootDir>/test/protected-ledger.test.ts',
+    '<rootDir>/test/protected-ledger-batch.test.ts',
     '<rootDir>/test/protected-ledger.property.test.ts'
   ])
   assert.ok(target.additionalInputs.includes('test/fixtures/**'))
@@ -652,4 +654,41 @@ test('proposal and lookup bounded recycling changes only the selected runner ent
     'output-lookup-session-payloads'
   ])
     assert.equal(targets[id].runnerOptions.maxTestRunnerReuse, undefined)
+})
+
+test('acquisition state owns all four whole modules and preserves complete native canonical tests', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT),
+    target = targets['private-acquisition-state']
+  assert.deepEqual(target.mutate, [
+    'src/private/PrivateAcquisitionPayloads.ts',
+    'src/private/PrivateAcquisitionRecords.ts',
+    'src/private/PrivateAcquisitionState.ts',
+    'src/private/SQLitePrivateAcquisitionStore.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-acquisition-payloads.test.ts',
+    '<rootDir>/test/private-acquisition-records.test.ts',
+    '<rootDir>/test/private-acquisition-state.test.ts',
+    '<rootDir>/test/private-acquisition-store.test.ts',
+    '<rootDir>/test/private-acquisition-process.test.ts',
+    '<rootDir>/test/private-acquisition-state.property.test.ts',
+    '<rootDir>/test/protected-payload.test.ts',
+    ...targets['private-acquisition-foundation'].runnerOptions.jest.config.testMatch
+  ])
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/private-acquisition-state.property.test.ts'
+  )
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  for (const name of [
+    'private-acquisition-records.fixture.ts',
+    'private-acquisition-store.fixture.ts'
+  ])
+    assert.ok(target.additionalInputs.includes(`test/${name}`))
+  assert.ok(target.additionalInputs.includes('test/fixtures/**'))
+  assert.ok(
+    targets['protected-ledger'].runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/test/protected-ledger-batch.test.ts'
+    )
+  )
 })

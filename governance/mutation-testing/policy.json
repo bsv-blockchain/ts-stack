@@ -1156,6 +1156,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-acquisition-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-acquisition-state.property.test.ts",
+      "boundary": "Atomic private acquisition quote/material/result reservations, original contract custody, permanent invoice prefixes, native funding association and guarded recovery disclosure",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

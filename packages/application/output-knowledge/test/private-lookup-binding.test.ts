@@ -187,3 +187,35 @@ it('rejects a current publication selecting a different lookup service or rules'
     ).toThrow(expect.objectContaining({ code: 'conflict' }))
   }
 })
+
+it.each(['blobKey', 'chain', 'topic', 'txid', 'outputIndex'] as const)(
+  'keeps the current publication %s bound for activation and receipt recovery',
+  field => {
+    const { f, active, reserved, waiting, blob } = prepared(),
+      changed = structuredClone(waiting)
+    if (field === 'chain') changed.chain.genesisHash = 'ff'.repeat(32)
+    else if (field === 'outputIndex') changed.outputIndex += 1
+    else changed[field] = field === 'topic' ? 'tm_other' : 'ff'.repeat(32)
+    if (changed.progress.phase !== 'binding') throw new Error('Expected pending binding')
+    changed.progress.admission = {
+      ...admission(changed),
+      steak: { [changed.topic]: { outputsToAdmit: [changed.outputIndex], coinsToRetain: [] } }
+    }
+    for (const call of [
+      () => activatePrivateLookupBinding(reserved, changed, blob, f.owner.identity),
+      () => privateLookupBindingReceipt(active, changed, blob, f.owner.identity)
+    ])
+      expect(call).toThrow(
+        expect.objectContaining({
+          code: 'conflict',
+          message: 'Private lookup binding differs from publication'
+        })
+      )
+  }
+)
+it('rejects an unknown phase even when a complete valid admission is present', () => {
+  const { f, active, blob } = prepared()
+  expect(() =>
+    parsePrivateLookupBinding({ ...active, phase: 'unknown' }, blob, f.owner.identity)
+  ).toThrow('Unknown private lookup binding phase')
+})

@@ -46,7 +46,15 @@ fixed-size allocation/index metadata remains outside encrypted bodies. Native
 SELECT bounds prevent a corrupt oversized field from being materialized as an
 unbounded JavaScript value.
 
-A commit accepts at most 64 distinct records and a 4 MiB owned JSON plan. A record
+The original four-argument commit accepts at most 64 distinct records and a 4 MiB
+owned JSON plan. An installed owner may explicitly provide a fifth options object
+with `maximumBatchBytes`, bounded by the sealed reservation ceiling plus 65,536
+bytes of plan framing. This local-only path owns each complete change separately,
+rejects sparse/decorated/accessor arrays and unexpected prototypes, preserves the
+per-record/depth limits, and counts the exact enclosing UTF-8 JSON bytes before
+storage. It supports atomic reservations for base64-encoded multi-record material.
+It does not widen the SDK's 4 MiB canonical network-packet limit or change the
+omitted-option behavior. A record
 holds at most 2 MiB of canonical object data. Installations may narrow these
 bounds; they cannot advertise more capacity than their custody codec supports.
 Larger application evidence needs separately reserved records or independently
@@ -103,3 +111,29 @@ key rotation, inventory/ciphertext corruption, capacity rollback, callback
 lifetime checks and the final two reserved revision steps. This is draft evidence.
 Adopted-source checks, complete mutation parts/aggregate, exact-head CI and the
 full private-service compositions are still required.
+
+## Retaining paid acquisition obligations
+
+The internal `SQLitePrivateAcquisitionStore` shares one seller/chain domain with
+its permanent invoice-prefix and funding-output fences. Quote creation atomically
+reserves the original signed capability, request/challenge, verified-evidence
+representation, immutable material and all future result slots. Original-record
+preflight bounds the entire eventual response, including acceptance and base64
+expansion, before a quote is returned. The service must separately establish
+Script/SPV, application-domain, release-policy and caller authority; this owner
+does not turn caller-supplied metadata into those verdicts.
+
+Payload chunks are independently addressed, bounded and hashed with their
+acquisition/request/purpose binding. Completion fills reserved result slots once
+and commits delivered progress in the same transaction. Reads recheck the current
+principal and native revision before accessing material. Response enqueue uses
+one synchronous native guard; the separate HTTP layer must bind and sign the
+exact body without bypassing that final boundary.
+
+A complete payment received strictly before recovery expiry pins its processing
+obligation. Wallet uncertainty remains funding-pending, and funded undelivered
+work cannot expire. Delivery extends recovery to at least one day after delivery.
+An exact retry retains the first quote/material even after catalogue turnover.
+Never recreate a missing store, reuse a prefix for a new acquisition, or bypass
+current authorization to recover an old one. No public route or stored-format
+migration is introduced by these internal modules.
