@@ -40,7 +40,13 @@ import { lchOverlayCustodyBinding } from '../src/overlayAcquisitionCustody.js'
 
 const cleanup = new Set<() => Promise<void>>()
 afterEach(async () => {
-  for await (const close of cleanup) await close()
+  await Array.from(cleanup).reduce(
+    (sequence, close) =>
+      sequence.then(async () => {
+        await close()
+      }),
+    Promise.resolve()
+  )
   cleanup.clear()
 })
 
@@ -138,16 +144,21 @@ export async function lchPaidFixture(
     settlementId = outputPacketDigest('lch-lookup-settlement', body),
     delivery = new WalletBRC78KeyDelivery(f.sellerWallet),
     grants: KeyGrant[] = []
-  for await (const [key, cek] of f.asset.keys)
-    grants.push({
-      keyId: Uint8Array.from(Utils.toArray(key, 'hex')),
-      delivery: 'https://bsv.brc.dev/apps/0170#brc78-key-v1',
-      payload: await delivery.deliver(
-        acquire.recipient,
-        Uint8Array.from(Utils.toArray(key, 'hex')),
-        cek
-      )
-    })
+  await Array.from(f.asset.keys).reduce(
+    (sequence, [key, cek]) =>
+      sequence.then(async () => {
+        grants.push({
+          keyId: Uint8Array.from(Utils.toArray(key, 'hex')),
+          delivery: 'https://bsv.brc.dev/apps/0170#brc78-key-v1',
+          payload: await delivery.deliver(
+            acquire.recipient,
+            Uint8Array.from(Utils.toArray(key, 'hex')),
+            cek
+          )
+        })
+      }),
+    Promise.resolve()
+  )
   const agreement = await createLCHOverlayFixedRenderAgreement(terms.policy),
     licenseOptions = {
       assetId: f.asset.assetId,
@@ -276,7 +287,13 @@ export async function lchPaidFixture(
     objects = SQLiteProtectedOperationObjectStore.create(path, configuration, codec)
   owners.push(objects)
   cleanup.add(async () => {
-    for await (const owner of owners) await owner.close()
+    await Array.from(owners).reduce(
+      (sequence, owner) =>
+        sequence.then(async () => {
+          await owner.close()
+        }),
+      Promise.resolve()
+    )
     rmSync(directory, { recursive: true, force: true })
   })
   await domain.initializeCustody(objects)

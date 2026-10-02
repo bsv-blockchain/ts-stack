@@ -260,31 +260,36 @@ export async function decodeUnverifiedLCHOverlayContext(
     evidence: LCHOverlayTypedEvidence[] = []
   let checks = license.signatures.length,
     previous = ''
-  for await (const item of value.evidence) {
-    const entry = map(item, 'Typed evidence')
-    closed(entry, ['type', 'object'])
-    lchAssert(
-      typeof entry.type === 'string' && (EVIDENCE_TYPES as readonly string[]).includes(entry.type),
-      'ERR_LCH_PROFILE_UNSUPPORTED',
-      'Unsupported typed evidence domain'
-    )
-    const type = entry.type as LCHOverlayEvidenceType,
-      object = signed(entry.object, type)
-    checks += object.signatures.length
-    lchAssert(
-      checks <= LCH_OVERLAY_LIMITS.signatureChecks,
-      'ERR_LCH_SIGNATURE',
-      'Acquisition signature budget exceeded'
-    )
-    const ordered = type + '\0' + toHex(await objectId(type, object.body))
-    lchAssert(
-      ordered > previous,
-      'ERR_LCH_CBOR',
-      'Typed evidence must be sorted and unique by domain and body ID'
-    )
-    previous = ordered
-    evidence.push({ type, object })
-  }
+  await Array.from(value.evidence).reduce(
+    (sequence, item) =>
+      sequence.then(async () => {
+        const entry = map(item, 'Typed evidence')
+        closed(entry, ['type', 'object'])
+        lchAssert(
+          typeof entry.type === 'string' &&
+            (EVIDENCE_TYPES as readonly string[]).includes(entry.type),
+          'ERR_LCH_PROFILE_UNSUPPORTED',
+          'Unsupported typed evidence domain'
+        )
+        const type = entry.type as LCHOverlayEvidenceType,
+          object = signed(entry.object, type)
+        checks += object.signatures.length
+        lchAssert(
+          checks <= LCH_OVERLAY_LIMITS.signatureChecks,
+          'ERR_LCH_SIGNATURE',
+          'Acquisition signature budget exceeded'
+        )
+        const ordered = type + '\0' + toHex(await objectId(type, object.body))
+        lchAssert(
+          ordered > previous,
+          'ERR_LCH_CBOR',
+          'Typed evidence must be sorted and unique by domain and body ID'
+        )
+        previous = ordered
+        evidence.push({ type, object })
+      }),
+    Promise.resolve()
+  )
   const settlement = bytes(value.settlement, 'Settlement')
   decodeLCHOverlayJSON(settlement)
   const result: UnverifiedLCHOverlayContext = { version: 1, license, evidence, settlement }

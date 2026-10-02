@@ -213,7 +213,11 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
           return
         }
         if (failure !== null && failure !== undefined) {
-          reject(failure)
+          reject(
+            failure instanceof Error
+              ? failure
+              : new Error('Protected object transaction failed', { cause: failure })
+          )
           return
         }
         reject(
@@ -324,12 +328,16 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
     )
     const slots = this.cipher.plan.slots({ ...header, receipt: null }),
       values: OutputJSONObject[] = []
-    for await (const [index, slot] of slots.entries()) {
-      values.push(
-        await this.cipher.open(raw.rows[index + 1], slot.key, revision, slot.reservedBytes)
-      )
-      this.current()
-    }
+    await Array.from(slots.entries()).reduce(
+      (sequence, [index, slot]) =>
+        sequence.then(async () => {
+          values.push(
+            await this.cipher.open(raw.rows[index + 1], slot.key, revision, slot.reservedBytes)
+          )
+          this.current()
+        }),
+      Promise.resolve()
+    )
     return { ...raw, inventory, header, bytes: this.cipher.plan.restore(header, values) }
   }
   private async commit(
@@ -348,10 +356,14 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
       )
     ]
     this.current()
-    for await (const slot of this.cipher.plan.slots(completed, bytes)) {
-      rows.push(await this.cipher.seal(slot.key, revision, slot.value, slot.reservedBytes))
-      this.current()
-    }
+    await Array.from(this.cipher.plan.slots(completed, bytes)).reduce(
+      (sequence, slot) =>
+        sequence.then(async () => {
+          rows.push(await this.cipher.seal(slot.key, revision, slot.value, slot.reservedBytes))
+          this.current()
+        }),
+      Promise.resolve()
+    )
     const entries = before.inventory.entries.filter(entry => entry.id !== completed.id)
     entries.push({
       id: completed.id,

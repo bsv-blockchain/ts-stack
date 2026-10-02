@@ -10,11 +10,7 @@ export interface PrivateAcquisitionHTTPCaller {
   signal: AbortSignal
 }
 export interface PrivateAcquisitionHTTPService {
-  acquire(
-    input: unknown,
-    payment: unknown | undefined,
-    caller: PrivateAcquisitionHTTPCaller
-  ): Promise<string>
+  acquire(input: unknown, payment: unknown, caller: PrivateAcquisitionHTTPCaller): Promise<string>
   recover(acquisitionId: string, caller: PrivateAcquisitionHTTPCaller): Promise<string>
 }
 export interface PrivateAcquisitionHTTPPrepared {

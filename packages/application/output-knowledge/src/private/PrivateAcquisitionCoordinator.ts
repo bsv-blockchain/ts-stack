@@ -125,7 +125,7 @@ export class PrivateAcquisitionCoordinator {
   }
   acquire(
     input: unknown,
-    paymentInput: unknown | undefined,
+    paymentInput: unknown,
     caller: PrivateAcquisitionCaller
   ): Promise<string> {
     const trusted = this.caller(caller),
@@ -287,22 +287,28 @@ export class PrivateAcquisitionCoordinator {
     caller: PrivateAcquisitionCaller,
     signal: AbortSignal
   ): Promise<void> {
-    for await (const _attempt of Array.from({ length: 8 }, (_, index) => index)) {
-      const loaded = this.load(id, caller, signal),
-        guard = this.guard(id, caller, signal, loaded.original)
-      try {
-        if (await this.advanceOne(loaded, caller, signal, guard)) return
-      } catch (error) {
-        this.requireCurrent(caller, signal)
-        if (
-          error instanceof OutputProtocolError &&
-          error.code === 'conflict' &&
-          this.load(id, caller, signal).row.revision !== loaded.row.revision
-        )
-          continue
-        throw error
-      }
-    }
+    await Array.from({ length: 8 }, (_, index) => index).reduce(
+      (previous, _attempt) =>
+        previous.then(async stopped => {
+          if (stopped) return true
+          const loaded = this.load(id, caller, signal),
+            guard = this.guard(id, caller, signal, loaded.original)
+          try {
+            if (await this.advanceOne(loaded, caller, signal, guard)) return true
+          } catch (error) {
+            this.requireCurrent(caller, signal)
+            if (
+              error instanceof OutputProtocolError &&
+              error.code === 'conflict' &&
+              this.load(id, caller, signal).row.revision !== loaded.row.revision
+            )
+              return false
+            throw error
+          }
+          return false
+        }),
+      Promise.resolve(false)
+    )
   }
   /** Serial phases preserve the original payment/credit obligation and stop on
    * unknown outcomes. Each physical await is followed by current-owner checks.

@@ -223,8 +223,13 @@ export class PrivateLookupBuyer {
   }
   static async initialize(options: PrivateLookupBuyerOptions): Promise<PrivateLookupBuyer> {
     const buyer = new PrivateLookupBuyer(options)
-    for await (const role of Object.keys(buyer.sizes) as Role[])
-      await options.objects.reserve(buyer.id(role), buyer.role(role), buyer.sizes[role])
+    await Array.from(Object.keys(buyer.sizes) as Role[]).reduce(
+      (sequence, role) =>
+        sequence.then(async () => {
+          await options.objects.reserve(buyer.id(role), buyer.role(role), buyer.sizes[role])
+        }),
+      Promise.resolve()
+    )
     await buyer.put('request', buyer.request)
     await buyer.put('contract', buyer.contract)
     const saved = await options.state.read()
@@ -250,17 +255,21 @@ export class PrivateLookupBuyer {
   }
   private async initialized(): Promise<void> {
     await this.load()
-    for await (const role of Object.keys(this.sizes) as Role[]) {
-      const saved = await this.ports.objects.read(this.id(role), this.role(role))
-      outputAssert(
-        saved.state !== 'absent' &&
-          (saved.state === 'stored'
-            ? saved.receipt.maximumBytes
-            : saved.reservation.maximumBytes) === this.sizes[role],
-        'Buyer original reservation is missing',
-        'unavailable'
-      )
-    }
+    await Array.from(Object.keys(this.sizes) as Role[]).reduce(
+      (sequence, role) =>
+        sequence.then(async () => {
+          const saved = await this.ports.objects.read(this.id(role), this.role(role))
+          outputAssert(
+            saved.state !== 'absent' &&
+              (saved.state === 'stored'
+                ? saved.receipt.maximumBytes
+                : saved.reservation.maximumBytes) === this.sizes[role],
+            'Buyer original reservation is missing',
+            'unavailable'
+          )
+        }),
+      Promise.resolve()
+    )
     outputAssert(
       canonicalOutputJSON(await this.get('request')) === canonicalOutputJSON(this.request) &&
         canonicalOutputJSON(await this.get('contract')) === canonicalOutputJSON(this.contract),

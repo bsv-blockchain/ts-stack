@@ -31,73 +31,84 @@ const clock = () => now,
   buyer = job.original.challenge.buyer
 let value = store.quote(job.original, 'AQID', clock, guard)
 const phases = ['quoted', 'pinned', 'funding-pending', 'funded', 'delivery-pending', 'delivered']
-for await (const phase of phases) {
-  if (phase === 'pinned') {
-    now = '30'
-    value = store.advance(
-      id,
-      buyer,
-      value.row.revision,
-      { type: 'pin', payment: job.payment },
-      clock,
-      guard
-    )
-  }
-  if (phase === 'funding-pending') {
-    now = '31'
-    value = store.advance(
-      id,
-      buyer,
-      value.row.revision,
-      {
-        type: 'reserve-funding',
-        candidateDigest: value.state.progress.candidate.digest,
-        sellerPaymentKey: job.sellerPaymentKey,
-        acceptance: job.acceptance
-      },
-      clock,
-      guard
-    )
-  }
-  if (phase === 'funded') {
-    now = '32'
-    const operation = value.state.progress.funding.operation
-    value = store.advance(
-      id,
-      buyer,
-      value.row.revision,
-      {
-        type: 'wallet-accepted',
-        receipt: {
-          operationId: operation.id,
-          funding: operation.funding,
-          seller: operation.seller,
-          satoshis: operation.satoshis,
-          evidence: { nativeReceipt: 'fixture-only' }
-        }
-      },
-      clock,
-      guard
-    )
-  }
-  if (phase === 'delivery-pending') {
-    now = '33'
-    value = store.advance(id, buyer, value.row.revision, { type: 'prepare-delivery' }, clock, guard)
-  }
-  if (phase === 'delivered') {
-    now = '34'
-    value = store.complete(id, buyer, value.row.revision, 'BAUG', clock, guard)
-  }
-  if (phase === job.phase) {
-    process.send({
-      phase,
-      revision: value.revision,
-      recordRevision: value.row.revision,
-      state: value.state
-    })
-    await new Promise(() => {
-      setInterval(() => {}, 1000)
-    })
-  }
-}
+await Array.from(phases).reduce(
+  (sequence, phase) =>
+    sequence.then(async () => {
+      if (phase === 'pinned') {
+        now = '30'
+        value = store.advance(
+          id,
+          buyer,
+          value.row.revision,
+          { type: 'pin', payment: job.payment },
+          clock,
+          guard
+        )
+      }
+      if (phase === 'funding-pending') {
+        now = '31'
+        value = store.advance(
+          id,
+          buyer,
+          value.row.revision,
+          {
+            type: 'reserve-funding',
+            candidateDigest: value.state.progress.candidate.digest,
+            sellerPaymentKey: job.sellerPaymentKey,
+            acceptance: job.acceptance
+          },
+          clock,
+          guard
+        )
+      }
+      if (phase === 'funded') {
+        now = '32'
+        const operation = value.state.progress.funding.operation
+        value = store.advance(
+          id,
+          buyer,
+          value.row.revision,
+          {
+            type: 'wallet-accepted',
+            receipt: {
+              operationId: operation.id,
+              funding: operation.funding,
+              seller: operation.seller,
+              satoshis: operation.satoshis,
+              evidence: { nativeReceipt: 'fixture-only' }
+            }
+          },
+          clock,
+          guard
+        )
+      }
+      if (phase === 'delivery-pending') {
+        now = '33'
+        value = store.advance(
+          id,
+          buyer,
+          value.row.revision,
+          { type: 'prepare-delivery' },
+          clock,
+          guard
+        )
+      }
+      if (phase === 'delivered') {
+        now = '34'
+        value = store.complete(id, buyer, value.row.revision, 'BAUG', clock, guard)
+      }
+      if (phase === job.phase) {
+        process.send({
+          phase,
+          revision: value.revision,
+          recordRevision: value.row.revision,
+          state: value.state
+        })
+        await new Promise(() => {
+          setInterval(() => {}, 1000)
+        })
+      }
+    }),
+  Promise.resolve()
+)
 throw new Error('Unknown process fixture phase')

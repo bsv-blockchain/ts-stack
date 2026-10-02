@@ -2752,3 +2752,43 @@ contracts, tests, release notes and maintenance baseline. The sole generated API
 migration conflict is rebuilt from the combined manifest/release registry instead
 of choosing one branch's text. All four mandatory root gates and the clean packed LCH/CLI/browser checks pass.
 Exact-head hosted quality and full mutation remain required.
+
+### October 2 serial work and exact JSON fences
+
+Published ca935dc98418d7f9ad7e28143ad5fd2fed9df17b passes conformance,
+container validation and CodeQL. Sonar reports 34 remaining source findings;
+its zero-new gate fails. Host coverage still times out in the complete 300-case
+private-publication signing property under its existing 90-second deadline,
+even with serial execution. Neither result is a completed checkpoint.
+
+The next batch replaces synchronous-collection `for await` loops with explicit
+serial Promise chains. Each original validation, physical await and current-owner
+check remains. Acquisition CAS conflicts continue at the next bounded attempt;
+unknown money outcomes still stop progression. Both reconciliation workers use
+a genuinely asynchronous, abortable timer iterator that starts the next delay
+only after the prior pass drains. No queued interval ticks accumulate.
+
+Browser transaction aborts preserve the original local Error and retain a
+foreign-realm Error as the cause of a local rejection. Twenty object-store cases
+pass, including whole-transaction rollback, absence of a phantom reservation and
+subsequent retry. Complete native buyer/coordination/object property and boundary
+qualification passes 70 tests in five suites (192.051 seconds), with every
+300-case history retained. The native process, wallet and recovery regression
+union passes 112 tests in ten suites. The complete LCH union still passes 201
+tests in 26 suites. Actual packed Chrome qualification passes strict CSP,
+native IndexedDB, page/browser restart, cross-tab CAS and protected immutable
+four-MiB custody after the serial-work changes.
+
+A CPU profile of the full private-publication property identifies repeated
+canonical JSON checks and UTF-8 array allocations as major work. The SDK JSON
+implementation now avoids allocating encoded arrays for printable ASCII chunks
+and detects lone surrogates with a Unicode-mode range: a valid surrogate pair is
+one code point outside that range. The wire bytes, exact UTF-8 limits, duplicate
+key checks, own-data restrictions and signature verification remain unchanged.
+Additional independent TextEncoder-oracle properties cover scalar boundaries
+and escaped controls; all 2,048 lone high/low surrogate code units are refused,
+while valid boundary pairs remain accepted. The complete local host coverage
+campaign passes 46 suites/863 tests in 139.252 seconds, preserving the original
+90-second publication property deadline. Exact-head hosted qualification must
+still verify this batch. No deadline, source union, case floor, coverage threshold
+or mutation requirement is changed.

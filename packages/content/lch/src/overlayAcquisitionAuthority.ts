@@ -54,38 +54,47 @@ export async function validateLCHOverlayAuthoritySelection(
     'ERR_LCH_AUTHORITY',
     'Asset interests are absent'
   )
-  for await (const path of paths) {
-    lchAssert(
-      path.actor instanceof Uint8Array &&
-        isCompressedPublicKey(path.actor) &&
-        path.controller instanceof Uint8Array &&
-        isCompressedPublicKey(path.controller) &&
-        toHex(path.controller) !== toHex(path.actor) &&
-        Array.isArray(path.chain) &&
-        path.chain.length > 0 &&
-        path.chain.length <= 16 &&
-        roles.has(path.capability) &&
-        interests.includes(path.interest) &&
-        rights.some(value => {
-          const right = snapshotLCHRecord(value, 'Rights interest')
-          return (
-            right.interest === path.interest &&
-            right.controller instanceof Uint8Array &&
-            toHex(right.controller) === toHex(path.controller)
-          )
-        }),
-      'ERR_LCH_AUTHORITY',
-      'Selected authority path is outside the required Asset roles'
-    )
-    await validateLCHOverlayAuthority(terms, path.actor, path.capability, paths, {
-      now,
-      network,
-      verifier,
-      revocationSource
-    })
-    for await (const authority of path.chain)
-      ids.add(toHex(await objectId('authority', authority.body)))
-  }
+  await Array.from(paths).reduce(
+    (sequence, path) =>
+      sequence.then(async () => {
+        lchAssert(
+          path.actor instanceof Uint8Array &&
+            isCompressedPublicKey(path.actor) &&
+            path.controller instanceof Uint8Array &&
+            isCompressedPublicKey(path.controller) &&
+            toHex(path.controller) !== toHex(path.actor) &&
+            Array.isArray(path.chain) &&
+            path.chain.length > 0 &&
+            path.chain.length <= 16 &&
+            roles.has(path.capability) &&
+            interests.includes(path.interest) &&
+            rights.some(value => {
+              const right = snapshotLCHRecord(value, 'Rights interest')
+              return (
+                right.interest === path.interest &&
+                right.controller instanceof Uint8Array &&
+                toHex(right.controller) === toHex(path.controller)
+              )
+            }),
+          'ERR_LCH_AUTHORITY',
+          'Selected authority path is outside the required Asset roles'
+        )
+        await validateLCHOverlayAuthority(terms, path.actor, path.capability, paths, {
+          now,
+          network,
+          verifier,
+          revocationSource
+        })
+        await Array.from(path.chain).reduce(
+          (sequence, authority) =>
+            sequence.then(async () => {
+              ids.add(toHex(await objectId('authority', authority.body)))
+            }),
+          Promise.resolve()
+        )
+      }),
+    Promise.resolve()
+  )
   const referenced = terms.offer.body.authorityIds
   lchAssert(
     referenced === undefined ||
@@ -137,56 +146,64 @@ export async function validateLCHOverlayAuthority(
     'ERR_LCH_AUTHORITY',
     'Asset interests are absent'
   )
-  for await (const interest of interests) {
-    lchAssert(typeof interest === 'string', 'ERR_LCH_AUTHORITY', 'Invalid required interest')
-    const controllers = rights
-      .map(value => snapshotLCHRecord(value, 'Rights interest'))
-      .filter(value => value.interest === interest)
-    lchAssert(
-      controllers.length > 0,
-      'ERR_LCH_AUTHORITY',
-      'Required interest has no Asset controller'
-    )
-    for await (const right of controllers) {
-      lchAssert(
-        right.controller instanceof Uint8Array,
-        'ERR_LCH_AUTHORITY',
-        'Rights controller is invalid'
-      )
-      if (toHex(right.controller) === toHex(actor)) continue
-      const selected = owned.filter(
-        path =>
-          path.interest === interest &&
-          path.capability === capability &&
-          toHex(path.actor) === toHex(actor) &&
-          toHex(path.controller) === toHex(right.controller as Uint8Array)
-      )
-      lchAssert(
-        selected.length === 1,
-        'ERR_LCH_AUTHORITY',
-        'Authority path is missing or ambiguous'
-      )
-      await validateAuthorityChain(
-        selected[0].chain as unknown as ReadonlyArray<{
-          body: AuthorityBody
-          signatures: Uint8Array[]
-        }>,
-        {
-          controller: right.controller,
-          actor,
-          assetId: terms.inspected.assetId,
-          interest,
-          capability,
-          policyAction: terms.policy.action,
-          usageProfile: terms.offer.body.usageProfile as string,
-          now,
-          network
-        },
-        verifier,
-        revocationSource
-      )
-    }
-  }
+  await Array.from(interests).reduce(
+    (sequence, interest) =>
+      sequence.then(async () => {
+        lchAssert(typeof interest === 'string', 'ERR_LCH_AUTHORITY', 'Invalid required interest')
+        const controllers = rights
+          .map(value => snapshotLCHRecord(value, 'Rights interest'))
+          .filter(value => value.interest === interest)
+        lchAssert(
+          controllers.length > 0,
+          'ERR_LCH_AUTHORITY',
+          'Required interest has no Asset controller'
+        )
+        await Array.from(controllers).reduce(
+          (sequence, right) =>
+            sequence.then(async () => {
+              lchAssert(
+                right.controller instanceof Uint8Array,
+                'ERR_LCH_AUTHORITY',
+                'Rights controller is invalid'
+              )
+              if (toHex(right.controller) === toHex(actor)) return
+              const selected = owned.filter(
+                path =>
+                  path.interest === interest &&
+                  path.capability === capability &&
+                  toHex(path.actor) === toHex(actor) &&
+                  toHex(path.controller) === toHex(right.controller as Uint8Array)
+              )
+              lchAssert(
+                selected.length === 1,
+                'ERR_LCH_AUTHORITY',
+                'Authority path is missing or ambiguous'
+              )
+              await validateAuthorityChain(
+                selected[0].chain as unknown as ReadonlyArray<{
+                  body: AuthorityBody
+                  signatures: Uint8Array[]
+                }>,
+                {
+                  controller: right.controller,
+                  actor,
+                  assetId: terms.inspected.assetId,
+                  interest,
+                  capability,
+                  policyAction: terms.policy.action,
+                  usageProfile: terms.offer.body.usageProfile as string,
+                  now,
+                  network
+                },
+                verifier,
+                revocationSource
+              )
+            }),
+          Promise.resolve()
+        )
+      }),
+    Promise.resolve()
+  )
 }
 
 export async function validateLCHOverlayPaidRoles(
@@ -207,15 +224,20 @@ export async function validateLCHOverlayPaidRoles(
   const issuer = terms.offer.body.licenseIssuer
   lchAssert(issuer instanceof Uint8Array, 'ERR_LCH_AUTHORITY', 'License issuer is invalid')
   await validateLCHOverlayAuthoritySelection(terms, paths, now, network, verifier, revocationSource)
-  for await (const role of [
+  await Array.from([
     { actor: terms.binding.seller, capability: LCH_IRI + '#issueOffer' },
     { actor: terms.binding.seller, capability: LCH_IRI + '#receivePayment' },
     { actor: issuer, capability: LCH_IRI + '#issueLicense' }
-  ])
-    await validateLCHOverlayAuthority(terms, role.actor, role.capability, paths, {
-      now,
-      network,
-      verifier,
-      revocationSource
-    })
+  ]).reduce(
+    (sequence, role) =>
+      sequence.then(async () => {
+        await validateLCHOverlayAuthority(terms, role.actor, role.capability, paths, {
+          now,
+          network,
+          verifier,
+          revocationSource
+        })
+      }),
+    Promise.resolve()
+  )
 }

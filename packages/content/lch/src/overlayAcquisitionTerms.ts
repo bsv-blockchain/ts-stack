@@ -309,14 +309,18 @@ export async function validateLCHOverlayPaidTerms(
     'ERR_LCH_TERMS',
     'Human terms consent differs'
   )
-  for await (const term of human) {
-    const ref = await validatePolicyReference(term, { mediaType: undefined })
-    lchAssert(
-      accepted.some(value => value instanceof Uint8Array && toHex(value) === toHex(ref.digest)),
-      'ERR_LCH_TERMS',
-      'A human term was not accepted'
-    )
-  }
+  await Array.from(human).reduce(
+    (sequence, term) =>
+      sequence.then(async () => {
+        const ref = await validatePolicyReference(term, { mediaType: undefined })
+        lchAssert(
+          accepted.some(value => value instanceof Uint8Array && toHex(value) === toHex(ref.digest)),
+          'ERR_LCH_TERMS',
+          'A human term was not accepted'
+        )
+      }),
+    Promise.resolve()
+  )
   const selected = map(request.body.selection, 'Request Selection')
   closed(selected, ['type'])
   lchAssert(

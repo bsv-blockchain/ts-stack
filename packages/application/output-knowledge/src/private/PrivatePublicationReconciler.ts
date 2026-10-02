@@ -43,23 +43,31 @@ export class PrivatePublicationReconciler {
     try {
       const page = this.coordinator.scanWork(this.next, this.maximum, current)
       const outcomes: { publicationId: string; status: string }[] = []
-      for await (const candidate of page.entries) {
-        outputAssert(!current.aborted, 'Private publication reconciliation cancelled', 'cancelled')
-        try {
-          const result = await this.coordinator.reconcile(candidate.publicationId, current)
-          outcomes.push({
-            publicationId: candidate.publicationId,
-            status: result?.status ?? 'no-pending-work'
-          })
-        } catch (error) {
-          if (current.aborted) throw error
-          // No private reason or payload is emitted to scheduler diagnostics.
-          outcomes.push({
-            publicationId: candidate.publicationId,
-            status: error instanceof OutputProtocolError ? error.code : 'unavailable'
-          })
-        }
-      }
+      await Array.from(page.entries).reduce(
+        (sequence, candidate) =>
+          sequence.then(async () => {
+            outputAssert(
+              !current.aborted,
+              'Private publication reconciliation cancelled',
+              'cancelled'
+            )
+            try {
+              const result = await this.coordinator.reconcile(candidate.publicationId, current)
+              outcomes.push({
+                publicationId: candidate.publicationId,
+                status: result?.status ?? 'no-pending-work'
+              })
+            } catch (error) {
+              if (current.aborted) throw error
+              // No private reason or payload is emitted to scheduler diagnostics.
+              outcomes.push({
+                publicationId: candidate.publicationId,
+                status: error instanceof OutputProtocolError ? error.code : 'unavailable'
+              })
+            }
+          }),
+        Promise.resolve()
+      )
       this.next = page.next
       return { outcomes, blocked: page.blocked, wrapped: this.next === null }
     } finally {
@@ -87,7 +95,7 @@ export class PrivatePublicationReconciler {
     this.started = true
     const done = (async () => {
       try {
-        for await (const pass of activePasses(this.stopSignal.signal)) {
+        for await (const pass of activePasses(this.stopSignal.signal, intervalMs)) {
           if (pass.aborted) break
           const result: unknown = report(await this.runOnce())
           if (result instanceof Promise) void result.catch(() => undefined)
@@ -95,7 +103,6 @@ export class PrivatePublicationReconciler {
             result === undefined,
             'Publication reconciliation observer must finish synchronously'
           )
-          if (!pass.aborted) await delay(intervalMs, pass)
         }
       } catch (error) {
         if (!this.stopSignal.signal.aborted) throw error
@@ -132,6 +139,10 @@ function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {
   return () => owner[key] === original
 }
 
-function* activePasses(signal: AbortSignal): Generator<AbortSignal> {
-  while (!signal.aborted) yield signal
+async function* activePasses(signal: AbortSignal, intervalMs: number): AsyncGenerator<AbortSignal> {
+  if (signal.aborted) return
+  yield signal
+  // Each next() starts one abortable delay after the prior physical pass drains.
+  // An async generator awaits the yielded Promise; no interval ticks accumulate.
+  while (!signal.aborted) yield delay(intervalMs, signal).then(() => signal)
 }

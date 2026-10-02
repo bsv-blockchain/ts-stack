@@ -23,7 +23,13 @@ import { custody } from './protected-operation-object.fixture.js'
 import { acquisitionRecordFixture } from './private-acquisition-records.fixture.js'
 const cleanup = new Set<() => Promise<void>>()
 afterEach(async () => {
-  for await (const close of cleanup) await close()
+  await Array.from(cleanup).reduce(
+    (sequence, close) =>
+      sequence.then(async () => {
+        await close()
+      }),
+    Promise.resolve()
+  )
   cleanup.clear()
 })
 export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions> = {}) {
@@ -152,11 +158,21 @@ export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions>
     return { buyer, ports, state, objects }
   }
   const dispose = async () => {
-    for await (const buyer of buyers) await buyer.stop()
-    for await (const owner of stores) {
-      await owner.state.close()
-      await owner.objects.close()
-    }
+    await Array.from(buyers).reduce(
+      (sequence, buyer) =>
+        sequence.then(async () => {
+          await buyer.stop()
+        }),
+      Promise.resolve()
+    )
+    await Array.from(stores).reduce(
+      (sequence, owner) =>
+        sequence.then(async () => {
+          await owner.state.close()
+          await owner.objects.close()
+        }),
+      Promise.resolve()
+    )
     rmSync(directory, { recursive: true, force: true })
     cleanup.delete(dispose)
   }

@@ -43,11 +43,9 @@ function limitsFor(limits: Partial<OutputJSONLimits>): OutputJSONLimits {
 }
 
 function wellFormed(value: string): void {
-  // Check UTF-16 before TextEncoder can silently replace a lone surrogate.
-  for (const character of value) {
-    const point = character.codePointAt(0)!
-    outputAssert(point < 0xd800 || point > 0xdfff, 'Unpaired JSON surrogate')
-  }
+  // In Unicode mode a valid pair is one code point outside this range. Only
+  // lone UTF-16 surrogates match; reject them before TextEncoder replaces them.
+  outputAssert(!/[\uD800-\uDFFF]/u.test(value), 'Unpaired JSON surrogate')
 }
 
 /**
@@ -201,7 +199,9 @@ export function canonicalOutputJSON(
   let bytes = 0
   function emit(chunk: string): void {
     outputAssert(chunk.length <= bounds.bytes, 'Output JSON byte limit', 'limited')
-    bytes += encoder.encode(chunk).length
+    // JSON punctuation and escaped ASCII strings have one byte per code unit.
+    // Avoid allocating an encoded array for every delimiter and ASCII field.
+    bytes += /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
     outputAssert(bytes <= bounds.bytes, 'Output JSON byte limit', 'limited')
     chunks.push(chunk)
   }

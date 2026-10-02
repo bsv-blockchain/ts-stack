@@ -566,7 +566,7 @@ export class LCHOverlayPaidDomain {
       await validatePolicyReference(body.agreement)
     )
     if (!locallyVerified)
-      for await (const role of [
+      await Array.from([
         { actor: terms.binding.seller, capability: LCH_IRI + '#issueOffer', at: this.selectedAt },
         {
           actor: terms.binding.seller,
@@ -578,13 +578,18 @@ export class LCHOverlayPaidDomain {
           capability: LCH_IRI + '#issueLicense',
           at: integer(body.issuedAt).toString()
         }
-      ])
-        await validateLCHOverlayAuthority(terms, role.actor, role.capability, paths, {
-          now: outputU64(role.at),
-          network: this.ports.authorityNetwork,
-          verifier,
-          revocationSource: this.ports.revocations?.at(role.at)
-        })
+      ]).reduce(
+        (sequence, role) =>
+          sequence.then(async () => {
+            await validateLCHOverlayAuthority(terms, role.actor, role.capability, paths, {
+              now: outputU64(role.at),
+              network: this.ports.authorityNetwork,
+              verifier,
+              revocationSource: this.ports.revocations?.at(role.at)
+            })
+          }),
+        Promise.resolve()
+      )
     const grants = body.keyGrants
     lchAssert(Array.isArray(grants), 'ERR_LCH_KEY', 'License key grants are absent')
     const typed: KeyGrant[] = grants.map(value => {
@@ -603,25 +608,29 @@ export class LCHOverlayPaidDomain {
     })
     validateKeyGrantsForSelection(terms.encryption, { type: 'all' }, typed)
     const keys = new Map<string, Uint8Array>()
-    for await (const grant of typed) {
-      const sender = grant.payload.slice(4, 37)
-      if (!locallyVerified && toHex(sender) !== toHex(issuer))
-        await validateLCHOverlayAuthority(terms, sender, LCH_IRI + '#releaseKey', paths, {
-          now: integer(body.issuedAt),
-          network: this.ports.authorityNetwork,
-          verifier,
-          revocationSource: this.ports.revocations?.at(integer(body.issuedAt).toString())
-        })
-      const recovered = await this.keyDelivery.recover(grant.payload)
-      this.current(signal)
-      lchAssert(
-        toHex(recovered.keyId) === toHex(grant.keyId) &&
-          toHex(grant.payload.slice(37, 70)) === terms.policy.buyer,
-        'ERR_LCH_KEY',
-        'Key grant commitment or recipient differs'
-      )
-      keys.set(toHex(recovered.keyId), recovered.cek)
-    }
+    await Array.from(typed).reduce(
+      (sequence, grant) =>
+        sequence.then(async () => {
+          const sender = grant.payload.slice(4, 37)
+          if (!locallyVerified && toHex(sender) !== toHex(issuer))
+            await validateLCHOverlayAuthority(terms, sender, LCH_IRI + '#releaseKey', paths, {
+              now: integer(body.issuedAt),
+              network: this.ports.authorityNetwork,
+              verifier,
+              revocationSource: this.ports.revocations?.at(integer(body.issuedAt).toString())
+            })
+          const recovered = await this.keyDelivery.recover(grant.payload)
+          this.current(signal)
+          lchAssert(
+            toHex(recovered.keyId) === toHex(grant.keyId) &&
+              toHex(grant.payload.slice(37, 70)) === terms.policy.buyer,
+            'ERR_LCH_KEY',
+            'Key grant commitment or recipient differs'
+          )
+          keys.set(toHex(recovered.keyId), recovered.cek)
+        }),
+      Promise.resolve()
+    )
     return keys
   }
   private async typedEvidence(
@@ -633,31 +642,48 @@ export class LCHOverlayPaidDomain {
     const expected = new Map<string, SignedObject>(),
       offerKey = 'offer:' + toHex(await objectId('offer', terms.offer.body))
     expected.set(offerKey, terms.offer)
-    for await (const path of paths)
-      for await (const authority of path.chain)
-        expected.set('authority:' + toHex(await objectId('authority', authority.body)), authority)
+    await Array.from(paths).reduce(
+      (sequence, path) =>
+        sequence.then(async () => {
+          await Array.from(path.chain).reduce(
+            (sequence, authority) =>
+              sequence.then(async () => {
+                expected.set(
+                  'authority:' + toHex(await objectId('authority', authority.body)),
+                  authority
+                )
+              }),
+            Promise.resolve()
+          )
+        }),
+      Promise.resolve()
+    )
     const seen = new Set<string>()
-    for await (const entry of context.evidence) {
-      lchAssert(
-        entry.type === 'offer' || entry.type === 'authority',
-        'ERR_LCH_PROFILE_UNSUPPORTED',
-        'This direct paid profile does not use multilateral evidence'
-      )
-      const key = entry.type + ':' + toHex(await objectId(entry.type, entry.object.body)),
-        original = expected.get(key)
-      lchAssert(
-        original !== undefined && equal(original.body, entry.object.body),
-        'ERR_LCH_AUTHORITY',
-        'Context evidence was not part of the original accepted terms'
-      )
-      const signer = entry.type === 'offer' ? terms.binding.seller : entry.object.body.grantor
-      lchAssert(signer instanceof Uint8Array, 'ERR_LCH_AUTHORITY', 'Evidence signer is missing')
-      await verifySignedObject(entry.type, entry.object, verifier, signer, {
-        supportedCriticalIdentifiers:
-          entry.type === 'offer' ? new Set(LCH_OVERLAY_PAID_MECHANISMS) : new Set()
-      })
-      seen.add(key)
-    }
+    await Array.from(context.evidence).reduce(
+      (sequence, entry) =>
+        sequence.then(async () => {
+          lchAssert(
+            entry.type === 'offer' || entry.type === 'authority',
+            'ERR_LCH_PROFILE_UNSUPPORTED',
+            'This direct paid profile does not use multilateral evidence'
+          )
+          const key = entry.type + ':' + toHex(await objectId(entry.type, entry.object.body)),
+            original = expected.get(key)
+          lchAssert(
+            original !== undefined && equal(original.body, entry.object.body),
+            'ERR_LCH_AUTHORITY',
+            'Context evidence was not part of the original accepted terms'
+          )
+          const signer = entry.type === 'offer' ? terms.binding.seller : entry.object.body.grantor
+          lchAssert(signer instanceof Uint8Array, 'ERR_LCH_AUTHORITY', 'Evidence signer is missing')
+          await verifySignedObject(entry.type, entry.object, verifier, signer, {
+            supportedCriticalIdentifiers:
+              entry.type === 'offer' ? new Set(LCH_OVERLAY_PAID_MECHANISMS) : new Set()
+          })
+          seen.add(key)
+        }),
+      Promise.resolve()
+    )
     lchAssert(
       expected.size === seen.size && [...expected.keys()].every(key => seen.has(key)),
       'ERR_LCH_AUTHORITY',

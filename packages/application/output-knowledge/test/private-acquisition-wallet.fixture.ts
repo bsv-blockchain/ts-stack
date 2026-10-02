@@ -47,7 +47,13 @@ const openKnex = installedWallet('knex') as (config: {
 export { genesisHeader }
 const cleanup = new Set<() => Promise<void>>()
 afterEach(async () => {
-  for await (const close of cleanup) await close()
+  await Array.from(cleanup).reduce(
+    (sequence, close) =>
+      sequence.then(async () => {
+        await close()
+      }),
+    Promise.resolve()
+  )
   cleanup.clear()
 })
 /** Fresh disposable native wallet with explicitly installed synthetic-chain evidence. */
@@ -110,7 +116,13 @@ export async function acquisitionNativeWalletFixture(
     return { active, wallet, controller, identities, bridge, close }
   }
   const close = async () => {
-    for await (const closeWallet of opened) await closeWallet()
+    await Array.from(opened).reduce(
+      (sequence, closeWallet) =>
+        sequence.then(async () => {
+          await closeWallet()
+        }),
+      Promise.resolve()
+    )
     rmSync(directory, { recursive: true, force: true })
     cleanup.delete(close)
   }

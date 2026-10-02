@@ -1,4 +1,5 @@
 import { afterEach, expect, jest, test } from '@jest/globals'
+import { runInNewContext } from 'node:vm'
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { PrivateKey, type OutputJSONObject } from '@bsv/sdk'
 import { IndexedDBProtectedOperationObjectStore } from '../src/operations/IndexedDBProtectedOperationObjectStore.js'
@@ -226,6 +227,31 @@ test('browser quota failure aborts the whole reservation and never manufactures 
   expect((await f.store.read(id, binding)).state).toBe('reserved')
   expect(await f.store.put(id, binding, new Uint8Array([1]))).toMatchObject({ bytes: 1 })
 })
+test.each(['native', 'foreign-realm'] as const)(
+  'retains the %s abort reason while refusing a phantom object after a request error',
+  async kind => {
+    const f = await fixture(),
+      reason: Error =
+        kind === 'native'
+          ? new Error('Synthetic request failure')
+          : runInNewContext('new Error("Synthetic foreign-realm request failure")')
+    // A storage provider can throw an Error from another execution realm.
+    // The local rejection remains an Error and retains that original as cause.
+    jest.spyOn(IDBObjectStore.prototype, 'add').mockImplementationOnce(() => {
+      throw reason
+    })
+    const failed = f.store.reserve(id, binding, 100)
+    if (kind === 'native') await expect(failed).rejects.toBe(reason)
+    else
+      await expect(failed).rejects.toMatchObject({
+        message: 'Protected object transaction failed',
+        cause: reason
+      })
+    expect(await f.store.read(id, binding)).toEqual({ state: 'absent' })
+    await f.store.reserve(id, binding, 100)
+    expect((await f.store.read(id, binding)).state).toBe('reserved')
+  }
+)
 test('close prevents further writes while allowing recovery using another connection', async () => {
   const f = await fixture()
   await f.store.reserve(id, binding, 100)

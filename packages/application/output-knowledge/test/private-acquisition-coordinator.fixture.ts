@@ -36,7 +36,13 @@ import {
 
 const cleanup = new Set<PrivateAcquisitionCoordinator>()
 afterEach(async () => {
-  for await (const coordinator of cleanup) await coordinator.stop()
+  await Array.from(cleanup).reduce(
+    (sequence, coordinator) =>
+      sequence.then(async () => {
+        await coordinator.stop()
+      }),
+    Promise.resolve()
+  )
   cleanup.clear()
 })
 export async function acquisitionCoordinatorFixture(
