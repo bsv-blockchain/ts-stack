@@ -14,7 +14,7 @@ import { DBType } from '../../../../storage/StorageReader'
 import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
 import { HeightRange } from '../util/HeightRange'
 import { Chain } from '../../../../sdk/types'
-import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
+import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED } from '../../../../sdk/WERR_errors'
 import { determineDBType } from '../../../../storage/schema/KnexMigrations'
 import { normalizeBulkHeaderFileInfo, normalizeBulkHeaderFileSequence } from '../util/BulkFileDataManager'
 
@@ -94,6 +94,9 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     }
     if (!this.isAvailable) {
       this._dbtype = await determineDBType(this.knex)
+      // Chaintracks storage supports SQLite and MySQL only.
+      if (this._dbtype === 'Postgres')
+        throw new WERR_NOT_IMPLEMENTED('ChaintracksStorageKnex does not support Postgres.')
       await super.makeAvailable()
       // Connect the bulk data file manager to the table provided by this storage class.
       await this.bulkManager.setStorage(this, this.log)

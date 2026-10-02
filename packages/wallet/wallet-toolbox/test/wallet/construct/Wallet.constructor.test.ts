@@ -18,6 +18,15 @@ describe('Wallet constructor tests', () => {
         })
       )
     }
+    if (env.runPostgres) {
+      ctxs.push(
+        await _tu.createPostgresTestSetup1Wallet({
+          databaseName: 'walletConstruct',
+          chain,
+          rootKeyHex: '1'.repeat(64)
+        })
+      )
+    }
     ctxs.push(
       await _tu.createSQLiteTestSetup1Wallet({
         databaseName: 'walletConstruct',

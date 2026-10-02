@@ -14,8 +14,17 @@ describe('Commission class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('CommissionTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('CommissionTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('CommissionTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('CommissionTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('CommissionTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('CommissionTests2'))
+  })
+
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
   })
 
   afterAll(async () => {

@@ -14,8 +14,17 @@ describe('User class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('userTests_db1'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('userTests_db2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('userTests_db1'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('userTests_db2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('userTests_db1'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('userTests_db2'))
+  })
+
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
   })
 
   afterAll(async () => {
@@ -82,66 +91,58 @@ describe('User class method tests', () => {
 
   // Test: equals method matching entities
   test('5_equals_identifies_matching_entities', async () => {
-    for (const ctx1 of ctxs) {
-      for (const ctx2 of ctxs2) {
-        // Insert the first user into the first database
-        const user1 = new EntityUser({
-          userId: 2,
-          identityKey: 'key1',
-          created_at: new Date('2023-01-01'),
-          updated_at: new Date('2023-01-02'),
-          activeStorage: ''
-        })
-        await ctx1.activeStorage.insertUser(user1.toApi())
+    // Insert the first user into each first database
+    const user1 = new EntityUser({
+      userId: 2,
+      identityKey: 'key1',
+      created_at: new Date('2023-01-01'),
+      updated_at: new Date('2023-01-02'),
+      activeStorage: ''
+    })
+    for (const ctx1 of ctxs) await ctx1.activeStorage.insertUser(user1.toApi())
 
-        // Insert a matching user into the second database
-        const user2 = new EntityUser({
-          userId: 3, // Different ID
-          identityKey: 'key1', // Same key
-          created_at: new Date('2023-01-01'),
-          updated_at: new Date('2023-01-02'),
-          activeStorage: ''
-        })
-        await ctx2.activeStorage.insertUser(user2.toApi())
+    // Insert a matching user into each second database
+    const user2 = new EntityUser({
+      userId: 3, // Different ID
+      identityKey: 'key1', // Same key
+      created_at: new Date('2023-01-01'),
+      updated_at: new Date('2023-01-02'),
+      activeStorage: ''
+    })
+    for (const ctx2 of ctxs2) await ctx2.activeStorage.insertUser(user2.toApi())
 
-        const syncMap = createSyncMap()
+    const syncMap = createSyncMap()
 
-        // Verify the entities match across databases
-        expect(user1.equals(user2.toApi(), syncMap)).toBe(true) // Should match
-      }
-    }
+    // Verify the entities match across databases
+    expect(user1.equals(user2.toApi(), syncMap)).toBe(true) // Should match
   })
 
   // Test: equals method non-matching entities
   test('6_equals_identifies_non_matching_entities', async () => {
-    for (const ctx1 of ctxs) {
-      for (const ctx2 of ctxs2) {
-        // Insert the first user into the first database
-        const user1 = new EntityUser({
-          userId: 4,
-          identityKey: 'key2',
-          created_at: new Date('2023-01-01'),
-          updated_at: new Date('2023-01-02'),
-          activeStorage: ''
-        })
-        await ctx1.activeStorage.insertUser(user1.toApi())
+    // Insert the first user into each first database
+    const user1 = new EntityUser({
+      userId: 4,
+      identityKey: 'key2',
+      created_at: new Date('2023-01-01'),
+      updated_at: new Date('2023-01-02'),
+      activeStorage: ''
+    })
+    for (const ctx1 of ctxs) await ctx1.activeStorage.insertUser(user1.toApi())
 
-        // Insert a user with a different key into the second database
-        const user2 = new EntityUser({
-          userId: 5, // Different ID
-          identityKey: 'key3', // Different key
-          created_at: new Date('2023-01-01'),
-          updated_at: new Date('2023-01-02'),
-          activeStorage: ''
-        })
-        await ctx2.activeStorage.insertUser(user2.toApi())
+    // Insert a user with a different key into each second database
+    const user2 = new EntityUser({
+      userId: 5, // Different ID
+      identityKey: 'key3', // Different key
+      created_at: new Date('2023-01-01'),
+      updated_at: new Date('2023-01-02'),
+      activeStorage: ''
+    })
+    for (const ctx2 of ctxs2) await ctx2.activeStorage.insertUser(user2.toApi())
 
-        const syncMap = createSyncMap()
+    const syncMap = createSyncMap()
 
-        // Verify the entities do not match across databases
-        expect(user1.equals(user2.toApi(), syncMap)).toBe(false) // Should not match
-      }
-    }
+    // Verify the entities do not match across databases
+    expect(user1.equals(user2.toApi(), syncMap)).toBe(false) // Should not match
   })
 
   // Test: Handles edge cases in the constructor

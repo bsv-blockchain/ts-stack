@@ -32,6 +32,16 @@ describe('count tests', () => {
       )
     }
 
+    if (env.runPostgres) {
+      storages.push(
+        new StorageKnex({
+          ...StorageKnex.defaultOptions(),
+          chain,
+          knex: await _tu.createLocalPostgres('storagecounttest')
+        })
+      )
+    }
+
     for (const storage of storages) {
       await storage.dropAllData()
       await storage.migrate('insert tests', '1'.repeat(64))
