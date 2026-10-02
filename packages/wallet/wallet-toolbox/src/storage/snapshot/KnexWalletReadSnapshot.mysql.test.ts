@@ -227,3 +227,35 @@ test('MySQL certificate pages preserve the collation-aware auxiliary key and ind
   expect(legacy.sql).not.toContain('snapshot_certificate_field_keys')
   expect(legacy.sql).toContain('or exists')
 })
+
+test.each([
+  ['provenTxReqs', 'proven_tx_reqs', 'provenTxReqId', 0],
+  ['provenTxs', 'proven_txs', 'provenTxId', 1]
+] as const)(
+  'MySQL %s pages retain the profile range plan and indexed source join',
+  async (table, name, key, tableId) => {
+    const k = knex({ client: 'mysql2' })
+    try {
+      const query = walletSnapshotSourceQuery(k, table, 41, true, true, true, true)
+        .select(`${name}.*`)
+        .where('rowId', '>', 700)
+        .orderBy('rowId')
+        .limit(32)
+        .toSQL()
+      expect(query.sql).toContain(`/*+ JOIN_FIXED_ORDER() JOIN_INDEX(${name}) */`)
+      expect(query.sql).toContain(
+        'from `snapshot_global_keys` FORCE INDEX (`snapshot_global_page`) cross join `' + name + '`'
+      )
+      expect(query.sql).toContain('`rowId` = `' + name + '`.`' + key + '`')
+      expect(query.sql).toContain('`tableId` = ? and `userId` = ? and `present` = ? and `refs` > ? and `rowId` > ?')
+      expect(query.sql).toContain('order by `rowId` asc limit ?')
+      expect(query.bindings).toEqual([tableId, 41, 1, 0, 700, 32])
+      const legacy = walletSnapshotSourceQuery(k, table, 41).toSQL()
+      expect(legacy.sql).not.toContain('snapshot_global_keys')
+      expect(legacy.sql).not.toContain('JOIN_FIXED_ORDER')
+      expect(legacy.sql).toContain('exists')
+    } finally {
+      await k.destroy()
+    }
+  }
+)

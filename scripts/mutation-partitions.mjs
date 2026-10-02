@@ -41,6 +41,27 @@ const plans = new Map([
     }
   ],
   [
+    'wallet-snapshot-journal',
+    {
+      fallback: 'revision',
+      files: new Map([
+        ['src/storage/snapshot/journal/SnapshotJournalRevision.ts', 'revision'],
+        ['src/storage/snapshot/journal/SnapshotJournalRevisionSql.ts', 'revision'],
+        ['src/storage/snapshot/journal/SnapshotJournalPage.ts', 'page'],
+        ['src/storage/snapshot/journal/SnapshotJournalSqliteClock.ts', 'clock'],
+        ['src/storage/snapshot/journal/SnapshotJournalMysqlClock.ts', 'clock'],
+        ['src/storage/snapshot/journal/SnapshotJournalSqliteObservers.ts', 'sqlite-observers'],
+        ['src/storage/snapshot/journal/SnapshotJournalMysqlObservers.ts', 'mysql-observers'],
+        ['src/storage/snapshot/journal/SnapshotJournalBootstrap.ts', 'bootstrap'],
+        ['src/storage/snapshot/journal/SnapshotJournalHighWater.ts', 'high-water'],
+        ['src/storage/snapshot/journal/SnapshotJournalMysqlSource.ts', 'mysql-source'],
+        ['src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts', 'sqlite-generation'],
+        ['src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts', 'mysql-intent'],
+        ['src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts', 'mysql-generation']
+      ])
+    }
+  ],
+  [
     'wallet-snapshot-archive',
     {
       fallback: 'capture',

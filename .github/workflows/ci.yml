@@ -503,7 +503,7 @@ jobs:
     # legitimately exceeds 20 minutes on a hosted runner.
     # Complete snapshot source-guard service qualification took 58m35s locally,
     # before hosted checkout/install. Preserve the 45-minute default elsewhere.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'), matrix.target) && 90 || 45 }}
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-journal","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -607,6 +607,11 @@ jobs:
         with:
           pattern: mutation-wallet-retained-snapshot-*
           path: .mutation-parts/wallet-retained-snapshot
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-journal')
+        with:
+          pattern: mutation-wallet-snapshot-journal-*
+          path: .mutation-parts/wallet-snapshot-journal
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-remote-http')
         with:

@@ -533,6 +533,19 @@
         ]
       },
       {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/journal/SnapshotJournal.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet exact journal revisions, bounded metadata pages and bootstrap, full-table observers, source binding and owned crash-resumable generation lifecycle",
+        "target": "Generated exact signed63 revision and metadata cursor schedules, plus thirteen-table insert/update/rekey/replacement/delete/rollback histories checked against independent source ownership oracles",
+        "invariants": [
+          "Canonical decimal revisions compare exactly across the signed63 domain, including values above Number precision.",
+          "Bounded metadata pages preserve composite byte ordering, fixed upper bounds and examined-row limits without skipping tied revisions.",
+          "Generated source changes retain exact physical generations and ownership across all thirteen standard tables, including replacement, rollback and observer order variations.",
+          "Invalid source/schema or ownership evidence never silently adopts foreign DDL, and interrupted installation resumes only the persisted epoch and exact authorized next object."
+        ]
+      },
+      {
         "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",

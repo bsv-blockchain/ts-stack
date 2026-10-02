@@ -68,6 +68,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "wallet-snapshot-journal",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/journal/SnapshotJournal.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet exact journal revisions, bounded metadata pages and bootstrap, full-table observers, source binding and owned crash-resumable generation lifecycle",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "wallet-snapshot-sync",
       "manifest": "packages/wallet/wallet-toolbox/package.json",
       "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",

@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add internal, unadvertised SQL journal foundation: exact revisions, bounded
+  pages/bootstrap, full-table observers and source-bound generation ownership
+  with interrupted-installation recovery. No public capability, registered
+  migration, deployment or completed incremental sync is introduced. Full
+  quota/receipt/receiver/primary and portability acceptance remains pending.
+
 - Repair SQLite replacement maintenance with a new auxiliary generation, durable
   displaced-owner witnesses, bounded resumable source copying and physical-row
   retirement. Preserve source tables, profile/reference semantics and pinned

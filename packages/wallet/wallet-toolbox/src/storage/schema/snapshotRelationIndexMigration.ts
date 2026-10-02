@@ -107,7 +107,7 @@ function trigger(
   }
 }
 
-function triggers(isMysql: boolean): { observers: Trigger[]; producers: Trigger[] } {
+export function snapshotRelationIndexTriggers(isMysql: boolean): { observers: Trigger[]; producers: Trigger[] } {
   const observers: Trigger[] = []
   const producers: Trigger[] = []
   const different = (key: string): string =>
@@ -452,7 +452,7 @@ export async function addSnapshotRelationIndexes(k: Knex): Promise<void> {
   if (mysql(k) && k.isTransaction)
     throw new WERR_INVALID_OPERATION('Snapshot relation migration requires independent DDL and bootstrap transactions')
   await ensureTables(k)
-  const { observers, producers } = triggers(mysql(k))
+  const { observers, producers } = snapshotRelationIndexTriggers(mysql(k))
   // Every graph-wide removal observer precedes every possible producer.
   await runInSeries([...observers, ...producers], async expected => {
     if (!(await validateTrigger(k, expected))) await k.raw(expected.sql)
@@ -478,7 +478,7 @@ export async function removeSnapshotRelationIndexes(k: Knex): Promise<void> {
     throw new WERR_INVALID_OPERATION('Snapshot relation migration requires independent DDL and bootstrap transactions')
   if (await k.schema.hasTable(KEYS)) await validateTable(k, KEYS)
   if (await k.schema.hasTable(PROGRESS)) await validateTable(k, PROGRESS)
-  const { observers, producers } = triggers(mysql(k))
+  const { observers, producers } = snapshotRelationIndexTriggers(mysql(k))
   const ordered = [...producers, ...observers]
   await runInSeries(ordered, async expected => {
     await validateTrigger(k, expected)

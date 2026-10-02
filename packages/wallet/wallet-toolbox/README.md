@@ -51,7 +51,17 @@ readiness and the child proof have deadlines. Failure or cancellation drains
 owned work and attempts exact-owner cleanup before reporting its outcome;
 unproved cleanup fails qualification. Other wallet shards do not start MySQL.
 
-Both native entry points include interrupted auxiliary profile and numeric
+The candidate also contains internal SQL journal primitives for exact revisions,
+bounded metadata pages and bootstrap, source-table observers, and recovery of an
+interrupted journal installation. Run `pnpm test:snapshot-journal-crash` for the
+SQLite process-loss fixture and `pnpm test:snapshot-journal-mysql` for the isolated
+MySQL client/server-process recovery fixtures. These helpers do not register a
+migration or advertise incremental synchronization. Full retention quotas,
+capture receipts, receiver/primary integration and the remaining issue #544
+acceptance work are still required; see the
+[journal foundation](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#internal-journal-foundation-unadvertised).
+
+Both native archive entry points include interrupted auxiliary profile and numeric
 relation migrations through the real migrator. The numeric relation fixture
 terminates seven migration boundaries, repairs the abandoned migration lock and
 compares recovered membership with an independent source-table oracle. The MySQL

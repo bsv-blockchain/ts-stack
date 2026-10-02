@@ -122,7 +122,13 @@ async function validateTable(k: Knex, table: string): Promise<void> {
 
 type TriggerEvent = 'DELETE' | 'UPDATE' | 'INSERT'
 
-function triggerDefinition(mysql: boolean, table: string, key: string, tableId: number, event: TriggerEvent) {
+export function snapshotProfileTriggerDefinition(
+  mysql: boolean,
+  table: string,
+  key: string,
+  tableId: number,
+  event: TriggerEvent
+) {
   const name = `snapshot_profile_${tableId}_${event.toLowerCase()}`
   const remove = `DELETE FROM ${KEYS} WHERE snapshotTableId = ${tableId} AND snapshotUserId = OLD.userId AND snapshotRowId = OLD.${key};`
   const add = `INSERT INTO ${KEYS} (snapshotTableId, snapshotUserId, snapshotRowId) VALUES (${tableId}, NEW.userId, NEW.${key});`
@@ -180,7 +186,7 @@ async function installTrigger(
   create = true
 ): Promise<void> {
   const mysql = isMySQL(k)
-  const { name, body, sql } = triggerDefinition(mysql, table, key, tableId, event)
+  const { name, body, sql } = snapshotProfileTriggerDefinition(mysql, table, key, tableId, event)
   const exists = mysql ? await mysqlTriggerExists(k, name, table, event, body) : await sqliteTriggerExists(k, name, sql)
   if (!exists && create) await k.raw(sql)
 }

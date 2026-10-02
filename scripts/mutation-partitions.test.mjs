@@ -280,6 +280,23 @@ for (const [id, expected, fallback] of [
     ],
     'lifecycle'
   ],
+  [
+    'wallet-snapshot-journal',
+    [
+      'revision',
+      'page',
+      'clock',
+      'sqlite-observers',
+      'mysql-observers',
+      'bootstrap',
+      'high-water',
+      'mysql-source',
+      'sqlite-generation',
+      'mysql-intent',
+      'mysql-generation'
+    ],
+    'revision'
+  ],
   ['wallet-snapshot-archive', ['store', 'capture', 'source'], 'capture'],
   ['wallet-snapshot-remote-reader', ['admission', 'lease', 'rows', 'page'], 'admission']
 ]) {

@@ -1037,3 +1037,30 @@ process, verify the reservation before loss and recover it afterward while
 preserving foreground writes. These fixtures do not establish deployed limits,
 distributed filesystems, PXC or physical mobile behavior. Reader advertisement
 remains disabled pending complete lifecycle and program qualification.
+
+## Internal journal foundation (unadvertised)
+
+The candidate includes internal SQL journal primitives for exact signed63 decimal
+revisions, bounded composite metadata pages, thirteen-table observers, and
+256-row bootstrap steps. Page limits charge every examined row. SQLite and MySQL
+generations bind source schema and typed object ownership; MySQL persists an
+atomic first intent and resumes each implicit-DDL step using the same epoch.
+Unexpected objects or changed metadata refuse adoption. Standard source rows are
+preserved by these helpers. Schema changes and concurrent migrators must be
+excluded by the operator during installation or resumption.
+
+This foundation adds no registered migration, public capability or reader
+advertisement. Its event-window invalidation is not a complete retention or
+resource policy. Full quotas, durable capture/receipt/floor ownership,
+generation-aware receiver/primary integration, and remaining remote/IndexedDB,
+streaming and staged-import acceptance remain unfinished. Do not infer full
+incremental continuity or completed issue #544 from these helpers.
+
+The wallet-snapshot-journal mutation target owns all thirteen complete source
+modules in eleven execution parts. Every part retains the complete canonical
+journal tests and fixtures, including one governed property entry for exact
+revision/page and generated source-observer schedules. A minimum score of 90%, zero
+uncovered/invalid mutants, 300 cases with seed 3242026, four workers, runner reuse 8 and 90-minute
+bounds remain in force. Native ownership, client/server process-loss and broader
+platform/performance evidence are separate required validation; source helpers
+alone do not establish deployment, replication, PXC or power-loss readiness.

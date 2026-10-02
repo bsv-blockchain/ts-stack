@@ -198,7 +198,7 @@ test('additional package-relative fixture inputs select their target without rep
   )
 
   const canonical = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(canonical).length, 46)
+  assert.equal(Object.keys(canonical).length, 47)
   assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
     'test/utils/snapshotRelationFixtures.ts',
     'test/utils/snapshotCertificateFixtures.ts',
@@ -239,4 +239,50 @@ test('retained snapshot mutation execution recycles workers while other wallet d
   assert.equal(targets['wallet-retained-snapshot'].runnerOptions.maxTestRunnerReuse, 8)
   assert.equal(targets['wallet-snapshot-archive'].runnerOptions.maxTestRunnerReuse, undefined)
   assert.equal(targets['wallet-snapshot-remote-http'].runnerOptions.maxTestRunnerReuse, undefined)
+})
+
+test('journal mutation registration retains its complete source, canonical tests and fixture ownership', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['wallet-snapshot-journal']
+  assert.deepEqual(target.mutate, [
+    'src/storage/snapshot/journal/SnapshotJournalRevision.ts',
+    'src/storage/snapshot/journal/SnapshotJournalRevisionSql.ts',
+    'src/storage/snapshot/journal/SnapshotJournalPage.ts',
+    'src/storage/snapshot/journal/SnapshotJournalSqliteClock.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlClock.ts',
+    'src/storage/snapshot/journal/SnapshotJournalSqliteObservers.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlObservers.ts',
+    'src/storage/snapshot/journal/SnapshotJournalBootstrap.ts',
+    'src/storage/snapshot/journal/SnapshotJournalHighWater.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlSource.ts',
+    'src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, [
+    'test/fixtures/snapshotJournal/mysql-generation-ddl-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-generation-metadata-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-generation-state-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-intent-metadata-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-source-metadata-fixture.json',
+    'test/utils/snapshotArchiveFixtures.ts',
+    'test/utils/snapshotSqliteFixtures.ts',
+    'test/utils/snapshotHistoricalMigrations.ts',
+    'test/storage/snapshotJournalNativeFixture.cjs',
+    'test/storage/snapshotJournalMysqlConnection.cjs',
+    'test/storage/snapshotJournalMysql.cjs',
+    'test/storage/snapshotJournalMysqlServerCrash.cjs',
+    'test/storage/snapshotJournalSqliteCrash.cjs',
+    'test/storage/runSnapshotJournalMysql.cjs',
+    'test/storage/snapshotArchiveDocker.cjs'
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/storage/snapshot/journal/*.test.ts'
+  ])
+  for (const input of target.additionalInputs)
+    assert.ok(
+      selectAffectedMutationTargets(buildMutationTargets(REPOSITORY_ROOT), [
+        'packages/wallet/wallet-toolbox/' + input
+      ]).includes('wallet-snapshot-journal')
+    )
 })

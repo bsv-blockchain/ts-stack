@@ -135,7 +135,7 @@ function trigger(
   }
 }
 
-function triggers(isMysql: boolean): {
+export function snapshotCertificateIndexTriggers(isMysql: boolean): {
   observers: Trigger[]
   producers: Trigger[]
 } {
@@ -547,7 +547,7 @@ export async function addSnapshotCertificateIndexes(k: Knex): Promise<void> {
     )
   const text = await sourceText(k)
   await ensureTables(k, text)
-  const { observers, producers } = triggers(mysql(k))
+  const { observers, producers } = snapshotCertificateIndexTriggers(mysql(k))
   await runInSeries([...observers, ...producers], async expected => {
     if (!(await validateTrigger(k, expected))) await k.raw(expected.sql)
   })
@@ -578,7 +578,7 @@ export async function removeSnapshotCertificateIndexes(k: Knex): Promise<void> {
   const text = await sourceText(k)
   if (await k.schema.hasTable(KEYS)) await validateTable(k, KEYS, text)
   if (await k.schema.hasTable(PROGRESS)) await validateTable(k, PROGRESS, text)
-  const { observers, producers } = triggers(mysql(k)),
+  const { observers, producers } = snapshotCertificateIndexTriggers(mysql(k)),
     ordered = [...producers, ...observers]
   await runInSeries(ordered, async expected => {
     await validateTrigger(k, expected)

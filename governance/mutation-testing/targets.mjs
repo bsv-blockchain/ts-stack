@@ -485,6 +485,53 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'wallet-snapshot-journal': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      additionalInputs: [
+        'test/fixtures/snapshotJournal/mysql-generation-ddl-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-generation-metadata-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-generation-state-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-intent-metadata-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-source-metadata-fixture.json',
+        'test/utils/snapshotArchiveFixtures.ts',
+        'test/utils/snapshotSqliteFixtures.ts',
+        'test/utils/snapshotHistoricalMigrations.ts',
+        'test/storage/snapshotJournalNativeFixture.cjs',
+        'test/storage/snapshotJournalMysqlConnection.cjs',
+        'test/storage/snapshotJournalMysql.cjs',
+        'test/storage/snapshotJournalMysqlServerCrash.cjs',
+        'test/storage/snapshotJournalSqliteCrash.cjs',
+        'test/storage/runSnapshotJournalMysql.cjs',
+        'test/storage/snapshotArchiveDocker.cjs'
+      ],
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/journal/SnapshotJournal.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/journal/SnapshotJournalRevision.ts',
+        'src/storage/snapshot/journal/SnapshotJournalRevisionSql.ts',
+        'src/storage/snapshot/journal/SnapshotJournalPage.ts',
+        'src/storage/snapshot/journal/SnapshotJournalSqliteClock.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlClock.ts',
+        'src/storage/snapshot/journal/SnapshotJournalSqliteObservers.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlObservers.ts',
+        'src/storage/snapshot/journal/SnapshotJournalBootstrap.ts',
+        'src/storage/snapshot/journal/SnapshotJournalHighWater.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlSource.ts',
+        'src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/journal/*.test.ts'], {
+        maxTestRunnerReuse: 8,
+        config: {
+          moduleNameMapper: {
+            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+            '^(\\.{1,2}/.*)\\.js$': '$1'
+          }
+        }
+      })
+    },
     'wallet-snapshot-archive': {
       packageDirectory: 'packages/wallet/wallet-toolbox',
       manifest: 'packages/wallet/wallet-toolbox/package.json',
