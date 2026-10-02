@@ -1,3 +1,4 @@
+import { migrateBeforeSqliteGeneration } from '../../../test/utils/snapshotHistoricalMigrations'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,7 +34,7 @@ async function fixture() {
   const source = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: k })
   stores.push(source)
   await k.raw('PRAGMA journal_mode=WAL')
-  await source.migrate('certificate index fixture', 'synthetic-certificate-index')
+  await migrateBeforeSqliteGeneration(source, 'certificate index fixture', 'synthetic-certificate-index')
   await source.makeAvailable()
   // Start with the immediately preceding schema on both old and new source.
   await removeSnapshotCertificateIndexes(k)

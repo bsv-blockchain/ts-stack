@@ -202,7 +202,13 @@ test('additional package-relative fixture inputs select their target without rep
   assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
     'test/utils/snapshotRelationFixtures.ts',
     'test/utils/snapshotCertificateFixtures.ts',
-    'test/utils/snapshotGlobalFixtures.ts'
+    'test/utils/snapshotGlobalFixtures.ts',
+    'test/utils/snapshotHistoricalMigrations.ts',
+    'test/utils/snapshotSqliteFixtures.ts',
+    'test/utils/snapshotSqliteIdentityFixture.ts',
+    'test/utils/snapshotSqliteMaintenanceFixture.ts',
+    'test/storage/snapshotHistoricalMigrations.cjs',
+    'test/storage/snapshotSqliteGenerationCrash.cjs'
   ])
   assert.deepEqual(
     selectAffectedMutationTargets(canonical, [

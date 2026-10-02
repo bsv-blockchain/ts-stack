@@ -126,6 +126,12 @@ Direct and request-based proof references remain independent; removing the last
 reference collects its auxiliary presence guard. Standard rows, text comparisons,
 indexes and cursor/portable bytes remain unchanged. See the
 [global migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-global-proofrequest-indexes-unpublished-candidate).
+The additive SQLite conflict-repair migration installs metadata-bound witnesses,
+rebuilds all four index families in bounded resumable pages, and retires obsolete
+auxiliary rows without changing standard wallet data. Reader adoption follows
+journal publication inside the pinned view. Preserve partial state for recovery;
+ordinary downgrade refuses, while explicit `dropAllData()` retains its destructive
+contract. See the [SQLite generation migration contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#sqlite-conflict-safe-index-generation-unpublished-candidate).
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results

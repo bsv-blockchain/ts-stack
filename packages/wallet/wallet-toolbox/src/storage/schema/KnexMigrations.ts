@@ -1,3 +1,5 @@
+import { migrateGeneration, refuseGenerationDowngrade } from './snapshotSqliteIndexMigration'
+import { migration as SNAPSHOT_SQLITE_INDEX_MIGRATION } from './snapshotSqliteIndexState'
 import {
   addSnapshotGlobalIndexes,
   removeSnapshotGlobalIndexes,
@@ -53,6 +55,7 @@ import {
 } from '../methods/managedChangePolicy'
 
 export { SNAPSHOT_GLOBAL_INDEX_MIGRATION } from './snapshotGlobalIndexMigration'
+export { migration as SNAPSHOT_SQLITE_INDEX_MIGRATION } from './snapshotSqliteIndexState'
 export { SNAPSHOT_CERTIFICATE_INDEX_MIGRATION } from './snapshotCertificateIndexMigration'
 export { SNAPSHOT_RELATION_INDEX_MIGRATION } from './snapshotRelationIndexMigration'
 export { SNAPSHOT_PROFILE_INDEX_MIGRATION } from './snapshotProfileIndexMigration'
@@ -146,6 +149,12 @@ export class KnexMigrations implements MigrationSource<string> {
 
     // DDL may commit independently on MySQL. Bootstrap pages retain their own
     // durable positions on both backends and resume before journal publication.
+    migrations[SNAPSHOT_SQLITE_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: migrateGeneration,
+      down: refuseGenerationDowngrade
+    }
+
     migrations[SNAPSHOT_GLOBAL_INDEX_MIGRATION] = {
       config: { transaction: false },
       up: addSnapshotGlobalIndexes,

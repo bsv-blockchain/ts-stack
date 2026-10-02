@@ -1,3 +1,4 @@
+const { migrateBeforeSqliteGeneration } = require('./snapshotHistoricalMigrations.cjs')
 // Synthetic process-loss qualification, invoked by the existing native fixtures.
 const assert = require('node:assert/strict')
 const { spawn } = require('node:child_process')
@@ -34,13 +35,13 @@ const provider = options =>
   new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: knex(options) })
 
 async function migrate(source) {
-  await source.migrate(migrationName, migrationIdentity)
+  await migrateBeforeSqliteGeneration(source, migrationName, migrationIdentity)
 }
 async function seed(options) {
   const source = provider(options)
   try {
     if (options.client === 'better-sqlite3') await source.knex.raw('PRAGMA journal_mode = WAL')
-    await source.migrate(migrationName, migrationIdentity)
+    await migrateBeforeSqliteGeneration(source, migrationName, migrationIdentity)
     await source.makeAvailable()
     await removeSnapshotGlobalIndexes(source.knex)
     await source.knex('knex_migrations').where('name', SNAPSHOT_GLOBAL_INDEX_MIGRATION).delete()

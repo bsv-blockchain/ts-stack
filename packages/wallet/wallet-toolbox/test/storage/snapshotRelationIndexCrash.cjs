@@ -1,3 +1,4 @@
+const { migrateBeforeSqliteGeneration } = require('./snapshotHistoricalMigrations.cjs')
 // Synthetic process-loss qualification, invoked by the existing native fixtures.
 const assert = require('node:assert/strict')
 const { spawn } = require('node:child_process')
@@ -36,7 +37,7 @@ async function seed(options) {
   const source = provider(options)
   try {
     if (options.client === 'better-sqlite3') await source.knex.raw('PRAGMA journal_mode = WAL')
-    await source.migrate(migrationName, migrationIdentity)
+    await migrateBeforeSqliteGeneration(source, migrationName, migrationIdentity)
     await source.makeAvailable()
     const migrationSource = new KnexMigrations('test', migrationName, migrationIdentity, 1024)
     await source.knex.migrate.down({
@@ -140,7 +141,7 @@ async function child(options, phase, marker) {
     if (phase === 'after-commit' && cursorWritten && sql.startsWith('commit')) park('query-response')
   })
   try {
-    await source.migrate(migrationName, migrationIdentity)
+    await migrateBeforeSqliteGeneration(source, migrationName, migrationIdentity)
     throw new Error('Expected migration boundary was not reached')
   } finally {
     await source.destroy()
@@ -217,7 +218,7 @@ async function qualify(options, phase) {
     // A killed migrator leaves Knex's lock claimed. This is fixture-owned recovery;
     // the verified child is gone and no other migrator can own this isolated store.
     await database.migrate.forceFreeMigrationsLock()
-    await source.migrate(migrationName, migrationIdentity)
+    await migrateBeforeSqliteGeneration(source, migrationName, migrationIdentity)
     assert.equal(await readSnapshotRelationIndexState(database), true)
     await runInSeries(snapshotNumericRelations.entries(), async ([tableId, relation]) => {
       const left = new Map((await database(relation.left)).map(row => [row[relation.leftKey], row.userId]))

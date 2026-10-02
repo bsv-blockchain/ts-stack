@@ -55,7 +55,7 @@ export async function sqliteTable(k: Knex, table: Table, secondary: boolean): Pr
   }
   for (const index of required) {
     const found = indexes.find(value => value.name === index.name)
-    if (found === undefined || found.partial !== 0) return false
+    if (found?.partial !== 0) return false
     const parts = await sqliteParts(k, found.name)
     if (
       parts.length !== index.columns.length ||
@@ -103,8 +103,7 @@ export async function validateSqliteSource(k: Knex): Promise<void> {
     for (const field of source.fields) {
       const column = actual.find(value => value.name === field.name)
       if (
-        column === undefined ||
-        column.type.toLowerCase() !== (field.text ? 'varchar(64)' : 'integer') ||
+        column?.type.toLowerCase() !== (field.text ? 'varchar(64)' : 'integer') ||
         column.hidden !== 0 ||
         (field.name !== source.key && column.notnull !== (field.nullable ? 0 : 1))
       )

@@ -271,6 +271,10 @@ for (const [id, expected, fallback] of [
       'global-sqlite',
       'global-bootstrap',
       'global-triggers',
+      'sqlite-identity',
+      'sqlite-generation',
+      'sqlite-bootstrap',
+      'sqlite-retirement',
       'storage'
     ],
     'lifecycle'

@@ -33,7 +33,7 @@ test.each([StorageClient, StorageMobile])(
       expect(storage.getSettings()).not.toHaveProperty('snapshotArchive')
       let transport = (await client.getSnapshotArchiveTransport(identityKey))!
       const offer = await transport.offer()
-      expect(offer.sourceSchema).toBe('2026-10-01-006 add snapshot global reference indexes')
+      expect(offer.sourceSchema).toBe('2026-10-02-001 repair snapshot SQLite conflict maintenance')
       expect(Math.abs(offer.serverTime - Date.now())).toBeLessThan(5000)
       const fields = {
         version: 1 as const,

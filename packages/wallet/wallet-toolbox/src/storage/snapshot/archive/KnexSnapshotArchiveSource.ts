@@ -1,3 +1,4 @@
+import { readGenerationIndexState } from '../../schema/snapshotSqliteIndexState'
 import { readSnapshotGlobalIndexState } from '../../schema/snapshotGlobalIndexMigration'
 import { readSnapshotCertificateIndexState } from '../../schema/snapshotCertificateIndexMigration'
 import { readSnapshotRelationIndexState } from '../../schema/snapshotRelationIndexMigration'
@@ -56,6 +57,7 @@ export async function openKnexSnapshotArchiveSource(
   try {
     const { header, profileIndexes, relationIndexes, certificateIndexes, globalIndexes } = await view.read(
       async trx => {
+        const generation = await readGenerationIndexState(storage.toDb(trx), storage.knex.client.config.migrations)
         const sourceStorage = await storage.readSettings(trx)
         const user = await storage.findUserByIdentityKey(identityKey, trx)
         if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
@@ -65,16 +67,18 @@ export async function openKnexSnapshotArchiveSource(
             user,
             sourceSchema: await readSnapshotArchiveSourceSchema(storage, storage.toDb(trx))
           },
-          profileIndexes: await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
-          relationIndexes: await readSnapshotRelationIndexState(
-            storage.toDb(trx),
-            storage.knex.client.config.migrations
-          ),
-          globalIndexes: await readSnapshotGlobalIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
-          certificateIndexes: await readSnapshotCertificateIndexState(
-            storage.toDb(trx),
-            storage.knex.client.config.migrations
-          )
+          profileIndexes:
+            generation ??
+            (await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
+          relationIndexes:
+            generation ??
+            (await readSnapshotRelationIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
+          globalIndexes:
+            generation ??
+            (await readSnapshotGlobalIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
+          certificateIndexes:
+            generation ??
+            (await readSnapshotCertificateIndexState(storage.toDb(trx), storage.knex.client.config.migrations))
         }
       }
     )

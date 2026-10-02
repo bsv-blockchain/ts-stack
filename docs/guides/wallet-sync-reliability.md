@@ -421,6 +421,51 @@ acceptance. Commit ordering, tombstones, primary reconciliation, nonblocking
 IndexedDB, remote destinations, streaming/staged portability and full system
 acceptance remain open. Reader advertisement stays disabled.
 
+### SQLite conflict-safe index generation (unpublished candidate)
+
+Migration `2026-10-02-001 repair snapshot SQLite conflict maintenance` replaces
+SQLite auxiliary index maintenance with metadata-bound conflict witnesses.
+SQLite REPLACE can remove a displaced row without invoking its deletion trigger;
+the new BEFORE observers retain displaced IDs and owners before the source write.
+AFTER observers reconcile the actual source state and preserve independent
+relation, certificate and proof-reference memberships. Supported unique keys use
+their existing BINARY, NOCASE or RTRIM comparison; NULL values retain SQLite's
+unique-key behavior. No-op and unrelated payload updates avoid auxiliary writes.
+Standard rows, indexes, legacy OFFSET order and portable/cursor bytes stay intact.
+MySQL continues to use its existing maintenance.
+
+Installation validates the complete prior migrations, source definitions and
+owned auxiliary objects, then atomically installs a fresh v2 generation and
+invalidates the previous progress states. Twelve source streams copy at most
+256 rows per transaction with typed durable positions. Independent writes,
+including inserts below the saved cursor, remain observed throughout the copy.
+Each completed page yields before the next transaction. Once the copy completes,
+obsolete owned tables retire in batches of at most 256 physical rows; only empty
+tables are dropped. Source tables are never retired. The hidden SQLite row
+identity bounds retirement even when several index families share one logical ID.
+
+Run `migrate()` explicitly, exclude concurrent migrators, and preserve owned
+schema/progress after interruption. Recover a stale Knex lock only after proving
+the migrator stopped. The real migrator publishes its journal after copy and
+retirement; partial state uses source-query fallback in new readers. Complete
+journal/progress state selects v2 indexes inside the same retained view as all
+pages. An already-pinned WAL reader retains its original view across retirement.
+Older binaries cannot adopt invalidated progress: do not downgrade their snapshot
+implementation against this schema. Ordinary migration rollback refuses without
+deleting source rows; use a separately designed forward migration. The explicit
+`dropAllData()` API still deletes all wallet data, including an unpublished
+partial generation. It is not a recovery or downgrade operation.
+
+Qualification includes generated conflict schedules, actual wallet schemas,
+independent WAL writers, retained ordinary/archive readers and real registered
+migration process loss through installation, copying, retirement and publication.
+The populated diagnostic uses 13,000 small synthetic source rows and verifies
+bounded retirement and six indexed late-page shapes. It does not establish
+large-wallet latency, internal SQLite row visits or an overall storage quota.
+Freed SQLite pages may remain allocated for reuse; physical file shrink is not
+promised. Complete exact-head native, mutation, platform and hosted gates remain
+required. Reader advertisement and the full #544 acceptance status are unchanged.
+
 ## Durable local SQL sync and ordinary backup
 
 With the version-one migration applied, supported local SQL providers use these

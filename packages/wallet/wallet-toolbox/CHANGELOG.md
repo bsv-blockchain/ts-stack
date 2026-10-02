@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Repair SQLite replacement maintenance with a new auxiliary generation, durable
+  displaced-owner witnesses, bounded resumable source copying and physical-row
+  retirement. Preserve source tables, profile/reference semantics and pinned
+  ordinary/archive views. Apply the explicit forward migration; normal downgrade
+  refuses, while explicit full-data deletion remains supported. Complete native,
+  mutation, larger-wallet and hosted acceptance remain required.
+
 - Accept a valid all-zero terminal offset reset when an unchanged backup keeps
   the same timestamp. Preserve remote state binding, monotonic timestamps and
   nonterminal/partial-reset checks in HTTP and resumable sessions. Repeated

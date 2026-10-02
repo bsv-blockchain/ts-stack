@@ -247,3 +247,15 @@ Incomplete journaled state refuses new views. This advances indexed profile
 selection only: the remaining relationship/global-table work, immutable
 commit-order high-water positions, complete tombstone propagation, nonblocking
 IndexedDB and the rest of the implementation program remain required.
+
+The SQLite conflict-maintenance follow-up adds an explicit forward migration for
+all four auxiliary index families. Metadata-bound BEFORE/AFTER witnesses preserve
+replacement and nested-owner semantics; twelve bounded streams rebuild a fresh
+generation under independent writes, and bounded physical-row retirement removes
+only obsolete auxiliary tables. Reader generation and journal state are selected
+inside the retained view. Historical-migration fixtures remain explicit, while
+current ordinary/archive readers and actual registered-migrator process-loss
+fixtures exercise adoption and recovery. Explicit full-data deletion remains
+supported; normal downgrade refuses without removing standard records. This
+advances indexed selection/recovery within S2 and V2. It does not complete
+committed-change continuity, large-wallet performance or the remaining program.

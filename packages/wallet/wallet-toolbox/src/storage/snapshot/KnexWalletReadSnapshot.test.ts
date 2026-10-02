@@ -1,3 +1,4 @@
+import { migrateBeforeSqliteGeneration } from '../../../test/utils/snapshotHistoricalMigrations'
 import {
   removeSnapshotCertificateIndexes,
   SNAPSHOT_CERTIFICATE_INDEX_MIGRATION
@@ -31,7 +32,9 @@ const timestamp = { created_at: date, updated_at: date }
 const stores: StorageKnex[] = []
 const directories: string[] = []
 
-async function fixture(): Promise<{ source: StorageKnex; writer: StorageKnex; userId: number; otherId: number }> {
+async function fixture(
+  historicalIndexes = false
+): Promise<{ source: StorageKnex; writer: StorageKnex; userId: number; otherId: number }> {
   const directory = await mkdtemp(join(tmpdir(), 'wallet-keyset-'))
   directories.push(directory)
   const open = () => {
@@ -50,7 +53,8 @@ async function fixture(): Promise<{ source: StorageKnex; writer: StorageKnex; us
   }
   const source = open()
   await source.knex.raw('PRAGMA journal_mode = WAL')
-  await source.migrate('keyset source', 'source-storage')
+  if (historicalIndexes) await migrateBeforeSqliteGeneration(source, 'keyset source', 'source-storage')
+  else await source.migrate('keyset source', 'source-storage')
   await source.makeAvailable()
   const { user } = await source.findOrInsertUser(identity)
   const { user: other } = await source.findOrInsertUser(foreignIdentity)
@@ -578,7 +582,7 @@ test.each([
 ])(
   'SQL keys support forward seeks without OFFSET or counts (profile=%s, relation=%s, certificate=%s)',
   async (profileIndexes, relationIndexes, certificateIndexes) => {
-    const { source, userId, otherId } = await fixture()
+    const { source, userId, otherId } = await fixture(true)
     if (!profileIndexes) {
       await removeSnapshotProfileIndexes(source.knex)
       await source.knex('knex_migrations').where('name', SNAPSHOT_PROFILE_INDEX_MIGRATION).delete()

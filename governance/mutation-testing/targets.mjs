@@ -416,7 +416,13 @@ export function buildMutationTargets(repositoryRoot) {
       additionalInputs: [
         'test/utils/snapshotRelationFixtures.ts',
         'test/utils/snapshotCertificateFixtures.ts',
-        'test/utils/snapshotGlobalFixtures.ts'
+        'test/utils/snapshotGlobalFixtures.ts',
+        'test/utils/snapshotHistoricalMigrations.ts',
+        'test/utils/snapshotSqliteFixtures.ts',
+        'test/utils/snapshotSqliteIdentityFixture.ts',
+        'test/utils/snapshotSqliteMaintenanceFixture.ts',
+        'test/storage/snapshotHistoricalMigrations.cjs',
+        'test/storage/snapshotSqliteGenerationCrash.cjs'
       ],
       propertyTest:
         'packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
@@ -432,6 +438,14 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/schema/snapshotGlobalIndexSqlite.ts',
         'src/storage/schema/snapshotGlobalIndexBootstrap.ts',
         'src/storage/schema/snapshotGlobalIndexTriggers.ts',
+        'src/storage/schema/snapshotSqliteIdentity.ts',
+        'src/storage/schema/snapshotSqliteMembership.ts',
+        'src/storage/schema/snapshotSqliteIndexGeneration.ts',
+        'src/storage/schema/snapshotSqliteIndexBootstrap.ts',
+        'src/storage/schema/snapshotSqliteIndexState.ts',
+        'src/storage/schema/snapshotSqliteIndexRetirement.ts',
+        'src/storage/schema/snapshotSqliteLegacyOwnership.ts',
+        'src/storage/schema/snapshotSqliteIndexMigration.ts',
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',
@@ -442,20 +456,34 @@ export function buildMutationTargets(repositoryRoot) {
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async dropAllData(): Promise<void>',
+          'override async transaction<T>'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
           'src/storage/StorageProvider.ts',
           'supportsRetainedReadSnapshot(): boolean',
           'protected supportsActionBatchPersistence(): boolean'
         )
       ],
-      ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/*.test.ts'], {
-        maxTestRunnerReuse: 8,
-        config: {
-          moduleNameMapper: {
-            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
-            '^(\\.{1,2}/.*)\\.js$': '$1'
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/*.test.ts',
+          '<rootDir>/src/storage/__test/StorageKnexMigrationFailure.security.test.ts'
+        ],
+        {
+          maxTestRunnerReuse: 8,
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
           }
         }
-      })
+      )
     },
     'wallet-snapshot-archive': {
       packageDirectory: 'packages/wallet/wallet-toolbox',

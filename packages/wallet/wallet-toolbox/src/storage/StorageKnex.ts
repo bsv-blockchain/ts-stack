@@ -1,3 +1,5 @@
+import { dropGenerationForDataDeletion } from './schema/snapshotSqliteIndexMigration'
+import { migration as SNAPSHOT_SQLITE_INDEX_MIGRATION } from './schema/snapshotSqliteIndexState'
 import { SnapshotResourceLimitError } from './snapshot/SnapshotResourceLimitError'
 import { readGuardedSnapshotArchive, recoverSnapshotArchiveGuards } from './snapshot/archive/SnapshotArchiveGuard'
 import type { SnapshotArchiveRequestOwner } from './snapshot/archive/SnapshotArchiveRequest'
@@ -2038,6 +2040,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async dropAllData(): Promise<void> {
     // Only using migrations to migrate down, don't need valid properties for settings table.
     const migrationSource = new KnexMigrations('test', '', '', 1024)
+    migrationSource.migrations[SNAPSHOT_SQLITE_INDEX_MIGRATION].down = dropGenerationForDataDeletion
 
     // Check if this is a SQLite database by looking at the Knex client config
     const clientName = (this.knex.client as { config?: { client?: string } }).config?.client ?? ''
@@ -2060,6 +2063,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
 
     try {
+      // An interrupted, unpublished generation has no journal entry to roll back.
+      // Explicit full deletion still removes its owned auxiliary schema first.
+      await dropGenerationForDataDeletion(this.knex)
       for (let i = 0; i < count; i++) {
         const version = await this.knex.migrate.currentVersion(config)
         if (version === 'none') return

@@ -1,3 +1,4 @@
+import type { SnapshotIndexState } from '../../schema/snapshotSqliteIndexState'
 import type { Knex } from 'knex'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
 import { runInSeries } from '../../../utility/runInSeries'
@@ -127,10 +128,10 @@ const references: readonly Reference[] = [
 export async function assertKnexSnapshotArchiveClosure(
   k: Knex,
   userId: number,
-  profileIndexes = false,
-  relationIndexes = false,
-  certificateIndexes = false,
-  globalIndexes = false
+  profileIndexes: SnapshotIndexState = false,
+  relationIndexes: SnapshotIndexState = false,
+  certificateIndexes: SnapshotIndexState = false,
+  globalIndexes: SnapshotIndexState = false
 ): Promise<void> {
   if (!Number.isSafeInteger(userId) || userId < 1) throw new WERR_INVALID_PARAMETER('userId', 'a positive safe ID')
   await runInSeries(references, async reference => {

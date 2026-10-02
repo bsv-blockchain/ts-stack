@@ -1,3 +1,4 @@
+import { readGenerationIndexState, type SnapshotIndexState } from '../schema/snapshotSqliteIndexState'
 import { readSnapshotGlobalIndexState } from '../schema/snapshotGlobalIndexMigration'
 import { readSnapshotCertificateIndexState } from '../schema/snapshotCertificateIndexMigration'
 import { readSnapshotRelationIndexState } from '../schema/snapshotRelationIndexMigration'
@@ -32,15 +33,27 @@ interface TableDefinition {
 // storage-key order, not the canonical BRC-38 array order.
 const definitions: Record<WalletSnapshotTable, TableDefinition> = {
   provenTxs: { name: 'proven_txs', keys: ['provenTxId'] },
-  provenTxReqs: { name: 'proven_tx_reqs', keys: ['provenTxReqId'], booleans: ['notified', 'wasBroadcast'] },
+  provenTxReqs: {
+    name: 'proven_tx_reqs',
+    keys: ['provenTxReqId'],
+    booleans: ['notified', 'wasBroadcast']
+  },
   outputBaskets: { name: 'output_baskets', keys: ['basketId'], booleans: ['isDeleted'] },
   transactions: { name: 'transactions', keys: ['transactionId'], booleans: ['isOutgoing'] },
   commissions: { name: 'commissions', keys: ['commissionId'], booleans: ['isRedeemed'] },
   outputs: { name: 'outputs', keys: ['outputId'], booleans: ['spendable', 'change'] },
   outputTags: { name: 'output_tags', keys: ['outputTagId'], booleans: ['isDeleted'] },
-  outputTagMaps: { name: 'output_tags_map', keys: ['outputTagId', 'outputId'], booleans: ['isDeleted'] },
+  outputTagMaps: {
+    name: 'output_tags_map',
+    keys: ['outputTagId', 'outputId'],
+    booleans: ['isDeleted']
+  },
   txLabels: { name: 'tx_labels', keys: ['txLabelId'], booleans: ['isDeleted'] },
-  txLabelMaps: { name: 'tx_labels_map', keys: ['txLabelId', 'transactionId'], booleans: ['isDeleted'] },
+  txLabelMaps: {
+    name: 'tx_labels_map',
+    keys: ['txLabelId', 'transactionId'],
+    booleans: ['isDeleted']
+  },
   certificates: { name: 'certificates', keys: ['certificateId'], booleans: ['isDeleted'] },
   certificateFields: { name: 'certificate_fields', keys: ['fieldName', 'certificateId'] },
   syncStates: { name: 'sync_states', keys: ['syncStateId'], booleans: ['init'], dates: ['when'] }
@@ -57,7 +70,10 @@ const auxiliaryTableIds: Partial<Record<WalletSnapshotTable, number>> = {
   syncStates: 7
 }
 
-const auxiliaryRelationTableIds: Partial<Record<WalletSnapshotTable, number>> = { txLabelMaps: 0, outputTagMaps: 1 }
+const auxiliaryRelationTableIds: Partial<Record<WalletSnapshotTable, number>> = {
+  txLabelMaps: 0,
+  outputTagMaps: 1
+}
 
 function definition(table: WalletSnapshotTable): TableDefinition {
   if (!Object.hasOwn(definitions, table)) throw new WERR_INVALID_PARAMETER('table', 'a wallet snapshot table')
@@ -131,12 +147,16 @@ function owned(k: Knex, table: string, id: string, source: string, userId: numbe
     .whereRaw('?? = ??', [`${table}.${id}`, source])
 }
 
-const globalTableIds: Partial<Record<WalletSnapshotTable, number>> = { provenTxReqs: 0, provenTxs: 1 }
+const globalTableIds: Partial<Record<WalletSnapshotTable, number>> = {
+  provenTxReqs: 0,
+  provenTxs: 1
+}
 function relationSourceQuery(
   k: Knex,
   table: WalletSnapshotTable,
   userId: number,
-  relationId: number
+  relationId: number,
+  state: SnapshotIndexState
 ): Knex.QueryBuilder {
   const { name } = definitions[table]
 
@@ -146,7 +166,9 @@ function relationSourceQuery(
   // auxiliary primary key whose suffix is the unchanged cursor order.
   const relationKeys = String(k.client.config.client).includes('mysql')
     ? k.raw('?? FORCE INDEX (??)', ['snapshot_relation_keys', 'PRIMARY'])
-    : 'snapshot_relation_keys'
+    : state === 'v2'
+      ? 'snapshot_relation_keys_v2'
+      : 'snapshot_relation_keys'
   const query = k(relationKeys)
     .crossJoin(name, function () {
       void this.on('snapshotLeftId', '=', `${name}.${left}`).andOn('snapshotRightId', '=', `${name}.${right}`)
@@ -158,13 +180,15 @@ function relationSourceQuery(
     void query.whereBetween('snapshotMembership', [1, 3]).hintComment(['JOIN_FIXED_ORDER()', `JOIN_INDEX(${name})`])
   return query
 }
-function certificateSourceQuery(k: Knex, userId: number): Knex.QueryBuilder {
+function certificateSourceQuery(k: Knex, userId: number, state: SnapshotIndexState): Knex.QueryBuilder {
   const name = 'certificate_fields'
 
   const mysql = String(k.client.config.client).includes('mysql')
   const keys = mysql
     ? k.raw('?? FORCE INDEX (??)', ['snapshot_certificate_field_keys', 'PRIMARY'])
-    : 'snapshot_certificate_field_keys'
+    : state === 'v2'
+      ? 'snapshot_certificate_field_keys_v2'
+      : 'snapshot_certificate_field_keys'
   const query = k(keys)
     .crossJoin(name, function () {
       void this.on('snapshotFieldName', '=', `${name}.fieldName`).andOn(
@@ -180,13 +204,21 @@ function certificateSourceQuery(k: Knex, userId: number): Knex.QueryBuilder {
       .hintComment(['JOIN_FIXED_ORDER()', 'JOIN_INDEX(certificate_fields)'])
   return query
 }
-function globalSourceQuery(k: Knex, table: WalletSnapshotTable, userId: number, globalId: number): Knex.QueryBuilder {
+function globalSourceQuery(
+  k: Knex,
+  table: WalletSnapshotTable,
+  userId: number,
+  globalId: number,
+  state: SnapshotIndexState
+): Knex.QueryBuilder {
   const { name } = definitions[table]
 
   const mysql = String(k.client.config.client).includes('mysql')
   const keys = mysql
     ? k.raw('?? FORCE INDEX (??)', ['snapshot_global_keys', 'snapshot_global_page'])
-    : 'snapshot_global_keys'
+    : state === 'v2'
+      ? 'snapshot_global_keys_v2'
+      : 'snapshot_global_keys'
   const query = k(keys)
     .crossJoin(name, 'rowId', `${name}.${definitions[table].keys[0]}`)
     .where({ tableId: globalId, userId, present: 1 })
@@ -200,23 +232,24 @@ export function walletSnapshotSourceQuery(
   k: Knex,
   table: WalletSnapshotTable,
   userId: number,
-  profileIndexes = false,
-  relationIndexes = false,
-  certificateIndexes = false,
-  globalIndexes = false
+  profileIndexes: SnapshotIndexState = false,
+  relationIndexes: SnapshotIndexState = false,
+  certificateIndexes: SnapshotIndexState = false,
+  globalIndexes: SnapshotIndexState = false
 ): Knex.QueryBuilder {
   const { name } = definitions[table]
   const tableId = auxiliaryTableIds[table]
   if (profileIndexes && tableId !== undefined)
-    return k('snapshot_profile_keys')
+    return k(profileIndexes === 'v2' ? 'snapshot_profile_keys_v2' : 'snapshot_profile_keys')
       .crossJoin(name, 'snapshotRowId', `${name}.${definitions[table].keys[0]}`)
       .where({ snapshotTableId: tableId, snapshotUserId: userId })
       .where(`${name}.userId`, userId)
   const relationId = auxiliaryRelationTableIds[table]
-  if (relationIndexes && relationId !== undefined) return relationSourceQuery(k, table, userId, relationId)
-  if (certificateIndexes && table === 'certificateFields') return certificateSourceQuery(k, userId)
+  if (relationIndexes && relationId !== undefined)
+    return relationSourceQuery(k, table, userId, relationId, relationIndexes)
+  if (certificateIndexes && table === 'certificateFields') return certificateSourceQuery(k, userId, certificateIndexes)
   const globalId = globalTableIds[table]
-  if (globalIndexes && globalId !== undefined) return globalSourceQuery(k, table, userId, globalId)
+  if (globalIndexes && globalId !== undefined) return globalSourceQuery(k, table, userId, globalId, globalIndexes)
   const query = k(name)
   if (table === 'provenTxReqs') {
     return query.whereExists(owned(k, 'transactions', 'txid', `${name}.txid`, userId))
@@ -323,10 +356,10 @@ interface SnapshotContext {
   storage: StorageKnex
   userId: number
   snapshotId: string
-  profileIndexes: boolean
-  relationIndexes: boolean
-  certificateIndexes: boolean
-  globalIndexes: boolean
+  profileIndexes: SnapshotIndexState
+  relationIndexes: SnapshotIndexState
+  certificateIndexes: SnapshotIndexState
+  globalIndexes: SnapshotIndexState
   columns: Map<WalletSnapshotTable, string[]>
 }
 
@@ -410,8 +443,22 @@ async function readPage<T extends WalletSnapshotTable>(
     const raw: Array<Record<string, unknown>> = await query
     rows = raw.map(row => normalize(storage, row, schema))
   }
-  return { rows, payloadBytes, cursor, done: count === candidates.length && candidates.length < limits.maxRows }
+  return {
+    rows,
+    payloadBytes,
+    cursor,
+    done: count === candidates.length && candidates.length < limits.maxRows
+  }
 }
+
+// Keep the existing optional positional call contract while grouping the four
+// index-generation selections captured by the same retained view.
+type SnapshotIndexFlags = [
+  profileIndexes?: SnapshotIndexState,
+  relationIndexes?: SnapshotIndexState,
+  certificateIndexes?: SnapshotIndexState,
+  globalIndexes?: SnapshotIndexState
+]
 
 /** Bind every page to one provider-owned view and immutable profile identifiers. */
 export function createKnexWalletSnapshotPageReader(
@@ -419,10 +466,12 @@ export function createKnexWalletSnapshotPageReader(
   userId: number,
   snapshotId: string,
   view: RetainedReadSnapshot,
-  profileIndexes = false,
-  relationIndexes = false,
-  certificateIndexes = false,
-  globalIndexes = false
+  ...[
+    profileIndexes = false,
+    relationIndexes = false,
+    certificateIndexes = false,
+    globalIndexes = false
+  ]: SnapshotIndexFlags
 ): WalletReadSnapshot['readPage'] {
   const context: SnapshotContext = {
     storage,
@@ -460,21 +509,24 @@ export async function openKnexWalletReadSnapshot(
   try {
     const { header, profileIndexes, relationIndexes, certificateIndexes, globalIndexes } = await view.read(
       async trx => {
+        const generation = await readGenerationIndexState(storage.toDb(trx), storage.knex.client.config.migrations)
         const sourceStorage = await storage.readSettings(trx)
         const user = await storage.findUserByIdentityKey(identityKey, trx)
         if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
         return {
           header: { sourceStorage, user },
-          profileIndexes: await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
-          relationIndexes: await readSnapshotRelationIndexState(
-            storage.toDb(trx),
-            storage.knex.client.config.migrations
-          ),
-          globalIndexes: await readSnapshotGlobalIndexState(storage.toDb(trx), storage.knex.client.config.migrations),
-          certificateIndexes: await readSnapshotCertificateIndexState(
-            storage.toDb(trx),
-            storage.knex.client.config.migrations
-          )
+          profileIndexes:
+            generation ??
+            (await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
+          relationIndexes:
+            generation ??
+            (await readSnapshotRelationIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
+          globalIndexes:
+            generation ??
+            (await readSnapshotGlobalIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
+          certificateIndexes:
+            generation ??
+            (await readSnapshotCertificateIndexState(storage.toDb(trx), storage.knex.client.config.migrations))
         }
       }
     )

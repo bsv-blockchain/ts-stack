@@ -1,3 +1,4 @@
+import { migrateBeforeSqliteGeneration } from '../../../test/utils/snapshotHistoricalMigrations'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,7 +27,7 @@ test('registered profile bootstrap survives reopening and publishes its journal 
     expect((await migrationSource.getMigration(SNAPSHOT_PROFILE_INDEX_MIGRATION)).config).toEqual({
       transaction: false
     })
-    await source.migrate('profile migration', 'synthetic-profile-migration')
+    await migrateBeforeSqliteGeneration(source, 'profile migration', 'synthetic-profile-migration')
     await source.makeAvailable()
     await database.migrate.down({ migrationSource, name: SNAPSHOT_PROFILE_INDEX_MIGRATION, disableTransactions: false })
     const priorJournal = await database('knex_migrations').orderBy('id')
@@ -49,7 +50,7 @@ test('registered profile bootstrap survives reopening and publishes its journal 
     }
     database.on('query', interrupt)
     try {
-      await expect(source.migrate('profile migration', 'synthetic-profile-migration')).rejects.toBe(failure)
+      await expect(migrateBeforeSqliteGeneration(source, 'profile migration', 'synthetic-profile-migration')).rejects.toBe(failure)
     } finally {
       database.off('query', interrupt)
     }
@@ -64,7 +65,7 @@ test('registered profile bootstrap survives reopening and publishes its journal 
     await source.destroy()
     database = knex(options)
     source = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: database })
-    await expect(source.migrate('profile migration', 'synthetic-profile-migration')).resolves.toBe(
+    await expect(migrateBeforeSqliteGeneration(source, 'profile migration', 'synthetic-profile-migration')).resolves.toBe(
       SNAPSHOT_GLOBAL_INDEX_MIGRATION
     )
     expect(await readSnapshotProfileIndexState(database)).toBe(true)

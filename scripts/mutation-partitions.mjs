@@ -27,6 +27,14 @@ const plans = new Map([
         ['src/storage/schema/snapshotGlobalIndexSqlite.ts', 'global-sqlite'],
         ['src/storage/schema/snapshotGlobalIndexBootstrap.ts', 'global-bootstrap'],
         ['src/storage/schema/snapshotGlobalIndexTriggers.ts', 'global-triggers'],
+        ['src/storage/schema/snapshotSqliteIdentity.ts', 'sqlite-identity'],
+        ['src/storage/schema/snapshotSqliteMembership.ts', 'sqlite-identity'],
+        ['src/storage/schema/snapshotSqliteIndexGeneration.ts', 'sqlite-generation'],
+        ['src/storage/schema/snapshotSqliteIndexBootstrap.ts', 'sqlite-bootstrap'],
+        ['src/storage/schema/snapshotSqliteIndexState.ts', 'sqlite-bootstrap'],
+        ['src/storage/schema/snapshotSqliteIndexRetirement.ts', 'sqlite-retirement'],
+        ['src/storage/schema/snapshotSqliteLegacyOwnership.ts', 'sqlite-generation'],
+        ['src/storage/schema/snapshotSqliteIndexMigration.ts', 'sqlite-retirement'],
         ['src/storage/StorageKnex.ts', 'storage'],
         ['src/storage/StorageProvider.ts', 'storage']
       ])

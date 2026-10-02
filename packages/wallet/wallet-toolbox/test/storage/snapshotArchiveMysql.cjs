@@ -145,7 +145,7 @@ async function captureFixture() {
     assert.equal(manifest.pages, 14)
     assert.equal(manifest.binding.sourceStorage.storageIdentityKey, 'native-source')
     assert.equal(manifest.binding.user.activeStorage, 'historical selection')
-    assert.equal(manifest.binding.sourceSchema, '2026-10-01-006 add snapshot global reference indexes')
+    assert.equal(manifest.binding.sourceSchema, '2026-10-02-001 repair snapshot SQLite conflict maintenance')
     const store = new KnexSnapshotArchiveStore(writer.knex)
     const first = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 8)).bytes)
     const second = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 9)).bytes)
@@ -433,7 +433,7 @@ async function requestFixture(writer, reader) {
       sourceStorageIdentityKey: 'native-source',
       digest: ready.digest
     })
-    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-01-006 add snapshot global reference indexes')
+    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-02-001 repair snapshot SQLite conflict maintenance')
     const page = await replacement.read(identity, ready.archiveId, 8)
     const decoded = decodeSyncTransfer(verifySnapshotArchivePage(page, verified.receipts[8]))
     assert.equal(decoded.rows[0].label, 'replacement')
