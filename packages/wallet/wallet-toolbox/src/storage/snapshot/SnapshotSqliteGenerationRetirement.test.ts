@@ -151,3 +151,95 @@ test.each(['{', 'null', '[null]', '[{"type":"table","name":"foreign","tbl_name":
     }
   }
 )
+
+test.each([-1, 257, 0.5, NaN, '256', undefined])(
+  'an invalid driver deletion count %s rolls back actual retired rows and progress',
+  async invalid => {
+    const k = await fixture('BINARY', false, false)
+    const client = Object.getPrototypeOf(k.client) as { processResponse: (...args: unknown[]) => unknown }
+    const original = client.processResponse
+    let response: ReturnType<typeof jest.spyOn> | undefined
+    try {
+      for (let start = 0; start < 600; start += 100)
+        await k('transactions').insert(
+          Array.from({ length: 100 }, (_, i) => value('transactions', start + i + 1, start + i + 1, 1))
+        )
+      const plan = await installGeneration(k)
+      let complete = false
+      for (let page = 0; page < 100 && !complete; page++) complete = (await copyGenerationPage(k, plan)).complete
+      expect(complete).toBe(true)
+      const before = await k('snapshot_global_edges').orderBy('transactionId')
+      expect(before).toHaveLength(600)
+      let injected = 0
+      response = jest.spyOn(client, 'processResponse').mockImplementation(function (this: unknown, ...args: unknown[]) {
+        const result = original.apply(this, args)
+        const query = args[0]
+        if (
+          typeof query === 'object' &&
+          query !== null &&
+          'sql' in query &&
+          typeof query.sql === 'string' &&
+          query.sql.startsWith('delete from `snapshot_global_edges`')
+        ) {
+          expect(result).toBe(256)
+          injected++
+          return invalid
+        }
+        return result
+      })
+      await expect(retireGenerationPage(k, plan)).rejects.toThrow('Invalid retirement row count')
+      expect(injected).toBe(1)
+      response.mockRestore()
+      response = undefined
+      expect(await k('snapshot_global_edges').orderBy('transactionId')).toEqual(before)
+      expect(await k(metadata).first('retireTable')).toEqual({ retireTable: 0 })
+      expect(await k('transactions')).toHaveLength(600)
+    } finally {
+      response?.mockRestore()
+      await k.destroy()
+    }
+  }
+)
+
+test('the final nonempty legacy table reports completion only after its empty-table drop commits', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k('certificates').insert(value('certificates', 1, 1, 1))
+    for (let start = 0; start < 257; start += 100)
+      await k('certificate_fields').insert(
+        Array.from({ length: Math.min(100, 257 - start) }, (_, i) => ({
+          userId: 1,
+          certificateId: 1,
+          fieldName: 'field-' + (start + i),
+          fieldValue: 'v'
+        }))
+      )
+    const plan = await installGeneration(k)
+    let complete = false
+    for (let n = 0; n < 100 && !complete; n++) complete = (await copyGenerationPage(k, plan)).complete
+    expect(complete).toBe(true)
+    const table = retiredTables.at(-1)!
+    let finalPage: Awaited<ReturnType<typeof retireGenerationPage>> | undefined
+    for (let n = 0; n < 20; n++) {
+      const page = await retireGenerationPage(k, plan)
+      expect(page.complete).toBe(false)
+      if (page.table === table) {
+        finalPage = page
+        break
+      }
+    }
+    expect(finalPage).toEqual({ complete: false, removed: 256, table })
+    expect(await k(table)).toHaveLength(1)
+    expect(await k(metadata).first('retireTable')).toEqual({ retireTable: retiredTables.length - 1 })
+    expect(await retireGenerationPage(k, plan)).toEqual({ complete: false, removed: 1, table })
+    expect(await k.schema.hasTable(table)).toBe(true)
+    expect(await k(table)).toEqual([])
+    expect(await retireGenerationPage(k, plan)).toEqual({ complete: true, removed: 0, table })
+    expect(await k(metadata).first('retireTable')).toEqual({ retireTable: retiredTables.length })
+    for (const retired of retiredTables) expect(await k.schema.hasTable(retired)).toBe(false)
+    expect(await k('certificate_fields')).toHaveLength(257)
+    expect(await k(names.certificate)).toHaveLength(257)
+  } finally {
+    await k.destroy()
+  }
+})
