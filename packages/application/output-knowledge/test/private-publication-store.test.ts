@@ -1,4 +1,10 @@
 import { expect, it } from '@jest/globals'
+import { canonicalOutputJSON } from '@bsv/sdk'
+import {
+  createPrivatePublicationRecords,
+  privatePublicationFenceAddress
+} from '../src/private/PrivatePublicationRecords.js'
+import { protectedValue } from '../src/private/ProtectedLedgerCodec.js'
 import { spawnSync } from 'node:child_process'
 import { SQLitePrivatePublicationStore } from '../src/private/SQLitePrivatePublicationStore.js'
 import {
@@ -156,7 +162,12 @@ it('does not promise staging after the clock reaches its deadline at the commit 
   let reads = 0
   expect(() =>
     f.store.stage(request(), selected(), '20', () => (++reads === 1 ? '19' : '20'), allow)
-  ).toThrow(expect.objectContaining({ code: 'expired' }))
+  ).toThrow(
+    expect.objectContaining({
+      code: 'expired',
+      message: 'Private publication staging deadline has elapsed'
+    })
+  )
   expect(f.rows()).toHaveLength(0)
 })
 it('rechecks admission reservation deadline inside the physical commit gate', () => {
@@ -171,7 +182,12 @@ it('rechecks admission reservation deadline inside the physical commit gate', ()
       () => (++reads <= 2 ? '19' : '20'),
       allow
     )
-  ).toThrow(expect.objectContaining({ code: 'expired' }))
+  ).toThrow(
+    expect.objectContaining({
+      code: 'expired',
+      message: 'Private publication staging deadline has elapsed'
+    })
+  )
   const recovered = f.reopen().load(state.publicationId, clock, allow)!
   expect(recovered.fence.state.progress.phase).toBe('staged')
   expect(recovered.observedAt).toBe('20')
@@ -205,7 +221,9 @@ it('reports an absent publication without making a new request fence', () => {
   expect(f.store.load('00'.repeat(32), clock, allow)).toBeUndefined()
   expect(() =>
     f.store.advance('00'.repeat(32), '1', { kind: 'reserve-admission' }, clock, allow)
-  ).toThrow(expect.objectContaining({ code: 'not-found' }))
+  ).toThrow(
+    expect.objectContaining({ code: 'not-found', message: 'Private publication is absent' })
+  )
   expect(f.rows()).toHaveLength(0)
 })
 
@@ -247,3 +265,309 @@ it.each(['staged', 'admitting', 'binding', 'ready'] as const)(
     expect(f.reopen().load(restored.publicationId, clock, allow)!.request).toEqual(request())
   }
 )
+
+it.each([null, {}, 'extension', Array.from({ length: 33 }, (_, i) => `urn:test:${i}`)])(
+  'requires a bounded extension array before opening a publication reservation: %j',
+  supportedExtensions => {
+    const f = fixture()
+    expect(
+      () =>
+        new SQLitePrivatePublicationStore(f.owner, {
+          ...limits(),
+          supportedExtensions
+        } as unknown as ConstructorParameters<typeof SQLitePrivatePublicationStore>[1])
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Invalid private publication extensions'
+      })
+    )
+    expect(f.rows()).toHaveLength(0)
+  }
+)
+it.each(['', 42, null, 'x'.repeat(1025)])(
+  'validates each installed extension name: %j',
+  extension => {
+    const f = fixture()
+    expect(
+      () =>
+        new SQLitePrivatePublicationStore(f.owner, {
+          ...limits(),
+          supportedExtensions: [extension]
+        } as unknown as ConstructorParameters<typeof SQLitePrivatePublicationStore>[1])
+    ).toThrow()
+    expect(f.rows()).toHaveLength(0)
+  }
+)
+it('accepts all 32 supported extensions and retains their critical request semantics', () => {
+  const f = fixture(),
+    supportedExtensions = Array.from({ length: 32 }, (_, i) => `urn:test:${i}`)
+  const store = new SQLitePrivatePublicationStore(f.owner, { ...limits(), supportedExtensions })
+  const input = {
+    ...request(),
+    extensions: Object.fromEntries(supportedExtensions.map(name => [name, true])),
+    critical: supportedExtensions
+  }
+  const state = store.stage(input, selected(), '20', clock, allow)
+  expect(store.load(state.publicationId, clock, allow)!.request).toEqual(input)
+})
+it('bounds the entire installation configuration before validating its members', () => {
+  const f = fixture()
+  expect(
+    () =>
+      new SQLitePrivatePublicationStore(f.owner, {
+        ...limits(),
+        supportedExtensions: Array.from({ length: 32 }, () => 'x'.repeat(600))
+      })
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(f.rows()).toHaveLength(0)
+})
+it('bounds the entire publisher and lookup selection before member validation or effects', () => {
+  const f = fixture()
+  expect(() =>
+    f.store.stage(request(), { ...selected(), publisher: 'x'.repeat(16384) }, '20', clock, allow)
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(f.rows()).toHaveLength(0)
+})
+it('rejects an already elapsed staging deadline during the initial read, before another guard', () => {
+  const f = fixture()
+  let gates = 0
+  expect(() =>
+    f.store.stage(
+      request(),
+      selected(),
+      '20',
+      () => '20',
+      () => {
+        gates++
+      }
+    )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'expired',
+      message: 'Private publication staging deadline has elapsed'
+    })
+  )
+  expect(gates).toBe(1)
+  expect(f.rows()).toHaveLength(0)
+})
+it('accepts the exact reservation for the complete future progress envelope and rejects one byte less', () => {
+  const f = fixture()
+  const prepared = createPrivatePublicationRecords(
+    request(),
+    f.owner.identity,
+    { ...selected(), chain: config().identity.chain },
+    '0',
+    '20'
+  )
+  // Count the independently serialized framing and the maximum complete state.
+  const bytes =
+    Buffer.byteLength(canonicalOutputJSON(prepared.fence)) -
+    Buffer.byteLength(canonicalOutputJSON(prepared.fence.state)) +
+    65536
+  const tooSmall = new SQLitePrivatePublicationStore(f.owner, {
+    ...limits(),
+    maximumFenceBytes: bytes - 1
+  })
+  expect(() => staged(tooSmall)).toThrow(
+    expect.objectContaining({
+      code: 'limited',
+      message: 'Private publication completion does not fit its reservation'
+    })
+  )
+  expect(f.rows()).toHaveLength(0)
+  const exact = new SQLitePrivatePublicationStore(f.owner, {
+    ...limits(),
+    maximumFenceBytes: bytes
+  })
+  const state = staged(exact)
+  expect(exact.load(state.publicationId, clock, allow)!.record.reservedBytes).toBe(bytes)
+})
+it.each(['request', 'blob'] as const)(
+  'preserves typed %s retry conflicts and the original records',
+  conflict => {
+    const f = fixture(),
+      state = staged(f.store)
+    const input = {
+      ...request(),
+      privateValues: 'BA==',
+      ...(conflict === 'blob' ? { requestId: 'synthetic-publish-2' } : {})
+    }
+    expect(() => f.store.stage(input, selected(), '20', clock, allow)).toThrow(
+      expect.objectContaining({
+        code: 'conflict',
+        message: `Private publication ${conflict} conflicts`
+      })
+    )
+    expect(f.reopen().load(state.publicationId, clock, allow)!.request).toEqual(request())
+    expect(f.rows()).toHaveLength(2)
+  }
+)
+it('refuses a retained fence whose protected blob is absent, both on retry and load', () => {
+  const f = fixture()
+  const prepared = createPrivatePublicationRecords(
+    request(),
+    f.owner.identity,
+    { ...selected(), chain: config().identity.chain },
+    '10',
+    '20'
+  )
+  const address = privatePublicationFenceAddress(
+    f.owner.identity,
+    prepared.fence.state.publicationId
+  )
+  f.owner.ledger.commit(
+    '0',
+    [
+      {
+        ...address,
+        expectedRevision: null,
+        reservedBytes: 131072,
+        reservedUpdates: 5,
+        value: protectedValue(prepared.fence, 131072).value
+      }
+    ],
+    clock,
+    allow
+  )
+  expect(() => staged(f.store)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Private publication blob is unavailable'
+    })
+  )
+  expect(() => f.reopen().load(prepared.fence.state.publicationId, clock, allow)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Private publication retained records are unavailable'
+    })
+  )
+  expect(f.rows()).toHaveLength(1)
+})
+it('rejects an individually valid retained pair stored under a different publication address', () => {
+  const f = fixture()
+  const prepared = createPrivatePublicationRecords(
+    request(),
+    f.owner.identity,
+    { ...selected(), chain: config().identity.chain },
+    '10',
+    '20'
+  )
+  const wrongId = 'aa'.repeat(32),
+    address = privatePublicationFenceAddress(f.owner.identity, wrongId)
+  f.owner.ledger.commit(
+    '0',
+    [
+      {
+        ...address,
+        expectedRevision: null,
+        reservedBytes: 131072,
+        reservedUpdates: 5,
+        value: protectedValue(prepared.fence, 131072).value
+      },
+      {
+        kind: 'publication',
+        key: prepared.fence.state.blobKey,
+        expectedRevision: null,
+        reservedBytes: 4096,
+        reservedUpdates: 0,
+        value: protectedValue(prepared.blob, 4096).value
+      }
+    ],
+    clock,
+    allow
+  )
+  expect(() => f.reopen().load(wrongId, clock, allow)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Private publication address binding differs'
+    })
+  )
+  expect(f.rows()).toHaveLength(2)
+})
+it('consumes each promised update once and retains two slots through readiness loss and restoration', () => {
+  const f = fixture(),
+    state = staged(f.store)
+  const updates = () => f.reopen().load(state.publicationId, clock, allow)!.record.reservedUpdates
+  expect(updates()).toBe(5)
+  f.store.advance(state.publicationId, '1', { kind: 'reserve-admission' }, clock, allow)
+  expect(updates()).toBe(4)
+  f.store.advance(
+    state.publicationId,
+    '2',
+    { kind: 'admitted', admission: admission(state) },
+    clock,
+    allow
+  )
+  expect(updates()).toBe(3)
+  f.store.advance(
+    state.publicationId,
+    '3',
+    { kind: 'bound', binding: binding(state) },
+    clock,
+    allow
+  )
+  expect(updates()).toBe(2)
+  f.store.advance(
+    state.publicationId,
+    '4',
+    { kind: 'unavailable', reason: 'lookup offline' },
+    clock,
+    allow
+  )
+  expect(updates()).toBe(2)
+  f.store.advance(
+    state.publicationId,
+    '5',
+    { kind: 'restored', binding: binding(state) },
+    clock,
+    allow
+  )
+  expect(updates()).toBe(2)
+})
+it.each(['rejected', 'expired'] as const)(
+  'preserves remaining promised capacity after %s without new reservations',
+  kind => {
+    const f = fixture(),
+      state = staged(f.store)
+    const event =
+      kind === 'rejected'
+        ? { kind, reason: 'invalid publication', noEffect: true as const }
+        : { kind, reason: 'staging elapsed' }
+    f.store.advance(state.publicationId, '1', event, () => '20', allow)
+    const loaded = f.reopen().load(state.publicationId, clock, allow)!
+    expect(loaded.record.reservedUpdates).toBe(4)
+    expect(loaded.fence.state.progress.phase).toBe(kind)
+  }
+)
+it('requires a synchronous result at the physical stage gate and rolls back both records', () => {
+  const f = fixture()
+  let gates = 0
+  expect(() =>
+    f.store.stage(request(), selected(), '20', clock, () => (++gates === 2 ? true : undefined))
+  ).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Private publication guard must be synchronous'
+    })
+  )
+  expect(gates).toBe(2)
+  expect(f.rows()).toHaveLength(0)
+})
+it('requires a synchronous result at the physical advance gate and preserves the reserved phase', () => {
+  const f = fixture(),
+    state = staged(f.store)
+  let gates = 0
+  expect(() =>
+    f.store.advance(state.publicationId, '1', { kind: 'reserve-admission' }, clock, () =>
+      ++gates === 3 ? true : undefined
+    )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Private publication guard must be synchronous'
+    })
+  )
+  expect(gates).toBe(3)
+  expect(f.reopen().load(state.publicationId, clock, allow)!.record.revision).toBe('1')
+})

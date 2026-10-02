@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 109)
+  assert.equal(result.summary.propertySuites, 110)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 109)
+  assert.equal(result.summary.mutationTargets, 110)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -151,6 +151,33 @@ test('overlay discovery excludes generated children while preserving its own mut
       const ignored = file => patterns.some(pattern => pattern.test(`${root}/${file}`))
       assert.equal(ignored('src/__tests__/OverlayExpress.test.ts'), false)
       assert.equal(ignored('src/__tests__/RootEvictionResponseGuard.property.test.ts'), false)
+      assert.equal(ignored('.stryker-tmp/sandbox-two/package.json'), true)
+      assert.equal(ignored('.stryker-tmp/sandbox-two/src/__tests/example.test.ts'), true)
+      assert.equal(ignored('dist/src/__tests/example.test.ts'), true)
+      assert.equal(ignored('xstryker-tmp/src/__tests/example.test.ts'), false)
+    }
+    const tests = config.testPathIgnorePatterns.map(
+      pattern =>
+        new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    )
+    assert.equal(
+      tests.some(pattern => pattern.test(`${root}/node_modules/dependency/example.test.ts`)),
+      true
+    )
+  }
+})
+
+test('overlay Engine discovery excludes generated children while preserving its own mutation root', async () => {
+  const { default: config } = await import('../packages/overlays/overlay/jest.config.js')
+  for (const root of ['/overlay', '/overlay/.stryker-tmp/sandbox-one']) {
+    for (const selected of [config.testPathIgnorePatterns, config.modulePathIgnorePatterns]) {
+      const patterns = selected.map(
+        pattern =>
+          new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+      )
+      const ignored = file => patterns.some(pattern => pattern.test(`${root}/${file}`))
+      assert.equal(ignored('src/__tests/Engine.test.ts'), false)
+      assert.equal(ignored('src/__tests/PrivatePublicationAdmission.property.test.ts'), false)
       assert.equal(ignored('.stryker-tmp/sandbox-two/package.json'), true)
       assert.equal(ignored('.stryker-tmp/sandbox-two/src/__tests/example.test.ts'), true)
       assert.equal(ignored('dist/src/__tests/example.test.ts'), true)
@@ -627,7 +654,7 @@ test('local advertisement verification retains the full signed-request source an
 
 test('proposal admission retains its complete source and generated provenance tests', () => {
   const target = buildMutationTargets(REPOSITORY_ROOT)['overlay-proposal-admission']
-  assert.deepEqual(target.mutate, ['src/ProposalAdmission.ts'])
+  assert.deepEqual(target.mutate, ['src/ProposalAdmission.ts', 'src/RetainedTopicAdmission.ts'])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/src/__tests/ProposalAdmission.test.ts',
     '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
@@ -646,6 +673,50 @@ test('proposal admission retains its complete source and generated provenance te
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)
+})
+
+test('private publication admission retains both complete sources and original proposal regressions', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['overlay-private-publication-admission']
+  assert.deepEqual(target.mutate, [
+    'src/PrivatePublicationAdmission.ts',
+    'src/RetainedTopicAdmission.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/__tests/PrivatePublicationAdmission.test.ts',
+    '<rootDir>/src/__tests/PrivatePublicationAdmission.property.test.ts',
+    '<rootDir>/src/__tests/ProposalAdmission.test.ts',
+    '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, [
+    'src/EngineAdmission.ts',
+    'src/storage/AdmissionStorage.ts',
+    'src/ProposalAdmission.ts',
+    'src/__tests/ProposalAdmissionFixture.ts',
+    'src/__tests/PrivatePublicationAdmissionFixture.ts'
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = policy.targets.find(
+    value => value.id === 'overlay-private-publication-admission'
+  )
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+  const manifest = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, target.manifest), 'utf8'))
+  assert.match(manifest.scripts['test:property'], /PrivatePublicationAdmission\.property\.test\.ts/)
+  assert.deepEqual(manifest.typesVersions['*']['private-publication-admission'], [
+    'dist/types/src/PrivatePublicationAdmission.d.ts'
+  ])
+  assert.equal(
+    manifest.exports['./private-publication-admission'].import.default,
+    './dist/esm/src/PrivatePublicationAdmission.js'
+  )
+  assert.equal(
+    manifest.exports['./private-publication-admission'].require.default,
+    './dist/cjs/src/PrivatePublicationAdmission.js'
+  )
 })
 
 test('proposal send qualification retains the entire SQLite journal and all journal/service/send regressions', () => {

@@ -2075,3 +2075,72 @@ containing workflow is still running (HTTP403); no rerun occurred and the hosted
 failure remains unresolved. No workflow or service source was changed for this
 diagnosis. The permitted package installation used ignored scripts followed by the
 existing named better-sqlite3 rebuild.
+
+### Private publication admission and native boundary follow-up
+
+The full application native suite on14a4750bb passes2132 tests across154 suites
+in601.188 seconds. All10007 captured inputs and HEAD remained unchanged. The
+new publication mutation target completed all four whole-file parts with those
+same inputs: identity71/87, progress294/338, records101/117 and store102/149.
+The complete691-mutant union scores82.20%, with zero uncovered and invalid
+outcomes. This fails the unchanged90% gate. No part exit status substitutes for
+that aggregate result, and that source freeze is now complete.
+
+The follow-up preserves all original tests and adds exact reservation-envelope,
+extension, typed failure, commit-guard, retained-record relationship and native
+revision-capacity cases. Its isolated current-source selection passes137 tests
+across five suites, including actual process-loss recovery. These tests count the
+future progress framing independently and accept the exact capacity while
+rejecting one byte less; missing protected blobs and correctly authenticated
+records stored at a different publication address remain unavailable. Fresh
+complete mutation qualification is required; individual negative controls do
+not establish the target score.
+
+The optional private-publication admission entry uses actual retained Engine
+history and the existing off-chain-values argument. It requires a separately
+verified and durably reserved publication, exact original signed capability and
+installed current-context guard. Its result distinguishes selected-output
+admission, definitive exclusion and unresolved work. Exclusion does not mean
+transaction-wide rollback. Reusing original public admission requires explicit
+installation policy and independent private validation. The shared retained
+receipt validator preserves the proposal adapter's original assessment identity
+and existing behavior.
+
+Before adoption, the private adapter and preserved proposal regressions passed
+107 tests across five suites, including two canonical300-case properties and
+three actual Engine/Mongo replica-set integration cases. The native cases
+exercise private-value delivery, lost-reply recovery, explicit public history
+reuse and retained history after serving eviction; their pinned public BRC-62
+proof roots do not replace the full service's independent header policy. Initial
+fixture corrections and successful strict compilation are retained in the local
+execution record. The new public subpath includes ESM, CJS, modern declarations
+and legacy TypeScript resolution; root exports and existing public submission
+behavior stay compatible. Full service/lookup/HTTP composition, complete new
+source qualification and terminal exact-head CI remain outstanding.
+
+
+The adopted selection passes all138 publication tests with the canonical300-case
+property budget, all107 private/proposal Engine tests including actual Mongo,
+strict builds and declarations, ESM/CJS packed consumers, and root health/lint/
+format/types. The first root format pass caught the appended README formatting;
+that formatting was corrected and the full check rerun successfully. All27 exact
+survivor controls (including14 native store controls) fail ordinary assertions,
+not import or compilation setup; complete qualification is still required.
+
+The first complete overlay test run also discovered an abandoned nested Stryker
+sandbox and attempted to execute its copied StorageContract test with an invalid
+fixture-relative path. That run was stopped and is not counted as validation.
+The Engine Jest configuration now excludes only nested generated children and
+retains the active mutation root; a regression checks real source/property tests,
+generated children, a similarly named real directory and node_modules. No live
+suite or mutant is excluded. The complete overlay suite must be rerun after this
+source-owned discovery correction.
+
+
+After the discovery fix, the complete overlay suite passes950 tests in46 suites
+in202.723 seconds. The existing opt-in Go localhost interop case remains skipped
+unless its separately governed external checkout is configured; no new skip was
+introduced. Root health/lint/format rerun successfully after the correction, and
+the previously completed root typecheck remains applicable (the correction only
+changes Jest discovery and its governance test). Complete mutation reports and
+hosted validation are the next acceptance boundary, not implied by these passes.

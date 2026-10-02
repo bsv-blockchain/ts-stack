@@ -722,11 +722,35 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/AdmissionStorage.ts',
         'src/__tests/ProposalAdmissionFixture.ts'
       ],
-      mutate: ['src/ProposalAdmission.ts'],
+      mutate: ['src/ProposalAdmission.ts', 'src/RetainedTopicAdmission.ts'],
       ...jestTarget('jest.config.js', [
         '<rootDir>/src/__tests/ProposalAdmission.test.ts',
         '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
       ])
+    },
+    'overlay-private-publication-admission': {
+      packageDirectory: 'packages/overlays/overlay',
+      manifest: 'packages/overlays/overlay/package.json',
+      propertyTest:
+        'packages/overlays/overlay/src/__tests/PrivatePublicationAdmission.property.test.ts',
+      additionalInputs: [
+        'src/EngineAdmission.ts',
+        'src/storage/AdmissionStorage.ts',
+        'src/ProposalAdmission.ts',
+        'src/__tests/ProposalAdmissionFixture.ts',
+        'src/__tests/PrivatePublicationAdmissionFixture.ts'
+      ],
+      mutate: ['src/PrivatePublicationAdmission.ts', 'src/RetainedTopicAdmission.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/__tests/PrivatePublicationAdmission.test.ts',
+          '<rootDir>/src/__tests/PrivatePublicationAdmission.property.test.ts',
+          '<rootDir>/src/__tests/ProposalAdmission.test.ts',
+          '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
+        ],
+        { maxTestRunnerReuse: 8 }
+      )
     },
     'overlay-root-response-guard': {
       packageDirectory: 'packages/overlays/overlay-express',

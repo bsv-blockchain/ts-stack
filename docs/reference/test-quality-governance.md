@@ -279,3 +279,13 @@ process-loss, deadline/authorization and 300-case native restart tests. Four wor
 the normal job deadlines, eight-execution worker recycling and the critical
 90%/zero-uncovered/zero-invalid aggregate remain required. No pure transition
 result or local part substitutes for actual admission/HTTP composition or final CI.
+
+
+The overlay-private-publication-admission target retains both complete admission
+and shared original-receipt validator modules, with private and existing proposal
+unit/property tests. The proposal target also retains the extracted validator and
+all its prior tests. Canonical property budgets, critical90%/zero-uncovered/
+zero-invalid acceptance and existing deadlines remain unchanged; workers for the
+new target recycle after eight executions. Native Engine/Mongo recovery tests run
+separately from this generated unit campaign. Neither replaces full package and
+exact-head hosted qualification.

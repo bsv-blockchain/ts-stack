@@ -57,6 +57,38 @@ function location() {
 }
 const clock = () => '100',
   allow = () => {}
+
+it('closes the physical ledger capability, including repeated close', () => {
+  const f = location(),
+    owner = f.create(),
+    address = reserve(owner)
+  owner.close()
+  owner.close()
+  expect(() => owner.ledger.read([address], clock, allow)).toThrow()
+  expect(f.open().ledger.read([address], clock, allow).records[0]?.value).toEqual({ id: 'one' })
+})
+
+it('bounds raw domain configuration before resolving custody or creating a file', () => {
+  const f = location()
+  let calls = 0
+  const guardedCustody = {
+    resolve() {
+      calls++
+      return indexKey
+    }
+  }
+  expect(() =>
+    PrivateServiceDomain.create(
+      f.path,
+      { ...config(), padding: 'x'.repeat(32768) } as PrivateServiceDomainConfiguration,
+      guardedCustody,
+      payloads()
+    )
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(calls).toBe(0)
+  expect(existsSync(f.path)).toBe(false)
+})
+
 function reserve(owner: PrivateServiceDomain, id = 'one') {
   const address = owner.identity.address('funding-fence', { acquisition: id })
   owner.ledger.commit(

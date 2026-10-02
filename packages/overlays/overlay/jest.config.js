@@ -1,8 +1,12 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {
   testEnvironment: 'node',
-  testPathIgnorePatterns: ['<rootDir>/dist/'],
-  modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '<rootDir>/dist/',
+    String.raw`<rootDir>/\.stryker-tmp/`
+  ],
+  modulePathIgnorePatterns: ['<rootDir>/dist/', String.raw`<rootDir>/\.stryker-tmp/`],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },

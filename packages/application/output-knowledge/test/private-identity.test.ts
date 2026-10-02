@@ -281,3 +281,101 @@ it('rejects nonobject application bindings and owns them before resolving custod
   expect(config.binding.application).toEqual({ profile: 'original' })
   expect(config.maximumRecords).toBe(16)
 })
+
+it('retains the complete chain and independent indexing-key commitment in the sealed configuration', () => {
+  const commitment = createHmac('sha256', key)
+    .update(
+      canonicalOutputJSON({
+        format: 'output-private-service-identity/1',
+        purpose: 'key-commitment',
+        ...scope
+      })
+    )
+    .digest('hex')
+  expect(identity().configuration(capacity, application)).toEqual({
+    ...capacity,
+    binding: {
+      identity: {
+        format: 'output-private-service-identity/1',
+        chain: scope.chain,
+        seller: scope.seller,
+        keyId: 'index-key',
+        keyCommitment: commitment
+      },
+      application
+    }
+  })
+})
+
+it('preserves typed client decisions for invalid labels, descriptors and unavailable custody', () => {
+  expect(() => new PrivateServiceIdentity(scope, { resolve: () => key }, 'bad key')).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Invalid private identity key label' })
+  )
+  expect(() => identity().address('quote', null as unknown as OutputJSONObject)).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Private identity descriptor must be an object'
+    })
+  )
+  const missing = {
+    resolve() {
+      throw new Error('synthetic provider details')
+    }
+  }
+  expect(() => new PrivateServiceIdentity(scope, missing, 'index-key')).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Private identity custody is unavailable'
+    })
+  )
+  let selected = key
+  const owner = new PrivateServiceIdentity(scope, { resolve: () => selected }, 'index-key')
+  selected = other
+  expect(() => owner.configuration(capacity, application)).toThrow(
+    expect.objectContaining({ code: 'unavailable', message: 'Private identity custody changed' })
+  )
+})
+
+it('requires a native secret KeyObject rather than key-like custody metadata', () => {
+  // Node accepts key option records for HMAC, but this installed custody contract
+  // promises an actual KeyObject and must not silently broaden that capability.
+  const keyLike = { key: Buffer.alloc(32, 71), type: 'secret', symmetricKeySize: 32 }
+  expect(
+    () =>
+      new PrivateServiceIdentity(
+        scope,
+        { resolve: () => keyLike as unknown as ReturnType<typeof createSecretKey> },
+        'index-key'
+      )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Private identity custody is unavailable'
+    })
+  )
+})
+
+it('enforces scope and capacity framing limits before custody or persistence work', () => {
+  let calls = 0
+  const custody = {
+    resolve() {
+      calls++
+      return key
+    }
+  }
+  expect(
+    () =>
+      new PrivateServiceIdentity(
+        { ...scope, padding: 'x'.repeat(4096) } as typeof scope,
+        custody,
+        'index-key'
+      )
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(calls).toBe(0)
+  const owner = new PrivateServiceIdentity(scope, custody, 'index-key')
+  const before = calls
+  expect(() =>
+    owner.configuration({ ...capacity, padding: 'x'.repeat(4096) } as typeof capacity, application)
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(calls).toBe(before)
+})

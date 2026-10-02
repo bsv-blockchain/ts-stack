@@ -37,6 +37,111 @@ const request = () => ({
 })
 const records = () => create(request(), identity(), selected(), '10', '20')
 
+it('keeps the permanent blob and request-fence purpose namespaces stable', () => {
+  const first = records(),
+    owner = identity()
+  expect(privatePublicationBlobAddress(owner, first.blob.binding)).toEqual(
+    owner.address('publication', {
+      purpose: 'private-publication-blob',
+      ...first.blob.binding,
+      chain: { ...first.blob.binding.chain }
+    })
+  )
+  expect(privatePublicationFenceAddress(owner, first.fence.state.publicationId)).toEqual(
+    owner.address('request-fence', {
+      purpose: 'private-publication',
+      publicationId: first.fence.state.publicationId
+    })
+  )
+})
+
+it('accepts the exact profile payload maximum and reports larger values as a typed limit', () => {
+  const first = records(),
+    privateValues = Buffer.alloc(1048576, 7).toString('base64')
+  expect(parsePrivatePublicationBlob({ ...first.blob, privateValues }).privateValues).toBe(
+    privateValues
+  )
+  expect(() =>
+    parsePrivatePublicationBlob({
+      ...first.blob,
+      privateValues: Buffer.alloc(1048577, 7).toString('base64')
+    })
+  ).toThrow(
+    expect.objectContaining({
+      code: 'limited',
+      message: 'Private publication payload exceeds 1 MiB'
+    })
+  )
+})
+
+it('reports unsupported blob and fence versions without relabeling them as invalid requests', () => {
+  const first = records()
+  expect(() =>
+    parsePrivatePublicationBlob({ ...first.blob, format: 'private-publication-blob/2' })
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: 'Unsupported private publication blob'
+    })
+  )
+  expect(() =>
+    parse({ ...first.fence, format: 'private-publication-fence/2' }, first.blob, identity())
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: 'Unsupported private publication fence'
+    })
+  )
+})
+
+it.each(['assetId', 'schema'] as const)(
+  'rejects individually valid records mixed across %s bindings',
+  field => {
+    const first = records(),
+      other = create(
+        {
+          ...request(),
+          [field]: field === 'assetId' ? '55'.repeat(32) : 'urn:synthetic:private:2'
+        },
+        identity(),
+        selected(),
+        '10',
+        '20'
+      )
+    // Both records are well-formed and the address matches the supplied blob. The
+    // complete relation must still bind that blob to this original semantic request.
+    const mixed = {
+      ...first.fence,
+      state: { ...first.fence.state, blobKey: other.fence.state.blobKey }
+    }
+    expect(() => parse(mixed, other.blob, identity())).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Private publication retained binding differs'
+      })
+    )
+  }
+)
+
+it('bounds complete selections and retained envelopes before interpreting their fields', () => {
+  const first = records()
+  expect(() =>
+    create(
+      request(),
+      identity(),
+      { ...selected(), padding: 'x'.repeat(16384) } as ReturnType<typeof selected>,
+      '10',
+      '20'
+    )
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(() =>
+    parsePrivatePublicationBlob({ ...first.blob, padding: 'x'.repeat(2 * 1024 * 1024) })
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(() =>
+    parse({ ...first.fence, padding: 'x'.repeat(2 * 1024 * 1024) }, first.blob, identity())
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+})
+
 it('keeps one owned protected blob distinct from each permanent operation fence', () => {
   const first = records()
   const decoded = parse(first.fence, first.blob, identity())

@@ -405,3 +405,21 @@ Current TS Stack changes are licensed under the Open BSV License Version 6; see
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+## Optional private publication admission bridge
+
+`@bsv/overlay/private-publication-admission` exports
+`OverlayPrivatePublicationAdmission`, an optional SDK3 adapter using the existing
+private off-chain values argument and original retained topic receipts. The caller
+first verifies publisher, schema and Bitcoin evidence and durably reserves the
+original request, contract/context and protected bytes. The adapter returns
+selected-output admission, definitive exclusion or unresolved work; none alone
+establishes a private lookup binding or ready publication. Explicitly configured
+reuse of an existing public admission still requires independent private validation.
+
+The [private publication admission guide](../../../docs/guides/private-publication-admission.md)
+covers exact contract binding, current guards, finite work/result limits, original
+receipt recovery, the public reuse policy and native Engine/Mongo validation.
+Existing root exports, public submissions, retained receipt bytes and proposal
+assessment identities remain unchanged. Installations that do not import or
+configure the new entry retain their existing behavior.

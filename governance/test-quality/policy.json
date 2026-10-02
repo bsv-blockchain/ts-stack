@@ -1136,6 +1136,18 @@
         ]
       },
       {
+        "path": "packages/overlays/overlay/src/__tests/PrivatePublicationAdmission.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Private publication admission with exact original context, explicit public history reuse, selected-output membership and bounded recoverable Engine effects",
+        "target": "At least 300 generated private-value, output-membership and reservation recovery combinations",
+        "invariants": [
+          "Only a bound original receipt can establish the selected output admission; empty duplicate STEAK remains unresolved.",
+          "Retry preserves original assessment identity and discloses only the selected topic.",
+          "Matching private-values context and explicit public reuse remain distinct from protected lookup readiness."
+        ]
+      },
+      {
         "path": "packages/application/output-knowledge/test/proposal-send.property.test.ts",
         "manifest": "packages/application/output-knowledge/package.json",
         "risk": "critical",

@@ -1,5 +1,6 @@
 import { expect, it } from '@jest/globals'
-import { PrivateKey, outputPacketDigest, type STEAK } from '@bsv/sdk'
+import { PrivateKey, canonicalOutputJSON, outputPacketDigest, type STEAK } from '@bsv/sdk'
+import { createHash } from 'node:crypto'
 import {
   advancePrivatePublicationProgress as advance,
   createPrivatePublicationProgress as create,
@@ -42,6 +43,131 @@ const binding = () => ({
 const bindingPending = () =>
   advance(admitting(), { kind: 'admitted', admission: admission() }, '12')
 const ready = () => advance(bindingPending(), { kind: 'bound', binding: binding() }, '13')
+
+it('preserves the independent permanent admission operation binding', () => {
+  const state = staged()
+  const expected = createHash('sha256')
+    .update(
+      canonicalOutputJSON({
+        format: 'private-publication-admission/1',
+        publicationId: state.publicationId,
+        requestDigest: state.requestDigest,
+        chain: selected.chain,
+        publisher: selected.publisher,
+        topic: request.topic,
+        txid: request.evidence.txid,
+        outputIndex: request.evidence.outputIndex,
+        blobKey: selected.blobKey
+      })
+    )
+    .digest('hex')
+  expect(privatePublicationOperation(state)).toBe(expected)
+  expect(privatePublicationOperation(ready())).toBe(expected)
+})
+
+it.each([null, [], true, 1, 'invalid'])(
+  'reports malformed progress %p as a typed parse error',
+  progress => {
+    expect(() => parse({ ...staged(), progress })).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Invalid publication progress'
+      })
+    )
+  }
+)
+
+it.each([null, [], true, 1, 'invalid'])(
+  'reports malformed events %p as a typed parse error',
+  event => {
+    expect(() => advance(staged(), event as unknown as PrivatePublicationEvent, '11')).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Invalid publication event'
+      })
+    )
+  }
+)
+
+it.each([{ kind: 'unknown' }, { kind: 'constructor' }, { kind: 42 }])(
+  'never dispatches unknown event %p',
+  event => {
+    expect(() => advance(staged(), event as unknown as PrivatePublicationEvent, '11')).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Unknown private publication event'
+      })
+    )
+  }
+)
+
+it('distinguishes unsupported persistence, malformed phases and inconsistent reserved operations', () => {
+  expect(() => parse({ ...staged(), format: 'private-publication-progress/2' })).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: 'Unsupported publication progress format'
+    })
+  )
+  expect(() => parse({ ...staged(), progress: { phase: 'unknown' } })).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Unknown publication progress'
+    })
+  )
+  expect(() =>
+    parse({ ...staged(), progress: { phase: 'admitting', operationId: '99'.repeat(32) } })
+  ).toThrow(
+    expect.objectContaining({
+      code: 'conflict',
+      message: 'Publication operation differs'
+    })
+  )
+})
+
+it('bounds whole progress and event bytes before selecting fields or dispatching', () => {
+  expect(() => parse({ ...staged(), padding: 'x'.repeat(65536) })).toThrow(
+    expect.objectContaining({ code: 'limited' })
+  )
+  expect(() =>
+    advance(
+      staged(),
+      { kind: 'reserve-admission', padding: 'x'.repeat(65536) } as PrivatePublicationEvent,
+      '11'
+    )
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+})
+
+it('preserves expired and conflict decisions for forbidden transition attempts', () => {
+  const expired = expect.objectContaining({ code: 'expired' })
+  const conflict = expect.objectContaining({ code: 'conflict' })
+  expect(() => create(request, selected, '20', '20')).toThrow(expired)
+  expect(() => advance(staged(), { kind: 'reserve-admission' }, '20')).toThrow(expired)
+  expect(() => advance(admitting(), { kind: 'reserve-admission' }, '12')).toThrow(conflict)
+  expect(() => advance(staged(), { kind: 'admitted', admission: admission() }, '12')).toThrow(
+    conflict
+  )
+  expect(() =>
+    advance(
+      admitting(),
+      { kind: 'admitted', admission: { ...admission(), txid: '99'.repeat(32) } },
+      '12'
+    )
+  ).toThrow(conflict)
+  expect(() => advance(staged(), { kind: 'bound', binding: binding() }, '12')).toThrow(conflict)
+  expect(() =>
+    advance(bindingPending(), { kind: 'bound', binding: { ...binding(), service: 'other' } }, '12')
+  ).toThrow(conflict)
+  expect(() =>
+    advance(bindingPending(), { kind: 'rejected', noEffect: true, reason: 'too late' }, '12')
+  ).toThrow(conflict)
+  expect(() => advance(admitting(), { kind: 'expired', reason: 'uncertain' }, '100')).toThrow(
+    conflict
+  )
+  expect(() => advance(staged(), { kind: 'unavailable', reason: 'not ready' }, '12')).toThrow(
+    conflict
+  )
+  expect(() => advance(ready(), { kind: 'restored', binding: binding() }, '14')).toThrow(conflict)
+})
 
 it('binds public identity and semantic retry fence while omitting secret material from progress and public status', () => {
   const state = staged()

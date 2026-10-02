@@ -928,6 +928,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "overlay-private-publication-admission",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/PrivatePublicationAdmission.property.test.ts",
+      "risk": "critical",
+      "boundary": "Private publication admission with exact original context, explicit public history reuse, selected-output membership and bounded recoverable Engine effects",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "proposal-journal-send",
       "manifest": "packages/application/output-knowledge/package.json",
       "propertyTest": "packages/application/output-knowledge/test/proposal-send.property.test.ts",

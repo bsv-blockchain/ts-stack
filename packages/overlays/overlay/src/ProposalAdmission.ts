@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { retainedTopicAdmission } from './RetainedTopicAdmission.js'
 import {
   canonicalOutputJSON,
   closedOutputObject,
@@ -23,7 +23,6 @@ import {
   type OutputSignedProposal,
   type STEAK
 } from '@bsv/sdk'
-import { parseOutputSTEAK } from '@bsv/sdk/overlay-tools/OutputObservation'
 import type { Engine } from './Engine.js'
 import {
   getOverlayAdmissionHost,
@@ -31,7 +30,6 @@ import {
   overlayAdmissionContextDigest
 } from './EngineAdmission.js'
 import {
-  admissionSemanticDigest,
   getAdmissionHistory,
   type AdmissionHistoryQuery,
   type RetainedAdmission
@@ -299,45 +297,7 @@ export class OverlayProposalAdmission {
     input: RetainedAdmission,
     tx: Transaction
   ): OverlayProposalAdmissionOutcome {
-    const { identity, receipt } = JSON.parse(
-      canonicalOutputJSON(input, { bytes: INPUT_LIMIT })
-    ) as RetainedAdmission
-    if (
-      canonicalOutputJSON(identity.scope) !== canonicalOutputJSON(query.scope) ||
-      identity.txid !== query.txid ||
-      identity.contextDigest !== query.contextDigest ||
-      !identity.topics.some(
-        item => item.topic === query.topic && item.policyId === query.policyId
-      ) ||
-      receipt.durability !== 'atomic-local' ||
-      receipt.semanticDigest !== admissionSemanticDigest(identity)
-    )
-      throw new OutputProtocolError(
-        'invalid',
-        'Retained admission provenance does not match reserved job'
-      )
-    outputString(receipt.operationId)
-    const complete = parseOutputSTEAK(parseOutputJSON(receipt.steak, { bytes: INPUT_LIMIT }))
-    const instructions = complete[this.topic]
-    if (!instructions)
-      throw new OutputProtocolError('invalid', 'Retained admission omits the selected topic')
-    validIndices(instructions.outputsToAdmit, tx.outputs.length)
-    validIndices(instructions.coinsToRetain, tx.inputs.length)
-    validIndices(instructions.coinsRemoved ?? [], tx.inputs.length)
-    if ((instructions.coinsRemoved ?? []).some(index => instructions.coinsToRetain.includes(index)))
-      throw new OutputProtocolError('invalid', 'Retained admission has inconsistent input effects')
-    // Retained identity establishes admission. Empty instructions alone establish
-    // neither success nor failure, and must not override that provenance.
-    const steak = { [this.topic]: instructions }
-    // Index visibility and propagation are observations, not the original topic
-    // assessment identity. Neither a newer reservation nor those changing
-    // observations may relabel this historical assessment.
-    const assessmentContextId =
-      ASSESSMENT_PREFIX +
-      createHash('sha256')
-        .update(ASSESSMENT_PREFIX + '\0')
-        .update(canonicalOutputJSON({ identity, operationId: receipt.operationId, steak }))
-        .digest('hex')
+    const { steak, assessmentContextId } = retainedTopicAdmission(input, query, tx)
     return this.result(job, steak, assessmentContextId)
   }
 
@@ -391,12 +351,4 @@ function ownedJob(
     beef: request.beef,
     requestedAt: value.requestedAt as string
   }
-}
-
-function validIndices(indices: number[], count: number): void {
-  if (new Set(indices).size !== indices.length || indices.some(index => index >= count))
-    throw new OutputProtocolError(
-      'invalid',
-      'Retained admission contains invalid transaction indices'
-    )
 }

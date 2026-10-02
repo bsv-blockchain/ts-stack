@@ -81,17 +81,27 @@
         "types": "./dist/cjs/src/ProposalAdmission.d.ts",
         "default": "./dist/cjs/src/ProposalAdmission.js"
       }
+    },
+    "./private-publication-admission": {
+      "import": {
+        "types": "./dist/types/src/PrivatePublicationAdmission.d.ts",
+        "default": "./dist/esm/src/PrivatePublicationAdmission.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/PrivatePublicationAdmission.d.ts",
+        "default": "./dist/cjs/src/PrivatePublicationAdmission.js"
+      }
     }
   },
   "scripts": {
     "test": "pnpm build && jest --runInBand --watchman=false",
     "test:watch": "pnpm build && jest --watch",
     "test:coverage": "pnpm build && jest --coverage --runInBand --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/BASM.property.test.ts src/__tests/ProposalAdmission.property.test.ts",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/BASM.property.test.ts src/__tests/ProposalAdmission.property.test.ts src/__tests/PrivatePublicationAdmission.property.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports admissionSemanticDigest,canAdvanceGaspCursor,getAdmissionStorage,getAdmissionHistory,isRecoveryLeaseCurrent,isReplaySafeProjection,parseStorageUint64,parseStorageOutputIndex,storageHasAdmission,BASM_ZERO_HASH,Engine,KnexStorage,KnexStorageMigrations,computeBasmRoot,computeTac,extractMerkleProofMetadata,serializeErrorForLog,serializeLogValue --entry-exports \"./storage=storageHasAdmission;./storage/knex/KnexStorage=KnexStorage;./proposal-admission=OverlayProposalAdmission\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports admissionSemanticDigest,canAdvanceGaspCursor,getAdmissionStorage,getAdmissionHistory,isRecoveryLeaseCurrent,isReplaySafeProjection,parseStorageUint64,parseStorageOutputIndex,storageHasAdmission,BASM_ZERO_HASH,Engine,KnexStorage,KnexStorageMigrations,computeBasmRoot,computeTac,extractMerkleProofMetadata,serializeErrorForLog,serializeLogValue --entry-exports \"./storage=storageHasAdmission;./storage/knex/KnexStorage=KnexStorage;./proposal-admission=OverlayProposalAdmission;./private-publication-admission=OverlayPrivatePublicationAdmission\"",
     "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false && tsc --project tsconfig.proposal-tests.json",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
@@ -149,6 +159,9 @@
   },
   "typesVersions": {
     "*": {
+      "private-publication-admission": [
+        "dist/types/src/PrivatePublicationAdmission.d.ts"
+      ],
       "proposal-admission": [
         "dist/types/src/ProposalAdmission.d.ts"
       ],
