@@ -125,7 +125,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
   }
 
   /**
-   * Force dates to strings on SQLite and Date objects on MySQL
+   * Force dates to strings on SQLite and Date objects on MySQL and Postgres
    * @param date
    * @returns
    */
@@ -135,6 +135,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
     switch (this.dbtype) {
       case 'IndexedDB':
       case 'MySQL':
+      case 'Postgres':
         break
       case 'SQLite':
         r = r.toISOString()
@@ -158,6 +159,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
     switch (this.dbtype) {
       case 'IndexedDB':
       case 'MySQL':
+      case 'Postgres':
         break
       case 'SQLite':
         if (r != null) r = r.toISOString()
@@ -188,6 +190,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
     switch (this.dbtype) {
       case 'IndexedDB':
       case 'MySQL':
+      case 'Postgres':
         r = vdate
         break
       case 'SQLite':
@@ -206,4 +209,4 @@ export interface StorageReaderOptions {
   telemetry?: TelemetryConfig
 }
 
-export type DBType = 'SQLite' | 'MySQL' | 'IndexedDB'
+export type DBType = 'SQLite' | 'MySQL' | 'Postgres' | 'IndexedDB'

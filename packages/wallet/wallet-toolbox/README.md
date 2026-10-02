@@ -6,6 +6,12 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+Postgres storage retains standard wallet migrations and legacy synchronization.
+The candidate's SQLite/MySQL auxiliary snapshot migrations are recorded as no-ops
+on Postgres, and its retained, paged and incremental snapshot capabilities are
+unavailable there. Future Postgres snapshot support requires forward migrations;
+those no-op entries must not be rewritten as deployed schema changes.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users
@@ -192,6 +198,20 @@ Transactional migration handling prevents partial table rebuilds. It does not au
 store already left with unjournaled schema objects by an older version. Preserve
 the database and verified backups and reconcile the exact schema and migration
 journal before recovery; do not delete journal rows or wallet data blindly.
+
+### Postgres storage
+
+`StorageKnex` runs on Postgres through the knex `pg` client. Install `pg` in the
+application and pass a Postgres knex:
+
+```ts
+import { knex as makeKnex } from 'knex'
+
+const knex = makeKnex({ client: 'pg', connection: { host, port, user, password, database } })
+const storage = new StorageKnex({ ...StorageKnex.defaultOptions(), chain: 'main', knex })
+```
+
+`ChaintracksStorageKnex` and `adminStats` do not support Postgres.
 
 ## Overview
 

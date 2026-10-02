@@ -31,13 +31,18 @@ describe('createAction2 nosend transactions', () => {
 
   let ctxs: TestWalletNoSetup[] = []
   const env = _tu.getEnv('test')
-  const testName = () => expect.getState().currentTestName ?? 'test'
+  // Also the database and storage name: keep it within MySQL and Postgres identifier limits,
+  // without the trailing space MySQL rejects.
+  const testName = () => (expect.getState().currentTestName ?? 'test').slice(0, 60).trimEnd()
 
   beforeEach(async () => {
     ctxs = []
 
     if (env.runMySQL) {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy(testName()))
+    }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy(testName()))
     }
 
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy(testName()))

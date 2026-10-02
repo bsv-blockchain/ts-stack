@@ -14,6 +14,7 @@ describe('abortAction tests', () => {
   test('0 invalid params', async () => {
     const ctxs: TestWalletNoSetup[] = []
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('abortActionTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('abortActionTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('abortActionTests'))
     for (const { wallet } of ctxs) {
       const invalidArgs: AbortActionArgs[] = [
@@ -36,6 +37,7 @@ describe('abortAction tests', () => {
   test('1_abort reference 49f878d8405589', async () => {
     const ctxs: TestWalletNoSetup[] = []
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('abortActionTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('abortActionTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('abortActionTests'))
     for (const { wallet } of ctxs) {
       const result = await wallet.abortAction({ reference: 'Sfh42EBViQ==' })

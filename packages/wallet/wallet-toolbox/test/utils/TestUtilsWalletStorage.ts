@@ -65,10 +65,12 @@ import type { ActionBatchMode } from '../../src/signer/actionBatch/ActionBatchWo
 dotenv.config()
 
 const localMySqlConnection = process.env.MYSQL_CONNECTION || ''
+const localPostgresConnection = process.env.POSTGRES_CONNECTION || ''
 
 export interface TuEnvFlags {
   chain: Chain
   runMySQL: boolean
+  runPostgres: boolean
   runSlowTests: boolean
   logTests: boolean
 }
@@ -127,10 +129,12 @@ export abstract class TestUtilsWalletStorage {
   static getEnvFlags(chain: Chain): TuEnvFlags {
     const logTests = !!process.env.LOGTESTS
     const runMySQL = !!process.env.RUNMYSQL
+    const runPostgres = !!process.env.RUNPOSTGRES
     const runSlowTests = !!process.env.RUNSLOWTESTS
     return {
       chain,
       runMySQL,
+      runPostgres,
       runSlowTests,
       logTests
     }
@@ -550,7 +554,8 @@ export abstract class TestUtilsWalletStorage {
 
   /**
    * Create the standard `StorageProvider[]` used by storage suites: a fresh
-   * SQLite store plus an optional MySQL store when `RUNMYSQL` is set. Database
+   * SQLite store plus optional MySQL and Postgres stores when `RUNMYSQL` or
+   * `RUNPOSTGRES` is set. Database
    * names are derived from `expect.getState().currentTestName` so tests in the
    * same suite never share state. Each store is dropped/migrated/made-available
    * before returning. Caller owns calling `destroy()` in afterEach.
@@ -581,6 +586,16 @@ export abstract class TestUtilsWalletStorage {
           ...StorageKnex.defaultOptions(),
           chain,
           knex: _tu.createLocalMySQL(`${databaseName}.mysql`)
+        })
+      )
+    }
+
+    if (env.runPostgres) {
+      storages.push(
+        new StorageKnex({
+          ...StorageKnex.defaultOptions(),
+          chain,
+          knex: await _tu.createLocalPostgres(`${databaseName}_pg`)
         })
       )
     }
@@ -685,6 +700,59 @@ export abstract class TestUtilsWalletStorage {
     return knex
   }
 
+  /**
+   * Connect to a database on the `POSTGRES_CONNECTION` server, creating it
+   * when it does not exist. `POSTGRES_CONNECTION` is a JSON node-postgres
+   * connection config whose `database` is used only to create test databases.
+   */
+  static async createLocalPostgres(database: string): Promise<Knex> {
+    const connection = JSON.parse(localPostgresConnection || '{}')
+    const admin = makeKnex({ client: 'pg', connection })
+    try {
+      const existing = await admin('pg_database').where({ datname: database }).first('datname')
+      // Not `??`: knex would split a database name containing dots.
+      if (existing == null) await admin.raw(`create database "${database.replaceAll('"', '""')}"`)
+    } finally {
+      await admin.destroy()
+    }
+    const config: Knex.Config = {
+      client: 'pg',
+      connection: { ...connection, database },
+      pool: { min: 0, max: 7, idleTimeoutMillis: 15000 }
+    }
+    return makeKnex(config)
+  }
+
+  /**
+   * Postgres sequences do not advance when a test inserts a row with an
+   * explicit id, so a later generated id can collide with it. Moves every
+   * sequence in a Postgres `StorageKnex` past the largest id in its column.
+   * Does nothing for other storage.
+   */
+  static async advancePostgresSequences(storage: StorageProvider): Promise<void> {
+    if (!(storage instanceof StorageKnex) || storage.knex.client.dialect !== 'postgresql') return
+    const knex = storage.knex
+    const columns: { rows: Array<{ table: string; column: string; sequence: string }> } = await knex.raw(`
+      select c.relname as "table", a.attname as "column",
+        pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) as "sequence"
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_attribute a on a.attrelid = c.oid
+      where c.relkind = 'r' and n.nspname = current_schema() and a.attnum > 0 and not a.attisdropped
+        and pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) is not null`)
+    await Promise.all(
+      columns.rows.map(
+        // `sequence` is a catalog-quoted name from pg_get_serial_sequence.
+        async ({ table, column, sequence }) =>
+          await knex.raw(
+            `select setval(?, m) from (select max(??) as m from ??) x
+             where m > (select case when is_called then last_value else last_value - 1 end from ${sequence})`,
+            [sequence, column, table]
+          )
+      )
+    )
+  }
+
   static async createMySQLTestWallet(args: {
     databaseName: string
     chain?: Chain
@@ -719,6 +787,43 @@ export abstract class TestUtilsWalletStorage {
       ...args,
       dropAll: true,
       knex: _tu.createLocalMySQL(args.databaseName)
+    })
+  }
+
+  static async createPostgresTestWallet(args: {
+    databaseName: string
+    chain?: Chain
+    rootKeyHex?: string
+    dropAll?: boolean
+  }): Promise<TestWallet<{}>> {
+    return await this.createKnexTestWallet({
+      ...args,
+      knex: await _tu.createLocalPostgres(args.databaseName)
+    })
+  }
+
+  static async createPostgresTestSetup1Wallet(args: {
+    databaseName: string
+    chain?: Chain
+    rootKeyHex?: string
+  }): Promise<TestWallet<TestSetup1>> {
+    return await this.createKnexTestSetup1Wallet({
+      ...args,
+      dropAll: true,
+      knex: await _tu.createLocalPostgres(args.databaseName)
+    })
+  }
+
+  static async createPostgresTestSetup2Wallet(args: {
+    databaseName: string
+    mockData: MockData
+    chain?: Chain
+    rootKeyHex?: string
+  }): Promise<TestWallet<TestSetup2>> {
+    return await this.createKnexTestSetup2Wallet({
+      ...args,
+      dropAll: true,
+      knex: await _tu.createLocalPostgres(args.databaseName)
     })
   }
 
@@ -835,6 +940,14 @@ export abstract class TestUtilsWalletStorage {
     return await _tu.createLegacyWalletCopy(databaseName, walletKnex, undefined, actionBatchMode)
   }
 
+  static async createLegacyWalletPostgresCopy(
+    databaseName: string,
+    actionBatchMode: 'auto' | 'legacy' = 'auto'
+  ): Promise<TestWalletNoSetup> {
+    const walletKnex = await _tu.createLocalPostgres(databaseName)
+    return await _tu.createLegacyWalletCopy(databaseName, walletKnex, undefined, actionBatchMode)
+  }
+
   static async createLiveWalletSQLiteWARNING(
     databaseFullPath: string = './test/data/walletLiveTestData.sqlite'
   ): Promise<TestWalletNoSetup> {
@@ -893,7 +1006,12 @@ export abstract class TestUtilsWalletStorage {
     const storage = new WalletStorageManager(identityKey, activeStorage)
     await storage.makeAvailable()
     if (useReader) {
-      const readerKnex = _tu.createLocalSQLite(readerFile)
+      // The fixture records only the initial migration. A file copy migrates
+      // its rows in place (for example the proven_tx_reqs history reset), so
+      // sync from a migrated copy of the fixture to get the same rows.
+      const migratedReaderFile = await _tu.newTmpFile(`${databaseName}.reader.sqlite`, false, false, false)
+      await _tu.copyFile(readerFile, migratedReaderFile)
+      const readerKnex = _tu.createLocalSQLite(migratedReaderFile)
       const reader = new StorageKnex({
         chain,
         knex: readerKnex,
@@ -901,9 +1019,14 @@ export abstract class TestUtilsWalletStorage {
         commissionPubKeyHex: undefined,
         feeModel: { model: 'sat/kb', value: 1 }
       })
-      await reader.makeAvailable()
-      await storage.syncFromReader(identityKey, new StorageSyncReader({ identityKey }, reader))
-      await reader.destroy()
+      try {
+        await reader.migrate(databaseName, randomBytesHex(33))
+        await reader.makeAvailable()
+        await storage.syncFromReader(identityKey, new StorageSyncReader({ identityKey }, reader))
+      } finally {
+        await reader.destroy()
+        await fsp.rm(migratedReaderFile, { force: true })
+      }
     }
     const services = new Services(chain)
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services)

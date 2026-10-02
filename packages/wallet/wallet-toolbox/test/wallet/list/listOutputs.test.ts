@@ -24,6 +24,7 @@ describe('listOutputs test', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('listOutputsTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('listOutputsTests'))
     ctxs.push(await _tu.createIdbLegacyWalletCopy(databaseName))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('listOutputsTests'))
   })

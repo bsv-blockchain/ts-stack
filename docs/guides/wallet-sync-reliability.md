@@ -1111,3 +1111,13 @@ proofs, using the same-head build. The journal steps have three- and ten-minute
 job-step bounds respectively. Each mutation part enforces zero uncovered and
 invalid mutants; the complete disjoint aggregate must also reach 90%. A successful
 part or a retried native worker does not establish complete-target qualification.
+
+### Postgres compatibility after main reconciliation
+
+Postgres uses its standard wallet schema and legacy synchronization path. The
+SQLite/MySQL auxiliary snapshot migrations are recorded as no-ops on Postgres;
+no retained or paged snapshot source is advertised. A future Postgres snapshot
+implementation needs new forward migrations rather than changing those recorded
+no-op entries. The bounded legacy transfer tables use Postgres `bytea`, and
+settings validation accepts its `Postgres` database type. This preserves main's
+storage contract while the #544 snapshot program remains incomplete.

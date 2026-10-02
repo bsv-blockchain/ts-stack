@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
+import YAML from 'yaml'
 
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
@@ -433,19 +434,20 @@ function assertNativeWalletJob(wallet) {
   assert.match(wallet, /^    timeout-minutes: 40$/m)
   assert.match(wallet, /^    permissions:\n      contents: read\n    strategy:/m)
   assert.doesNotMatch(wallet, /continue-on-error/)
-  const matrix = /        include:\n([\s\S]*?)\n    steps:/.exec(wallet)?.[1]
-  assert.ok(matrix)
-  assert.deepEqual(
-    matrix.split('\n').map(line => line.trim()),
-    [
-      '- { id: shard-1, shard: 1 }',
-      '- { id: shard-2, shard: 2 }',
-      '- { id: shard-3, shard: 3 }',
-      '- { id: shard-4, shard: 4 }',
-      '- { id: sync-http-0, latency: 0 }',
-      '- { id: sync-http-1000, latency: 1000 }'
-    ]
+  const job = YAML.parse(wallet)['coverage-wallet']
+  assert.deepEqual(job.strategy.matrix.include, [
+    { id: 'shard-1', shard: 1 },
+    { id: 'shard-2', shard: 2 },
+    { id: 'shard-3', shard: 3 },
+    { id: 'shard-4', shard: 4 },
+    { id: 'sync-http-0', latency: 0 },
+    { id: 'sync-http-1000', latency: 1000 }
+  ])
+  assert.equal(
+    job.services.postgres.image,
+    'postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef'
   )
+  assert.deepEqual(job.services.postgres.ports, ['5432:5432'])
 }
 
 test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', () => {

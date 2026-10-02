@@ -429,6 +429,14 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [
         'src/storage/snapshot/RetainedReadSnapshot.ts',
         'src/storage/snapshot/KnexWalletReadSnapshot.ts',
+        'src/storage/schema/snapshotSqlMigration.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/schema/KnexMigrations.ts',
+          'migrations[SNAPSHOT_SQLITE_INDEX_MIGRATION] = {',
+          'migrations[SYNC_TRANSFER_MIGRATION] = {'
+        ),
         'src/storage/schema/snapshotProfileIndexMigration.ts',
         'src/storage/schema/snapshotRelationIndexMigration.ts',
         'src/storage/schema/snapshotCertificateIndexMigration.ts',
