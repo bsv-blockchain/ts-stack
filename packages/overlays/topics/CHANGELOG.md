@@ -19,6 +19,51 @@ All notable changes to this project will be documented in this file. The format 
   replacement service is installed and no database or on-chain data is deleted.
   See [migration guidance](../../../docs/guides/identity-did-vc-migration.md).
 
+- Replace the `tm_mandala` / `ls_mandala` admission, lookup and storage API
+  with Mandala on BRC-162 (BSV-21 binary, authority supply). The old
+  `MandalaToken` / `MandalaAdmin` templates are gone from `@bsv/templates`
+  2.0.0, so the old wire format is no longer admitted. Migration:
+  - `MandalaTopicManager` no longer takes `adminWallet` or `adminProtocolID`
+    (admin outputs lock to the issuer, not to a derived admin key) and no longer
+    needs `stateStore.isAdminOutpoint`: admin continuity is an admitted
+    authority input. It now requires `trustedIssuers` (a non-empty list of
+    compressed lowercase public keys; construction throws otherwise) and
+    `engineOutputs` (the owner-index repair reads), and accepts an optional
+    `membership` provider, `membershipExempt` keys and an `onOwnerRepair`
+    log. `stateStore` is a `MandalaStateStore`; pass the same
+    `MandalaStorageManager` to admission and lookup.
+  - Refusals are a typed `MandalaReject { code, reason }` with one of the
+    `ERR_*` codes, not a free-text `Error`. Registry membership is an explicit
+    `MembershipProvider` dependency, answered as `ERR_MEMBERSHIP`.
+  - The v2 linkage payload is replaced by the v3 envelope
+    `{ inputs, outputs, admin, deploySig }`. The `MandalaLinkagePayload` type is
+    removed; use `MandalaEnvelope`, `encodeEnvelope` and `decodeEnvelope`.
+    Admin details are strict DAG-CBOR (lowercase hex), committed by the
+    authority output, and the `register` action is replaced by a deploy at
+    output 0 with a `deploySig`.
+  - `foldAction`, `defaultAssetState`, `AssetAdminState` and `FoldContext`
+    change with the schema: `assetId` is now `tokenId` (`<txid>_0`),
+    `issuerIdentityKey` and `FoldContext.issuer` are removed (the trusted set is
+    configuration), `feeRatePerKb` is added, `defaultAssetState` takes
+    `(tokenId, feeRatePerKb?)` and `foldAction` folds an `AdminDetails`.
+    `MandalaTokenRecord.assetId` is now `tokenId`.
+  - Every Mandala output is read by the layer-A BRC-162 ledger
+    (`classifyOutputs`, `buildLedger`), which refuses a token-shaped output whose
+    encoding is not canonical.
+
+- Persisted-schema change (spec section 6.6), a clean break with no data
+  migration. New collections: `mandalaOwners` (the append-only owner journal)
+  and `mandalaAuthorities` (unspent authority outputs). Changed shapes:
+  `mandalaTokens`, `mandalaMetadata`, `mandalaAssetStates` and
+  `mandalaAdminHistory` are keyed by `tokenId` (`<txid>_0`) instead of
+  `assetId`, metadata holds the decoded deploy payload (`sym`, `dec`, `label`,
+  `feeRatePerKb`), the asset state drops `issuerIdentityKey` and gains
+  `feeRatePerKb`, and an admin history row stores `kind`, `detailsHex`,
+  `commitment` and `delta` instead of `actionDetails`. `mandalaLinkageRecords`, `mandalaBalances` and
+  `mandalaCounters` keep their shapes. Rows written by 1.x are not valid 2.0.0
+  rows and are not read or converted: start Mandala on a new database with new
+  deploys. Existing on-chain outputs are not spent or deleted.
+
 - Accept SDK-compatible 200-row UHRP lookup pages with deterministic outpoint ordering and unchanged selector/signature validation.
 
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
@@ -27,6 +72,19 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- `tm_mandala_registry` / `ls_mandala_registry`: the Mandala identity registry
+  as its own authority-only BRC-162 token (`RegistryTopicManager`,
+  `RegistryLookupService`, `createRegistryLookupService`, `RegistryStorage`,
+  `registryMembership`).
+- Mandala on BRC-162 adds to the package entry point `classifyOutputs`,
+  `classifyAdmittedInputs`, `buildLedger` and `specVerdicts` (layer A),
+  `MandalaReject`, `isMandalaReject` and `Reasons`, `reconcileOwnerIndex`,
+  `encodeEnvelope` and `decodeEnvelope`, `encodeAdminDetails`,
+  `decodeAdminDetails`, `deployMetadata` and `commitmentOf`, `deployDigest` and
+  `verifyDeploySig`, `MANDALA_TOPIC`, and their types. The manager journals every
+  admitted owner before admittance, repairs a missing owner-index row inline,
+  and the lookup service carries the eviction API (`outputEvicted`,
+  `purgeAndRefold`, `restoreInputRow`).
 - `foldAction`, `defaultAssetState` and the `AssetAdminState` / `FoldContext` /
   `FrozenRef` types are exported from the package entry point, so consumers can
   replay Mandala admin history themselves (for example to rebuild an asset's
