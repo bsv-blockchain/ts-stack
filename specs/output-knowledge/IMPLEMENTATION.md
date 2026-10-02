@@ -2361,3 +2361,47 @@ checks and both packed packages pass, including legacy Overlay Express SDK2.8.9
 ESM/CJS and strict declaration consumers. All44 documentation examples compile
 against22 exact tarballs. Complete source mutation and terminal hosted acceptance
 remain open; none of these passing checks converts prior failures into success.
+
+### Paid acquisition foundation and canonical execution follow-up
+
+Five internal modules now define paid-acquisition progress, recipient-safe result
+projection, original quote/capability ownership, actual SDK funding evidence, and
+a protected seller/chain funding uniqueness index. The quote's original terms
+survive discovery changes. The first complete candidate must reach durable intake
+before the recovery deadline; processing may finish later. Exact retries retain
+the candidate and original invoice. Indeterminate wallet credit cannot authorize
+delivery, and a funded undelivered acquisition retains its recovery obligation.
+Funding slots reserve capacity before payment and require a single native commit
+with the progress transition at the observed global revision.
+
+The modules have no new public entry or route. Full paid-service composition still
+requires the atomic quote/material/result owner, current buyer authorization,
+bounded wallet reconciliation, domain release policy, final disclosure guard and
+HTTP integration. A material reservation is distinct from payment-dependent result
+issuance; for example, a result may bind a subsequently verified funding identity.
+Neither SDK evidence nor a wallet receipt alone establishes the release verdict.
+
+The new critical private-acquisition-foundation registration adds one target and
+property (113 to 114), with five complete, disjoint execution parts and the same
+full native/property/process selection on each. The separately coordinated
+proposal journal/store and HTTP partitions preserve their complete source/test
+unions. Only the selected proposal and lookup-session runner entries gain reuse8;
+other lookup defaults remain absent. Seeds, budgets, workers, deadlines, aggregate
+score and zero-uncovered/invalid gates are unchanged. Complete fresh target
+qualification and exact-head hosted CI remain required.
+
+On197caf0a0, the previous service campaign completed evidence31 (30 detected),
+contracts76 (73 detected), and original105 (95 detected, nine survived and one
+uncovered private-helper default). Every captured input and HEAD stayed unchanged.
+The uncovered default prevented continuation; binding and records did not run, so
+there is no complete-target acceptance. The redundant private default is removed
+while both public defaults remain. Native cases explicitly preserve those defaults
+and reject changed retained private values. Fresh complete qualification is pending.
+
+The adopted canonical acquisition selection plus the publication-contract
+regression passes294 tests across15 suites in19.368 seconds, including the real
+separate-process funding race and both300-case properties. All99 governance
+regressions and four root checks pass. An earlier direct Jest invocation omitted
+the package's required VM-module flag: four suites passed, three failed at
+TypeScript setup. The corrected native command uses the package's actual Node
+entry and flag; the earlier setup failure is not counted as test evidence.

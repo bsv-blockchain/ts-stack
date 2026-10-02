@@ -57,7 +57,13 @@ function vitestTarget(configFile) {
   }
 }
 
-function lookupProviderTarget(property, files, tests, additionalInputs = []) {
+function lookupProviderTarget(
+  property,
+  files,
+  tests,
+  additionalInputs = [],
+  { maxTestRunnerReuse } = {}
+) {
   return {
     packageDirectory: 'packages/application/output-knowledge',
     manifest: 'packages/application/output-knowledge/package.json',
@@ -74,7 +80,7 @@ function lookupProviderTarget(property, files, tests, additionalInputs = []) {
     ...jestTarget(
       'jest.config.js',
       [...tests.map(name => `<rootDir>/test/${name}.test.ts`), `<rootDir>/test/${property}`],
-      { esm: true, buildCommand: 'pnpm build' }
+      { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse }
     )
   }
 }
@@ -710,7 +716,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/proposal-open.test.ts',
           '<rootDir>/test/proposal-recovery.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'overlay-proposal-admission': {
@@ -812,6 +818,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/__tests__/OverlayExpress.test.ts'
         ],
         {
+          maxTestRunnerReuse: 8,
           config: {
             moduleNameMapper: {
               ...Object.fromEntries(
@@ -973,7 +980,8 @@ export function buildMutationTargets(repositoryRoot) {
         'proposal-storage-channel',
         'lookup-session-bootstrap'
       ],
-      ['src/proposals/**', 'test/proposal-client-fixture.ts', 'test/live-lookup-fixture.ts']
+      ['src/proposals/**', 'test/proposal-client-fixture.ts', 'test/live-lookup-fixture.ts'],
+      { maxTestRunnerReuse: 8 }
     ),
     'output-lookup-codecs': {
       packageDirectory: 'packages/application/output-knowledge',
@@ -1226,6 +1234,48 @@ export function buildMutationTargets(repositoryRoot) {
           }
         }
       })
+    },
+    'private-acquisition-foundation': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-acquisition.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/private-acquisition.fixture.ts',
+        'test/private-publication-fixture.ts',
+        'test/protected-ledger-fixture.ts',
+        'test/protected-ledger-restoration-fixture.ts',
+        'test/evidence-fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: [
+        'src/private/PrivateAcquisitionProgress.ts',
+        'src/private/PrivateAcquisitionResult.ts',
+        'src/private/PrivateAcquisitionFundingIndex.ts',
+        'src/private/PrivateAcquisitionContracts.ts',
+        'src/private/SDKPrivateAcquisitionFunding.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-acquisition-progress.test.ts',
+          '<rootDir>/test/private-acquisition-result.test.ts',
+          '<rootDir>/test/private-acquisition-funding-index.test.ts',
+          '<rootDir>/test/private-acquisition-contracts.test.ts',
+          '<rootDir>/test/private-acquisition-funding-evidence.test.ts',
+          '<rootDir>/test/private-acquisition.property.test.ts',
+          '<rootDir>/test/private-domain.test.ts',
+          '<rootDir>/test/private-identity.test.ts',
+          '<rootDir>/test/protected-ledger-codec.test.ts',
+          '<rootDir>/test/protected-ledger-integrity.test.ts',
+          '<rootDir>/test/protected-ledger-boundaries.test.ts',
+          '<rootDir>/test/protected-ledger-enumeration.test.ts',
+          '<rootDir>/test/protected-ledger.test.ts',
+          '<rootDir>/test/protected-ledger.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
     },
     'protected-ledger': {
       packageDirectory: 'packages/application/output-knowledge',

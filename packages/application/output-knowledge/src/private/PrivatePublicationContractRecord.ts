@@ -39,7 +39,7 @@ function parseOriginal(
   reference: Omit<OutputPrivatePublish, 'privateValues'>,
   contracts: PrivatePublicationContracts,
   policy: { id: string; digest: string },
-  supportedExtensions: readonly string[] = []
+  supportedExtensions: readonly string[]
 ) {
   state = parsePrivatePublicationProgress(state)
   const request = parseOutputPrivatePublish(

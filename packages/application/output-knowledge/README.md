@@ -1195,3 +1195,18 @@ endpoint and does not itself implement private publication, paid acquisition or
 POTATOES delivery. See the [storage and custody guide](../../../docs/guides/protected-private-service-storage.md)
 for limits, process-loss behavior and the required recovery boundary. Existing
 public entry points and wire formats are unchanged.
+
+## Paid acquisition foundation
+
+The internal acquisition helpers preserve original quote/capability context,
+model durable payment and delivery progress, bind real SDK funding evidence,
+project recipient-safe results and reserve a seller/chain funding uniqueness slot.
+Exact retries use the original acquisition; an uncertain wallet outcome cannot
+authorize a second credit or secret release. The funding slot and progress change
+require one atomic commit, and funded undelivered obligations do not expire.
+
+These helpers are not exposed as a complete paid lookup service. The native
+quote/material/result owner, current buyer authorization, wallet recovery, domain
+release policy and final guarded HTTP disclosure remain integration obligations.
+The [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md) tracks
+that work and the distinction between native checks and complete qualification.

@@ -61,6 +61,7 @@ const plans = new Map([
     {
       fallback: 'journal',
       files: new Map([
+        ['src/proposals/SQLiteProposalJournalStore.ts', 'store'],
         ['src/proposals/ProposalJournalState.ts', 'state'],
         ['src/storage/SQLiteTransactionDomain.ts', 'domain']
       ])
@@ -77,6 +78,29 @@ const plans = new Map([
         ['src/proposals/ProposalChannelFeedRecords.ts', 'records'],
         ['src/proposals/ProposalFeedPrivacy.ts', 'privacy'],
         ['src/proposals/AuthorDocumentPolicy.ts', 'policy']
+      ])
+    }
+  ],
+  [
+    'overlay-proposal-http',
+    {
+      fallback: 'routes',
+      files: new Map([
+        ['src/ProposalResponseGuard.ts', 'guard'],
+        ['src/ProposalHTTPPolicy.ts', 'policy'],
+        ['src/ProposalHTTPPorts.ts', 'policy']
+      ])
+    }
+  ],
+  [
+    'private-acquisition-foundation',
+    {
+      fallback: 'progress',
+      files: new Map([
+        ['src/private/PrivateAcquisitionResult.ts', 'result'],
+        ['src/private/PrivateAcquisitionFundingIndex.ts', 'index'],
+        ['src/private/PrivateAcquisitionContracts.ts', 'contracts'],
+        ['src/private/SDKPrivateAcquisitionFunding.ts', 'evidence']
       ])
     }
   ],

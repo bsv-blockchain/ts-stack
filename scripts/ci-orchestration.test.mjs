@@ -654,3 +654,30 @@ test('private publication HTTP aggregation requires selected complete execution 
       aggregate.indexOf('name: Require every selected canonical partition target gate')
   )
 })
+
+test('acquisition and proposal HTTP aggregation require every selected part artifact', () => {
+  for (const id of ['private-acquisition-foundation', 'overlay-proposal-http']) {
+    assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
+    const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+      job => job.name === 'mutation-quality'
+    ).source
+    const downloads = aggregate
+      .split(/\n      - /)
+      .filter(
+        step =>
+          step.startsWith('uses: actions/download-artifact@') &&
+          step.includes(`pattern: mutation-${id}-*\n`)
+      )
+    assert.equal(downloads.length, 1)
+    assert.ok(
+      downloads[0].includes(
+        `contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), '${id}')`
+      )
+    )
+    assert.ok(downloads[0].includes(`path: .mutation-parts/${id}`))
+    assert.ok(
+      aggregate.indexOf(downloads[0]) <
+        aggregate.indexOf('name: Require every selected canonical partition target gate')
+    )
+  }
+})

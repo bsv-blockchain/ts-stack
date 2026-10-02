@@ -7,6 +7,35 @@ import { PrivatePublicationContracts } from '../src/private/PrivatePublicationCo
 import { transactions } from './evidence-fixture.js'
 import { contractFixture as fixture } from './private-publication-service-fixture.js'
 
+it('keeps both public restoration defaults and checks original protected values independently', () => {
+  const f = fixture()
+  const { privateValues: _secret, ...reference } = f.request
+  expect(
+    parsePrivatePublicationContractMetadata(
+      f.record,
+      f.prepared.fence.state,
+      reference,
+      f.contracts,
+      f.policy
+    )
+  ).toEqual(f.record)
+  expect(f.restore()).toEqual(f.record)
+  expect(() =>
+    parsePrivatePublicationContractRecord(
+      f.record,
+      f.prepared.fence.state,
+      { ...f.request, privateValues: 'BAUG' },
+      f.contracts,
+      f.policy
+    )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Private publication original contract binding differs'
+    })
+  )
+})
+
 it('retains original selection for recovery after its manifest can no longer start new work', () => {
   const f = fixture()
   expect(f.restore()).toEqual(f.record)

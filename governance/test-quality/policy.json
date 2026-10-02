@@ -1398,6 +1398,17 @@
           "Exact signed selection and original publication terms survive manifest expiry without authorizing a different publisher.",
           "Authorization and protected readiness remain current after HTTP signing and at the single synchronous native enqueue; private diagnostics never enter control errors."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-acquisition.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Original paid lookup contracts, pinned payment recovery, exact BRC-29 Script/SPV evidence, globally unique native funding reservations and private result projection",
+        "target": "At least 300 payment receipt, deadline, exact funding, wallet outcome, delivery and restart schedules",
+        "invariants": [
+          "A candidate received before recovery expiry retains its original quote and validation obligation without another payment or invoice.",
+          "Wallet uncertainty never fabricates credit, funded undelivered work cannot expire, and each actual delivery retains at least one day of recovery."
+        ]
       }
     ],
     "exclusions": [

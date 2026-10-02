@@ -228,10 +228,8 @@ for (const [targetId, fallback, expected] of [
     'proposal-journal-send',
     'journal',
     {
-      journal: [
-        'src/proposals/SQLiteProposalJournal.ts',
-        'src/proposals/SQLiteProposalJournalStore.ts'
-      ],
+      journal: ['src/proposals/SQLiteProposalJournal.ts'],
+      store: ['src/proposals/SQLiteProposalJournalStore.ts'],
       state: ['src/proposals/ProposalJournalState.ts'],
       domain: ['src/storage/SQLiteTransactionDomain.ts']
     }
@@ -368,5 +366,26 @@ test('private publication coordination and HTTP partitions retain complete canon
         .filter(path => path === 'src/FuturePrivateCompanion.ts').length,
       1
     )
+  }
+})
+
+test('paid acquisition and proposal HTTP parts preserve exact whole-source/test unions', () => {
+  for (const [id, expected] of [
+    ['private-acquisition-foundation', ['progress', 'result', 'index', 'contracts', 'evidence']],
+    ['overlay-proposal-http', ['routes', 'guard', 'policy']]
+  ]) {
+    const canonical = buildMutationTargets(REPOSITORY_ROOT)[id]
+    const parts = partitionMutationTarget(id, canonical)
+    assert.deepEqual(
+      parts.map(part => part.id),
+      expected
+    )
+    assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+    assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
+    for (const part of parts) {
+      const { mutate: _actual, ...actual } = part.target
+      const { mutate: _expected, ...original } = canonical
+      assert.deepEqual(actual, original)
+    }
   }
 })

@@ -333,3 +333,26 @@ gates, canonical property budgets and seeds, four workers and bounded runner reu
 Selected complete artifacts are required by the final canonical aggregate gate.
 Local report generation, a passing baseline or an incomplete/cancelled campaign
 does not qualify any target.
+
+### Paid acquisition foundations and execution follow-ups
+
+`private-acquisition-foundation` qualifies five complete modules for original
+paid lookup contracts, pinned-candidate lifecycle, exact BRC-29/Script/SPV funding,
+native seller-wide funding uniqueness and recipient projection. Each whole-file
+part retains all canonical tests, including protected-ledger compatibility,
+300 generated lifecycle schedules and the separate-process SQLite claim race.
+The critical aggregate score remains90%, with zero uncovered or invalid mutants,
+four workers, bounded reuse8 and complete selected artifacts. These helpers do
+not by themselves qualify the full paid acquisition service.
+
+The proposal journal and HTTP targets now recycle each worker after eight
+executions. Journal execution separates the complete facade and store files;
+state/domain remain separate. HTTP separates complete routes, response guard and
+policy/ports. Every part retains the original canonical test selection (209
+journal and224 HTTP tests at the recorded hosted attempt), all sources, seeds,
+budgets and45-minute bounds. Lookup sessions alone selects the same optional
+reuse8 setting; every other lookup factory default stays unchanged. Its earlier
+503-mutant/190-test attempt reached45minutes without a report. The204-mutant
+proposal channel inventory cancellation already used reuse8 and is not resolved
+by these changes. Every cancellation remains incomplete qualification until a
+complete fresh run satisfies the unchanged gates.

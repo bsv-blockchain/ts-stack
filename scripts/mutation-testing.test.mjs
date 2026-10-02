@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 113)
+  assert.equal(Object.keys(configured).length, 114)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -606,4 +606,50 @@ test('private publication composition retains its complete sources and canonical
   ])
   for (const id of ['private-publication-coordination', 'private-publication-http'])
     assert.equal(targets[id].runnerOptions.maxTestRunnerReuse, 8)
+})
+
+test('acquisition foundations retain five complete modules and native recovery/funding inputs', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['private-acquisition-foundation']
+  assert.deepEqual(target.mutate, [
+    'src/private/PrivateAcquisitionProgress.ts',
+    'src/private/PrivateAcquisitionResult.ts',
+    'src/private/PrivateAcquisitionFundingIndex.ts',
+    'src/private/PrivateAcquisitionContracts.ts',
+    'src/private/SDKPrivateAcquisitionFunding.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-acquisition-progress.test.ts',
+    '<rootDir>/test/private-acquisition-result.test.ts',
+    '<rootDir>/test/private-acquisition-funding-index.test.ts',
+    '<rootDir>/test/private-acquisition-contracts.test.ts',
+    '<rootDir>/test/private-acquisition-funding-evidence.test.ts',
+    '<rootDir>/test/private-acquisition.property.test.ts',
+    '<rootDir>/test/private-domain.test.ts',
+    '<rootDir>/test/private-identity.test.ts',
+    '<rootDir>/test/protected-ledger-codec.test.ts',
+    '<rootDir>/test/protected-ledger-integrity.test.ts',
+    '<rootDir>/test/protected-ledger-boundaries.test.ts',
+    '<rootDir>/test/protected-ledger-enumeration.test.ts',
+    '<rootDir>/test/protected-ledger.test.ts',
+    '<rootDir>/test/protected-ledger.property.test.ts'
+  ])
+  assert.ok(target.additionalInputs.includes('test/fixtures/**'))
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/private-acquisition.property.test.ts'
+  )
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+})
+
+test('proposal and lookup bounded recycling changes only the selected runner entries', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  for (const id of ['proposal-journal-send', 'overlay-proposal-http', 'output-lookup-sessions'])
+    assert.equal(targets[id].runnerOptions.maxTestRunnerReuse, 8)
+  for (const id of [
+    'output-lookup-index',
+    'output-lookup-index-records',
+    'output-lookup-session-records',
+    'output-lookup-session-payloads'
+  ])
+    assert.equal(targets[id].runnerOptions.maxTestRunnerReuse, undefined)
 })
