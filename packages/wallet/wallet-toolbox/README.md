@@ -71,10 +71,17 @@ closure verification. It requires an existing file-backed WAL database with
 construction. Physical cleanup retains provider admission, and an unproved close
 fences further sources. Run `pnpm test:snapshot-journal-crash` for the
 SQLite process-loss fixture and `pnpm test:snapshot-journal-mysql` for the isolated
-MySQL client/server-process recovery fixtures. These helpers do not register a
-migration or advertise incremental synchronization. Full retention quotas,
-continuity floors, generation-aware delta pages and receiver/primary integration and the remaining issue #544
-acceptance work are still required; see the
+MySQL client/server-process recovery fixtures. Internal floor transactions reserve
+the global writer clock before current receipt locks and cannot pass a live
+receipt's prefix. Tombstone collection examines at most 256 primary-key rows,
+including live and newer records, and binds its cursor to one epoch, floor and
+stream. Native WAL/RC/RR checks cover twenty-four real process-loss boundaries.
+Callers must validate the complete owned generation and exclude migrations before
+these short transactions; automatic provider maintenance remains unfinished.
+These helpers do not register a migration or advertise incremental
+synchronization. Runtime quotas, registered recovery, generation-aware delta pages
+and receiver/primary integration and the remaining issue #544 acceptance work are
+still required; see the
 [journal foundation](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#internal-journal-foundation-unadvertised).
 
 Required wallet CI shard 1 also runs both native journal entry points from the

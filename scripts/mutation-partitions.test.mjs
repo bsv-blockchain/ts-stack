@@ -298,7 +298,8 @@ for (const [id, expected, fallback] of [
       'capture-fence',
       'connections',
       'capture-backend',
-      'capture'
+      'capture',
+      'collection'
     ],
     'revision'
   ],

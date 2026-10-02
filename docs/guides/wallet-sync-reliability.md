@@ -1105,19 +1105,44 @@ progress. MySQL additionally exercises READ COMMITTED and REPEATABLE READ, busy
 barrier refusal and native provider shutdown. These are local synthetic engine
 proofs; exact-head hosted, deployed/PXC and power-loss acceptance remain separate.
 
-Atomic floor/tombstone lifecycle and generation-aware delta-page/receiver
-integration remain unfinished. A durable prefix proof does not reopen a killed
+Internal floor advancement reserves the exclusive global writer clock before
+retention and receipt locks. A bounded full receipt scan (at most 129 rows)
+validates every retained record and uses database-clock expiry. The floor is
+monotonic and cannot pass either its fresh allocated prefix or any live receipt's
+high-water mark. Expired receipts still occupy capacity until their separate
+bounded collector commits.
+
+Internal tombstone collection scans at most 256 primary-key records per short
+transaction, including live and newer rows before applying eligibility. Its
+cursor binds the complete composite key, generation epoch, floor and stream;
+changing the floor starts another pass. Exact revision/presence conditions guard
+each deletion, and all selected metadata is validated first. MySQL current reads
+use NOWAIT and explicit equality-prefix ranges; SQLite uses indexed tuple seeks
+with exact UTF-8 order. The collector removes only old absent metadata, preserves
+all thirteen source tables and does not promise physical file shrink.
+
+WAL and both MySQL isolation cohorts prove active-prefix pins, retained-view
+immutability, revisions above the JavaScript safe-integer limit and bounded seek
+plans. Twenty-four actual process-loss cuts cover floor commit, partial deletion,
+collection commit and committed lost acknowledgements, then independently check
+metadata/source preservation and writer progress. These remain synthetic engine
+proofs, with production/PXC and power-loss acceptance separate.
+
+These primitives require the caller to validate complete owned DDL/source and
+exclude migration before a fresh transaction. Provider-owned maintenance and
+registered retention recovery remain unfinished, as does generation-aware
+delta-page/receiver integration. A durable prefix proof does not reopen a killed
 database read transaction.
 
 This foundation adds no registered migration, public capability or reader
 advertisement. Its event-window invalidation is not a complete retention or
-resource policy. Full quotas and continuity-floor ownership,
+resource policy. Runtime quotas and provider continuity-floor ownership,
 generation-aware receiver/primary integration, and remaining remote/IndexedDB,
 streaming and staged-import acceptance remain unfinished. Do not infer full
 incremental continuity or completed issue #544 from these helpers.
 
-The wallet-snapshot-journal mutation target owns all eighteen complete source
-modules in sixteen execution parts, including the whole receipt, capture, native
+The wallet-snapshot-journal mutation target owns all nineteen complete source
+modules in seventeen execution parts, including the whole receipt, collection, capture, native
 backend, connection ownership and barrier modules. Every part retains the complete canonical
 journal tests and fixtures, including one governed property entry for exact
 revision/page, generated source-observer and committed receipt-state schedules. A minimum score of 90%, zero

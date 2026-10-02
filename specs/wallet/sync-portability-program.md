@@ -268,7 +268,7 @@ pinned complete generation, profile and schema, commits an exact receipt before
 publication, and verifies closure after releasing the writer barrier. WAL and
 MySQL native fixtures cover process loss before commit, after durable commit and
 after publication. These component proofs advance S2; they do not complete it.
-Atomic continuity floors, bounded tombstone collection, runtime quotas, registered
+Provider floor/collection integration, runtime quotas, registered
 journal migration/recovery, generation-aware delta payload pages and receiver
 integration remain required. The other acceptance rows remain open.
 
@@ -283,3 +283,27 @@ YAML dependency. Disposable process-cut children receive an exclusive inherited
 marker descriptor and cannot choose a filesystem write path through CLI input.
 Local source controls and the native capture cuts qualify this remediation;
 complete exact-head hosted success is still required before any ready claim.
+
+## Internal retention floor and collection checkpoint
+
+Floor advancement now reserves the global writer clock before current retention
+and receipt locks and refuses a backwards, future or live-prefix-crossing floor.
+Database-clock expiry decides whether a receipt still pins continuity; expired
+records stay charged until bounded receipt deletion commits. Collection examines
+at most 256 complete primary-key rows, including live/newer entries, validates the
+whole page, and deletes only absent metadata at or before the fixed bound floor.
+Its cursor binds epoch, floor, stream and exact composite key.
+
+Native WAL, MySQL RC and RR fixtures prove exact large revisions, active-prefix
+pins, current reads through an older transaction snapshot, nonwaiting conflict
+refusal, PRIMARY seek plans, retained-view immutability and all thirteen source
+tables preserved. Twenty-four real process cuts cover partial deletion and floor
+or collection commit with rollback/lost-acknowledgement recovery. Sixty dedicated
+tests include 300 independent seeded floor ledgers. The complete journal target
+now owns nineteen whole modules in seventeen parts; no campaign threshold,
+source/test union or final qualification gate is reduced.
+
+Provider maintenance integration, runtime quotas and registered forward lifecycle
+and recovery remain required within S2. No public reader advertisement or
+migration registration is introduced by this checkpoint. Every acceptance row
+remains open until its complete implementation and end-to-end evidence exist.

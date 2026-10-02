@@ -6,12 +6,19 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add internal monotonic continuity-floor transactions and bounded primary-key
+  tombstone collection. Current receipt locks pin all live prefixes; collection
+  preserves live/newer records and all thirteen source tables. WAL/RC/RR fixtures
+  cover partial deletion, rollback and committed lost acknowledgements. Provider
+  maintenance integration, runtime quotas, registered recovery and full #544
+  acceptance remain required; incremental reader advertisement stays off.
+
 - Add internal owned journal capture for `better-sqlite3` WAL and static `mysql2`.
   Reserve both pools before the short writer barrier; pin generation/profile,
   commit the exact receipt and verify closure before publication. Retain source
   admission through physical cleanup and fence an unproved close. Native fixtures
   cover commit/publication process loss, immutable pages and writer progress.
-  Continuity floors, quotas, delta receiver integration and full #544 acceptance
+  Provider retention ownership, quotas, delta receiver integration and full #544 acceptance
   remain unfinished; no migration or incremental capability is advertised.
 
 - Preserve main's Postgres storage and legacy sync support. SQLite/MySQL snapshot

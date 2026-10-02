@@ -62,7 +62,8 @@ const plans = new Map([
         ['src/storage/snapshot/journal/SnapshotJournalCaptureFence.ts', 'capture-fence'],
         ['src/storage/snapshot/journal/SnapshotJournalConnections.ts', 'connections'],
         ['src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts', 'capture-backend'],
-        ['src/storage/snapshot/journal/SnapshotJournalCapture.ts', 'capture']
+        ['src/storage/snapshot/journal/SnapshotJournalCapture.ts', 'capture'],
+        ['src/storage/snapshot/journal/SnapshotJournalCollection.ts', 'collection']
       ])
     }
   ],

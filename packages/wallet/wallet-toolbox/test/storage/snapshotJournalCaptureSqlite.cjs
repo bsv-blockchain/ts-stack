@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const { fork } = require('node:child_process')
-const { mkdtemp, rm, readFile, open: openFile } = require('node:fs/promises')
+const { mkdtemp, rm, open: openFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 const {
@@ -41,7 +41,7 @@ async function child(filename, phase) {
   }
 }
 async function killAt(filename, phase, marker) {
-  const output = await openFile(marker, 'wx', 0o600)
+  const output = await openFile(marker, 'wx+', 0o600)
   const killed = fork(__filename, ['child', filename, phase], { stdio: ['ignore', 'ignore', 'pipe', 'ipc', output.fd] })
   let stderr = ''
   killed.stderr.on('data', data => {
@@ -54,7 +54,9 @@ async function killAt(filename, phase, marker) {
       killed.once('exit', (code, signal) => resolve({ code, signal }))
     })
     assert.equal(result.signal, 'SIGKILL', stderr)
-    assert.equal(await readFile(marker, 'utf8'), phase)
+    const bytes = Buffer.alloc(64)
+    const { bytesRead } = await output.read(bytes, 0, bytes.length, 0)
+    assert.equal(bytes.subarray(0, bytesRead).toString('utf8'), phase)
   } finally {
     clearTimeout(timer)
     await output.close()
@@ -159,7 +161,7 @@ async function main() {
   if (failure !== undefined) throw failure.error
 }
 module.exports = main
-if (require.main === module) {
+if (require.main?.filename === __filename) {
   const run = process.argv[2] === 'child' ? child(...process.argv.slice(3)) : main()
   run.catch(error => {
     console.error(error)

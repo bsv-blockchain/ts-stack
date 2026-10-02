@@ -261,7 +261,8 @@ test('journal mutation registration retains its complete source, canonical tests
     'src/storage/snapshot/journal/SnapshotJournalCaptureFence.ts',
     'src/storage/snapshot/journal/SnapshotJournalConnections.ts',
     'src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts',
-    'src/storage/snapshot/journal/SnapshotJournalCapture.ts'
+    'src/storage/snapshot/journal/SnapshotJournalCapture.ts',
+    'src/storage/snapshot/journal/SnapshotJournalCollection.ts'
   ])
   assert.deepEqual(target.additionalInputs, [
     'test/fixtures/snapshotJournal/mysql-generation-ddl-fixture.json',
@@ -281,6 +282,13 @@ test('journal mutation registration retains its complete source, canonical tests
     'test/storage/snapshotJournalCaptureMysqlChild.cjs',
     'test/storage/snapshotJournalCaptureProcessLoss.cjs',
     'test/storage/snapshotJournalCaptureSqlite.cjs',
+    'test/storage/snapshotJournalRetentionChild.cjs',
+    'test/storage/snapshotJournalRetentionCuts.cjs',
+    'test/storage/snapshotJournalRetentionMysql.cjs',
+    'test/storage/snapshotJournalRetentionMysqlRc.cjs',
+    'test/storage/snapshotJournalRetentionMysqlRr.cjs',
+    'test/storage/snapshotJournalRetentionProcessLoss.cjs',
+    'test/storage/snapshotJournalRetentionSqlite.cjs',
     'test/storage/snapshotJournalSqliteCrash.cjs',
     'test/storage/runSnapshotJournalMysql.cjs',
     'test/storage/snapshotArchiveDocker.cjs'

@@ -1,8 +1,13 @@
 import { knex, type Knex } from 'knex'
 import { createHash } from 'node:crypto'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { SNAPSHOT_JOURNAL_SQLITE_CLOCK_DDL } from './SnapshotJournalSqliteClock'
 import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 import * as ArchiveClock from '../archive/SnapshotArchiveSql'
 import {
+  advanceSnapshotJournalFloor,
   snapshotJournalReceiptPolicy,
   snapshotJournalReceiptBinding,
   snapshotJournalReceiptDdl,
@@ -411,4 +416,177 @@ test('request expiry must be an exact primitive number before database work', as
       k.transaction(t => recordSnapshotJournalReceipt(t, binding, { ...input, expiresAt } as typeof input))
     ).rejects.toThrow(WERR_INVALID_OPERATION)
   expect(await k('snapshot_journal_receipts')).toEqual([])
+})
+
+describe('atomic continuity floor', () => {
+  let directory: string
+  beforeEach(async () => {
+    await k.destroy()
+    directory = await mkdtemp(join(tmpdir(), 'ts569-retention-'))
+    k = knex({
+      client: 'better-sqlite3',
+      connection: { filename: join(directory, 'wallet.sqlite') },
+      useNullAsDefault: true,
+      pool: { min: 1, max: 1 }
+    })
+    await k.raw('PRAGMA journal_mode=WAL')
+    await k.raw('PRAGMA busy_timeout=0')
+    for (const sql of snapshotJournalReceiptDdl(k)) await k.raw(sql)
+    await k.raw(SNAPSHOT_JOURNAL_SQLITE_CLOCK_DDL)
+    await k('snapshot_journal_clock').insert({ id: 1, revision: '100', ceiling: '1000', enabled: 1, reason: null })
+    await k('snapshot_journal_retention').insert({ id: 1, floor: '0', receiptLimit: 128, receiptLifetimeMs: 600000 })
+    jest.spyOn(ArchiveClock, 'snapshotArchiveDatabaseNow').mockResolvedValue(2000)
+  })
+  afterEach(async () => {
+    jest.restoreAllMocks()
+    await k.destroy()
+    await rm(directory, { recursive: true, force: true })
+  })
+  const revision = (n: number) => snapshotJournalRevision(String(n))
+  async function stored(n: number, highWater: number, expiresAt = 3000) {
+    await k('snapshot_journal_receipts').insert({
+      requestId: n.toString(16).padStart(64, '0'),
+      binding: 'a'.repeat(64),
+      highWater: String(highWater),
+      floor: '0',
+      expiresAt
+    })
+  }
+  test('the lowest live receipt pins continuity, including receipts for other profiles', async () => {
+    await stored(1, 90)
+    await stored(2, 70)
+    await stored(3, 10, 2000)
+    const receipts = await k('snapshot_journal_receipts').orderBy('requestId')
+    await expect(k.transaction(t => advanceSnapshotJournalFloor(t, revision(71)))).rejects.toThrow()
+    expect((await k('snapshot_journal_clock').first()).revision).toBe(100)
+    expect((await k('snapshot_journal_retention').first()).floor).toBe('0')
+    expect(await k('snapshot_journal_receipts').orderBy('requestId')).toEqual(receipts)
+    expect(await k.transaction(t => advanceSnapshotJournalFloor(t, revision(70)))).toEqual({
+      floor: '70',
+      highWater: '101',
+      liveReceipts: 2,
+      examined: 3
+    })
+    expect(await k.transaction(t => advanceSnapshotJournalFloor(t, revision(70)))).toEqual({
+      floor: '70',
+      highWater: '102',
+      liveReceipts: 2,
+      examined: 3
+    })
+    expect(await k('snapshot_journal_receipts').orderBy('requestId')).toEqual(receipts)
+  })
+  test('rejects backwards and future floors and requires a writer transaction', async () => {
+    await k('snapshot_journal_retention').update({ floor: '40' })
+    await expect(advanceSnapshotJournalFloor(k, revision(40))).rejects.toThrow()
+    for (const floor of [39, 102])
+      await expect(k.transaction(t => advanceSnapshotJournalFloor(t, revision(floor)))).rejects.toThrow()
+    expect((await k('snapshot_journal_retention').first()).floor).toBe('40')
+    expect((await k('snapshot_journal_clock').first()).revision).toBe(100)
+  })
+  test('an exhausted generation commits invalidation without advancing continuity', async () => {
+    await k('snapshot_journal_clock').update({ revision: 1000 })
+    expect(await k.transaction(t => advanceSnapshotJournalFloor(t, revision(50)))).toBeUndefined()
+    expect((await k('snapshot_journal_clock').first()).enabled).toBe(0)
+    expect((await k('snapshot_journal_retention').first()).floor).toBe('0')
+  })
+  test('floor publication rolls back atomically and survives a lost committed acknowledgement', async () => {
+    await expect(
+      k.transaction(async t => {
+        await advanceSnapshotJournalFloor(t, revision(50))
+        throw Error('before commit')
+      })
+    ).rejects.toThrow('before commit')
+    expect((await k('snapshot_journal_retention').first()).floor).toBe('0')
+    await expect(
+      (async () => {
+        await k.transaction(t => advanceSnapshotJournalFloor(t, revision(50)))
+        throw Error('lost acknowledgement')
+      })()
+    ).rejects.toThrow('lost acknowledgement')
+    expect((await k('snapshot_journal_retention').first()).floor).toBe('50')
+  })
+  test('bounded capacity scans refuse overfull storage, including expired rows', async () => {
+    await k('snapshot_journal_retention').update({ receiptLimit: 1 })
+    await stored(1, 10, 1000)
+    await stored(2, 10, 1000)
+    const queries: string[] = []
+    k.on('query', query => queries.push(query.sql))
+    await expect(k.transaction(t => advanceSnapshotJournalFloor(t, revision(50)))).rejects.toThrow()
+    expect(queries.filter(sql => sql.includes('from `snapshot_journal_receipts`'))).toEqual([
+      expect.stringMatching(/order by `requestId` asc limit \?$/)
+    ])
+    expect((await k('snapshot_journal_retention').first()).floor).toBe('0')
+  })
+  test('corrupt expired receipts also prevent floor publication', async () => {
+    await stored(1, 10, 1000)
+    await k('snapshot_journal_receipts').update({ binding: 'z'.repeat(64) })
+    await expect(k.transaction(t => advanceSnapshotJournalFloor(t, revision(50)))).rejects.toThrow()
+    expect((await k('snapshot_journal_retention').first()).floor).toBe('0')
+  })
+  test('an independently held writer makes floor admission fail without waiting', async () => {
+    const peer = knex({
+      client: 'better-sqlite3',
+      connection: k.client.config.connection,
+      useNullAsDefault: true,
+      pool: { min: 1, max: 1 }
+    })
+    await peer.raw('PRAGMA busy_timeout=0')
+    const held = await peer.transaction()
+    try {
+      await held('snapshot_journal_clock').where('id', 1).update({ revision: 100 })
+      const start = performance.now()
+      await expect(k.transaction(t => advanceSnapshotJournalFloor(t, revision(50)))).rejects.toMatchObject({
+        code: 'SQLITE_BUSY'
+      })
+      expect(performance.now() - start).toBeLessThan(1000)
+    } finally {
+      await held.rollback()
+      await peer.destroy()
+    }
+  })
+
+  test('300 seeded independent ledgers preserve every live prefix and monotonic floor', async () => {
+    let seed = 3242026
+    const random = (max: number) => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+      return seed % max
+    }
+    for (let n = 0; n < 300; n++) {
+      const prior = random(101),
+        requested = random(151)
+      const proofs = Array.from({ length: random(4) }, (_, index) => ({
+        requestId: (index + 1).toString(16).padStart(64, '0'),
+        binding: 'a'.repeat(64),
+        highWater: String(random(121) + 1),
+        floor: '0',
+        expiresAt: random(2) ? 2000 : 3000
+      }))
+      await k('snapshot_journal_receipts').delete()
+      await k('snapshot_journal_clock').update({ revision: 100, enabled: 1, reason: null })
+      await k('snapshot_journal_retention').update({ floor: String(prior) })
+      if (proofs.length) await k('snapshot_journal_receipts').insert(proofs)
+      const live = proofs.filter(proof => proof.expiresAt > 2000)
+      const allowed =
+        requested >= prior &&
+        requested <= 101 &&
+        live.every(
+          proof =>
+            Number(proof.highWater) >= prior && Number(proof.highWater) <= 101 && requested <= Number(proof.highWater)
+        )
+      const advancing = k.transaction(t => advanceSnapshotJournalFloor(t, revision(requested)))
+      if (allowed) {
+        expect(await advancing).toEqual({
+          floor: String(requested),
+          highWater: '101',
+          liveReceipts: live.length,
+          examined: proofs.length
+        })
+      } else {
+        await expect(advancing).rejects.toThrow()
+      }
+      expect((await k('snapshot_journal_retention').first()).floor).toBe(String(allowed ? requested : prior))
+      expect((await k('snapshot_journal_clock').first()).revision).toBe(allowed ? 101 : 100)
+      expect(await k('snapshot_journal_receipts').orderBy('requestId')).toEqual(proofs)
+    }
+  })
 })

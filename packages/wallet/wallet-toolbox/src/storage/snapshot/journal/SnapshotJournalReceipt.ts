@@ -2,6 +2,7 @@ import type { Knex } from 'knex'
 import { createHash } from 'node:crypto'
 import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 import { snapshotArchiveDatabaseNow } from '../archive/SnapshotArchiveSql'
+import { reserveSnapshotJournalCaptureFence } from './SnapshotJournalCaptureFence'
 import {
   compareSnapshotJournalRevisions,
   snapshotJournalRevision,
@@ -285,4 +286,60 @@ export async function collectSnapshotJournalReceipts(k: Knex): Promise<number> {
       )
       .delete()
   return rows.length
+}
+
+/** Advance only inside a fresh caller-owned transaction on an already validated,
+ * complete generation. The global writer reservation precedes retention and
+ * receipt locks, matching capture's order. Undefined disables publication: the
+ * caller must commit the clock invalidation and cannot collect that generation.
+ * Expired receipts continue to occupy capacity until their bounded collector
+ * commits, but cannot pin continuity after database-clock expiry.
+ */
+export async function advanceSnapshotJournalFloor(
+  k: Knex,
+  requested: SnapshotJournalRevision
+): Promise<
+  | { floor: SnapshotJournalRevision; highWater: SnapshotJournalRevision; liveReceipts: number; examined: number }
+  | undefined
+> {
+  const floor = snapshotJournalRevision(requested)
+  transaction(k)
+  const highWater = await reserveSnapshotJournalCaptureFence(k)
+  if (highWater === undefined) return undefined
+  const state = await retention(k, true),
+    time = await now(k)
+  if (
+    compareSnapshotJournalRevisions(state.floor, highWater) > 0 ||
+    compareSnapshotJournalRevisions(floor, state.floor) < 0 ||
+    compareSnapshotJournalRevisions(floor, highWater) > 0
+  )
+    return invalid()
+  const query = receiptQuery(k)
+    .orderBy('requestId')
+    .limit(state.receiptLimit + 1)
+  if (!local(k)) query.forUpdate().noWait()
+  const rows: Array<Record<string, unknown>> = await query
+  if (rows.length > state.receiptLimit) return invalid()
+  let liveReceipts = 0
+  for (const row of rows) {
+    const existing = receipt(row, true)
+    if (compareSnapshotJournalRevisions(existing.floor, state.floor) > 0) return invalid()
+    if (existing.expiresAt > time) {
+      if (
+        compareSnapshotJournalRevisions(existing.highWater, state.floor) < 0 ||
+        compareSnapshotJournalRevisions(existing.highWater, highWater) > 0 ||
+        compareSnapshotJournalRevisions(floor, existing.highWater) > 0
+      )
+        return invalid()
+      liveReceipts++
+    }
+  }
+  if ((await k('snapshot_journal_retention').where('id', 1).where('floor', state.floor).update({ floor })) !== 1)
+    return invalid()
+  return { floor, highWater, liveReceipts, examined: rows.length }
+}
+
+/** Internal collector lock; callers reserve the global writer clock first. */
+export async function lockSnapshotJournalRetention(k: Knex): Promise<SnapshotJournalRetention> {
+  return await retention(k, true)
 }
