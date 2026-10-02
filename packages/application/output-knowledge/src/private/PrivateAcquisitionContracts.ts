@@ -191,7 +191,10 @@ export class PrivateAcquisitionContracts {
       86400n,
       outputU64(parameters.recoverySeconds),
       outputU64(terms.minimumRecoverySeconds)
-    ].reduce((a, b) => (a > b ? a : b))
+    ].reduce((a, b) => {
+      if (a > b) return a
+      return b
+    }, 0n)
     outputAssert(
       recoverySeconds <= outputU64(this.installed.maximumRecoverySeconds),
       'Acquisition domain recovery exceeds installed capacity',

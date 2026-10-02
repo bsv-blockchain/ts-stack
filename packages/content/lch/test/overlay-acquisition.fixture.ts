@@ -6,6 +6,7 @@ import {
   selectOutputCapability,
   Utils,
   type OutputCapabilities,
+  type OutputChain,
   type OutputPaidLookupAcquire
 } from '@bsv/sdk'
 import {
@@ -29,15 +30,24 @@ import { LCH_OVERLAY_PROFILES } from '../src/overlayAcquisitionCodec.js'
 import { LCH_OVERLAY_PAID_MECHANISMS } from '../src/overlayAcquisitionTerms.js'
 
 export async function lchOverlayFixture(
-  chain = { network: 'fixture', genesisHash: '09'.repeat(32) },
-  installation = {
+  chain?: OutputChain,
+  installation?: {
+    baseURL: string
+    service: string
+    rules: { id: string; parameters: { version: number } }
+    maximumRequestBytes: number
+    maximumResponseBytes: number
+  },
+  embedCiphertext = true
+) {
+  chain ??= { network: 'fixture', genesisHash: '09'.repeat(32) }
+  installation ??= {
     baseURL: 'https://seller.example/api',
     service: 'catalogue',
     rules: { id: 'urn:reference:lch-paid-rules', parameters: { version: 1 } },
     maximumRequestBytes: 1048576,
     maximumResponseBytes: 4194304
   }
-) {
   const sellerKey = new PrivateKey(83),
     buyerKey = new PrivateKey(84),
     sellerWallet = new ProtoWallet(sellerKey),
@@ -160,9 +170,11 @@ export async function lchOverlayFixture(
       createdAt: 20
     }),
     requestBytes = encodeDeterministicCbor(request as unknown as LCHValue),
-    published = await publisher.publish(asset, [
-      { mode: 'inline', offer: offer as unknown as LCHValue }
-    ]),
+    published = await publisher.publish(
+      asset,
+      [{ mode: 'inline', offer: offer as unknown as LCHValue }],
+      embedCiphertext
+    ),
     rules = installation.rules,
     body: OutputCapabilities = {
       version: 1,

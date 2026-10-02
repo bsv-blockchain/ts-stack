@@ -229,29 +229,11 @@ class PrivateAcquisitionHTTPHandler {
       throw new OutputProtocolError('unsupported', 'Private acquisition profile was not selected')
     if (req.headers['cache-control'] !== 'no-store')
       throw new OutputProtocolError('invalid', 'Private acquisition requests require no-store')
-    const identity = (req as Request & { auth?: { identityKey?: string } }).auth?.identityKey
-    if (identity === undefined || identity === 'unknown')
-      throw new OutputProtocolError(
-        'unauthorized',
-        'Private acquisition requires authenticated identity'
-      )
-    const authenticated = (req as Request & { auth?: { identityKey?: string } }).auth
-    const controller = new AbortController()
-    const cancel = () => controller.abort()
+    const controller = new AbortController(),
+      caller = authenticatedCaller(req, res, capabilityDigest, controller),
+      cancel = () => controller.abort()
     res.once('close', cancel)
     req.once('aborted', cancel)
-    const caller: PrivateAcquisitionHTTPCaller = Object.freeze({
-      buyer: outputIdentity(identity),
-      capability: capabilityDigest,
-      profile: OUTPUT_PROFILES.acquisition,
-      signal: controller.signal,
-      current: () =>
-        !req.aborted &&
-        !res.destroyed &&
-        !controller.signal.aborted &&
-        (req as Request & { auth?: { identityKey?: string } }).auth === authenticated &&
-        authenticated?.identityKey === identity
-    })
     res.set({
       'x-bsv-overlay-capability': capabilityDigest,
       'x-bsv-overlay-profile': OUTPUT_PROFILES.acquisition
@@ -262,15 +244,7 @@ class PrivateAcquisitionHTTPHandler {
       if (req.aborted || res.destroyed) return
       release = this.acquire(caller.buyer)
       const input = parseOutputJSON(text, { bytes: this.requestBytes })
-      const paymentHeader = req.headers['x-bsv-payment']
-      if (operation === 'recover' && paymentHeader !== undefined)
-        throw new OutputProtocolError('invalid', 'Recovery never accepts payment')
-      if (paymentHeader !== undefined && typeof paymentHeader !== 'string')
-        throw new OutputProtocolError('invalid', 'Invalid payment header')
-      const payment =
-        paymentHeader === undefined
-          ? undefined
-          : parseOutputPaidLookupPayment(parseOutputJSON(paymentHeader, { bytes: 98304 }))
+      const payment = requestPayment(req, operation)
       const id =
         operation === 'acquire'
           ? await this.options.service.acquire(input, payment, caller)
@@ -335,4 +309,42 @@ export function createPrivateAcquisitionRouter(options: PrivateAcquisitionRouteO
     handler = new PrivateAcquisitionHTTPHandler(options)
   router.use(handler.handle)
   return router
+}
+
+function authenticatedCaller(
+  req: Request,
+  res: Response,
+  capabilityDigest: string,
+  controller: AbortController
+): PrivateAcquisitionHTTPCaller {
+  const identity = (req as Request & { auth?: { identityKey?: string } }).auth?.identityKey
+  if (identity === undefined || identity === 'unknown')
+    throw new OutputProtocolError(
+      'unauthorized',
+      'Private acquisition requires authenticated identity'
+    )
+  const authenticated = (req as Request & { auth?: { identityKey?: string } }).auth
+  return Object.freeze({
+    buyer: outputIdentity(identity),
+    capability: capabilityDigest,
+    profile: OUTPUT_PROFILES.acquisition,
+    signal: controller.signal,
+    current: () =>
+      !req.aborted &&
+      !res.destroyed &&
+      !controller.signal.aborted &&
+      (req as Request & { auth?: { identityKey?: string } }).auth === authenticated &&
+      authenticated?.identityKey === identity
+  })
+}
+
+function requestPayment(req: Request, operation: PrivateAcquisitionHTTPOperation) {
+  const paymentHeader = req.headers['x-bsv-payment']
+  if (operation === 'recover' && paymentHeader !== undefined)
+    throw new OutputProtocolError('invalid', 'Recovery never accepts payment')
+  if (paymentHeader !== undefined && typeof paymentHeader !== 'string')
+    throw new OutputProtocolError('invalid', 'Invalid payment header')
+  return paymentHeader === undefined
+    ? undefined
+    : parseOutputPaidLookupPayment(parseOutputJSON(paymentHeader, { bytes: 98304 }))
 }

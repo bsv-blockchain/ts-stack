@@ -253,7 +253,7 @@ export class LCHOverlayPaidSeller<C> {
       value = record as unknown as Material
     lchAssert(
       Object.keys(record)
-        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .sort((a, b) => Number(a > b) - Number(a < b))
         .join(',') ===
         'acquire,header,installation,keys,offer,paths,request,selectedAt,selection,version' &&
         value.version === 1 &&
@@ -380,7 +380,10 @@ export class LCHOverlayPaidSeller<C> {
       payableUntil =
         terms.notAfter !== undefined && cutoff > terms.notAfter ? terms.notAfter : cutoff,
       recovery = [86400n, terms.recoverySeconds, outputU64(terms.advertisedRecoverySeconds)].reduce(
-        (a, b) => (a > b ? a : b),
+        (a, b) => {
+          if (a > b) return a
+          return b
+        },
         0n
       )
     // A representation placeholder checks the typed-object/signature inventory
@@ -461,7 +464,7 @@ export class LCHOverlayPaidSeller<C> {
       Promise.resolve()
     )
     return [...objects]
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .sort(([left], [right]) => Number(left > right) - Number(left < right))
       .map(([, value]) => value)
   }
   async issue(
@@ -546,16 +549,12 @@ export class LCHOverlayPaidSeller<C> {
     ].reduce(
       (previous, role) =>
         previous.then(() =>
-          validateLCHOverlayAuthority(
-            terms,
-            role.actor,
-            role.capability,
-            material.paths,
-            outputU64(role.at),
-            this.ports.authorityNetwork,
+          validateLCHOverlayAuthority(terms, role.actor, role.capability, material.paths, {
+            now: outputU64(role.at),
+            network: this.ports.authorityNetwork,
             verifier,
-            this.ports.revocations?.at(role.at)
-          )
+            revocationSource: this.ports.revocations?.at(role.at)
+          })
         ),
       Promise.resolve()
     )

@@ -82,7 +82,7 @@ async function wrongWallet() {
 async function raw() {
   return await new Promise((resolve, reject) => {
     const request = indexedDB.open('operation-objects-native-browser')
-    request.onerror = () => reject(request.error)
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'))
     request.onsuccess = () => {
       const db = request.result,
         tx = db.transaction('protected-operation-objects'),
@@ -91,7 +91,7 @@ async function raw() {
         db.close()
         resolve(JSON.stringify(rows.result))
       }
-      tx.onabort = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'))
     }
   })
 }

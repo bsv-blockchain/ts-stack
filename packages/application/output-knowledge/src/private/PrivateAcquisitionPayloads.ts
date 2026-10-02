@@ -188,8 +188,7 @@ export class PrivateAcquisitionPayloads {
     return rows.map((row, index) => {
       const address = this.address(value, index)
       outputAssert(
-        row !== undefined &&
-          row.kind === address.kind &&
+        row?.kind === address.kind &&
           row.key === address.key &&
           row.reservedBytes === this.allowance(value, index) &&
           row.reservedUpdates === (value.digest === null ? 1 : 0),

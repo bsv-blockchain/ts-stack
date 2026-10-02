@@ -2706,3 +2706,49 @@ whole-source mutation region; the current branch registry remains 122. Main
 2d64fcd3d is reconciled locally, retaining the branch's actually generated bundle
 evidence hash. Full mutation, zero-new source findings and exact-head hosted
 qualification remain pending.
+
+### October 2 source-quality and complete recovery qualification
+
+The next quality batch extracts the existing new-signing guard and guarded
+unlocking-template wrapper into local helpers, preserving every guard invocation,
+script result, async boundary and telemetry span. The buyer and acquisition
+coordinator retain serial phase execution, exact BigInt times, immutable first
+results, unknown credit outcomes and bounded CAS retries. Protected SQLite methods
+perform native work and input ownership synchronously while preserving Promise
+rejection semantics. IndexedDB ciphertext work remains outside the transaction;
+abort/quota outcomes retain their prior meanings. Canonical ordering explicitly
+uses code units, independent of host locale.
+
+Native process fixtures receive bounded jobs over IPC and refuse non-fixture
+locations, alternate filenames, symlink escapes and oversized input before opening
+a database. The six actual SIGKILL phase cuts remain. Local qualification passes
+139 recovery regressions, 70 boundary/property tests including the complete
+300-case buyer, coordination and object histories, 22 authenticated HTTP cases and
+ten actual process/input-boundary cases. These are component evidence, not final
+checkpoint or mutation evidence.
+
+The published 92825f86 source passes hosted build/policy/conformance, packed
+consumers, native wallet and browser jobs, but has 107 new Sonar findings and a
+host publication property timeout under full parallel coverage. Local quality
+changes address those findings without removing cases or extending deadlines.
+A complete two-worker host coverage measurement passes all 46 suites/863 tests
+in 82.064 seconds; the same complete serial union passes in 150.743 seconds.
+Coverage now runs in one process to isolate the authenticated 300-case property
+from competing coverage workers. This trades total local wall time for consistent
+per-test access to the runner; all suites, cases, coverage collection and 90-second
+property deadlines remain unchanged. Exact-head hosted proof is still required.
+
+Detached seller source qualification adds actual source reads before quotation,
+retained-material validation and issuance, followed by independent buyer License
+verification and authenticated playback. The same complete LCH coverage campaign
+now passes 26 suites/201 tests. Five negative source schedules refuse a new quote
+before credit. The native signing/recovery suites pass 42 tests, and the exact
+packed browser runtime passes real Chrome IndexedDB/page/process restart,
+cross-tab CAS, protected custody and immutable four-MiB object retention. These
+changes preserve ordinary embedded-content behavior.
+
+Main 5c92262e4 (#629) is reconciled, preserving its MessageBox payment-outcome
+contracts, tests, release notes and maintenance baseline. The sole generated API
+migration conflict is rebuilt from the combined manifest/release registry instead
+of choosing one branch's text. All four mandatory root gates and the clean packed LCH/CLI/browser checks pass.
+Exact-head hosted quality and full mutation remain required.

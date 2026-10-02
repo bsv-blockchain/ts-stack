@@ -20,9 +20,11 @@ import {
 } from '../src/private/PrivateAcquisitionProgress.js'
 
 /** Real BRC-29/Atomic encoding, synthetic unproved inputs: lifecycle tests only. */
-export async function acquisitionFixture(
-  chain: OutputChain = { network: 'acquisition-lifecycle-fixture', genesisHash: '66'.repeat(32) }
-) {
+export async function acquisitionFixture(selectedChain?: OutputChain) {
+  const chain = selectedChain ?? {
+    network: 'acquisition-lifecycle-fixture',
+    genesisHash: '66'.repeat(32)
+  }
   const sellerWallet = new ProtoWallet(new PrivateKey(83)),
     buyerWallet = new ProtoWallet(new PrivateKey(84))
   const seller = (await sellerWallet.getPublicKey({ identityKey: true })).publicKey

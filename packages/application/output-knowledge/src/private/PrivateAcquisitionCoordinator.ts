@@ -287,127 +287,11 @@ export class PrivateAcquisitionCoordinator {
     caller: PrivateAcquisitionCaller,
     signal: AbortSignal
   ): Promise<void> {
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for await (const _attempt of Array.from({ length: 8 }, (_, index) => index)) {
       const loaded = this.load(id, caller, signal),
-        state = loaded.state.progress,
         guard = this.guard(id, caller, signal, loaded.original)
       try {
-        if (state.phase === 'quoted') {
-          if (state.candidate?.verdict !== 'pending') {
-            if (outputU64(loaded.observedAt) >= outputU64(state.recoveryUntil))
-              this.ports.store.advance(
-                id,
-                caller.buyer,
-                loaded.row.revision,
-                { type: 'expire' },
-                this.ports.clock,
-                guard
-              )
-            return
-          }
-          let verified: Awaited<ReturnType<SDKPrivateAcquisitionFunding['verify']>>
-          try {
-            verified = await this.ports.funding.verify(
-              state.candidate.payment,
-              state.challenge,
-              state.chain,
-              signal
-            )
-          } catch (error) {
-            this.requireCurrent(caller, signal)
-            if (error instanceof OutputProtocolError && error.code === 'invalid')
-              this.ports.store.advance(
-                id,
-                caller.buyer,
-                loaded.row.revision,
-                {
-                  type: 'invalid',
-                  candidateDigest: state.candidate.digest,
-                  reason: 'Payment candidate failed verification'
-                },
-                this.ports.clock,
-                guard
-              )
-            throw error
-          }
-          const acceptance = await this.ports.release.assess(
-            loaded.original,
-            state,
-            verified,
-            signal
-          )
-          this.requireCurrent(caller, signal)
-          if (!acceptance) return
-          this.ports.store.advance(
-            id,
-            caller.buyer,
-            loaded.row.revision,
-            {
-              type: 'reserve-funding',
-              candidateDigest: state.candidate.digest,
-              sellerPaymentKey: verified.sellerPaymentKey,
-              acceptance: acceptance.evidence
-            },
-            this.ports.clock,
-            view => {
-              guard(view)
-              acceptance.checkCurrent()
-            }
-          )
-        } else if (state.phase === 'funding-pending') {
-          let outcome = await this.ports.wallet.status(state, signal)
-          this.requireCurrent(caller, signal)
-          if (outcome.state === 'absent') {
-            outcome = await this.ports.wallet.internalize(state, signal)
-            this.requireCurrent(caller, signal)
-          }
-          if (outcome.state === 'accepted')
-            this.ports.store.advance(
-              id,
-              caller.buyer,
-              loaded.row.revision,
-              { type: 'wallet-accepted', receipt: outcome.receipt },
-              this.ports.clock,
-              guard
-            )
-          else if (outcome.state === 'rejected')
-            this.ports.store.advance(
-              id,
-              caller.buyer,
-              loaded.row.revision,
-              { type: 'wallet-rejected', operationId: outcome.operationId, reason: outcome.reason },
-              this.ports.clock,
-              guard
-            )
-          else return
-        } else if (state.phase === 'funded')
-          this.ports.store.advance(
-            id,
-            caller.buyer,
-            loaded.row.revision,
-            { type: 'prepare-delivery' },
-            this.ports.clock,
-            guard
-          )
-        else if (state.phase === 'delivery-pending') {
-          const material = this.ports.store.material(
-            id,
-            caller.buyer,
-            loaded.row.revision,
-            this.ports.clock,
-            guard
-          )
-          const result = await this.ports.domain.issue(loaded.original, state, material, signal)
-          this.requireCurrent(caller, signal)
-          this.ports.store.complete(
-            id,
-            caller.buyer,
-            loaded.row.revision,
-            result,
-            this.ports.clock,
-            guard
-          )
-        } else return
+        if (await this.advanceOne(loaded, caller, signal, guard)) return
       } catch (error) {
         this.requireCurrent(caller, signal)
         if (
@@ -419,6 +303,152 @@ export class PrivateAcquisitionCoordinator {
         throw error
       }
     }
+  }
+  /** Serial phases preserve the original payment/credit obligation and stop on
+   * unknown outcomes. Each physical await is followed by current-owner checks.
+   */
+  private async advanceOne(
+    loaded: Loaded,
+    caller: PrivateAcquisitionCaller,
+    signal: AbortSignal,
+    guard: ProtectedLedgerGuard
+  ): Promise<boolean> {
+    const state = loaded.state.progress,
+      id = state.challenge.acquisitionId
+    if (state.phase === 'quoted') return this.advanceQuoted(loaded, caller, signal, guard)
+    if (state.phase === 'funding-pending') return this.advanceCredit(loaded, caller, signal, guard)
+    if (state.phase === 'funded') {
+      this.ports.store.advance(
+        id,
+        caller.buyer,
+        loaded.row.revision,
+        { type: 'prepare-delivery' },
+        this.ports.clock,
+        guard
+      )
+      return false
+    }
+    if (state.phase !== 'delivery-pending') return true
+    const material = this.ports.store.material(
+        id,
+        caller.buyer,
+        loaded.row.revision,
+        this.ports.clock,
+        guard
+      ),
+      result = await this.ports.domain.issue(loaded.original, state, material, signal)
+    this.requireCurrent(caller, signal)
+    this.ports.store.complete(
+      id,
+      caller.buyer,
+      loaded.row.revision,
+      result,
+      this.ports.clock,
+      guard
+    )
+    return false
+  }
+  private async advanceQuoted(
+    loaded: Loaded,
+    caller: PrivateAcquisitionCaller,
+    signal: AbortSignal,
+    guard: ProtectedLedgerGuard
+  ): Promise<boolean> {
+    const state = loaded.state.progress,
+      id = state.challenge.acquisitionId,
+      candidate = state.candidate
+    if (candidate?.verdict !== 'pending') {
+      if (outputU64(loaded.observedAt) >= outputU64(state.recoveryUntil))
+        this.ports.store.advance(
+          id,
+          caller.buyer,
+          loaded.row.revision,
+          { type: 'expire' },
+          this.ports.clock,
+          guard
+        )
+      return true
+    }
+    let verified: Awaited<ReturnType<SDKPrivateAcquisitionFunding['verify']>>
+    try {
+      verified = await this.ports.funding.verify(
+        candidate.payment,
+        state.challenge,
+        state.chain,
+        signal
+      )
+    } catch (error) {
+      this.requireCurrent(caller, signal)
+      if (error instanceof OutputProtocolError && error.code === 'invalid')
+        this.ports.store.advance(
+          id,
+          caller.buyer,
+          loaded.row.revision,
+          {
+            type: 'invalid',
+            candidateDigest: candidate.digest,
+            reason: 'Payment candidate failed verification'
+          },
+          this.ports.clock,
+          guard
+        )
+      throw error
+    }
+    const acceptance = await this.ports.release.assess(loaded.original, state, verified, signal)
+    this.requireCurrent(caller, signal)
+    if (!acceptance) return true
+    this.ports.store.advance(
+      id,
+      caller.buyer,
+      loaded.row.revision,
+      {
+        type: 'reserve-funding',
+        candidateDigest: candidate.digest,
+        sellerPaymentKey: verified.sellerPaymentKey,
+        acceptance: acceptance.evidence
+      },
+      this.ports.clock,
+      view => {
+        guard(view)
+        acceptance.checkCurrent()
+      }
+    )
+    return false
+  }
+  private async advanceCredit(
+    loaded: Loaded,
+    caller: PrivateAcquisitionCaller,
+    signal: AbortSignal,
+    guard: ProtectedLedgerGuard
+  ): Promise<boolean> {
+    const state = loaded.state.progress,
+      id = state.challenge.acquisitionId
+    let outcome = await this.ports.wallet.status(state, signal)
+    this.requireCurrent(caller, signal)
+    if (outcome.state === 'absent') {
+      outcome = await this.ports.wallet.internalize(state, signal)
+      this.requireCurrent(caller, signal)
+    }
+    if (outcome.state === 'accepted')
+      this.ports.store.advance(
+        id,
+        caller.buyer,
+        loaded.row.revision,
+        { type: 'wallet-accepted', receipt: outcome.receipt },
+        this.ports.clock,
+        guard
+      )
+    else if (outcome.state === 'rejected')
+      this.ports.store.advance(
+        id,
+        caller.buyer,
+        loaded.row.revision,
+        { type: 'wallet-rejected', operationId: outcome.operationId, reason: outcome.reason },
+        this.ports.clock,
+        guard
+      )
+    else return true
+    return false
   }
   private load(id: string, caller: PrivateAcquisitionCaller, signal: AbortSignal): Loaded {
     this.requireCurrent(caller, signal)

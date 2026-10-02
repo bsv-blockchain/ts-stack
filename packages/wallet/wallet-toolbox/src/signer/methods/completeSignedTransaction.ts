@@ -4,6 +4,33 @@ import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
 import { brc29ProtocolID, ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
 
+function synchronousSigningGuard(checkNewSigning?: () => void): (() => void) | undefined {
+  if (checkNewSigning === undefined) return undefined
+  if (typeof checkNewSigning !== 'function' || checkNewSigning.constructor.name === 'AsyncFunction')
+    throw new WERR_INVALID_PARAMETER('checkNewSigning', 'must be synchronous')
+  return () => {
+    const result: unknown = checkNewSigning()
+    if (result instanceof Promise) void result.catch(() => undefined)
+    if (result !== undefined) throw new WERR_INVALID_PARAMETER('checkNewSigning', 'must return void synchronously')
+  }
+}
+
+function guardedUnlockingTemplate(
+  template: ReturnType<ScriptTemplateBRC29['unlockWithDerivedPrivateKey']>,
+  guard?: () => void
+): ReturnType<ScriptTemplateBRC29['unlockWithDerivedPrivateKey']> {
+  if (guard === undefined) return template
+  return {
+    estimateLength: async (transaction, inputIndex) => await template.estimateLength(transaction, inputIndex),
+    sign: async (transaction, inputIndex) => {
+      guard()
+      const script = await template.sign(transaction, inputIndex)
+      guard()
+      return script
+    }
+  }
+}
+
 /** Optional authority applies to new managed signing, not recovery of an earlier final. */
 export async function completeSignedTransaction(
   prior: PendingSignAction,
@@ -11,13 +38,7 @@ export async function completeSignedTransaction(
   wallet: Wallet,
   checkNewSigning?: () => void
 ): Promise<Transaction> {
-  if (checkNewSigning !== undefined && (typeof checkNewSigning !== 'function' || checkNewSigning.constructor.name === 'AsyncFunction'))
-    throw new WERR_INVALID_PARAMETER('checkNewSigning', 'must be synchronous')
-  const guard = checkNewSigning === undefined ? undefined : () => {
-    const result: unknown = checkNewSigning()
-    if (result instanceof Promise) void result.catch(() => undefined)
-    if (result !== undefined) throw new WERR_INVALID_PARAMETER('checkNewSigning', 'must return void synchronously')
-  }
+  const guard = synchronousSigningGuard(checkNewSigning)
   guard?.()
   /// //////////////////
   // Insert the user provided unlocking scripts from "spends" arg
@@ -86,15 +107,7 @@ export async function completeSignedTransaction(
         asBsvSdkScript(pdi.lockingScript)
       )
       const input = prior.tx.inputs[pdi.vin]
-      input.unlockingScriptTemplate = guard === undefined ? unlockTemplate : {
-        estimateLength: async (transaction, inputIndex) => await unlockTemplate.estimateLength(transaction, inputIndex),
-        sign: async (transaction, inputIndex) => {
-          guard()
-          const script = await unlockTemplate.sign(transaction, inputIndex)
-          guard()
-          return script
-        }
-      }
+      input.unlockingScriptTemplate = guardedUnlockingTemplate(unlockTemplate, guard)
     }
   }
 

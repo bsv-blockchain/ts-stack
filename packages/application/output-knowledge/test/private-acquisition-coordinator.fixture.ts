@@ -1,3 +1,4 @@
+import { fixturePromise } from './private-async.fixture.js'
 import { afterEach } from '@jest/globals'
 import {
   P2PKH,
@@ -35,7 +36,7 @@ import {
 
 const cleanup = new Set<PrivateAcquisitionCoordinator>()
 afterEach(async () => {
-  for (const coordinator of cleanup) await coordinator.stop()
+  for await (const coordinator of cleanup) await coordinator.stop()
   cleanup.clear()
 })
 export async function acquisitionCoordinatorFixture(
@@ -84,50 +85,60 @@ export async function acquisitionCoordinatorFixture(
   const counts = { prepare: 0, validate: 0, issue: 0, status: 0, internalize: 0, assess: 0 }
   const receipts = new Map<string, PrivateAcquisitionWalletOutcome>()
   const domain: PrivateAcquisitionDomain = {
-    async prepare() {
-      counts.prepare++
-      if (!available) throw new Error('Synthetic catalogue unavailable')
-      return {
-        terms: f.f.terms,
-        evidence: candidate('P').evidence,
-        verificationContext: verificationContext(),
-        schema: f.original.schema,
-        maximumContextBytes: f.original.maximumContextBytes,
-        maximumAcceptanceBytes: f.original.maximumAcceptanceBytes,
-        material: 'AQID'
-      }
+    prepare() {
+      return fixturePromise(() => {
+        counts.prepare++
+        if (!available) throw new Error('Synthetic catalogue unavailable')
+        return {
+          terms: f.f.terms,
+          evidence: candidate('P').evidence,
+          verificationContext: verificationContext(),
+          schema: f.original.schema,
+          maximumContextBytes: f.original.maximumContextBytes,
+          maximumAcceptanceBytes: f.original.maximumAcceptanceBytes,
+          material: 'AQID'
+        }
+      })
     },
-    async validate(input) {
-      counts.validate++
-      if (
-        !domainValid ||
-        input.assetId !== request.assetId ||
-        input.termsDigest !== request.termsDigest
-      )
-        throw new Error('Synthetic domain binding differs')
+    validate(input) {
+      return fixturePromise(() => {
+        counts.validate++
+        if (
+          !domainValid ||
+          input.assetId !== request.assetId ||
+          input.termsDigest !== request.termsDigest
+        )
+          throw new Error('Synthetic domain binding differs')
+      })
     },
     isCurrent() {
       return authority
     },
-    async issue(_original, _progress, material) {
-      counts.issue++
-      if (!issueReady) throw new Error('Synthetic issuer unavailable')
-      return material
+    issue(_original, _progress, material) {
+      return fixturePromise(() => {
+        counts.issue++
+        if (!issueReady) throw new Error('Synthetic issuer unavailable')
+        return material
+      })
     }
   }
   const wallet: PrivateAcquisitionWallet = {
-    async status(state) {
-      counts.status++
-      return receipts.get(state.funding!.operation.id) ?? { state: 'absent' }
+    status(state) {
+      return fixturePromise(() => {
+        counts.status++
+        return receipts.get(state.funding!.operation.id) ?? { state: 'absent' }
+      })
     },
-    async internalize(state) {
-      counts.internalize++
-      const operation = state.funding!.operation
-      if (!receipts.has(operation.id)) {
-        credits++
-        receipts.set(operation.id, { state: 'accepted', receipt: f.f.f.receipt(state) })
-      }
-      return receipts.get(operation.id)!
+    internalize(state) {
+      return fixturePromise(() => {
+        counts.internalize++
+        const operation = state.funding!.operation
+        if (!receipts.has(operation.id)) {
+          credits++
+          receipts.set(operation.id, { state: 'accepted', receipt: f.f.f.receipt(state) })
+        }
+        return receipts.get(operation.id)!
+      })
     }
   }
   const evidence = new SDKPrivateReleaseEvidence(resolver)

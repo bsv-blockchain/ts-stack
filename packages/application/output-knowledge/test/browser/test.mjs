@@ -238,7 +238,12 @@ try {
     page.evaluate(() => window.outputKnowledgeBrowser.protected.cas('2', 'left')),
     protectedPeer.evaluate(() => window.outputKnowledgeBrowser.protected.cas('2', 'right'))
   ])
-  assert.deepEqual(protectedWriters.map(result => result.status).sort(), ['conflict', 'updated'])
+  assert.deepEqual(
+    protectedWriters
+      .map(result => result.status)
+      .sort((left, right) => Number(left > right) - Number(left < right)),
+    ['conflict', 'updated']
+  )
   const protectedFinal = await protectedPeer.evaluate(() =>
     window.outputKnowledgeBrowser.protected.inspect()
   )
@@ -278,7 +283,12 @@ try {
     page.evaluate(() => window.outputKnowledgeBrowser.objects.compete(7)),
     objectPeer.evaluate(() => window.outputKnowledgeBrowser.objects.compete(8))
   ])
-  assert.deepEqual(objectWriters.map(value => value.status).sort(), ['conflict', 'stored'])
+  assert.deepEqual(
+    objectWriters
+      .map(value => value.status)
+      .sort((left, right) => Number(left > right) - Number(left < right)),
+    ['conflict', 'stored']
+  )
   assert.deepEqual(
     (await objectPeer.evaluate(() => window.outputKnowledgeBrowser.objects.second())).bytes,
     [objectWriters[0].status === 'stored' ? 7 : 8]

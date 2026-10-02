@@ -407,12 +407,13 @@ export function privatePublicationResult(input: unknown): OutputPrivatePublicati
     publicationId: state.publicationId,
     txid: state.txid,
     updatedAt: state.updatedAt,
-    status:
-      phase === 'staged' || phase === 'admitting' || phase === 'binding'
-        ? 'pending'
-        : phase === 'excluded'
-          ? 'rejected'
-          : phase,
+    status: publicationStatus(phase),
     ...('reason' in state.progress ? { reason: state.progress.reason } : {})
   })
+}
+
+function publicationStatus(phase: PrivatePublicationProgress['progress']['phase']) {
+  if (['staged', 'admitting', 'binding'].includes(phase)) return 'pending' as const
+  if (phase === 'excluded') return 'rejected' as const
+  return phase
 }

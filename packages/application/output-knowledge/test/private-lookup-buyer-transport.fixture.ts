@@ -1,3 +1,4 @@
+import { fixturePromise } from './private-async.fixture.js'
 import { jest } from '@jest/globals'
 import {
   OutputPaidLookupTransport,
@@ -36,9 +37,10 @@ export function buyerRemote(f: Awaited<ReturnType<typeof buyerFixture>>): {
     paidRemotely = false,
     lose: 'quote' | 'pay' | undefined
   const calls: string[] = []
-  const send = jest
-    .spyOn(OutputPaidLookupTransport.prototype, 'send')
-    .mockImplementation(async function (this: OutputPaidLookupTransport<'quote'>) {
+  const send = jest.spyOn(OutputPaidLookupTransport.prototype, 'send').mockImplementation(function (
+    this: OutputPaidLookupTransport<'quote'>
+  ) {
+    return fixturePromise(() => {
       const operation = (this as unknown as { operation: string }).operation
       calls.push(operation)
       if (operation === 'quote') {
@@ -60,6 +62,7 @@ export function buyerRemote(f: Awaited<ReturnType<typeof buyerFixture>>): {
       if (!quotedRemotely) throw new Error('Unexpected recovery before any quote')
       return (paidRemotely ? delivered : quoted) as unknown as OutputPaidLookupQuote
     })
+  })
   return {
     calls,
     send,

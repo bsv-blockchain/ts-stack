@@ -43,7 +43,7 @@ export const LCH_OVERLAY_PAID_MECHANISMS = Object.freeze(
     LCH_MECHANISMS.brc105Single,
     LCH_MECHANISMS.encryption,
     LCH_MECHANISMS.brc78Key
-  ].sort()
+  ].sort((left, right) => Number(left > right) - Number(left < right))
 )
 const CRITICAL = new Set<string>(LCH_OVERLAY_PAID_MECHANISMS)
 
@@ -144,24 +144,7 @@ export function validateLCHOverlayCapability(
     const key = canonicalOutputJSON([entry.kind, entry.service, entry.mode])
     lchAssert(!seen.has(key), 'ERR_LCH_PROFILE_UNSUPPORTED', 'Duplicate LCH capability binding')
     seen.add(key)
-    let previous = ''
-    const names: string[] = []
-    for (const name of entry.mechanisms) {
-      lchAssert(
-        typeof name === 'string' && name.length <= 2048 && name > previous,
-        'ERR_LCH_PROFILE_UNSUPPORTED',
-        'Mechanisms must be sorted and unique'
-      )
-      let absolute = false
-      try {
-        absolute = new URL(name).protocol.length > 1
-      } catch {
-        /* assertion below */
-      }
-      lchAssert(absolute, 'ERR_LCH_PROFILE_UNSUPPORTED', 'Mechanism must be an absolute IRI')
-      previous = name
-      names.push(name)
-    }
+    const names = mechanismNames(entry.mechanisms)
     if (
       entry.kind === selection.service.kind &&
       entry.service === binding.service &&
@@ -326,7 +309,7 @@ export async function validateLCHOverlayPaidTerms(
     'ERR_LCH_TERMS',
     'Human terms consent differs'
   )
-  for (const term of human) {
+  for await (const term of human) {
     const ref = await validatePolicyReference(term, { mediaType: undefined })
     lchAssert(
       accepted.some(value => value instanceof Uint8Array && toHex(value) === toHex(ref.digest)),
@@ -456,7 +439,11 @@ export function validateLCHOverlayPaidPromise(
   bindOutputPaidLookupChallenge(challenge, terms.acquire, terms.selected)
   const cutoff = outputU64(challenge.payableUntil),
     minimum = [86400n, outputU64(advertisedRecoverySeconds), terms.recoverySeconds].reduce(
-      (a, b) => (a > b ? a : b)
+      (a, b) => {
+        if (a > b) return a
+        return b
+      },
+      0n
     )
   lchAssert(
     challenge.satoshis === terms.policy.satoshis.toString() &&
@@ -466,4 +453,26 @@ export function validateLCHOverlayPaidPromise(
     'ERR_LCH_QUOTE',
     'Challenge price, cutoff or recovery promise differs from Offer'
   )
+}
+
+function mechanismNames(mechanisms: readonly LCHValue[]): string[] {
+  let previous = ''
+  const names: string[] = []
+  for (const name of mechanisms) {
+    lchAssert(
+      typeof name === 'string' && name.length <= 2048 && name > previous,
+      'ERR_LCH_PROFILE_UNSUPPORTED',
+      'Mechanisms must be sorted and unique'
+    )
+    let absolute = false
+    try {
+      absolute = new URL(name).protocol.length > 1
+    } catch {
+      /* assertion below */
+    }
+    lchAssert(absolute, 'ERR_LCH_PROFILE_UNSUPPORTED', 'Mechanism must be an absolute IRI')
+    previous = name
+    names.push(name)
+  }
+  return names
 }

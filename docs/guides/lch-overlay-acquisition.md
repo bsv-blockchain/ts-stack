@@ -185,7 +185,11 @@ cover lost originals, smaller reservations and changed entitlements. Codec tests
 cover exact CBOR/JCS, evidence ordering, duplicates, unknown fields and resource
 ceilings, including 300 seeded generated histories. Seller component tests exercise
 real settlement/License/key issuance, withdrawal/expiry recovery, exact native
-credit refusal and invalid chronology.
+credit refusal and invalid chronology. Detached representations use the installed
+bounded source during quotation, retained-material validation and issuance; the
+result then passes independent buyer verification and authenticated playback.
+Missing or tampered ciphertext, an oversized source response, access loss and
+cancellation during a read refuse a new quote before native credit.
 
 Run `pnpm --dir packages/overlays/overlay-express test --runTestsByPath
 src/__tests__/PrivateBuyerLCH.integration.test.ts` for the complete disposable

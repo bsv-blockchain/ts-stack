@@ -208,7 +208,7 @@ export class ProtectedOperationObjectCipher {
       return {
         id: outputHex32(value.id),
         complete: value.complete,
-        digests: value.digests.map(outputHex32)
+        digests: value.digests.map(value => outputHex32(value))
       }
     })
     const result = { revision: row.revision, entries }
@@ -216,10 +216,12 @@ export class ProtectedOperationObjectCipher {
     const expected = [
       OPERATION_OBJECT_HEAD,
       ...entries.flatMap(entry => this.addresses(entry.id))
-    ].sort()
+    ].sort((left, right) => Number(left > right) - Number(left < right))
     outputAssert(
       keys.length === expected.length &&
-        [...keys].sort().every((key, index) => key === expected[index]),
+        [...keys]
+          .sort((left, right) => Number(left > right) - Number(left < right))
+          .every((key, index) => key === expected[index]),
       'Protected object rows differ from authenticated inventory',
       'unavailable'
     )
@@ -254,7 +256,7 @@ export class ProtectedOperationObjectCipher {
         'Protected object inventory framing differs',
         'unavailable'
       )
-      entry.digests.forEach(outputHex32)
+      entry.digests.forEach(value => outputHex32(value))
       expectedRevision += entry.complete ? 2 : 1
     })
     outputAssert(

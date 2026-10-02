@@ -1,6 +1,8 @@
 import { expect, it } from '@jest/globals'
 import { fork } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { acquisitionStoreFixture } from './private-acquisition-store.fixture.js'
 
@@ -8,10 +10,7 @@ it.each(['quoted', 'pinned', 'funding-pending', 'funded', 'delivery-pending', 'd
   'recovers the same original obligation after SIGKILL at %s',
   async phase => {
     const f = await acquisitionStoreFixture(),
-      jobPath = f.path + '.json'
-    writeFileSync(
-      jobPath,
-      JSON.stringify({
+      job = {
         path: f.path,
         configuration: f.configuration,
         installation: f.f.installation,
@@ -28,11 +27,10 @@ it.each(['quoted', 'pinned', 'funding-pending', 'funded', 'delivery-pending', 'd
           policy: { kind: 'local-admission' },
           acceptedAt: '19'
         }
-      })
-    )
+      }
     const child = fork(
       fileURLToPath(new URL('./fixtures/private-acquisition-owner-worker.mjs', import.meta.url)),
-      [jobPath],
+      [],
       { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] }
     )
     let output = ''
@@ -61,6 +59,12 @@ it.each(['quoted', 'pinned', 'funding-pending', 'funded', 'delivery-pending', 'd
         child.once('exit', (code, signal) => {
           clearTimeout(timer)
           reject(new Error(`Native fixture exited ${code}/${signal}: ${output}`))
+        })
+        child.send(job, error => {
+          if (error) {
+            clearTimeout(timer)
+            reject(error)
+          }
         })
       })
       expect(result.phase).toBe(phase)
@@ -95,4 +99,51 @@ it.each(['quoted', 'pinned', 'funding-pending', 'funded', 'delivery-pending', 'd
     }
   },
   25000
+)
+
+it.each(['directory', 'filename', 'symlink', 'oversized'])(
+  'refuses %s initialization before opening the acquisition worker database',
+  async kind => {
+    const outside = mkdtempSync(join(tmpdir(), 'unapproved-worker-')),
+      disposable = mkdtempSync(join(tmpdir(), 'acquisition-store-')),
+      file = join(outside, 'private.db')
+    writeFileSync(file, 'Synthetic fixture only')
+    let path = file
+    if (kind === 'filename') {
+      path = join(disposable, 'other.db')
+      writeFileSync(path, 'Synthetic fixture only')
+    } else if (kind === 'symlink') {
+      path = join(disposable, 'private.db')
+      symlinkSync(file, path)
+    }
+    const child = fork(
+      fileURLToPath(new URL('./fixtures/private-acquisition-owner-worker.mjs', import.meta.url)),
+      [],
+      { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] }
+    )
+    let output = ''
+    child.stderr?.on('data', chunk => {
+      output += String(chunk)
+    })
+    try {
+      const exit = new Promise<number | null>((resolve, reject) => {
+        child.once('error', reject)
+        child.once('exit', resolve)
+      })
+      child.send({ path, ...(kind === 'oversized' ? { extra: 'x'.repeat(2097152) } : {}) })
+      expect(await exit).toBe(1)
+      expect(output).toContain(
+        kind === 'oversized' ? 'Fixture job exceeds bound' : 'outside the disposable fixture'
+      )
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        const ended = new Promise(resolve => child.once('exit', resolve))
+        child.kill('SIGKILL')
+        await ended
+      }
+      rmSync(outside, { recursive: true, force: true })
+      rmSync(disposable, { recursive: true, force: true })
+    }
+  },
+  20000
 )

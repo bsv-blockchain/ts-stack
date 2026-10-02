@@ -260,7 +260,7 @@ export async function decodeUnverifiedLCHOverlayContext(
     evidence: LCHOverlayTypedEvidence[] = []
   let checks = license.signatures.length,
     previous = ''
-  for (const item of value.evidence) {
+  for await (const item of value.evidence) {
     const entry = map(item, 'Typed evidence')
     closed(entry, ['type', 'object'])
     lchAssert(

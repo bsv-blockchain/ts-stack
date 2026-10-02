@@ -228,7 +228,7 @@ it('accepts the specified exact 2 MiB context boundary and rejects one extra enc
     exact = 2096000 + 2097152 - measured
   value.license.body.extensions[name] = new Uint8Array(exact)
   const wire = await encodeLCHOverlayContext(value, 'paid-lookup')
-  expect(wire.length).toBe(2097152)
+  expect(wire).toHaveLength(2097152)
   expect((await decodeUnverifiedLCHOverlayContext(wire, 'paid-lookup')).version).toBe(1)
   value.license.body.extensions[name] = new Uint8Array(exact + 1)
   await expect(encodeLCHOverlayContext(value, 'paid-lookup')).rejects.toThrow('byte bound')

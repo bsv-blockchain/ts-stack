@@ -40,16 +40,17 @@ import { lchOverlayCustodyBinding } from '../src/overlayAcquisitionCustody.js'
 
 const cleanup = new Set<() => Promise<void>>()
 afterEach(async () => {
-  for (const close of cleanup) await close()
+  for await (const close of cleanup) await close()
   cleanup.clear()
 })
 
 export async function lchPaidFixture(
   chain = fixtureChain,
-  installation?: Parameters<typeof lchOverlayFixture>[1]
+  installation?: Parameters<typeof lchOverlayFixture>[1],
+  embedCiphertext = true
 ) {
   const snapshot = () => ({ ...context(), view: { ...context().view, chain } })
-  const f = await lchOverlayFixture(chain, installation),
+  const f = await lchOverlayFixture(chain, installation, embedCiphertext),
     acquire = {
       ...f.acquire,
       listing: { chain, txid: transactions.get('P')!.id('hex'), outputIndex: 0 }
@@ -137,7 +138,7 @@ export async function lchPaidFixture(
     settlementId = outputPacketDigest('lch-lookup-settlement', body),
     delivery = new WalletBRC78KeyDelivery(f.sellerWallet),
     grants: KeyGrant[] = []
-  for (const [key, cek] of f.asset.keys)
+  for await (const [key, cek] of f.asset.keys)
     grants.push({
       keyId: Uint8Array.from(Utils.toArray(key, 'hex')),
       delivery: 'https://bsv.brc.dev/apps/0170#brc78-key-v1',
@@ -275,7 +276,7 @@ export async function lchPaidFixture(
     objects = SQLiteProtectedOperationObjectStore.create(path, configuration, codec)
   owners.push(objects)
   cleanup.add(async () => {
-    for (const owner of owners) await owner.close()
+    for await (const owner of owners) await owner.close()
     rmSync(directory, { recursive: true, force: true })
   })
   await domain.initializeCustody(objects)

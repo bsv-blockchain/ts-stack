@@ -1,11 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { fixtureJob } from './private-acquisition-worker-input.mjs'
 import { createSecretKey } from 'node:crypto'
 import { PrivateServiceDomain } from '../../dist/private/PrivateServiceDomain.js'
 import { NodeProtectedPayloadCodec } from '../../dist/private/NodeProtectedPayloadCodec.js'
 import { PrivateAcquisitionFundingIndex } from '../../dist/private/PrivateAcquisitionFundingIndex.js'
 
 // Public synthetic custody for this isolated test database only.
-const input = JSON.parse(readFileSync(process.argv[2], 'utf8'))
+const input = await fixtureJob('acquisition-index-')
 const owner = PrivateServiceDomain.open(
   input.path,
   input.config,

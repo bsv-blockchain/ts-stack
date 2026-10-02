@@ -61,16 +61,12 @@ it('requires exactly one finite authenticated delegation and a fresh retained re
         })
     },
     check = (paths: LCHOverlayAuthorityPath[], source = status) =>
-      validateLCHOverlayAuthority(
-        f.terms,
-        f.delegate.identityKey,
-        f.capability,
-        paths,
-        20n,
-        'testnet',
-        f.verifier,
-        source
-      )
+      validateLCHOverlayAuthority(f.terms, f.delegate.identityKey, f.capability, paths, {
+        now: 20n,
+        network: 'testnet',
+        verifier: f.verifier,
+        revocationSource: source
+      })
   await expect(check([f.path])).resolves.toBeUndefined()
   await expect(check([])).rejects.toThrow('missing or ambiguous')
   await expect(check([f.path, f.path])).rejects.toThrow('missing or ambiguous')
@@ -80,15 +76,11 @@ it('requires exactly one finite authenticated delegation and a fresh retained re
     })
   ).rejects.toThrow()
   await expect(
-    validateLCHOverlayAuthority(
-      f.terms,
-      f.delegate.identityKey,
-      f.capability,
-      [f.path],
-      20n,
-      'testnet',
-      f.verifier
-    )
+    validateLCHOverlayAuthority(f.terms, f.delegate.identityKey, f.capability, [f.path], {
+      now: 20n,
+      network: 'testnet',
+      verifier: f.verifier
+    })
   ).rejects.toThrow('No revocation-status')
   const forged = { ...f.path, chain: [{ ...f.authority, signatures: [Uint8Array.of(1)] }] }
   await expect(check([forged])).rejects.toThrow()

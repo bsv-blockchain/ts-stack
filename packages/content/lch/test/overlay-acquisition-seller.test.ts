@@ -6,9 +6,12 @@ import { lchPaidFixture } from './overlay-acquisition-paid.fixture.js'
 import { SDKPrivateAcquisitionFunding } from '../../../application/output-knowledge/src/private/SDKPrivateAcquisitionFunding.js'
 import { context, resolver } from '../../../application/output-knowledge/test/evidence-fixture.js'
 
-async function fixture(reverseClockAfterAssessment = false) {
-  const f = await lchPaidFixture(),
-    signal = new AbortController().signal,
+type SourceMode = 'stable' | 'missing' | 'tampered' | 'oversized' | 'access-lost' | 'cancelled'
+async function fixture(options?: { reverseClockAfterAssessment?: boolean; detached?: boolean }) {
+  let reverseClockAfterAssessment = options?.reverseClockAfterAssessment === true
+  const f = await lchPaidFixture(undefined, undefined, options?.detached !== true),
+    controller = new AbortController(),
+    signal = controller.signal,
     fundingVerifier = new SDKPrivateAcquisitionFunding(resolver, f.sellerWallet, () => context()),
     funding = await fundingVerifier.verify(f.payment, f.challenge, f.acquire.listing.chain, signal),
     capability = retainOutputCapability(f.selection.manifest, {
@@ -25,7 +28,9 @@ async function fixture(reverseClockAfterAssessment = false) {
     }).record
   let catalogue = true,
     credit = true,
-    credits = 0
+    credits = 0,
+    sourceReads = 0,
+    sourceMode: SourceMode = 'stable'
   const seller = new LCHOverlayPaidSeller({
     id: 'urn:reference:lch-paid-seller:1',
     catalogue: {
@@ -43,7 +48,18 @@ async function fixture(reverseClockAfterAssessment = false) {
         })
       }
     },
-    source: f.storage,
+    source: {
+      async read(...args) {
+        sourceReads++
+        if (sourceMode === 'missing') throw new Error('Detached ciphertext unavailable')
+        const bytes = await f.storage.read(...args)
+        if (sourceMode === 'tampered') bytes[0] ^= 1
+        if (sourceMode === 'oversized') return new Uint8Array(1048577)
+        if (sourceMode === 'access-lost') f.setAccess(false)
+        if (sourceMode === 'cancelled') controller.abort()
+        return bytes
+      }
+    },
     sellerSigner: f.seller,
     issuerSigner: f.seller,
     issuerWallet: f.sellerWallet,
@@ -102,7 +118,11 @@ async function fixture(reverseClockAfterAssessment = false) {
     setCredit: (value: boolean) => {
       credit = value
     },
-    credits: () => credits
+    credits: () => credits,
+    sourceReads: () => sourceReads,
+    setSourceMode: (value: SourceMode) => {
+      sourceMode = value
+    }
   }
 }
 it('issues a real signed settlement and recipient-bound License from exact accepted material, with independently authenticated buyer playback', async () => {
@@ -165,7 +185,7 @@ it('cannot issue from missing credit, substituted retained request or a differen
   expect(f.credits()).toBe(1)
 })
 it('keeps the obligation unresolved when issuance would precede its actual acceptance', async () => {
-  const f = await fixture(true)
+  const f = await fixture({ reverseClockAfterAssessment: true })
   await expect(
     f.sellerDomain.issue(f.original, f.progress, f.preparation.material, f.signal)
   ).rejects.toThrow('chronology')
@@ -173,4 +193,36 @@ it('keeps the obligation unresolved when issuance would precede its actual accep
   await expect(
     f.sellerDomain.issue(f.original, f.progress, f.preparation.material, f.signal)
   ).resolves.toEqual(expect.any(String))
+})
+
+it('validates a detached representation through the bounded source before quoting and issuing, then plays authenticated plaintext', async () => {
+  const f = await fixture({ detached: true })
+  expect(f.sourceReads()).toBe(1)
+  await f.sellerDomain.validate(f.acquire, f.preparation, f.signal)
+  const context = await f.sellerDomain.issue(
+      f.original,
+      f.progress,
+      f.preparation.material,
+      f.signal
+    ),
+    delivered = { ...f.delivered, result: { ...f.delivered.result!, context } }
+  expect(f.sourceReads()).toBe(3)
+  await f.domain.verify(f.acquire, f.challenge, f.payment, delivered, f.signal)
+  expect(await f.domain.playback(delivered, f.signal)).toEqual(f.plaintext)
+  expect(f.credits()).toBe(1)
+})
+it.each([
+  ['missing', 'Detached ciphertext unavailable'],
+  ['tampered', 'Ciphertext digest mismatch'],
+  ['oversized', 'Seller ciphertext source exceeded bound'],
+  ['access-lost', 'Seller installation cancelled, changed or inaccessible'],
+  ['cancelled', 'Seller installation cancelled, changed or inaccessible']
+] as const)('refuses detached %s content before a new quote or credit', async (mode, message) => {
+  const f = await fixture({ detached: true })
+  f.setSourceMode(mode)
+  await expect(f.sellerDomain.prepare(f.acquire, f.selection, f.signal)).rejects.toMatchObject({
+    message: 'No valid ciphertext source was available',
+    cause: expect.objectContaining({ message })
+  })
+  expect(f.credits()).toBe(0)
 })

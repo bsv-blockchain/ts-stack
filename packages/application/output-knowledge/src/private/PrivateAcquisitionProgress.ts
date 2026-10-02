@@ -259,30 +259,40 @@ export function parsePrivateAcquisitionProgress(input: unknown): PrivateAcquisit
     outputAssert(state.funding !== null, 'Wallet receipt has no reserved funding')
     state.walletReceipt = receipt(value.walletReceipt, state.funding.operation)
   }
-  if (value.delivery !== null) {
-    closedOutputObject(value.delivery, ['preparedAt', 'deliveredAt'])
-    const preparedAt = outputU64(value.delivery.preparedAt).toString()
-    const deliveredAt =
-      value.delivery.deliveredAt === null ? null : outputU64(value.delivery.deliveredAt).toString()
-    outputAssert(
-      state.walletReceipt !== null &&
-        state.funding !== null &&
-        outputU64(preparedAt) >= outputU64(createdAt) &&
-        outputU64(preparedAt) <= outputU64(updatedAt),
-      'Delivery has no prior funded history'
-    )
-    outputAssert(
-      deliveredAt === null ||
-        (outputU64(deliveredAt) >= outputU64(preparedAt) &&
-          outputU64(deliveredAt) <= outputU64(updatedAt)),
-      'Delivery time differs from prepared intent'
-    )
-    outputAssert(
-      outputU64(recoveryUntil) >= outputU64(deliveredAt ?? preparedAt) + 86400n,
-      'Delivery recovery is less than one day'
-    )
-    state.delivery = { preparedAt, deliveredAt }
-  }
+  if (value.delivery !== null) state.delivery = parseDelivery(value.delivery, state)
+  validateProgressPhase(state)
+  return state
+}
+function parseDelivery(
+  input: unknown,
+  state: PrivateAcquisitionProgress
+): NonNullable<PrivateAcquisitionProgress['delivery']> {
+  const value = owned(input, 1024),
+    { createdAt, updatedAt, recoveryUntil } = state
+  closedOutputObject(value, ['preparedAt', 'deliveredAt'])
+  const preparedAt = outputU64(value.preparedAt).toString()
+  const deliveredAt = value.deliveredAt === null ? null : outputU64(value.deliveredAt).toString()
+  outputAssert(
+    state.walletReceipt !== null &&
+      state.funding !== null &&
+      outputU64(preparedAt) >= outputU64(createdAt) &&
+      outputU64(preparedAt) <= outputU64(updatedAt),
+    'Delivery has no prior funded history'
+  )
+  outputAssert(
+    deliveredAt === null ||
+      (outputU64(deliveredAt) >= outputU64(preparedAt) &&
+        outputU64(deliveredAt) <= outputU64(updatedAt)),
+    'Delivery time differs from prepared intent'
+  )
+  outputAssert(
+    outputU64(recoveryUntil) >= outputU64(deliveredAt ?? preparedAt) + 86400n,
+    'Delivery recovery is less than one day'
+  )
+  return { preparedAt, deliveredAt }
+}
+function validateProgressPhase(state: PrivateAcquisitionProgress): void {
+  const { challenge, recoveryUntil, updatedAt } = state
   const funded = state.funding !== null,
     credited = state.walletReceipt !== null
   if (state.phase === 'quoted' || state.phase === 'expired')
@@ -305,6 +315,24 @@ export function parsePrivateAcquisitionProgress(input: unknown): PrivateAcquisit
       recoveryUntil === challenge.recoveryUntil,
       'Acquisition recovery changed without delivery intent'
     )
+  validateDeliveryPhase(state, funded, credited)
+  outputAssert(
+    (state.reason !== null) === (state.phase === 'failed' || state.phase === 'expired'),
+    'Acquisition reason differs from phase'
+  )
+  if (state.phase === 'expired')
+    outputAssert(
+      state.candidate?.verdict !== 'pending' &&
+        outputU64(updatedAt) >= outputU64(challenge.recoveryUntil),
+      'Pinned or unexpired acquisition cannot expire'
+    )
+}
+
+function validateDeliveryPhase(
+  state: PrivateAcquisitionProgress,
+  funded: boolean,
+  credited: boolean
+): void {
   if (state.phase === 'funded')
     outputAssert(
       funded && credited && state.delivery === null,
@@ -318,17 +346,6 @@ export function parsePrivateAcquisitionProgress(input: unknown): PrivateAcquisit
         (state.delivery.deliveredAt !== null) === (state.phase === 'delivered'),
       'Delivery phase differs from retained outcome'
     )
-  outputAssert(
-    (state.reason !== null) === (state.phase === 'failed' || state.phase === 'expired'),
-    'Acquisition reason differs from phase'
-  )
-  if (state.phase === 'expired')
-    outputAssert(
-      state.candidate?.verdict !== 'pending' &&
-        outputU64(updatedAt) >= outputU64(challenge.recoveryUntil),
-      'Pinned or unexpired acquisition cannot expire'
-    )
-  return state
 }
 
 /** Call only after quote eligibility/material/capacity checks, before any 402 response. */

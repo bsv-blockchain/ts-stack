@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { fixtureJob } from './private-acquisition-worker-input.mjs'
 import { createSecretKey } from 'node:crypto'
 import { PrivateServiceDomain } from '../../dist/private/PrivateServiceDomain.js'
 import { NodeProtectedPayloadCodec } from '../../dist/private/NodeProtectedPayloadCodec.js'
@@ -7,7 +7,7 @@ import { SQLitePrivateAcquisitionStore } from '../../dist/private/SQLitePrivateA
 
 // Synthetic local process-loss fixture. Receipt fields model a trusted native
 // adapter outcome; this worker performs no real wallet effect or paid operation.
-const job = JSON.parse(readFileSync(process.argv[2], 'utf8'))
+const job = await fixtureJob('acquisition-store-')
 const domain = PrivateServiceDomain.open(
   job.path,
   job.configuration,
@@ -31,7 +31,7 @@ const clock = () => now,
   buyer = job.original.challenge.buyer
 let value = store.quote(job.original, 'AQID', clock, guard)
 const phases = ['quoted', 'pinned', 'funding-pending', 'funded', 'delivery-pending', 'delivered']
-for (const phase of phases) {
+for await (const phase of phases) {
   if (phase === 'pinned') {
     now = '30'
     value = store.advance(

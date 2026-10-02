@@ -1,3 +1,4 @@
+import { fixturePromise } from './private-async.fixture.js'
 import { afterEach } from '@jest/globals'
 import { createSecretKey } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -22,7 +23,7 @@ import { custody } from './protected-operation-object.fixture.js'
 import { acquisitionRecordFixture } from './private-acquisition-records.fixture.js'
 const cleanup = new Set<() => Promise<void>>()
 afterEach(async () => {
-  for (const close of cleanup) await close()
+  for await (const close of cleanup) await close()
   cleanup.clear()
 })
 export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions> = {}) {
@@ -55,34 +56,46 @@ export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions>
   const counts = { preflight: 0, plan: 0, finish: 0, recover: 0, verify: 0, usable: 0 }
   const payment: PrivateLookupBuyerOptions['payment'] = {
     configuration: { protocol: 'synthetic-durable-payment', wallet: f.f.buyer, storage: 'fixture' },
-    async plan(id, challenge, suffix) {
-      counts.plan++
-      return { operationId: id, acquisitionId: challenge.acquisitionId, suffix }
+    plan(id, challenge, suffix) {
+      return fixturePromise(() => {
+        counts.plan++
+        return { operationId: id, acquisitionId: challenge.acquisitionId, suffix }
+      })
     },
-    async recover() {
-      counts.recover++
-      return finalized ? { state: 'finalized', payment: f.f.payment() } : { state: 'absent' }
+    recover() {
+      return fixturePromise(() => {
+        counts.recover++
+        return finalized ? { state: 'finalized', payment: f.f.payment() } : { state: 'absent' }
+      })
     },
-    async finish(_plan, guard) {
-      guard()
-      counts.finish++
-      finalized = true
-      return f.f.payment()
+    finish(_plan, guard) {
+      return fixturePromise(() => {
+        guard()
+        counts.finish++
+        finalized = true
+        return f.f.payment()
+      })
     }
   }
   const validation: PrivateLookupBuyerOptions['validation'] = {
     id: 'urn:test:buyer-material',
-    async preflight() {
-      counts.preflight++
-      if (!valid) throw new Error('Synthetic domain terms are invalid')
+    preflight() {
+      return fixturePromise(() => {
+        counts.preflight++
+        if (!valid) throw new Error('Synthetic domain terms are invalid')
+      })
     },
-    async verify() {
-      counts.verify++
-      if (!valid) throw new Error('Synthetic material is invalid')
+    verify() {
+      return fixturePromise(() => {
+        counts.verify++
+        if (!valid) throw new Error('Synthetic material is invalid')
+      })
     },
-    async usable() {
-      counts.usable++
-      return usable
+    usable() {
+      return fixturePromise(() => {
+        counts.usable++
+        return usable
+      })
     }
   }
   const partial = {
@@ -139,8 +152,8 @@ export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions>
     return { buyer, ports, state, objects }
   }
   const dispose = async () => {
-    for (const buyer of buyers) await buyer.stop()
-    for (const owner of stores) {
+    for await (const buyer of buyers) await buyer.stop()
+    for await (const owner of stores) {
       await owner.state.close()
       await owner.objects.close()
     }

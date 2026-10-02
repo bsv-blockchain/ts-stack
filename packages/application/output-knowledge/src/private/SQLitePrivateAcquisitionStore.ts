@@ -301,18 +301,10 @@ export class SQLitePrivateAcquisitionStore {
     check: ProtectedLedgerGuard
   ): Loaded {
     const phase = state.progress.phase
-    const required =
-      phase === 'quoted'
-        ? state.progress.candidate?.verdict === 'pending'
-          ? 5
-          : 6
-        : phase === 'funding-pending'
-          ? 3
-          : phase === 'funded'
-            ? 2
-            : phase === 'delivery-pending'
-              ? 1
-              : 0
+    const remaining = { 'funding-pending': 3, funded: 2, 'delivery-pending': 1 }
+    let required = 0
+    if (phase === 'quoted') required = state.progress.candidate?.verdict === 'pending' ? 5 : 6
+    else if (phase in remaining) required = remaining[phase as keyof typeof remaining]
     const change: ProtectedLedgerChange = {
       kind: retained.row.kind,
       key: retained.row.key,

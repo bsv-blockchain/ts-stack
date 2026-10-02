@@ -47,7 +47,7 @@ const openKnex = installedWallet('knex') as (config: {
 export { genesisHeader }
 const cleanup = new Set<() => Promise<void>>()
 afterEach(async () => {
-  for (const close of cleanup) await close()
+  for await (const close of cleanup) await close()
   cleanup.clear()
 })
 /** Fresh disposable native wallet with explicitly installed synthetic-chain evidence. */
@@ -58,9 +58,9 @@ export async function acquisitionNativeWalletFixture(
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'acquisition-wallet-native-'))
   const opened = new Set<() => Promise<void>>()
-  const broadcast: () => Promise<never> = jest.fn(async () => {
-    throw new Error('Synthetic fixture cannot broadcast')
-  })
+  const broadcast: () => Promise<never> = jest.fn(() =>
+    Promise.reject(new Error('Synthetic fixture cannot broadcast'))
+  )
   async function open(create = false) {
     const knex = openKnex({
       client: 'better-sqlite3',
@@ -85,7 +85,7 @@ export async function acquisitionNativeWalletFixture(
       storage = new WalletStorageManager(keyDeriver.identityKey, active)
     await storage.makeAvailable()
     const services = chain.network === 'mock' ? new MockServices(knex) : new Services(chain.network)
-    services.getChainTracker = async () => tracker
+    services.getChainTracker = () => Promise.resolve(tracker)
     services.postBeef = broadcast
     const wallet = new Wallet({
       chain: chain.network,
@@ -110,7 +110,7 @@ export async function acquisitionNativeWalletFixture(
     return { active, wallet, controller, identities, bridge, close }
   }
   const close = async () => {
-    for (const closeWallet of opened) await closeWallet()
+    for await (const closeWallet of opened) await closeWallet()
     rmSync(directory, { recursive: true, force: true })
     cleanup.delete(close)
   }

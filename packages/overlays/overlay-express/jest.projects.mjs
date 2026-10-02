@@ -42,7 +42,7 @@ export function createOverlayTestProjects(
       displayName: 'private-esm',
       cacheDirectory: '<rootDir>/node_modules/.cache/jest-private-esm',
       testMatch,
-      testPathIgnorePatterns: [...overlayTestIgnorePatterns, String.raw`^(?!.*${privateTests}).*$`],
+      testPathIgnorePatterns: [...overlayTestIgnorePatterns, `^(?!.*${privateTests}).*$`],
       extensionsToTreatAsEsm: ['.ts', '.tsx'],
       transform: {
         '^.+\\.tsx?$': [

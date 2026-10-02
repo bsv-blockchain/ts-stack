@@ -223,7 +223,7 @@ export class PrivateLookupBuyer {
   }
   static async initialize(options: PrivateLookupBuyerOptions): Promise<PrivateLookupBuyer> {
     const buyer = new PrivateLookupBuyer(options)
-    for (const role of Object.keys(buyer.sizes) as Role[])
+    for await (const role of Object.keys(buyer.sizes) as Role[])
       await options.objects.reserve(buyer.id(role), buyer.role(role), buyer.sizes[role])
     await buyer.put('request', buyer.request)
     await buyer.put('contract', buyer.contract)
@@ -250,7 +250,7 @@ export class PrivateLookupBuyer {
   }
   private async initialized(): Promise<void> {
     await this.load()
-    for (const role of Object.keys(this.sizes) as Role[]) {
+    for await (const role of Object.keys(this.sizes) as Role[]) {
       const saved = await this.ports.objects.read(this.id(role), this.role(role))
       outputAssert(
         saved.state !== 'absent' &&
@@ -364,8 +364,7 @@ export class PrivateLookupBuyer {
           ? 0n
           : outputU64(snapshot.value.observedAt),
       supplied = outputU64(progress.observedAt),
-      retained = previous > supplied ? previous : supplied,
-      observedAt = this.latestObservedAt > retained ? this.latestObservedAt : retained
+      observedAt = maximumTime([previous, supplied, this.latestObservedAt])
     const result = await this.ports.state.compareAndSwap(
       snapshot.revision,
       object({ ...progress, observedAt: observedAt.toString() }, 16384)
@@ -466,7 +465,7 @@ export class PrivateLookupBuyer {
     progress.challenge = challenge
     const now = outputU64(this.ports.clock()),
       previous = outputU64(progress.observedAt)
-    progress.observedAt = (now > previous ? now : previous).toString()
+    progress.observedAt = maximumTime([now, previous]).toString()
     await this.save(snapshot, progress)
   }
   private async reconcile(signal: AbortSignal): Promise<OutputPaidLookupAcquired | undefined> {
@@ -496,7 +495,7 @@ export class PrivateLookupBuyer {
         if (progress.phase === 'funding' || progress.phase === 'quoted') {
           progress.phase = 'paid'
           await this.save(snapshot, progress)
-          ;({ snapshot, progress } = await this.load())
+          progress = (await this.load()).progress
         }
       }
     }
@@ -720,4 +719,10 @@ function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {
   const method = owner[key]
   outputAssert(typeof method === 'function', 'Buyer capability is required')
   return () => owner[key] === method
+}
+
+function maximumTime(values: readonly bigint[]): bigint {
+  let maximum = 0n
+  for (const value of values) if (value > maximum) maximum = value
+  return maximum
 }

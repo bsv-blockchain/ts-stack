@@ -122,8 +122,7 @@ export class SQLiteProtectedOperationObjectStore implements ProtectedOperationOb
     for (let index = 0; index < slots.length; index++) {
       const row = rows[index + 1]
       outputAssert(
-        row !== undefined &&
-          row.key === slots[index].key &&
+        row?.key === slots[index].key &&
           row.reservedBytes === slots[index].reservedBytes &&
           row.reservedUpdates === (header.receipt === null ? 1 : 0),
         'Protected operation object completion reservation differs',
@@ -140,110 +139,124 @@ export class SQLiteProtectedOperationObjectStore implements ProtectedOperationOb
       )
     }
   }
-  async reserve(
+  reserve(
     id: string,
     originalBinding: OutputJSONObject,
     maximumBytes: number
   ): Promise<ProtectedOperationObjectReservation> {
-    const wanted = this.plan.reservation(id, originalBinding, maximumBytes),
-      saved = this.snapshot(id, wanted.originalBinding)
-    if (saved.header !== undefined) {
-      outputAssert(
-        saved.header.maximumBytes === wanted.maximumBytes,
-        'Protected operation object reservation changed',
-        'conflict'
-      )
+    return attempt(() => {
+      const wanted = this.plan.reservation(id, originalBinding, maximumBytes),
+        saved = this.snapshot(id, wanted.originalBinding)
+      if (saved.header !== undefined) {
+        outputAssert(
+          saved.header.maximumBytes === wanted.maximumBytes,
+          'Protected operation object reservation changed',
+          'conflict'
+        )
+        return { id: wanted.id, bindingDigest: wanted.bindingDigest, maximumBytes }
+      }
+      const changes: ProtectedLedgerChange[] = [
+        {
+          ...this.headerAddress(id),
+          expectedRevision: null,
+          reservedBytes: OPERATION_OBJECT_HEADER_BYTES,
+          reservedUpdates: 1,
+          value: this.plan.frame(wanted)
+        },
+        ...this.plan.slots(wanted).map(slot => ({
+          kind: 'delivery' as const,
+          key: slot.key,
+          expectedRevision: null,
+          reservedBytes: slot.reservedBytes,
+          reservedUpdates: 1,
+          value: slot.value
+        }))
+      ]
+      this.ledger.commit(saved.revision, changes, clock, guard)
       return { id: wanted.id, bindingDigest: wanted.bindingDigest, maximumBytes }
-    }
-    const changes: ProtectedLedgerChange[] = [
-      {
-        ...this.headerAddress(id),
-        expectedRevision: null,
-        reservedBytes: OPERATION_OBJECT_HEADER_BYTES,
-        reservedUpdates: 1,
-        value: this.plan.frame(wanted)
-      },
-      ...this.plan.slots(wanted).map(slot => ({
-        kind: 'delivery' as const,
-        key: slot.key,
-        expectedRevision: null,
-        reservedBytes: slot.reservedBytes,
-        reservedUpdates: 1,
-        value: slot.value
-      }))
-    ]
-    this.ledger.commit(saved.revision, changes, clock, guard)
-    return { id: wanted.id, bindingDigest: wanted.bindingDigest, maximumBytes }
+    })
   }
-  async read(
-    id: string,
-    originalBinding: OutputJSONObject
-  ): Promise<ProtectedOperationObjectStatus> {
-    const saved = this.snapshot(id, originalBinding)
-    if (saved.header === undefined) return { state: 'absent' }
-    const { id: originalId, bindingDigest, maximumBytes, receipt } = saved.header
-    if (receipt === null)
-      return { state: 'reserved', reservation: { id: originalId, bindingDigest, maximumBytes } }
-    return { state: 'stored', receipt, bytes: saved.bytes! as Uint8Array }
+  read(id: string, originalBinding: OutputJSONObject): Promise<ProtectedOperationObjectStatus> {
+    return attempt(() => {
+      const saved = this.snapshot(id, originalBinding)
+      if (saved.header === undefined) return { state: 'absent' }
+      const { id: originalId, bindingDigest, maximumBytes, receipt } = saved.header
+      if (receipt === null)
+        return { state: 'reserved', reservation: { id: originalId, bindingDigest, maximumBytes } }
+      return { state: 'stored', receipt, bytes: saved.bytes! as Uint8Array }
+    })
   }
-  async put(
+  put(
     id: string,
     originalBinding: OutputJSONObject,
     input: Uint8Array
   ): Promise<ProtectedOperationObjectReceipt> {
-    outputAssert(
-      input instanceof Uint8Array && input.byteLength <= this.plan.configuration.maximumObjectBytes,
-      'Protected operation object exceeds installed capacity',
-      'limited'
-    )
-    const bytes = new Uint8Array(input)
-    try {
-      const saved = this.snapshot(id, originalBinding)
+    return attempt(() => {
       outputAssert(
-        saved.header !== undefined,
-        'Protected operation object requires its original reservation',
-        'unavailable'
+        input instanceof Uint8Array &&
+          input.byteLength <= this.plan.configuration.maximumObjectBytes,
+        'Protected operation object exceeds installed capacity',
+        'limited'
       )
-      const completed = this.plan.complete(saved.header, bytes)
-      if (saved.header.receipt !== null) {
+      const bytes = new Uint8Array(input)
+      try {
+        const saved = this.snapshot(id, originalBinding)
         outputAssert(
-          saved.bytes !== null &&
-            saved.bytes !== undefined &&
-            saved.bytes.length === bytes.length &&
-            saved.bytes.every((byte, index) => byte === bytes[index]),
-          'Protected operation object first bytes differ',
-          'conflict'
+          saved.header !== undefined,
+          'Protected operation object requires its original reservation',
+          'unavailable'
         )
+        const completed = this.plan.complete(saved.header, bytes)
+        if (saved.header.receipt !== null) {
+          outputAssert(
+            saved.bytes?.length === bytes.length &&
+              saved.bytes.every((byte, index) => byte === bytes[index]),
+            'Protected operation object first bytes differ',
+            'conflict'
+          )
+          return completed.receipt!
+        }
+        const slots = this.plan.slots(completed, bytes)
+        const changes: ProtectedLedgerChange[] = [
+          {
+            ...this.headerAddress(id),
+            expectedRevision: saved.rows[0]!.revision,
+            reservedBytes: OPERATION_OBJECT_HEADER_BYTES,
+            reservedUpdates: 0,
+            value: this.plan.frame(completed)
+          },
+          ...slots.map((slot, index) => ({
+            kind: 'delivery' as const,
+            key: slot.key,
+            expectedRevision: saved.rows[index + 1]!.revision,
+            reservedBytes: slot.reservedBytes,
+            reservedUpdates: 0,
+            value: slot.value
+          }))
+        ]
+        this.ledger.commit(saved.revision, changes, clock, guard, {
+          maximumBatchBytes:
+            operationObjectCapacity(this.plan.configuration.maximumObjectBytes).bytes + 65536
+        })
         return completed.receipt!
+      } finally {
+        bytes.fill(0)
       }
-      const slots = this.plan.slots(completed, bytes)
-      const changes: ProtectedLedgerChange[] = [
-        {
-          ...this.headerAddress(id),
-          expectedRevision: saved.rows[0]!.revision,
-          reservedBytes: OPERATION_OBJECT_HEADER_BYTES,
-          reservedUpdates: 0,
-          value: this.plan.frame(completed)
-        },
-        ...slots.map((slot, index) => ({
-          kind: 'delivery' as const,
-          key: slot.key,
-          expectedRevision: saved.rows[index + 1]!.revision,
-          reservedBytes: slot.reservedBytes,
-          reservedUpdates: 0,
-          value: slot.value
-        }))
-      ]
-      this.ledger.commit(saved.revision, changes, clock, guard, {
-        maximumBatchBytes:
-          operationObjectCapacity(this.plan.configuration.maximumObjectBytes).bytes + 65536
-      })
-      return completed.receipt!
-    } finally {
-      bytes.fill(0)
-    }
+    })
   }
-  async close(): Promise<void> {
-    this.ledger.close()
+  close(): Promise<void> {
+    return attempt(() => {
+      this.ledger.close()
+    })
+  }
+}
+
+/** Retain async rejection semantics while native work and byte ownership remain
+ * synchronous, before the caller can mutate inputs or begin another operation. */
+function attempt<T>(work: () => T): Promise<T> {
+  try {
+    return Promise.resolve(work())
+  } catch (error) {
+    return Promise.reject(error)
   }
 }

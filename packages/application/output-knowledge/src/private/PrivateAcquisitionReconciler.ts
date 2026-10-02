@@ -43,7 +43,7 @@ export class PrivateAcquisitionReconciler {
     try {
       const page = this.coordinator.scanWork(this.next, this.maximum, current)
       const outcomes: { acquisitionId: string; status: string }[] = []
-      for (const candidate of page.entries) {
+      for await (const candidate of page.entries) {
         outputAssert(!current.aborted, 'Private acquisition reconciliation cancelled', 'cancelled')
         try {
           const result = await this.coordinator.reconcile(candidate.acquisitionId, current)
@@ -87,14 +87,15 @@ export class PrivateAcquisitionReconciler {
     this.started = true
     const done = (async () => {
       try {
-        while (!this.stopSignal.signal.aborted) {
+        for await (const pass of activePasses(this.stopSignal.signal)) {
+          if (pass.aborted) break
           const result: unknown = report(await this.runOnce())
           if (result instanceof Promise) void result.catch(() => undefined)
           outputAssert(
             result === undefined,
             'Acquisition reconciliation observer must finish synchronously'
           )
-          if (!this.stopSignal.signal.aborted) await delay(intervalMs, this.stopSignal.signal)
+          if (!pass.aborted) await delay(intervalMs, pass)
         }
       } catch (error) {
         if (!this.stopSignal.signal.aborted) throw error
@@ -129,4 +130,8 @@ function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
 function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {
   const original = owner[key]
   return () => owner[key] === original
+}
+
+function* activePasses(signal: AbortSignal): Generator<AbortSignal> {
+  while (!signal.aborted) yield signal
 }

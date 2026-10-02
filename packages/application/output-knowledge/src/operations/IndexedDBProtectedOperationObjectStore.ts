@@ -200,20 +200,30 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
           : reject(
               new OutputProtocolError('unavailable', 'Protected object transaction has no result')
             )
-      transaction.onabort = () =>
-        reject(
+      transaction.onabort = () => {
+        if (
           failure !== null &&
-            typeof failure === 'object' &&
-            'name' in failure &&
-            failure.name === 'QuotaExceededError'
-            ? new OutputProtocolError('limited', 'Protected object browser quota exhausted', true)
-            : (failure ??
-                new OutputProtocolError(
-                  transaction.error?.name === 'QuotaExceededError' ? 'limited' : 'unavailable',
-                  'Protected object transaction aborted',
-                  true
-                ))
+          typeof failure === 'object' &&
+          'name' in failure &&
+          failure.name === 'QuotaExceededError'
+        ) {
+          reject(
+            new OutputProtocolError('limited', 'Protected object browser quota exhausted', true)
+          )
+          return
+        }
+        if (failure !== null && failure !== undefined) {
+          reject(failure)
+          return
+        }
+        reject(
+          new OutputProtocolError(
+            transaction.error?.name === 'QuotaExceededError' ? 'limited' : 'unavailable',
+            'Protected object transaction aborted',
+            true
+          )
         )
+      }
       const fail = (error: unknown): void => {
         failure = error
         transaction.abort()
@@ -314,14 +324,9 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
     )
     const slots = this.cipher.plan.slots({ ...header, receipt: null }),
       values: OutputJSONObject[] = []
-    for (let index = 0; index < slots.length; index++) {
+    for await (const [index, slot] of slots.entries()) {
       values.push(
-        await this.cipher.open(
-          raw.rows[index + 1],
-          slots[index].key,
-          revision,
-          slots[index].reservedBytes
-        )
+        await this.cipher.open(raw.rows[index + 1], slot.key, revision, slot.reservedBytes)
       )
       this.current()
     }
@@ -343,7 +348,7 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
       )
     ]
     this.current()
-    for (const slot of this.cipher.plan.slots(completed, bytes)) {
+    for await (const slot of this.cipher.plan.slots(completed, bytes)) {
       rows.push(await this.cipher.seal(slot.key, revision, slot.value, slot.reservedBytes))
       this.current()
     }
@@ -353,7 +358,7 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
       complete: completed.receipt !== null,
       digests: rows.map(row => this.cipher.envelopeDigest(row))
     })
-    entries.sort((left, right) => (left.id < right.id ? -1 : left.id === right.id ? 0 : 1))
+    entries.sort((left, right) => Number(left.id > right.id) - Number(left.id < right.id))
     const head = await this.cipher.sealInventory({
       revision: String(Number(before.inventory.revision) + 1),
       entries
@@ -451,9 +456,7 @@ export class IndexedDBProtectedOperationObjectStore implements ProtectedOperatio
       const completed = this.cipher.plan.complete(before.header, bytes)
       if (before.header.receipt !== null)
         outputAssert(
-          before.bytes !== null &&
-            before.bytes !== undefined &&
-            before.bytes.length === bytes.length &&
+          before.bytes?.length === bytes.length &&
             before.bytes.every((byte, index) => byte === bytes[index]),
           'Protected object first bytes differ',
           'conflict'

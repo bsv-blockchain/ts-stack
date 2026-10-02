@@ -2,8 +2,7 @@ import { LCH_IRI } from './constants.js'
 import { validateAuthorityChain, type AuthorityBody } from './authority.js'
 import { snapshotLCHRecord, snapshotSignedObject } from './boundary.js'
 import { lchAssert } from './errors.js'
-import { toHex } from './hash.js'
-import { objectId } from './hash.js'
+import { toHex, objectId } from './hash.js'
 import { isCompressedPublicKey } from './signatures.js'
 import type {
   LCHSignatureVerifier,
@@ -22,6 +21,12 @@ export interface LCHOverlayAuthorityPath {
   interest: string
   capability: string
   chain: readonly SignedObject[]
+}
+export interface LCHOverlayAuthorityAssessment {
+  now: bigint
+  network: RevocationObservation['network']
+  verifier: LCHSignatureVerifier
+  revocationSource?: RevocationSource
 }
 
 /** Validate the complete finite selection before funding, including referenced
@@ -49,7 +54,7 @@ export async function validateLCHOverlayAuthoritySelection(
     'ERR_LCH_AUTHORITY',
     'Asset interests are absent'
   )
-  for (const path of paths) {
+  for await (const path of paths) {
     lchAssert(
       path.actor instanceof Uint8Array &&
         isCompressedPublicKey(path.actor) &&
@@ -72,17 +77,14 @@ export async function validateLCHOverlayAuthoritySelection(
       'ERR_LCH_AUTHORITY',
       'Selected authority path is outside the required Asset roles'
     )
-    await validateLCHOverlayAuthority(
-      terms,
-      path.actor,
-      path.capability,
-      paths,
+    await validateLCHOverlayAuthority(terms, path.actor, path.capability, paths, {
       now,
       network,
       verifier,
       revocationSource
-    )
-    for (const authority of path.chain) ids.add(toHex(await objectId('authority', authority.body)))
+    })
+    for await (const authority of path.chain)
+      ids.add(toHex(await objectId('authority', authority.body)))
   }
   const referenced = terms.offer.body.authorityIds
   lchAssert(
@@ -104,17 +106,17 @@ export async function validateLCHOverlayAuthority(
   actor: Uint8Array,
   capability: string,
   paths: readonly LCHOverlayAuthorityPath[],
-  now: bigint,
-  network: RevocationObservation['network'],
-  verifier: LCHSignatureVerifier,
-  revocationSource?: RevocationSource
+  assessment: LCHOverlayAuthorityAssessment
 ): Promise<void> {
+  const { now, network, verifier, revocationSource } = assessment
   actor = actor.slice()
   lchAssert(paths.length <= 128, 'ERR_LCH_AUTHORITY', 'Too many selected authority paths')
   const owned = paths.map(path => {
     const value = snapshotLCHRecord(path, 'Authority path')
     lchAssert(
-      Object.keys(value).sort().join(',') === 'actor,capability,chain,controller,interest' &&
+      Object.keys(value)
+        .sort((left, right) => Number(left > right) - Number(left < right))
+        .join(',') === 'actor,capability,chain,controller,interest' &&
         value.actor instanceof Uint8Array &&
         value.controller instanceof Uint8Array &&
         typeof value.capability === 'string' &&
@@ -135,7 +137,7 @@ export async function validateLCHOverlayAuthority(
     'ERR_LCH_AUTHORITY',
     'Asset interests are absent'
   )
-  for (const interest of interests) {
+  for await (const interest of interests) {
     lchAssert(typeof interest === 'string', 'ERR_LCH_AUTHORITY', 'Invalid required interest')
     const controllers = rights
       .map(value => snapshotLCHRecord(value, 'Rights interest'))
@@ -145,7 +147,7 @@ export async function validateLCHOverlayAuthority(
       'ERR_LCH_AUTHORITY',
       'Required interest has no Asset controller'
     )
-    for (const right of controllers) {
+    for await (const right of controllers) {
       lchAssert(
         right.controller instanceof Uint8Array,
         'ERR_LCH_AUTHORITY',
@@ -205,19 +207,15 @@ export async function validateLCHOverlayPaidRoles(
   const issuer = terms.offer.body.licenseIssuer
   lchAssert(issuer instanceof Uint8Array, 'ERR_LCH_AUTHORITY', 'License issuer is invalid')
   await validateLCHOverlayAuthoritySelection(terms, paths, now, network, verifier, revocationSource)
-  for (const role of [
+  for await (const role of [
     { actor: terms.binding.seller, capability: LCH_IRI + '#issueOffer' },
     { actor: terms.binding.seller, capability: LCH_IRI + '#receivePayment' },
     { actor: issuer, capability: LCH_IRI + '#issueLicense' }
   ])
-    await validateLCHOverlayAuthority(
-      terms,
-      role.actor,
-      role.capability,
-      paths,
+    await validateLCHOverlayAuthority(terms, role.actor, role.capability, paths, {
       now,
       network,
       verifier,
       revocationSource
-    )
+    })
 }

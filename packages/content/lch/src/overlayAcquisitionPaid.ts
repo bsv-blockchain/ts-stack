@@ -566,7 +566,7 @@ export class LCHOverlayPaidDomain {
       await validatePolicyReference(body.agreement)
     )
     if (!locallyVerified)
-      for (const role of [
+      for await (const role of [
         { actor: terms.binding.seller, capability: LCH_IRI + '#issueOffer', at: this.selectedAt },
         {
           actor: terms.binding.seller,
@@ -579,22 +579,20 @@ export class LCHOverlayPaidDomain {
           at: integer(body.issuedAt).toString()
         }
       ])
-        await validateLCHOverlayAuthority(
-          terms,
-          role.actor,
-          role.capability,
-          paths,
-          outputU64(role.at),
-          this.ports.authorityNetwork,
+        await validateLCHOverlayAuthority(terms, role.actor, role.capability, paths, {
+          now: outputU64(role.at),
+          network: this.ports.authorityNetwork,
           verifier,
-          this.ports.revocations?.at(role.at)
-        )
+          revocationSource: this.ports.revocations?.at(role.at)
+        })
     const grants = body.keyGrants
     lchAssert(Array.isArray(grants), 'ERR_LCH_KEY', 'License key grants are absent')
     const typed: KeyGrant[] = grants.map(value => {
       const grant = snapshotLCHRecord(value, 'Key grant')
       lchAssert(
-        Object.keys(grant).sort().join(',') === 'delivery,keyId,payload' &&
+        Object.keys(grant)
+          .sort((left, right) => Number(left > right) - Number(left < right))
+          .join(',') === 'delivery,keyId,payload' &&
           grant.keyId instanceof Uint8Array &&
           grant.payload instanceof Uint8Array &&
           grant.delivery === LCH_MECHANISMS.brc78Key,
@@ -605,19 +603,15 @@ export class LCHOverlayPaidDomain {
     })
     validateKeyGrantsForSelection(terms.encryption, { type: 'all' }, typed)
     const keys = new Map<string, Uint8Array>()
-    for (const grant of typed) {
+    for await (const grant of typed) {
       const sender = grant.payload.slice(4, 37)
       if (!locallyVerified && toHex(sender) !== toHex(issuer))
-        await validateLCHOverlayAuthority(
-          terms,
-          sender,
-          LCH_IRI + '#releaseKey',
-          paths,
-          integer(body.issuedAt),
-          this.ports.authorityNetwork,
+        await validateLCHOverlayAuthority(terms, sender, LCH_IRI + '#releaseKey', paths, {
+          now: integer(body.issuedAt),
+          network: this.ports.authorityNetwork,
           verifier,
-          this.ports.revocations?.at(integer(body.issuedAt).toString())
-        )
+          revocationSource: this.ports.revocations?.at(integer(body.issuedAt).toString())
+        })
       const recovered = await this.keyDelivery.recover(grant.payload)
       this.current(signal)
       lchAssert(
@@ -639,11 +633,11 @@ export class LCHOverlayPaidDomain {
     const expected = new Map<string, SignedObject>(),
       offerKey = 'offer:' + toHex(await objectId('offer', terms.offer.body))
     expected.set(offerKey, terms.offer)
-    for (const path of paths)
-      for (const authority of path.chain)
+    for await (const path of paths)
+      for await (const authority of path.chain)
         expected.set('authority:' + toHex(await objectId('authority', authority.body)), authority)
     const seen = new Set<string>()
-    for (const entry of context.evidence) {
+    for await (const entry of context.evidence) {
       lchAssert(
         entry.type === 'offer' || entry.type === 'authority',
         'ERR_LCH_PROFILE_UNSUPPORTED',

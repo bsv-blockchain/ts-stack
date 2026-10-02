@@ -166,7 +166,7 @@ export function readCurrentPrivatePublicationStatus(
     store.markUnavailable(publicationId, metadata.record.revision, clock, guard)
     const retained = store.loadStatus(publicationId, clock, guard)
     outputAssert(
-      retained && retained.fence.state.progress.phase === 'unavailable',
+      retained?.fence.state.progress.phase === 'unavailable',
       'Private publication loss is not durably recorded',
       'unavailable'
     )

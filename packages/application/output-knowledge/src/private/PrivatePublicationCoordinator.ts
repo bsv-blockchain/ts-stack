@@ -234,7 +234,7 @@ export class PrivatePublicationCoordinator {
           verified.verificationContext,
           signal,
           current,
-          async reference => {
+          reference => {
             const now = this.ports.clock()
             const retained = this.ports.contracts.retain(selected.manifest, now)
             this.selector(trusted, retained.selection)
@@ -264,6 +264,7 @@ export class PrivatePublicationCoordinator {
               this.ports.clock,
               fresh
             )
+            return Promise.resolve()
           }
         )
       }
@@ -274,7 +275,7 @@ export class PrivatePublicationCoordinator {
   status(input: unknown, caller: PrivatePublicationCaller) {
     const trusted = this.caller(caller)
     const request = parseOutputPrivatePublicationStatus(input)
-    return this.run(trusted.publisher, trusted.signal, async signal => {
+    return this.run(trusted.publisher, trusted.signal, signal => {
       this.requireCurrent(trusted, signal)
       const loaded = readCurrentPrivatePublicationStatus(
         this.ports.store,
@@ -288,16 +289,16 @@ export class PrivatePublicationCoordinator {
         }
       )
       outputAssert(loaded, 'Private publication not found', 'not-found')
-      return this.project(loaded.metadata, trusted)
+      return Promise.resolve(this.project(loaded.metadata, trusted))
     })
   }
 
   resume(input: unknown, caller: PrivatePublicationCaller) {
     const trusted = this.caller(caller)
     const request = parseOutputPrivatePublicationStatus(input)
-    return this.run(trusted.publisher, trusted.signal, async signal => {
-      return this.progress(request.publicationId, trusted, signal)
-    })
+    return this.run(trusted.publisher, trusted.signal, signal =>
+      this.progress(request.publicationId, trusted, signal)
+    )
   }
 
   /** Internal worker entry: principal and selector come from the original protected record. */

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from '@jest/globals'
 import { createSecretKey } from 'node:crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -203,25 +203,30 @@ describe('native acquisition funding reservation index', () => {
         child.on('message', message)
       })
     try {
-      for (const [i, state] of [pending(a), pending(b)].entries()) {
-        const input = join(place.directory, `worker-${i}.json`)
-        writeFileSync(input, JSON.stringify({ path: place.path, config: place.config, state }))
+      for await (const state of [pending(a), pending(b)]) {
         const child = fork(
           fileURLToPath(
             new URL('./fixtures/private-acquisition-funding-worker.mjs', import.meta.url)
           ),
-          [input],
+          [],
           { execArgv: [], stdio: ['ignore', 'ignore', 'pipe', 'ipc'] }
         )
         children.push(child)
-        expect(await wait(child, 'ready')).toEqual({ phase: 'ready', revision: '2' })
+        const ready = wait(child, 'ready')
+        child.send({ path: place.path, config: place.config, state })
+        expect(await ready).toEqual({ phase: 'ready', revision: '2' })
       }
       const results = children.map(child => wait(child, 'settled'))
       for (const child of children) child.send('commit')
-      expect((await Promise.all(results)).map(result => result.outcome).sort()).toEqual([
-        'committed',
-        'conflict'
-      ])
+      expect(
+        (await Promise.all(results))
+          .map(result => {
+            if (result.outcome !== 'committed' && result.outcome !== 'conflict')
+              throw new Error('Unexpected native funding worker outcome')
+            return result.outcome
+          })
+          .sort((left, right) => Number(left > right) - Number(left < right))
+      ).toEqual(['committed', 'conflict'])
       const entries = place.owner.ledger.enumerate('funding-fence', null, 64, clock, allow)
       expect(entries.revision).toBe('3')
       const records = place.owner.ledger.read(

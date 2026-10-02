@@ -1,3 +1,4 @@
+import { fixturePromise } from './private-async.fixture.js'
 import type { NodeProtectedPayloadCodec } from '../src/private/NodeProtectedPayloadCodec.js'
 import { expect, jest } from '@jest/globals'
 import {
@@ -32,34 +33,38 @@ export function coordinatorFixture(
   const admission: PrivatePublicationAdmission = {
     maximumPrivateBytes: 100000,
     maximumOutcomeBytes: 4096,
-    async recover(job, _selection, reference) {
-      expect(leases.isCurrent(reference)).toBe(true)
-      const stored = f.store.loadVerified(job.publicationId, () => now, allow)!
-      expect(stored.fence.state.progress.phase).toBe('admitting')
-      expect(stored.blob.privateValues).toBe(job.request.privateValues)
-      calls.push(job.operationId)
-      return {
-        status: 'admitted',
-        operationId: job.operationId,
-        txid: job.request.evidence.txid,
-        steak: {
-          [job.request.topic]: {
-            outputsToAdmit: [job.request.evidence.outputIndex],
-            coinsToRetain: [],
-            coinsRemoved: []
-          }
-        },
-        assessmentContextId: 'original-assessment',
-        context: 'matching-private-values'
-      }
+    recover(job, _selection, reference) {
+      return fixturePromise(() => {
+        expect(leases.isCurrent(reference)).toBe(true)
+        const stored = f.store.loadVerified(job.publicationId, () => now, allow)!
+        expect(stored.fence.state.progress.phase).toBe('admitting')
+        expect(stored.blob.privateValues).toBe(job.request.privateValues)
+        calls.push(job.operationId)
+        return {
+          status: 'admitted',
+          operationId: job.operationId,
+          txid: job.request.evidence.txid,
+          steak: {
+            [job.request.topic]: {
+              outputsToAdmit: [job.request.evidence.outputIndex],
+              coinsToRetain: [],
+              coinsRemoved: []
+            }
+          },
+          assessmentContextId: 'original-assessment',
+          context: 'matching-private-values'
+        }
+      })
     }
   }
   const validate: jest.Mock<PrivatePublicationCoordinatorOptions['validate']> = jest.fn<
     PrivatePublicationCoordinatorOptions['validate']
-  >(async (request, verified) => {
-    expect(request.privateValues).toBe('AQID')
-    expect(verified.rawTransaction).toBe(f.contract.record.rawTransaction)
-  })
+  >((request, verified) =>
+    fixturePromise(() => {
+      expect(request.privateValues).toBe('AQID')
+      expect(verified.rawTransaction).toBe(f.contract.record.rawTransaction)
+    })
+  )
   const manifest: jest.Mock<PrivatePublicationCoordinatorOptions['manifest']> = jest.fn<
     PrivatePublicationCoordinatorOptions['manifest']
   >(() => f.contract.retained.selection.manifest)
