@@ -61,7 +61,9 @@ import {
   SendMessageResponse,
   DeviceRegistrationParams,
   DeviceRegistrationResponse,
-  RegisteredDevice
+  RegisteredDevice,
+  LiveStatus,
+  LiveConnectionState
 } from './types.js'
 import {
   SetMessageBoxPermissionParams,
@@ -89,6 +91,16 @@ const MAX_ACKNOWLEDGMENT_IDS = 1_000
 const MAX_MESSAGE_FEE = 2_147_483_647
 const MAX_PAYMENT_BEEF_BYTES = 32 * 1024 * 1024
 const MAX_PAYMENT_OUTPUTS = MAX_MESSAGE_RECIPIENTS + 1
+/** Backoff for the rebuild a server-forced disconnect triggers. The first is
+ * immediate; a relay that authenticates and drops in a loop gets the rest. */
+const REBUILD_BASE_DELAY_MS = 1_000
+const REBUILD_MAX_DELAY_MS = 30_000
+
+/** Join refusals that re-emitting the same room can never clear. */
+const PERMANENT_JOIN_REFUSALS = new Set([
+  'ERR_WEBSOCKET_ROOM_NOT_OWNED',
+  'ERR_WEBSOCKET_INVALID_ROOM'
+])
 const unsafeRecordKeys = new Set(['__proto__', 'constructor', 'prototype'])
 
 type OwnDataRecord = Record<string, unknown>
@@ -931,8 +943,51 @@ export class MessageBoxClient {
   private initialized = false
   private socketAuthenticated = false
   private connectionInitPromise?: Promise<void>
+  /** Settles the in-flight `connectionInitPromise`; driven by the socket's own handlers. */
+  private settleAuthWait?: (error?: Error) => void
+  /**
+   * Rooms the consumer asked for. Survives a drop; `joinedRooms` does not. Also
+   * filled by `sendLiveMessage`, so it is bounded by the distinct boxes used.
+   * Only `leaveRoom` and `disconnectWebSocket` remove from it.
+   */
+  private readonly requestedRooms: Set<string> = new Set()
+  /** Live-message subscriptions by room. A rebuilt socket has no listeners of its own. */
+  private roomHandlers: Array<{
+    roomId: string
+    event: string
+    onMessage: (message: PeerMessage) => void
+  }> = []
+  /**
+   * Events already dispatched on the current socket. One listener per event per
+   * socket, because the socket wrapper has no `off`: a second listener for a
+   * room could never be taken off again, and would deliver every message twice.
+   */
+  private readonly dispatchedEvents: Set<string> = new Set()
+  /** Live-status subscribers. Isolated from each other when notified. */
+  private readonly liveStatusListeners = new Set<(status: LiveStatus) => void>()
+  private lastLiveStatus: LiveStatus = { state: 'closed', rooms: [] }
+  /**
+   * Sends waiting on an acknowledgement, oldest first, by ack event. A refusal
+   * carries no messageId, so the ack can only go to the oldest send in flight;
+   * that is what a listener per send did, since the settled ones returned at
+   * once and the first unsettled one took it.
+   */
+  private readonly pendingAcks: Map<string, Array<(response?: SendMessageResponse) => void>> =
+    new Map()
+  /**
+   * A wait timed out with the socket still down. Covers bounded
+   * `reconnectionAttempts` running out, which the wrapper gives no way to
+   * observe; `reconnection: false` is read up front instead.
+   */
+  private socketStale = false
+  /** Consecutive proactive rebuilds, reset once a socket holds its authentication. */
+  private rebuildAttempts = 0
+  private rebuildTimer?: ReturnType<typeof setTimeout>
+  private rebuildHoldTimer?: ReturnType<typeof setTimeout>
   protected originator?: OriginatorDomainNameStringUnder250Bytes
   private readonly socketOptions: MessageBoxClientOptions['socketOptions']
+  /** False only when the host set `managerOptions.reconnection` to false. */
+  private readonly socketReconnects: boolean
   private readonly expectedServerIdentityByOrigin: ReadonlyMap<string, PubKeyHex>
   private readonly authenticatedServerIdentityByOrigin = new Map<string, PubKeyHex>()
   /**
@@ -942,7 +997,7 @@ export class MessageBoxClient {
    * @param {WalletInterface} options.walletClient - Wallet instance used for authentication, signing, and encryption.
    * @param {boolean} [options.enableLogging=false] - Whether to enable detailed debug logging to the console.
    * @param {'local' | 'mainnet' | 'testnet' | 'teratestnet'} [options.networkPreset='mainnet'] - Overlay network preset used for routing and advertisement lookup.
-   * @param {MessageBoxSocketOptions} [options.socketOptions] - Options forwarded to the underlying AuthSocketClient, e.g. `{ managerOptions: { transports: ['websocket'] } }`. The client's own wallet and originator always win; deferred connection and Socket.IO message retries are unsupported.
+   * @param {MessageBoxSocketOptions} [options.socketOptions] - Options forwarded to the underlying AuthSocketClient, e.g. `{ managerOptions: { transports: ['websocket'] } }`. With `managerOptions.reconnection: false` a drop disposes the socket and the next call rebuilds it and restores rooms and handlers, but nothing rebuilds on its own, so a pure subscriber never comes back. The client's own wallet and originator always win; deferred connection and Socket.IO message retries are unsupported.
    *
    * @description
    * Constructs a new MessageBoxClient.
@@ -987,7 +1042,7 @@ export class MessageBoxClient {
     // These options are excluded from the forwarded type; validate JavaScript
     // callers as well so unsupported socket settings fail before authentication.
     const forwardedManagerOptions = socketOptions?.managerOptions as
-      { autoConnect?: boolean; retries?: number } | undefined
+      { autoConnect?: boolean; retries?: number; reconnection?: boolean } | undefined
     if (forwardedManagerOptions?.autoConnect === false) {
       throw new Error(
         '[MB CLIENT ERROR] socketOptions.managerOptions.autoConnect must not be false: deferred connection is unsupported.'
@@ -999,6 +1054,7 @@ export class MessageBoxClient {
       )
     }
     this.socketOptions = socketOptions
+    this.socketReconnects = forwardedManagerOptions?.reconnection !== false
     this.expectedServerIdentityByOrigin = normalizeServerIdentityPins(serverIdentityKeysByHost)
     this.walletClient = walletClient ?? new WalletClient('auto', originator)
     this.authFetch = new AuthFetch(this.walletClient, undefined, undefined, originator)
@@ -1078,10 +1134,73 @@ export class MessageBoxClient {
   }
 
   /**
+   * @method onLiveStatus
+   * @param listener - Called on every live-socket transition, and once
+   *   immediately with the current status.
+   * @returns A function that removes the listener.
+   *
+   * @description
+   * Reports what the live socket is doing: connecting, live, reconnecting after
+   * a drop something will recover from, or closed with nothing coming. Before
+   * this, a consumer could only find out by sending and seeing what happened.
+   *
+   * A listener that throws is reported and does not stop the others. Status is
+   * about the socket only; `listMessages` polling is required for correctness
+   * whatever it says, because a live message reaches only the sockets held by
+   * the server process that served the send, and a paid message is never
+   * pushed.
+   *
+   * @example
+   * const stop = client.onLiveStatus(({ state, rooms }) => {
+   *   poller.setInterval(state === 'live' ? 60_000 : 5_000)
+   * })
+   */
+  public onLiveStatus(listener: (status: LiveStatus) => void): () => void {
+    this.liveStatusListeners.add(listener)
+    try {
+      listener(this.liveStatus)
+    } catch {
+      Logger.error('[MB CLIENT ERROR] A live status subscriber threw')
+    }
+    return () => {
+      this.liveStatusListeners.delete(listener)
+    }
+  }
+
+  /** The last reported live status. */
+  public get liveStatus(): LiveStatus {
+    return this.lastLiveStatus
+  }
+
+  /** Reports a transition, and nothing when the status is unchanged. */
+  private reportLiveStatus(state: LiveConnectionState, reason?: string): void {
+    const rooms = state === 'live' ? [...this.joinedRooms] : []
+    const previous = this.lastLiveStatus
+    const unchanged =
+      previous.state === state &&
+      previous.reason === reason &&
+      previous.rooms.length === rooms.length &&
+      rooms.every(room => previous.rooms.includes(room))
+    if (unchanged) return
+    const status: LiveStatus = reason === undefined ? { state, rooms } : { state, rooms, reason }
+    this.lastLiveStatus = status
+    // A Set skips entries deleted mid-iteration, so a listener that
+    // unsubscribes itself here does not disturb the rest.
+    for (const listener of this.liveStatusListeners) {
+      try {
+        listener(status)
+      } catch {
+        Logger.error('[MB CLIENT ERROR] A live status subscriber threw')
+      }
+    }
+  }
+
+  /**
    * @method getJoinedRooms
    * @returns {Set<string>} A set of currently joined WebSocket room IDs
    * @description
-   * Returns a live list of WebSocket rooms the client is subscribed to.
+   * Returns the live set of WebSocket rooms joined on the current socket.
+   * Mutating it does not cancel a rejoin; use `leaveRoom`.
    * Useful for inspecting state or ensuring no duplicates are joined.
    */
   public getJoinedRooms(): Set<string> {
@@ -1215,7 +1334,7 @@ export class MessageBoxClient {
 
     Logger.log('[MB CLIENT] Setting up WebSocket connection...')
 
-    if (this.socketAuthenticated && this.socket != null) {
+    if (this.socketAuthenticated && this.socket?.connected === true) {
       return
     }
 
@@ -1224,140 +1343,268 @@ export class MessageBoxClient {
       return
     }
 
-    if (this.socket == null) {
-      const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
-      const targetOrigin = new URL(targetHost).origin
-      const socketConfiguredIdentity = this.socketOptions?.expectedServerIdentityKey
-      const sharedExpectedIdentity = this.expectedServerIdentity(targetOrigin)
-      if (
-        socketConfiguredIdentity != null &&
-        sharedExpectedIdentity != null &&
-        socketConfiguredIdentity !== sharedExpectedIdentity
-      ) {
-        throw new Error(`Conflicting Message Box WebSocket identity pin for ${targetOrigin}.`)
-      }
-      const expectedServerIdentityKey = socketConfiguredIdentity ?? sharedExpectedIdentity
-      this.socket = AuthSocketClient(targetHost, {
-        ...this.socketOptions,
-        wallet: this.walletClient,
-        originator: this.originator,
-        ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
-      })
-
-      this.socket.on('connect', () => {
-        Logger.log('[MB CLIENT] Connected to WebSocket.')
-
-        Logger.log('[MB CLIENT] Sending WebSocket authentication data')
-        if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
-          Logger.error('[MB CLIENT ERROR] Cannot send authentication: Identity key is missing!')
-        } else {
-          this.socket?.emit('authenticated', { identityKey: this.myIdentityKey })
-        }
-      })
-
-      // Listen for authentication success from the server
-      this.socket.on('authenticationSuccess', () => {
-        const serverIdentityKey = canonicalIdentityKey(
-          this.socket?.serverIdentityKey,
-          `Authenticated Message Box WebSocket identity for ${targetOrigin}`
-        )
-        this.pinAuthenticatedServerIdentity(targetOrigin, serverIdentityKey)
-        Logger.log('[MB CLIENT] WebSocket authentication successful')
-        this.socketAuthenticated = true
-      })
-
-      // Handle authentication failures
-      this.socket.on('authenticationFailed', () => {
-        Logger.error('[MB CLIENT ERROR] WebSocket authentication failed')
-        this.socketAuthenticated = false
-      })
-
-      this.socket.on('disconnect', () => {
-        Logger.log('[MB CLIENT] Disconnected from MessageBox server')
-        this.socket = undefined
-        this.socketAuthenticated = false
-      })
-
-      this.socket.on('error', () => {
-        Logger.error('[MB CLIENT ERROR] WebSocket error')
-      })
+    // Reconnection can be disabled or exhausted by the host's managerOptions, and
+    // Socket.IO exposes no signal for it here. A wait that timed out while
+    // still down is the nearest evidence; rebuild rather than reject forever.
+    if (this.socket != null && this.socketStale) {
+      const stale = this.socket
+      this.socket = undefined
+      this.socketStale = false
+      stale.disconnect()
     }
+
+    if (this.socket == null) this.openSocket(overrideHost)
 
     if (this.socket?.connected && !this.socketAuthenticated) {
       this.socket.emit('authenticated', { identityKey: this.myIdentityKey })
     }
 
-    this.connectionInitPromise = new Promise<void>((resolve, reject) => {
-      const socketAny = this.socket as any
-      let settled = false
-      let timeoutId: ReturnType<typeof setTimeout> | undefined
+    await this.beginAuthWait()
+  }
 
-      const finalizeResolve = (): void => {
-        if (settled) return
-        settled = true
-        if (timeoutId != null) {
-          clearTimeout(timeoutId)
-          timeoutId = undefined
-        }
-        if (typeof socketAny?.off === 'function') {
-          socketAny.off('authenticationSuccess', onSuccess)
-          socketAny.off('authenticationFailed', onFailed)
-          socketAny.off('disconnect', onDisconnectBeforeAuth)
-        }
-        this.connectionInitPromise = undefined
-        Logger.log('[MB CLIENT] WebSocket fully authenticated and ready!')
-        resolve()
-      }
-
-      const finalizeReject = (error: Error): void => {
-        if (settled) return
-        settled = true
-        if (timeoutId != null) {
-          clearTimeout(timeoutId)
-          timeoutId = undefined
-        }
-        if (typeof socketAny?.off === 'function') {
-          socketAny.off('authenticationSuccess', onSuccess)
-          socketAny.off('authenticationFailed', onFailed)
-          socketAny.off('disconnect', onDisconnectBeforeAuth)
-        }
-        this.connectionInitPromise = undefined
-        reject(error)
-      }
-
-      const onSuccess = (): void => {
-        this.socketAuthenticated = true
-        finalizeResolve()
-      }
-
-      const onFailed = (): void => {
-        this.socketAuthenticated = false
-        finalizeReject(new Error('[MB CLIENT ERROR] WebSocket authentication failed!'))
-      }
-
-      const onDisconnectBeforeAuth = (): void => {
-        this.socketAuthenticated = false
-      }
-
-      if (this.socketAuthenticated) {
-        finalizeResolve()
-        return
-      }
-
-      socketAny?.on('authenticationSuccess', onSuccess)
-      socketAny?.on('authenticationFailed', onFailed)
-      socketAny?.on('disconnect', onDisconnectBeforeAuth)
-
-      timeoutId = setTimeout(() => {
-        if (this.socketAuthenticated) {
-          finalizeResolve()
-        } else {
-          finalizeReject(new Error('[MB CLIENT ERROR] WebSocket authentication timed out!'))
-        }
-      }, 5000)
+  /**
+   * Builds the socket and takes ownership of it. The caller has already
+   * established that there is none to reuse.
+   */
+  private openSocket(overrideHost?: string): void {
+    const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
+    const targetOrigin = new URL(targetHost).origin
+    const socketConfiguredIdentity = this.socketOptions?.expectedServerIdentityKey
+    const sharedExpectedIdentity = this.expectedServerIdentity(targetOrigin)
+    if (
+      socketConfiguredIdentity != null &&
+      sharedExpectedIdentity != null &&
+      socketConfiguredIdentity !== sharedExpectedIdentity
+    ) {
+      throw new Error(`Conflicting Message Box WebSocket identity pin for ${targetOrigin}.`)
+    }
+    const expectedServerIdentityKey = socketConfiguredIdentity ?? sharedExpectedIdentity
+    const socket = AuthSocketClient(targetHost, {
+      ...this.socketOptions,
+      wallet: this.walletClient,
+      originator: this.originator,
+      ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
     })
+    this.socket = socket
+    // A new socket carries none of the old one's listeners. Sends that were
+    // waiting on the old one fall back when they time out, as they did when
+    // their listener went with it.
+    this.dispatchedEvents.clear()
+    this.pendingAcks.clear()
+    for (const { event } of this.roomHandlers) this.dispatchLive(socket, event)
+    this.attachSocketHandlers(socket, targetHost, targetOrigin)
+    this.reportLiveStatus('connecting')
+  }
 
-    await this.connectionInitPromise
+  /** Sockets that reached `authenticationSuccess`, so a drop knows whether to rebuild. */
+  private readonly authenticatedSockets = new WeakSet<object>()
+
+  /**
+   * Registers every handler this socket will ever have, once. Each one re-checks
+   * that the socket is still the client's, because the wrapper has no `off` and a
+   * replaced socket goes on reporting.
+   */
+  private attachSocketHandlers(
+    socket: ReturnType<typeof AuthSocketClient>,
+    targetHost: string,
+    targetOrigin: string
+  ): void {
+    // `connect` fires on the first connection and on every Socket.IO reconnection.
+    socket.on('connect', () => this.onSocketConnect(socket))
+    socket.on('authenticationSuccess', () => this.onSocketAuthenticated(socket, targetOrigin))
+    socket.on('authenticationFailed', () => this.onSocketAuthenticationFailed(socket))
+    socket.on('disconnect', (reason?: string) =>
+      this.onSocketDisconnect(socket, targetHost, reason)
+    )
+    // The server answers every join. An older one answers nothing, which is why
+    // `joinRoom` records the room optimistically; these only correct that record.
+    socket.on('joinedRoom', (data?: { roomId?: string }) => this.onRoomJoined(socket, data))
+    socket.on('joinFailed', (data?: { roomId?: string; reason?: string; code?: string }) =>
+      this.onRoomJoinFailed(socket, data)
+    )
+    socket.on('error', () => {
+      Logger.error('[MB CLIENT ERROR] WebSocket error')
+    })
+  }
+
+  private onSocketConnect(socket: ReturnType<typeof AuthSocketClient>): void {
+    if (this.socket !== socket) return
+    Logger.log('[MB CLIENT] Connected to WebSocket.')
+    this.socketStale = false
+
+    if (this.connectionInitPromise == null) {
+      this.beginAuthWait().catch(() => {})
+    }
+
+    Logger.log('[MB CLIENT] Sending WebSocket authentication data')
+    if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
+      Logger.error('[MB CLIENT ERROR] Cannot send authentication: Identity key is missing!')
+      return
+    }
+    socket.emit('authenticated', { identityKey: this.myIdentityKey })
+  }
+
+  private onSocketAuthenticated(
+    socket: ReturnType<typeof AuthSocketClient>,
+    targetOrigin: string
+  ): void {
+    if (this.socket !== socket) return
+    this.authenticatedSockets.add(socket)
+    const serverIdentityKey = canonicalIdentityKey(
+      socket.serverIdentityKey,
+      `Authenticated Message Box WebSocket identity for ${targetOrigin}`
+    )
+    this.pinAuthenticatedServerIdentity(targetOrigin, serverIdentityKey)
+    Logger.log('[MB CLIENT] WebSocket authentication successful')
+    this.holdRebuildCount()
+    this.socketAuthenticated = true
+    // The server refuses joins before this point, and a reconnect is a new
+    // server-side socket in no rooms.
+    for (const roomId of this.requestedRooms) {
+      socket.emit('joinRoom', roomId)
+      this.joinedRooms.add(roomId)
+    }
+    this.reportLiveStatus('live')
+    this.settleAuthWait?.()
+  }
+
+  private onSocketAuthenticationFailed(socket: ReturnType<typeof AuthSocketClient>): void {
+    if (this.socket !== socket) return
+    Logger.error('[MB CLIENT ERROR] WebSocket authentication failed')
+    this.socketAuthenticated = false
+    this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket authentication failed!'))
+  }
+
+  private onSocketDisconnect(
+    socket: ReturnType<typeof AuthSocketClient>,
+    targetHost: string,
+    reason?: string
+  ): void {
+    if (this.socket !== socket) return
+    Logger.log('[MB CLIENT] Disconnected from MessageBox server')
+    // Membership belongs to the server-side socket that joined.
+    this.joinedRooms.clear()
+    this.socketAuthenticated = false
+
+    const retriedBySocketIo =
+      this.socketReconnects &&
+      reason !== 'io client disconnect' &&
+      reason !== 'io server disconnect'
+    if (retriedBySocketIo) {
+      // Socket.IO reconnects and re-emits `connect`. Callers that arrive
+      // meanwhile wait on this attempt.
+      if (this.connectionInitPromise == null) {
+        this.beginAuthWait().catch(() => {})
+      }
+      this.reportLiveStatus('reconnecting', reason)
+      return
+    }
+
+    // Socket.IO will not retry these; the object is dead.
+    this.socket = undefined
+    this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
+    // A listener makes no calls, so nothing else would restore it. `reconnection:
+    // false` stays the host's choice.
+    if (reason === 'io server disconnect' && this.socketReconnects) {
+      this.scheduleRebuild(socket, targetHost)
+    }
+    // `scheduleRebuild` reports `reconnecting` when it takes the socket on.
+    if (this.rebuildTimer === undefined) this.reportLiveStatus('closed', reason)
+  }
+
+  private onRoomJoined(
+    socket: ReturnType<typeof AuthSocketClient>,
+    data?: { roomId?: string }
+  ): void {
+    if (this.socket !== socket) return
+    const roomId = data?.roomId
+    if (typeof roomId !== 'string' || !this.requestedRooms.has(roomId)) return
+    this.joinedRooms.add(roomId)
+    if (this.socketAuthenticated) this.reportLiveStatus('live')
+  }
+
+  private onRoomJoinFailed(
+    socket: ReturnType<typeof AuthSocketClient>,
+    data?: { roomId?: string; reason?: string; code?: string }
+  ): void {
+    if (this.socket !== socket) return
+    Logger.error('[MB CLIENT ERROR] WebSocket room join refused')
+    const roomId = data?.roomId
+    // Without a room this cannot be attributed: an older server sends no room,
+    // and several joins can be in flight.
+    if (typeof roomId !== 'string') return
+    this.joinedRooms.delete(roomId)
+    // The handler stays attached. Nothing is pushed to a room we are not in, and
+    // dropping it would let a later listen attach a second one.
+    if (PERMANENT_JOIN_REFUSALS.has(data?.code ?? '')) {
+      this.requestedRooms.delete(roomId)
+    }
+  }
+
+  /**
+   * Holding the connection past the delay the next rebuild would use means the
+   * trouble passed, so the next one starts from scratch.
+   */
+  private holdRebuildCount(): void {
+    if (this.rebuildAttempts === 0) return
+    clearTimeout(this.rebuildHoldTimer)
+    this.rebuildHoldTimer = setTimeout(() => {
+      this.rebuildAttempts = 0
+    }, this.rebuildDelay())
+  }
+
+  /**
+   * Rebuilds after a server-forced drop: at once the first time, then backing
+   * off. Only a socket that authenticated is rebuilt, so a server refusing
+   * authentication is not retried in a loop.
+   */
+  private scheduleRebuild(socket: object, targetHost: string): void {
+    if (!this.authenticatedSockets.has(socket)) return
+    clearTimeout(this.rebuildHoldTimer)
+    const delay = this.rebuildDelay()
+    this.rebuildAttempts += 1
+    clearTimeout(this.rebuildTimer)
+    this.rebuildTimer = setTimeout(() => {
+      this.rebuildTimer = undefined
+      this.initializeConnection(targetHost).catch(() => {
+        this.reportLiveStatus('closed')
+      })
+    }, delay)
+    this.reportLiveStatus('reconnecting')
+  }
+  /**
+   * Starts an authentication attempt and registers it as `connectionInitPromise`.
+   * Callers must check that slot first; this does not enforce a single attempt.
+   * The socket's long-lived handlers settle it, so no per-attempt listeners
+   * accumulate across reconnects.
+   */
+  /** Zero for the first rebuild, then doubling to the cap. */
+  private rebuildDelay(): number {
+    if (this.rebuildAttempts === 0) return 0
+    return Math.min(REBUILD_BASE_DELAY_MS * 2 ** (this.rebuildAttempts - 1), REBUILD_MAX_DELAY_MS)
+  }
+
+  private beginAuthWait(): Promise<void> {
+    const promise = new Promise<void>((resolve, reject) => {
+      const settle = (error?: Error): void => {
+        clearTimeout(timeoutId)
+        if (this.connectionInitPromise === promise) this.connectionInitPromise = undefined
+        if (this.settleAuthWait === settle) this.settleAuthWait = undefined
+        if (error != null) reject(error)
+        else resolve()
+      }
+      const timeoutId = setTimeout(() => {
+        this.socketStale = !this.socketAuthenticated && this.socket?.connected !== true
+        settle(
+          this.socketAuthenticated
+            ? undefined
+            : new Error('[MB CLIENT ERROR] WebSocket authentication timed out!')
+        )
+      }, 5000)
+      this.settleAuthWait = settle
+    })
+    this.connectionInitPromise = promise
+    return promise
   }
 
   /**
@@ -1533,6 +1780,13 @@ export class MessageBoxClient {
    * If the WebSocket connection is not already established, this method will first initialize the connection.
    * It also ensures the room is only joined once, and tracks all joined rooms in an internal set.
    *
+   * Resolving means the request was sent, not that the server granted it. The
+   * room is recorded at once so that a server which answers nothing behaves as
+   * it always has; a server that answers corrects the record, dropping a room
+   * it refused and, when the refusal is one that re-emitting can never clear,
+   * no longer asking for it on reconnect. The room is requested again whenever
+   * a socket authenticates, since membership belongs to the socket that joined.
+   *
    * Room ID format: `${identityKey}-${messageBox}`
    *
    * @example
@@ -1545,17 +1799,17 @@ export class MessageBoxClient {
       forbidControls: true
     })
 
-    // Ensure WebSocket connection is established first
-    if (this.socket == null) {
-      Logger.log('[MB CLIENT] No WebSocket connection. Initializing...')
-      await this.initializeConnection(overrideHost)
-    }
+    // Returns at once when authenticated; otherwise awaits the attempt in flight
+    // or starts one.
+    await this.initializeConnection(overrideHost)
 
     if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
       throw new Error('[MB CLIENT ERROR] Identity key is not defined')
     }
 
     const roomId = `${this.myIdentityKey ?? ''}-${canonicalMessageBox}`
+
+    this.requestedRooms.add(roomId)
 
     if (this.joinedRooms.has(roomId)) {
       Logger.log('[MB CLIENT] WebSocket room already joined')
@@ -1567,6 +1821,7 @@ export class MessageBoxClient {
       this.socket?.emit('joinRoom', roomId)
       this.joinedRooms.add(roomId)
       Logger.log('[MB CLIENT] WebSocket room joined')
+      if (this.socketAuthenticated) this.reportLiveStatus('live')
     } catch {
       Logger.error('[MB CLIENT ERROR] Failed to join WebSocket room')
     }
@@ -1590,6 +1845,18 @@ export class MessageBoxClient {
    * - Automatically attempts to parse and decrypt message bodies.
    * - Emits the final message (as a `PeerMessage`) to the supplied `onMessage` handler.
    *
+   * The subscription is restored on a socket rebuilt after a disconnect, and
+   * calling this again with the same `onMessage` for the same box is a no-op
+   * rather than a second subscription. Every subscriber to a room shares one
+   * socket listener, so the body is parsed and decrypted once per arrival and
+   * `onMessage` is called a tick after the message arrives. A subscriber that
+   * throws is reported and does not stop the others.
+   *
+   * Live delivery is not complete delivery: a message reaches only the sockets
+   * held by the server process that served the send, and a message carrying a
+   * payment is never pushed. Keep polling with `listMessages`, which is also
+   * the only call that internalizes a recipient payment.
+   *
    * If the incoming message is encrypted, the client decrypts it using AES-256-GCM via
    * ECDH shared secrets derived from identity keys as defined in [BRC-2](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0002.md).
    * Messages sent by the client to itself are decrypted using `counterparty = 'self'`.
@@ -1611,13 +1878,7 @@ export class MessageBoxClient {
   }): Promise<void> {
     Logger.log('[MB CLIENT] Setting up a WebSocket room listener')
 
-    // Ensure WebSocket connection is established first
-    if (this.socket == null) {
-      Logger.log('[MB CLIENT] No WebSocket connection. Initializing...')
-      await this.initializeConnection(overrideHost)
-    }
-
-    // Join the room
+    // Join the room (joinRoom establishes the connection first)
     await this.joinRoom(messageBox, overrideHost)
 
     // Ensure identity key is available before creating roomId
@@ -1629,66 +1890,118 @@ export class MessageBoxClient {
 
     Logger.log('[MB CLIENT] Listening for WebSocket room messages')
 
-    this.socket?.on(`sendMessage-${roomId}`, (message: PeerMessage) => {
+    const event = `sendMessage-${roomId}`
+    // The same callback twice would be delivered to twice.
+    if (this.roomHandlers.some(entry => entry.event === event && entry.onMessage === onMessage)) {
+      return
+    }
+    this.roomHandlers.push({ roomId, event, onMessage })
+    if (this.socket != null) this.dispatchLive(this.socket, event)
+  }
+
+  /**
+   * Attaches this socket's only listener for `event`, which reads the
+   * subscriptions at delivery time. Subscribing and unsubscribing are then
+   * list operations, which is what makes `leaveRoom` followed by another
+   * `listenForLiveMessages` safe on a socket that cannot detach a listener.
+   */
+  private dispatchLive(socket: ReturnType<typeof AuthSocketClient>, event: string): void {
+    if (this.dispatchedEvents.has(event)) return
+    this.dispatchedEvents.add(event)
+    socket.on(event, (message: PeerMessage) => {
       void (async () => {
+        if (this.socket !== socket) return
         Logger.log('[MB CLIENT] Received a WebSocket room message')
-
-        try {
-          let parsedBody: unknown = message.body
-
-          if (typeof parsedBody === 'string') {
-            try {
-              parsedBody = JSON.parse(parsedBody)
-            } catch {
-              // Leave it as-is (plain text)
-            }
+        // Read after the decrypt so a subscription that went away while it ran
+        // is not delivered to.
+        await this.readLiveBody(message)
+        // Isolated: subscribers share one listener now, so a throw must not
+        // cost the rest of the room its message.
+        for (const entry of this.roomHandlers) {
+          if (entry.event !== event) continue
+          try {
+            entry.onMessage(message)
+          } catch {
+            Logger.error('[MB CLIENT ERROR] A live message subscriber threw')
           }
-
-          if (
-            parsedBody != null &&
-            typeof parsedBody === 'object' &&
-            !Array.isArray(parsedBody) &&
-            Object.hasOwn(parsedBody, 'encryptedMessage')
-          ) {
-            const body = ownDataRecord(parsedBody, 'Live Message Box message body')
-            if (typeof body.encryptedMessage !== 'string') {
-              throw new TypeError('Live Message Box ciphertext must be a string')
-            }
-            Logger.log('[MB CLIENT] Decrypting a WebSocket message')
-            const request: Parameters<WalletInterface['decrypt']>[0] = {
-              protocolID: [1, 'messagebox'],
-              keyID: '1',
-              counterparty: message.sender,
-              ciphertext: toArray(body.encryptedMessage, 'base64')
-            }
-            const decrypted = validateWalletResult(
-              'decrypt',
-              await this.walletClient.decrypt(request, this.originator),
-              request
-            )
-
-            message.body = toUTF8(decrypted.plaintext)
-          } else {
-            Logger.log('[MB CLIENT] Message is not encrypted.')
-            message.body =
-              typeof parsedBody === 'string'
-                ? parsedBody
-                : (() => {
-                    try {
-                      return stringifyBRC100(parsedBody)
-                    } catch {
-                      return '[Error: Unstringifiable message]'
-                    }
-                  })()
-          }
-        } catch {
-          Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt live message')
-          message.body = '[Error: Failed to decrypt or parse message]'
         }
-
-        onMessage(message)
       })()
     })
+  }
+
+  /** Attaches this socket's only acknowledgement listener for a room. */
+  private dispatchAcks(socket: ReturnType<typeof AuthSocketClient>, event: string): void {
+    if (this.dispatchedEvents.has(event)) return
+    this.dispatchedEvents.add(event)
+    socket.on(event, (response?: SendMessageResponse) => {
+      if (this.socket !== socket) return
+      this.pendingAcks.get(event)?.[0]?.(response)
+    })
+  }
+
+  /** Takes a settled or abandoned send out of its room's queue. */
+  private dropPendingAck(event: string, handler: (response?: SendMessageResponse) => void): void {
+    const waiting = this.pendingAcks.get(event)
+    if (waiting == null) return
+    const index = waiting.indexOf(handler)
+    if (index >= 0) waiting.splice(index, 1)
+    if (waiting.length === 0) this.pendingAcks.delete(event)
+  }
+
+  /** Decrypts or parses a live message in place, exactly once per arrival. */
+  private async readLiveBody(message: PeerMessage): Promise<void> {
+    try {
+      let parsedBody: unknown = message.body
+
+      if (typeof parsedBody === 'string') {
+        try {
+          parsedBody = JSON.parse(parsedBody)
+        } catch {
+          // Leave it as-is (plain text)
+        }
+      }
+
+      if (
+        parsedBody != null &&
+        typeof parsedBody === 'object' &&
+        !Array.isArray(parsedBody) &&
+        Object.hasOwn(parsedBody, 'encryptedMessage')
+      ) {
+        const body = ownDataRecord(parsedBody, 'Live Message Box message body')
+        if (typeof body.encryptedMessage !== 'string') {
+          throw new TypeError('Live Message Box ciphertext must be a string')
+        }
+        Logger.log('[MB CLIENT] Decrypting a WebSocket message')
+        const request: Parameters<WalletInterface['decrypt']>[0] = {
+          protocolID: [1, 'messagebox'],
+          keyID: '1',
+          counterparty: message.sender,
+          ciphertext: toArray(body.encryptedMessage, 'base64')
+        }
+        const decrypted = validateWalletResult(
+          'decrypt',
+          await this.walletClient.decrypt(request, this.originator),
+          request
+        )
+
+        message.body = toUTF8(decrypted.plaintext)
+      } else {
+        Logger.log('[MB CLIENT] Message is not encrypted.')
+        message.body =
+          typeof parsedBody === 'string'
+            ? parsedBody
+            : (() => {
+                try {
+                  return stringifyBRC100(parsedBody)
+                } catch {
+                  return '[Error: Unstringifiable message]'
+                }
+              })()
+      }
+    } catch {
+      Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt live message')
+      message.body = '[Error: Failed to decrypt or parse message]'
+    }
   }
 
   /**
@@ -1768,10 +2081,7 @@ export class MessageBoxClient {
           timeoutId = undefined
         }
 
-        const socketAny = this.socket as any
-        if (typeof socketAny?.off === 'function') {
-          socketAny.off(ackEvent, ackHandler)
-        }
+        this.dropPendingAck(ackEvent, ackHandler)
 
         Logger.log('[MB CLIENT] Received a WebSocket acknowledgment')
 
@@ -1788,8 +2098,11 @@ export class MessageBoxClient {
         }
       }
 
-      // Attach acknowledgment listener
-      this.socket?.on(ackEvent, ackHandler)
+      // One listener per room, with this send queued behind any already waiting.
+      const waiting = this.pendingAcks.get(ackEvent) ?? []
+      waiting.push(ackHandler)
+      this.pendingAcks.set(ackEvent, waiting)
+      if (this.socket != null) this.dispatchAcks(this.socket, ackEvent)
 
       // Emit message to room
       this.socket?.emit('sendMessage', {
@@ -1806,10 +2119,8 @@ export class MessageBoxClient {
         if (!handled) {
           handled = true
           timeoutId = undefined
-          const socketAny = this.socket as any
-          if (typeof socketAny?.off === 'function') {
-            socketAny.off(ackEvent, ackHandler)
-          }
+          // Dropped from the queue, or it would take an ack meant for a later send.
+          this.dropPendingAck(ackEvent, ackHandler)
           Logger.warn('[CLIENT] WebSocket acknowledgment timed out, falling back to HTTP')
           this.sendMessage(fallbackMessage(finalMessageId), overrideHost)
             .then(resolve)
@@ -1829,7 +2140,10 @@ export class MessageBoxClient {
    * Leaves a previously joined WebSocket room associated with the authenticated identity key.
    * This helps reduce unnecessary message traffic and memory usage.
    *
-   * If the WebSocket is not connected or the identity key is missing, the method exits gracefully.
+   * The room is released whether or not the socket is up, so leaving while
+   * disconnected does not leave a claim the next connection rejoins. Its
+   * subscribers stop being delivered to immediately. The identity key must be
+   * known; without one this throws.
    *
    * @example
    * await client.leaveRoom('payment_inbox')
@@ -1839,21 +2153,28 @@ export class MessageBoxClient {
       forbidControls: true
     })
     await this.assertInitialized()
-    if (this.socket == null) {
-      Logger.warn('[MB CLIENT] Attempted to leave a room but WebSocket is not connected.')
-      return
-    }
-
     if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
       throw new Error('[MB CLIENT ERROR] Identity key is not defined')
     }
 
     const roomId = `${this.myIdentityKey}-${canonicalMessageBox}`
+    // Dropped first, and regardless of the socket: a caller that leaves while
+    // disconnected must not be left claiming a room it will never rejoin.
+    this.joinedRooms.delete(roomId)
+    this.requestedRooms.delete(roomId)
+    if (this.socketAuthenticated) this.reportLiveStatus('live')
+    // The live socket keeps its copy (it cannot detach), but a rebuild will not.
+    this.roomHandlers = this.roomHandlers.filter(entry => entry.roomId !== roomId)
+
+    // Emitting while disconnected would buffer a leave for a room the next
+    // server-side socket is not in.
+    if (this.socket?.connected !== true) {
+      Logger.warn('[MB CLIENT] Attempted to leave a room but WebSocket is not connected.')
+      return
+    }
+
     Logger.log('[MB CLIENT] Leaving WebSocket room')
     this.socket.emit('leaveRoom', roomId)
-
-    // Ensure the room is removed from tracking
-    this.joinedRooms.delete(roomId)
   }
 
   /**
@@ -1875,9 +2196,27 @@ export class MessageBoxClient {
       Logger.log('[MB CLIENT] No active WebSocket connection to close.')
     } else {
       Logger.log('[MB CLIENT] Closing WebSocket connection...')
-      this.socket.disconnect()
+      const socket = this.socket
+      // Detached first so the socket's own `disconnect` event is ignored.
       this.socket = undefined
+      this.socketAuthenticated = false
+      this.socketStale = false
+      socket.disconnect()
+      this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
     }
+    // Teardown is deliberate: nothing is left to restore.
+    this.joinedRooms.clear()
+    this.requestedRooms.clear()
+    this.roomHandlers = []
+    this.dispatchedEvents.clear()
+    this.pendingAcks.clear()
+    // A rebuild in flight would undo the close.
+    clearTimeout(this.rebuildTimer)
+    clearTimeout(this.rebuildHoldTimer)
+    this.rebuildTimer = undefined
+    this.rebuildHoldTimer = undefined
+    this.rebuildAttempts = 0
+    this.reportLiveStatus('closed')
   }
 
   /**

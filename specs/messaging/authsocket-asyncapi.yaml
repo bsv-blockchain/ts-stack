@@ -2,7 +2,7 @@ asyncapi: '3.1.0'
 
 info:
   title: AuthSocket WebSocket Protocol
-  version: '1.0.0'
+  version: '1.1.0'
   description: |
     AsyncAPI 3.0 specification for the `AuthSocketServer` / `AuthSocket`
     WebSocket channel used by the BSV MessageBox Server.
@@ -173,10 +173,37 @@ components:
 
     JoinFailedPayload:
       type: object
+      description: |
+        Emitted when a `joinRoom` is refused. `roomId` names the room that was
+        refused and is present whenever the server could read one, which a
+        client needs because several joins may be in flight and this event is
+        the only reply any of them gets. It is absent only when the requested
+        room was missing or malformed. `code` separates a refusal that
+        re-emitting may clear from one it never will.
       required: [reason]
       properties:
+        roomId:
+          type: string
+          description: |
+            The refused room, echoed back as the client sent it. Absent when
+            the requested room was missing or malformed, which is always so
+            for `ERR_WEBSOCKET_INVALID_ROOM` and possible for any refusal
+            raised before the room is validated.
         reason:
           type: string
+        code:
+          type: string
+          description: |
+            `ERR_WEBSOCKET_ROOM_NOT_OWNED` and `ERR_WEBSOCKET_INVALID_ROOM` are
+            permanent for that room. `ERR_WEBSOCKET_NOT_AUTHENTICATED`,
+            `ERR_WEBSOCKET_ROOM_LIMIT` and `ERR_WEBSOCKET_CONTROL_RATE_LIMITED`
+            may succeed on a later attempt.
+          enum:
+            - ERR_WEBSOCKET_NOT_AUTHENTICATED
+            - ERR_WEBSOCKET_INVALID_ROOM
+            - ERR_WEBSOCKET_ROOM_NOT_OWNED
+            - ERR_WEBSOCKET_ROOM_LIMIT
+            - ERR_WEBSOCKET_CONTROL_RATE_LIMITED
 
     LeaveRoomPayload:
       type: string
@@ -243,7 +270,9 @@ components:
       description: |
         Broadcast emitted by the server on `sendMessage-{roomId}` to all
         connections in the room (including the sender). Note: the event name
-        is dynamic.
+        is dynamic. Emitted for a message stored over HTTP as well as one sent
+        through a socket, with the exceptions under the `sendMessage-{roomId}`
+        channel.
       required: [sender, messageId, body]
       properties:
         sender:
@@ -355,7 +384,10 @@ channels:
 
   joinFailed:
     address: joinFailed
-    description: Emitted when `joinRoom` fails (unauthenticated or invalid roomId).
+    description: |
+      Emitted when `joinRoom` is refused. Names the refused room where the
+      server could read one, so a client with several joins in flight can
+      attribute it.
     messages:
       joinFailedMessage:
         name: joinFailedMessage
@@ -403,7 +435,9 @@ channels:
       3. Creates the message box if it does not exist.
       4. Inserts the message into the database (with ON CONFLICT IGNORE dedup).
       5. Emits `sendMessageAck-{roomId}` back to the sender.
-      6. Broadcasts `sendMessage-{roomId}` to all connections in the room.
+      6. Broadcasts `sendMessage-{roomId}` to the room's sockets on this
+         process. The HTTP send route broadcasts the same event on the same
+         terms; see that channel for what it does not cover.
     messages:
       sendMessageMessage:
         name: sendMessageMessage
@@ -430,7 +464,21 @@ channels:
     address: 'sendMessage-{roomId}'
     description: |
       Broadcast emitted to all connections subscribed to `roomId` after a
-      successful `sendMessage`. The event name is `sendMessage-<roomId>`.
+      message is stored, whether it was sent through a socket or over HTTP.
+      The event name is `sendMessage-<roomId>`.
+
+      Best effort, and never a substitute for `listMessages`:
+      - It reaches only the sockets held by the process that served the
+        request. A client joined on another process of a scaled-out
+        deployment is not reached, so polling remains required for
+        correctness rather than as a fallback.
+      - A send carrying a payment is never broadcast. The broadcast carries
+        the request body, which has no payment in it, so a recipient that
+        acknowledged on the broadcast would delete the stored row before its
+        wallet had internalized the output. Paid messages are delivered by
+        `listMessages`, which does internalize.
+      - A send the route refused is never broadcast.
+
     parameters:
       roomId:
         description: The target room ID.

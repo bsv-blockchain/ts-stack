@@ -17,7 +17,15 @@
  */
 
 import * as dotenv from 'dotenv'
-import { app, appReady, getWallet, knex, paymentReplayStore, sessionManager } from './app.js'
+import {
+  app,
+  appReady,
+  getWallet,
+  knex,
+  liveDelivery,
+  paymentReplayStore,
+  sessionManager
+} from './app.js'
 import { createServer } from 'node:http'
 import { Logger, log } from './utils/logger.js'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
@@ -105,7 +113,8 @@ export const start = async (): Promise<void> => {
       knex,
       enableWebSockets: true,
       sessionManager,
-      paymentReplayStore
+      paymentReplayStore,
+      liveDelivery
     })
     ioRef.current = attachMessageBoxWebSockets(http, ctx)
   }

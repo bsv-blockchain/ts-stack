@@ -42,11 +42,14 @@ import {
   WebSocketMinuteRateLimiter
 } from './security/webSocketConnections.js'
 import { canonicalIdentityKey, isCanonicalMessageId } from './security/messageFields.js'
+import { deliverLiveMessage, withLiveDelivery, type LiveDelivery } from './security/liveDelivery.js'
 
 export { createMessageBoxContext } from './context.js'
 export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
 export type { TransactionalPaymentReplayStore } from './security/TransactionalPaymentReplayStore.js'
 export { bindMessageBoxRuntime } from './runtimeDeps.js'
+export { createLiveDelivery } from './security/liveDelivery.js'
+export type { LiveDelivery } from './security/liveDelivery.js'
 
 type HttpMethod = 'get' | 'post' | 'put' | 'delete'
 
@@ -55,6 +58,7 @@ export type MessageBoxRouter = IRouter
 
 interface WebSocketState {
   connections: WebSocketConnectionRegistry
+  liveDelivery: LiveDelivery
 }
 
 const webSocketState = new WeakMap<AuthSocketServer, WebSocketState>()
@@ -165,6 +169,9 @@ export async function closeMessageBoxWebSockets(io: AuthSocketServer | null): Pr
     disconnectAuthenticatedSockets(state?.connections.sockets() ?? [])
   }
   state?.connections.clear()
+  if (state != null && state.liveDelivery.connections === state.connections) {
+    state.liveDelivery.connections = null
+  }
   webSocketState.delete(io)
 }
 
@@ -218,10 +225,16 @@ export function registerMessageBoxPostAuthRoutes(
     | 'calculateRequestPrice'
     | 'paymentReplayStore'
     | 'paymentTransactionVerifier'
+    | 'liveDelivery'
   >,
   routingPrefix: string = '',
   authenticatedRateLimitOptions: Partial<RateLimitOptions> = {}
 ): void {
+  if (ctx.liveDelivery == null) {
+    throw new Error(
+      'registerMessageBoxPostAuthRoutes requires ctx.liveDelivery; without it HTTP sends are never pushed to sockets'
+    )
+  }
   const runtime: MessageBoxRuntimeDeps = {
     knex: ctx.knex,
     wallet: ctx.wallet,
@@ -259,7 +272,13 @@ export function registerMessageBoxPostAuthRoutes(
     if (route.path === '/sendMessage') {
       router[method](
         `${routingPrefix}${route.path}`,
-        sendMessageRoute.func as unknown as RequestHandler
+        withLiveDelivery(
+          ctx.liveDelivery,
+          sendMessageRoute.func as unknown as (
+            req: ExpressRequest,
+            res: Response
+          ) => Promise<unknown>
+        ) as unknown as RequestHandler
       )
     } else {
       router[method](`${routingPrefix}${route.path}`, route.func as RequestHandler)
@@ -279,6 +298,9 @@ export function attachMessageBoxWebSockets(
   if (!ctx.enableWebSockets) {
     return null
   }
+  if (ctx.liveDelivery.connections != null) {
+    throw new Error('A MessageBoxContext supports one attachMessageBoxWebSockets call')
+  }
 
   Logger.log('[WEBSOCKET] Initializing WebSocket support...')
 
@@ -287,7 +309,9 @@ export function attachMessageBoxWebSockets(
   const connections = new WebSocketConnectionRegistry()
   const resources = readMessageBoxResourceConfig()
   const pricing = readMessageBoxPricingConfig()
-  webSocketState.set(io, { connections })
+  const { liveDelivery } = ctx
+  liveDelivery.connections = connections
+  webSocketState.set(io, { connections, liveDelivery })
 
   io.on('connection', socket => {
     let activeSendEvents = 0
@@ -508,20 +532,13 @@ export function attachMessageBoxWebSockets(
             messageId: message.messageId
           })
 
-          const recipientSockets = connections.recipientSockets(
-            message.recipient,
+          await deliverLiveMessage(connections, {
+            sender: connections.identityKey(socket.id),
+            recipient: message.recipient,
             roomId,
-            resources.webSocketMaxRecipientConnections
-          )
-          await Promise.all(
-            recipientSockets.map(async recipientSocket => {
-              await recipientSocket.emit(`sendMessage-${roomId}`, {
-                sender: connections.identityKey(socket.id),
-                messageId: message.messageId,
-                body: message.body
-              })
-            })
-          )
+            messageId: message.messageId,
+            body: message.body
+          })
           Logger.log('[WEBSOCKET] Delivered message notification to authenticated recipients.')
         } catch {
           Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler.')
@@ -534,8 +551,12 @@ export function attachMessageBoxWebSockets(
 
     // Handle joining/leaving rooms
     socket.on('joinRoom', async (roomId: string) => {
+      // Named on every refusal a client can correlate: it may have several
+      // joins in flight and the event is the only reply it gets.
+      const named = typeof roomId === 'string' && roomId.trim() !== '' ? { roomId } : {}
       if (!controlRateLimiter.consume()) {
         await socket.emit('joinFailed', {
+          ...named,
           reason: 'WebSocket control-event rate limit exceeded',
           code: 'ERR_WEBSOCKET_CONTROL_RATE_LIMITED'
         })
@@ -544,25 +565,37 @@ export function attachMessageBoxWebSockets(
 
       if (!connections.isAuthenticated(socket.id)) {
         Logger.warn('[WEBSOCKET] Unauthorized attempt to join a room.')
-        await socket.emit('joinFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
+        await socket.emit('joinFailed', {
+          ...named,
+          reason: 'Unauthorized: WebSocket not authenticated',
+          code: 'ERR_WEBSOCKET_NOT_AUTHENTICATED'
+        })
         return
       }
 
       if (roomId == null || typeof roomId !== 'string' || roomId.trim() === '') {
         Logger.error('[WEBSOCKET ERROR] Invalid roomId.')
-        await socket.emit('joinFailed', { reason: 'Invalid room ID' })
+        await socket.emit('joinFailed', {
+          reason: 'Invalid room ID',
+          code: 'ERR_WEBSOCKET_INVALID_ROOM'
+        })
         return
       }
 
       const identityKey = connections.identityKey(socket.id)
       if (identityKey == null || !isIdentityOwnedRoom(identityKey, roomId)) {
         Logger.warn("[WEBSOCKET] Rejected an attempt to join another identity's room.")
-        await socket.emit('joinFailed', { reason: 'Room is not owned by authenticated identity' })
+        await socket.emit('joinFailed', {
+          ...named,
+          reason: 'Room is not owned by authenticated identity',
+          code: 'ERR_WEBSOCKET_ROOM_NOT_OWNED'
+        })
         return
       }
 
       if (!connections.join(socket.id, roomId, resources.webSocketMaxRoomsPerConnection)) {
         await socket.emit('joinFailed', {
+          ...named,
           reason: 'WebSocket room limit exceeded',
           code: 'ERR_WEBSOCKET_ROOM_LIMIT'
         })
