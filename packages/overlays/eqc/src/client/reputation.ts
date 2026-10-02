@@ -64,11 +64,11 @@ export class InMemoryReputationStore implements ReputationStore {
 
 /** A uniform integer in `[0, bound)` from the SDK random source, without modulo bias. */
 function randomBelow(bound: number): number {
-  const range = 0x1_0000_0000
+  const range = 2 ** 32
   const limit = range - (range % bound)
   for (;;) {
     const [a, b, c, d] = Random(4)
-    const value = a * 0x100_0000 + b * 0x1_0000 + c * 0x100 + d
+    const value = a * 2 ** 24 + b * 2 ** 16 + c * 2 ** 8 + d
     if (value < limit) return value % bound
   }
 }

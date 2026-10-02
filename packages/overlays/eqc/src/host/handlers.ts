@@ -335,7 +335,7 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     const client = authenticate(req)
     const request = parseCollect(req)
     const record = await store.get(request.queryId)
-    if (record === undefined || record.clientIdentityKey !== client) {
+    if (record?.clientIdentityKey !== client) {
       throw new HostError(404, 'ERR_QUERY_UNKNOWN', 'No such query for this client')
     }
     if (record.state !== 'pending') {

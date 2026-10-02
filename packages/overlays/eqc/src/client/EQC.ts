@@ -14,6 +14,7 @@ import {
   type Attestation,
   type Delivery
 } from '../protocol/attestation.js'
+import { compareCodeUnits } from '../protocol/canonicalJson.js'
 import { EQCError } from '../protocol/errors.js'
 import { sumOfWeights } from '../protocol/fibonacci.js'
 import type { HostParams } from '../protocol/params.js'
@@ -478,7 +479,7 @@ export class EQC {
         candidates.flatMap(candidate => candidate.host.identityKeys ?? [candidate.params.host])
       )
     ]
-      .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+      .sort(compareCodeUnits)
       .slice(0, 64)
     return {
       type: request.type,

@@ -134,7 +134,7 @@ export class InMemoryPendingStore implements PendingStore {
 
   async beginSettle(queryId: string): Promise<boolean> {
     const record = this.records.get(queryId)
-    if (record === undefined || record.state !== 'pending') return false
+    if (record?.state !== 'pending') return false
     if (this.releaseIfExpired(record, this.clock())) return false
     record.state = 'settling'
     return true

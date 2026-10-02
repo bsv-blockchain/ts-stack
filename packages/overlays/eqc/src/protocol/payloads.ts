@@ -1,5 +1,6 @@
 import { Beef, Hash, Transaction, Utils, type LookupAnswer } from '@bsv/sdk'
 
+import { compareCodeUnits } from './canonicalJson.js'
 import { isHashHex, isPlainObject } from './query.js'
 
 const MAX_OUTPOINTS = 100_000
@@ -106,7 +107,7 @@ export function encodeOutpointList(entries: LookupOutpoint[]): number[] {
     .map(normalizeOutpoint)
     .sort(
       (left, right) =>
-        (left.txid < right.txid ? -1 : left.txid > right.txid ? 1 : 0) ||
+        compareCodeUnits(left.txid, right.txid) ||
         left.outputIndex - right.outputIndex ||
         compareBytes(left.context, right.context)
     )

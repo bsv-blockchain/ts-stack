@@ -94,6 +94,27 @@ function defaultTrackers(preset: LookupNetworkPreset): string[] {
   return DEFAULT_SLAP_TRACKERS
 }
 
+/** The host one lookup output advertises for the target, or `undefined` if it names none. */
+function advertisedHost(
+  target: DiscoveryTarget,
+  output: { beef: number[]; outputIndex: number }
+): Advertisement | undefined {
+  try {
+    const transaction = Transaction.fromBEEF(output.beef)
+    const script = transaction.outputs[output.outputIndex].lockingScript
+    if (target.kind !== 'overlay-lookup') {
+      return { url: Utils.toUTF8(PushDrop.decode(script).fields[1]) }
+    }
+    const token = OverlayAdminTokenTemplate.decode(script)
+    if (token.protocol === 'SLAP' && token.topicOrService === target.service) {
+      return { url: token.domain, identityKey: token.identityKey }
+    }
+  } catch {
+    // An undecodable advertisement names no host.
+  }
+  return undefined
+}
+
 /**
  * Bootstraps from SLAP trackers, as `LookupResolver` does. Discovery runs on the free BRC-24
  * `/lookup` route and makes no wallet call; the fee of the query that follows covers it.
@@ -179,20 +200,8 @@ export class HostDiscovery {
     if (answer.type !== 'output-list') return []
     const hosts: Advertisement[] = []
     for (const output of answer.outputs) {
-      try {
-        const transaction = Transaction.fromBEEF(output.beef)
-        const script = transaction.outputs[output.outputIndex].lockingScript
-        if (target.kind === 'overlay-lookup') {
-          const token = OverlayAdminTokenTemplate.decode(script)
-          if (token.protocol === 'SLAP' && token.topicOrService === target.service) {
-            hosts.push({ url: token.domain, identityKey: token.identityKey })
-          }
-        } else {
-          hosts.push({ url: Utils.toUTF8(PushDrop.decode(script).fields[1]) })
-        }
-      } catch {
-        // An undecodable advertisement names no host.
-      }
+      const host = advertisedHost(target, output)
+      if (host !== undefined) hosts.push(host)
     }
     return hosts
   }

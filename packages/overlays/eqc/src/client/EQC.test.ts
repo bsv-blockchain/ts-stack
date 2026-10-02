@@ -126,7 +126,7 @@ describe('EQC.query', () => {
     network.add(urls[4], { providers: [relay([8])] })
     const error = await failure(eqc.query(request))
     expect(error.code).toBe('ERR_EQC_THRESHOLD')
-    expect((error.details.groups as unknown[]).length).toBe(4)
+    expect(error.details.groups as unknown[]).toHaveLength(4)
     expect(payer.actions).toEqual([])
     for (const host of network.hosts.values()) {
       expect(host.posts.map(post => post.path)).toEqual(['/economic/query'])

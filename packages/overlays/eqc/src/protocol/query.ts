@@ -138,6 +138,11 @@ export function validateQuery(value: unknown): EconomicQuery {
     expires: value.expires,
     nonce: value.nonce
   }
+  copyOptionalFields(value, query)
+  return query
+}
+
+function copyOptionalFields(value: Record<string, unknown>, query: EconomicQuery): void {
   if (value.hostSetHint !== undefined) {
     const hint = value.hostSetHint
     if (!Array.isArray(hint) || hint.length > MAX_HOST_HINTS || !hint.every(isPublicKeyHex)) {
@@ -149,7 +154,6 @@ export function validateQuery(value: unknown): EconomicQuery {
     if (typeof value.strictHosts !== 'boolean') throw new TypeError('strictHosts must be a boolean')
     query.strictHosts = value.strictHosts
   }
-  return query
 }
 
 /** `SHA-256` of the canonical JSON of the query, as lowercase hex. */

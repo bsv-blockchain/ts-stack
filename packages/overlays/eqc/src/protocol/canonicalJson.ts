@@ -8,6 +8,15 @@ export function canonicalJson(value: unknown): string {
   return serialize(value, 0)
 }
 
+/**
+ * Orders strings by UTF-16 code unit, the order canonical encodings hash. `localeCompare` would
+ * make the bytes depend on the runtime locale.
+ */
+export function compareCodeUnits(left: string, right: string): number {
+  if (left < right) return -1
+  return left > right ? 1 : 0
+}
+
 function serialize(value: unknown, depth: number): string {
   if (depth > MAX_DEPTH) throw new RangeError('Canonical JSON nesting exceeds 32 levels')
   if (value === null) return 'null'
@@ -43,7 +52,7 @@ function serializeObject(value: object, depth: number): string {
     throw new TypeError('Canonical JSON objects must be plain objects')
   }
   const record = value as Record<string, unknown>
-  const keys = Object.keys(record).sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+  const keys = Object.keys(record).sort(compareCodeUnits)
   const parts: string[] = []
   for (const key of keys) {
     const item = record[key]

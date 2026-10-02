@@ -13,6 +13,12 @@ import { parseHostParams, type HostParams } from '../../src/protocol/params.js'
 import { ECONOMIC_PATHS } from '../../src/protocol/query.js'
 import { HostWallet } from './wallets.js'
 
+/** What the receiving side of an HTTP JSON body sees: the value after encoding and parsing. */
+function overTheWire(value: unknown): unknown {
+  const encoded = JSON.stringify(value)
+  return JSON.parse(encoded)
+}
+
 export interface LoopbackHost {
   url: string
   wallet: HostWallet
@@ -57,7 +63,7 @@ function capture(): Captured & {
       return response
     },
     json(body: unknown) {
-      captured.body = JSON.parse(JSON.stringify(body))
+      captured.body = overTheWire(body)
       return response
     },
     set() {
@@ -157,7 +163,7 @@ export class LoopbackNetwork implements HostTransport {
     if (entry.delayMs > 0) await new Promise(resolve => setTimeout(resolve, entry.delayMs))
     const captured = capture()
     const request = {
-      body: JSON.parse(JSON.stringify(body)),
+      body: overTheWire(body),
       headers: {},
       auth: { identityKey: this.clientIdentityKey }
     }

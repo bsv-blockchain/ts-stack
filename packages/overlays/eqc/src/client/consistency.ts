@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '../protocol/canonicalJson.js'
 import type { Arrival } from './race.js'
 
 export type ConsistencyStatus = 'agreed' | 'lagging' | 'diverged' | 'unknown'
@@ -49,9 +50,27 @@ function referenceFor(topic: string, winners: Arrival[]): Reference | undefined 
   return tacs.size === 1 ? { blockHeight, tac: [...tacs][0] } : { blockHeight }
 }
 
+type TopicAnchor = NonNullable<Arrival['attestation']['anchors']>[number]
+
+function hostStatus(anchor: TopicAnchor, reference: Reference): ConsistencyStatus {
+  if (anchor.blockHeight < reference.blockHeight) return 'lagging'
+  if (anchor.blockHeight > reference.blockHeight) return 'unknown'
+  return reference.tac !== undefined ? 'agreed' : 'diverged'
+}
+
+function topicStatus(
+  reference: Reference | undefined,
+  hosts: Array<{ status: ConsistencyStatus }>
+): ConsistencyStatus {
+  if (reference === undefined) return 'unknown'
+  if (hosts.some(entry => entry.status === 'diverged')) return 'diverged'
+  if (hosts.some(entry => entry.status === 'lagging')) return 'lagging'
+  return 'agreed'
+}
+
 /**
- * Compares BRC-136 topic anchors across the winning hosts. Agreement means `t` independent hosts
- * share the answer and the topic's whole confirmed history through that height. A matching TAC
+ * Compares BRC-136 topic anchors across the winning hosts. Agreement means `t` hosts with
+ * distinct identity keys, not necessarily distinct operators, share the answer and the topic's whole confirmed history through that height. A matching TAC
  * proves agreement on admission only; bans and janitor removals are node-local. The reference tip
  * is corroborated (see `referenceFor`); when no height is corroborated for a topic there is no
  * reference, every winner that reported the topic is `unknown`, and the topic itself is `unknown`.
@@ -61,7 +80,7 @@ export function assessConsistency(winners: Arrival[]): TopicConsistency[] {
   for (const winner of winners) {
     for (const anchor of winner.attestation.anchors ?? []) topics.add(anchor.topic)
   }
-  return [...topics].sort().map(topic => {
+  return [...topics].sort(compareCodeUnits).map(topic => {
     const reference = referenceFor(topic, winners)
     const hosts = winners.map(winner => {
       const anchor = winner.attestation.anchors?.find(entry => entry.topic === topic)
@@ -74,18 +93,14 @@ export function assessConsistency(winners: Arrival[]): TopicConsistency[] {
           tac: anchor.tac
         }
       }
-      let status: ConsistencyStatus
-      if (anchor.blockHeight < reference.blockHeight) status = 'lagging'
-      else if (anchor.blockHeight > reference.blockHeight) status = 'unknown'
-      else status = reference.tac !== undefined ? 'agreed' : 'diverged'
-      return { host: winner.host, status, blockHeight: anchor.blockHeight, tac: anchor.tac }
+      return {
+        host: winner.host,
+        status: hostStatus(anchor, reference),
+        blockHeight: anchor.blockHeight,
+        tac: anchor.tac
+      }
     })
-    let status: ConsistencyStatus
-    if (reference === undefined) status = 'unknown'
-    else if (hosts.some(entry => entry.status === 'diverged')) status = 'diverged'
-    else if (hosts.some(entry => entry.status === 'lagging')) status = 'lagging'
-    else status = 'agreed'
-    const result: TopicConsistency = { topic, status, hosts }
+    const result: TopicConsistency = { topic, status: topicStatus(reference, hosts), hosts }
     if (reference !== undefined) {
       result.blockHeight = reference.blockHeight
       if (reference.tac !== undefined) result.tac = reference.tac
@@ -114,8 +129,7 @@ export function classifyMinority(
     const reference = referenceFor(anchor.topic, winners)
     if (reference !== undefined && anchor.blockHeight < reference.blockHeight) return 'lagging'
     if (
-      reference !== undefined &&
-      reference.tac !== undefined &&
+      reference?.tac !== undefined &&
       anchor.blockHeight === reference.blockHeight &&
       anchor.tac === reference.tac
     ) {
