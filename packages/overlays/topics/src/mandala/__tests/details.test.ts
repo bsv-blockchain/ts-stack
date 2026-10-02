@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Hash, PublicKey } from '@bsv/sdk'
 import { encodeStrictCbor } from '@bsv/templates'
@@ -20,10 +21,23 @@ interface CommitmentVector {
 }
 
 // The templates package pins one details map per §3.3 kind; the overlay must
-// read exactly those bytes and reproduce exactly those commitments.
-const vectorsPath = fileURLToPath(
-  new URL('../../../../../helpers/ts-templates/test/vectors/brc162.json', import.meta.url)
-)
+// read exactly those bytes and reproduce exactly those commitments. The file is
+// found by walking up to the repository root rather than by a fixed relative
+// path, so the test also runs from a copy of this package (the mutation
+// sandbox lives inside the package directory).
+const VECTORS_FROM_ROOT = 'packages/helpers/ts-templates/test/vectors/brc162.json'
+
+function findVectors(start: string): string {
+  let directory = start
+  while (!existsSync(resolve(directory, VECTORS_FROM_ROOT))) {
+    const parent = dirname(directory)
+    if (parent === directory) throw new Error(`${VECTORS_FROM_ROOT} not found above ${start}`)
+    directory = parent
+  }
+  return resolve(directory, VECTORS_FROM_ROOT)
+}
+
+const vectorsPath = findVectors(dirname(fileURLToPath(import.meta.url)))
 const vectors = JSON.parse(readFileSync(vectorsPath, 'utf8')) as {
   commitments: CommitmentVector[]
 }

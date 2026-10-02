@@ -140,7 +140,8 @@ const LOWERCASE_HEX = /^([0-9a-f]{2})+$/
 const utf8Encoder = new TextEncoder()
 // fatal: invalid UTF-8 is refused, never replaced. ignoreBOM: a leading BOM
 // stays in the text, so JSON.parse refuses it (as Go's encoding/json does).
-const utf8Decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+// The default label is UTF-8.
+const utf8Decoder = new TextDecoder(undefined, { fatal: true, ignoreBOM: true })
 
 type EnvelopeList = 'inputs' | 'outputs' | 'admin'
 
