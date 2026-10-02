@@ -572,18 +572,22 @@ describe('checkAuthority — supply delta and caps', () => {
     expect([...result.deltas]).toEqual([[T, 2n]])
   })
 
-  test('answers ERR_UNAVAILABLE when the circulating supply cannot be read', async () => {
+  test('answers ERR_UNAVAILABLE when the circulating supply cannot be read, keeping the fault', async () => {
     const issue = committed(0, { kind: 'issue' })
-    await expectReject(
-      {
+    const fault = new Error('mongo is down')
+    const refusal = await rejection(
+      run({
         outputs: [issue.out, valueOut(1, 2n)],
         inputs: [authIn(0)],
         admin: [issue.entry],
-        supply: new Error('mongo is down')
-      },
-      'ERR_UNAVAILABLE',
-      'the circulating supply could not be read; retry'
+        supply: fault
+      })
     )
+    expect(refusal).toMatchObject({
+      code: 'ERR_UNAVAILABLE',
+      reason: 'the circulating supply could not be read; retry'
+    })
+    expect(refusal.cause).toBe(fault)
   })
 
   test('reads the circulating supply only for a positive delta', async () => {
@@ -651,12 +655,14 @@ describe('checkAuthority — reissue', () => {
     await expectReject(make(), 'ERR_SHAPE', `token ${T}: reissue ${detail}`)
   })
 
-  test('answers ERR_UNAVAILABLE when the asset state cannot be read', async () => {
-    await expectReject(
-      reissueCase({ state: new Error('mongo is down') }),
-      'ERR_UNAVAILABLE',
-      'the asset state could not be read; retry'
-    )
+  test('answers ERR_UNAVAILABLE when the asset state cannot be read, keeping the fault', async () => {
+    const fault = new Error('mongo is down')
+    const refusal = await rejection(run(reissueCase({ state: fault })))
+    expect(refusal).toMatchObject({
+      code: 'ERR_UNAVAILABLE',
+      reason: 'the asset state could not be read; retry'
+    })
+    expect(refusal.cause).toBe(fault)
   })
 })
 

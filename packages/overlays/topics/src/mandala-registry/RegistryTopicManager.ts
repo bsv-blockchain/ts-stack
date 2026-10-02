@@ -22,7 +22,7 @@ import {
   resolveInputOwners,
   verifyOutputOwners
 } from '../mandala/ownership.js'
-import { MandalaReject, Reasons } from '../mandala/reject.js'
+import { Reasons } from '../mandala/reject.js'
 import { decodeEnvelope } from '../mandala/types.js'
 import type { EngineOutputReader } from '../mandala/types.js'
 import docs from './RegistryDocs.md.js'
@@ -114,8 +114,7 @@ export class RegistryTopicManager implements TopicManager {
     try {
       return await this.deps.registry.registryTokenId()
     } catch (cause) {
-      const { code, reason } = Reasons.storeUnavailable('the registry')
-      throw new MandalaReject(code, reason, { cause })
+      throw Reasons.storeUnavailable('the registry', cause)
     }
   }
 

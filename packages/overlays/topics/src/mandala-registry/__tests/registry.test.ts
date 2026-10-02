@@ -637,7 +637,10 @@ describe('RegistryTopicManager — admission and the owner journal', () => {
     const fault = new Error('document failed validation')
     const manager = managerWith({ stateStore: failingJournal(fault) })
     const refused = await rejection(submit(await deploy(), manager))
-    expect(refused).toMatchObject({ code: 'ERR_UNAVAILABLE' })
+    expect(refused).toMatchObject({
+      code: 'ERR_UNAVAILABLE',
+      reason: 'the owner journal could not be written; retry'
+    })
     expect(refused.cause).toBe(fault)
     expect(await journalCount()).toBe(0)
   })

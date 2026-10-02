@@ -435,8 +435,8 @@ describe('MandalaTopicManager — admission and the owner journal', () => {
     const refused = await rejection(submit(await deploy(), manager))
     expect(refused).toMatchObject({
       code: 'ERR_UNAVAILABLE',
-      reason: 'the owner journal could not be read; retry',
-      message: 'the owner journal could not be read; retry'
+      reason: 'the owner journal could not be written; retry',
+      message: 'the owner journal could not be written; retry'
     })
     // the engine logs only what is thrown, so the store's own error rides along
     expect(refused.cause).toBe(fault)
@@ -734,6 +734,31 @@ describe('MandalaTopicManager — construction and metadata', () => {
     ]
   ])('refuses %s as trustedIssuers', (_label, trustedIssuers, message) => {
     expect(() => managerWith({ trustedIssuers })).toThrow(new Error(message))
+  })
+
+  // A bad exempt key is a configuration fault: refused once at construction, never an untyped
+  // error on every token transaction.
+  const notExempt = (key: unknown): string =>
+    `MandalaTopicManager: membership-exempt key ${String(key)} is not a compressed lowercase public key`
+  test.each([
+    [
+      'not an array',
+      'overlay' as unknown as string[],
+      'MandalaTopicManager: membershipExempt must be an array'
+    ],
+    ['a non-hex entry', ['overlay'], notExempt('overlay')],
+    ['a non-string entry', [7 as unknown as string], notExempt(7)],
+    ['an uncompressed key', [uncompressed], notExempt(uncompressed)],
+    ['an uppercase key', [HOLDER.toUpperCase()], notExempt(HOLDER.toUpperCase())],
+    ['an x coordinate with no point on the curve', [offCurve], notExempt(offCurve)]
+  ])('refuses %s as membershipExempt', (_label, membershipExempt, message) => {
+    expect(() => managerWith({ membershipExempt })).toThrow(new Error(message))
+  })
+
+  test('accepts no, an empty, or a canonical membershipExempt list, overlapping the issuers', () => {
+    expect(() => managerWith({ membershipExempt: undefined })).not.toThrow()
+    expect(() => managerWith({ membershipExempt: [] })).not.toThrow()
+    expect(() => managerWith({ membershipExempt: [HOLDER, ISSUER, HOLDER] })).not.toThrow()
   })
 
   test('describes itself', async () => {

@@ -1626,7 +1626,7 @@ describe('Mandala reject vectors', () => {
     async () => {
       const catalog = Reasons as unknown as Record<string, (...args: never[]) => unknown>
       const spies = Object.keys(catalog)
-        .filter(name => name !== 'storeUnavailable')
+        .filter(name => name !== 'storeUnavailable' && name !== 'storeWriteUnavailable')
         .map(name => ({ name, spy: jest.spyOn(catalog, name) }))
       await mismatches(committed())
       expect(

@@ -288,6 +288,26 @@ describe('checkControls — sanctions and membership', () => {
     }
   )
 
+  test('keeps a provider fault as the cause, and has none for a non-boolean answer', async () => {
+    const fault = new Error('screening is down')
+    const thrown = await rejection(
+      run({
+        ...transfer(),
+        screening: {
+          isSanctioned: async (): Promise<boolean> => {
+            throw fault
+          }
+        }
+      })
+    )
+    expect(thrown.cause).toBe(fault)
+    const odd = await rejection(
+      run({ ...transfer(), screening: { isSanctioned: async () => 'no' as unknown as boolean } })
+    )
+    expect(odd.code).toBe('ERR_UNAVAILABLE')
+    expect('cause' in odd).toBe(false)
+  })
+
   test('refuses a party that is not an admitted registry member', async () => {
     const { provider } = membershipOf(true, [ALICE])
     await expectReject(

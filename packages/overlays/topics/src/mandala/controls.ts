@@ -100,15 +100,16 @@ function allIdentities(p: Parties): string[] {
 }
 
 // A provider that throws or answers anything but a boolean is an infra fault:
-// a retryable ERR_UNAVAILABLE, never a verdict.
+// a retryable ERR_UNAVAILABLE, never a verdict. A throw is kept as its cause.
 async function verdictOf(ask: () => Promise<unknown>, provider: string): Promise<boolean> {
   let verdict: unknown
+  let cause: unknown
   try {
     verdict = await ask()
-  } catch {
-    verdict = undefined
+  } catch (e) {
+    cause = e
   }
-  if (typeof verdict !== 'boolean') throw Reasons.storeUnavailable(provider)
+  if (typeof verdict !== 'boolean') throw Reasons.storeUnavailable(provider, cause)
   return verdict
 }
 

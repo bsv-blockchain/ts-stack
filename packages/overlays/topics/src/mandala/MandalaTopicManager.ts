@@ -15,7 +15,7 @@ import { checkAuthority } from './authority.js'
 import { checkControls } from './controls.js'
 import { requireValidTokenOutputs, resolveInputOwners, verifyOutputOwners } from './ownership.js'
 import type { VerifiedOwner } from './ownership.js'
-import { MandalaReject, Reasons } from './reject.js'
+import { Reasons } from './reject.js'
 import { decodeEnvelope } from './types.js'
 import type {
   EngineOutputReader,
@@ -79,6 +79,24 @@ export function trustedSet(keys: readonly string[], owner: string): ReadonlySet<
   return trusted
 }
 
+/**
+ * The configured membership-exempt keys, held to the same spelling as the trusted issuers. A
+ * configuration fault, so a plain Error at construction: a bad key here would otherwise surface as
+ * an untyped error on every token transaction.
+ */
+export function exemptKeys(keys: readonly string[] | undefined, owner: string): string[] {
+  if (keys === undefined) return []
+  if (!Array.isArray(keys)) throw new Error(`${owner}: membershipExempt must be an array`)
+  for (const key of keys) {
+    if (!isCanonicalKey(key)) {
+      throw new Error(
+        `${owner}: membership-exempt key ${String(key)} is not a compressed lowercase public key`
+      )
+    }
+  }
+  return [...keys]
+}
+
 const journalRows = (
   topic: string,
   txid: string,
@@ -110,7 +128,8 @@ export const logOwnerRepair =
 
 /**
  * §4.2a rule 1: the append-only owner journal, the source every owner-row repair reads. A failed
- * write keeps the store's error as `cause`, since the engine logs only what is thrown.
+ * write is the retryable infra reject, keeping the store's error as `cause`, since the engine logs
+ * only what is thrown.
  */
 export async function journalOwners(
   store: MandalaStateStore,
@@ -121,8 +140,7 @@ export async function journalOwners(
   try {
     await store.recordOwners(journalRows(topic, txid, owners, new Date()))
   } catch (cause) {
-    const { code, reason } = Reasons.storeUnavailable('the owner journal')
-    throw new MandalaReject(code, reason, { cause })
+    throw Reasons.storeWriteUnavailable('the owner journal', cause)
   }
 }
 
@@ -135,7 +153,10 @@ export class MandalaTopicManager implements TopicManager {
   constructor(deps: MandalaTopicManagerDeps) {
     this.trusted = trustedSet(deps.trustedIssuers, 'MandalaTopicManager')
     this.onRepair = deps.onOwnerRepair ?? logOwnerRepair('MandalaTopicManager')
-    this.exempt = new Set([...this.trusted, ...(deps.membershipExempt ?? [])])
+    this.exempt = new Set([
+      ...this.trusted,
+      ...exemptKeys(deps.membershipExempt, 'MandalaTopicManager')
+    ])
     this.deps = deps
   }
 

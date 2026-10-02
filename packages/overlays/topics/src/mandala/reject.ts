@@ -71,7 +71,9 @@ const shape = reject('ERR_SHAPE')
 const linkage = reject('ERR_LINKAGE')
 const authority = reject('ERR_AUTHORITY')
 const untrusted = reject('ERR_UNTRUSTED')
-const unavailable = reject('ERR_UNAVAILABLE')
+// An infra reject keeps the underlying fault as `cause`: the engine logs only what is thrown.
+const unavailable = (reason: string, cause?: unknown): MandalaReject =>
+  new MandalaReject('ERR_UNAVAILABLE', reason, cause === undefined ? undefined : { cause })
 const conservation = reject('ERR_CONSERVATION')
 const frozen = reject('ERR_FROZEN')
 const access = reject('ERR_ACCESS')
@@ -96,7 +98,10 @@ export const Reasons = {
   inputLinkageOwner: (i: number, named: string, owner: string) =>
     linkage(`input ${i}: linkage names ${named} but the coin is owned by ${owner}`),
   ownerIndexUnavailable: (op: string) => unavailable(`owner index unavailable for ${op}`),
-  storeUnavailable: (what: string) => unavailable(`${what} could not be read; retry`),
+  storeUnavailable: (what: string, cause?: unknown) =>
+    unavailable(`${what} could not be read; retry`, cause),
+  storeWriteUnavailable: (what: string, cause?: unknown) =>
+    unavailable(`${what} could not be written; retry`, cause),
   untrustedOwner: (i: number, k: string) =>
     untrusted(`output ${i}: owner ${k} is not a trusted issuer`),
   untrustedProver: (i: number, k: string) =>

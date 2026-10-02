@@ -76,16 +76,16 @@ export async function readAssetState(
 ): Promise<AssetAdminState> {
   try {
     return await store.getAssetState(tokenId)
-  } catch {
-    throw Reasons.storeUnavailable('the asset state')
+  } catch (cause) {
+    throw Reasons.storeUnavailable('the asset state', cause)
   }
 }
 
 async function readSupply(store: MandalaStateStore, tokenId: string): Promise<bigint> {
   try {
     return await store.circulatingSupply(tokenId)
-  } catch {
-    throw Reasons.storeUnavailable('the circulating supply')
+  } catch (cause) {
+    throw Reasons.storeUnavailable('the circulating supply', cause)
   }
 }
 

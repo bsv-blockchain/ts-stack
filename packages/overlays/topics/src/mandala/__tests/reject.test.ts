@@ -60,9 +60,15 @@ const catalog: Array<[string, MandalaReject, MandalaRejectCode, string]> = [
   ],
   [
     'storeUnavailable',
-    Reasons.storeUnavailable('the owner journal'),
+    Reasons.storeUnavailable('the owner index'),
     'ERR_UNAVAILABLE',
-    'the owner journal could not be read; retry'
+    'the owner index could not be read; retry'
+  ],
+  [
+    'storeWriteUnavailable',
+    Reasons.storeWriteUnavailable('the owner journal'),
+    'ERR_UNAVAILABLE',
+    'the owner journal could not be written; retry'
   ],
   [
     'untrustedOwner',
@@ -248,6 +254,14 @@ describe('MandalaReject', () => {
 
   test('has no cause by default', () => {
     expect(new MandalaReject('ERR_SHAPE', 'x').cause).toBeUndefined()
+  })
+
+  test('an infra reject keeps the fault it is given as its cause, and has none otherwise', () => {
+    const cause = new Error('mongo down')
+    expect(Reasons.storeUnavailable('the owner index', cause).cause).toBe(cause)
+    expect(Reasons.storeWriteUnavailable('the owner index', cause).cause).toBe(cause)
+    expect('cause' in Reasons.storeUnavailable('the owner index')).toBe(false)
+    expect('cause' in Reasons.ownerIndexUnavailable(op)).toBe(false)
   })
 })
 
