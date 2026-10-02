@@ -3,6 +3,31 @@ import path from 'node:path'
 const partitionFile = specification => specification.replace(/:\d+(?:-\d+)?$/, '')
 const plans = new Map([
   [
+    'private-publication-coordination',
+    {
+      fallback: 'leases',
+      files: new Map([
+        ['src/private/PrivatePublicationAccess.ts', 'access'],
+        ['src/private/PrivatePublicationPorts.ts', 'ports'],
+        ['src/private/PrivatePublicationCoordinator.ts', 'coordinator'],
+        ['src/private/PrivatePublicationDisclosure.ts', 'disclosure'],
+        ['src/private/PrivatePublicationWork.ts', 'work'],
+        ['src/private/PrivatePublicationReconciler.ts', 'reconciler']
+      ])
+    }
+  ],
+  [
+    'private-publication-http',
+    {
+      fallback: 'routes',
+      files: new Map([
+        ['src/PrivatePublicationHTTPPolicy.ts', 'policy'],
+        ['src/PrivatePublicationResponseGuard.ts', 'guard']
+      ])
+    }
+  ],
+
+  [
     'sdk-auth-http',
     {
       fallback: 'core',

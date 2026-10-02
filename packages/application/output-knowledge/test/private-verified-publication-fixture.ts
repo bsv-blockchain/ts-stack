@@ -15,7 +15,7 @@ afterEach(() => {
   for (const cleanup of cleanups) cleanup()
   cleanups.clear()
 })
-export function verifiedFixture() {
+export function verifiedFixture(payloads?: NodeProtectedPayloadCodec) {
   const contract = contractFixture(),
     configuration = config()
   configuration.identity = {
@@ -30,10 +30,11 @@ export function verifiedFixture() {
       path,
       configuration,
       { resolve: () => createSecretKey(Buffer.alloc(32, 101)) },
-      new NodeProtectedPayloadCodec(
-        { resolve: () => createSecretKey(Buffer.alloc(32, 102)) },
-        'payload'
-      )
+      payloads ??
+        new NodeProtectedPayloadCodec(
+          { resolve: () => createSecretKey(Buffer.alloc(32, 102)) },
+          'payload'
+        )
     )
     owners.push(owner)
     return owner

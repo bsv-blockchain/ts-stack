@@ -135,7 +135,10 @@ it('rejects a selected chain different from the immutable verification context b
       ...chain,
       genesisHash: 'ff'.repeat(32)
     })
-  ).rejects.toMatchObject({ code: 'context-changed' })
+  ).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Private publication chain context differs'
+  })
   expect(calls).toBe(0)
 })
 it('rejects an aggregate whose default transaction is not the requested verified target', async () => {
@@ -195,4 +198,41 @@ it('preserves cancellation and elapsed-deadline failures as retryable outcomes',
       limits: { ...context().limits, deadline: '1' }
     })).verify(request, publisher, chain)
   ).rejects.toMatchObject({ code: 'limited', retryable: true })
+})
+
+it('owns installed critical extensions and keeps their data in the semantic request', async () => {
+  const { request } = await publication()
+  const extension = 'urn:test:private-material-context'
+  const installed = [extension]
+  const verifier = new SDKPrivatePublicationEvidence(resolver, () => context(), {}, installed)
+  installed.length = 0
+  const selected = {
+    ...request,
+    extensions: { [extension]: { revision: 1 } },
+    critical: [extension]
+  }
+  const result = await verifier.verify(selected, publisher, chain)
+  expect(result.requestDigest).toBe(outputPrivatePublicationRequestDigest(selected, [extension]))
+  expect(result.requestDigest).not.toBe(outputPrivatePublicationRequestDigest(request))
+  await expect(
+    new SDKPrivatePublicationEvidence(resolver, () => context()).verify(selected, publisher, chain)
+  ).rejects.toMatchObject({ code: 'unsupported' })
+})
+
+it('keeps changed immutable resolver context retryable with an explicit verification outcome', async () => {
+  const { request } = await publication()
+  const verifier = new SDKPrivatePublicationEvidence(
+    {
+      resolve: async (...args) => {
+        const resolved = await resolver.resolve(...args)
+        return { ...resolved, view: { ...resolved.view, id: 'different-immutable-view' } }
+      }
+    },
+    () => context()
+  )
+  await expect(verifier.verify(request, publisher, chain)).rejects.toMatchObject({
+    code: 'context-changed',
+    retryable: true,
+    message: 'Private publication evidence verification context-changed'
+  })
 })

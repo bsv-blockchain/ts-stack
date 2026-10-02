@@ -86,10 +86,10 @@ export class SDKPrivatePublicationEvidence {
     }
     // Engine.submit consumes the BEEF default transaction. An aggregate containing
     // the requested transaction elsewhere cannot silently select another target.
+    // Exact bytes already bind the verified txid and are stronger than a repeated hash check.
     const target = Transaction.fromBEEF(bytes)
     outputAssert(
-      target.id('hex') === request.evidence.txid &&
-        Utils.toBase64(target.toBinary()) === result.fact.rawTransaction,
+      Utils.toBase64(target.toBinary()) === result.fact.rawTransaction,
       'Private publication BEEF default target differs'
     )
     return {

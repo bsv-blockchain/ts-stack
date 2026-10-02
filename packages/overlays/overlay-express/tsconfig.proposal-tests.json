@@ -7,6 +7,11 @@
     "types": ["jest", "node"]
   },
   "files": [],
-  "include": ["src/Proposal*.ts", "src/__tests__/Proposal*.ts"],
+  "include": [
+    "src/Proposal*.ts",
+    "src/__tests__/Proposal*.ts",
+    "src/PrivatePublication*.ts",
+    "src/__tests__/PrivatePublication*.ts"
+  ],
   "exclude": ["dist", "node_modules", ".stryker-tmp"]
 }

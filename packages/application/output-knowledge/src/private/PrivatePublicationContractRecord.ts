@@ -32,17 +32,20 @@ export interface PrivatePublicationContractRecord {
   validationPolicy: { id: string; digest: string }
 }
 
-/** Only protected local records enter here. Parsing is not renewed authority or SPV. */
-export function parsePrivatePublicationContractRecord(
+/** Protected original metadata only; this does not prove private material is available. */
+function parseOriginal(
   input: unknown,
   state: PrivatePublicationProgress,
-  request: OutputPrivatePublish,
+  reference: Omit<OutputPrivatePublish, 'privateValues'>,
   contracts: PrivatePublicationContracts,
   policy: { id: string; digest: string },
   supportedExtensions: readonly string[] = []
-): PrivatePublicationContractRecord {
+) {
   state = parsePrivatePublicationProgress(state)
-  request = parseOutputPrivatePublish(request, supportedExtensions)
+  const request = parseOutputPrivatePublish(
+    { ...reference, privateValues: '' },
+    supportedExtensions
+  )
   const expectedPolicy = parseOutputJSON(canonicalOutputJSON(policy, { bytes: 4096 }))
   closedOutputObject(expectedPolicy, ['id', 'digest'])
   policy = {
@@ -91,7 +94,6 @@ export function parsePrivatePublicationContractRecord(
   outputAssert(
     value.publicationId === state.publicationId &&
       value.requestDigest === state.requestDigest &&
-      state.requestDigest === outputPrivatePublicationRequestDigest(request, supportedExtensions) &&
       state.topic === installation.topic &&
       request.topic === installation.topic &&
       canonicalOutputJSON(state.chain) === canonicalOutputJSON(installation.chain) &&
@@ -109,13 +111,7 @@ export function parsePrivatePublicationContractRecord(
     'Private publication schema is absent from original contract',
     'unsupported'
   )
-  outputAssert(
-    decodeOutputBytes(request.privateValues).length <= parameters.maxPrivateBytes,
-    'Private publication exceeds original private capacity',
-    'limited'
-  )
-  canonicalOutputJSON(request, { bytes: selection.profile.maxRequestBytes })
-  return {
+  const record: PrivatePublicationContractRecord = {
     format: value.format,
     publicationId: outputHex32(value.publicationId),
     requestDigest: outputHex32(value.requestDigest),
@@ -124,4 +120,51 @@ export function parsePrivatePublicationContractRecord(
     verificationContext,
     validationPolicy
   }
+  return { record, selection }
+}
+
+/** Protected original metadata only; no renewed private-byte availability assertion. */
+export function parsePrivatePublicationContractMetadata(
+  input: unknown,
+  state: PrivatePublicationProgress,
+  reference: Omit<OutputPrivatePublish, 'privateValues'>,
+  contracts: PrivatePublicationContracts,
+  policy: { id: string; digest: string },
+  supportedExtensions: readonly string[] = []
+): PrivatePublicationContractRecord {
+  return parseOriginal(input, state, reference, contracts, policy, supportedExtensions).record
+}
+
+/** Full protected relation; checked separately from metadata-only status recovery. */
+export function parsePrivatePublicationContractRecord(
+  input: unknown,
+  state: PrivatePublicationProgress,
+  request: OutputPrivatePublish,
+  contracts: PrivatePublicationContracts,
+  policy: { id: string; digest: string },
+  supportedExtensions: readonly string[] = []
+): PrivatePublicationContractRecord {
+  request = parseOutputPrivatePublish(request, supportedExtensions)
+  const { privateValues, ...reference } = request
+  const { record, selection } = parseOriginal(
+    input,
+    state,
+    reference,
+    contracts,
+    policy,
+    supportedExtensions
+  )
+  outputAssert(
+    record.requestDigest === outputPrivatePublicationRequestDigest(request, supportedExtensions),
+    'Private publication original contract binding differs',
+    'unavailable'
+  )
+  const parameters = selection.profile.parameters as { maxPrivateBytes: number }
+  outputAssert(
+    decodeOutputBytes(privateValues).length <= parameters.maxPrivateBytes,
+    'Private publication exceeds original private capacity',
+    'limited'
+  )
+  canonicalOutputJSON(request, { bytes: selection.profile.maxRequestBytes })
+  return record
 }

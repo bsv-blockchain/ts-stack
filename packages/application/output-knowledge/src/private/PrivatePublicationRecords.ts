@@ -42,10 +42,7 @@ export type PrivatePublicationFence = {
   | { format: 'private-publication-fence/1'; original?: never }
   | { format: 'private-publication-fence/2'; original: OutputJSONObject }
 )
-function blobBinding(
-  request: OutputPrivatePublish,
-  chain: OutputChain
-): PrivatePublicationBlob['binding'] {
+function blobBinding(request: Reference, chain: OutputChain): PrivatePublicationBlob['binding'] {
   return {
     chain,
     topic: request.topic,
@@ -149,17 +146,12 @@ export function parsePrivatePublicationBlob(input: unknown): PrivatePublicationB
   }
 }
 
-/** Validate the complete retained relation, not a status flag in isolation. */
-export function parsePrivatePublicationRecords(
+/** Protected metadata only; this does not prove private bytes or current readiness. */
+export function parsePrivatePublicationFenceMetadata(
   fenceInput: unknown,
-  blobInput: unknown,
   identity: PrivateServiceIdentity,
   supportedExtensions: readonly string[] = []
-): {
-  blob: PrivatePublicationBlob
-  fence: PrivatePublicationFence
-  request: OutputPrivatePublish
-} {
+): PrivatePublicationFence {
   const value = parseOutputJSON(canonicalOutputJSON(fenceInput, { bytes: 2 * 1024 * 1024 }))
   closedOutputObject(value, ['format', 'reference', 'state'], ['original'])
   outputAssert(
@@ -188,45 +180,52 @@ export function parsePrivatePublicationRecords(
     ['version', 'requestId', 'topic', 'evidence', 'assetId', 'schema'],
     ['extensions', 'critical']
   )
-  const blob = parsePrivatePublicationBlob(blobInput)
-  const request = parseOutputPrivatePublish(
-    { ...value.reference, privateValues: blob.privateValues },
+  const { privateValues: _unused, ...reference } = parseOutputPrivatePublish(
+    { ...value.reference, privateValues: '' },
     supportedExtensions
   )
   const state = parsePrivatePublicationProgress(value.state)
-  const publicationId = outputPacketDigest('private-publication', {
-    chain: state.chain,
-    publisher: state.publisher,
-    topic: request.topic,
-    requestId: request.requestId
-  })
   outputAssert(
-    canonicalOutputJSON(blob.binding) === canonicalOutputJSON(blobBinding(request, state.chain)) &&
-      state.publicationId === publicationId &&
-      state.requestDigest === outputPrivatePublicationRequestDigest(request, supportedExtensions) &&
-      state.blobKey === privatePublicationBlobAddress(identity, blob.binding).key &&
-      state.topic === request.topic &&
-      state.txid === request.evidence.txid &&
-      state.outputIndex === request.evidence.outputIndex,
+    state.publicationId ===
+      outputPacketDigest('private-publication', {
+        chain: state.chain,
+        publisher: state.publisher,
+        topic: reference.topic,
+        requestId: reference.requestId
+      }) &&
+      state.blobKey ===
+        privatePublicationBlobAddress(identity, blobBinding(reference, state.chain)).key &&
+      state.topic === reference.topic &&
+      state.txid === reference.evidence.txid &&
+      state.outputIndex === reference.evidence.outputIndex,
     'Private publication retained binding differs',
     'unavailable'
   )
-  // The complete reference was checked above by the public request parser.
-  return {
-    blob,
-    fence:
-      value.format === 'private-publication-fence/1'
-        ? {
-            format: value.format,
-            reference: value.reference as unknown as Reference,
-            state
-          }
-        : {
-            format: value.format,
-            reference: value.reference as unknown as Reference,
-            state,
-            original: value.original as OutputJSONObject
-          },
-    request
-  }
+  return value.format === 'private-publication-fence/1'
+    ? { format: value.format, reference, state }
+    : { format: value.format, reference, state, original: value.original as OutputJSONObject }
+}
+
+/** Validate the complete retained relation, not a status flag in isolation. */
+export function parsePrivatePublicationRecords(
+  fenceInput: unknown,
+  blobInput: unknown,
+  identity: PrivateServiceIdentity,
+  supportedExtensions: readonly string[] = []
+): { blob: PrivatePublicationBlob; fence: PrivatePublicationFence; request: OutputPrivatePublish } {
+  const fence = parsePrivatePublicationFenceMetadata(fenceInput, identity, supportedExtensions)
+  const blob = parsePrivatePublicationBlob(blobInput)
+  const request = parseOutputPrivatePublish(
+    { ...fence.reference, privateValues: blob.privateValues },
+    supportedExtensions
+  )
+  outputAssert(
+    canonicalOutputJSON(blob.binding) ===
+      canonicalOutputJSON(blobBinding(request, fence.state.chain)) &&
+      fence.state.requestDigest ===
+        outputPrivatePublicationRequestDigest(request, supportedExtensions),
+    'Private publication retained binding differs',
+    'unavailable'
+  )
+  return { blob, fence, request }
 }

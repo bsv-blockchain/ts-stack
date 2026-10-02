@@ -2303,3 +2303,58 @@ now recycles workers after eight executions, retaining every canonical input,
 existing records partition, budget, worker bound, deadline and critical gate.
 This is a measurement change, not a claim about the cause of the five hosted
 cancellations or acceptance of those targets. Complete frozen-source reruns follow.
+
+### Integrated private publication service and HTTP composition
+
+The optional `@bsv/output-knowledge/private/node` entry now exposes the protected
+seller/chain domain, contracts, exact SDK evidence, bounded verification leases,
+structural coordinator/storage/admission ports, native disclosure and restart
+reconciliation. The separate Overlay Express `private-publication` entry mounts
+publish/status explicitly with the existing origin authentication instance.
+Ordinary root imports and routes retain their behavior. These publication owners
+do not implement paid lookup, purchase/POTATOES or playback entitlement.
+
+Protected metadata can retain an original publication when its material key is
+unavailable. Authorized status first checks the original selector, then commits
+ready-to-unavailable under native revision/current-authority guards. Metadata
+alone never asserts readiness. Missing metadata fails closed; explicit restoration
+must recover the same material and binding. Deferred or repeated HTTP enqueue is
+rejected, with no replacement after an actual native send attempt.
+
+Before adoption, the coherent composition passed325 tests across25 suites in
+337.732 seconds: actual SDK Script/SPV, three-member Mongo/Engine, SQLite, mutually
+authenticated HTTP, full legacy publication cases, authority/recovery cases and
+minimum300-case native and HTTP properties. All10,045 captured checkout inputs and
+163 outside candidate/build inputs stayed unchanged on895dfa2fb. Two public
+installation examples strictly compile. These are local composition observations,
+not complete checkpoint or hosted qualification.
+
+The critical private-publication-coordination and private-publication-http targets
+raise the registry count from111 to113. They retain all complete modules and
+canonical native/property/cross-package tests in disjoint whole-file execution
+parts. State/service targets additionally retain material-loss cases. No score,
+coverage, invalid-mutant, seed/budget, worker or deadline gate is relaxed.
+
+The earlier895dfa service parts failed: evidence28/36killed(77.78%),
+contracts57/76killed(75%), original70/97killed(72.16%), all zero uncovered/invalid.
+Every input stayed unchanged. Report generation's zero exit status is not a
+passing critical gate. The queued campaign was stopped only after its original
+part completed; unrun service/state/root jobs remain unqualified. Additional
+contract boundary tests and fresh complete-source campaigns are required.
+
+The pushed336bf9fd1 CI also cancelled proposal-journal-send journal/state and
+proposal HTTP at their45-minute bounds after full baselines, and lookup-index
+finished89.04% with five uncovered compound-owner paths. Native lookup composition
+regressions now cover atomic append/head/row ownership and rollback, distinct
+retained composition identity and closed compaction bounds. The cancelled and
+failed hosted evidence remains open until complete successful reruns.
+
+Integrated source qualification then passes337 tests across25 suites using the
+registered canonical source-based native configuration, including all actual
+Engine/HTTP integrations, in336.121 seconds. All10,088 captured checkout/build
+inputs and HEAD895dfa2fb remained unchanged. The separate strengthened lookup and
+contract suites pass81 cases;97 governance tests pass. All four required root
+checks and both packed packages pass, including legacy Overlay Express SDK2.8.9
+ESM/CJS and strict declaration consumers. All44 documentation examples compile
+against22 exact tarballs. Complete source mutation and terminal hosted acceptance
+remain open; none of these passing checks converts prior failures into success.

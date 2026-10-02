@@ -316,3 +316,20 @@ measured execution remedy, subject to complete qualification. Every complete
 source, canonical test, seed, property budget, four-worker bound, existing records
 partition and final critical gate remains unchanged. No cancelled report counts
 as a passing result.
+
+### Private publication composition
+
+`private-publication-coordination` covers all seven complete authority, port,
+coordinator, disclosure, work and reconciler modules. Its disjoint whole-file
+parts each retain the full state/service/availability/authority/recovery/property
+test union and actual Engine/HTTP integration cases. `private-publication-http`
+covers all four transport modules and every native HTTP, response-driver, property
+and cross-package integration test. Its routes, policy and guard parts preserve
+the complete source union. The existing state and service targets add material-loss
+availability cases without removing prior source or tests.
+
+Both additions retain the critical 90% score, zero uncovered and zero invalid
+gates, canonical property budgets and seeds, four workers and bounded runner reuse.
+Selected complete artifacts are required by the final canonical aggregate gate.
+Local report generation, a passing baseline or an incomplete/cancelled campaign
+does not qualify any target.

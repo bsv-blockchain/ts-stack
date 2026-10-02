@@ -346,3 +346,27 @@ test('verified publication service parts preserve every full module and canonica
       .target.mutate.includes('src/private/FutureCompanion.ts')
   )
 })
+
+test('private publication coordination and HTTP partitions retain complete canonical inputs', () => {
+  for (const id of ['private-publication-coordination', 'private-publication-http']) {
+    const canonical = buildMutationTargets(REPOSITORY_ROOT)[id]
+    const parts = partitionMutationTarget(id, canonical)
+    assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+    assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
+    for (const part of parts) {
+      const { mutate: _actual, ...actual } = part.target
+      const { mutate: _expected, ...expected } = canonical
+      assert.deepEqual(actual, expected)
+    }
+    const extended = {
+      ...canonical,
+      mutate: [...canonical.mutate, 'src/FuturePrivateCompanion.ts']
+    }
+    assert.equal(
+      partitionMutationTarget(id, extended)
+        .flatMap(part => part.target.mutate)
+        .filter(path => path === 'src/FuturePrivateCompanion.ts').length,
+      1
+    )
+  }
+})

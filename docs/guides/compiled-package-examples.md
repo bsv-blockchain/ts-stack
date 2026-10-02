@@ -1454,3 +1454,155 @@ export function createPrivateChannelProvider(options: {
   }
 }
 ```
+
+## Compose verified private publication
+
+Create or reopen the protected seller/chain domain explicitly using its retained
+index and payload custody. This Node-only composition accepts an already opened
+owner; opening missing storage must fail instead of creating a fresh obligation
+namespace. The installed validator must authorize the publisher and prove the
+schema and key/content relationship. The selected immutable chain view and its
+currentness policy remain explicit host inputs.
+
+```ts compile
+// example-id: verified-private-publication-service
+import type { Engine as PublicationEngine } from '@bsv/overlay'
+import { OverlayPrivatePublicationAdmission as PublicationAdmission } from '@bsv/overlay/private-publication-admission'
+import {
+  PrivateServiceDomain as PublicationDomain,
+  PrivatePublicationContracts as PublicationContracts,
+  PrivatePublicationAccess as PublicationAccess,
+  PrivatePublicationVerificationLeases as PublicationLeases,
+  PrivatePublicationCoordinator as PublicationCoordinator,
+  PrivatePublicationDisclosure as PublicationDisclosure,
+  PrivatePublicationWork as PublicationWork,
+  PrivatePublicationReconciler as PublicationReconciler,
+  SQLitePrivatePublicationStore as PublicationStore,
+  type PrivatePublicationCoordinatorOptions as PublicationOptions,
+  type PrivatePublicationInstallation as PublicationInstallation,
+  type PrivatePublicationTrust as PublicationTrust
+} from '@bsv/output-knowledge/private/node'
+
+export function composePrivatePublication(options: {
+  domain: PublicationDomain
+  engine: PublicationEngine
+  installation: PublicationInstallation
+  trust: PublicationTrust
+  storageLimits: ConstructorParameters<typeof PublicationStore>[1]
+  evidence: PublicationOptions['evidence']
+  validate: PublicationOptions['validate']
+  validationPolicy: PublicationOptions['validationPolicy']
+  lookup: PublicationOptions['lookup']
+  manifest: PublicationOptions['manifest']
+  clock: PublicationOptions['clock']
+  stagingSeconds: string
+  canPublish: ConstructorParameters<typeof PublicationAccess>[2]
+  verificationCurrent: ConstructorParameters<typeof PublicationLeases>[0]
+  workerCurrent: () => boolean
+  authorizeControl: NonNullable<ConstructorParameters<typeof PublicationDisclosure>[5]>
+}) {
+  const contracts = new PublicationContracts(options.installation, options.trust)
+  const access = new PublicationAccess(
+    options.domain,
+    options.installation.topic,
+    options.canPublish,
+    options.storageLimits.supportedExtensions
+  )
+  const leases = new PublicationLeases(options.verificationCurrent, {
+    supportedExtensions: options.storageLimits.supportedExtensions
+  })
+  const admission = new PublicationAdmission({
+    engine: options.engine,
+    identity: options.installation.seller,
+    topic: options.installation.topic,
+    service: options.installation.service,
+    rulesDigest: options.installation.rulesDigest,
+    maximumPrivateBytes: options.installation.maximumPrivateBytes,
+    maximumOutcomeBytes: 4096,
+    publicAdmissionReuse: 'disabled',
+    isCurrent: reference => leases.isCurrent(reference)
+  })
+  const store = new PublicationStore(options.domain, options.storageLimits, {
+    contracts,
+    validationPolicy: options.validationPolicy,
+    lookup: options.lookup,
+    maximumBindingBytes: 8192,
+    maximumOutcomeBytes: admission.maximumOutcomeBytes
+  })
+  const worker = new PublicationWork(
+    options.domain,
+    contracts,
+    options.clock,
+    options.workerCurrent
+  )
+  const coordinator = new PublicationCoordinator({
+    store,
+    contracts,
+    access,
+    leases,
+    admission,
+    worker,
+    evidence: options.evidence,
+    validate: options.validate,
+    validationPolicy: options.validationPolicy,
+    lookup: options.lookup,
+    manifest: options.manifest,
+    clock: options.clock,
+    stagingSeconds: options.stagingSeconds,
+    supportedExtensions: options.storageLimits.supportedExtensions
+  })
+  const disclosure = new PublicationDisclosure(
+    options.domain,
+    store,
+    contracts,
+    access,
+    options.clock,
+    options.authorizeControl
+  )
+  return {
+    coordinator,
+    disclosure,
+    reconciler: new PublicationReconciler(coordinator)
+  }
+}
+```
+
+The Engine must use retained admission-history storage and the same installed
+topic/rules context. Public history reuse is explicitly disabled in this example.
+Start reconciliation only after installation, observe its returned `done`
+promise, and stop and await the loop before draining `coordinator.stop()` and
+closing the protected domain. A request timeout does not release a still-running
+admission operation's physical capacity. Publication readiness is separate from
+paid lookup, purchase/POTATOES and permission to release a decryption key.
+
+## Mount private publication over authenticated HTTP
+
+Mount this router before body parsers, compression and response transformations.
+Pass the origin's existing BRC-103/104 authentication middleware; do not create a
+second authentication session manager at the same origin. The service and
+disclosure must refer to the same durable publication owner. Advertise only the
+matching installed BRC-101 publication capability.
+
+```ts compile
+// example-id: private-publication-http-composition
+import {
+  createPrivatePublicationRouter,
+  type PrivatePublicationRouteOptions
+} from '@bsv/overlay-express/private-publication'
+
+export function privatePublicationHTTP(options: PrivatePublicationRouteOptions) {
+  return createPrivatePublicationRouter({
+    ...options,
+    // Smaller deployment bounds may be supplied; this is the profile envelope maximum.
+    maximumRequestBytes: options.maximumRequestBytes ?? 4 * 1024 * 1024
+  })
+}
+```
+
+The concrete base URL determines the `/overlay/v1/private/publish` and
+`/overlay/v1/private/status` paths below its pathname. For a root base URL,
+these are root-relative paths. The caller must sign the exact capability/profile
+headers. Default CORS remains credential-free and cross-domain; an explicit
+origin list is deployment policy. The router never installs a payment handler or
+returns protected material. Its final guard checks the signed response bytes,
+original selector, current publisher and native record state after signing.

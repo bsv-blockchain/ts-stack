@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 111)
+  assert.equal(Object.keys(configured).length, 113)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -488,7 +488,8 @@ test('private publication retains every complete implementation and native resta
     '<rootDir>/test/private-publication.property.test.ts',
     '<rootDir>/test/private-publication-exclusion.test.ts',
     '<rootDir>/test/private-verified-publication-store.test.ts',
-    '<rootDir>/test/private-verified-publication.property.test.ts'
+    '<rootDir>/test/private-verified-publication.property.test.ts',
+    '<rootDir>/test/private-publication-availability.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('test/private-publication-fixture.ts'))
@@ -548,8 +549,61 @@ test('verified private service retains every complete source and all canonical n
     '<rootDir>/test/private-publication-evidence.test.ts',
     '<rootDir>/test/private-publication-contract.test.ts',
     '<rootDir>/test/private-lookup-binding.test.ts',
-    '<rootDir>/test/private-publication-service-records.test.ts'
+    '<rootDir>/test/private-publication-service-records.test.ts',
+    '<rootDir>/test/private-publication-availability.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('test/fixtures/**'))
+})
+
+test('private publication composition retains its complete sources and canonical native integrations', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const coordination = targets['private-publication-coordination']
+  assert.deepEqual(coordination.mutate, [
+    'src/private/PrivatePublicationVerificationLeases.ts',
+    'src/private/PrivatePublicationAccess.ts',
+    'src/private/PrivatePublicationPorts.ts',
+    'src/private/PrivatePublicationCoordinator.ts',
+    'src/private/PrivatePublicationDisclosure.ts',
+    'src/private/PrivatePublicationWork.ts',
+    'src/private/PrivatePublicationReconciler.ts'
+  ])
+  assert.deepEqual(coordination.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-identity.test.ts',
+    '<rootDir>/test/private-domain.test.ts',
+    '<rootDir>/test/private-publication-records.test.ts',
+    '<rootDir>/test/private-publication-progress.test.ts',
+    '<rootDir>/test/private-publication-store.test.ts',
+    '<rootDir>/test/private-publication.property.test.ts',
+    '<rootDir>/test/private-publication-exclusion.test.ts',
+    '<rootDir>/test/private-verified-publication-store.test.ts',
+    '<rootDir>/test/private-verified-publication.property.test.ts',
+    '<rootDir>/test/private-publication-evidence.test.ts',
+    '<rootDir>/test/private-publication-contract.test.ts',
+    '<rootDir>/test/private-lookup-binding.test.ts',
+    '<rootDir>/test/private-publication-service-records.test.ts',
+    '<rootDir>/test/private-publication-availability.test.ts',
+    '<rootDir>/test/private-publication-access.test.ts',
+    '<rootDir>/test/private-publication-coordination.property.test.ts',
+    '<rootDir>/test/private-publication-coordinator.test.ts',
+    '<rootDir>/test/private-publication-disclosure.test.ts',
+    '<rootDir>/test/private-publication-reconciler.test.ts',
+    '<rootDir>/test/private-publication-verification-leases.test.ts',
+    resolve(
+      REPOSITORY_ROOT,
+      'packages/overlays/overlay-express/src/__tests__/PrivatePublication*.integration.test.ts'
+    )
+  ])
+  const http = targets['private-publication-http']
+  assert.deepEqual(http.mutate, [
+    'src/PrivatePublicationHTTPPorts.ts',
+    'src/PrivatePublicationHTTPPolicy.ts',
+    'src/PrivatePublicationResponseGuard.ts',
+    'src/PrivatePublicationRoutes.ts'
+  ])
+  assert.deepEqual(http.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/__tests__/PrivatePublication*.test.ts'
+  ])
+  for (const id of ['private-publication-coordination', 'private-publication-http'])
+    assert.equal(targets[id].runnerOptions.maxTestRunnerReuse, 8)
 })

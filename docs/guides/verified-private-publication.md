@@ -1,11 +1,12 @@
 # Verified private publication records and native lookup binding
 
-This implementation is an internal Node building block for BRC-195. It composes
-an original signed capability, exact Bitcoin evidence, protected publication
-records and a durable lookup binding. A public HTTP endpoint, installed domain
-publisher/schema validation, reconciliation worker and final response disclosure
-must still compose these parts. Calling a storage method does not authenticate a
-publisher or prove a decryption key matches its content.
+This optional Node composition implements the publication part of BRC-195: original
+signed capabilities, exact Bitcoin evidence, protected publication records, native
+lookup binding, bounded recovery and authenticated publisher-facing status.
+Installed publisher/schema validation and current authority remain explicit host
+policies. Calling a storage method does not authenticate a publisher or prove a
+decryption key matches its content. Paid acquisition and purchase fulfillment are
+separate owners, still required for the full private-overlay program.
 
 ## Keep each authority explicit
 
@@ -121,8 +122,123 @@ boundaries. The complete legacy publication suites remain part of qualification.
 Real Script/SPV evidence tests use signed synthetic Bitcoin transactions and an
 immutable chain fixture. No funded operation or live deployment is involved.
 
-These tests do not by themselves qualify the complete private-overlay service.
-The application validator, authenticated HTTP integration, actual Engine/Mongo
-and native-store composition, bounded reconciler, paid/purchase owners and final
-exact-head CI are separate required program work. The source remains internal
-until that composition and its public consumer contract are ready.
+Actual Engine/Mongo and authenticated HTTP tests additionally exercise retained
+admission after a lost reply, original-contract recovery after restart and manifest
+expiry, private off-chain values, compatibility with an ordinary lookup route,
+and revocation or readiness changes during response signing. Generated native and
+HTTP schedules retain a minimum of 300 cases. This evidence qualifies individual
+composition behaviors; complete mutation, platform, package and exact-head CI
+qualification remain required before the checkpoint is complete.
+
+## Install the service and transport explicitly
+
+The optional `@bsv/output-knowledge/private/node` entry exports the Node custody,
+publication store, contracts, evidence adapter, coordinator, disclosure and
+reconciliation components. The separate
+`@bsv/overlay-express/private-publication` entry exports
+`createPrivatePublicationRouter` and its structural service/disclosure options.
+Both are opt-in. Existing package roots, finite lookup routes and ordinary
+submission behavior remain unchanged. This composition requires the SDK 3.0
+candidate and authentication middleware 2.3; it adds no SDK requirement to
+ordinary legacy Overlay Express imports.
+
+Use one protected `PrivateServiceDomain` for the authoritative seller and chain.
+Its creation is an explicit provisioning decision. Restart with `open` and the
+same retained index-key identity, domain configuration and payload custody;
+opening missing state fails. Back up the database and protected custody together.
+An independent database does not share funding uniqueness or obligations merely
+because it uses the same seller key. Private replication must preserve the
+original records and enforce receiver authorization separately from public GASP.
+
+`PrivatePublicationCoordinator` accepts structural storage, evidence, admission
+and worker ports. A replacement adapter must preserve the semantic request fence,
+complete original contract, native multi-record atomicity, exact revisions,
+capacity reservations and current-authority checks. These are behavioral
+requirements, not satisfied just by implementing TypeScript method names.
+`PrivatePublicationDisclosure` is the SQLite reference final-response owner: every
+writer and policy change affecting visibility must participate in its shared
+native transaction domain. Another backend needs an equivalent atomic disclosure
+owner as well as storage methods.
+
+The installed domain validator checks publisher authorization, asset/schema
+binding and the private value's relationship to the content. The real SDK evidence
+adapter verifies the exact output under the selected immutable chain view.
+`PrivatePublicationVerificationLeases` retains that complete checked context for
+the actual Engine operation and exposes only a bounded local reference to the
+admission bridge. A lease is not a wire credential, an authentication substitute,
+or independent verification. Its currentness callback must check the retained
+premises, including policy changes, on every use.
+
+The Engine bridge must use retained admission history and the same selected topic,
+service and rules. It carries existing off-chain values through the ordinary
+topic-manager interface. Its public-history reuse setting is an explicit local
+migration policy. Public STEAK and protected lookup readiness are retained
+separately; a repeated submission's empty receipt cannot replace the original
+admission assessment. The
+[compiled installation examples](compiled-package-examples.md#compose-verified-private-publication)
+compose the actual Engine bridge, native store, coordinator and response owner.
+
+## Recover without the original request staying connected
+
+`PrivatePublicationWork` provides a finite private work inventory under explicit
+local-worker authority. `PrivatePublicationReconciler.runOnce` processes one
+bounded page and wraps the cursor so later passes discover inserts behind it.
+`start` is an explicit optional loop with an observable completion promise and
+sanitized per-publication outcomes. It reuses original reservations after manifest
+expiry and uncertain Engine responses. It neither impersonates the publisher nor
+requests a new capability for an existing obligation. Missing original history
+remains unresolved.
+
+HTTP callers and reconciliation have bounded work ownership. Cancellation or a
+deadline stops caller waiting and prevents further authorized effects, but does
+not release a physical slot while the underlying call is still running. Stop
+accepting requests, stop and await the reconciler, drain `coordinator.stop()`, then
+close storage and custody. Swapping callbacks or closing the database under a
+live operation is not a supported reconfiguration procedure.
+
+## Report protected-material loss truthfully
+
+A ready publication must have its exact protected material and active binding.
+The store's metadata-only `loadStatus` path reports an unchecked internal view;
+that method alone never establishes readiness. Coordinator and disclosure first
+authorize the original publisher and selector, then verify the complete ready
+records. When the material or its decryption key is unavailable, they durably
+advance the original fence to unavailable under revision and authority guards.
+The original request, contract, admission, lookup receipt and remaining recovery
+obligations remain retained. No key or payload is recreated automatically.
+
+Separating metadata custody from material custody permits an authorized unavailable
+status when only the material key is lost. If metadata itself cannot be decrypted
+or authenticated, the service fails closed; it cannot invent an unavailable
+record from a caller's assertion. Opening the protected ledger still checks the
+complete retained inventory and requires its payload keys. This metadata-only
+status fallback applies to an already opened owner; missing startup custody fails
+startup instead of creating a new namespace. Wrong publishers and wrong selectors cannot
+trigger a state transition or receive protected details. Explicit restoration
+must recover the same material and binding before the original publication can
+return to ready. Existing funded acquisitions have separate retention duties.
+
+## Bind the authenticated response to its native enqueue
+
+Mount the router before generic body parsing, compression, caches and response
+transformations, using the origin's single BRC-103/104 authentication instance.
+It strictly decodes received UTF-8, enforces the selected raw request limit and
+profile maximum, binds the publisher to the authenticated peer, and requires the
+exact signed capability/profile headers. Public cross-domain credential-free
+CORS remains the default; explicit origins are optional. Unknown paths pass to
+the host without changing existing routes.
+
+Publish and status results contain only the bounded BRC-195 projection. The
+disclosure companion reloads the original contract and current state after HTTP
+signing and keeps its native gate through the single synchronous enqueue. Changed
+authority or readiness withholds the prepared body. At most one sanitized fixed
+control replacement may then be signed, with fresh control authority checked
+before sending. After any native enqueue attempt, an error closes the operation
+without retrying delivery. Deferred, asynchronous or repeated enqueue callbacks
+are rejected. Domain-validator exception text and protected payloads are never
+serialized into public errors.
+
+This router does not install a catalogue, paid lookup, purchase/POTATOES owner or
+playback implementation. Those owners compose the same authoritative domain while
+retaining their own terms, payment fences and fulfillment obligations. Publisher
+status is not an entitlement to receive a song key or other protected value.

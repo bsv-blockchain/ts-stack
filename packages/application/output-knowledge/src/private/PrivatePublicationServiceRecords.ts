@@ -9,7 +9,10 @@ import {
 import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
 import { protectedInteger, protectedValue } from './ProtectedLedgerCodec.js'
 import type { PrivatePublicationContracts } from './PrivatePublicationContracts.js'
-import { parsePrivatePublicationContractRecord } from './PrivatePublicationContractRecord.js'
+import {
+  parsePrivatePublicationContractRecord,
+  parsePrivatePublicationContractMetadata
+} from './PrivatePublicationContractRecord.js'
 import { createPrivateLookupBinding, privateLookupBindingAddress } from './PrivateLookupBinding.js'
 import {
   parsePrivatePublicationRecords,
@@ -169,6 +172,24 @@ export class PrivatePublicationServiceRecords {
       fence.original,
       fence.state,
       { ...fence.reference, privateValues: blob.privateValues },
+      this.contracts,
+      this.policy,
+      this.extensions
+    )
+  }
+
+  /** Retained public metadata is sufficient to report loss, never to establish readiness. */
+  restoreStatus(fence: PrivatePublicationFence) {
+    outputAssert(
+      fence.format === 'private-publication-fence/2',
+      'Original private publication service contract is unavailable',
+      'unavailable'
+    )
+    this.requireLookup(fence.state)
+    return parsePrivatePublicationContractMetadata(
+      fence.original,
+      fence.state,
+      fence.reference,
       this.contracts,
       this.policy,
       this.extensions

@@ -1,3 +1,10 @@
+import { SQLiteTransactionDomain } from '../src/storage/SQLiteTransactionDomain.js'
+import {
+  lookupIndexDefinition,
+  SQLiteLookupIndexStore,
+  sqliteLookupComposition
+} from '../src/lookup/SQLiteLookupIndexStore.js'
+import type { LookupIndexCompactionLimits } from '../src/lookup/LookupIndexStorage.js'
 import fc from 'fast-check'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
@@ -726,4 +733,77 @@ it('counts separators and accepts exactly bounded empty and two-record pages', a
   const groups = await store.changes('0', { records: 2, bytes: 65536 })
   expect(await store.changes('0', { records: 2, bytes: size(groups) })).toEqual(groups)
   expect((await store.changes('0', { records: 2, bytes: size(groups) - 1 })).groups).toHaveLength(1)
+})
+
+it('binds the compound format and exact immutable owner configuration independently of legacy indexes', () => {
+  const composition = { owner: 'proposal-owner', privacy: 'current-access/1' }
+  const ordinary = lookupIndexDefinition('index', binding, {})
+  const compound = lookupIndexDefinition('index', binding, {}, composition)
+  expect(JSON.parse(ordinary.configurationJSON)).toMatchObject({ format: 'output-lookup-index/1' })
+  expect(JSON.parse(ordinary.configurationJSON)).not.toHaveProperty('composition')
+  expect(JSON.parse(compound.configurationJSON)).toMatchObject({
+    format: 'proposal-current-channel-index/1',
+    composition
+  })
+  expect(compound.configurationJSON).not.toEqual(ordinary.configurationJSON)
+  composition.owner = 'changed'
+  expect(JSON.parse(compound.configurationJSON).composition.owner).toBe('proposal-owner')
+})
+it('keeps compound lookup writes, head and row reads under one native write transaction', () => {
+  const database = new DatabaseSync(':memory:')
+  const domain = new SQLiteTransactionDomain(database)
+  const definition = lookupIndexDefinition('compound', binding, {}, { owner: 'test-owner' })
+  const store = new SQLiteLookupIndexStore(domain, definition)
+  const companion = store[sqliteLookupComposition]
+  try {
+    expect(() => companion.initialize(true)).toThrow('requires a write transaction')
+    domain.transaction(() => companion.initialize(true))
+    expect(() => companion.append(mutation())).toThrow('requires a write transaction')
+    expect(() => companion.head()).toThrow('requires a write transaction')
+    expect(() => companion.row('01')).toThrow('requires a write transaction')
+    domain.transaction(
+      () => {
+        expect(() => companion.append(mutation())).toThrow('requires a write transaction')
+        expect(() => companion.head()).toThrow('requires a write transaction')
+        expect(() => companion.row('01')).toThrow('requires a write transaction')
+        companion.initialize(false)
+      },
+      { write: false }
+    )
+    expect(() =>
+      domain.transaction(() => {
+        expect(companion.append(mutation()).sequence).toBe('1')
+        expect(companion.head().sequence).toBe('1')
+        expect(companion.row('01')).toMatchObject({ key: '01', value: { data: { label: '01' } } })
+        expect(() => companion.row('invalid-key')).toThrow()
+        throw new Error('Rollback compound publication')
+      })
+    ).toThrow('Rollback compound publication')
+    domain.transaction(() => {
+      expect(companion.head().sequence).toBe('0')
+      expect(companion.row('01')).toBeNull()
+      const result = companion.append(mutation())
+      expect(result.sequence).toBe('1')
+      expect(companion.append(mutation())).toEqual(result)
+      expect(companion.row('01')).toMatchObject({ key: '01', revision: '1' })
+    })
+    expect(() => new SQLiteLookupIndexStore(domain, definition)).toThrow(
+      'already owns this namespace'
+    )
+    expect(
+      () => new SQLiteLookupIndexStore(domain, lookupIndexDefinition('independent', binding, {}))
+    ).not.toThrow()
+  } finally {
+    domain.close()
+  }
+})
+it('rejects incomplete or extended compaction shapes rather than silently ignoring a caller bound', async () => {
+  const { store } = await fixture()
+  for (const limits of [
+    { groups: 1, versions: 1 },
+    { groups: 1, versions: 1, pins: 1, extra: 1 }
+  ])
+    await expect(
+      store.compact('100', limits as unknown as LookupIndexCompactionLimits)
+    ).rejects.toMatchObject({ code: 'invalid' })
 })

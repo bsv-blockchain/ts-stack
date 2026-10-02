@@ -1050,6 +1050,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/private/**',
         'src/storage/**',
         'test/private-publication-fixture.ts',
+        'test/private-publication-coordinator-fixture.ts',
         'test/private-publication-service-fixture.ts',
         'test/private-verified-publication-fixture.ts',
         'test/evidence-fixture.ts',
@@ -1073,7 +1074,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-publication.property.test.ts',
           '<rootDir>/test/private-publication-exclusion.test.ts',
           '<rootDir>/test/private-verified-publication-store.test.ts',
-          '<rootDir>/test/private-verified-publication.property.test.ts'
+          '<rootDir>/test/private-verified-publication.property.test.ts',
+          '<rootDir>/test/private-publication-availability.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
@@ -1106,10 +1108,124 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-publication-evidence.test.ts',
           '<rootDir>/test/private-publication-contract.test.ts',
           '<rootDir>/test/private-lookup-binding.test.ts',
-          '<rootDir>/test/private-publication-service-records.test.ts'
+          '<rootDir>/test/private-publication-service-records.test.ts',
+          '<rootDir>/test/private-publication-availability.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
+    },
+    'private-publication-coordination': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-publication-coordination.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/*fixture.ts',
+        'test/fixtures/**',
+        '../../overlays/overlay-express/src/PrivatePublication*.ts',
+        '../../overlays/overlay-express/src/__tests__/PrivatePublication*.ts',
+        '../../overlays/overlay/src/**',
+        '../../sdk/src/**',
+        '../../middleware/auth-express-middleware/src/**'
+      ],
+      mutate: [
+        'src/private/PrivatePublicationVerificationLeases.ts',
+        'src/private/PrivatePublicationAccess.ts',
+        'src/private/PrivatePublicationPorts.ts',
+        'src/private/PrivatePublicationCoordinator.ts',
+        'src/private/PrivatePublicationDisclosure.ts',
+        'src/private/PrivatePublicationWork.ts',
+        'src/private/PrivatePublicationReconciler.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-identity.test.ts',
+          '<rootDir>/test/private-domain.test.ts',
+          '<rootDir>/test/private-publication-records.test.ts',
+          '<rootDir>/test/private-publication-progress.test.ts',
+          '<rootDir>/test/private-publication-store.test.ts',
+          '<rootDir>/test/private-publication.property.test.ts',
+          '<rootDir>/test/private-publication-exclusion.test.ts',
+          '<rootDir>/test/private-verified-publication-store.test.ts',
+          '<rootDir>/test/private-verified-publication.property.test.ts',
+          '<rootDir>/test/private-publication-evidence.test.ts',
+          '<rootDir>/test/private-publication-contract.test.ts',
+          '<rootDir>/test/private-lookup-binding.test.ts',
+          '<rootDir>/test/private-publication-service-records.test.ts',
+          '<rootDir>/test/private-publication-availability.test.ts',
+          '<rootDir>/test/private-publication-access.test.ts',
+          '<rootDir>/test/private-publication-coordination.property.test.ts',
+          '<rootDir>/test/private-publication-coordinator.test.ts',
+          '<rootDir>/test/private-publication-disclosure.test.ts',
+          '<rootDir>/test/private-publication-reconciler.test.ts',
+          '<rootDir>/test/private-publication-verification-leases.test.ts',
+          resolve(
+            repositoryRoot,
+            'packages/overlays/overlay-express/src/__tests__/PrivatePublication*.integration.test.ts'
+          )
+        ],
+        {
+          esm: true,
+          buildCommand: 'pnpm build',
+          maxTestRunnerReuse: 8,
+          config: {
+            roots: [
+              '<rootDir>',
+              resolve(repositoryRoot, 'packages/overlays/overlay-express/src/__tests__')
+            ],
+            moduleNameMapper: {
+              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]:
+                '<rootDir>/$1.ts',
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1'
+            }
+          }
+        }
+      )
+    },
+    'private-publication-http': {
+      packageDirectory: 'packages/overlays/overlay-express',
+      manifest: 'packages/overlays/overlay-express/package.json',
+      propertyTest:
+        'packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts',
+      additionalInputs: [
+        'src/__tests__/PrivatePublication*.ts',
+        'src/RootEvictionHTTPPolicy.ts',
+        'src/OutputLookupHTTPPolicy.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/private-*.ts',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/**',
+        '../overlay/src/**',
+        '../../sdk/src/**',
+        '../../middleware/auth-express-middleware/src/**'
+      ],
+      mutate: [
+        'src/PrivatePublicationHTTPPorts.ts',
+        'src/PrivatePublicationHTTPPolicy.ts',
+        'src/PrivatePublicationResponseGuard.ts',
+        'src/PrivatePublicationRoutes.ts'
+      ],
+      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests__/PrivatePublication*.test.ts'], {
+        esm: true,
+        maxTestRunnerReuse: 8,
+        config: {
+          moduleNameMapper: {
+            [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
+              repositoryRoot,
+              'packages/application/output-knowledge/$1.ts'
+            ),
+            [String.raw`^\.\./\.\./\.\./overlay/src/__tests/mongo/MongoReplicaFixture\.js$`]:
+              resolve(
+                repositoryRoot,
+                'packages/overlays/overlay/src/__tests/mongo/MongoReplicaFixture.ts'
+              ),
+            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+            '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+          }
+        }
+      })
     },
     'protected-ledger': {
       packageDirectory: 'packages/application/output-knowledge',

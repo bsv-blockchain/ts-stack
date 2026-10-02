@@ -20,6 +20,15 @@ Built-in discovery overflow probes use deterministic pages of at most 1000 rows.
 
 The release candidate advances the packed Overlay dependency to support optional retained admission history. This package keeps its existing behavior and does not enable history retention automatically. No consumer or database migration is required.
 
+The optional `@bsv/overlay-express/private-publication` entry exposes verified
+private publication and publisher status through the shared BRC-103/104
+authentication instance. Supply the same durable service and disclosure owner;
+mount before generic parsers and response transformations. It checks original
+selection and current record authority again after signing, sends only bounded
+public projections and fixed errors, and preserves credential-free CORS by
+default. It never mounts automatically or installs a payment handler. See the
+[private publication guide](../../../docs/guides/verified-private-publication.md).
+
 ## Requirements and installation
 
 The unpublished 2.8.0 candidate also provides the optional

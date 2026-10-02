@@ -1376,6 +1376,28 @@
           "A repeated publication preserves its original signed capability, verified transaction, policy and protected bytes; a legacy fence cannot manufacture missing original history.",
           "Only the exact native admission and lookup-binding transaction can make a verified publication ready; revocation, stale revisions and crashes cannot partially activate it."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-publication-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Current private publication authority, bounded physical admission, durable original recovery, truthful availability and final native disclosure",
+        "target": "At least 300 native publication, authorization, cancellation, expiry, uncertain-admission and restart schedules",
+        "invariants": [
+          "An admitted publication preserves its original verified contract and protected material across retries and restarts.",
+          "Current owner and chain authority guard admission, readiness and physical disclosure; cancelled work retains its physical capacity until settlement."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated private publication HTTP intake, exact signed selection, bounded work and current guarded native response",
+        "target": "At least 300 authenticated HTTP signing, revocation, readiness-loss and original-contract schedules",
+        "invariants": [
+          "Exact signed selection and original publication terms survive manifest expiry without authorizing a different publisher.",
+          "Authorization and protected readiness remain current after HTTP signing and at the single synchronous native enqueue; private diagnostics never enter control errors."
+        ]
       }
     ],
     "exclusions": [

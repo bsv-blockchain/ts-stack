@@ -29,6 +29,7 @@ import {
   createPrivatePublicationRecords,
   parsePrivatePublicationBlob,
   parsePrivatePublicationRecords,
+  parsePrivatePublicationFenceMetadata,
   privatePublicationFenceAddress,
   type PrivatePublicationFence
 } from './PrivatePublicationRecords.js'
@@ -354,6 +355,77 @@ export class SQLitePrivatePublicationStore {
             'Private publication staging deadline has elapsed',
             'expired'
           )
+      }
+    )
+    return state
+  }
+
+  /** Current authorized metadata; callers must separately establish private readiness. */
+  loadStatus(publicationId: string, clock: () => string, guard: ProtectedLedgerGuard) {
+    outputAssert(
+      this.service,
+      'Verified private publication installation is required',
+      'unsupported'
+    )
+    const address = privatePublicationFenceAddress(this.domain.identity, publicationId)
+    const current = this.domain.ledger.read([address], clock, guard)
+    const record = current.records[0]
+    if (!record) return undefined
+    const fence = parsePrivatePublicationFenceMetadata(
+      record.value,
+      this.domain.identity,
+      this.limits.supportedExtensions
+    )
+    outputAssert(
+      fence.state.publicationId === publicationId,
+      'Private publication address binding differs',
+      'unavailable'
+    )
+    const original = this.service.restoreStatus(fence)
+    return {
+      revision: current.revision,
+      observedAt: current.observedAt,
+      record,
+      fence,
+      original,
+      availability: 'unchecked' as const
+    }
+  }
+
+  /** Record a loss without requiring the unavailable blob/key/binding to decrypt. */
+  markUnavailable(
+    publicationId: string,
+    expectedRecordRevision: string,
+    clock: () => string,
+    guard: ProtectedLedgerGuard
+  ) {
+    const revision = outputU64(expectedRecordRevision).toString()
+    const retained = this.loadStatus(publicationId, clock, guard)
+    outputAssert(retained, 'Private publication is absent', 'not-found')
+    outputAssert(retained.record.revision === revision, 'Private publication changed', 'conflict')
+    const state = advancePrivatePublicationProgress(
+      retained.fence.state,
+      {
+        kind: 'unavailable',
+        reason: 'Original private publication material or binding is unavailable'
+      },
+      retained.observedAt
+    )
+    this.domain.ledger.commit(
+      retained.revision,
+      [
+        {
+          kind: retained.record.kind,
+          key: retained.record.key,
+          expectedRevision: revision,
+          reservedBytes: retained.record.reservedBytes,
+          reservedUpdates: Math.max(2, retained.record.reservedUpdates - 1),
+          value: protectedValue({ ...retained.fence, state }, retained.record.reservedBytes).value
+        }
+      ],
+      clock,
+      view => {
+        outputAssert(guard(view) === undefined, 'Private publication guard must be synchronous')
       }
     )
     return state

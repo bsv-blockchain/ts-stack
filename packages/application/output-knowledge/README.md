@@ -20,7 +20,11 @@ serving-path integration, platform qualification and downstream application
 adoption remain incomplete.
 The internal [native private-publication foundation](../../../docs/guides/private-publication-storage.md)
 now binds protected material, permanent request fences and ordered durable phases.
-Its actual admission/lookup/HTTP composition is still incomplete.
+The optional `@bsv/output-knowledge/private/node` entry now composes verified
+publication, actual retained Engine admission, protected lookup binding, current
+publisher disclosure and bounded restart recovery. Its
+[installation guide](../../../docs/guides/verified-private-publication.md) separates
+publication from the remaining paid lookup and purchase/POTATOES owners.
 The package version does not indicate a published or production-qualified release.
 See the [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md)
 for exact component evidence and outstanding work.
