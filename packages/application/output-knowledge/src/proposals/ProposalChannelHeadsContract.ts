@@ -85,22 +85,28 @@ export class ProposalChannelHeadsContract {
 
   private change(observations: OutputObservation[], start: number, phase: 'snapshot' | 'live') {
     const initial = observations[start]
-    let position = start,
-      removed: Removal | undefined,
-      channel: string
-    if (initial.kind === 'proposal-remove') {
-      if (phase !== 'live') this.invalid('Snapshot cannot remove a channel')
-      removed = initial.payload
-      channel = this.reference(removed)
-      position++
-    } else if (initial.kind === 'proposal') channel = this.proposal(initial.payload.proposal)
-    else this.invalid('Expected a channel head or an authorized identifier removal')
-    const change: ProposalChannelQueryChange = { channel, ...(removed ? { removed } : {}) }
+    if (initial.kind === 'proposal') {
+      const channel = this.proposal(initial.payload.proposal)
+      return {
+        change: {
+          channel,
+          head: this.head(initial.payload.proposal, observations[start + 1], undefined, channel)
+        },
+        position: start + 2
+      }
+    }
+    if (initial.kind !== 'proposal-remove')
+      this.invalid('Expected a channel head or an authorized identifier removal')
+    if (phase !== 'live') this.invalid('Snapshot cannot remove a channel')
+    const removed = initial.payload,
+      channel = this.reference(removed),
+      change: ProposalChannelQueryChange = { channel, removed }
+    let position = start + 1
     const next = observations[position]
     if (next?.kind === 'proposal' && next.payload.proposal.body.channel === channel) {
       change.head = this.head(next.payload.proposal, observations[position + 1], removed, channel)
       position += 2
-    } else if (!removed) this.invalid('Current-channel state pair is incomplete')
+    }
     return { change, position }
   }
 

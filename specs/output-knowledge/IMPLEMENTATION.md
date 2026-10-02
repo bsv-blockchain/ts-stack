@@ -2498,3 +2498,32 @@ mutation and exact-head hosted qualification remain unfinished.
 Existing operation and protected-control exports, budgets and formats are
 unchanged. The durable buyer, material adapters and full acquisition demonstration
 remain separate unfinished work.
+
+### Boundary qualification follow-up
+
+An independent generated run exposed an oracle error for a retry of the initial
+protected workflow value: the exact value already retained at revision one must
+be recovered as `replayed` from revision zero. The implementation behaves correctly.
+The generated model now distinguishes this exact replay from other stale writes,
+with an explicit deterministic example. The original failing seed
+`-273856364`, path `12:2:2:2:2:2:0`, passes after the model correction. The earlier
+object mutation campaign was stopped with unchanged inputs; it remains incomplete
+and does not establish qualification.
+
+Additional object framing and custody tests exercise retained headers, chunk
+bounds, exact digests, inventory ordering, full capacity, capability drift and
+plaintext cleanup. Complete byte equality for large binary fixtures uses native
+byte comparison, preserving every byte and the existing deadlines.
+
+Current-channel parsing has explicit head and removal paths with the same wire
+grammar, plus independent maximum-size, policy, chain and state-binding cases.
+Runtime work creation and its awaited race share one lifecycle scope. The previously
+crashing block-removal mutation now produces ordinary test failures in an isolated
+run, while normal behavior passes. Complete canonical mutation and hosted
+qualification for these changes remains required.
+
+Canonical follow-up validation passes 618 tests across 24 suites, the complete
+112-test UHRP suite, and root health, lint, formatting and strict types. The UHRP
+suite completed in 21.3 seconds locally with the original test deadlines. This
+local result does not establish hosted Linux completion. Mutation qualification
+will use the corrected replay model and preserve all prior targets and gates.

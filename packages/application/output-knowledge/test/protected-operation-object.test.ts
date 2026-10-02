@@ -53,7 +53,13 @@ test('retains and reopens the complete four-MiB original result outside the smal
   expect(readFileSync(file).includes(secret)).toBe(false)
   const reopened = SQLiteProtectedOperationObjectStore.open(file, config, codec())
   stores.push(reopened)
-  expect(await reopened.read(id, binding)).toEqual({ state: 'stored', receipt, bytes })
+  const saved = await reopened.read(id, binding)
+  expect(saved.state).toBe('stored')
+  if (saved.state !== 'stored') throw new Error('Expected retained original bytes')
+  const { bytes: retained, ...metadata } = saved
+  expect(metadata).toEqual({ state: 'stored', receipt })
+  expect(retained.constructor).toBe(Uint8Array)
+  expect(Buffer.from(retained).equals(Buffer.from(bytes))).toBe(true)
   bytes[0] ^= 1
   await expect(reopened.put(id, binding, bytes)).rejects.toMatchObject({ code: 'conflict' })
 }, 30000)

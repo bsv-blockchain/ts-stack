@@ -112,23 +112,29 @@ it('rejects a partial group before any receipt-facing yield and closes the retai
   expect((await iterator.next()).done).toBe(true)
 })
 
-it.each(['provenance', 'finite', 'checkpoint', 'reset-data'] as const)(
-  'rejects incompatible %s without disclosing the batch',
-  async kind => {
-    const f = fixture()
-    if (kind === 'provenance') f.batch.provenance.authentication = 'configured-transport'
-    if (kind === 'finite') {
-      f.batch.coverage.phase = 'finite'
-      f.batch.groups[0].sequence = '0'
-    }
-    if (kind === 'checkpoint') delete f.batch.checkpoint
-    if (kind === 'reset-data') f.batch.coverage.status = 'reset-required'
-    await expect(
-      f.source.open(f.request, new AbortController().signal)[Symbol.asyncIterator]().next()
-    ).rejects.toThrow()
-    expect(f.state.closed).toBe(true)
+it.each([
+  [
+    'provenance',
+    'unauthorized',
+    'Current-channel lookup requires authenticated provider provenance'
+  ],
+  ['finite', 'unsupported', 'Current-channel lookup requires snapshot/live ordering'],
+  ['checkpoint', 'reset-required', 'Current-channel lookup lost its retained checkpoint'],
+  ['reset-data', 'equivocation', 'Reset cannot carry current-channel observations']
+] as const)('rejects incompatible %s without disclosing the batch', async (kind, code, message) => {
+  const f = fixture()
+  if (kind === 'provenance') f.batch.provenance.authentication = 'configured-transport'
+  if (kind === 'finite') {
+    f.batch.coverage.phase = 'finite'
+    f.batch.groups[0].sequence = '0'
   }
-)
+  if (kind === 'checkpoint') delete f.batch.checkpoint
+  if (kind === 'reset-data') f.batch.coverage.status = 'reset-required'
+  await expect(
+    f.source.open(f.request, new AbortController().signal)[Symbol.asyncIterator]().next()
+  ).rejects.toMatchObject({ code, message })
+  expect(f.state.closed).toBe(true)
+})
 
 it('carries an explicit reset without fabricating heads or requiring a continuing cursor', async () => {
   const f = fixture()
@@ -155,7 +161,7 @@ it('checks query and cancellation before starting a remote pull and refuses vola
   abort.abort()
   await expect(
     f.source.open(f.request, abort.signal)[Symbol.asyncIterator]().next()
-  ).rejects.toMatchObject({ code: 'cancelled' })
+  ).rejects.toMatchObject({ code: 'cancelled', message: 'Current-channel source cancelled' })
   expect(f.state.pulls).toBe(0)
   expect(
     () =>
@@ -165,5 +171,10 @@ it('checks query and cancellation before starting a remote pull and refuses vola
         f.parameters,
         f.query
       )
-  ).toThrow('durable')
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: 'Current-channel lookup requires durable source receipts'
+    })
+  )
 })

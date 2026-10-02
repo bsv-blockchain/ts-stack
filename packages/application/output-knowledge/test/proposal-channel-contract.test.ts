@@ -121,7 +121,12 @@ it.each(['rulesDigest', 'queryDigest'] as const)(
           f.parameters,
           f.query
         )
-    ).toThrow(expect.objectContaining({ code: 'context-changed' }))
+    ).toThrow(
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Current-channel query differs from selected scope'
+      })
+    )
   }
 )
 
@@ -186,4 +191,43 @@ it('rejects duplicate/reversed channels and same-body removal/replacement', () =
   expect(() =>
     f.contract.check(f.group(f.remove(first), f.head(first), f.state(first)), 'live')
   ).toThrow('predecessor')
+})
+
+it('checks empty and exact maximum live group sizes before walking any changes', () => {
+  const f = fixture(),
+    proposal = signed()
+  expect(() => f.contract.check(f.group(), 'live')).toThrow(
+    'Current-channel group has an invalid observation count'
+  )
+  const observations = Array.from({ length: 1024 }, (_, index) => {
+    const removal = f.remove(proposal)
+    if (removal.kind !== 'proposal-remove') throw new Error('Expected fixture removal')
+    removal.payload.channel = index.toString(16).padStart(64, '0')
+    return removal
+  })
+  expect(f.contract.check(f.group(...observations), 'live')).toHaveLength(1024)
+  expect(() => f.contract.check(f.group(...observations, f.remove(proposal)), 'live')).toThrow(
+    'Current-channel group has an invalid observation count'
+  )
+})
+
+it('validates the signed proposal chain independently of unchanged observation scope', () => {
+  const f = fixture(),
+    proposal = signed({ chain: { ...chain, genesisHash: 'ff'.repeat(32) } })
+  expect(() => f.contract.check(f.group(f.head(proposal), f.state(proposal)), 'snapshot')).toThrow(
+    'Proposal chain differs from query'
+  )
+})
+
+it('requires the exact state channel and proposal id independently', () => {
+  const f = fixture(),
+    proposal = signed()
+  for (const field of ['channel', 'proposalId'] as const) {
+    const state = f.state(proposal)
+    if (state.kind !== 'proposal-state') throw new Error('Expected fixture state')
+    state.payload[field] = 'ff'.repeat(32)
+    expect(() => f.contract.check(f.group(f.head(proposal), state), 'snapshot')).toThrow(
+      'Current-channel head must be followed by its exact state'
+    )
+  }
 })

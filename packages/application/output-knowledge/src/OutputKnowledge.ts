@@ -273,13 +273,13 @@ export class OutputKnowledge {
       expired = true
       controller.abort()
     }, this.limits.deadlineMs)
-    this.runningOperations++
-    const work = Promise.resolve()
-      .then(() => task(controller.signal))
-      .finally(() => {
-        this.runningOperations--
-      })
     try {
+      this.runningOperations++
+      const work = Promise.resolve()
+        .then(() => task(controller.signal))
+        .finally(() => {
+          this.runningOperations--
+        })
       return await Promise.race([work, aborted])
     } finally {
       clearTimeout(timer)

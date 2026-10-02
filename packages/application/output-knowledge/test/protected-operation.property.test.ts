@@ -85,9 +85,17 @@ test(
               const before = revision,
                 writeRevision = String(step.stale ? Math.max(0, before - 2) : before)
               const actual = await client.compareAndSwap(writeRevision, value)
-              if (step.stale)
-                expect(actual).toEqual({ status: 'conflict', revision: String(before) })
-              else {
+              if (step.stale) {
+                // Initialization is itself revision one. A retry of those same
+                // bytes from revision zero recovers that first committed value.
+                const replayed =
+                  Number(writeRevision) + 1 === before &&
+                  canonicalOutputJSON(value) === canonicalOutputJSON(expected)
+                expect(actual).toEqual({
+                  status: replayed ? 'replayed' : 'conflict',
+                  revision: String(before)
+                })
+              } else {
                 revision++
                 expected = value
                 expect(actual).toEqual({ status: 'updated', revision: String(revision) })
@@ -107,7 +115,10 @@ test(
             await Promise.all(bases.map(base => base.close()))
           }
         }
-      )
+      ),
+      {
+        examples: [[[{ value: 0, stale: true, replay: false, reopen: false }]]]
+      }
     )
   },
   Math.max(

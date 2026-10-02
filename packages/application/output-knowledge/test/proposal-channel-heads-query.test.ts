@@ -4,6 +4,8 @@ import {
   ProposalChannelHeadsQuery,
   proposalChannelIndexKey
 } from '../src/proposals/ProposalChannelHeadsQuery.js'
+import { AuthorDocumentPolicy } from '../src/proposals/AuthorDocumentPolicy.js'
+import { ProposalPolicyRegistry } from '../src/proposals/ProposalPolicyRegistry.js'
 import { LookupQueryRegistry } from '../src/lookup/LookupQueryRegistry.js'
 import type { LookupIndexRow, LookupIndexGroup } from '../src/lookup/LookupIndexCodec.js'
 import {
@@ -231,4 +233,60 @@ describe('registered proposal current-channel query mapping', () => {
       'not installed'
     )
   })
+})
+
+it('selects one exact policy among multiple installations and rejects either changed identity field', () => {
+  const first = new AuthorDocumentPolicy()
+  const second = {
+    id: 'urn:example:second-document-policy',
+    parameters: first.parameters.bind(first),
+    validate: first.validate.bind(first),
+    permits: first.permits.bind(first),
+    successor: first.successor.bind(first),
+    finalization: first.finalization.bind(first)
+  }
+  const registry = new ProposalPolicyRegistry([
+    { policy: first, parameters: { maxTextBytes: 32 } },
+    { policy: second, parameters: { maxTextBytes: 64 } }
+  ])
+  const query = new ProposalChannelHeadsQuery(registry)
+  for (const { id, digest } of registry.describe()) {
+    expect(query.parameters({ policy: { id, digest } })).toEqual({ policy: { id, digest } })
+    for (const changed of [
+      { id: 'urn:missing', digest },
+      { id, digest: 'ff'.repeat(32) }
+    ])
+      expect(() => query.parameters({ policy: changed })).toThrow(
+        expect.objectContaining({
+          code: 'unsupported',
+          message: 'Proposal query policy is not installed'
+        })
+      )
+  }
+})
+
+it('keeps hidden transitions empty while reporting a terminal visible withdrawal', () => {
+  const hidden = fixture(outsider),
+    before = hidden.row(),
+    after = hidden.row(signed(), undefined, '2')
+  expect(hidden.policy.transition(hidden.group(before, after), hidden.context)).toEqual([])
+  expect(hidden.policy.transition(hidden.group(null, after), hidden.context)).toEqual([])
+  expect(hidden.policy.transition(hidden.group(before, null), hidden.context)).toEqual([])
+  const visible = fixture()
+  const withdrawal = signed({
+    operation: 'withdraw',
+    revision: '1',
+    previous: outputPacketDigest('proposal', signed().body)
+  })
+  const row = visible.row(withdrawal, { status: 'withdrawn', recordedAt: '11' }, '2')
+  expect(visible.policy.snapshot(row, visible.context).map(item => item.kind)).toEqual([
+    'proposal',
+    'proposal-state'
+  ])
+  expect(() =>
+    visible.policy.snapshot(
+      visible.row(withdrawal, { status: 'active', recordedAt: '11' }, '2'),
+      visible.context
+    )
+  ).toThrow('Proposal query state differs from its signed head')
 })
