@@ -99,10 +99,12 @@
         "path": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
         "manifest": "packages/overlays/topics/package.json",
         "risk": "critical",
-        "boundary": "Overlay Mandala linkage payloads and issuer authorization",
-        "target": "Overlay linkage serialization and exact issuer-allowlist membership",
+        "boundary": "Overlay Mandala BRC-162 envelope, admin-details schema and issuer authorization",
+        "target": "Mandala v3 envelope encoding, admin-details validation and exact issuer-allowlist membership",
         "invariants": [
-          "Arbitrary structured linkage payloads retain exact UTF-8 JSON content.",
+          "Arbitrary v3 envelopes round-trip with deterministic UTF-8 wire bytes.",
+          "Duplicate indices in any list are rejected without changing valid wire bytes.",
+          "Admin details that are not lowercase hex are rejected.",
           "Issuer admission matches exact allowlist membership."
         ]
       },
@@ -123,13 +125,14 @@
         "path": "packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts",
         "manifest": "packages/helpers/ts-templates/package.json",
         "risk": "critical",
-        "boundary": "Bitcoin script-number and on-chain asset outpoint encodings",
-        "target": "Safe-integer script numbers, exact minimal-push boundaries, uint32 outpoints, and truncation rejection",
+        "boundary": "Bitcoin script numbers, BRC-162 push canonicality and the strict CBOR subset",
+        "target": "Safe-integer script numbers, canonical BRC-162 amount and payload pushes, token ids, and the strict CBOR subset",
         "invariants": [
           "Every safe integer round-trips through script-number bytes and minimal chunks.",
-          "Zero, negative one, small integers, sign-bit boundaries, and every push-length transition use their exact minimal opcode.",
-          "Every 32-byte transaction ID and uint32 output index round-trips.",
-          "Non-hex IDs and overflowing output indexes are rejected."
+          "BRC-162 amounts round-trip, use OP_0 or OP_1..OP_16 up to 16 and minimal data pushes above, and decode exactly as the SDK script-number reader says.",
+          "BRC-162 decode refuses exactly the non-canonical layouts and pushes the spec refuses, in their order.",
+          "Strict CBOR accepts only maps that re-encode to exactly their own bytes, independent of key insertion order.",
+          "Strict CBOR refuses non-minimal headers, disallowed major types, truncation, trailing bytes, unsorted keys, excess depth and invalid UTF-8."
         ]
       },
       {

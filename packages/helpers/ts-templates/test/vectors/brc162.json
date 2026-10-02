@@ -1,0 +1,1495 @@
+{
+  "id": "mandala.brc162",
+  "version": 1,
+  "scripts": [
+    {
+      "id": "deploy-authority-empty-payload",
+      "tokenId": null,
+      "amount": "0",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "a0",
+      "scriptHex": "00006d01a07576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "deploy"
+    },
+    {
+      "id": "deploy-authority-metadata",
+      "tokenId": null,
+      "amount": "0",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "a463646563026373796d63555344656c6162656c69555320446f6c6c61726c666565526174655065724b621903e8",
+      "scriptHex": "00006d2ea463646563026373796d63555344656c6162656c69555320446f6c6c61726c666565526174655065724b621903e87576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "deploy"
+    },
+    {
+      "id": "deploy-authority-fee-disabled",
+      "tokenId": null,
+      "amount": "0",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "a463646563026373796d63555344656c6162656c69555320446f6c6c61726c666565526174655065724b62f6",
+      "scriptHex": "00006d2ca463646563026373796d63555344656c6162656c69555320446f6c6c61726c666565526174655065724b62f67576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "deploy"
+    },
+    {
+      "id": "deploy-authority-no-payload",
+      "tokenId": null,
+      "amount": "0",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "00006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "deploy"
+    },
+    {
+      "id": "deploy-fixed-supply-codec-only",
+      "tokenId": null,
+      "amount": "5",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "00556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "deploy"
+    },
+    {
+      "id": "authority-no-payload",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "0",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "authority"
+    },
+    {
+      "id": "authority-adm-commitment",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "0",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "a16361646d58209de342429e6618e9db8198ef6ebfddce4148d20259fdac6e5b416ddde4aeaa09",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab006d27a16361646d58209de342429e6618e9db8198ef6ebfddce4148d20259fdac6e5b416ddde4aeaa097576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "authority"
+    },
+    {
+      "id": "authority-ascending-id",
+      "tokenId": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f_0",
+      "amount": "0",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "authority"
+    },
+    {
+      "id": "value-amount-1",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "1",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab516d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-5",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "5",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-16",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "16",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab606d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-17",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "17",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab01116d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-127",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "127",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab017f6d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-128",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "128",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab0280006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-255",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "255",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab02ff006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-256",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "256",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab0200016d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-5000",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "5000",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab0288136d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-9007199254740991",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "9007199254740991",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab07ffffffffffff1f6d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-9007199254740992",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "9007199254740992",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab07000000000000206d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-amount-18446744073709551615",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "18446744073709551615",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab09ffffffffffffffff006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-ascending-id",
+      "tokenId": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f_0",
+      "amount": "1",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": null,
+      "scriptHex": "201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100516d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-strict-cbor-map",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "a1616101",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d04a16161017576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-empty",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d007576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-0x01",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "01",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d517576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-0x05",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "05",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d557576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-0x10",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "10",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d607576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-0x81",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "81",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d4f7576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-0x00",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "00",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d01007576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-0x11",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "11",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d01117576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-0x80",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "80",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d01807576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-75-bytes",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f90007",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d4b01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900077576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-76-bytes",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d4c4c020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f7576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-255-bytes",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d4cff030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef57576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    },
+    {
+      "id": "value-payload-256-bytes",
+      "tokenId": "abababababababababababababababababababababababababababababababcd_0",
+      "amount": "7",
+      "pubKeyHash": "0102030405060708090a0b0c0d0e0f1011121314",
+      "payload": "040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab576d4d0001040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd7576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "role": "value"
+    }
+  ],
+  "payloadPushes": [
+    {
+      "id": "canonical-op-1negate",
+      "scriptHex": "00006d4f7576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "81",
+      "payloadCanonical": true
+    },
+    {
+      "id": "canonical-op-1-value-1",
+      "scriptHex": "00006d517576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "01",
+      "payloadCanonical": true
+    },
+    {
+      "id": "non-canonical-data-push-of-1",
+      "scriptHex": "00006d01017576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "01",
+      "payloadCanonical": false
+    },
+    {
+      "id": "non-canonical-data-push-of-0x81",
+      "scriptHex": "00006d01817576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "81",
+      "payloadCanonical": false
+    },
+    {
+      "id": "non-canonical-pushdata1-of-0x05",
+      "scriptHex": "00006d4c01057576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "05",
+      "payloadCanonical": false
+    },
+    {
+      "id": "non-canonical-pushdata1-empty",
+      "scriptHex": "00006d4c007576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "",
+      "payloadCanonical": false
+    },
+    {
+      "id": "non-canonical-pushdata1-4-bytes",
+      "scriptHex": "00006d4c04a16161017576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "a1616101",
+      "payloadCanonical": false
+    },
+    {
+      "id": "non-canonical-pushdata2-76-bytes",
+      "scriptHex": "00006d4d4c00111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111117576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "payloadCanonical": false
+    },
+    {
+      "id": "non-canonical-pushdata4-256-bytes",
+      "scriptHex": "00006d4e00010000111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111117576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "payloadCanonical": false
+    },
+    {
+      "id": "value-non-canonical-pushdata1",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab516d4c01057576a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "payload": "05",
+      "payloadCanonical": false
+    }
+  ],
+  "amountChunks": [
+    {
+      "id": "amount-0",
+      "amount": "0",
+      "chunkHex": "00"
+    },
+    {
+      "id": "amount-1",
+      "amount": "1",
+      "chunkHex": "51"
+    },
+    {
+      "id": "amount-2",
+      "amount": "2",
+      "chunkHex": "52"
+    },
+    {
+      "id": "amount-5",
+      "amount": "5",
+      "chunkHex": "55"
+    },
+    {
+      "id": "amount-16",
+      "amount": "16",
+      "chunkHex": "60"
+    },
+    {
+      "id": "amount-17",
+      "amount": "17",
+      "chunkHex": "0111"
+    },
+    {
+      "id": "amount-127",
+      "amount": "127",
+      "chunkHex": "017f"
+    },
+    {
+      "id": "amount-128",
+      "amount": "128",
+      "chunkHex": "028000"
+    },
+    {
+      "id": "amount-255",
+      "amount": "255",
+      "chunkHex": "02ff00"
+    },
+    {
+      "id": "amount-256",
+      "amount": "256",
+      "chunkHex": "020001"
+    },
+    {
+      "id": "amount-5000",
+      "amount": "5000",
+      "chunkHex": "028813"
+    },
+    {
+      "id": "amount-32767",
+      "amount": "32767",
+      "chunkHex": "02ff7f"
+    },
+    {
+      "id": "amount-32768",
+      "amount": "32768",
+      "chunkHex": "03008000"
+    },
+    {
+      "id": "amount-65535",
+      "amount": "65535",
+      "chunkHex": "03ffff00"
+    },
+    {
+      "id": "amount-65536",
+      "amount": "65536",
+      "chunkHex": "03000001"
+    },
+    {
+      "id": "amount-8388607",
+      "amount": "8388607",
+      "chunkHex": "03ffff7f"
+    },
+    {
+      "id": "amount-8388608",
+      "amount": "8388608",
+      "chunkHex": "0400008000"
+    },
+    {
+      "id": "amount-16777215",
+      "amount": "16777215",
+      "chunkHex": "04ffffff00"
+    },
+    {
+      "id": "amount-16777216",
+      "amount": "16777216",
+      "chunkHex": "0400000001"
+    },
+    {
+      "id": "amount-2147483647",
+      "amount": "2147483647",
+      "chunkHex": "04ffffff7f"
+    },
+    {
+      "id": "amount-2147483648",
+      "amount": "2147483648",
+      "chunkHex": "050000008000"
+    },
+    {
+      "id": "amount-4294967295",
+      "amount": "4294967295",
+      "chunkHex": "05ffffffff00"
+    },
+    {
+      "id": "amount-4294967296",
+      "amount": "4294967296",
+      "chunkHex": "050000000001"
+    },
+    {
+      "id": "amount-549755813887",
+      "amount": "549755813887",
+      "chunkHex": "05ffffffff7f"
+    },
+    {
+      "id": "amount-549755813888",
+      "amount": "549755813888",
+      "chunkHex": "06000000008000"
+    },
+    {
+      "id": "amount-1099511627775",
+      "amount": "1099511627775",
+      "chunkHex": "06ffffffffff00"
+    },
+    {
+      "id": "amount-1099511627776",
+      "amount": "1099511627776",
+      "chunkHex": "06000000000001"
+    },
+    {
+      "id": "amount-140737488355327",
+      "amount": "140737488355327",
+      "chunkHex": "06ffffffffff7f"
+    },
+    {
+      "id": "amount-140737488355328",
+      "amount": "140737488355328",
+      "chunkHex": "0700000000008000"
+    },
+    {
+      "id": "amount-281474976710655",
+      "amount": "281474976710655",
+      "chunkHex": "07ffffffffffff00"
+    },
+    {
+      "id": "amount-281474976710656",
+      "amount": "281474976710656",
+      "chunkHex": "0700000000000001"
+    },
+    {
+      "id": "amount-9007199254740991",
+      "amount": "9007199254740991",
+      "chunkHex": "07ffffffffffff1f"
+    },
+    {
+      "id": "amount-9007199254740992",
+      "amount": "9007199254740992",
+      "chunkHex": "0700000000000020"
+    },
+    {
+      "id": "amount-36028797018963967",
+      "amount": "36028797018963967",
+      "chunkHex": "07ffffffffffff7f"
+    },
+    {
+      "id": "amount-36028797018963968",
+      "amount": "36028797018963968",
+      "chunkHex": "080000000000008000"
+    },
+    {
+      "id": "amount-72057594037927935",
+      "amount": "72057594037927935",
+      "chunkHex": "08ffffffffffffff00"
+    },
+    {
+      "id": "amount-72057594037927936",
+      "amount": "72057594037927936",
+      "chunkHex": "080000000000000001"
+    },
+    {
+      "id": "amount-9223372036854775807",
+      "amount": "9223372036854775807",
+      "chunkHex": "08ffffffffffffff7f"
+    },
+    {
+      "id": "amount-9223372036854775808",
+      "amount": "9223372036854775808",
+      "chunkHex": "09000000000000008000"
+    },
+    {
+      "id": "amount-18446744073709551615",
+      "amount": "18446744073709551615",
+      "chunkHex": "09ffffffffffffffff00"
+    }
+  ],
+  "rejectScripts": [
+    {
+      "id": "amount-small-as-data",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab01056d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amounts 0..16 must use OP_0/OP_1..OP_16"
+    },
+    {
+      "id": "amount-16-as-data",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab01106d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amounts 0..16 must use OP_0/OP_1..OP_16"
+    },
+    {
+      "id": "amount-zero-as-data",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab01006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount is not minimally encoded"
+    },
+    {
+      "id": "amount-empty-pushdata1",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab4c006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount must be OP_0, OP_1..OP_16 or a direct push of 1-9 bytes"
+    },
+    {
+      "id": "amount-17-pushdata1",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab4c01116d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount must be OP_0, OP_1..OP_16 or a direct push of 1-9 bytes"
+    },
+    {
+      "id": "amount-op-1negate",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab4f6d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount must be OP_0, OP_1..OP_16 or a direct push of 1-9 bytes"
+    },
+    {
+      "id": "amount-negative",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab01816d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount must not be negative"
+    },
+    {
+      "id": "amount-negative-zero",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab01806d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount must not be negative"
+    },
+    {
+      "id": "amount-negative-multi-byte",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab0211806d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount must not be negative"
+    },
+    {
+      "id": "amount-padded",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab0211006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount is not minimally encoded"
+    },
+    {
+      "id": "amount-double-padded",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab03ff00006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount is not minimally encoded"
+    },
+    {
+      "id": "amount-above-2-64-1",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab090000000000000000016d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount exceeds 2^64-1"
+    },
+    {
+      "id": "amount-10-bytes",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab0a010000000000000000006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "amount must be OP_0, OP_1..OP_16 or a direct push of 1-9 bytes"
+    },
+    {
+      "id": "id-36-bytes",
+      "scriptHex": "24111111111111111111111111111111111111111111111111111111111111111111111111556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "id-33-bytes",
+      "scriptHex": "21111111111111111111111111111111111111111111111111111111111111111111556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "id-31-bytes",
+      "scriptHex": "1f11111111111111111111111111111111111111111111111111111111111111556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "id-op-1negate",
+      "scriptHex": "4f556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "id-op-1",
+      "scriptHex": "51556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "id-pushdata1",
+      "scriptHex": "4c201111111111111111111111111111111111111111111111111111111111111111556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "id-pushdata2",
+      "scriptHex": "4d20001111111111111111111111111111111111111111111111111111111111111111556d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "truncated-push-after-deploy-prefix",
+      "scriptHex": "00006d4c050102",
+      "tokenShaped": true,
+      "error": "truncated push"
+    },
+    {
+      "id": "truncated-push-after-value-prefix",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab516d4c050102",
+      "tokenShaped": true,
+      "error": "truncated push"
+    },
+    {
+      "id": "truncated-push-wins-over-bad-id",
+      "scriptHex": "24111111111111111111111111111111111111111111111111111111111111111111111111556d76a9140102030405060708090a0b0c0d0e0f101112131488ac4c050102",
+      "tokenShaped": true,
+      "error": "truncated push"
+    },
+    {
+      "id": "truncated-push-wins-over-bad-amount",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab01056d76a9140102030405060708090a0b0c0d0e0f101112131488ac4c050102",
+      "tokenShaped": true,
+      "error": "truncated push"
+    },
+    {
+      "id": "id-checked-before-amount",
+      "scriptHex": "4f01056d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": true,
+      "error": "token id must be a direct 32-byte push"
+    },
+    {
+      "id": "plain-p2pkh",
+      "scriptHex": "76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    },
+    {
+      "id": "empty-script",
+      "scriptHex": "",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    },
+    {
+      "id": "two-chunks",
+      "scriptHex": "0000",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    },
+    {
+      "id": "third-chunk-op-drop",
+      "scriptHex": "000075",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    },
+    {
+      "id": "first-chunk-op-dup",
+      "scriptHex": "76006d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    },
+    {
+      "id": "second-chunk-op-dup",
+      "scriptHex": "20cdababababababababababababababababababababababababababababababab766d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    },
+    {
+      "id": "second-chunk-op-nop",
+      "scriptHex": "00616d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    },
+    {
+      "id": "second-chunk-op-reserved",
+      "scriptHex": "00506d76a9140102030405060708090a0b0c0d0e0f101112131488ac",
+      "tokenShaped": false,
+      "error": "not a BRC-162 token output"
+    }
+  ],
+  "strictCbor": [
+    {
+      "id": "spec-sym-dec",
+      "hex": "a263646563026373796d63555344",
+      "valid": true
+    },
+    {
+      "id": "empty-map",
+      "hex": "a0",
+      "valid": true
+    },
+    {
+      "id": "uint-max-2-64-1",
+      "hex": "a161611bffffffffffffffff",
+      "valid": true
+    },
+    {
+      "id": "uint-0",
+      "hex": "a1616100",
+      "valid": true
+    },
+    {
+      "id": "uint-23",
+      "hex": "a1616117",
+      "valid": true
+    },
+    {
+      "id": "uint-24",
+      "hex": "a161611818",
+      "valid": true
+    },
+    {
+      "id": "uint-255",
+      "hex": "a1616118ff",
+      "valid": true
+    },
+    {
+      "id": "uint-256",
+      "hex": "a16161190100",
+      "valid": true
+    },
+    {
+      "id": "uint-65535",
+      "hex": "a1616119ffff",
+      "valid": true
+    },
+    {
+      "id": "uint-65536",
+      "hex": "a161611a00010000",
+      "valid": true
+    },
+    {
+      "id": "uint-4294967295",
+      "hex": "a161611affffffff",
+      "valid": true
+    },
+    {
+      "id": "uint-4294967296",
+      "hex": "a161611b0000000100000000",
+      "valid": true
+    },
+    {
+      "id": "all-value-kinds",
+      "hex": "a561624201026166f4616da1617801616ef66174f5",
+      "valid": true
+    },
+    {
+      "id": "depth-4",
+      "hex": "a16161a16162a16163a1616401",
+      "valid": true
+    },
+    {
+      "id": "keys-length-first",
+      "hex": "a261620162616102",
+      "valid": true
+    },
+    {
+      "id": "keys-same-length-sorted",
+      "hex": "a2616101616202",
+      "valid": true
+    },
+    {
+      "id": "key-with-24-bytes",
+      "hex": "a1781861616161616161616161616161616161616161616161616101",
+      "valid": true
+    },
+    {
+      "id": "bytes-with-24-bytes",
+      "hex": "a161615818000000000000000000000000000000000000000000000000",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-3-byte",
+      "hex": "a1616163e282ac",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-4-byte",
+      "hex": "a1616164f09f9880",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-2-byte",
+      "hex": "a1616162c2a2",
+      "valid": true
+    },
+    {
+      "id": "text-leading-bom",
+      "hex": "a1616164efbbbf78",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-smallest-2-byte",
+      "hex": "a1616162c280",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-smallest-3-byte",
+      "hex": "a1616163e0a080",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-smallest-4-byte",
+      "hex": "a1616164f0908080",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-below-surrogates",
+      "hex": "a1616163ed9fbf",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-above-surrogates",
+      "hex": "a1616163ee8080",
+      "valid": true
+    },
+    {
+      "id": "text-utf8-max-code-point",
+      "hex": "a1616164f48fbfbf",
+      "valid": true
+    },
+    {
+      "id": "key-utf8",
+      "hex": "a163e282ac63e282ac",
+      "valid": true
+    },
+    {
+      "id": "key-proto",
+      "hex": "a1695f5f70726f746f5f5fa1616101",
+      "valid": true
+    },
+    {
+      "id": "nested-keys-length-first",
+      "hex": "a16161a261620162616102",
+      "valid": true
+    },
+    {
+      "id": "size-limit-4096",
+      "hex": "a16161590ffa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "valid": true
+    },
+    {
+      "id": "float-1",
+      "hex": "a16161fb3ff0000000000000",
+      "valid": false,
+      "error": "simple value or float not allowed"
+    },
+    {
+      "id": "float16",
+      "hex": "a16161f93c00",
+      "valid": false,
+      "error": "simple value or float not allowed"
+    },
+    {
+      "id": "float32",
+      "hex": "a16161fa3f800000",
+      "valid": false,
+      "error": "simple value or float not allowed"
+    },
+    {
+      "id": "tag-42",
+      "hex": "a16161d82a4100",
+      "valid": false,
+      "error": "major type 6 not allowed"
+    },
+    {
+      "id": "negative-int",
+      "hex": "a1616120",
+      "valid": false,
+      "error": "major type 1 not allowed"
+    },
+    {
+      "id": "array",
+      "hex": "a161618101",
+      "valid": false,
+      "error": "major type 4 not allowed"
+    },
+    {
+      "id": "undefined",
+      "hex": "a16161f7",
+      "valid": false,
+      "error": "simple value or float not allowed"
+    },
+    {
+      "id": "simple-32",
+      "hex": "a16161f820",
+      "valid": false,
+      "error": "simple value or float not allowed"
+    },
+    {
+      "id": "simple-20-two-byte-form",
+      "hex": "a16161f814",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "non-minimal-uint",
+      "hex": "a161611805",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "non-minimal-uint-16-bit",
+      "hex": "a16161190005",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "non-minimal-uint-32-bit",
+      "hex": "a161611a0000ffff",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "non-minimal-uint-64-bit",
+      "hex": "a161611b00000000ffffffff",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "non-minimal-length",
+      "hex": "b801616101",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "non-minimal-key-header",
+      "hex": "a178016101",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "indefinite-map",
+      "hex": "bf616101ff",
+      "valid": false,
+      "error": "indefinite length"
+    },
+    {
+      "id": "indefinite-text",
+      "hex": "a161617f6161ff",
+      "valid": false,
+      "error": "indefinite length"
+    },
+    {
+      "id": "indefinite-bytes",
+      "hex": "a161615f4100ff",
+      "valid": false,
+      "error": "indefinite length"
+    },
+    {
+      "id": "break-byte-as-value",
+      "hex": "a16161ff",
+      "valid": false,
+      "error": "indefinite length"
+    },
+    {
+      "id": "reserved-additional-info",
+      "hex": "a161611c",
+      "valid": false,
+      "error": "reserved additional info"
+    },
+    {
+      "id": "reserved-additional-info-30",
+      "hex": "a161611e",
+      "valid": false,
+      "error": "reserved additional info"
+    },
+    {
+      "id": "top-level-text",
+      "hex": "6161",
+      "valid": false,
+      "error": "top level must be a map"
+    },
+    {
+      "id": "top-level-array",
+      "hex": "8101",
+      "valid": false,
+      "error": "top level must be a map"
+    },
+    {
+      "id": "empty-input",
+      "hex": "",
+      "valid": false,
+      "error": "truncated input"
+    },
+    {
+      "id": "trailing-byte",
+      "hex": "a161610100",
+      "valid": false,
+      "error": "trailing bytes"
+    },
+    {
+      "id": "depth-5",
+      "hex": "a16161a16161a16161a16161a1616101",
+      "valid": false,
+      "error": "map nesting deeper than 4"
+    },
+    {
+      "id": "truncated-value",
+      "hex": "a16161",
+      "valid": false,
+      "error": "truncated input"
+    },
+    {
+      "id": "truncated-key",
+      "hex": "a161",
+      "valid": false,
+      "error": "truncated input"
+    },
+    {
+      "id": "truncated-header",
+      "hex": "a161611901",
+      "valid": false,
+      "error": "truncated input"
+    },
+    {
+      "id": "size-over-4096",
+      "hex": "a16161590ffb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "valid": false,
+      "error": "input exceeds 4096 bytes"
+    },
+    {
+      "id": "unsorted-keys",
+      "hex": "a2616201616101",
+      "valid": false,
+      "error": "map keys unsorted or duplicated"
+    },
+    {
+      "id": "keys-wrong-length-first-order",
+      "hex": "a262616101616201",
+      "valid": false,
+      "error": "map keys unsorted or duplicated"
+    },
+    {
+      "id": "duplicate-keys",
+      "hex": "a2616101616102",
+      "valid": false,
+      "error": "map keys unsorted or duplicated"
+    },
+    {
+      "id": "integer-key",
+      "hex": "a10101",
+      "valid": false,
+      "error": "map key must be text"
+    },
+    {
+      "id": "bytes-key",
+      "hex": "a1416101",
+      "valid": false,
+      "error": "map key must be text"
+    },
+    {
+      "id": "nested-unsorted-keys",
+      "hex": "a16161a2616201616101",
+      "valid": false,
+      "error": "map keys unsorted or duplicated"
+    },
+    {
+      "id": "nested-keys-wrong-length-first-order",
+      "hex": "a16161a262616101616201",
+      "valid": false,
+      "error": "map keys unsorted or duplicated"
+    },
+    {
+      "id": "nested-duplicate-keys",
+      "hex": "a16161a2616101616102",
+      "valid": false,
+      "error": "map keys unsorted or duplicated"
+    },
+    {
+      "id": "nested-integer-key",
+      "hex": "a16161a10101",
+      "valid": false,
+      "error": "map key must be text"
+    },
+    {
+      "id": "nested-bytes-key",
+      "hex": "a16161a1416101",
+      "valid": false,
+      "error": "map key must be text"
+    },
+    {
+      "id": "nested-invalid-utf8-key",
+      "hex": "a16161a161ff01",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "byte-string-longer-than-input",
+      "hex": "a161614a01",
+      "valid": false,
+      "error": "length exceeds input"
+    },
+    {
+      "id": "byte-string-longer-than-the-rest",
+      "hex": "a1616144010203",
+      "valid": false,
+      "error": "truncated input"
+    },
+    {
+      "id": "bytes-length-2-64-1",
+      "hex": "a161615bffffffffffffffff",
+      "valid": false,
+      "error": "length exceeds input"
+    },
+    {
+      "id": "text-length-2-64-1",
+      "hex": "a161617bffffffffffffffff",
+      "valid": false,
+      "error": "length exceeds input"
+    },
+    {
+      "id": "key-length-2-64-1",
+      "hex": "a17bffffffffffffffff",
+      "valid": false,
+      "error": "length exceeds input"
+    },
+    {
+      "id": "map-count-2-64-1",
+      "hex": "bbffffffffffffffff",
+      "valid": false,
+      "error": "length exceeds input"
+    },
+    {
+      "id": "nested-map-count-longer-than-input",
+      "hex": "a16161b8ff",
+      "valid": false,
+      "error": "length exceeds input"
+    },
+    {
+      "id": "invalid-utf8",
+      "hex": "a1616161ff",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-overlong-c080",
+      "hex": "a1616162c080",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-overlong-c1bf",
+      "hex": "a1616162c1bf",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-overlong-3-byte",
+      "hex": "a1616163e09fbf",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-overlong-4-byte",
+      "hex": "a1616164f08fbfbf",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-last-surrogate-edbfbf",
+      "hex": "a1616163edbfbf",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-lead-f5",
+      "hex": "a1616164f5808080",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-surrogate-eda080",
+      "hex": "a1616163eda080",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-above-10ffff",
+      "hex": "a1616164f4908080",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-truncated-sequence",
+      "hex": "a1616162e282",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-lone-continuation",
+      "hex": "a161616180",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-bad-continuation",
+      "hex": "a1616162c241",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-five-byte-lead",
+      "hex": "a1616165f888808080",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "utf8-invalid-in-key",
+      "hex": "a161ff01",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "order-minimal-before-float64",
+      "hex": "a16161fb0000000000000000",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "order-minimal-before-float32",
+      "hex": "a16161fa00000000",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "order-minimal-before-float16",
+      "hex": "a16161f90000",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "order-minimal-before-negative-int",
+      "hex": "a161613800",
+      "valid": false,
+      "error": "non-minimal header"
+    },
+    {
+      "id": "order-negative-int-minimal-header",
+      "hex": "a1616138ff",
+      "valid": false,
+      "error": "major type 1 not allowed"
+    },
+    {
+      "id": "order-count-before-depth",
+      "hex": "a16161a16162a16163a16164b8ff",
+      "valid": false,
+      "error": "length exceeds input"
+    },
+    {
+      "id": "order-depth-before-key",
+      "hex": "a16161a16162a16163a16164a14161",
+      "valid": false,
+      "error": "map nesting deeper than 4"
+    },
+    {
+      "id": "order-key-text-before-key-order",
+      "hex": "a2616201416101",
+      "valid": false,
+      "error": "map key must be text"
+    },
+    {
+      "id": "order-key-utf8-before-key-order",
+      "hex": "a261620161ff01",
+      "valid": false,
+      "error": "invalid UTF-8"
+    },
+    {
+      "id": "order-top-level-before-trailing",
+      "hex": "0100",
+      "valid": false,
+      "error": "top level must be a map"
+    }
+  ],
+  "commitments": [
+    {
+      "id": "issue-bankref",
+      "detailsHex": "a2646b696e646569737375656762616e6b526566582040474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b1219",
+      "commitment": "9de342429e6618e9db8198ef6ebfddce4148d20259fdac6e5b416ddde4aeaa09"
+    },
+    {
+      "id": "issue-no-bankref",
+      "detailsHex": "a1646b696e64656973737565",
+      "commitment": "5048b6182d8c7c2819141b5b414c97757c43aee9460dab32902ff96d49cb3ac5"
+    },
+    {
+      "id": "issue-bankref-reason",
+      "detailsHex": "a3646b696e6465697373756566726561736f6e697769726520343731316762616e6b526566582040474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b1219",
+      "commitment": "d82217842f517a82e1960a0626af5a2e32edef065e866ea64cea21bb69516d69"
+    },
+    {
+      "id": "redeem",
+      "detailsHex": "a1646b696e646672656465656d",
+      "commitment": "6ff1614f25229c427cb4853a50fd6dea1d0fd28b5a95a5a648a32d86026b480d"
+    },
+    {
+      "id": "reissue",
+      "detailsHex": "a3646b696e646772656973737565686f7574706f696e74582410171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e90100000069726563697069656e745821038c44b639733c7893760b8b6a954f79f0e76d71bbc10da8a761be1dae262421ff",
+      "commitment": "35957ceeb0074c9998516dd39f16e20e558dc917f92a1cc4bd92667d64fa5164"
+    },
+    {
+      "id": "pause",
+      "detailsHex": "a1646b696e64657061757365",
+      "commitment": "e885e8f25a98c91a20c922fa97ce07eb415c6a896e6c7749ca6994340c438a5b"
+    },
+    {
+      "id": "unpause",
+      "detailsHex": "a2646b696e6467756e706175736566726561736f6e6f696e636964656e7420636c6f736564",
+      "commitment": "0c33dd1118235fb9dcc0a8a1974675771eab40098b8d5c7997ae484cdbab6aca"
+    },
+    {
+      "id": "blockIdentity",
+      "detailsHex": "a2646b696e646d626c6f636b4964656e746974796b6964656e746974794b65795821027fd738cb67baa2c6818850e56b2c7fe7de87130964dc1c2210b143a8e97bd0a6",
+      "commitment": "37b4aeb048402f8674d733986c46bdb582e22f704bde36be54a5817b0d28e393"
+    },
+    {
+      "id": "unblockIdentity",
+      "detailsHex": "a2646b696e646f756e626c6f636b4964656e746974796b6964656e746974794b65795821027fd738cb67baa2c6818850e56b2c7fe7de87130964dc1c2210b143a8e97bd0a6",
+      "commitment": "2d80e348f85c855d1e25edad784f56572e22c8f4c4c8ca8aadc4b9e33ac529bf"
+    },
+    {
+      "id": "allowIdentity",
+      "detailsHex": "a2646b696e646d616c6c6f774964656e746974796b6964656e746974794b65795821027fd738cb67baa2c6818850e56b2c7fe7de87130964dc1c2210b143a8e97bd0a6",
+      "commitment": "0a3935aeb8a2b2eb62ea7bb9ae53d033989803367d9bbaa0ea8debf8cf55b4fc"
+    },
+    {
+      "id": "unallowIdentity",
+      "detailsHex": "a2646b696e646f756e616c6c6f774964656e746974796b6964656e746974794b65795821027fd738cb67baa2c6818850e56b2c7fe7de87130964dc1c2210b143a8e97bd0a6",
+      "commitment": "85d4fcdb7a5f828092f6fdda820526a00f707d685d08eb61562ffc5a67c3c08b"
+    },
+    {
+      "id": "setAccessMode-denylist",
+      "detailsHex": "a2646b696e646d7365744163636573734d6f6465646d6f64656864656e796c697374",
+      "commitment": "4b3da0a4dd7833d8bd78ca0e488cf0c1355a786a6a9d126017706adbf61309c8"
+    },
+    {
+      "id": "setAccessMode-allowlist",
+      "detailsHex": "a2646b696e646d7365744163636573734d6f6465646d6f646569616c6c6f776c697374",
+      "commitment": "1c3cfa62fc654864c5cfbc48fd62b8d94d488273c0ae6a99d7e5083e97e5c750"
+    },
+    {
+      "id": "freezeOutput",
+      "detailsHex": "a2646b696e646c667265657a654f7574707574686f7574706f696e74582410171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e901000000",
+      "commitment": "4e530a63026892b3123479c122a583510f3279ca903f9484eafab5803540a390"
+    },
+    {
+      "id": "unfreezeOutput",
+      "detailsHex": "a2646b696e646e756e667265657a654f7574707574686f7574706f696e74582410171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e901000000",
+      "commitment": "c9f6ed98e1be170b07a3ce09749376c1f218f6e3bb685eb578d0d44b2435b3d2"
+    },
+    {
+      "id": "setFeeRate",
+      "detailsHex": "a2646b696e646a736574466565526174656c666565526174655065724b621903e8",
+      "commitment": "3b2798d09437548828294224efc33b38a3574c72b4f3a8651bd3a30a00bb3783"
+    },
+    {
+      "id": "setFeeRate-disabled",
+      "detailsHex": "a2646b696e646a736574466565526174656c666565526174655065724b62f6",
+      "commitment": "758e4ef1f86db8228525302c0a31798935c86bf4332ba290baf87720a9ae2ce9"
+    },
+    {
+      "id": "admitIdentity",
+      "detailsHex": "a2646b696e646d61646d69744964656e746974796b6964656e746974794b65795821027fd738cb67baa2c6818850e56b2c7fe7de87130964dc1c2210b143a8e97bd0a6",
+      "commitment": "aaefb0ea584c2313d2b379b558387440617e7da83f41d08c504917b57fdf7a08"
+    },
+    {
+      "id": "revokeIdentity",
+      "detailsHex": "a2646b696e646e7265766f6b654964656e746974796b6964656e746974794b65795821027fd738cb67baa2c6818850e56b2c7fe7de87130964dc1c2210b143a8e97bd0a6",
+      "commitment": "7eee679cae57aaa531ce4b36a6192cbcc1b75a7bbc14bb15259e99b27187abd5"
+    }
+  ],
+  "deploySig": [
+    {
+      "id": "digest-1",
+      "txid": "abababababababababababababababababababababababababababababababcd",
+      "digestHex": "6d616e64616c612d6465706c6f793a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626364",
+      "issuerIdentityKey": "0364f4edfaef6066ac3b98005c5670d8c771f986640abbd2f804364d271d410f2e",
+      "protocolID": [
+        2,
+        "mandala deploy"
+      ],
+      "keyID": "1",
+      "counterparty": "anyone",
+      "signatureHex": "3044022073e985499c764e64d136e92cac1c6fafe42335065c7c396167c2fdbb9835ede202200287c7f0ebc9cbecf1b56ef194ce67ff5b6f862c4a587743b33e08f34cc49682"
+    },
+    {
+      "id": "digest-2",
+      "txid": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "digestHex": "6d616e64616c612d6465706c6f793a30303031303230333034303530363037303830393061306230633064306530663130313131323133313431353136313731383139316131623163316431653166",
+      "issuerIdentityKey": "0364f4edfaef6066ac3b98005c5670d8c771f986640abbd2f804364d271d410f2e",
+      "protocolID": [
+        2,
+        "mandala deploy"
+      ],
+      "keyID": "1",
+      "counterparty": "anyone",
+      "signatureHex": "304402207e8c09fb4c0431feff38603192439068b80e878fef29dfdadb1bc5ce490327b102205ce60329bdf5c50a877b70cbad0c72da69dab8dc41fa8c85f770d3dffa6edc3f"
+    }
+  ]
+}

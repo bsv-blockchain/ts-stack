@@ -108,10 +108,6 @@ jobs:
         with:
           node-version: 24.x
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-      - name: Install pinned dependency parser without lifecycle scripts
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
       - name: Resolve package, mutation, documentation, conformance, and image scope
         id: scope
         env:
@@ -125,11 +121,13 @@ jobs:
              [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ] &&
              git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             SCOPE=$(node scripts/ci-affected-scope.mjs --base "$BASE_SHA" --head "$HEAD_SHA")
-            git diff --name-only "$BASE_SHA"..."$HEAD_SHA" > .ci-changed-files.txt
+            # Mutation is a full-suite qualification: ordinary pull requests and
+            # pushes select no targets. Dispatch CI, or the scheduled Mutation
+            # quality workflow, to run the complete governed registry.
             MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs --base "$BASE_SHA" --head HEAD)
           else
             SCOPE=$(node scripts/ci-affected-scope.mjs --all)
-            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs)
+            MUTATION_SCOPE=$(node scripts/ci-mutation-scope.mjs --all)
           fi
           MUTATION_TARGETS=$(jq -c '.required' <<<"$MUTATION_SCOPE")
           if [ "$(jq -r 'type' <<<"$MUTATION_TARGETS")" != "array" ]; then
@@ -156,10 +154,9 @@ jobs:
             echo
             echo "- Direct test packages: $(jq -c '[.directProjects[].name]' <<<"$SCOPE")"
             echo "- Compatibility packages: $(jq -c '[.affectedProjects[].name]' <<<"$SCOPE")"
-            echo "- Required premerge mutation targets: $MUTATION_TARGETS"
-            echo "- Deferred to complete final qualification (not passed): $(jq -c '.deferred' <<<"$MUTATION_SCOPE")"
-            echo "- Newly deferred from prior selection: $(jq -c '.newlyDeferred' <<<"$MUTATION_SCOPE")"
-            echo "- Critical targets outside this PR scope: $(jq -c '.outside' <<<"$MUTATION_SCOPE")"
+            echo "- Mutation targets in this run (full campaigns only): $MUTATION_TARGETS"
+            echo "- Deferred to the scheduled or dispatched full campaign (not passed): $(jq -c '.deferred' <<<"$MUTATION_SCOPE")"
+            echo "- Critical targets awaiting the full campaign (not passed): $(jq -c '.outside' <<<"$MUTATION_SCOPE")"
             echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
           } >> "$GITHUB_STEP_SUMMARY"
 

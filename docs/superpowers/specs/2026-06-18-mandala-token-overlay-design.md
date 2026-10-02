@@ -12,6 +12,8 @@ tags: [mandala, brc-92, overlay, regulated-token]
 
 # Mandala Token Regulated-Transfer Overlay — Design
 
+> **Superseded (2026-10):** Mandala moved to BRC-162 binary tokens — see @bsv/templates 2.0.0 Bsv21Binary and @bsv/overlay-topics 2.0.0.
+
 **Date:** 2026-06-18
 **Branch:** `feature/mandala-token-overlay`
 **Status:** Approved for implementation planning

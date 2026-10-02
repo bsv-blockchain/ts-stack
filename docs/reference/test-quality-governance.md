@@ -87,9 +87,9 @@ Required CI uses `fast-check` to generate and shrink unexpected inputs across
   framing, payment replay admission, fund-wallet CLI keys/endpoints/amounts,
   currency conversion/formatting, and project-scaffolder path/configuration
   validation; and
-- untrusted application data: Mandala linkage payloads, BTMS metadata and
-  derivation instructions, canonical token amounts and asset IDs, and
-  forge-resistant overlay log fields.
+- untrusted application data: Mandala BRC-162 envelope and issuer
+  authorization, BTMS metadata and derivation instructions, canonical token
+  amounts and asset IDs, and forge-resistant overlay log fields.
 
 These are not round-trip-only tests. Depending on the boundary, the registered
 invariants also require an independently encoded oracle, canonicalization,
