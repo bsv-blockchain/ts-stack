@@ -9,7 +9,7 @@ const replica = await createMongoReplicaFixture()
 let child
 let termination
 const stop = () => {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return
+  if (child?.exitCode !== null || child.signalCode !== null) return
   child.kill('SIGTERM')
   termination ??= setTimeout(() => child.kill('SIGKILL'), 10000)
 }

@@ -1236,6 +1236,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-listing-purchase",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-purchase.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact original BRC-196 preparation and recipient-bound purchase receipt composed with full Bitcoin/genesis/Script lineage",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

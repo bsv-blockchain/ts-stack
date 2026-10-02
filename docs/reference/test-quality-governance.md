@@ -2,9 +2,9 @@
 id: test-quality-governance
 title: 'Test Quality and Skip Governance'
 kind: reference
-version: '1.1.0'
-last_updated: '2026-07-26'
-last_verified: '2026-08-26'
+version: '1.2.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, testing]
@@ -434,3 +434,12 @@ The new critical target retains a complete aggregate 90% minimum and zero uncove
 or invalid mutants. Existing wallet targets, source/test unions, thresholds,
 deadlines and complete-campaign policy remain unchanged. Registration alone is not
 passing campaign evidence.
+
+`revenue-listing-purchase` qualifies the complete prepared-purchase verifier with
+both full unit/property suites and the disclosed lineage/authority/funding fixture
+closure. Its 300 seeded generated cases distinguish Script-valid receipts from
+association with the original seller/request/recipient. The complete critical
+source retains score90, zero uncovered/invalid/unexecuted, four workers and the
+existing deadline/seed policy. It has no source partition; a named feedback run
+is diagnostic, while the final complete campaign remains mandatory. Existing
+wallet, application, LCH and administrative-route target unions remain intact.

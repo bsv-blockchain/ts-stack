@@ -59,6 +59,14 @@ signing implementation. Neither signs during ingestion or proves permission,
 lineage, currentness or fulfillment. See the
 [authority guide](../../../docs/guides/revenue-listing-authority.md).
 
+The same optional entry now supplies `RevenueListingPurchaseVerifier` for exact
+BRC-196 prepared-request association. It authenticates the frozen terms against the
+original request and selected seller, checks the actual predecessor, successor
+increment/state and recipient-bound receipt, then verifies the complete successor
+history and every covenant. The result does not establish currentness, asset
+permission, admission, private release or usability. See the history guide's
+prepared-purchase section before composing it with a wallet or host.
+
 ## Durable progressive and live provider
 
 The optional `@bsv/output-knowledge/lookup` entry composes durable snapshot/live

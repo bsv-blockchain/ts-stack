@@ -2,9 +2,9 @@
 id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
-version: '1.0.0'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+version: '1.1.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [guide, typescript, packages, consumers, examples]
@@ -1826,4 +1826,44 @@ async function useOriginalPrivateBuyer(buyer: DurablePrivateBuyer, explicitlyAut
 }
 void openOriginalPrivateBuyer
 void useOriginalPrivateBuyer
+```
+
+## Prepared purchase verification
+
+The independently selected seller, original request/terms and trusted chain view
+remain caller-owned selections. This read-only verifier does not fund, admit or
+release anything.
+
+```ts compile
+// example-id: revenue-listing-purchase
+import { RevenueListing as PurchaseListingCodec } from '@bsv/sdk/script/templates/RevenueListing'
+import type {
+  OutputPurchasePrepare,
+  OutputSignedPurchaseTerms as PreparedPurchaseTerms
+} from '@bsv/sdk'
+import {
+  RevenueListingPurchaseVerifier,
+  type ChainViewResolver as PurchaseChainViewResolver,
+  type VerificationContext as PurchaseVerificationContext
+} from '@bsv/output-knowledge/revenue-listing'
+
+export function installPurchaseVerifier(program: Uint8Array, chains: PurchaseChainViewResolver) {
+  return new RevenueListingPurchaseVerifier(new PurchaseListingCodec(program), chains, {
+    concurrentRequests: 2
+  })
+}
+
+export async function inspectPreparedPurchase(
+  verifier: RevenueListingPurchaseVerifier,
+  purchase: unknown,
+  original: {
+    seller: string
+    request: OutputPurchasePrepare
+    terms: PreparedPurchaseTerms
+  },
+  context: PurchaseVerificationContext,
+  signal: AbortSignal
+) {
+  return await verifier.verify(purchase, original, context, signal)
+}
 ```

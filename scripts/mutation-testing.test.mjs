@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 122)
+  assert.equal(Object.keys(configured).length, 123)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -947,4 +947,30 @@ test('host qualification preserves complete selected unions in disjoint legacy a
     assert.equal(ignores(privateProject, privatePath), false)
     assert.ok(target.additionalInputs.includes('jest.projects.mjs'))
   }
+})
+
+test('prepared purchases qualify the complete verifier and full association suite without a source partition', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    target = configured['revenue-listing-purchase']
+  assert.deepEqual(target.mutate, ['src/revenue-listing/RevenueListingPurchaseVerifier.ts'])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/revenue-purchase.test.ts',
+    '<rootDir>/test/revenue-purchase.property.test.ts'
+  ])
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/revenue-purchase.property.test.ts'
+  )
+  for (const input of [
+    'test/revenue-purchase*.ts',
+    'test/revenue-lineage-fixture.ts',
+    'test/revenue-authority-fixture.ts',
+    'test/fixtures/revenue-listing/**'
+  ])
+    assert.ok(target.additionalInputs.includes(input))
+  assert.ok(
+    selectAffectedMutationTargets(configured, [
+      'packages/application/output-knowledge/test/revenue-purchase.fixture.ts'
+    ]).includes('revenue-listing-purchase')
+  )
 })

@@ -2838,3 +2838,31 @@ signature/revocation validation. Its 20 authority, paid-domain and seller regres
 strict types and clean packed ESM/CLI consumers pass. The previous published
 84656bbe6 head has one remaining new Sonar finding addressed by this extraction;
 the new batch still requires exact-head hosted qualification and complete mutation.
+
+### October 2 exact prepared purchase composition
+
+The additive `RevenueListingPurchaseVerifier` composes the complete BRC-196
+original request and authenticated seller terms with BRC-197's executable family,
+authorized genesis, both-parent lineage and Bitcoin evidence. The prepared domain
+uses the exact registered profile/schema and JCS lineage bytes. A purchase must
+consume the selected predecessor at input zero and reproduce the exact successor
+and recipient/acquisition/request-bound receipt. Independent verification runs
+the covenant even when the purchase carries a mining proof. A signed preparation
+for another recipient or request cannot turn a valid payment into its entitlement.
+
+The complete verifier union passes 19 tests, including 300 generated valid
+alternate-preparation refusals. Coverage measures 100% statements, functions and
+lines and 97.14% branches. An actual purchase after unanimous revenue amendment
+passes; missing declared genesis remains unresolved, and a wrong prepared receipt
+fails before chain I/O. The fixtures use disclosed synthetic funding, actual
+transaction signatures and Script validation. They do not establish a native
+wallet-funded purchase, admission, release, current unspentness or playback.
+
+The clean package check includes the new optional export and its declarations;
+all 30 compiled examples pass against eight exact tarballs. The verifier has one
+complete critical mutation target, preserving score 90, zero uncovered/invalid/
+unexecuted requirements, four workers, the 300-case floor, replay controls and the
+complete-campaign-only policy. Named local mutation feedback and hosted checks
+remain pending qualifications rather than completed checkpoint evidence. The
+three new analyzer findings on published 4f1a57515 are addressed without altering
+the workbench's input, ownership or shutdown semantics.

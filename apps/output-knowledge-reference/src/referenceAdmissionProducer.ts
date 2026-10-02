@@ -226,7 +226,7 @@ export class ReferenceAdmissionProducer {
       const pending = value.pending
       closedOutputObject(pending, ['action', 'serial', 'acceptedAt', 'withdrawn'])
       outputAssert(
-        actions.some(action => action === pending.action) &&
+        actions.includes(pending.action as ReferenceAction) &&
           pending.serial === value.serial &&
           typeof pending.withdrawn === 'boolean',
         'Invalid retained reference command'

@@ -1503,6 +1503,18 @@
           "Duplicate typed body IDs, unsupported fields and wrong-mode evidence fail closed.",
           "Aggregate signature and finite typed-evidence budgets apply before authentication work."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-purchase.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact original BRC-196 preparation and recipient-bound purchase receipt composed with full Bitcoin/genesis/Script lineage",
+        "target": "At least 300 deterministic signed alternate-request, request-ID and recipient association refusals",
+        "invariants": [
+          "A Script-valid purchase cannot authorize delivery for another valid signed preparation.",
+          "Receipt acquisition, original request digest and recipient must all match the retained terms.",
+          "Conclusive association failures do not invoke chain I/O or reserve an admission effect."
+        ]
       }
     ],
     "exclusions": [

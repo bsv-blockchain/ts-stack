@@ -450,6 +450,32 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'revenue-listing-purchase': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/revenue-purchase.property.test.ts',
+      additionalInputs: [
+        'src/revenue-listing/**',
+        'src/SDKEvidenceVerifier.ts',
+        'src/EvidenceAssembler.ts',
+        'src/validation.ts',
+        'src/internal/asyncValues.ts',
+        'src/internal/synchronousPromise.ts',
+        'test/revenue-purchase*.ts',
+        'test/revenue-lineage-fixture.ts',
+        'test/revenue-authority-fixture.ts',
+        'test/fixtures/revenue-listing/**'
+      ],
+      mutate: ['src/revenue-listing/RevenueListingPurchaseVerifier.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/revenue-purchase.test.ts',
+          '<rootDir>/test/revenue-purchase.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'revenue-lineage-package': lineageTarget(
       'LineagePackage',
       'revenue-lineage-package.property.test.ts'

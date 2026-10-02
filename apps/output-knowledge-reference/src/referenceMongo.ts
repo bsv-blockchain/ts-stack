@@ -37,7 +37,7 @@ export async function openReferenceMongo(options: {
     'Reference Mongo must use an isolated loopback replica set'
   )
   outputAssert(
-    /^output_reference_[A-Za-z0-9_]{1,48}$/.test(options.database),
+    /^output_reference_\w{1,48}$/.test(options.database),
     'Reference database must use the output_reference_ prefix'
   )
   outputAssert(['one', 'two'].includes(options.role), 'Invalid reference Mongo role')

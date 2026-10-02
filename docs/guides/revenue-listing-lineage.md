@@ -2,9 +2,9 @@
 id: revenue-listing-lineage
 title: 'Verifying Revenue Listing Histories'
 kind: guide
-version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+version: '1.1.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, sdk, scripts, revenue, evidence]
@@ -155,3 +155,50 @@ The graph mutation gate aggregates both complete helper files, with the same ful
 canonical unit/property tests in each execution part. Traversal retains its own
 complete source and critical gate. Both remain required before qualification; no
 partial report or earlier cancelled run establishes acceptance.
+
+## Exact prepared purchases
+
+`RevenueListingPurchaseVerifier` composes a frozen BRC-196 preparation with the
+full history verifier. Supply the independently selected seller, original complete
+Prepare and original signed PurchaseTerms, plus purchase evidence selecting output
+zero and the trusted local verification context. The verifier authenticates the
+terms against that exact request and seller. It requires the registered purchase
+profile and exact UTF-8 JCS lineage-package schema bytes, with the prepared target,
+chain, seller, asset and terms matching the immutable descriptor.
+
+It checks the actual input-zero predecessor, operation-one ABI, byte-identical
+successor script and current revenue schedule, exact price increment and one-satoshi
+receipt committing to acquisition, request and recipient. It extends the declared
+history with this purchase, then independently verifies Bitcoin evidence and every
+covenant through the authorized genesis. A mining proof cannot skip the additional
+family execution. Another valid recipient or another preparation may produce a
+Script-valid purchase, but cannot satisfy this acquisition. An administrative merge
+is not a purchase or a license fulfillment, including a value-conserving funded-copy
+merge. Missing declared ancestry remains unresolved even if incidental raw ancestor
+bytes occur inside purchase BEEF.
+
+The result includes independently owned original request/terms, purchase evidence,
+prepared history, complete verified successor history, predecessor/successor points,
+old value and price increment. It has the history verifier's bounded physical work
+and negative statuses. Local installation changes across asynchronous verification
+return context-changed. Caller limits apply before assembling candidate dependency
+unions. The complete extended package, including the new purchase entry, must fit
+the existing history profile; preparation must reserve enough space before a wallet
+is asked to fund a purchase.
+
+This is a domain verification boundary. Asset authority and content/key/license
+validation, output currentness, explicit wallet authorization and durable action
+recovery, actual topical admission, release-policy assessment and POTATOES issuance
+are still separate owners. A historically valid purchase need not be the winning
+current spend. The verifier deliberately does not reject an old prepared obligation
+merely because the Offer or purchase cutoff has since expired; the durable service
+owns the original reservation and late-first-delivery rules. A verified result alone
+never authorizes key disclosure or a second purchase.
+
+The disclosed synthetic tests construct and sign fresh actual purchase receipts,
+including a purchase after unanimous amendment, and execute the complete ancestry.
+They also verify independent recipient/request refusals and an invalid covenant with
+a valid synthetic mining proof. Three hundred generated valid preparations test
+association refusal before chain I/O. These are local component evidence; a complete
+wallet/host/LCH purchase demonstration and the final full mutation campaign remain
+checkpoint requirements.
