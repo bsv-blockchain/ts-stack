@@ -38,7 +38,10 @@ All notable changes to this project will be documented in this file. The format 
   `StrictCborError`, `StrictCborValue`, `StrictCborMap`,
   `STRICT_CBOR_MAX_BYTES` and `STRICT_CBOR_MAX_DEPTH`. Floats, tags, negative
   integers, arrays, unsorted keys, non-minimal headers, trailing bytes and
-  nesting deeper than 4 are refused.
+  nesting deeper than 4 are refused, and so is a `number[]` input with an entry
+  outside 0..255 (never wrapped to a byte). Each refusal throws a fixed
+  message; the package-local `test/vectors/brc162.json` pins every message and
+  the order the checks run in, for ports such as the Go overlay.
 
 ### Changed
 

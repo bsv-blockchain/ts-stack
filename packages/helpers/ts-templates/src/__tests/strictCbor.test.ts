@@ -9,6 +9,17 @@ import {
 const hex = (h: string): number[] => Array.from(Buffer.from(h.replace(/\s/g, ''), 'hex'))
 const toHex = (b: number[]): string => Buffer.from(b).toString('hex')
 
+// The StrictCborError a call throws, so a test can pin its exact message.
+const strictCborErrorOf = (call: () => unknown): string => {
+  try {
+    call()
+  } catch (e) {
+    expect(e).toBeInstanceOf(StrictCborError)
+    return (e as Error).message
+  }
+  throw new Error('expected a StrictCborError, but nothing was thrown')
+}
+
 // a1 6161 59 <len16> <data>: a one-entry map holding a byte string of `dataLength` bytes.
 const mapWithBytes = (dataLength: number): number[] => [
   0xa1,
@@ -54,14 +65,22 @@ describe('strictCbor encode', () => {
   })
   it('encodes 2^64-1 and rejects 2^64, negatives, unsafe numbers and floats', () => {
     expect(toHex(encodeStrictCbor({ a: (1n << 64n) - 1n }))).toBe('a161611bffffffffffffffff')
-    for (const bad of [1n << 64n, -1n, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
-      expect(() => encodeStrictCbor({ a: bad as never })).toThrow(StrictCborError)
+    for (const bad of [1n << 64n, -1n]) {
+      expect(strictCborErrorOf(() => encodeStrictCbor({ a: bad }))).toBe(
+        'integer outside 0..2^64-1'
+      )
     }
+    for (const bad of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
+      expect(strictCborErrorOf(() => encodeStrictCbor({ a: bad }))).toBe(
+        'number must be a safe non-negative integer'
+      )
+    }
+    expect(toHex(encodeStrictCbor({ a: Number.MAX_SAFE_INTEGER }))).toBe('a161611b001fffffffffffff')
   })
   it('rejects nesting deeper than 4 and accepts exactly 4', () => {
-    expect(() => encodeStrictCbor({ a: { b: { c: { d: { e: 1n } } } } } as never)).toThrow(
-      StrictCborError
-    )
+    expect(
+      strictCborErrorOf(() => encodeStrictCbor({ a: { b: { c: { d: { e: 1n } } } } } as never))
+    ).toBe('map nesting deeper than 4')
     expect(toHex(encodeStrictCbor({ a: { b: { c: { d: 1n } } } } as never))).toBe(
       'a1 6161 a1 6162 a1 6163 a1 6164 01'.replace(/\s/g, '')
     )
@@ -69,23 +88,34 @@ describe('strictCbor encode', () => {
   it('rejects values and containers outside the subset instead of coercing them', () => {
     const bad: unknown[] = [undefined, [1], new Date(0), new Map(), new Uint16Array(1), () => 1]
     for (const value of bad) {
-      expect(() => encodeStrictCbor({ a: value as never })).toThrow(StrictCborError)
+      expect(strictCborErrorOf(() => encodeStrictCbor({ a: value as never }))).toBe(
+        'unsupported value type'
+      )
     }
     for (const top of [[], null, new Uint8Array(1), 'text', 1n]) {
-      expect(() => encodeStrictCbor(top as never)).toThrow(StrictCborError)
+      expect(strictCborErrorOf(() => encodeStrictCbor(top as never))).toBe(
+        'top level must be a map'
+      )
     }
   })
   it('rejects lone surrogates, which UTF-8 cannot carry', () => {
-    expect(() => encodeStrictCbor({ a: '\ud800' })).toThrow(StrictCborError)
-    expect(() => encodeStrictCbor({ '\udc00': 1n })).toThrow(StrictCborError)
-    expect(() => encodeStrictCbor({ a: '\ud800x' })).toThrow(StrictCborError)
-    expect(() => encodeStrictCbor({ a: 'x\ude00\ud83d' })).toThrow(StrictCborError)
-    expect(() => encodeStrictCbor({ a: '\ud83d\ude00\ud800' })).toThrow(StrictCborError)
+    const loneSurrogates: Array<Record<string, string | bigint>> = [
+      { a: '\ud800' },
+      { '\udc00': 1n },
+      { a: '\ud800x' },
+      { a: 'x\ude00\ud83d' },
+      { a: '\ud83d\ude00\ud800' }
+    ]
+    for (const map of loneSurrogates) {
+      expect(strictCborErrorOf(() => encodeStrictCbor(map))).toBe('text contains a lone surrogate')
+    }
     expect(toHex(encodeStrictCbor({ a: '😀' }))).toBe('a1 6161 64f09f9880'.replace(/\s/g, ''))
   })
   it('enforces the 4096 byte ceiling', () => {
     expect(encodeStrictCbor({ a: new Uint8Array(4090) })).toHaveLength(STRICT_CBOR_MAX_BYTES)
-    expect(() => encodeStrictCbor({ a: new Uint8Array(4091) })).toThrow(StrictCborError)
+    expect(strictCborErrorOf(() => encodeStrictCbor({ a: new Uint8Array(4091) }))).toBe(
+      'encoding exceeds 4096 bytes'
+    )
   })
 })
 
@@ -139,52 +169,121 @@ describe('strictCbor decode accepts exactly the subset', () => {
     expect(decodeStrictCbor(hex('a1 6161 64 f09f9880'))).toEqual({ a: '😀' })
     expect(decodeStrictCbor(hex('a1 6161 62 c2a2'))).toEqual({ a: '¢' })
   })
+  // [label, hex, message]. The message is a cross-engine contract: the overlay copies it into
+  // its deployPayload / detailsSchema reasons, and the Go port must produce the same bytes.
   it.each([
-    ['float 1.0', 'a1 6161 fb3ff0000000000000'],
-    ['float16', 'a1 6161 f93c00'],
-    ['tag 42', 'a1 6161 d82a 4100'],
-    ['negative int', 'a1 6161 20'],
-    ['array', 'a1 6161 8101'],
-    ['undefined', 'a1 6161 f7'],
-    ['simple value 20 in the two-byte form', 'a1 6161 f814'],
-    ['non-minimal uint', 'a1 6161 1805'],
-    ['non-minimal 16-bit uint', 'a1 6161 190005'],
-    ['non-minimal length', 'b801 6161 01'],
-    ['indefinite map', 'bf 6161 01 ff'],
-    ['indefinite text', 'a1 6161 7f6161ff'],
-    ['break byte as a value', 'a1 6161 ff'],
-    ['unsorted keys', 'a2 6162 01 6161 01'],
-    ['wrong length-first order', 'a2 626161 01 6162 01'],
-    ['duplicate keys', 'a2 6161 01 6161 02'],
-    ['integer key', 'a1 01 01'],
-    ['bytes key', 'a1 4161 01'],
-    ['top-level not a map', '6161'],
-    ['empty input', ''],
-    ['trailing byte', 'a1 6161 01 00'],
-    ['invalid utf-8', 'a1 6161 61ff'],
-    ['depth 5', 'a1 6161 a1 6161 a1 6161 a1 6161 a1 6161 01'],
-    ['truncated', 'a1 6161'],
-    ['truncated key', 'a1 61'],
-    ['truncated multi-byte header', 'a1 6161 19 01'],
-    ['byte string longer than the input', 'a1 6161 4a 01'],
-    ['reserved additional info', 'a1 6161 1c'],
-    ['overlong utf-8 c0 80', 'a1 6161 62 c080'],
-    ['surrogate ed a0 80', 'a1 6161 63 eda080'],
-    ['code point above U+10FFFF', 'a1 6161 64 f4908080'],
-    ['truncated utf-8 sequence', 'a1 6161 62 e282'],
-    ['lone continuation byte', 'a1 6161 61 80'],
-    ['bad continuation byte', 'a1 6161 62 c241'],
-    ['five-byte lead', 'a1 6161 65 f888808080'],
-    ['invalid utf-8 in a key', 'a1 61ff 01']
-  ])('rejects %s', (_label, h) => {
-    expect(() => decodeStrictCbor(hex(h))).toThrow(StrictCborError)
+    ['float 1.0', 'a1 6161 fb3ff0000000000000', 'simple value or float not allowed'],
+    ['float16', 'a1 6161 f93c00', 'simple value or float not allowed'],
+    ['float32', 'a1 6161 fa3f800000', 'simple value or float not allowed'],
+    ['tag 42', 'a1 6161 d82a 4100', 'major type 6 not allowed'],
+    ['negative int', 'a1 6161 20', 'major type 1 not allowed'],
+    ['array', 'a1 6161 8101', 'major type 4 not allowed'],
+    ['undefined', 'a1 6161 f7', 'simple value or float not allowed'],
+    ['simple value 32', 'a1 6161 f820', 'simple value or float not allowed'],
+    ['simple value 20 in the two-byte form', 'a1 6161 f814', 'non-minimal header'],
+    ['non-minimal uint', 'a1 6161 1805', 'non-minimal header'],
+    ['non-minimal 16-bit uint', 'a1 6161 190005', 'non-minimal header'],
+    ['non-minimal 32-bit uint', 'a1 6161 1a0000ffff', 'non-minimal header'],
+    ['non-minimal 64-bit uint', 'a1 6161 1b00000000ffffffff', 'non-minimal header'],
+    ['non-minimal length', 'b801 6161 01', 'non-minimal header'],
+    ['non-minimal key header', 'a1 7801 61 01', 'non-minimal header'],
+    [
+      'float64 zero (minimality before major type)',
+      'a1 6161 fb0000000000000000',
+      'non-minimal header'
+    ],
+    ['float32 zero (minimality before major type)', 'a1 6161 fa00000000', 'non-minimal header'],
+    ['float16 zero (minimality before major type)', 'a1 6161 f90000', 'non-minimal header'],
+    [
+      'non-minimal negative int (minimality before major type)',
+      'a1 6161 3800',
+      'non-minimal header'
+    ],
+    ['minimal one-byte negative int', 'a1 6161 38ff', 'major type 1 not allowed'],
+    ['indefinite map', 'bf 6161 01 ff', 'indefinite length'],
+    ['indefinite text', 'a1 6161 7f6161ff', 'indefinite length'],
+    ['indefinite bytes', 'a1 6161 5f4100ff', 'indefinite length'],
+    ['break byte as a value', 'a1 6161 ff', 'indefinite length'],
+    ['reserved additional info', 'a1 6161 1c', 'reserved additional info'],
+    ['reserved additional info 30', 'a1 6161 1e', 'reserved additional info'],
+    ['unsorted keys', 'a2 6162 01 6161 01', 'map keys unsorted or duplicated'],
+    ['wrong length-first order', 'a2 626161 01 6162 01', 'map keys unsorted or duplicated'],
+    ['duplicate keys', 'a2 6161 01 6161 02', 'map keys unsorted or duplicated'],
+    ['integer key', 'a1 01 01', 'map key must be text'],
+    ['bytes key', 'a1 4161 01', 'map key must be text'],
+    [
+      'unsorted keys in a nested map',
+      'a1 6161 a2 6162 01 6161 01',
+      'map keys unsorted or duplicated'
+    ],
+    [
+      'duplicate keys in a nested map',
+      'a1 6161 a2 6161 01 6161 02',
+      'map keys unsorted or duplicated'
+    ],
+    ['integer key in a nested map', 'a1 6161 a1 01 01', 'map key must be text'],
+    ['bytes key in a nested map', 'a1 6161 a1 4161 01', 'map key must be text'],
+    ['a non-text key before its order is judged', 'a2 6162 01 4161 01', 'map key must be text'],
+    ['an invalid UTF-8 key before its order is judged', 'a2 6162 01 61ff 01', 'invalid UTF-8'],
+    ['top-level not a map', '6161', 'top level must be a map'],
+    ['top-level array', '8101', 'top level must be a map'],
+    ['empty input', '', 'truncated input'],
+    ['trailing byte', 'a1 6161 01 00', 'trailing bytes'],
+    ['invalid utf-8', 'a1 6161 61ff', 'invalid UTF-8'],
+    ['depth 5', 'a1 6161 a1 6161 a1 6161 a1 6161 a1 6161 01', 'map nesting deeper than 4'],
+    [
+      'depth 5 before its key',
+      'a1 6161 a1 6162 a1 6163 a1 6164 a1 4161',
+      'map nesting deeper than 4'
+    ],
+    [
+      'a map count longer than the input, before depth',
+      'a1 6161 a1 6162 a1 6163 a1 6164 b8ff',
+      'length exceeds input'
+    ],
+    ['truncated', 'a1 6161', 'truncated input'],
+    ['truncated key', 'a1 61', 'truncated input'],
+    ['truncated multi-byte header', 'a1 6161 19 01', 'truncated input'],
+    ['byte string longer than the input', 'a1 6161 4a 01', 'length exceeds input'],
+    ['byte string longer than the rest of the input', 'a1 6161 44 010203', 'truncated input'],
+    ['byte string of 2^64-1 bytes', 'a1 6161 5b ffffffffffffffff', 'length exceeds input'],
+    ['text of 2^64-1 bytes', 'a1 6161 7b ffffffffffffffff', 'length exceeds input'],
+    ['key of 2^64-1 bytes', 'a1 7b ffffffffffffffff', 'length exceeds input'],
+    ['map of 2^64-1 entries', 'bb ffffffffffffffff', 'length exceeds input'],
+    ['overlong utf-8 c0 80', 'a1 6161 62 c080', 'invalid UTF-8'],
+    ['surrogate ed a0 80', 'a1 6161 63 eda080', 'invalid UTF-8'],
+    ['code point above U+10FFFF', 'a1 6161 64 f4908080', 'invalid UTF-8'],
+    ['truncated utf-8 sequence', 'a1 6161 62 e282', 'invalid UTF-8'],
+    ['lone continuation byte', 'a1 6161 61 80', 'invalid UTF-8'],
+    ['bad continuation byte', 'a1 6161 62 c241', 'invalid UTF-8'],
+    ['five-byte lead', 'a1 6161 65 f888808080', 'invalid UTF-8'],
+    ['invalid utf-8 in a key', 'a1 61ff 01', 'invalid UTF-8'],
+    ['invalid utf-8 in a nested key', 'a1 6161 a1 61ff 01', 'invalid UTF-8']
+  ])('rejects %s', (_label, h, message) => {
+    expect(strictCborErrorOf(() => decodeStrictCbor(hex(h)))).toBe(message)
+    expect(strictCborErrorOf(() => decodeStrictCbor(Uint8Array.from(hex(h))))).toBe(message)
     expect(tryDecodeStrictCbor(hex(h))).toBeUndefined()
+  })
+  it('rejects number[] entries outside 0..255 instead of wrapping them', () => {
+    // Uint8Array.from would read 0x101 as 0x01 and -1 as 0xff
+    for (const input of [
+      [0xa1, 0x61, 0x61, 0x101],
+      [0xa1, 0x61, 0x61, -0xff],
+      [0xa1, 0x61, 0x61, 1.5],
+      [0x1a1, 0x61, 0x61, 0x01]
+    ]) {
+      expect(strictCborErrorOf(() => decodeStrictCbor(input))).toBe('non-canonical encoding')
+      expect(tryDecodeStrictCbor(input)).toBeUndefined()
+    }
+    expect(decodeStrictCbor([0xa1, 0x61, 0x61, 0x01])).toEqual({ a: 1n })
   })
   it('rejects input over 4096 bytes', () => {
     const big = mapWithBytes(4091)
     expect(big).toHaveLength(STRICT_CBOR_MAX_BYTES + 1)
-    expect(() => decodeStrictCbor(big)).toThrow(StrictCborError)
-    expect(() => decodeStrictCbor(Uint8Array.from(big))).toThrow(StrictCborError)
+    expect(strictCborErrorOf(() => decodeStrictCbor(big))).toBe('input exceeds 4096 bytes')
+    expect(strictCborErrorOf(() => decodeStrictCbor(Uint8Array.from(big)))).toBe(
+      'input exceeds 4096 bytes'
+    )
   })
   it('exposes a named error type', () => {
     let caught: unknown

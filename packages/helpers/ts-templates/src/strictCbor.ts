@@ -28,8 +28,8 @@ const fail = (message: string): never => {
 
 const utf8Encoder = new TextEncoder()
 // ignoreBOM keeps a leading U+FEFF in the text; the decoder would otherwise
-// strip it and the value would no longer round-trip.
-const utf8Decoder = new TextDecoder('utf-8', { ignoreBOM: true })
+// strip it and the value would no longer round-trip. The default label is UTF-8.
+const utf8Decoder = new TextDecoder(undefined, { ignoreBOM: true })
 
 const bigEndian = (value: bigint, size: number): number[] => {
   const out = Array.from({ length: size }, () => 0)
@@ -256,9 +256,11 @@ export function decodeStrictCbor(input: readonly number[] | Uint8Array): StrictC
   if (major !== 5) fail('top level must be a map')
   const map = decodeMapBody(r, r.count(count), 1)
   if (r.pos !== bytes.length) fail('trailing bytes')
-  // Belt and braces: whatever the decoder accepted must re-encode to the same bytes.
+  // Belt and braces: whatever the decoder accepted must re-encode to the caller's
+  // exact bytes. Compared with `input`, not `bytes`: Uint8Array.from wraps a
+  // number[] entry outside 0..255 (0x101 reads as 0x01), and that must not pass.
   const again = encodeStrictCbor(map)
-  if (compareBytes(again, bytes) !== 0) fail('non-canonical encoding')
+  if (compareBytes(again, input) !== 0) fail('non-canonical encoding')
   return map
 }
 
