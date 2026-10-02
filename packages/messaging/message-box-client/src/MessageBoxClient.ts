@@ -1286,153 +1286,7 @@ export class MessageBoxClient {
       stale.disconnect()
     }
 
-    if (this.socket == null) {
-      const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
-      const targetOrigin = new URL(targetHost).origin
-      const socketConfiguredIdentity = this.socketOptions?.expectedServerIdentityKey
-      const sharedExpectedIdentity = this.expectedServerIdentity(targetOrigin)
-      if (
-        socketConfiguredIdentity != null &&
-        sharedExpectedIdentity != null &&
-        socketConfiguredIdentity !== sharedExpectedIdentity
-      ) {
-        throw new Error(`Conflicting Message Box WebSocket identity pin for ${targetOrigin}.`)
-      }
-      const expectedServerIdentityKey = socketConfiguredIdentity ?? sharedExpectedIdentity
-      const socket = AuthSocketClient(targetHost, {
-        ...this.socketOptions,
-        wallet: this.walletClient,
-        originator: this.originator,
-        ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
-      })
-      this.socket = socket
-      // A new socket carries none of the old one's listeners. Sends that were
-      // waiting on the old one fall back when they time out, as they did when
-      // their listener went with it.
-      this.dispatchedEvents.clear()
-      this.pendingAcks.clear()
-      for (const { event } of this.roomHandlers) this.dispatchLive(socket, event)
-
-      // Fires on the first connection and on every Socket.IO reconnection.
-      socket.on('connect', () => {
-        if (this.socket !== socket) return
-        Logger.log('[MB CLIENT] Connected to WebSocket.')
-        this.socketStale = false
-
-        if (this.connectionInitPromise == null) {
-          this.beginAuthWait().catch(() => {})
-        }
-
-        Logger.log('[MB CLIENT] Sending WebSocket authentication data')
-        if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
-          Logger.error('[MB CLIENT ERROR] Cannot send authentication: Identity key is missing!')
-        } else {
-          socket.emit('authenticated', { identityKey: this.myIdentityKey })
-        }
-      })
-
-      let wasAuthenticated = false
-      socket.on('authenticationSuccess', () => {
-        if (this.socket !== socket) return
-        wasAuthenticated = true
-        const serverIdentityKey = canonicalIdentityKey(
-          socket.serverIdentityKey,
-          `Authenticated Message Box WebSocket identity for ${targetOrigin}`
-        )
-        this.pinAuthenticatedServerIdentity(targetOrigin, serverIdentityKey)
-        Logger.log('[MB CLIENT] WebSocket authentication successful')
-        // Holding the connection past the delay the next rebuild would use
-        // means the trouble passed, so the next one starts from scratch.
-        if (this.rebuildAttempts > 0) {
-          clearTimeout(this.rebuildHoldTimer)
-          this.rebuildHoldTimer = setTimeout(() => {
-            this.rebuildAttempts = 0
-          }, this.rebuildDelay())
-        }
-        this.socketAuthenticated = true
-        // The server refuses joins before this point, and a reconnect is a new
-        // server-side socket in no rooms.
-        for (const roomId of this.requestedRooms) {
-          socket.emit('joinRoom', roomId)
-          this.joinedRooms.add(roomId)
-        }
-        this.settleAuthWait?.()
-      })
-
-      socket.on('authenticationFailed', () => {
-        if (this.socket !== socket) return
-        Logger.error('[MB CLIENT ERROR] WebSocket authentication failed')
-        this.socketAuthenticated = false
-        this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket authentication failed!'))
-      })
-
-      socket.on('disconnect', (reason?: string) => {
-        if (this.socket !== socket) return
-        Logger.log('[MB CLIENT] Disconnected from MessageBox server')
-        // Membership belongs to the server-side socket that joined.
-        this.joinedRooms.clear()
-        this.socketAuthenticated = false
-        if (
-          !this.socketReconnects ||
-          reason === 'io client disconnect' ||
-          reason === 'io server disconnect'
-        ) {
-          // Socket.IO will not retry these; the object is dead.
-          this.socket = undefined
-          this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
-          // A listener makes no calls, so nothing else would restore it. Once
-          // only: a socket the server drops before authenticating is not retried,
-          // and a failed rebuild is left to the next caller. `reconnection: false`
-          // stays the host's choice.
-          if (reason === 'io server disconnect' && this.socketReconnects && wasAuthenticated) {
-            clearTimeout(this.rebuildHoldTimer)
-            const delay = this.rebuildDelay()
-            this.rebuildAttempts += 1
-            clearTimeout(this.rebuildTimer)
-            this.rebuildTimer = setTimeout(() => {
-              this.initializeConnection(targetHost).catch(() => {})
-            }, delay)
-          }
-          return
-        }
-        // Transient: Socket.IO reconnects and re-emits `connect`. Callers that
-        // arrive meanwhile wait on this attempt.
-        if (this.connectionInitPromise == null) {
-          this.beginAuthWait().catch(() => {})
-        }
-      })
-
-      // The server answers every join. An older one answers nothing, which is
-      // why `joinRoom` still records the room optimistically; these only
-      // correct that record once an answer arrives.
-      socket.on('joinedRoom', (data?: { roomId?: string }) => {
-        if (this.socket !== socket) return
-        const roomId = data?.roomId
-        if (typeof roomId !== 'string' || !this.requestedRooms.has(roomId)) return
-        this.joinedRooms.add(roomId)
-      })
-
-      socket.on('joinFailed', (data?: { roomId?: string; reason?: string; code?: string }) => {
-        if (this.socket !== socket) return
-        Logger.error('[MB CLIENT ERROR] WebSocket room join refused')
-        const roomId = data?.roomId
-        // Without a room this cannot be attributed: an older server sends no
-        // room, and several joins can be in flight.
-        if (typeof roomId !== 'string') return
-        this.joinedRooms.delete(roomId)
-        // A refusal that re-emitting cannot change must not be retried on every
-        // reconnect for the life of the client.
-        // The handler stays attached. Nothing is pushed to a room we are not
-        // in, and dropping it would let a later listen attach a second one.
-        if (PERMANENT_JOIN_REFUSALS.has(data?.code ?? '')) {
-          this.requestedRooms.delete(roomId)
-        }
-      })
-
-      socket.on('error', () => {
-        Logger.error('[MB CLIENT ERROR] WebSocket error')
-      })
-    }
+    if (this.socket == null) this.openSocket(overrideHost)
 
     if (this.socket?.connected && !this.socketAuthenticated) {
       this.socket.emit('authenticated', { identityKey: this.myIdentityKey })
@@ -1441,6 +1295,206 @@ export class MessageBoxClient {
     await this.beginAuthWait()
   }
 
+  /**
+   * Builds the socket and takes ownership of it. The caller has already
+   * established that there is none to reuse.
+   */
+  private openSocket(overrideHost?: string): void {
+    const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
+    const targetOrigin = new URL(targetHost).origin
+    const socketConfiguredIdentity = this.socketOptions?.expectedServerIdentityKey
+    const sharedExpectedIdentity = this.expectedServerIdentity(targetOrigin)
+    if (
+      socketConfiguredIdentity != null &&
+      sharedExpectedIdentity != null &&
+      socketConfiguredIdentity !== sharedExpectedIdentity
+    ) {
+      throw new Error(`Conflicting Message Box WebSocket identity pin for ${targetOrigin}.`)
+    }
+    const expectedServerIdentityKey = socketConfiguredIdentity ?? sharedExpectedIdentity
+    const socket = AuthSocketClient(targetHost, {
+      ...this.socketOptions,
+      wallet: this.walletClient,
+      originator: this.originator,
+      ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
+    })
+    this.socket = socket
+    // A new socket carries none of the old one's listeners. Sends that were
+    // waiting on the old one fall back when they time out, as they did when
+    // their listener went with it.
+    this.dispatchedEvents.clear()
+    this.pendingAcks.clear()
+    for (const { event } of this.roomHandlers) this.dispatchLive(socket, event)
+    this.attachSocketHandlers(socket, targetHost, targetOrigin)
+  }
+
+  /** Sockets that reached `authenticationSuccess`, so a drop knows whether to rebuild. */
+  private readonly authenticatedSockets = new WeakSet<object>()
+
+  /**
+   * Registers every handler this socket will ever have, once. Each one re-checks
+   * that the socket is still the client's, because the wrapper has no `off` and a
+   * replaced socket goes on reporting.
+   */
+  private attachSocketHandlers(
+    socket: ReturnType<typeof AuthSocketClient>,
+    targetHost: string,
+    targetOrigin: string
+  ): void {
+    // `connect` fires on the first connection and on every Socket.IO reconnection.
+    socket.on('connect', () => this.onSocketConnect(socket))
+    socket.on('authenticationSuccess', () => this.onSocketAuthenticated(socket, targetOrigin))
+    socket.on('authenticationFailed', () => this.onSocketAuthenticationFailed(socket))
+    socket.on('disconnect', (reason?: string) =>
+      this.onSocketDisconnect(socket, targetHost, reason)
+    )
+    // The server answers every join. An older one answers nothing, which is why
+    // `joinRoom` records the room optimistically; these only correct that record.
+    socket.on('joinedRoom', (data?: { roomId?: string }) => this.onRoomJoined(socket, data))
+    socket.on('joinFailed', (data?: { roomId?: string; reason?: string; code?: string }) =>
+      this.onRoomJoinFailed(socket, data)
+    )
+    socket.on('error', () => {
+      Logger.error('[MB CLIENT ERROR] WebSocket error')
+    })
+  }
+
+  private onSocketConnect(socket: ReturnType<typeof AuthSocketClient>): void {
+    if (this.socket !== socket) return
+    Logger.log('[MB CLIENT] Connected to WebSocket.')
+    this.socketStale = false
+
+    if (this.connectionInitPromise == null) {
+      this.beginAuthWait().catch(() => {})
+    }
+
+    Logger.log('[MB CLIENT] Sending WebSocket authentication data')
+    if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
+      Logger.error('[MB CLIENT ERROR] Cannot send authentication: Identity key is missing!')
+      return
+    }
+    socket.emit('authenticated', { identityKey: this.myIdentityKey })
+  }
+
+  private onSocketAuthenticated(
+    socket: ReturnType<typeof AuthSocketClient>,
+    targetOrigin: string
+  ): void {
+    if (this.socket !== socket) return
+    this.authenticatedSockets.add(socket)
+    const serverIdentityKey = canonicalIdentityKey(
+      socket.serverIdentityKey,
+      `Authenticated Message Box WebSocket identity for ${targetOrigin}`
+    )
+    this.pinAuthenticatedServerIdentity(targetOrigin, serverIdentityKey)
+    Logger.log('[MB CLIENT] WebSocket authentication successful')
+    this.holdRebuildCount()
+    this.socketAuthenticated = true
+    // The server refuses joins before this point, and a reconnect is a new
+    // server-side socket in no rooms.
+    for (const roomId of this.requestedRooms) {
+      socket.emit('joinRoom', roomId)
+      this.joinedRooms.add(roomId)
+    }
+    this.settleAuthWait?.()
+  }
+
+  private onSocketAuthenticationFailed(socket: ReturnType<typeof AuthSocketClient>): void {
+    if (this.socket !== socket) return
+    Logger.error('[MB CLIENT ERROR] WebSocket authentication failed')
+    this.socketAuthenticated = false
+    this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket authentication failed!'))
+  }
+
+  private onSocketDisconnect(
+    socket: ReturnType<typeof AuthSocketClient>,
+    targetHost: string,
+    reason?: string
+  ): void {
+    if (this.socket !== socket) return
+    Logger.log('[MB CLIENT] Disconnected from MessageBox server')
+    // Membership belongs to the server-side socket that joined.
+    this.joinedRooms.clear()
+    this.socketAuthenticated = false
+
+    const retriedBySocketIo =
+      this.socketReconnects &&
+      reason !== 'io client disconnect' &&
+      reason !== 'io server disconnect'
+    if (retriedBySocketIo) {
+      // Socket.IO reconnects and re-emits `connect`. Callers that arrive
+      // meanwhile wait on this attempt.
+      if (this.connectionInitPromise == null) {
+        this.beginAuthWait().catch(() => {})
+      }
+      return
+    }
+
+    // Socket.IO will not retry these; the object is dead.
+    this.socket = undefined
+    this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket disconnected'))
+    // A listener makes no calls, so nothing else would restore it. `reconnection:
+    // false` stays the host's choice.
+    if (reason === 'io server disconnect' && this.socketReconnects) {
+      this.scheduleRebuild(socket, targetHost)
+    }
+  }
+
+  private onRoomJoined(
+    socket: ReturnType<typeof AuthSocketClient>,
+    data?: { roomId?: string }
+  ): void {
+    if (this.socket !== socket) return
+    const roomId = data?.roomId
+    if (typeof roomId !== 'string' || !this.requestedRooms.has(roomId)) return
+    this.joinedRooms.add(roomId)
+  }
+
+  private onRoomJoinFailed(
+    socket: ReturnType<typeof AuthSocketClient>,
+    data?: { roomId?: string; reason?: string; code?: string }
+  ): void {
+    if (this.socket !== socket) return
+    Logger.error('[MB CLIENT ERROR] WebSocket room join refused')
+    const roomId = data?.roomId
+    // Without a room this cannot be attributed: an older server sends no room,
+    // and several joins can be in flight.
+    if (typeof roomId !== 'string') return
+    this.joinedRooms.delete(roomId)
+    // The handler stays attached. Nothing is pushed to a room we are not in, and
+    // dropping it would let a later listen attach a second one.
+    if (PERMANENT_JOIN_REFUSALS.has(data?.code ?? '')) {
+      this.requestedRooms.delete(roomId)
+    }
+  }
+
+  /**
+   * Holding the connection past the delay the next rebuild would use means the
+   * trouble passed, so the next one starts from scratch.
+   */
+  private holdRebuildCount(): void {
+    if (this.rebuildAttempts === 0) return
+    clearTimeout(this.rebuildHoldTimer)
+    this.rebuildHoldTimer = setTimeout(() => {
+      this.rebuildAttempts = 0
+    }, this.rebuildDelay())
+  }
+
+  /**
+   * Rebuilds after a server-forced drop: at once the first time, then backing
+   * off. Only a socket that authenticated is rebuilt, so a server refusing
+   * authentication is not retried in a loop.
+   */
+  private scheduleRebuild(socket: object, targetHost: string): void {
+    if (!this.authenticatedSockets.has(socket)) return
+    clearTimeout(this.rebuildHoldTimer)
+    const delay = this.rebuildDelay()
+    this.rebuildAttempts += 1
+    clearTimeout(this.rebuildTimer)
+    this.rebuildTimer = setTimeout(() => {
+      this.initializeConnection(targetHost).catch(() => {})
+    }, delay)
+  }
   /**
    * Starts an authentication attempt and registers it as `connectionInitPromise`.
    * Callers must check that slot first; this does not enforce a single attempt.
