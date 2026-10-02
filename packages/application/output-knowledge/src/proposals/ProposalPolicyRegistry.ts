@@ -33,6 +33,7 @@ export class ProposalPolicyRegistry {
     ProposalPolicyInstallation & ProposalPolicyDescription
   >()
   private readonly extensions: string[]
+  private readonly verifiedSignatures = new Set<string>()
 
   constructor(installations: readonly ProposalPolicyInstallation[]) {
     if (installations.length < 1 || installations.length > 32)
@@ -74,9 +75,20 @@ export class ProposalPolicyRegistry {
     const installation = this.resolve(body)
     validateOutputExtensions(body, installation.policy.supportedExtensions)
     installation.policy.validate(body, structuredClone(installation.parameters))
-    if (!verifyOutputPacket('proposal', proposal, body.author))
-      throw new OutputProtocolError('unauthorized', 'Invalid proposal author signature')
+    this.requireSignature(proposal)
     return proposal
+  }
+
+  /** Cache only a positive immutable signature result; scope and policy run on every use. */
+  private requireSignature(proposal: OutputSignedProposal): void {
+    const key = Utils.toHex(Hash.sha256(Utils.toArray(canonicalOutputJSON(proposal), 'utf8')))
+    if (this.verifiedSignatures.has(key)) return
+    if (!verifyOutputPacket('proposal', proposal, proposal.body.author))
+      throw new OutputProtocolError('unauthorized', 'Invalid proposal author signature')
+    // Fixed-size FIFO bounds untrusted unique inputs. No proposal or private payload is retained.
+    if (this.verifiedSignatures.size >= 256)
+      this.verifiedSignatures.delete(this.verifiedSignatures.values().next().value!)
+    this.verifiedSignatures.add(key)
   }
 
   /** Policy permission only. Intersect with the host's current access policy on every effect/read. */

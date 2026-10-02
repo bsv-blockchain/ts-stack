@@ -20,12 +20,13 @@ function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker
 function jestTarget(
   configFile,
   testMatch,
-  { esm = false, config = {}, findRelated = false, buildCommand } = {}
+  { esm = false, config = {}, findRelated = false, buildCommand, maxTestRunnerReuse } = {}
 ) {
   return {
     testRunner: 'jest',
     runnerOptions: {
       ...(buildCommand ? { buildCommand } : {}),
+      ...(maxTestRunnerReuse === undefined ? {} : { maxTestRunnerReuse }),
       jest: {
         projectType: 'custom',
         configFile,
@@ -347,11 +348,18 @@ export function buildMutationTargets(repositoryRoot) {
       'src/storage/actionRecovery/ActionRecoveryCodec.ts',
       'src/storage/actionRecovery/__test/ActionRecoveryDescriptors.property.test.ts'
     ),
-    'wallet-recovery-encoding': walletRecoveryTarget(
-      repositoryRoot,
-      'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
-      'src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts'
-    ),
+    'wallet-recovery-encoding': {
+      ...walletRecoveryTarget(
+        repositoryRoot,
+        'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
+        'src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts'
+      ),
+      mutate: [
+        'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
+        'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts',
+        'src/storage/actionRecovery/ActionRecoveryJSON.ts'
+      ]
+    },
     'wallet-recovery-installation': walletRecoveryTarget(
       repositoryRoot,
       `${actionStoreFile}:1-${recordsStart - 1}`,
@@ -1042,7 +1050,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/lookup-sqlite-sessions.test.ts',
           '<rootDir>/test/lookup-native-send.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'proposal-current-query': {
@@ -1132,6 +1140,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/proposal-policy.test.ts',
+          '<rootDir>/test/proposal-signature-cache.test.ts',
           '<rootDir>/test/proposal-source-policy.test.ts',
           '<rootDir>/test/proposal-verification-pool.test.ts',
           '<rootDir>/test/proposal-local-frame.test.ts',

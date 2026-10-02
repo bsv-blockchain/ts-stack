@@ -406,3 +406,38 @@ test('compound proposal storage preserves all native implementations and canonic
     target.runnerOptions.jest.config.testMatch.includes('<rootDir>/test/lookup-native-send.test.ts')
   )
 })
+
+test('wallet recovery encoding covers every extracted implementation with the original canonical tests', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['wallet-recovery-encoding']
+  assert.deepEqual(target.mutate, [
+    'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
+    'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts',
+    'src/storage/actionRecovery/ActionRecoveryJSON.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/storage/actionRecovery/__test/*.test.ts',
+    '<rootDir>/src/signer/actionRecovery/__test/*.test.ts',
+    '<rootDir>/src/storage/methods/__test/createActionInputResolution.test.ts',
+    '<rootDir>/src/storage/__test/createActionPerformance.test.ts'
+  ])
+})
+
+test('proposal signature qualification retains current policy and bounded-cache regressions', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['proposal-client-verification']
+  assert.ok(target.mutate.includes('src/proposals/ProposalPolicyRegistry.ts'))
+  assert.ok(
+    target.runnerOptions.jest.config.testMatch.includes('<rootDir>/test/proposal-policy.test.ts')
+  )
+  assert.ok(
+    target.runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/test/proposal-signature-cache.test.ts'
+    )
+  )
+})
+
+test('compound mutation execution recycles workers without changing canonical work', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  assert.equal(targets['proposal-channel-storage'].runnerOptions.maxTestRunnerReuse, 8)
+  assert.equal(targets['proposal-client-verification'].runnerOptions.maxTestRunnerReuse, undefined)
+  assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
+})

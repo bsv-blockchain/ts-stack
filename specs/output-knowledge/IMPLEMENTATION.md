@@ -1835,3 +1835,53 @@ A further local-context regression checks owned recovery retention and exclusion
 from lookup payloads. The adopted reference application passes nine tests across
 four suites, including both native storage modes. Mutation qualification and the
 fresh complete native run remain pending; line coverage is not mutation evidence.
+
+### Compound qualification and recovery encoder follow-up
+
+At local `612092dd39050cd05a926d42880ff46d87e53c4b`, complete output-knowledge
+native coverage passes 1,853 tests/139 suites in 860.392 seconds. All 9,961
+captured source/build inputs and HEAD match. This run used Node 25.9.0, within
+the repository Node >=24.11 requirement; subsequent isolated checks explicitly
+use Node 24.19.0. The complete 431-mutant contract part had 270 passing initial
+tests, then a worker SIGABRT after about 37 minutes; the campaign subsequently reached its 45-minute bound without a final report.
+All 9,961 captured inputs and HEAD still matched. The SIGABRT and timeout are
+negative evidence, and no mutation score is claimed.
+
+The wallet action-recovery encoding extraction preserves the original JSON and
+binary function bodies, limits, error identity and exports. Its strict isolated
+codec compile and 57 focused tests pass. After correcting only the isolated test
+fixture layout and transpiling existing legacy test utilities, all 164 canonical
+recovery tests/16 suites pass in 71.548 seconds, including actual child-process
+termination/recovery. That isolated run is not a whole-wallet typecheck or a
+replacement for adopted-source, packed, mutation and hosted validation. The
+preceding isolated-layout failures are retained. Complete JSON and binary/bounds
+execution reports plus their canonical aggregate remain required.
+
+A bounded positive-signature cache prototype passes 103 tests/seven suites.
+Under Node 24.19.0, the identical native 300-case property with seed 3242026 took
+87.671 seconds without caching and 45.667 seconds with the cache; these are
+sequential local observations, not a portable performance promise. The cache
+stores only 256 full-envelope SHA-256 identities. Policy, scope, ownership,
+current authorization and lifecycle checks are not cached. Fresh signed variants,
+modified bytes, failed signatures, FIFO eviction, separate registries and changed
+policy decisions are exercised. No canonical test, property budget, seed, timeout
+or validation threshold is reduced.
+
+The adopted follow-up passes complete native coverage: 1,859 tests/140 suites in
+641.528 seconds under Node 24.19.0, with all 9,964 captured inputs and HEAD
+unchanged. The actual adopted wallet canonical selection passes 164 tests/16
+suites in 70.185 seconds; public packs, preserved SDK 2 wallet consumers, all nine
+reference-app tests and root health/lint/format/types pass. These results do not
+replace pending mutation or hosted qualification.
+
+The subsequent application-only worker-recycling setting preserves all canonical
+work and restarts a runner after eight executions. Source discovery also ignores
+only nested generated Stryker directories, preventing an abandoned crashed
+sandbox from colliding with the live package name. The rooted pattern does not
+exclude a running mutation sandbox's own sources/tests. Existing authored test
+selection, transforms, coverage gates and runtime behavior are unchanged.
+
+Hosted 4ec3 subsequently reported six root-eviction failures at the five-minute
+initial-test deadline: service, maintenance, coordination, commit, requests and
+serving. None produced a mutation score. Their logs are retained and their
+canonical native-test costs require remediation before complete CI acceptance.

@@ -475,3 +475,26 @@ test('every selected application execution part is downloaded before canonical a
   )
   assert.ok(aggregate.includes('--target "$target" --directory ".mutation-parts/$target"'))
 })
+
+test('wallet recovery encoding downloads both complete execution parts before canonical aggregation', () => {
+  const id = 'wallet-recovery-encoding'
+  const selected = partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT))
+  assert.deepEqual(selected, [id])
+  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    job => job.name === 'mutation-quality'
+  ).source
+  const downloads = aggregate
+    .split(/\n      - /)
+    .filter(
+      step =>
+        step.startsWith('uses: actions/download-artifact@') &&
+        step.includes(`pattern: mutation-${id}-*\n`)
+    )
+  assert.equal(downloads.length, 1)
+  assert.ok(
+    downloads[0].includes(
+      `contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), '${id}')`
+    )
+  )
+  assert.ok(downloads[0].includes(`path: .mutation-parts/${id}`))
+})

@@ -236,3 +236,19 @@ split whole files only; new files fall back to factory. Every part retains the
 canonical tests, 300-case native property budget, configuration and thresholds.
 The final canonical aggregate remains mandatory. Passing an isolated draft or
 one execution part is not a completed target qualification.
+
+The wallet recovery encoder uses complete JSON and binary/bounds execution parts
+within the existing `wallet-recovery-encoding` target. The extraction preserves
+its public facade, accepted bytes and complete canonical regression/property
+selection. Both reports are required for the canonical score, uncovered and
+invalid gates; a completed part alone is not qualification. The prior hosted
+45-minute timeout remains failed evidence until fresh exact-head CI succeeds.
+
+The compound proposal-storage campaign recycles each test-runner process after
+eight executions to bound accumulation in the long-running native Jest workers.
+Its four-worker concurrency, all canonical sources/tests, generated-case budgets,
+seeds, timeouts and final score/coverage/invalid gates are unchanged. This is an
+execution-lifetime setting, not permission to omit a failing mutant or test.
+Other targets retain their existing settings. Fresh complete qualification is
+required; the preceding worker SIGABRT and missing-report timeout remain negative
+evidence.

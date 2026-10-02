@@ -188,6 +188,17 @@ test('root records keep whole files, original tests and future sources under one
 
 for (const [targetId, fallback, expected] of [
   [
+    'wallet-recovery-encoding',
+    'binary',
+    {
+      binary: [
+        'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
+        'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts'
+      ],
+      json: ['src/storage/actionRecovery/ActionRecoveryJSON.ts']
+    }
+  ],
+  [
     'proposal-channel-storage',
     'factory',
     {

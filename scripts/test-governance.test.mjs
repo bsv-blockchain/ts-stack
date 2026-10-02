@@ -423,7 +423,9 @@ test('wallet recovery encoding and descriptors retain complete modules and the s
   const names = ['wallet-recovery-codec', 'wallet-recovery-encoding']
   assert.deepEqual(names.flatMap(name => targets[name].mutate).toSorted(), [
     'src/storage/actionRecovery/ActionRecoveryCodec.ts',
-    'src/storage/actionRecovery/ActionRecoveryEncoding.ts'
+    'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
+    'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts',
+    'src/storage/actionRecovery/ActionRecoveryJSON.ts'
   ])
   for (const name of names) {
     assert.deepEqual(targets[name].runnerOptions, targets[names[0]].runnerOptions)
@@ -759,4 +761,35 @@ test('proposal maintenance qualifies whole inventory and scheduler modules with 
   assert.equal(registration.minimumScore, 90)
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)
+})
+
+test('output knowledge discovery ignores nested generated sandboxes without hiding a live mutation root', async () => {
+  const { default: config } =
+    await import('../packages/application/output-knowledge/jest.config.js')
+  assert.deepEqual(config.testMatch, ['<rootDir>/test/**/*.test.ts'])
+  assert.deepEqual(config.modulePathIgnorePatterns, [String.raw`<rootDir>/\.stryker-tmp/`])
+  const owns = root =>
+    new RegExp(
+      config.modulePathIgnorePatterns[0].replace(
+        '<rootDir>',
+        root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      )
+    )
+  assert.equal(
+    owns('/workspace/package').test('/workspace/package/.stryker-tmp/abandoned/package.json'),
+    true
+  )
+  assert.equal(owns('/workspace/package').test('/workspace/package/test/current.test.ts'), false)
+  assert.equal(
+    owns('/workspace/package/.stryker-tmp/live').test(
+      '/workspace/package/.stryker-tmp/live/test/current.test.ts'
+    ),
+    false
+  )
+  assert.equal(
+    owns('/workspace/package/.stryker-tmp/live').test(
+      '/workspace/package/.stryker-tmp/live/.stryker-tmp/old/package.json'
+    ),
+    true
+  )
 })

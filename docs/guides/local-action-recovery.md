@@ -146,3 +146,10 @@ the prepared response, before final processing, and after the processing commit.
 They establish those local boundaries. They do not establish production miner
 acceptance, remote-provider recovery, browser storage support or a deployed
 application's permission and backup policies.
+
+The private recovery encoder separates canonical JSON ownership from binary
+encoding and shared limits. Existing exports, persisted bytes, validation bounds
+and recovery semantics are unchanged; no database or caller migration is needed.
+Its mutation campaign retains the complete source and test union across both
+execution parts. This internal division does not change wallet authority or make
+local recovery journals portable between custodians.

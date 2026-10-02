@@ -482,3 +482,15 @@ consensus node. The HTTP fixture maps the selected HTTPS origin to an owned
 loopback listener while preserving actual BRC-103/104 authentication; it does
 not qualify TLS termination or production deployment. Interactive private
 subscriptions and admission-driven lookup projection remain separate work.
+
+### Repeated signature verification
+
+Each proposal policy registry retains at most 256 positive signature checks,
+identified by a SHA-256 digest of the complete canonical signed envelope. This
+bounded in-memory FIFO retains no proposal bodies and is discarded on restart.
+A changed body, author or signature requires its own verification; failures are
+never cached. The registry still parses the packet and checks selected chain,
+service, installed parameters, critical extensions and the current policy on
+every use. Caller permissions, clock windows, state transitions, admission and
+private response guards remain separate checks. The cache grants no durable
+receipt or authority and introduces no persistent-format change.

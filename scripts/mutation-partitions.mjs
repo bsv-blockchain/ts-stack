@@ -56,6 +56,13 @@ const plans = new Map([
     }
   ],
   [
+    'wallet-recovery-encoding',
+    {
+      fallback: 'binary',
+      files: new Map([['src/storage/actionRecovery/ActionRecoveryJSON.ts', 'json']])
+    }
+  ],
+  [
     'wallet-retained-snapshot',
     {
       fallback: 'lifecycle',
