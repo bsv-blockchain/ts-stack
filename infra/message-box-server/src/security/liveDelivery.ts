@@ -1,6 +1,7 @@
 import type { Request as ExpressRequest, Response } from 'express'
 import { Logger } from '../utils/logger.js'
 import { readMessageBoxResourceConfig } from '../config/resources.js'
+import { mapWithConcurrency } from '../utils/boundedConcurrency.js'
 import type { WebSocketConnectionRegistry } from './webSocketConnections.js'
 
 /**
@@ -108,8 +109,14 @@ async function announceStored(
     return
   }
   const sender = (req as ExpressRequest & { auth?: { identityKey?: string } }).auth?.identityKey
-  await Promise.all(
-    results.map(async (entry: { recipient: string; messageId: string }) => {
+  // One send reaches up to MAX_RECIPIENTS recipients and each of those up to
+  // WEBSOCKET_MAX_RECIPIENT_CONNECTIONS sockets, so the product is emitted off
+  // one request. Bounded like the notification fan-out the send route already
+  // runs over the same list.
+  await mapWithConcurrency(
+    results as Array<{ recipient: string; messageId: string }>,
+    readMessageBoxResourceConfig().notificationRecipientConcurrency,
+    async entry => {
       await deliverLiveMessage(connections, {
         sender,
         recipient: entry.recipient,
@@ -117,6 +124,6 @@ async function announceStored(
         messageId: entry.messageId,
         body: sent.body as string
       })
-    })
+    }
   )
 }

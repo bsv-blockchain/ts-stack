@@ -185,9 +185,13 @@ describe('HTTP sendMessage live delivery', () => {
     return `http://127.0.0.1:${address.port}`
   }
 
-  async function joinRecipient(host: string, pushes: Push[]): Promise<string> {
-    const recipientKey = (await recipientWallet.getPublicKey({ identityKey: true })).publicKey
-    client = new MessageBoxClient({ host, walletClient: recipientWallet as WalletInterface })
+  async function joinRecipient(
+    host: string,
+    pushes: Push[],
+    wallet: ProtoWallet = recipientWallet
+  ): Promise<string> {
+    const recipientKey = (await wallet.getPublicKey({ identityKey: true })).publicKey
+    client = new MessageBoxClient({ host, walletClient: wallet as WalletInterface })
     await client.initializeConnection()
     const roomId = `${recipientKey}-${BOX}`
     const joined = new Promise<void>((resolve, reject) => {
@@ -357,6 +361,64 @@ describe('HTTP sendMessage live delivery', () => {
     await new Promise(resolve => setTimeout(resolve, QUIET_MS))
     expect(pushes).toEqual([])
     expect(await database('messages').where({ messageId: 'm-2' })).toHaveLength(1)
+    await closeMessageBoxWebSockets(io)
+  })
+
+  it('names the room on a refused join', async () => {
+    const ctx = newContext(true)
+    httpServer = createServer(buildApp(ctx, senderKey))
+    const io = attachMessageBoxWebSockets(httpServer, ctx)
+    await joinRecipient(await listen(httpServer), [])
+
+    const foreign = `${senderKey}-${BOX}`
+    const refused = new Promise<{ roomId?: string; code?: string }>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('joinFailed timeout')), EVENT_TIMEOUT_MS)
+      client?.testSocket?.on('joinFailed', (data: { roomId?: string; code?: string }) => {
+        clearTimeout(timer)
+        resolve(data)
+      })
+    })
+    client?.testSocket?.emit('joinRoom', foreign)
+
+    // Without the room a client with several joins in flight cannot tell which
+    // of them was refused.
+    await expect(refused).resolves.toEqual({
+      roomId: foreign,
+      reason: 'Room is not owned by authenticated identity',
+      code: 'ERR_WEBSOCKET_ROOM_NOT_OWNED'
+    })
+    await closeMessageBoxWebSockets(io)
+  })
+
+  it('pushes an HTTP-stored message to every joined recipient', async () => {
+    const ctx = newContext(true)
+    const app = buildApp(ctx, senderKey)
+    httpServer = createServer(app)
+    const io = attachMessageBoxWebSockets(httpServer, ctx)
+    const host = await listen(httpServer)
+    const pushes: Push[] = []
+    const first = await joinRecipient(host, pushes)
+    const firstClient = client
+    const secondPushes: Push[] = []
+    const second = await joinRecipient(host, secondPushes, new ProtoWallet(new PrivateKey(204)))
+
+    const response = await request(app)
+      .post('/sendMessage')
+      .send({
+        message: {
+          recipients: [first, second],
+          messageBox: BOX,
+          messageId: ['m-fan-1', 'm-fan-2'],
+          body: 'hi'
+        }
+      })
+    expect(response.status).toBe(200)
+
+    await settle(pushes)
+    await settle(secondPushes)
+    expect(pushes.map(push => push.messageId)).toEqual(['m-fan-1'])
+    expect(secondPushes.map(push => push.messageId)).toEqual(['m-fan-2'])
+    await firstClient?.disconnectWebSocket()
     await closeMessageBoxWebSockets(io)
   })
 

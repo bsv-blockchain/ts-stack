@@ -89,6 +89,11 @@ const MAX_ACKNOWLEDGMENT_IDS = 1_000
 const MAX_MESSAGE_FEE = 2_147_483_647
 const MAX_PAYMENT_BEEF_BYTES = 32 * 1024 * 1024
 const MAX_PAYMENT_OUTPUTS = MAX_MESSAGE_RECIPIENTS + 1
+/** Join refusals that re-emitting the same room can never clear. */
+const PERMANENT_JOIN_REFUSALS = new Set([
+  'ERR_WEBSOCKET_ROOM_NOT_OWNED',
+  'ERR_WEBSOCKET_INVALID_ROOM'
+])
 const unsafeRecordKeys = new Set(['__proto__', 'constructor', 'prototype'])
 
 type OwnDataRecord = Record<string, unknown>
@@ -1353,6 +1358,33 @@ export class MessageBoxClient {
         // arrive meanwhile wait on this attempt.
         if (this.connectionInitPromise == null) {
           this.beginAuthWait().catch(() => {})
+        }
+      })
+
+      // The server answers every join. An older one answers nothing, which is
+      // why `joinRoom` still records the room optimistically; these only
+      // correct that record once an answer arrives.
+      socket.on('joinedRoom', (data?: { roomId?: string }) => {
+        if (this.socket !== socket) return
+        const roomId = data?.roomId
+        if (typeof roomId !== 'string' || !this.requestedRooms.has(roomId)) return
+        this.joinedRooms.add(roomId)
+      })
+
+      socket.on('joinFailed', (data?: { roomId?: string; reason?: string; code?: string }) => {
+        if (this.socket !== socket) return
+        Logger.error('[MB CLIENT ERROR] WebSocket room join refused')
+        const roomId = data?.roomId
+        // Without a room this cannot be attributed: an older server sends no
+        // room, and several joins can be in flight.
+        if (typeof roomId !== 'string') return
+        this.joinedRooms.delete(roomId)
+        // A refusal that re-emitting cannot change must not be retried on every
+        // reconnect for the life of the client.
+        // The handler stays attached. Nothing is pushed to a room we are not
+        // in, and dropping it would let a later listen attach a second one.
+        if (PERMANENT_JOIN_REFUSALS.has(data?.code ?? '')) {
+          this.requestedRooms.delete(roomId)
         }
       })
 

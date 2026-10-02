@@ -551,8 +551,12 @@ export function attachMessageBoxWebSockets(
 
     // Handle joining/leaving rooms
     socket.on('joinRoom', async (roomId: string) => {
+      // Named on every refusal a client can correlate: it may have several
+      // joins in flight and the event is the only reply it gets.
+      const named = typeof roomId === 'string' && roomId.trim() !== '' ? { roomId } : {}
       if (!controlRateLimiter.consume()) {
         await socket.emit('joinFailed', {
+          ...named,
           reason: 'WebSocket control-event rate limit exceeded',
           code: 'ERR_WEBSOCKET_CONTROL_RATE_LIMITED'
         })
@@ -561,25 +565,37 @@ export function attachMessageBoxWebSockets(
 
       if (!connections.isAuthenticated(socket.id)) {
         Logger.warn('[WEBSOCKET] Unauthorized attempt to join a room.')
-        await socket.emit('joinFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
+        await socket.emit('joinFailed', {
+          ...named,
+          reason: 'Unauthorized: WebSocket not authenticated',
+          code: 'ERR_WEBSOCKET_NOT_AUTHENTICATED'
+        })
         return
       }
 
       if (roomId == null || typeof roomId !== 'string' || roomId.trim() === '') {
         Logger.error('[WEBSOCKET ERROR] Invalid roomId.')
-        await socket.emit('joinFailed', { reason: 'Invalid room ID' })
+        await socket.emit('joinFailed', {
+          reason: 'Invalid room ID',
+          code: 'ERR_WEBSOCKET_INVALID_ROOM'
+        })
         return
       }
 
       const identityKey = connections.identityKey(socket.id)
       if (identityKey == null || !isIdentityOwnedRoom(identityKey, roomId)) {
         Logger.warn("[WEBSOCKET] Rejected an attempt to join another identity's room.")
-        await socket.emit('joinFailed', { reason: 'Room is not owned by authenticated identity' })
+        await socket.emit('joinFailed', {
+          ...named,
+          reason: 'Room is not owned by authenticated identity',
+          code: 'ERR_WEBSOCKET_ROOM_NOT_OWNED'
+        })
         return
       }
 
       if (!connections.join(socket.id, roomId, resources.webSocketMaxRoomsPerConnection)) {
         await socket.emit('joinFailed', {
+          ...named,
           reason: 'WebSocket room limit exceeded',
           code: 'ERR_WEBSOCKET_ROOM_LIMIT'
         })

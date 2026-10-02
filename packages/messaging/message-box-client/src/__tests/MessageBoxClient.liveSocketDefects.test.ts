@@ -386,6 +386,61 @@ describe('live-socket reconnection', () => {
     expect(sockets).toHaveLength(1)
   })
 
+  /**
+   * The server answers every join. Before it was read, a refused join left the
+   * client certain it was subscribed to a room it had never been given.
+   */
+  describe('the server answer to a join', () => {
+    const listening = async (): Promise<InstanceType<typeof MessageBoxClient>> => {
+      const client = await connected()
+      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+      expect(client.getJoinedRooms().has(ROOM)).toBe(true)
+      return client
+    }
+
+    it('drops the claim when the join is refused', async () => {
+      const client = await listening()
+      fire('joinFailed', { roomId: ROOM, code: 'ERR_WEBSOCKET_ROOM_LIMIT' })
+      expect(client.getJoinedRooms().has(ROOM)).toBe(false)
+    })
+
+    it('retries a refusal that reconnecting can clear', async () => {
+      const client = await listening()
+      const socket = latest()
+      fire('joinFailed', { roomId: ROOM, code: 'ERR_WEBSOCKET_ROOM_LIMIT' })
+      socket.emit.mockClear()
+
+      drop(socket)
+      reconnect(socket)
+      expect(joinRoomEmits(socket).map(call => call[1])).toEqual([ROOM])
+      expect(client.getJoinedRooms().has(ROOM)).toBe(true)
+    })
+
+    it('stops asking for a room it may never have', async () => {
+      const client = await listening()
+      const socket = latest()
+      fire('joinFailed', { roomId: ROOM, code: 'ERR_WEBSOCKET_ROOM_NOT_OWNED' })
+      socket.emit.mockClear()
+
+      drop(socket)
+      reconnect(socket)
+      expect(joinRoomEmits(socket)).toHaveLength(0)
+      expect(client.getJoinedRooms().has(ROOM)).toBe(false)
+    })
+
+    it('keeps its claim when a refusal names no room', async () => {
+      const client = await listening()
+      fire('joinFailed', { reason: 'Invalid room ID' })
+      expect(client.getJoinedRooms().has(ROOM)).toBe(true)
+    })
+
+    it('ignores a confirmation for a room it never asked for', async () => {
+      const client = await listening()
+      fire('joinedRoom', { roomId: `${IDENTITY}-somewhere_else` })
+      expect(client.getJoinedRooms().has(`${IDENTITY}-somewhere_else`)).toBe(false)
+    })
+  })
+
   /** Socket.IO got it back on its own; nothing needs rebuilding. */
   it('reuses a socket that reconnects after its wait timed out', async () => {
     const client = await connected()
