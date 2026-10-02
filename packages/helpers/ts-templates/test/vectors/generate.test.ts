@@ -6,10 +6,14 @@
 //
 // regenerates the file; a plain run is the --check mode and fails when the file
 // differs from what the code produces now.
+//
+// Every key in the file is derived from a fixed scalar, so each one is a real
+// compressed secp256k1 point (a Go port that validates points must accept all of
+// them), and the deploySig signatures are deterministic (RFC 6979).
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { LockingScript } from '@bsv/sdk'
+import { LockingScript, PrivateKey, ProtoWallet, PublicKey } from '@bsv/sdk'
 import { sha256 } from '@bsv/sdk/primitives/Hash'
 import {
   BSV21_MAX_AMOUNT,
@@ -23,6 +27,7 @@ import {
   tokenIdToString,
   tryDecodeStrictCbor
 } from '../../mod.js'
+import type { WalletProtocol } from '@bsv/sdk'
 import type { Bsv21Role, StrictCborMap } from '../../mod.js'
 
 const VECTORS_PATH = join(__dirname, 'brc162.json')
@@ -87,6 +92,11 @@ interface DeploySigVector {
   id: string
   txid: string
   digestHex: string
+  issuerIdentityKey: string
+  protocolID: WalletProtocol
+  keyID: string
+  counterparty: string
+  signatureHex: string
 }
 interface Brc162Vectors {
   id: string
@@ -411,15 +421,21 @@ const buildStrictCbor = ([id, hex]: [string, string, boolean]): StrictCborVector
 
 // ---- commitments: one details map per §3.3 kind ----------------------------
 
-const identityKey = patterned(33, 0x02)
-const outpoint = patterned(36, 0x10)
+// Compressed SEC1 public keys (33 bytes), each from its own fixed scalar so that a swapped
+// field never matches. A patterned 33-byte string is not a valid point.
+const publicKeyOf = (scalar: Uint8Array): Uint8Array =>
+  Uint8Array.from(PrivateKey.fromHex(hexOf(scalar)).toPublicKey().toDER() as number[])
+const identityKey = publicKeyOf(patterned(32, 0x21))
+const recipientKey = publicKeyOf(patterned(32, 0x35))
+// 36-byte sighash layout: txid in natural order, then the uint32 LE vout (here 1).
+const outpoint = Uint8Array.from([...patterned(32, 0x10), 1, 0, 0, 0])
 
 const DETAILS_CASES: Array<[string, Details]> = [
   ['issue-bankref', issueDetails],
   ['issue-no-bankref', { kind: 'issue' }],
   ['issue-bankref-reason', { kind: 'issue', bankRef: patterned(32, 0x40), reason: 'wire 4711' }],
   ['redeem', { kind: 'redeem' }],
-  ['reissue', { kind: 'reissue', outpoint, recipient: identityKey }],
+  ['reissue', { kind: 'reissue', outpoint, recipient: recipientKey }],
   ['pause', { kind: 'pause' }],
   ['unpause', { kind: 'unpause', reason: 'incident closed' }],
   ['blockIdentity', { kind: 'blockIdentity', identityKey }],
@@ -442,22 +458,49 @@ const buildCommitment = ([id, details]: [string, Details]): CommitmentVector => 
   commitment: hexOf(commitmentOf(details))
 })
 
-// ---- deploySig digest (spec §5.3) ------------------------------------------
+// ---- deploySig (spec §5.3) -------------------------------------------------
+// The signed data is the UTF-8 bytes of "mandala-deploy:" + txid. The issuer signs it with
+// wallet createSignature (protocol [2, 'mandala deploy'], keyID '1', counterparty 'anyone')
+// and the overlay verifies it with ProtoWallet('anyone') against the issuer identity key.
+// The SDK signs with RFC 6979 and low S, so the bytes are deterministic. A reader only has to
+// verify them: it does not need to reproduce this signer's S normalisation.
+
+const DEPLOY_PROTOCOL: WalletProtocol = [2, 'mandala deploy']
+const DEPLOY_KEY_ID = '1'
+const DEPLOY_COUNTERPARTY = 'anyone'
+const DEPLOY_ISSUER = new ProtoWallet(PrivateKey.fromHex(hexOf(patterned(32, 0x49))))
 
 const DEPLOY_TXIDS: Array<[string, string]> = [
   ['digest-1', TXID],
   ['digest-2', TXID_ASCENDING]
 ]
 
-const buildDeploySig = ([id, txid]: [string, string]): DeploySigVector => ({
-  id,
-  txid,
-  digestHex: hexOf(Buffer.from(`mandala-deploy:${txid}`, 'utf8'))
-})
+const deployDigest = (txid: string): number[] => [...Buffer.from(`mandala-deploy:${txid}`, 'utf8')]
+
+const buildDeploySig = async ([id, txid]: [string, string]): Promise<DeploySigVector> => {
+  const digest = deployDigest(txid)
+  const { publicKey } = await DEPLOY_ISSUER.getPublicKey({ identityKey: true })
+  const { signature } = await DEPLOY_ISSUER.createSignature({
+    data: digest,
+    protocolID: DEPLOY_PROTOCOL,
+    keyID: DEPLOY_KEY_ID,
+    counterparty: DEPLOY_COUNTERPARTY
+  })
+  return {
+    id,
+    txid,
+    digestHex: hexOf(digest),
+    issuerIdentityKey: publicKey,
+    protocolID: DEPLOY_PROTOCOL,
+    keyID: DEPLOY_KEY_ID,
+    counterparty: DEPLOY_COUNTERPARTY,
+    signatureHex: hexOf(signature)
+  }
+}
 
 // ---- assembly --------------------------------------------------------------
 
-const buildVectors = (): Brc162Vectors => ({
+const buildVectors = async (): Promise<Brc162Vectors> => ({
   id: 'mandala.brc162',
   version: 1,
   scripts: scriptCases().map(buildScript),
@@ -466,7 +509,7 @@ const buildVectors = (): Brc162Vectors => ({
   rejectScripts: rejectCases().map(buildReject),
   strictCbor: CBOR_CASES.map(buildStrictCbor),
   commitments: DETAILS_CASES.map(buildCommitment),
-  deploySig: DEPLOY_TXIDS.map(buildDeploySig)
+  deploySig: await Promise.all(DEPLOY_TXIDS.map(buildDeploySig))
 })
 
 const serialize = (vectors: Brc162Vectors): string => `${JSON.stringify(vectors, null, 2)}\n`
@@ -474,9 +517,10 @@ const serialize = (vectors: Brc162Vectors): string => `${JSON.stringify(vectors,
 // ---- tests -----------------------------------------------------------------
 
 describe('BRC-162 templates vectors', () => {
-  const vectors = buildVectors()
+  let vectors: Brc162Vectors
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    vectors = await buildVectors()
     if (process.env.REGENERATE_VECTORS === '1') writeFileSync(VECTORS_PATH, serialize(vectors))
   })
 
@@ -620,6 +664,32 @@ describe('BRC-162 templates vectors', () => {
     )
   })
 
+  it('commitment details carry real keys and outpoints (§3.3)', () => {
+    const keys: string[] = []
+    const outpoints: Uint8Array[] = []
+    for (const v of vectors.commitments) {
+      const details = decodeStrictCbor(Buffer.from(v.detailsHex, 'hex'))
+      for (const field of ['identityKey', 'recipient']) {
+        const value = details[field]
+        if (value instanceof Uint8Array) keys.push(hexOf(value))
+      }
+      if (details.outpoint instanceof Uint8Array) outpoints.push(details.outpoint)
+    }
+    // reissue.recipient plus six identity kinds
+    expect(keys).toHaveLength(7)
+    for (const key of keys) {
+      expect(key).toHaveLength(66)
+      // PublicKey.fromString throws 'Invalid point' for an x that is not on the curve
+      expect(PublicKey.fromString(key).toString()).toBe(key)
+    }
+    // reissue, freezeOutput, unfreezeOutput: txid (32) then a uint32 LE vout
+    expect(outpoints).toHaveLength(3)
+    for (const outpoint of outpoints) {
+      expect(outpoint).toHaveLength(36)
+      expect(Buffer.from(outpoint).readUInt32LE(32)).toBe(1)
+    }
+  })
+
   it('the adm authority payload is {adm: sha256(issue details)}', () => {
     const issue = vectors.commitments.find(v => v.id === 'issue-bankref')
     const authority = vectors.scripts.find(v => v.id === 'authority-adm-commitment')
@@ -633,5 +703,66 @@ describe('BRC-162 templates vectors', () => {
       expect(Buffer.from(v.digestHex, 'hex').toString('utf8')).toBe(`mandala-deploy:${v.txid}`)
     }
     expect(vectors.deploySig).toHaveLength(2)
+  })
+
+  describe('deploySig signatures', () => {
+    const anyone = new ProtoWallet('anyone')
+    // The overlay's check: any throw counts as invalid.
+    const verifies = async (
+      v: DeploySigVector,
+      digestHex: string,
+      signatureHex: string,
+      key: string
+    ) =>
+      anyone
+        .verifySignature({
+          data: [...Buffer.from(digestHex, 'hex')],
+          signature: [...Buffer.from(signatureHex, 'hex')],
+          protocolID: v.protocolID,
+          keyID: v.keyID,
+          counterparty: key
+        })
+        .then(
+          r => r.valid,
+          () => false
+        )
+
+    it('carry the §5.3 parameters and one issuer identity key that is a real point', () => {
+      for (const v of vectors.deploySig) {
+        expect(v.protocolID).toEqual([2, 'mandala deploy'])
+        expect(v.keyID).toBe('1')
+        expect(v.counterparty).toBe('anyone')
+        expect(PublicKey.fromString(v.issuerIdentityKey).toString()).toBe(v.issuerIdentityKey)
+        expect(v.signatureHex).toMatch(/^30[0-9a-f]+$/)
+      }
+      expect(new Set(vectors.deploySig.map(v => v.issuerIdentityKey)).size).toBe(1)
+    })
+
+    it('verify against their own digest and issuer identity key', async () => {
+      for (const v of vectors.deploySig) {
+        expect(await verifies(v, v.digestHex, v.signatureHex, v.issuerIdentityKey)).toBe(true)
+      }
+    })
+
+    it('do not verify for another txid, another issuer or a damaged signature', async () => {
+      const [a, b] = vectors.deploySig
+      const otherIssuer = (
+        await new ProtoWallet(PrivateKey.fromHex(hexOf(patterned(32, 0x5d)))).getPublicKey({
+          identityKey: true
+        })
+      ).publicKey
+      expect(await verifies(a, b.digestHex, a.signatureHex, a.issuerIdentityKey)).toBe(false)
+      expect(await verifies(a, a.digestHex, b.signatureHex, a.issuerIdentityKey)).toBe(false)
+      expect(await verifies(a, a.digestHex, a.signatureHex, otherIssuer)).toBe(false)
+      expect(await verifies(a, a.digestHex, a.signatureHex.slice(0, -2), a.issuerIdentityKey)).toBe(
+        false
+      )
+      expect(await verifies(a, a.digestHex, 'zz', a.issuerIdentityKey)).toBe(false)
+    })
+
+    it('are deterministic: signing again gives the same bytes', async () => {
+      const again = await Promise.all(DEPLOY_TXIDS.map(buildDeploySig))
+      expect(again).toEqual(vectors.deploySig)
+    })
   })
 })
