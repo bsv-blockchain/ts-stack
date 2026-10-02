@@ -21,7 +21,7 @@
     },
     {
       "name": "@iconify/utils",
-      "version": "3.1.4",
+      "version": "3.1.7",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -49,7 +49,7 @@
     },
     {
       "name": "@mermaid-js/parser",
-      "version": "1.2.0",
+      "version": "2.0.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -133,7 +133,7 @@
     },
     {
       "name": "cytoscape",
-      "version": "3.34.0",
+      "version": "3.34.3",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -483,7 +483,7 @@
     },
     {
       "name": "dayjs",
-      "version": "1.11.21",
+      "version": "1.11.23",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -497,7 +497,7 @@
     },
     {
       "name": "dompurify",
-      "version": "3.4.13",
+      "version": "3.4.15",
       "kind": "vite",
       "packageLicense": "(MPL-2.0 OR Apache-2.0)",
       "licenseExpression": "Apache-2.0",
@@ -511,7 +511,7 @@
     },
     {
       "name": "es-toolkit",
-      "version": "1.50.0",
+      "version": "1.52.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -637,7 +637,7 @@
     },
     {
       "name": "mermaid",
-      "version": "11.16.1",
+      "version": "12.0.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -669,7 +669,7 @@
     },
     {
       "name": "react-dom",
-      "version": "19.2.8",
+      "version": "19.3.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -683,7 +683,7 @@
     },
     {
       "name": "react-router",
-      "version": "8.3.0",
+      "version": "8.4.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -697,7 +697,7 @@
     },
     {
       "name": "react",
-      "version": "19.2.8",
+      "version": "19.3.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -725,7 +725,7 @@
     },
     {
       "name": "scheduler",
-      "version": "0.27.0",
+      "version": "0.28.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",
@@ -767,7 +767,7 @@
     },
     {
       "name": "uuid",
-      "version": "14.0.1",
+      "version": "14.0.2",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",

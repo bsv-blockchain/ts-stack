@@ -33,6 +33,10 @@ minimumReleaseAgeExclude:
 # brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest
 # security-patched release until Jest adopts it directly.
 overrides:
+  # libp2p 3.3.11 requires @libp2p/interface 3.3, whose Stream type includes
+  # readableEnded. Yamux 8.0.1 allows @libp2p/utils ^7.0.0 but the lock selected
+  # 7.3.0, whose AbstractStream does not declare that field. 7.4.1 does.
+  '@chainsafe/libp2p-yamux>@libp2p/utils': 7.4.1
   brace-expansion@<5.0.11: 5.0.11
   # Socket.IO retains engine.io releases vulnerable to the protocol-revision
   # mismatch DoS. Select the first patched release; authsocket consumes the
