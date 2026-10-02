@@ -62,15 +62,17 @@ export async function validateLegacy(k: Knex, config?: Knex.MigratorConfig): Pro
   )
   const names = legacyTriggerNames()
   const foreign: Array<{
+    type: string
     name: string
+    tbl_name: string
     sql: string
-  }> = await k('sqlite_master').whereIn('type', ['trigger', 'view']).select('name', 'sql')
+  }> = await k('sqlite_master').whereIn('type', ['trigger', 'view']).select('type', 'name', 'tbl_name', 'sql')
   for (const object of foreign)
-    if (!names.has(object.name) && retiredTables.some(table => new RegExp('\\b' + table + '\\b', 'i').test(object.sql)))
+    if (
+      !(object.type === 'trigger' && names.has(object.name)) &&
+      (retiredTables.includes(object.tbl_name) ||
+        retiredTables.some(table => new RegExp('\\b' + table + '\\b', 'i').test(object.sql)))
+    )
       throw new WERR_INVALID_OPERATION('Unowned object references legacy auxiliary data')
-  const aux = await legacySchema(k)
-  for (const row of aux)
-    if (row.type === 'trigger' && !names.has(row.name))
-      throw new WERR_INVALID_OPERATION('Unknown legacy auxiliary trigger')
   return names
 }

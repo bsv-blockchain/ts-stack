@@ -3,9 +3,19 @@ import { dropGenerationForDataDeletion } from '../schema/snapshotSqliteIndexMigr
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import type { Knex } from 'knex'
 import { fixture, exact, value, replace, tables } from '../../../test/utils/snapshotSqliteFixtures'
-import { installGeneration, names, metadata, progress, oldProgress } from '../schema/snapshotSqliteIndexGeneration'
+import {
+  installGeneration,
+  readPlan,
+  validateInstalled,
+  names,
+  metadata,
+  progress,
+  oldProgress
+} from '../schema/snapshotSqliteIndexGeneration'
 import { copyGenerationPage } from '../schema/snapshotSqliteIndexBootstrap'
 import { legacyNames } from '../schema/snapshotSqliteMembership'
+import { retiredTables } from '../schema/snapshotSqliteLegacyOwnership'
+import { knex } from 'knex'
 
 function generation(k: Knex): Knex {
   const mapping = new Map(Object.entries(legacyNames).map(([key, value]) => [value, names[key as keyof typeof names]]))
@@ -88,6 +98,205 @@ test('page rollback keeps its cursor and memberships together; resumed copies ar
     })
     await finish(k, resumed)
     await exact(generation(k))
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each([
+  ['tx_labels_map', 'txLabelId INTEGER,transactionId INTEGER,UNIQUE(transactionId,txLabelId)'],
+  ['tx_labels_map', 'txLabelId INTEGER,transactionId INTEGER,UNIQUE(txLabelId)'],
+  ['tx_labels_map', 'txLabelId INTEGER,transactionId INTEGER,UNIQUE(txLabelId DESC,transactionId)'],
+  ['tx_labels_map', 'txLabelId INTEGER,transactionId INTEGER,UNIQUE(txLabelId COLLATE NOCASE,transactionId)'],
+  ['tx_labels_map', 'txLabelId INTEGER,transactionId INTEGER,UNIQUE(txLabelId,transactionId COLLATE RTRIM)'],
+  [
+    'certificate_fields',
+    'userId INTEGER,fieldName VARCHAR(100),certificateId INTEGER,fieldValue TEXT,UNIQUE(fieldName,certificateId COLLATE NOCASE)'
+  ]
+])('unsupported native composite comparison refuses before writing: %s / %s', async (table, columns) => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k.schema.dropTable(table)
+    await k.raw(`CREATE TABLE ?? (${columns})`, [table])
+    const before = await k('sqlite_master').orderBy(['type', 'name'])
+    await expect(installGeneration(k)).rejects.toThrow('Unsupported composite identity comparison')
+    expect(await k('sqlite_master').orderBy(['type', 'name'])).toEqual(before)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('an index whose comparison differs from the source order refuses a sorting scan', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k.schema.dropTable('certificate_fields')
+    await k.raw(
+      'CREATE TABLE certificate_fields(userId INTEGER,fieldName VARCHAR(100),certificateId INTEGER,fieldValue TEXT,UNIQUE(fieldName COLLATE NOCASE,certificateId))'
+    )
+    const query = 'SELECT fieldName,certificateId FROM certificate_fields ORDER BY fieldName,certificateId LIMIT 1'
+    expect(
+      (await k.raw('EXPLAIN QUERY PLAN ' + query)).some((step: { detail: string }) =>
+        step.detail.includes('TEMP B-TREE')
+      )
+    ).toBe(true)
+    await expect(installGeneration(k)).rejects.toThrow('Composite source order mismatch')
+    expect(await k.schema.hasTable(metadata)).toBe(false)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('the SQLite generation refuses a different database client before issuing queries', async () => {
+  const k = knex({ client: 'mysql2' })
+  const query = jest.fn()
+  k.on('query', query)
+  try {
+    await expect(readPlan(k)).rejects.toThrow('SQLite rebuild requires SQLite')
+    expect(query).not.toHaveBeenCalled()
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('validation binds the observed source schema and rejects malformed generated definitions', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    const plan = await installGeneration(k)
+    await k.raw('CREATE INDEX extra_source_index ON tx_labels(userId)')
+    await expect(validateInstalled(k, plan)).rejects.toThrow('Rebuild source schema changed')
+    await k.raw('DROP INDEX extra_source_index')
+    await expect(validateInstalled(k, { ...plan, ddl: ['SELECT 1'] })).rejects.toThrow(
+      'Invalid generated schema definition'
+    )
+    await expect(validateInstalled(k, plan)).resolves.toBeUndefined()
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each(['absent', 'extra', 'wrong id', 'invalid complete', 'binary legacy'])(
+  'generation metadata must be one correctly typed source-bound row: %s',
+  async kind => {
+    const k = await fixture('BINARY', false, false)
+    try {
+      const plan = await installGeneration(k)
+      if (kind === 'absent') await k(metadata).delete()
+      if (kind === 'extra') await k(metadata).insert({ ...(await k(metadata).first()), id: 1 })
+      if (kind === 'wrong id') await k(metadata).update({ id: 1 })
+      if (kind === 'invalid complete') await k(metadata).update({ complete: 2 })
+      if (kind === 'binary legacy') await k.raw('UPDATE ?? SET legacy = ?', [metadata, Buffer.from([0])])
+      await expect(validateInstalled(k, plan)).rejects.toThrow('Rebuild source binding mismatch')
+    } finally {
+      await k.destroy()
+    }
+  }
+)
+
+test.each(oldProgress)('an incomplete prior index refuses replacement: %s', async table => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k(table).update({ complete: false })
+    await k('knex_migrations')
+      .where('name', 'like', `% snapshot ${table.split('_')[1]} %`)
+      .delete()
+    const before = await k('sqlite_master').orderBy(['type', 'name'])
+    await expect(installGeneration(k)).rejects.toThrow('Prior snapshot migrations must be complete')
+    expect(await k('sqlite_master').orderBy(['type', 'name'])).toEqual(before)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each(retiredTables)('foreign views of %s prevent retiring their data', async table => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k.raw('CREATE VIEW foreign_snapshot_reader AS SELECT * FROM ??', [table.toUpperCase()])
+    await expect(installGeneration(k)).rejects.toThrow('Unowned object references legacy auxiliary data')
+    expect(await k.schema.hasTable(metadata)).toBe(false)
+    expect(await k.schema.hasTable(table)).toBe(true)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('a view using a known trigger name is still an unowned reader of legacy data', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k.raw('CREATE VIEW snapshot_profile_0_insert AS SELECT * FROM snapshot_profile_keys')
+    expect(await k('sqlite_master').where('name', 'snapshot_profile_0_insert').orderBy('type').select('type')).toEqual([
+      { type: 'trigger' },
+      { type: 'view' }
+    ])
+    await expect(installGeneration(k)).rejects.toThrow('Unowned object references legacy auxiliary data')
+    expect(await k.schema.hasTable(metadata)).toBe(false)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('a foreign auxiliary trigger prevents retirement even when its body reads no legacy data', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k.raw('CREATE TRIGGER application_auxiliary_hook AFTER INSERT ON snapshot_profile_keys BEGIN SELECT 1; END')
+    await expect(installGeneration(k)).rejects.toThrow('Unowned object references legacy auxiliary data')
+    expect(await k.schema.hasTable(metadata)).toBe(false)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('orphan generation objects refuse adoption without replacing their contents', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k.schema.createTable(names.profile, table => {
+      table.text('foreignValue')
+    })
+    await k(names.profile).insert({ foreignValue: 'preserve' })
+    await expect(installGeneration(k)).rejects.toThrow('Orphan rebuild schema refuses adoption')
+    expect(await k(names.profile)).toEqual([{ foreignValue: 'preserve' }])
+    expect(await k.schema.hasTable(metadata)).toBe(false)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('reserved source trigger names refuse while independent application triggers are retained', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await k.raw('CREATE TRIGGER snapshot_profile_unowned AFTER INSERT ON tx_labels BEGIN SELECT 1; END')
+    await expect(installGeneration(k)).rejects.toThrow('Unknown legacy source trigger')
+    await k.raw('DROP TRIGGER snapshot_profile_unowned')
+    await k.raw('CREATE TABLE application_events(id INTEGER)')
+    await k.raw(
+      'CREATE TRIGGER app_snapshot_profile_notice AFTER INSERT ON tx_labels BEGIN INSERT INTO application_events VALUES(NEW.txLabelId); END'
+    )
+    await installGeneration(k)
+    await k('tx_labels').insert(value('tx_labels', 1, 1, 1))
+    expect(await k('application_events')).toEqual([{ id: 1 }])
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('the installed generation owns every required secondary range index', async () => {
+  const k = await fixture('BINARY', false, false)
+  try {
+    await installGeneration(k)
+    const required = {
+      snapshot_relation_right_v2: ['snapshotTableId', 'snapshotUserId', 'snapshotRightId', 'snapshotLeftId'],
+      snapshot_relation_map_v2: ['snapshotTableId', 'snapshotLeftId', 'snapshotRightId', 'snapshotUserId'],
+      snapshot_certificate_parent_v2: ['snapshotCertificateId', 'snapshotUserId', 'snapshotFieldName'],
+      snapshot_certificate_lookup_v2: ['snapshotFieldName', 'snapshotCertificateId', 'snapshotUserId'],
+      snapshot_global_page_v2: ['tableId', 'userId', 'present', 'rowId'],
+      snapshot_global_target_v2: ['tableId', 'rowId', 'userId'],
+      snapshot_global_request_v2: ['requestId', 'transactionId']
+    }
+    for (const [name, columns] of Object.entries(required)) {
+      const parts: Array<{ key: number; name: string; desc: number }> = await k.raw('PRAGMA index_xinfo(??)', [name])
+      expect(parts.filter(part => part.key === 1).map(part => ({ name: part.name, desc: part.desc }))).toEqual(
+        columns.map(name => ({ name, desc: 0 }))
+      )
+    }
   } finally {
     await k.destroy()
   }

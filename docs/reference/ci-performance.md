@@ -354,6 +354,17 @@ the full pinned inventory/configuration on the final source before adoption.
 Registry, runtime, assertions, workers, deadlines and thresholds remain owned
 and unchanged by the partition facility.
 
+The SQLite conflict-repair extension retains all eight canonical helper files in
+five whole-file groups: identity, membership, generation/legacy ownership,
+bootstrap/state and retirement/migration. Identity and membership originally
+shared a part. On source `18748e2f4`, that part passed all 759 baseline tests and
+instrumented 465 mutants, but reached its 90-minute limit without a complete
+report; three native worker crashes remain in the failed-run evidence. Separating
+the two complete files preserves every canonical source, test and fixture, four
+workers, runner reuse of eight, the 90-minute per-part limit, and each critical
+score/uncovered/invalid gate. Complete fresh qualification is required; splitting
+does not establish a runtime improvement or turn the timed-out run into a pass.
+
 ### Remote reader execution allowance
 
 The complete `wallet-snapshot-remote-reader` campaign at wallet source

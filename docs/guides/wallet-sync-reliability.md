@@ -436,7 +436,12 @@ MySQL continues to use its existing maintenance.
 
 Installation validates the complete prior migrations, source definitions and
 owned auxiliary objects, then atomically installs a fresh v2 generation and
-invalidates the previous progress states. Twelve source streams copy at most
+invalidates the previous progress states. Ownership binds both object type and
+name: a view sharing an owned trigger name remains a foreign reader. Foreign
+views or triggers that depend on legacy auxiliary data refuse installation
+before those tables can be retired. Orphan generation objects and unsupported
+composite comparison or source-order definitions also refuse adoption.
+Twelve source streams copy at most
 256 rows per transaction with typed durable positions. Independent writes,
 including inserts below the saved cursor, remain observed throughout the copy.
 Each completed page yields before the next transaction. Once the copy completes,

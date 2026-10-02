@@ -258,6 +258,18 @@ its traversal tests assert fixture bounds and cursor progress so broken paging
 fails promptly. Partitioning and test changes require fresh complete evidence;
 the cancelled run does not qualify these targets.
 
+The eight SQLite conflict-repair helpers remain complete canonical retained
+sources. Identity and membership each execute as a whole-file part; generation
+shares its part with legacy ownership, bootstrap with state, and retirement with
+the migration entry point. The identity/membership split follows a local
+90-minute timeout on source `18748e2f4`, with 465 instrumented mutants and all 759
+baseline tests passing but no complete mutation result. Preserve that failure
+and its three worker crash warnings. All parts keep the full current canonical
+tests and fixtures, four workers, reuse eight, the 90-minute limit, and their
+independent critical score and zero-uncovered/invalid gates. Aggregation requires
+the complete disjoint source union and fresh matching provenance; no target,
+property budget, dependency-selection rule or acceptance threshold changes.
+
 PR CI downloads each selected target's complete partition artifacts before
 canonical verification. The orchestration regression derives the required
 downloads from the canonical target registry and execution map, preventing a

@@ -9,7 +9,9 @@ attention to changes that materially alter behavior or extend functionality.
 - Repair SQLite replacement maintenance with a new auxiliary generation, durable
   displaced-owner witnesses, bounded resumable source copying and physical-row
   retirement. Preserve source tables, profile/reference semantics and pinned
-  ordinary/archive views. Apply the explicit forward migration; normal downgrade
+  ordinary/archive views. Bind legacy trigger ownership to its object type so
+  foreign views sharing a trigger name cannot bypass retirement refusal. Apply
+  the explicit forward migration; normal downgrade
   refuses, while explicit full-data deletion remains supported. Complete native,
   mutation, larger-wallet and hosted acceptance remain required.
 
