@@ -63,6 +63,20 @@ store already left with unjournaled schema objects by an older version. Preserve
 the database and verified backups and reconcile the exact schema and migration
 journal before recovery; do not delete journal rows or wallet data blindly.
 
+### Postgres storage
+
+`StorageKnex` runs on Postgres through the knex `pg` client. Install `pg` in the
+application and pass a Postgres knex:
+
+```ts
+import { knex as makeKnex } from 'knex'
+
+const knex = makeKnex({ client: 'pg', connection: { host, port, user, password, database } })
+const storage = new StorageKnex({ ...StorageKnex.defaultOptions(), chain: 'main', knex })
+```
+
+`ChaintracksStorageKnex` and `adminStats` do not support Postgres.
+
 ## Overview
 
 The Wallet Toolbox is the reference implementation of the BRC-100 wallet interface. It connects the BSV SDK's cryptographic primitives to real storage backends, network services, and signing flows so that application developers don't have to wire these layers together themselves.

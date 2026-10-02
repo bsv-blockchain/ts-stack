@@ -27,6 +27,7 @@ describe('createAction test', () => {
   beforeEach(async () => {
     ctxs = []
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('createActionTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('createActionTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy(`${testName()}`))
     _tu.mockPostServicesAsSuccess(ctxs)
   })

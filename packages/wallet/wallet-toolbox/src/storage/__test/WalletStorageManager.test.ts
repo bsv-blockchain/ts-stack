@@ -15,6 +15,7 @@ describe('WalletStorageManager tests', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('walletStorageManagerTestSource', 'legacy'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('walletStorageManagerTestSource', 'legacy'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('walletStorageManagerTestSource', 'legacy'))
   })
 

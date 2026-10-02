@@ -10,6 +10,7 @@ describe('internalizeAction operator coverage', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('internalizeActionTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('internalizeActionTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('internalizeActionTests'))
   })
 

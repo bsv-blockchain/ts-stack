@@ -9,6 +9,7 @@ describe('RelinquishOutputArgs tests', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('relinquishActionTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('relinquishActionTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('relinquishActionTests'))
   })
 
@@ -63,6 +64,9 @@ describe('RelinquishOutputArgs tests', () => {
     beforeAll(async () => {
       if (env.runMySQL) {
         innerCtxs.push(await _tu.createLegacyWalletMySQLCopy('relinquishActionBasketAuthTests', 'legacy'))
+      }
+      if (env.runPostgres) {
+        innerCtxs.push(await _tu.createLegacyWalletPostgresCopy('relinquishActionBasketAuthTests', 'legacy'))
       }
       innerCtxs.push(await _tu.createLegacyWalletSQLiteCopy('relinquishActionBasketAuthTests', 'legacy'))
     })
