@@ -226,13 +226,13 @@ export class ProtectedOperationStateStore implements OperationStateStore {
       'unavailable'
     )
     const bytes = await this.codec.open(this.aad(snapshot.revision), saved.payload)
-    this.current()
-    outputAssert(
-      bytes instanceof Uint8Array && bytes.byteLength <= this.plaintextBytes,
-      'Protected operation plaintext capacity exceeded',
-      'limited'
-    )
     try {
+      this.current()
+      outputAssert(
+        bytes instanceof Uint8Array && bytes.byteLength <= this.plaintextBytes,
+        'Protected operation plaintext capacity exceeded',
+        'limited'
+      )
       const plain = parseOutputJSON(bytes, { bytes: this.plaintextBytes })
       closedOutputObject(plain, ['format', 'initialDigest', 'value'])
       outputAssert(
@@ -246,7 +246,7 @@ export class ProtectedOperationStateStore implements OperationStateStore {
         value: object(plain.value, this.valueBytes)
       }
     } finally {
-      bytes.fill(0)
+      if (bytes instanceof Uint8Array) bytes.fill(0)
     }
   }
   async read(): Promise<OperationStateSnapshot> {

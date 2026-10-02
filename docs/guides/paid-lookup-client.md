@@ -83,6 +83,10 @@ plaintext, including framing. A complete four-MiB delivery needs a separately
 bounded protected result owner. A small encrypted control cell is not such an
 owner, and increasing a wire limit would not solve that storage requirement.
 
+Owned plaintext work buffers are cleared after processing, including when a returned
+buffer exceeds capacity or an installed capability changes during decryption.
+This does not erase copies retained inside the installed wallet.
+
 Each CAS owns the supplied value before awaiting encryption. Multiple writers use
 the original backing store's atomic revision check. A lost acknowledgement can be
 recognized only when the immediately following revision decrypts to that exact
