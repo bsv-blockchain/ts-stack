@@ -22,7 +22,7 @@ const open = filename =>
     pool: { min: 1, max: 1 }
   })
 const finish = async k => {
-  for (let page = 0; page < 100; page++) if ((await copy(k)).complete) return
+  for (let page = 0; page < 100; page++) if ((await copy(k, 1000000)).complete) return
   throw new Error('Bootstrap incomplete')
 }
 async function child() {
@@ -45,6 +45,9 @@ async function child() {
     if (sql.startsWith('insert into `snapshot_journal_generation`')) park('install-after-generation')
     if (sql.startsWith('insert into `snapshot_journal_bootstrap`')) park('install-after-bootstrap')
     if (sql.startsWith('update `snapshot_journal_generation`')) park('complete-after-state')
+    if (sql.startsWith('update `snapshot_journal_bootstrap` set `rowlimit`')) park('bootstrap-after-budget-bind')
+    if (sql.startsWith('insert into `snapshot_journal_physical`')) park('bootstrap-after-metadata')
+    if (sql.startsWith('update `snapshot_journal_bootstrap` set `cursor`')) park('bootstrap-after-progress')
   })
   k.on('query', q => {
     if (q.sql.toLowerCase().startsWith('update `snapshot_journal_generation`')) park('complete-before-state')
@@ -53,6 +56,9 @@ async function child() {
     if (boundary.startsWith('install-')) {
       await install(k, '1000000')
       park('install-after-commit')
+    } else if (boundary.startsWith('bootstrap-')) {
+      await copy(k, 1000000)
+      park('bootstrap-after-commit')
     } else {
       await complete(k)
       park('complete-after-commit')
@@ -89,6 +95,10 @@ async function main() {
       'install-after-generation',
       'install-after-bootstrap',
       'install-after-commit',
+      'bootstrap-after-budget-bind',
+      'bootstrap-after-metadata',
+      'bootstrap-after-progress',
+      'bootstrap-after-commit',
       'complete-before-state',
       'complete-after-state',
       'complete-after-commit'
@@ -105,6 +115,7 @@ async function main() {
         await seedArchiveClosure(source, user.userId, other.userId)
         const original = {}
         for (const table of tables) original[table] = await k(table)
+        if (boundary.startsWith('bootstrap-')) await install(k, '1000000')
         if (boundary.startsWith('complete-')) {
           await install(k, '1000000')
           await finish(k)
@@ -118,12 +129,31 @@ async function main() {
         const objects = await k('sqlite_master').whereRaw('lower(substr(name,1,17))=?', ['snapshot_journal_'])
         const committed = boundary.endsWith('after-commit')
         if (boundary.startsWith('install-')) assert.equal(objects.length, committed ? 58 : 0)
-        else assert.equal((await read(k)).complete, committed)
+        else if (boundary.startsWith('bootstrap-')) {
+          assert.equal((await read(k)).complete, false)
+          const progress = await k('snapshot_journal_bootstrap').first()
+          assert.equal(progress.rowsUsed, committed ? original.transactions.length : 0)
+          assert.equal(progress.rowLimit, committed ? 1000000 : null)
+          assert.equal(
+            progress.cursor,
+            committed ? JSON.stringify([Math.max(...original.transactions.map(row => row.transactionId))]) : null
+          )
+        } else assert.equal((await read(k)).complete, committed)
         await install(k, '1000000')
         await finish(k)
         await complete(k)
         assert.equal((await read(k)).complete, true)
         await exact(k)
+        let charged = 0
+        for (const table of [
+          ...tables,
+          'snapshot_profile_keys_v2',
+          'snapshot_relation_keys_v2',
+          'snapshot_certificate_field_keys_v2',
+          'snapshot_global_keys_v2'
+        ])
+          charged += Number((await k(table).count('* AS n').first()).n)
+        assert.equal((await k('snapshot_journal_bootstrap').first()).rowsUsed, charged)
         for (const table of tables) assert.deepEqual(await k(table), original[table])
         assert.deepEqual(await k.raw('PRAGMA foreign_key_check'), [])
         results.push({

@@ -44,8 +44,16 @@ async function fixture() {
   await database('snapshot_journal_generation').insert(nativeState)
   await database.raw('CREATE TABLE snapshot_journal_clock(id INTEGER,ceiling TEXT)')
   await database('snapshot_journal_clock').insert({ id: 1, ceiling })
-  await database.raw('CREATE TABLE snapshot_journal_bootstrap(id INTEGER,stream INTEGER,cursor TEXT)')
-  await database('snapshot_journal_bootstrap').insert({ id: 1, stream: 17, cursor: null })
+  await database.raw(
+    'CREATE TABLE snapshot_journal_bootstrap(id INTEGER,stream INTEGER,cursor TEXT,rowLimit INTEGER,rowsUsed INTEGER)'
+  )
+  await database('snapshot_journal_bootstrap').insert({
+    id: 1,
+    stream: 17,
+    cursor: null,
+    rowLimit: 1000000,
+    rowsUsed: 0
+  })
   await database.raw('CREATE TABLE snapshot_journal_invalid(id INTEGER,reason TEXT)')
   await database.raw('CREATE TABLE snapshot_journal_events(revision TEXT)')
   const metadata = structuredClone(captured),
@@ -99,7 +107,8 @@ async function fixture() {
             complete: 0
           })
         if (name === 'snapshot_journal_clock') await database(name).insert({ id: 1, ceiling: values![0] })
-        if (name === 'snapshot_journal_bootstrap') await database(name).insert({ id: 1, stream: 0, cursor: null })
+        if (name === 'snapshot_journal_bootstrap')
+          await database(name).insert({ id: 1, stream: 0, cursor: null, rowLimit: null, rowsUsed: 0 })
         available.add(name)
         fail('after:' + name)
         return {}
@@ -198,7 +207,7 @@ test('lost final object acknowledgement resumes its epoch and advances only the 
   const f = await fixture()
   try {
     await f.database('snapshot_journal_generation').update({ nextObject: 56, complete: 0 })
-    await f.database('snapshot_journal_bootstrap').update({ stream: 0 })
+    await f.database('snapshot_journal_bootstrap').update({ stream: 0, rowLimit: null })
     f.writes.length = 0
     const resumed = await installSnapshotJournalMysqlGeneration(f.k, ceiling)
     expect(resumed).toMatchObject({
@@ -460,7 +469,9 @@ test('fresh installation uses the independently captured native DDL and atomical
     expect(state).toMatchObject({ nextObject: 57, complete: false, enabled: true })
     expect(state.epoch).not.toBe(nativeState.epoch)
     expect(await f.database('snapshot_journal_clock')).toEqual([{ id: 1, ceiling }])
-    expect(await f.database('snapshot_journal_bootstrap')).toEqual([{ id: 1, stream: 0, cursor: null }])
+    expect(await f.database('snapshot_journal_bootstrap')).toEqual([
+      { id: 1, stream: 0, cursor: null, rowLimit: null, rowsUsed: 0 }
+    ])
     expect(objectNames).toHaveLength(58)
   } finally {
     await f.database.destroy()

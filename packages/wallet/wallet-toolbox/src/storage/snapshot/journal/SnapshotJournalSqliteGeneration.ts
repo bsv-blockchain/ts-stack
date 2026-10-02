@@ -10,7 +10,7 @@ import {
   snapshotJournalSqliteObserverSql,
   SNAPSHOT_JOURNAL_SQLITE_METADATA_DDL
 } from './SnapshotJournalSqliteObservers'
-import { SNAPSHOT_JOURNAL_BOOTSTRAP_DDL } from './SnapshotJournalBootstrap'
+import { SNAPSHOT_JOURNAL_BOOTSTRAP_DDL, validSnapshotJournalBootstrapBudget } from './SnapshotJournalBootstrap'
 import {
   snapshotJournalRevision,
   compareSnapshotJournalRevisions,
@@ -144,7 +144,9 @@ async function validate(k: Knex, p: Plan): Promise<SnapshotJournalSqliteGenerati
       (typeof position.cursor === 'string' && Buffer.byteLength(position.cursor, 'utf8') <= 2048)
     ) ||
     (position.stream === 17 && position.cursor !== null) ||
-    (row.complete === 1 && position.stream !== 17)
+    (row.complete === 1 && position.stream !== 17) ||
+    !validSnapshotJournalBootstrapBudget(position) ||
+    (position.rowLimit === null && (position.stream !== 0 || position.cursor !== null))
   )
     return invalid()
   return {
@@ -194,7 +196,7 @@ export async function installSnapshotJournalSqliteGeneration(
       enabled: 1,
       reason: null
     })
-    await t('snapshot_journal_bootstrap').insert({ id: 1, stream: 0, cursor: null })
+    await t('snapshot_journal_bootstrap').insert({ id: 1, stream: 0, cursor: null, rowLimit: null, rowsUsed: 0 })
     return await validate(t, p)
   })
 }

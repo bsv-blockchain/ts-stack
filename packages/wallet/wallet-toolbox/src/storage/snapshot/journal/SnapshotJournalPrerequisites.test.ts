@@ -10,7 +10,7 @@ import { snapshotJournalMysqlObserverSql } from './SnapshotJournalMysqlObservers
 import { snapshotJournalRevision as rev } from './SnapshotJournalRevision'
 
 test.each([
-  ['bootstrap', (k: Knex) => copySnapshotJournalBootstrapPage(k)],
+  ['bootstrap', (k: Knex) => copySnapshotJournalBootstrapPage(k, 1000000)],
   ['SQLite generation read', (k: Knex) => readSnapshotJournalSqliteGeneration(k)],
   ['SQLite generation completion', (k: Knex) => completeSnapshotJournalSqliteGeneration(k)],
   ['high-water', (k: Knex) => readSnapshotJournalHighWater(k, 1, rev('0'), rev('0'))],

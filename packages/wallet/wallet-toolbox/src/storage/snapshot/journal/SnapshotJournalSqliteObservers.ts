@@ -38,6 +38,14 @@ const exactWhere = (table: string, prefix: string, alias: string) => {
     right = tuple(table, alias)
   return left.map((key, i) => `CAST(${key} AS BLOB) IS CAST(${right[i]} AS BLOB)`).join(' AND ')
 }
+/** Native equality admits the declared point index; the byte residual keeps
+ * generation identity exact even for NOCASE/RTRIM certificate-field keys. */
+const sourceWhere = (table: string, prefix: string, alias: string) => {
+  const left = tuple(table, prefix),
+    right = tuple(table, alias)
+  const indexed = right.flatMap((key, i) => (key.startsWith(alias + '.') ? [`${key}=${left[i]}`] : []))
+  return indexed.join(' AND ') + ' AND ' + exactWhere(table, prefix, alias)
+}
 function keyGuard(key: string[], owner?: string): string {
   const [id1, id2, text] = key
   const integer = (value: string, minimum: number) =>
@@ -109,7 +117,7 @@ export async function snapshotJournalSqliteObserverSql(k: Knex): Promise<string[
       const regenerate =
         event === 'INSERT' ? '1' : event === 'UPDATE' ? `NOT (${exactWhere(table, 'OLD', 'NEW')})` : '0'
       const writePhysical = (p: string, fresh: string) =>
-        `INSERT INTO snapshot_journal_physical(${physicalKey},revision,generation,present) SELECT ${tableId},${tuple(table, p).join(',')},${revision},${revision},EXISTS(SELECT 1 FROM ${q(table)} s WHERE ${exactWhere(table, p, 's')}) WHERE ${writable} ON CONFLICT(${physicalKey}) DO UPDATE SET revision=excluded.revision,generation=CASE WHEN ${fresh} THEN excluded.generation ELSE snapshot_journal_physical.generation END,present=excluded.present; `
+        `INSERT INTO snapshot_journal_physical(${physicalKey},revision,generation,present) SELECT ${tableId},${tuple(table, p).join(',')},${revision},${revision},EXISTS(SELECT 1 FROM ${q(table)} s WHERE ${sourceWhere(table, p, 's')}) WHERE ${writable} ON CONFLICT(${physicalKey}) DO UPDATE SET revision=excluded.revision,generation=CASE WHEN ${fresh} THEN excluded.generation ELSE snapshot_journal_physical.generation END,present=excluded.present; `
       let body = keyGuard(current, tableId < 8 ? prefix + '.userId' : undefined)
       if (event === 'UPDATE') body += keyGuard(tuple(table, 'OLD'), tableId < 8 ? 'OLD.userId' : undefined)
       body += tick
@@ -117,7 +125,7 @@ export async function snapshotJournalSqliteObserverSql(k: Knex): Promise<string[
       body += writePhysical(prefix, regenerate)
       if (tableId < 8) {
         body += scopeUpsert(
-          `SELECT ${tableId},s.userId,s.${q(numeric[tableId].key)},0,'',${revision},1 FROM ${q(table)} s WHERE ${exactWhere(table, prefix, 's')} AND ${writable}`
+          `SELECT ${tableId},s.userId,s.${q(numeric[tableId].key)},0,'',${revision},1 FROM ${q(table)} s WHERE ${sourceWhere(table, prefix, 's')} AND ${writable}`
         )
       } else if (tableId === 10 || tableId === 11) {
         body += scopeUpsert(

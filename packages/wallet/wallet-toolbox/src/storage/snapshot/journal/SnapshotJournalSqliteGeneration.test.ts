@@ -36,7 +36,7 @@ async function fixture() {
   }
 }
 async function finish(k: Knex) {
-  for (let page = 0; page < 80; page++) if ((await copySnapshotJournalBootstrapPage(k)).complete) return
+  for (let page = 0; page < 80; page++) if ((await copySnapshotJournalBootstrapPage(k, 1000000)).complete) return
   throw new Error('bootstrap did not finish')
 }
 
@@ -48,7 +48,7 @@ test('atomic installation resumes its epoch and publishes only completed durable
     expect(installed).toMatchObject({ complete: false, enabled: true, ceiling })
     expect(installed.epoch).toMatch(/^[0-9a-f-]{36}$/)
     await expect(completeSnapshotJournalSqliteGeneration(k)).rejects.toThrow('Invalid or unowned')
-    await copySnapshotJournalBootstrapPage(k)
+    await copySnapshotJournalBootstrapPage(k, 1000000)
     const progress = await k('snapshot_journal_bootstrap').first()
     expect(await installSnapshotJournalSqliteGeneration(k, ceiling)).toEqual(installed)
     expect(await k('snapshot_journal_bootstrap').first()).toEqual(progress)
@@ -150,7 +150,7 @@ test('configured event exhaustion preserves source writes and refuses completion
     await k('tx_labels').where('txLabelId', 1).update({ label: 'ordinary after exhaustion' })
     expect((await k('tx_labels').where('txLabelId', 1).first()).label).toBe('ordinary after exhaustion')
     expect(await readSnapshotJournalSqliteGeneration(k)).toEqual({ ...installed, enabled: false })
-    await k('snapshot_journal_bootstrap').update({ stream: 17, cursor: null })
+    await k('snapshot_journal_bootstrap').update({ stream: 17, cursor: null, rowLimit: 1000000 })
     await expect(completeSnapshotJournalSqliteGeneration(k)).rejects.toThrow('Invalid or unowned')
     await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
   } finally {

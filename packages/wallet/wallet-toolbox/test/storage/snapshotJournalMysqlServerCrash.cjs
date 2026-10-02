@@ -89,7 +89,7 @@ async function isolate(k, isolation) {
 }
 async function finish(k) {
   for (let i = 0; i < 100; i++) {
-    const page = await copy(k)
+    const page = await copy(k, 1000000)
     assert(!page.invalidated)
     if (page.complete) return await complete(k, ceiling)
     assert(i < 99)
@@ -137,13 +137,20 @@ async function child() {
     if (name) park('after-' + name)
     if (q.sql.startsWith('update `snapshot_journal_generation` set `nextObject`')) park('after-ack-' + q.bindings[0])
     if (completing && q.sql === 'COMMIT;') park('complete-after-commit')
+    if (q.sql.startsWith('update `snapshot_journal_bootstrap` set `rowLimit`')) park('bootstrap-after-budget-bind')
+    if (q.sql.startsWith('insert into `snapshot_journal_physical`')) park('bootstrap-after-metadata')
+    if (q.sql.startsWith('update `snapshot_journal_bootstrap` set `cursor`')) park('bootstrap-after-progress')
   })
   try {
     await isolate(k, isolation)
     await install(k, ceiling)
+    if (boundary.startsWith('bootstrap-')) {
+      await copy(k, 1000000)
+      park('bootstrap-after-commit')
+    }
     if (boundary.startsWith('complete-')) {
       for (let i = 0; i < 100; i++) {
-        const page = await copy(k)
+        const page = await copy(k, 1000000)
         if (page.complete) break
         assert(i < 99)
       }
@@ -196,6 +203,10 @@ async function main() {
       'after-snapshot_journal_clock',
       'after-snapshot_journal_scope_0_INSERT',
       'after-snapshot_journal_physical_12_DELETE',
+      'bootstrap-after-budget-bind',
+      'bootstrap-after-metadata',
+      'bootstrap-after-progress',
+      'bootstrap-after-commit',
       'complete-before-commit',
       'complete-after-commit'
     ]
@@ -211,9 +222,31 @@ async function main() {
         const saved = await k(intent).first()
         assert(saved)
         if (boundary.startsWith('complete-')) assert.equal(saved.complete, boundary === 'complete-after-commit' ? 1 : 0)
+        if (boundary.startsWith('bootstrap-')) {
+          const committed = boundary === 'bootstrap-after-commit',
+            progress = await k('snapshot_journal_bootstrap').first()
+          assert.equal(progress.rowsUsed, committed ? baseline.transactions.length : 0)
+          assert.equal(progress.rowLimit, committed ? 1000000 : null)
+          assert.equal(
+            progress.cursor,
+            committed
+              ? JSON.stringify([Math.max(...baseline.transactions.map(text => JSON.parse(text).transactionId))])
+              : null
+          )
+        }
         const resumed = await install(k, ceiling)
         assert.equal(resumed.epoch, saved.epoch)
         await finish(k)
+        let charged = 0
+        for (const table of [
+          ...tables,
+          'snapshot_profile_keys',
+          'snapshot_relation_keys',
+          'snapshot_certificate_field_keys',
+          'snapshot_global_keys'
+        ])
+          charged += Number((await k(table).count('* AS n').first()).n)
+        assert.equal((await k('snapshot_journal_bootstrap').first()).rowsUsed, charged)
         await exact(k)
         assert.deepEqual(await rows(k), baseline)
         await k('tx_labels').where('txLabelId', 1).update({ label: 'post-server-recovery writer' })

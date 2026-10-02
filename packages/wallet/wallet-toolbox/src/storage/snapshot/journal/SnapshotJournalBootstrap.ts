@@ -13,7 +13,7 @@ import {
 import { snapshotJournalRevisionText, snapshotJournalRevisionOperand } from './SnapshotJournalRevisionSql'
 
 export const SNAPSHOT_JOURNAL_BOOTSTRAP_DDL =
-  'CREATE TABLE snapshot_journal_bootstrap(id INTEGER NOT NULL PRIMARY KEY,stream INTEGER NOT NULL,`cursor` TEXT,CHECK(id=1),CHECK(stream BETWEEN 0 AND 17))'
+  'CREATE TABLE snapshot_journal_bootstrap(id INTEGER NOT NULL PRIMARY KEY,stream INTEGER NOT NULL,`cursor` TEXT,rowLimit INTEGER,rowsUsed INTEGER NOT NULL,CHECK(id=1),CHECK(stream BETWEEN 0 AND 17),CHECK(rowLimit IS NULL OR rowLimit BETWEEN 0 AND 2147483647),CHECK(rowsUsed BETWEEN 0 AND 2147483647),CHECK(rowLimit IS NULL OR rowsUsed<=rowLimit))'
 interface Stream {
   table: string
   keys: string[]
@@ -21,6 +21,17 @@ interface Stream {
   extra?: string
   physical: boolean
   record: (row: Record<string, unknown>) => Record<string, unknown>
+}
+/** A conservative charge counts every examined bootstrap record, including an
+ * already-observed key. The bound survives retries without counting SQL affected
+ * rows, whose semantics differ between the two drivers. */
+export function validSnapshotJournalBootstrapBudget(row: { rowLimit: unknown; rowsUsed: unknown }): boolean {
+  const bounded = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 2147483647
+  return (
+    bounded(row.rowsUsed) &&
+    (row.rowLimit === null ? row.rowsUsed === 0 : bounded(row.rowLimit) && row.rowsUsed <= row.rowLimit)
+  )
 }
 function invalid(): never {
   throw new WERR_INVALID_OPERATION('Invalid snapshot journal bootstrap state or source order')
@@ -248,8 +259,19 @@ export interface SnapshotJournalBootstrapPage {
   stream: number
   invalidated: boolean
 }
-/** Fresh/resumed owned state only. Caller must validate migration ownership before every resume. */
-export async function copySnapshotJournalBootstrapPage(k: Knex): Promise<SnapshotJournalBootstrapPage> {
+/** Fresh/resumed owned state only. Caller validates migration ownership before
+ * every resume and supplies an explicit row allowance. The first page persists
+ * that allowance; changing it requires a new generation. This bounds bootstrap
+ * allocation, separately from event-window and physical/receipt retention limits.
+ * Owns its transaction: a caller transaction could retain the writer barrier
+ * beyond this page or reuse an older MySQL progress/capacity read view.
+ */
+export async function copySnapshotJournalBootstrapPage(
+  k: Knex,
+  rowLimit: number
+): Promise<SnapshotJournalBootstrapPage> {
+  if (k.isTransaction || !validSnapshotJournalBootstrapBudget({ rowLimit, rowsUsed: 0 }) || rowLimit === null)
+    return invalid()
   const local = sqlite(k),
     all = streams(local)
   return await k.transaction(async t => {
@@ -258,21 +280,26 @@ export async function copySnapshotJournalBootstrapPage(k: Knex): Promise<Snapsho
         .where('id', 1)
         .update({ stream: t.ref('stream') })
     else if (!(await t('snapshot_journal_clock').where('id', 1).forUpdate().noWait().first('id'))) return invalid()
-    const state: { stream: number; cursor: string | null } | undefined = await t('snapshot_journal_bootstrap')
-      .where('id', 1)
-      .first()
+    const state: { stream: number; cursor: string | null; rowLimit: number | null; rowsUsed: number } | undefined =
+      await t('snapshot_journal_bootstrap').where('id', 1).first()
     if (
       !state ||
       !Number.isInteger(state.stream) ||
       state.stream < 0 ||
       state.stream > all.length ||
-      !(state.cursor === null || typeof state.cursor === 'string')
+      !(state.cursor === null || typeof state.cursor === 'string') ||
+      !validSnapshotJournalBootstrapBudget(state) ||
+      (state.rowLimit !== null && state.rowLimit !== rowLimit) ||
+      (state.rowLimit === null && (state.stream !== 0 || state.cursor !== null))
     )
       return invalid()
     const enabled = local
       ? (await t('snapshot_journal_clock').where('id', 1).first('enabled'))?.enabled === 1
       : !(await t('snapshot_journal_invalid').where('id', 1).first('id'))
     if (!enabled) return { complete: false, selected: 0, stream: state.stream, invalidated: true }
+    if (state.rowLimit === null) {
+      await t('snapshot_journal_bootstrap').where('id', 1).update({ rowLimit })
+    }
     if (state.stream === all.length) {
       if (state.cursor !== null) return invalid()
       return { complete: true, selected: 0, stream: state.stream, invalidated: false }
@@ -301,6 +328,10 @@ export async function copySnapshotJournalBootstrapPage(k: Knex): Promise<Snapsho
       records = rows.map(row => stream.record(row))
     if (records.some(record => !validKey(record))) {
       await invalidate(t, local, 'key-out-of-range')
+      return { complete: false, selected: rows.length, stream: state.stream, invalidated: true }
+    }
+    if (records.length > rowLimit - state.rowsUsed) {
+      await invalidate(t, local, 'capacity-exhausted')
       return { complete: false, selected: rows.length, stream: state.stream, invalidated: true }
     }
     if (records.length) {
@@ -334,7 +365,7 @@ export async function copySnapshotJournalBootstrapPage(k: Knex): Promise<Snapsho
       .where('id', 1)
       .update(
         last
-          ? { cursor: JSON.stringify(stream.keys.map(key => last[key])) }
+          ? { cursor: JSON.stringify(stream.keys.map(key => last[key])), rowsUsed: state.rowsUsed + rows.length }
           : { stream: state.stream + 1, cursor: null }
       )
     return {

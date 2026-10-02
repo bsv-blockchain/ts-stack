@@ -4,7 +4,7 @@ import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 import { runInSeries } from '../../../utility/runInSeries'
 import { SNAPSHOT_JOURNAL_MYSQL_CLOCK_DDL } from './SnapshotJournalMysqlClock'
 import { SNAPSHOT_JOURNAL_MYSQL_METADATA_DDL, snapshotJournalMysqlObserverSql } from './SnapshotJournalMysqlObservers'
-import { SNAPSHOT_JOURNAL_BOOTSTRAP_DDL } from './SnapshotJournalBootstrap'
+import { SNAPSHOT_JOURNAL_BOOTSTRAP_DDL, validSnapshotJournalBootstrapBudget } from './SnapshotJournalBootstrap'
 import { readSnapshotJournalMysqlBinding } from './SnapshotJournalMysqlSource'
 import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
 import {
@@ -130,9 +130,21 @@ function tables(): Table[] {
     },
     {
       name: 'snapshot_journal_bootstrap',
-      columns: [integer('id'), integer('stream'), { ...column('cursor', 'text'), nullable: true }],
+      columns: [
+        integer('id'),
+        integer('stream'),
+        { ...column('cursor', 'text'), nullable: true },
+        { ...integer('rowLimit'), nullable: true },
+        integer('rowsUsed')
+      ],
       indexes: [primary('id')],
-      checks: ['(`id` = 1)', '(`stream` between 0 and 17)'],
+      checks: [
+        '(`id` = 1)',
+        '(`stream` between 0 and 17)',
+        '((`rowLimit` is null) or (`rowLimit` between 0 and 2147483647))',
+        '(`rowsUsed` between 0 and 2147483647)',
+        '((`rowLimit` is null) or (`rowsUsed` <= `rowLimit`))'
+      ],
       seed: 'bootstrap'
     }
   ]
@@ -312,7 +324,14 @@ async function validateObject(
     }
     if (object.definition.seed === 'bootstrap' && state.nextObject < 57) {
       const progress = await k('snapshot_journal_bootstrap').select('*').limit(2)
-      if (progress.length !== 1 || progress[0].id !== 1 || progress[0].stream !== 0 || progress[0].cursor !== null)
+      if (
+        progress.length !== 1 ||
+        progress[0].id !== 1 ||
+        progress[0].stream !== 0 ||
+        progress[0].cursor !== null ||
+        progress[0].rowLimit !== null ||
+        progress[0].rowsUsed !== 0
+      )
         return invalid()
     }
     return
@@ -395,7 +414,9 @@ async function validateState(
     row.stream > 17 ||
     !(row.cursor === null || (typeof row.cursor === 'string' && Buffer.byteLength(row.cursor, 'utf8') <= 2048)) ||
     (row.stream === 17 && row.cursor !== null) ||
-    (state.complete && row.stream !== 17)
+    (state.complete && row.stream !== 17) ||
+    !validSnapshotJournalBootstrapBudget(row) ||
+    (row.rowLimit === null && (row.stream !== 0 || row.cursor !== null))
   )
     return invalid()
   const invalidations = await k('snapshot_journal_invalid').select('*').limit(2)
@@ -437,7 +458,8 @@ export async function installSnapshotJournalMysqlGeneration(
         const table = object.definition
         const sql = table.sql + " COMMENT='" + owner(state.epoch) + "'"
         if (table.seed === 'clock') await k.raw(sql + ' SELECT 1 id,? ceiling', [ceiling])
-        else if (table.seed === 'bootstrap') await k.raw(sql + ' SELECT 1 id,0 stream,NULL `cursor`')
+        else if (table.seed === 'bootstrap')
+          await k.raw(sql + ' SELECT 1 id,0 stream,NULL `cursor`,NULL rowLimit,0 rowsUsed')
         else await k.raw(sql)
       }
       await validateObject(k, object, state, p.context)

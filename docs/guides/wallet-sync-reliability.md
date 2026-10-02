@@ -1047,7 +1047,26 @@ generations bind source schema and typed object ownership; MySQL persists an
 atomic first intent and resumes each implicit-DDL step using the same epoch.
 Unexpected objects or changed metadata refuse adoption. Standard source rows are
 preserved by these helpers. Schema changes and concurrent migrators must be
-excluded by the operator during installation or resumption.
+excluded by the operator during installation or resumption. SQLite observer
+source probes use native point-key equality plus an exact-byte residual, retaining
+BINARY/NOCASE/RTRIM identity while admitting the complete source key index.
+
+Bootstrap callers supply an explicit row allowance from zero through 2,147,483,647.
+The first copy transaction persists it; later pages require the same allowance.
+Each page owns its transaction and refuses a caller transaction before accessing
+the journal, preventing a retained writer barrier or an older MySQL progress view.
+Each examined record consumes one unit, including a key already created by a live
+observer, so the accounting does not depend on driver affected-row semantics.
+Charges and progress commit atomically. An over-budget page inserts no metadata,
+leaves the cursor and charge unchanged, and commits `capacity-exhausted`
+invalidation; standard source writes remain available. Raising the allowance
+requires a new owned generation. This bounds bootstrap allocations and does not
+add quota accounting to ordinary MySQL source transactions. It does not bound
+physical database/WAL bytes, event metadata or receipt retention.
+
+Native recovery fixtures include allowance binding, metadata insertion, progress
+update and commit boundaries, then independently count the fully bootstrapped
+streams to detect lost or repeated charges after recovery.
 
 This foundation adds no registered migration, public capability or reader
 advertisement. Its event-window invalidation is not a complete retention or

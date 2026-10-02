@@ -3,7 +3,7 @@ import {
   snapshotJournalSqliteObserverSql,
   SNAPSHOT_JOURNAL_SQLITE_METADATA_DDL
 } from './SnapshotJournalSqliteObservers'
-import { installSnapshotJournalSqliteClock } from './SnapshotJournalSqliteClock'
+import { installSnapshotJournalSqliteClock, SNAPSHOT_JOURNAL_SQLITE_WRITABLE } from './SnapshotJournalSqliteClock'
 import { snapshotJournalRevision } from './SnapshotJournalRevision'
 // Internal journal foundation. Registered migration and reader adoption remain separate.
 import { knex, type Knex } from 'knex'
@@ -86,7 +86,7 @@ async function exact(k: Knex) {
 async function beginBootstrap(k: Knex) {
   await installCandidate(k, false)
   await k.raw(SNAPSHOT_JOURNAL_BOOTSTRAP_DDL)
-  await k('snapshot_journal_bootstrap').insert({ id: 1, stream: 0, cursor: null })
+  await k('snapshot_journal_bootstrap').insert({ id: 1, stream: 0, cursor: null, rowLimit: 1000000, rowsUsed: 0 })
 }
 
 test('exact bootstrap copies bounded pages, resumes and preserves newer low-key observers', async () => {
@@ -140,7 +140,7 @@ test('exact bootstrap copies bounded pages, resumes and preserves newer low-key 
     writer.on('query', count)
     for (let page = 0; page < 100; page++) {
       insertQueries = 0
-      const result = await copySnapshotJournalBootstrapPage(page % 2 ? writer : k)
+      const result = await copySnapshotJournalBootstrapPage(page % 2 ? writer : k, 1000000)
       expect(insertQueries).toBeLessThanOrEqual(4)
       expect(result.invalidated).toBe(false)
       max = Math.max(max, result.selected)
@@ -174,7 +174,7 @@ test('exact bootstrap copies bounded pages, resumes and preserves newer low-key 
       expect(BigInt(row.revision)).toBeGreaterThan(9007199254740992n)
       expect(BigInt(row.generation)).toBeGreaterThan(9007199254740992n)
     }
-    expect(await copySnapshotJournalBootstrapPage(k)).toEqual({
+    expect(await copySnapshotJournalBootstrapPage(k, 1000000)).toEqual({
       complete: true,
       selected: 0,
       stream: 17,
@@ -212,7 +212,7 @@ test('oversized historical text is bounded before decode and disables bootstrap 
           if (row?.boundedText instanceof Uint8Array) maximum = Math.max(maximum, row.boundedText.length)
     }
     k.on('query-response', record)
-    const page = await copySnapshotJournalBootstrapPage(k)
+    const page = await copySnapshotJournalBootstrapPage(k, 1000000)
     k.off('query-response', record)
     expect(page).toEqual({ complete: false, selected: 1, stream: 12, invalidated: true })
     expect(maximum).toBe(401)
@@ -227,7 +227,9 @@ test('oversized historical text is bounded before decode and disables bootstrap 
     expect(await k('snapshot_journal_bootstrap').first()).toEqual({
       id: 1,
       stream: 12,
-      cursor: null
+      cursor: null,
+      rowLimit: 1000000,
+      rowsUsed: 0
     })
   } finally {
     await k.destroy()
@@ -244,7 +246,7 @@ test.each(['capacity', 'signed63'])('%s exhaustion commits invalidation without 
         ? { revision: 1, ceiling: 1 }
         : { revision: '9223372036854775807', ceiling: '9223372036854775807' }
     )
-    expect(await copySnapshotJournalBootstrapPage(k)).toEqual({
+    expect(await copySnapshotJournalBootstrapPage(k, 1000000)).toEqual({
       complete: false,
       selected: 1,
       stream: 0,
@@ -253,7 +255,9 @@ test.each(['capacity', 'signed63'])('%s exhaustion commits invalidation without 
     expect(await k('snapshot_journal_bootstrap').first()).toEqual({
       id: 1,
       stream: 0,
-      cursor: null
+      cursor: null,
+      rowLimit: 1000000,
+      rowsUsed: 0
     })
     expect(await k('snapshot_journal_physical')).toEqual([])
     expect(await k('transactions').count('* AS n').first()).toEqual({ n: 1 })
@@ -269,7 +273,7 @@ test.each(['{', '{}', '[]', '["wrong-type"]', '[9007199254740992]', '[1,2]'])(
     try {
       await beginBootstrap(k)
       await k('snapshot_journal_bootstrap').update({ cursor })
-      await expect(copySnapshotJournalBootstrapPage(k)).rejects.toThrow('bootstrap state')
+      await expect(copySnapshotJournalBootstrapPage(k, 1000000)).rejects.toThrow('bootstrap state')
       expect(await k('snapshot_journal_physical')).toEqual([])
     } finally {
       await k.destroy()
@@ -285,7 +289,7 @@ test('historical BLOB field spelling invalidates instead of changing its SQL com
     )
     await beginBootstrap(k)
     await k('snapshot_journal_bootstrap').update({ stream: 12 })
-    expect((await copySnapshotJournalBootstrapPage(k)).invalidated).toBe(true)
+    expect((await copySnapshotJournalBootstrapPage(k, 1000000)).invalidated).toBe(true)
     expect(await k('snapshot_journal_physical')).toEqual([])
     expect(await k('certificate_fields').select(k.raw('typeof(fieldName) kind')).first()).toEqual({
       kind: 'blob'
@@ -309,14 +313,16 @@ test('malformed SQLite clock response rolls back allocation and bootstrap progre
     await beginBootstrap(k)
     const before = await k('snapshot_journal_clock').first()
     k.on('query-response', listener)
-    await expect(copySnapshotJournalBootstrapPage(k)).rejects.toThrow('Invalid snapshot')
+    await expect(copySnapshotJournalBootstrapPage(k, 1000000)).rejects.toThrow('Invalid snapshot')
     expect(altered).toBe(true)
     expect(await k('snapshot_journal_clock').first()).toEqual(before)
     expect(await k('snapshot_journal_physical')).toEqual([])
     expect(await k('snapshot_journal_bootstrap').first()).toEqual({
       id: 1,
       stream: 0,
-      cursor: null
+      cursor: null,
+      rowLimit: 1000000,
+      rowsUsed: 0
     })
   } finally {
     k.off('query-response', listener)
@@ -332,15 +338,192 @@ test('legacy SQLite alias bootstraps an exact 400-byte historical key', async ()
     await k('certificate_fields').insert({ ...value('certificate_fields', 1, 1, 1), fieldName })
     await beginBootstrap(k)
     await k('snapshot_journal_bootstrap').update({ stream: 12 })
-    expect(await copySnapshotJournalBootstrapPage(k)).toMatchObject({
+    expect(await copySnapshotJournalBootstrapPage(k, 1000000)).toMatchObject({
       selected: 1,
       invalidated: false
     })
     expect((await k('snapshot_journal_physical').first()).exactText).toBe(fieldName)
-    expect(await copySnapshotJournalBootstrapPage(k)).toMatchObject({
+    expect(await copySnapshotJournalBootstrapPage(k, 1000000)).toMatchObject({
       selected: 0,
       invalidated: false
     })
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('SQLite bootstrap commits over-budget invalidation without source loss or partial metadata', async () => {
+  const k = await emptyFixture()
+  try {
+    await k('transactions').insert([value('transactions', 1, 1, 1), value('transactions', 2, 2, 1)])
+    await beginBootstrap(k)
+    await k('snapshot_journal_bootstrap').update({ rowLimit: null })
+    const clock = await k('snapshot_journal_clock').first()
+    expect(await copySnapshotJournalBootstrapPage(k, 1)).toEqual({
+      complete: false,
+      selected: 2,
+      stream: 0,
+      invalidated: true
+    })
+    expect(await k('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 0,
+      cursor: null,
+      rowLimit: 1,
+      rowsUsed: 0
+    })
+    expect(await k('snapshot_journal_physical')).toEqual([])
+    expect(await k('snapshot_journal_scope')).toEqual([])
+    expect(await k('snapshot_journal_clock').first()).toEqual({ ...clock, enabled: 0, reason: 'capacity-exhausted' })
+    await k('transactions').insert(value('transactions', 3, 3, 1))
+    expect(await k('transactions')).toHaveLength(3)
+    expect(await k('snapshot_journal_physical')).toEqual([])
+    await expect(copySnapshotJournalBootstrapPage(k, 3)).rejects.toThrow('Invalid snapshot')
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('SQLite bootstrap commits the exact allowance with its cursor and preserves it on resume', async () => {
+  const k = await emptyFixture()
+  try {
+    await k('transactions').insert([value('transactions', 1, 1, 1), value('transactions', 2, 2, 1)])
+    await beginBootstrap(k)
+    await k('snapshot_journal_bootstrap').update({ rowLimit: null })
+    expect((await copySnapshotJournalBootstrapPage(k, 2)).invalidated).toBe(false)
+    expect(await k('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 0,
+      cursor: '[2]',
+      rowLimit: 2,
+      rowsUsed: 2
+    })
+    expect(await k('snapshot_journal_physical')).toHaveLength(2)
+    expect((await copySnapshotJournalBootstrapPage(k, 2)).selected).toBe(0)
+    expect(await k('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 1,
+      cursor: null,
+      rowLimit: 2,
+      rowsUsed: 2
+    })
+    await expect(copySnapshotJournalBootstrapPage(k, 1)).rejects.toThrow('Invalid snapshot')
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('SQLite bootstrap rolls back a newly bound allowance, charge, cursor and revision on failed metadata', async () => {
+  const k = await emptyFixture()
+  try {
+    await k('transactions').insert(value('transactions', 1, 1, 1))
+    await beginBootstrap(k)
+    await k('snapshot_journal_bootstrap').update({ rowLimit: null })
+    const clock = await k('snapshot_journal_clock').first()
+    await k.raw(
+      "CREATE TRIGGER fail_bootstrap_metadata BEFORE INSERT ON snapshot_journal_physical BEGIN SELECT RAISE(ABORT,'fixture metadata failure'); END"
+    )
+    await expect(copySnapshotJournalBootstrapPage(k, 1)).rejects.toThrow('fixture metadata failure')
+    expect(await k('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 0,
+      cursor: null,
+      rowLimit: null,
+      rowsUsed: 0
+    })
+    expect(await k('snapshot_journal_clock').first()).toEqual(clock)
+    expect(await k('snapshot_journal_physical')).toEqual([])
+    await k.raw('DROP TRIGGER fail_bootstrap_metadata')
+    await copySnapshotJournalBootstrapPage(k, 1)
+    expect((await k('snapshot_journal_bootstrap').first()).rowsUsed).toBe(1)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each([0, 2147483647])('SQLite bootstrap accepts empty-stream budget boundary %s', async allowance => {
+  const k = await emptyFixture()
+  try {
+    await beginBootstrap(k)
+    await k('snapshot_journal_bootstrap').update({ rowLimit: null })
+    expect((await copySnapshotJournalBootstrapPage(k, allowance)).selected).toBe(0)
+    expect(await k('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 1,
+      cursor: null,
+      rowLimit: allowance,
+      rowsUsed: 0
+    })
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each(['BINARY', 'NOCASE', 'RTRIM'])(
+  'SQLite journal source probes use complete point indexes under %s without widening byte identity',
+  async collation => {
+    const k = await fixture(collation, false, false)
+    try {
+      for (const table of tables) await k(table).insert(value(table, 1, 2, 1))
+      const definitions = await snapshotJournalSqliteObserverSql(k)
+      for (const [tableId, table] of tables.entries()) {
+        const definition = definitions.find(sql =>
+          sql.startsWith('CREATE TRIGGER snapshot_journal_physical_' + tableId + '_INSERT ')
+        )!
+        const start = definition.indexOf('EXISTS(') + 'EXISTS('.length
+        const end = definition.indexOf(') WHERE ' + SNAPSHOT_JOURNAL_SQLITE_WRITABLE, start)
+        expect(start).toBeGreaterThan('EXISTS('.length)
+        expect(end).toBeGreaterThan(start)
+        const row = value(table, 1, 2, 1)
+        const names: string[] = []
+        const query = definition
+          .slice(start, end)
+          .replace(
+            /NEW\.(?:"([^"]+)"|([A-Za-z][A-Za-z0-9_]*))/g,
+            (_match, quoted: string | undefined, bare: string | undefined) => {
+              const name = (quoted ?? bare)!
+              names.push(name)
+              // Driver numeric bindings are doubles; NEW/OLD key columns are native integers.
+              return typeof row[name] === 'number' ? 'CAST(? AS INTEGER)' : '?'
+            }
+          )
+        const bindings = names.map(name => row[name]) as Knex.RawBinding[]
+        const plan: Array<{ detail: string }> = await k.raw('EXPLAIN QUERY PLAN ' + query, bindings)
+        expect(plan.some(step => step.detail.startsWith('SCAN s'))).toBe(false)
+        const search = plan.find(step => step.detail.startsWith('SEARCH s '))
+        expect(search).toBeDefined()
+        expect(search!.detail.match(/=\?/g)).toHaveLength(tableId < 10 ? 1 : 2)
+        expect(await k.raw(query, bindings)).toHaveLength(1)
+        if (table === 'certificate_fields') {
+          for (const alternate of [String(row.fieldName).toUpperCase(), String(row.fieldName) + ' ']) {
+            const changed = names.map(name => (name === 'fieldName' ? alternate : row[name])) as Knex.RawBinding[]
+            expect(await k.raw(query, changed)).toHaveLength(0)
+          }
+        }
+      }
+    } finally {
+      await k.destroy()
+    }
+  }
+)
+
+test('SQLite bootstrap rejects caller transactions before any journal access', async () => {
+  const k = await emptyFixture()
+  try {
+    await beginBootstrap(k)
+    const before = await k('snapshot_journal_bootstrap').first()
+    await k.transaction(async t => {
+      const queries: string[] = []
+      const observe = (query: { sql: string }) => queries.push(query.sql)
+      t.on('query', observe)
+      try {
+        await expect(copySnapshotJournalBootstrapPage(t, 1000000)).rejects.toThrow('Invalid snapshot')
+        expect(queries).toEqual([])
+      } finally {
+        t.off('query', observe)
+      }
+    })
+    expect(await k('snapshot_journal_bootstrap').first()).toEqual(before)
   } finally {
     await k.destroy()
   }

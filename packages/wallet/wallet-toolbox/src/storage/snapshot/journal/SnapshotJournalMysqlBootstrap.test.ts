@@ -158,7 +158,7 @@ async function driver() {
   }
   await installSnapshotJournalMysqlClock(k, rev('9223372036854775807'))
   await db.raw(SNAPSHOT_JOURNAL_BOOTSTRAP_DDL)
-  await db('snapshot_journal_bootstrap').insert({ id: 1, stream: 0, cursor: null })
+  await db('snapshot_journal_bootstrap').insert({ id: 1, stream: 0, cursor: null, rowLimit: 1000000, rowsUsed: 0 })
   for (const ddl of SNAPSHOT_JOURNAL_SQLITE_METADATA_DDL) await db.raw(ddl)
   for (const source of identities) {
     const columns = [...source.keys, ...(source.extra ? [source.extra] : [])].map(
@@ -209,7 +209,7 @@ test.each(identities.map((source, stream) => [source.table, stream] as const))(
       const source = identities[stream]
       await f.db('snapshot_journal_bootstrap').update({ stream, cursor: null })
       await f.db(source.table).insert([sample(stream, 1), sample(stream, 2)])
-      const first = await copySnapshotJournalBootstrapPage(f.k)
+      const first = await copySnapshotJournalBootstrapPage(f.k, 1000000)
       expect(first).toEqual({ complete: false, selected: 2, stream, invalidated: false })
       const metadata = stream < 13 ? 'snapshot_journal_physical' : 'snapshot_journal_scope',
         rows = await f.db(metadata).select('*', f.db.raw('CAST(revision AS TEXT) AS exactRevision'))
@@ -218,13 +218,15 @@ test.each(identities.map((source, stream) => [source.table, stream] as const))(
       expect(rows.every(row => row.exactText instanceof Uint8Array)).toBe(true)
       expect(await f.db('snapshot_journal_events')).toEqual([])
       await f.db(source.table).insert(sample(stream, 3))
-      expect((await copySnapshotJournalBootstrapPage(f.k)).selected).toBe(1)
-      const final = await copySnapshotJournalBootstrapPage(f.k)
+      expect((await copySnapshotJournalBootstrapPage(f.k, 1000000)).selected).toBe(1)
+      const final = await copySnapshotJournalBootstrapPage(f.k, 1000000)
       expect(final).toEqual({ complete: stream === 16, selected: 0, stream, invalidated: false })
       expect(await f.db('snapshot_journal_bootstrap').first()).toEqual({
         id: 1,
         stream: stream + 1,
-        cursor: null
+        cursor: null,
+        rowLimit: 1000000,
+        rowsUsed: 3
       })
       expect(f.queries.some(q => q.sql.endsWith('for update nowait'))).toBe(true)
       expect(
@@ -249,7 +251,7 @@ test('MySQL bootstrap bounds each page and preserves an already observed newer g
       generation: '9007199254740998',
       present: 0
     })
-    const page = await copySnapshotJournalBootstrapPage(f.k)
+    const page = await copySnapshotJournalBootstrapPage(f.k, 1000000)
     expect(page.selected).toBe(256)
     const writes = f.queries.filter(q => q.sql.startsWith('insert into `snapshot_journal_physical`'))
     expect(writes).toHaveLength(4)
@@ -264,7 +266,7 @@ test('MySQL bootstrap bounds each page and preserves an already observed newer g
       revision: '9007199254740999',
       generation: '9007199254740998'
     })
-    expect((await copySnapshotJournalBootstrapPage(f.k)).selected).toBe(44)
+    expect((await copySnapshotJournalBootstrapPage(f.k, 1000000)).selected).toBe(44)
   } finally {
     await f.close()
   }
@@ -278,7 +280,7 @@ test.each([
     await f.db('transactions').insert({ transactionId: 1 })
     await f.db('snapshot_journal_clock').update({ ceiling })
     f.state.next = BigInt(next)
-    expect(await copySnapshotJournalBootstrapPage(f.k)).toEqual({
+    expect(await copySnapshotJournalBootstrapPage(f.k, 1000000)).toEqual({
       complete: false,
       selected: 1,
       stream: 0,
@@ -288,7 +290,7 @@ test.each([
     expect(await f.db('snapshot_journal_physical')).toEqual([])
     expect((await f.db('snapshot_journal_bootstrap').first()).cursor).toBeNull()
     expect(await f.db('transactions')).toEqual([{ transactionId: 1 }])
-    expect((await copySnapshotJournalBootstrapPage(f.k)).invalidated).toBe(true)
+    expect((await copySnapshotJournalBootstrapPage(f.k, 1000000)).invalidated).toBe(true)
   } finally {
     await f.close()
   }
@@ -298,7 +300,7 @@ test.each([null, 1, '-1', '1.5', 'bad'])('MySQL malformed allocator value %p rol
   try {
     await f.db('transactions').insert({ transactionId: 1 })
     f.state.allocated = value
-    await expect(copySnapshotJournalBootstrapPage(f.k)).rejects.toThrow('Invalid snapshot')
+    await expect(copySnapshotJournalBootstrapPage(f.k, 1000000)).rejects.toThrow('Invalid snapshot')
     expect(await f.db('snapshot_journal_events')).toEqual([])
     expect(await f.db('snapshot_journal_physical')).toEqual([])
     expect((await f.db('snapshot_journal_bootstrap').first()).cursor).toBeNull()
@@ -313,7 +315,7 @@ test.each(['filesort', 'noIndex', 'oversized', 'failMetadata'] as const)(
     try {
       await f.db('transactions').insert({ transactionId: 1 })
       f.state[kind] = true
-      await expect(copySnapshotJournalBootstrapPage(f.k)).rejects.toThrow()
+      await expect(copySnapshotJournalBootstrapPage(f.k, 1000000)).rejects.toThrow()
       expect(await f.db('snapshot_journal_physical')).toEqual([])
       expect((await f.db('snapshot_journal_bootstrap').first()).cursor).toBeNull()
     } finally {
@@ -326,7 +328,7 @@ test('MySQL oversized historical UTF-8 key invalidates without copying or changi
   try {
     await f.db('snapshot_journal_bootstrap').update({ stream: 12 })
     await f.db('certificate_fields').insert({ fieldName: 'a'.repeat(401), certificateId: 1 })
-    expect((await copySnapshotJournalBootstrapPage(f.k)).invalidated).toBe(true)
+    expect((await copySnapshotJournalBootstrapPage(f.k, 1000000)).invalidated).toBe(true)
     expect(await f.db('snapshot_journal_invalid')).toEqual([{ id: 1, reason: 'key-out-of-range' }])
     expect(await f.db('snapshot_journal_physical')).toEqual([])
     expect((await f.db('certificate_fields').first()).fieldName).toHaveLength(401)
@@ -375,7 +377,7 @@ test.each(['clock', 'bootstrap'])('missing MySQL %s state refuses rather than cr
   const f = await driver()
   try {
     await f.db('snapshot_journal_' + kind).delete()
-    await expect(copySnapshotJournalBootstrapPage(f.k)).rejects.toThrow('Invalid snapshot')
+    await expect(copySnapshotJournalBootstrapPage(f.k, 1000000)).rejects.toThrow('Invalid snapshot')
     expect(await f.db('snapshot_journal_physical')).toEqual([])
   } finally {
     await f.close()
@@ -388,7 +390,7 @@ test.each(['not-json', '[]', '[-1]', '[1.5]', '["1"]', 'x'.repeat(2049)])(
     try {
       await f.db('transactions').insert({ transactionId: 1 })
       await f.db('snapshot_journal_bootstrap').update({ cursor })
-      await expect(copySnapshotJournalBootstrapPage(f.k)).rejects.toThrow('Invalid snapshot')
+      await expect(copySnapshotJournalBootstrapPage(f.k, 1000000)).rejects.toThrow('Invalid snapshot')
       expect(await f.db('snapshot_journal_physical')).toEqual([])
       expect(await f.db('transactions')).toEqual([{ transactionId: 1 }])
     } finally {
@@ -400,14 +402,14 @@ test('completed MySQL bootstrap is stable and a dangling terminal cursor refuses
   const f = await driver()
   try {
     await f.db('snapshot_journal_bootstrap').update({ stream: 17 })
-    expect(await copySnapshotJournalBootstrapPage(f.k)).toEqual({
+    expect(await copySnapshotJournalBootstrapPage(f.k, 1000000)).toEqual({
       complete: true,
       selected: 0,
       stream: 17,
       invalidated: false
     })
     await f.db('snapshot_journal_bootstrap').update({ cursor: '[]' })
-    await expect(copySnapshotJournalBootstrapPage(f.k)).rejects.toThrow('Invalid snapshot')
+    await expect(copySnapshotJournalBootstrapPage(f.k, 1000000)).rejects.toThrow('Invalid snapshot')
   } finally {
     await f.close()
   }
@@ -424,7 +426,7 @@ test.each(['missingRevisionClock', 'nonBinaryText'] as const)(
       const clock = await f.db('snapshot_journal_clock'),
         progress = await f.db('snapshot_journal_bootstrap')
       f.state[kind] = true
-      await expect(copySnapshotJournalBootstrapPage(f.k)).rejects.toThrow('Invalid snapshot')
+      await expect(copySnapshotJournalBootstrapPage(f.k, 1000000)).rejects.toThrow('Invalid snapshot')
       expect(await f.db('snapshot_journal_physical')).toEqual([])
       expect(await f.db('snapshot_journal_clock')).toEqual(clock)
       expect(await f.db('snapshot_journal_bootstrap')).toEqual(progress)
@@ -444,7 +446,7 @@ test.each([14, 15, 16])('MySQL stream %s preserves absent membership and its phy
     if (stream === 16) absent.tableId = 1
     await f.db('snapshot_journal_bootstrap').update({ stream })
     await f.db(source.table).insert([present, absent])
-    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+    expect(await copySnapshotJournalBootstrapPage(f.k, 1000000)).toMatchObject({
       selected: 2,
       invalidated: false
     })
@@ -465,7 +467,7 @@ test.each(['10', '9223372036854775807'])('MySQL can allocate the exact final all
     await f.db('transactions').insert({ transactionId: 1 })
     await f.db('snapshot_journal_clock').update({ ceiling })
     f.state.next = BigInt(ceiling)
-    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+    expect(await copySnapshotJournalBootstrapPage(f.k, 1000000)).toMatchObject({
       selected: 1,
       invalidated: false
     })
@@ -486,7 +488,7 @@ test.each([-1, 0, 1.5, 'invalid', 9007199254740992])(
       const malformedResponse = typeof transactionId !== 'number' || !Number.isInteger(transactionId)
       await f.db('transactions').insert({ transactionId: malformedResponse ? 1 : transactionId })
       if (malformedResponse) f.state.invalidIdentity = transactionId
-      expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+      expect(await copySnapshotJournalBootstrapPage(f.k, 1000000)).toMatchObject({
         selected: 1,
         invalidated: true
       })
@@ -506,15 +508,186 @@ test('MySQL accepts a 400-byte key through the final composite bootstrap cursor'
     const fieldName = '😀'.repeat(100)
     await f.db('snapshot_journal_bootstrap').update({ stream: 12 })
     await f.db('certificate_fields').insert({ fieldName, certificateId: 1 })
-    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+    expect(await copySnapshotJournalBootstrapPage(f.k, 1000000)).toMatchObject({
       selected: 1,
       invalidated: false
     })
     expect(Buffer.from((await f.db('snapshot_journal_physical').first()).exactText).toString('utf8')).toBe(fieldName)
-    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+    expect(await copySnapshotJournalBootstrapPage(f.k, 1000000)).toMatchObject({
       selected: 0,
       invalidated: false
     })
+  } finally {
+    await f.close()
+  }
+})
+
+test('MySQL bootstrap charges an explicit immutable allowance across resumed pages', async () => {
+  const f = await driver()
+  try {
+    await f.db('snapshot_journal_bootstrap').update({ rowLimit: null })
+    for (let first = 1; first <= 300; first += 50)
+      await f.db('transactions').insert(Array.from({ length: 50 }, (_, offset) => sample(0, first + offset)))
+    expect(await copySnapshotJournalBootstrapPage(f.k, 300)).toMatchObject({ selected: 256, invalidated: false })
+    expect(await f.db('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 0,
+      cursor: '[256]',
+      rowLimit: 300,
+      rowsUsed: 256
+    })
+    const prior = await f.db('snapshot_journal_bootstrap').first()
+    await expect(copySnapshotJournalBootstrapPage(f.k, 301)).rejects.toThrow('Invalid snapshot')
+    expect(await f.db('snapshot_journal_bootstrap').first()).toEqual(prior)
+    expect(await copySnapshotJournalBootstrapPage(f.k, 300)).toMatchObject({ selected: 44, invalidated: false })
+    const full = await f.db('snapshot_journal_bootstrap').first()
+    expect(full).toEqual({ id: 1, stream: 0, cursor: '[300]', rowLimit: 300, rowsUsed: 300 })
+    await f.db('transactions').insert(sample(0, 301))
+    expect(await copySnapshotJournalBootstrapPage(f.k, 300)).toEqual({
+      complete: false,
+      selected: 1,
+      stream: 0,
+      invalidated: true
+    })
+    expect(await f.db('snapshot_journal_bootstrap').first()).toEqual(full)
+    expect(await f.db('snapshot_journal_invalid')).toEqual([{ id: 1, reason: 'capacity-exhausted' }])
+    expect(Number((await f.db('snapshot_journal_physical').count('* AS n').first())!.n)).toBe(300)
+    expect(Number((await f.db('transactions').count('* AS n').first())!.n)).toBe(301)
+    await expect(copySnapshotJournalBootstrapPage(f.k, 301)).rejects.toThrow('Invalid snapshot')
+    expect((await copySnapshotJournalBootstrapPage(f.k, 300)).selected).toBe(0)
+  } finally {
+    await f.close()
+  }
+})
+
+test('MySQL bootstrap refuses a whole over-budget page before allocation or metadata writes', async () => {
+  const f = await driver()
+  try {
+    await f.db('snapshot_journal_bootstrap').update({ rowLimit: null })
+    await f.db('transactions').insert([sample(0, 1), sample(0, 2)])
+    const sequence = f.state.next
+    expect(await copySnapshotJournalBootstrapPage(f.k, 1)).toEqual({
+      complete: false,
+      selected: 2,
+      stream: 0,
+      invalidated: true
+    })
+    expect(f.state.next).toBe(sequence)
+    expect(await f.db('snapshot_journal_physical')).toEqual([])
+    expect(await f.db('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 0,
+      cursor: null,
+      rowLimit: 1,
+      rowsUsed: 0
+    })
+    expect(await f.db('transactions')).toHaveLength(2)
+  } finally {
+    await f.close()
+  }
+})
+
+test('MySQL bootstrap rolls back first allowance binding and charge with failed metadata', async () => {
+  const f = await driver()
+  try {
+    await f.db('snapshot_journal_bootstrap').update({ rowLimit: null })
+    await f.db('transactions').insert(sample(0, 1))
+    f.state.failMetadata = true
+    await expect(copySnapshotJournalBootstrapPage(f.k, 1)).rejects.toThrow('metadata write failed')
+    expect(await f.db('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 0,
+      cursor: null,
+      rowLimit: null,
+      rowsUsed: 0
+    })
+    expect(await f.db('snapshot_journal_physical')).toEqual([])
+    f.state.failMetadata = false
+    await copySnapshotJournalBootstrapPage(f.k, 1)
+    expect((await f.db('snapshot_journal_bootstrap').first()).rowsUsed).toBe(1)
+    await copySnapshotJournalBootstrapPage(f.k, 1)
+    expect((await f.db('snapshot_journal_bootstrap').first()).rowsUsed).toBe(1)
+  } finally {
+    await f.close()
+  }
+})
+
+test('MySQL bootstrap charges examined records even when live metadata already owns the key', async () => {
+  const f = await driver()
+  try {
+    await f.db('snapshot_journal_bootstrap').update({ rowLimit: null })
+    await f.db('transactions').insert(sample(0, 1))
+    const live = { tableId: 0, id1: 1, id2: 0, exactText: Buffer.from(''), revision: 9, generation: 7, present: 0 }
+    await f.db('snapshot_journal_physical').insert(live)
+    await copySnapshotJournalBootstrapPage(f.k, 1)
+    expect(await f.db('snapshot_journal_physical').first()).toEqual(live)
+    expect((await f.db('snapshot_journal_bootstrap').first()).rowsUsed).toBe(1)
+  } finally {
+    await f.close()
+  }
+})
+
+test.each([0, 2147483647])('MySQL bootstrap persists boundary allowance %s for an empty stream', async allowance => {
+  const f = await driver()
+  try {
+    await f.db('snapshot_journal_bootstrap').update({ rowLimit: null })
+    expect(await copySnapshotJournalBootstrapPage(f.k, allowance)).toEqual({
+      complete: false,
+      selected: 0,
+      stream: 0,
+      invalidated: false
+    })
+    expect(await f.db('snapshot_journal_bootstrap').first()).toEqual({
+      id: 1,
+      stream: 1,
+      cursor: null,
+      rowLimit: allowance,
+      rowsUsed: 0
+    })
+  } finally {
+    await f.close()
+  }
+})
+
+test.each([-1, 0.5, 2147483648, NaN, Infinity, '1', undefined, null])(
+  'MySQL bootstrap rejects invalid allowance %s before I/O',
+  async allowance => {
+    const f = await driver()
+    try {
+      await expect(copySnapshotJournalBootstrapPage(f.k, allowance as number)).rejects.toThrow('Invalid snapshot')
+      expect(f.queries).toEqual([])
+    } finally {
+      await f.close()
+    }
+  }
+)
+
+test.each([{ rowsUsed: 0.5 }, { rowLimit: 0.5 }, { rowLimit: null, rowsUsed: 1 }])(
+  'MySQL bootstrap refuses malformed persisted budget %j',
+  async patch => {
+    const f = await driver()
+    try {
+      await f.db('snapshot_journal_bootstrap').update(patch)
+      const before = await f.db('snapshot_journal_bootstrap').first()
+      await expect(copySnapshotJournalBootstrapPage(f.k, 1000000)).rejects.toThrow('Invalid snapshot')
+      expect(await f.db('snapshot_journal_bootstrap').first()).toEqual(before)
+      expect(await f.db('snapshot_journal_physical')).toEqual([])
+    } finally {
+      await f.close()
+    }
+  }
+)
+
+test('MySQL bootstrap rejects caller transactions before a nested transaction or progress read', async () => {
+  const f = await driver()
+  try {
+    const before = await f.db('snapshot_journal_bootstrap').first()
+    await f.k.transaction(async t => {
+      const count = f.queries.length
+      await expect(copySnapshotJournalBootstrapPage(t, 1000000)).rejects.toThrow('Invalid snapshot')
+      expect(f.queries).toHaveLength(count)
+    })
+    expect(await f.db('snapshot_journal_bootstrap').first()).toEqual(before)
   } finally {
     await f.close()
   }
