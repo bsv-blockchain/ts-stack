@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Accept a valid all-zero terminal offset reset when an unchanged backup keeps
+  the same timestamp. Preserve remote state binding, monotonic timestamps and
+  nonterminal/partial-reset checks in HTTP and resumable sessions. Repeated
+  ordinary/binary HTTP backups and lost terminal acknowledgements are covered;
+  returned provider failures retain precedence over checkpoint fields. Checkpoint
+  bytes and stored schemas remain unchanged.
+
 - Add resumable global proof/request ownership indexes with exact reference
   counts and proof-presence guards. Preserve both ownership bases, current
   independent-writer changes and pinned ordinary/archive views. Bootstrap,

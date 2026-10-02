@@ -17,10 +17,16 @@ function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker
   return `${filePath}:${startIndex + 1}-${endIndex}`
 }
 
-function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelated = false } = {}) {
+function jestTarget(
+  configFile,
+  testMatch,
+  { esm = false, config = {}, findRelated = false, buildCommand, maxTestRunnerReuse } = {}
+) {
   return {
     testRunner: 'jest',
     runnerOptions: {
+      ...(buildCommand ? { buildCommand } : {}),
+      ...(maxTestRunnerReuse === undefined ? {} : { maxTestRunnerReuse }),
       jest: {
         projectType: 'custom',
         configFile,
@@ -61,6 +67,14 @@ function snapshotSyncMutationTargets(repositoryRoot) {
       'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts',
     mutate: [
       'src/utility/runInSeries.ts',
+      'src/storage/sync/syncCheckpoint.ts',
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/sync/syncSession.ts',
+        'async function committedCheckpoint(',
+        '/** One page in flight;'
+      ),
       'src/storage/snapshot/SnapshotSync.ts',
       'src/storage/snapshot/SnapshotSyncRows.ts',
       'src/storage/snapshot/KnexSnapshotSyncDestination.ts',
@@ -163,6 +177,7 @@ function snapshotSyncMutationTargets(repositoryRoot) {
         '<rootDir>/src/storage/methods/validateSyncProof.test.ts',
         '<rootDir>/src/storage/sync/syncFailure.test.ts',
         '<rootDir>/src/storage/sync/syncSession.test.ts',
+        '<rootDir>/src/storage/sync/syncCheckpoint.test.ts',
         '<rootDir>/src/utility/__tests__/runInSeries.test.ts'
       ],
       {
@@ -412,6 +427,10 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/schema/snapshotRelationIndexMigration.ts',
         'src/storage/schema/snapshotCertificateIndexMigration.ts',
         'src/storage/schema/snapshotGlobalIndexMigration.ts',
+        'src/storage/schema/snapshotGlobalIndexModel.ts',
+        'src/storage/schema/snapshotGlobalIndexMysql.ts',
+        'src/storage/schema/snapshotGlobalIndexSqlite.ts',
+        'src/storage/schema/snapshotGlobalIndexBootstrap.ts',
         'src/storage/schema/snapshotGlobalIndexTriggers.ts',
         sourceLineRange(
           repositoryRoot,
@@ -429,6 +448,7 @@ export function buildMutationTargets(repositoryRoot) {
         )
       ],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/*.test.ts'], {
+        maxTestRunnerReuse: 8,
         config: {
           moduleNameMapper: {
             '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
@@ -543,6 +563,11 @@ export function buildMutationTargets(repositoryRoot) {
         ...[
           [
             'src/storage/remoting/StorageClientBase.ts',
+            'async processSyncChunk(',
+            'async getSyncChunk('
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
             'if (properties.snapshotArchive != null)',
             'return value as RemoteStorageSettings'
           ],
@@ -614,6 +639,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/storage/remoting/__test/RateLimitPolicy.test.ts',
           '<rootDir>/src/storage/remoting/__test/StorageServerRpc.test.ts',
           '<rootDir>/src/storage/remoting/__test/StorageClientBase.*.test.ts',
+          '<rootDir>/src/storage/sync/syncCheckpoint.test.ts',
           '<rootDir>/src/storage/remoting/__test/StorageClient.security.test.ts',
           '<rootDir>/src/storage/remoting/__test/StorageClient.transport.security.test.ts',
           '<rootDir>/src/storage/remoting/__test/StorageClient.telemetry.test.ts'

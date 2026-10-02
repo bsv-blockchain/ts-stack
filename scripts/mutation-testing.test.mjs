@@ -227,3 +227,10 @@ test('additional package-relative fixture inputs select their target without rep
     )
   }
 })
+
+test('retained snapshot mutation execution recycles workers while other wallet defaults remain intact', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  assert.equal(targets['wallet-retained-snapshot'].runnerOptions.maxTestRunnerReuse, 8)
+  assert.equal(targets['wallet-snapshot-archive'].runnerOptions.maxTestRunnerReuse, undefined)
+  assert.equal(targets['wallet-snapshot-remote-http'].runnerOptions.maxTestRunnerReuse, undefined)
+})

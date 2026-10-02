@@ -22,6 +22,10 @@ const plans = new Map([
         ['src/storage/schema/snapshotRelationIndexMigration.ts', 'relation-index'],
         ['src/storage/schema/snapshotCertificateIndexMigration.ts', 'certificate-index'],
         ['src/storage/schema/snapshotGlobalIndexMigration.ts', 'global-index'],
+        ['src/storage/schema/snapshotGlobalIndexModel.ts', 'global-index'],
+        ['src/storage/schema/snapshotGlobalIndexMysql.ts', 'global-mysql'],
+        ['src/storage/schema/snapshotGlobalIndexSqlite.ts', 'global-sqlite'],
+        ['src/storage/schema/snapshotGlobalIndexBootstrap.ts', 'global-bootstrap'],
         ['src/storage/schema/snapshotGlobalIndexTriggers.ts', 'global-triggers'],
         ['src/storage/StorageKnex.ts', 'storage'],
         ['src/storage/StorageProvider.ts', 'storage']

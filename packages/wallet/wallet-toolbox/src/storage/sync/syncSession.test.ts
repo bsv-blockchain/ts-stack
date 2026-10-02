@@ -79,6 +79,54 @@ test('foreground reads and writes complete while source I/O waits, with bounded 
   expect((await manager.syncFromReaderResumable(identityKey, reader)).inserts).toBe(0)
 })
 
+test.each(['earlier timestamp', 'missing timestamp', 'foreign state', 'partial reset'])(
+  'rejects a terminal %s reply and resumes from the actual durable checkpoint',
+  async invalid => {
+    const { reader, writer, manager } = await fixture(3)
+    await manager.syncFromReaderResumable(identityKey, reader, { maxItems: 2 })
+    const prepare = writer.prepareSyncChunk.bind(writer)
+    let terminalReplies = 0
+    const events: SyncSessionProgress[] = []
+    const altered = jest.spyOn(writer, 'prepareSyncChunk').mockImplementation(async (args, chunk) => {
+      const apply = await prepare(args, chunk)
+      return async () => {
+        const result = await apply()
+        if (result.done) {
+          terminalReplies++
+          const checkpoint = result.nextCheckpoint!
+          expect(args.since).toBeDefined()
+          expect(checkpoint.since).toEqual(args.since)
+          if (invalid === 'earlier timestamp') checkpoint.since = new Date(args.since!.getTime() - 1)
+          if (invalid === 'missing timestamp') checkpoint.since = undefined
+          if (invalid === 'foreign state') checkpoint.syncStateId++
+          if (invalid === 'partial reset') checkpoint.offsets[0].offset = 1
+        }
+        return result
+      }
+    })
+    await expect(
+      manager.syncFromReaderResumable(identityKey, reader, {
+        maxItems: 2,
+        onProgress: event => events.push(event)
+      })
+    ).rejects.toThrow('Invalid sync checkpoint')
+    expect(terminalReplies).toBe(1)
+    expect(events.some(event => event.state === 'completed')).toBe(false)
+    altered.mockRestore()
+    const settings = reader.getSettings()
+    const durable = await writer.getSyncCheckpoint({ identityKey }, settings.storageIdentityKey, settings.storageName)
+    expect(durable.since).toBeDefined()
+    expect(durable.offsets.every(entry => entry.offset === 0)).toBe(true)
+    await expect(manager.syncFromReaderResumable(identityKey, reader, { maxItems: 2 })).resolves.toMatchObject({
+      status: 'completed',
+      inserts: 0,
+      updates: 0,
+      checkpoint: durable
+    })
+    expect(await writer.countTxLabels({ partial: {} })).toBe(3)
+  }
+)
+
 test('cancellation during a read discards the late page without starting a write', async () => {
   const { reader, writer, manager } = await fixture()
   const entered = deferred()

@@ -8,11 +8,29 @@ import {
   applyGlobalOperation
 } from '../../../test/utils/snapshotGlobalFixtures'
 import {
-  addSnapshotGlobalIndexes as install,
+  addSnapshotGlobalIndexes as installMigration,
   removeSnapshotGlobalIndexes as remove,
   readSnapshotGlobalIndexState as enabled,
   SNAPSHOT_GLOBAL_INDEX_MIGRATION as migration
 } from '../schema/snapshotGlobalIndexMigration'
+
+// A migration attempt must advance every committed source page. Fail a stalled
+// cursor at the query boundary so its work settles before fixture cleanup.
+async function install(k: Knex): Promise<void> {
+  let previous = -1
+  const advancing = (query: { sql: string; bindings?: readonly unknown[] }): void => {
+    if (!query.sql.includes('from `transactions` where `transactionId` > ? order by')) return
+    const cursor = Number(query.bindings?.at(-2))
+    expect(cursor).toBeGreaterThan(previous)
+    previous = cursor
+  }
+  k.on('query', advancing)
+  try {
+    await installMigration(k)
+  } finally {
+    k.off('query', advancing)
+  }
+}
 
 const databases: Knex[] = []
 async function fixture(collation = 'BINARY') {
@@ -95,6 +113,57 @@ test.each(['BINARY', 'NOCASE', 'RTRIM'])(
       }),
       { numRuns: 300, seed: 3242026 }
     )
+  }
+)
+
+test.each([
+  ['transactions', 'transactionId', 1],
+  ['proven_tx_reqs', 'provenTxReqId', 5],
+  ['proven_txs', 'provenTxId', 7]
+] as const)('unchanged membership in %s does not rewrite auxiliary rows', async (table, key, id) => {
+  const k = await fixture()
+  await k.schema.alterTable(table, schema => {
+    void schema.string('payload')
+  })
+  await install(k)
+  expect(await k('sqlite_master').where('type', 'trigger').pluck('name')).toEqual(
+    expect.arrayContaining([
+      'snapshot_global_tx_after_update',
+      'snapshot_global_req_after_update',
+      'snapshot_global_proof_after_update'
+    ])
+  )
+  await k('proven_txs').insert({ provenTxId: 7 })
+  await k('proven_tx_reqs').insert({ provenTxReqId: 5, txid: 'a', provenTxId: 7 })
+  await k('transactions').insert({ transactionId: 1, userId: 1, txid: 'a', provenTxId: 7 })
+  const changed = async (): Promise<number> => Number((await k.raw('SELECT total_changes() AS count'))[0].count)
+  const before = await changed()
+  await k(table).where(key, id).update({ payload: 'updated payload' })
+  expect((await changed()) - before).toBe(1)
+  const afterPayload = await changed()
+  await k(table)
+    .where(key, id)
+    .update({ [key]: id })
+  expect((await changed()) - afterPayload).toBe(1)
+  await expectGlobalMembership(k)
+})
+
+test.each(['transactions', 'proven_tx_reqs'])(
+  'replacing an identical %s row preserves existing reference edges without double counting',
+  async table => {
+    const k = await fixture()
+    await install(k)
+    await k('proven_txs').insert({ provenTxId: 7 })
+    await k('proven_tx_reqs').insert({ provenTxReqId: 5, txid: 'a', provenTxId: 7 })
+    await k('transactions').insert({ transactionId: 1, userId: 1, txid: 'a', provenTxId: 7 })
+    const before = await k('snapshot_global_keys').orderBy(['tableId', 'userId', 'rowId'])
+    if (table === 'transactions') {
+      await k.raw('INSERT OR REPLACE INTO transactions(transactionId,userId,txid,provenTxId) VALUES (1,1,?,7)', ['a'])
+    } else {
+      await k.raw('INSERT OR REPLACE INTO proven_tx_reqs(provenTxReqId,txid,provenTxId) VALUES (5,?,7)', ['a'])
+    }
+    await expectGlobalMembership(k)
+    expect(await k('snapshot_global_keys').orderBy(['tableId', 'userId', 'rowId'])).toEqual(before)
   }
 )
 
@@ -351,7 +420,7 @@ test('inconsistent SQLite primary-index metadata refuses adoption instead of ass
   const k = await fixture()
   await install(k)
   const raw = k.client.raw.bind(k.client)
-  jest.spyOn(k.client, 'raw').mockImplementation((...args: Parameters<Knex['raw']>) => {
+  jest.spyOn(k.client, 'raw').mockImplementation((...args) => {
     const query = raw(...args)
     if (args[0] === 'PRAGMA index_list(??)' && Array.isArray(args[1]) && args[1][0] === 'snapshot_global_keys') {
       return query.then((rows: Array<{ origin: string }>) =>
@@ -361,4 +430,23 @@ test('inconsistent SQLite primary-index metadata refuses adoption instead of ass
     return query
   })
   await expect(install(k)).rejects.toThrow('table definition mismatch')
+})
+
+test.each([
+  'other integer NOT NULL PRIMARY KEY, present boolean NOT NULL',
+  'proofId bigint NOT NULL PRIMARY KEY, present boolean NOT NULL',
+  'proofId integer PRIMARY KEY, present boolean NOT NULL',
+  'proofId integer NOT NULL PRIMARY KEY DEFAULT 0, present boolean NOT NULL',
+  'proofId integer NOT NULL, present boolean NOT NULL PRIMARY KEY',
+  'proofId integer NOT NULL PRIMARY KEY, present boolean NOT NULL GENERATED ALWAYS AS (1) STORED'
+])('same-size altered auxiliary columns refuse resume, adoption and removal: %s', async definition => {
+  const k = await fixture()
+  await install(k)
+  await journal(k)
+  await k.schema.dropTable('snapshot_global_guards')
+  await k.raw(`CREATE TABLE snapshot_global_guards(${definition})`)
+  await expect(install(k)).rejects.toThrow('table definition mismatch')
+  await expect(enabled(k)).rejects.toThrow('table definition mismatch')
+  await expect(remove(k)).rejects.toThrow('table definition mismatch')
+  expect(await k.schema.hasTable('snapshot_global_keys')).toBe(true)
 })

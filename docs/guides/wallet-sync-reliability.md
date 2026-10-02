@@ -71,6 +71,15 @@ honor returned `ProcessSyncChunkResult.error` values as well as thrown errors.
 Neither path advances counts or checkpoints after an error, and a nonterminal
 page that makes no checkpoint progress fails explicitly.
 
+A completed unchanged backup may reset all twelve legacy offsets to zero while
+retaining its `since` timestamp. Clients accept that reset only with literal
+`done: true`; nonterminal and partial offset retreats still fail. State identity
+and timestamp monotonicity are checked on terminal replies too. This fixes the
+`Invalid sync checkpoint` error on repeated ordinary HTTP backups without
+changing checkpoint JSON or persisted state. A lost terminal acknowledgement
+still resumes by loading the destination's durable checkpoint. A returned
+provider failure takes precedence over any accompanying checkpoint fields.
+
 Sessions pin wallet identity, destination instance and manager generation.
 Switching/destroying the destination fences late replies before mutation. The
 page commit rechecks the durable checkpoint and any proof rows inspected during

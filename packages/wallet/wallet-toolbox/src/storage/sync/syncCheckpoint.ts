@@ -20,7 +20,11 @@ function invalidCheckpoint(): never {
 }
 
 /** Validate remote progress and return only the fields permitted to advance a sync. */
-export function validateSyncCheckpoint(value: SyncCheckpoint, previous?: Partial<SyncCheckpoint>): SyncCheckpoint {
+export function validateSyncCheckpoint(
+  value: SyncCheckpoint,
+  previous?: Partial<SyncCheckpoint>,
+  completed = false
+): SyncCheckpoint {
   if (
     value == null ||
     typeof value !== 'object' ||
@@ -43,7 +47,11 @@ export function validateSyncCheckpoint(value: SyncCheckpoint, previous?: Partial
     if (!Number.isFinite(since.getTime())) invalidCheckpoint()
   }
   if (previous?.since != null && (since == null || since < previous.since)) invalidCheckpoint()
+  // The legacy terminal page resets every offset, including when equal-time
+  // rows leave the high-water timestamp unchanged. Other retreats stay invalid.
+  const completedReset = completed && offsets.every(entry => entry.offset === 0)
   if (
+    !completedReset &&
     previous != null &&
     since?.getTime() === previous.since?.getTime() &&
     previous.offsets != null &&

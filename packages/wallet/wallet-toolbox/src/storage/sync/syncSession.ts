@@ -117,8 +117,7 @@ async function committedCheckpoint(
   reply: ProcessSyncChunkResult
 ): Promise<SyncCheckpoint> {
   if (reply.nextCheckpoint == null) return requestCheckpoint(await session.loadRequest())
-  const expected = reply.done ? { syncStateId: args.syncStateId } : args
-  return validateSyncCheckpoint(reply.nextCheckpoint, expected)
+  return validateSyncCheckpoint(reply.nextCheckpoint, args, reply.done === true)
 }
 
 /** One page in flight; resume always starts with the destination's durable checkpoint. */

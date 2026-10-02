@@ -948,7 +948,9 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       bytes != null && bytes.length * expansion > (capabilities!.inlineBytes ?? 6 * 1024 * 1024)
         ? await this.uploadSyncTransfer(args.identityKey, bytes, capabilities!)
         : await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, wireChunk])
-    if (r.nextCheckpoint != null) r.nextCheckpoint = validateSyncCheckpoint(r.nextCheckpoint, args)
+    // Preserve the failure result; its error takes precedence over checkpoint fields.
+    if (r.error == null && r.nextCheckpoint != null)
+      r.nextCheckpoint = validateSyncCheckpoint(r.nextCheckpoint, args, r.done === true)
     return r
   }
 

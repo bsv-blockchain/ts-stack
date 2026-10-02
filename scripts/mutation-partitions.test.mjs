@@ -267,6 +267,9 @@ for (const [id, expected, fallback] of [
       'relation-index',
       'certificate-index',
       'global-index',
+      'global-mysql',
+      'global-sqlite',
+      'global-bootstrap',
       'global-triggers',
       'storage'
     ],

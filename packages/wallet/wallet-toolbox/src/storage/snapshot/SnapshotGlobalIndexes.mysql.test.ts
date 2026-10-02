@@ -26,6 +26,7 @@ function fixture(change: (kind: Kind, table: string, rows: Metadata) => unknown 
   const triggers = new Map<string, Record<string, unknown>>()
   const edges: Edge[] = []
   const guards = new Set<number>()
+  let lastSourceCursor = -1
   let journaled = false
   let progress: { id: number; afterRowId: number; complete: boolean | number } | undefined
   const columns: Record<string, Array<[string, string, string]>> = {
@@ -169,10 +170,14 @@ function fixture(change: (kind: Kind, table: string, rows: Metadata) => unknown 
       return []
     }
     if (sql.startsWith('select `transactionId`, `userId`, `provenTxId`')) {
-      expect(sql).toContain('CASE WHEN octet_length(txid) <= 256 THEN txid END AS txid')
-      expect(sql).toContain('COALESCE(octet_length(txid),0) AS txidBytes')
+      const cursor = Number(values[2])
+      expect(cursor).toBeGreaterThan(lastSourceCursor)
+      lastSourceCursor = cursor
+      expect(sql).toContain('CASE WHEN octet_length(txid) <= ? THEN txid END AS txid')
+      expect(sql).toContain('COALESCE(octet_length(txid),?) AS txidBytes')
       expect(sql).toContain('where `transactionId` > ? order by `transactionId` asc limit ? for update')
-      expect(values[1]).toBe(256)
+      expect(values.slice(0, 2)).toEqual([256, 0])
+      expect(values[3]).toBe(256)
       return Array.from({ length: 257 }, (_, i) => ({
         transactionId: i + 1,
         userId: (i % 2) + 1,
@@ -180,8 +185,8 @@ function fixture(change: (kind: Kind, table: string, rows: Metadata) => unknown 
         txid: i % 2 ? 'a' : null,
         txidBytes: i % 2 ? 1 : 0
       }))
-        .filter(row => row.transactionId > Number(values[0]))
-        .slice(0, Number(values[1]))
+        .filter(row => row.transactionId > cursor)
+        .slice(0, Number(values[3]))
     }
     if (sql.startsWith('select `provenTxReqId`, `provenTxId`')) {
       expect(sql).toContain('from `proven_tx_reqs` where `txid` = ? limit ? lock in share mode')
@@ -307,11 +312,105 @@ test('MySQL bootstrap uses current locks, bounded pages and idempotent reference
   }
 })
 
+test('MySQL trigger DDL preserves durable names, conditional updates and all current-read ownership bases', async () => {
+  const f = fixture()
+  try {
+    await install(f.k)
+    expect([...f.triggers].map(([name, row]) => [name, row.tableName, row.timing, row.event])).toEqual([
+      ['snapshot_global_edge_delete', 'snapshot_global_edges', 'AFTER', 'DELETE'],
+      ['snapshot_global_edge_insert', 'snapshot_global_edges', 'AFTER', 'INSERT'],
+      ['snapshot_global_tx_delete', 'transactions', 'AFTER', 'DELETE'],
+      ['snapshot_global_tx_before_update', 'transactions', 'BEFORE', 'UPDATE'],
+      ['snapshot_global_req_delete', 'proven_tx_reqs', 'AFTER', 'DELETE'],
+      ['snapshot_global_req_before_update', 'proven_tx_reqs', 'BEFORE', 'UPDATE'],
+      ['snapshot_global_proof_delete', 'proven_txs', 'AFTER', 'DELETE'],
+      ['snapshot_global_proof_before_update', 'proven_txs', 'BEFORE', 'UPDATE'],
+      ['snapshot_global_proof_insert', 'proven_txs', 'AFTER', 'INSERT'],
+      ['snapshot_global_proof_after_update', 'proven_txs', 'AFTER', 'UPDATE'],
+      ['snapshot_global_tx_insert', 'transactions', 'AFTER', 'INSERT'],
+      ['snapshot_global_tx_after_update', 'transactions', 'AFTER', 'UPDATE'],
+      ['snapshot_global_req_insert', 'proven_tx_reqs', 'AFTER', 'INSERT'],
+      ['snapshot_global_req_after_update', 'proven_tx_reqs', 'AFTER', 'UPDATE']
+    ])
+    const body = (name: string): string => String(f.triggers.get('snapshot_global_' + name)?.body)
+    const transactionChange =
+      'NOT (OLD.transactionId <=> NEW.transactionId) OR NOT (OLD.userId <=> NEW.userId) OR NOT (OLD.txid <=> NEW.txid) OR NOT (OLD.provenTxId <=> NEW.provenTxId)'
+    const requestChange =
+      'NOT (OLD.provenTxReqId <=> NEW.provenTxReqId) OR NOT (OLD.txid <=> NEW.txid) OR NOT (OLD.provenTxId <=> NEW.provenTxId)'
+    for (const [name, condition] of [
+      ['tx_before_update', transactionChange],
+      ['tx_after_update', transactionChange],
+      ['req_before_update', requestChange],
+      ['req_after_update', requestChange],
+      ['proof_before_update', 'NOT (OLD.provenTxId <=> NEW.provenTxId)'],
+      ['proof_after_update', 'NOT (OLD.provenTxId <=> NEW.provenTxId)']
+    ]) {
+      expect(body(name)).toContain('IF ' + condition + ' THEN ')
+      expect(body(name)).toMatch(/ END IF; END$/)
+    }
+    for (const row of f.triggers.values()) expect(row.body).not.toContain('undefined')
+    for (const name of ['edge_delete', 'edge_insert', 'tx_delete', 'req_delete', 'proof_delete', 'proof_insert']) {
+      expect(body(name)).not.toContain(' END IF;')
+    }
+    expect(body('edge_insert')).toContain('ON DUPLICATE KEY UPDATE refs=snapshot_global_keys.refs+1;')
+    for (const name of ['tx_insert', 'tx_after_update']) {
+      const statement = body(name)
+      expect(statement).toContain('IF NEW.provenTxId IS NOT NULL THEN ')
+      expect(statement).toContain(
+        'SELECT provenTxReqId,provenTxId INTO requestedId,requestedProof FROM proven_tx_reqs WHERE txid=NEW.txid FOR SHARE;'
+      )
+      expect(statement).toContain('IF requestedId IS NOT NULL THEN ')
+      expect(statement).toContain('IF requestedProof IS NOT NULL THEN ')
+      for (const tuple of [
+        'NEW.transactionId,0,1,NEW.provenTxId,NEW.userId',
+        'NEW.transactionId,requestedId,0,requestedId,NEW.userId',
+        'NEW.transactionId,requestedId,1,requestedProof,NEW.userId'
+      ])
+        expect(statement).toContain(
+          'VALUES (' + tuple + ') ON DUPLICATE KEY UPDATE transactionId = snapshot_global_edges.transactionId;'
+        )
+      for (const proof of ['NEW.provenTxId', 'requestedProof']) {
+        expect(statement).toContain(
+          'INSERT INTO snapshot_global_guards (proofId,present) VALUES (' +
+            proof +
+            ',0) ON DUPLICATE KEY UPDATE proofId=snapshot_global_guards.proofId;'
+        )
+        expect(statement).toContain(
+          'UPDATE snapshot_global_guards g LEFT JOIN proven_txs p ON p.provenTxId=g.proofId SET g.present=(p.provenTxId IS NOT NULL) WHERE g.proofId=' +
+            proof +
+            ';'
+        )
+      }
+    }
+    for (const name of ['req_insert', 'req_after_update']) {
+      const statement = body(name)
+      expect(statement).toContain(
+        'IF NEW.provenTxId IS NOT NULL THEN INSERT INTO snapshot_global_guards (proofId,present) VALUES (NEW.provenTxId,0) ON DUPLICATE KEY UPDATE proofId=snapshot_global_guards.proofId;'
+      )
+      expect(statement).toContain(
+        'UPDATE snapshot_global_guards g LEFT JOIN proven_txs p ON p.provenTxId=g.proofId SET g.present=(p.provenTxId IS NOT NULL) WHERE g.proofId=NEW.provenTxId; END IF;'
+      )
+      expect(
+        statement.match(/ON DUPLICATE KEY UPDATE transactionId = snapshot_global_edges.transactionId;/g)
+      ).toHaveLength(2)
+    }
+    for (const [name, presence] of [
+      ['proof_delete', '0'],
+      ['proof_before_update', '0'],
+      ['proof_insert', '1'],
+      ['proof_after_update', '1']
+    ])
+      expect(body(name)).toContain('ON DUPLICATE KEY UPDATE present=' + presence + ';')
+  } finally {
+    await f.k.destroy()
+  }
+})
+
 test.each(['CASCADE', 'SET NULL', 'SET DEFAULT'])(
   'MySQL refuses implicit %s updates or deletes before DDL',
   async rule => {
     for (const field of ['updateRule', 'deleteRule']) {
-      const f = fixture((kind, _table, rows) => (kind === 'rules' ? [{ ...rows[0], [field]: rule }] : rows))
+      const f = fixture((kind, _table, rows) => (kind === 'rules' ? [...rows, { ...rows[0], [field]: rule }] : rows))
       try {
         await expect(install(f.k)).rejects.toThrow('requires explicit row mutations')
         await expect(remove(f.k)).rejects.toThrow('requires explicit row mutations')
@@ -326,6 +425,7 @@ test.each(['CASCADE', 'SET NULL', 'SET DEFAULT'])(
 test.each([
   ['engine', [], 'requires transactional tables'],
   ['engine', [{ engine: 'MyISAM' }], 'requires transactional tables'],
+  ['engine', [{ engine: 'InnoDB' }, { engine: 'InnoDB' }], 'requires transactional tables'],
   ['rules', null, 'requires explicit row mutations'],
   ['sourceColumns', [], 'Unsupported snapshot global source column'],
   ['indexes', null, 'Invalid snapshot global index metadata'],
@@ -489,12 +589,52 @@ test('MySQL refuses nested migration transactions before any database work', asy
   }
 })
 
-test.each([{ rows: [] }, { rows: [{ engine: 'MyISAM' }] }])(
+test.each([{ rows: [] }, { rows: [{ engine: 'MyISAM' }] }, { rows: [{ engine: 'InnoDB' }, { engine: 'InnoDB' }] }])(
   'MySQL auxiliary engine metadata %j refuses adoption',
   async ({ rows: value }) => {
     const f = fixture((kind, table, rows) => (kind === 'engine' && table.startsWith('snapshot_') ? value : rows))
     try {
       await expect(install(f.k)).rejects.toThrow('table definition mismatch')
+    } finally {
+      await f.k.destroy()
+    }
+  }
+)
+
+test('MySQL integer display widths preserve the supported source and auxiliary types', async () => {
+  const f = fixture((kind, _table, rows) =>
+    kind === 'sourceColumns' || kind === 'columns'
+      ? rows.map(row => ({ ...row, type: String(row.type).replace(/^(bigint|int)\b/, '$1(10)') }))
+      : rows
+  )
+  try {
+    await install(f.k)
+    f.setJournaled()
+    expect(await enabled(f.k)).toBe(true)
+  } finally {
+    await f.k.destroy()
+  }
+})
+
+test.each(['partial primary', 'extra unique', 'compound request lookup'])(
+  'MySQL refuses %s index definitions even when their first column matches',
+  async altered => {
+    const f = fixture((kind, table, rows) => {
+      if (kind !== 'indexes') return rows
+      if (altered === 'partial primary' && table === 'snapshot_global_keys')
+        return rows.map((row, i) => (i === 1 ? { ...row, columnName: 'other' } : row))
+      if (altered === 'extra unique' && table === 'snapshot_global_keys')
+        return [...rows, { ...rows[0], name: 'unexpected_unique', columnName: 'rowId' }]
+      if (altered === 'compound request lookup' && table === 'proven_tx_reqs')
+        return [...rows, { ...rows[1], columnName: 'provenTxReqId' }]
+      return rows
+    })
+    try {
+      await expect(install(f.k)).rejects.toThrow(
+        altered === 'compound request lookup'
+          ? 'requires complete transaction lookup indexes'
+          : 'table definition mismatch'
+      )
     } finally {
       await f.k.destroy()
     }

@@ -198,6 +198,12 @@ lanes finish after a sibling failure, and every CI job has a reviewed timeout
 instead of GitHub's six-hour default. The zero-install orchestration tests
 enforce these resource and complete-campaign controls.
 
+The retained-snapshot target recycles each Stryker test worker after eight mutant
+executions to bound accumulated worker state. Every replacement worker runs the
+same canonical test selection; the complete mutant union, four-worker concurrency,
+property seeds and budgets, per-test limits and aggregate gates remain unchanged.
+Worker exits and incomplete reports remain failed qualification evidence.
+
 The retained-snapshot campaign and the three snapshot-sync groups have a
 90-minute limit in PR CI and the standalone mutation workflow. The retained
 campaign completed within that allowance, but the complete snapshot-sync campaign
@@ -234,9 +240,16 @@ each execute as a whole-file part, alongside reader, storage and the lifecycle
 fallback. The subsequent certificate-field migration is registered as another
 complete source and whole-file part with the same full retained test selection;
 its independently defined fixture is included in the input digest. Global
-proof/request migration and trigger sources are each registered in full and run
-in disjoint whole-file parts, with the independent global fixture included in
-the same retained input digest. These parts preserve the complete canonical
+proof/request migration, model, MySQL metadata, SQLite metadata, bootstrap and
+trigger sources are each registered in full, with the independent global fixture
+included in the same retained input digest. The entry point and model share
+`global-index`; the metadata backends, bootstrap and triggers each run in a
+separate whole-file part. This follows a complete local monolithic run lasting
+64 minutes that failed the zero-invalid gate; that failed evidence is retained.
+The extraction preserves the original declaration bodies, and the separately
+tested descriptor/SQL-binding corrections make broken variants fail within the
+awaited migration. Every part retains the complete canonical test selection and
+the existing 90-minute limit. These parts preserve the complete canonical
 source and test union. Archive groups store/migration, source/closure and the capture fallback.
 Remote reader groups lease, rows, page/open/cursor and the admission fallback.
 These partitions retain every original source specification and full test
