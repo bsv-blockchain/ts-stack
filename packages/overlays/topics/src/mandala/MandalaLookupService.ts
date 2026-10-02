@@ -153,8 +153,8 @@ async function everyStep(steps: ReadonlyArray<() => Promise<void>>): Promise<voi
   await eachInOrder(steps, async step => {
     try {
       await step()
-    } catch (fault) {
-      faults.push(fault)
+    } catch (error_) {
+      faults.push(error_)
     }
   })
   if (faults.length > 0) throw faults[0]
@@ -165,8 +165,8 @@ type Settled<T> = { ok: true; value: T } | { ok: false; fault: unknown }
 const settled = async <T>(work: Promise<T>): Promise<Settled<T>> => {
   try {
     return { ok: true, value: await work }
-  } catch (fault) {
-    return { ok: false, fault }
+  } catch (error_) {
+    return { ok: false, fault: error_ }
   }
 }
 
@@ -348,7 +348,7 @@ export class MandalaLookupService implements LookupService {
     if (outpoint === undefined) return {}
     const [txid, vout] = outpoint.split('.')
     const row = await this.deps.storage.getTokenRow(txid, Number(vout))
-    if (row === null || row.tokenId !== tokenId) return { frozenAmount: 0, frozenOwner: '' }
+    if (row?.tokenId !== tokenId) return { frozenAmount: 0, frozenOwner: '' }
     return { frozenAmount: row.amount, frozenOwner: row.identityKey }
   }
 
