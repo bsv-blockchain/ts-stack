@@ -18,7 +18,8 @@ import { HostWallet } from '../support/wallets.js'
  * server. BRC-104 signs the path and query, not the scheme, so authentication is unaffected.
  */
 export const loopbackFetch: typeof fetch = async (input, init) => {
-  const url = input instanceof Request ? input.url : String(input)
+  if (input instanceof Request) throw new TypeError('loopbackFetch takes a URL and init')
+  const url = String(input)
   if (!url.startsWith('https://127.0.0.1:')) throw new Error(`unexpected e2e URL ${url}`)
   return await fetch(`http://${url.slice('https://'.length)}`, init)
 }

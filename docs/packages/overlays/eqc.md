@@ -87,6 +87,7 @@ A host that withholds data from its peers ends up alone with its hash and earns 
 
 ## Reference
 
+- API reference, generated with `pnpm doc`: [client entry](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/overlays/eqc/docs/client.md) and [host entry](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/overlays/eqc/docs/host.md)
 - [Design and protocol decisions](../../superpowers/specs/2026-09-18-eqc-brc178-design.md)
 - [BRC-178](https://bsv.brc.dev/overlays/0178), [BRC-136](https://bsv.brc.dev/overlays/0136)
 - [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/eqc#readme)

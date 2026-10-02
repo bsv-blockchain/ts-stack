@@ -49,6 +49,7 @@
   ],
   "scripts": {
     "build": "tsdown src/index.ts src/host.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "doc": "ts2md --inputFilename=src/index.ts --outputFilename=docs/client.md --filenameSubString=client --firstHeadingLevel=1 && ts2md --inputFilename=src/host.ts --outputFilename=docs/host.md --filenameSubString=host --firstHeadingLevel=1",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/eqc/src/**/*.ts\" \"packages/overlays/eqc/test/**/*.ts\" \"packages/overlays/eqc/*.{json,ts,md}\"",
     "lint": "oxlint src test vitest.config.ts --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports EQC,EQCError,ECONOMIC_PATHS,DEFAULTS,computeQueryId,computePayouts,canonicalJson --entry-exports \"./host=createEconomicQueryHost|overlayLookupProvider|messageListProvider|bytesProvider\"",
@@ -88,6 +89,7 @@
     "express": "^5.2.1",
     "fast-check": "^4.9.0",
     "oxlint": "^1.83.0",
+    "ts2md": "^0.2.8",
     "tsdown": "0.23.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "^5.0.1"

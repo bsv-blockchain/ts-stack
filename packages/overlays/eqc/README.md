@@ -183,6 +183,11 @@ BRC-178 leaves several encodings open. The choices made here, including the `/ec
 paths and the 1000-satoshi default floor, are recorded in
 [the design document](../../../docs/superpowers/specs/2026-09-18-eqc-brc178-design.md).
 
+## API reference
+
+Generated with `pnpm doc` (ts2md): [client entry](./docs/client.md) (`@bsv/eqc`) and
+[host entry](./docs/host.md) (`@bsv/eqc/host`).
+
 ## License
 
 Open BSV License — see [LICENSE.txt](./LICENSE.txt).
