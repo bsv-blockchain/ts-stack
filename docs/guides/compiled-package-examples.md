@@ -1796,3 +1796,34 @@ function openNativeOriginalObjects(
 void openBrowserOriginalObjects
 void openNativeOriginalObjects
 ```
+
+## One original private acquisition
+
+Initialize only an explicitly selected new operation. Reopen existing owners for
+status recovery; an unknown reply must not select a new seller or wallet action.
+The supplied validation policy independently checks evidence and material.
+
+```ts compile
+// example-id: durable-private-lookup-buyer
+import {
+  PrivateLookupBuyer as DurablePrivateBuyer,
+  privateLookupBuyerBinding as durableBuyerBinding,
+  type PrivateLookupBuyerOptions as DurableBuyerOptions
+} from '@bsv/output-knowledge/private/buyer'
+
+async function openOriginalPrivateBuyer(options: DurableBuyerOptions, create: boolean) {
+  const originalBinding = durableBuyerBinding(options)
+  const buyer = create
+    ? await DurablePrivateBuyer.initialize(options)
+    : await DurablePrivateBuyer.open(options)
+  return { originalBinding, buyer }
+}
+async function useOriginalPrivateBuyer(buyer: DurablePrivateBuyer, explicitlyAuthorize: boolean) {
+  const originalStatus = explicitlyAuthorize ? await buyer.advance() : await buyer.recover()
+  if (originalStatus?.status !== 'delivered') return undefined
+  if ((await buyer.validate()) !== 'usable') return undefined
+  return await buyer.usableResult()
+}
+void openOriginalPrivateBuyer
+void useOriginalPrivateBuyer
+```

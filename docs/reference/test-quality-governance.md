@@ -414,3 +414,13 @@ at least 300 cases with the governed seed/replay. Four workers, the new target's
 runner reuse of eight, 45-minute parts, complete aggregate 90% and zero uncovered
 or invalid mutants remain mandatory. No prior source/test selection, threshold,
 budget or deadline is narrowed.
+
+`private-lookup-buyer` qualifies the complete buyer, payment adapter, interfaces
+and entry in disjoint buyer/payment parts. Both retain the same complete buyer
+and native payment test union, original encrypted custody fixtures, SDK transport
+and actual wallet source inputs, with same-head wallet/application builds. Its
+separate 300-case seeded property suite explores original-obligation interruption,
+expiry, validation and reopen histories. Four workers, reuse eight, 45-minute
+parts and complete aggregate 90%/zero uncovered/invalid remain required. Existing
+targets and ordinary PR mutation deferral are preserved; deferred CI is not
+complete-campaign evidence.

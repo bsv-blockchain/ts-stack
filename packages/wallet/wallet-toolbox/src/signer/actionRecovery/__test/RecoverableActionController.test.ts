@@ -26,6 +26,20 @@ describe('retained noSend action signing', () => {
     await context?.wallet.destroy()
   })
 
+  test('describes the actual independently installed local action owner without exposing mutable configuration', () => {
+    const expected = {
+      protocol: 'wallet-action-recovery-v1',
+      walletIdentity: context.wallet.identityKey,
+      storageIdentity: context.activeStorage.getSettings().storageIdentityKey,
+      chain: context.wallet.chain,
+      originator: 'recovery-fixture.local'
+    }
+    const first = controller.configuration()
+    expect(first).toEqual(expected)
+    first.originator = 'changed-by-caller.local'
+    expect(controller.configuration()).toEqual(expected)
+  })
+
   function changeAtomicLayout(bytes: number[]): number[] {
     const beef = Beef.fromBinaryStrict(bytes)
     const tx = Transaction.fromAtomicBEEF(bytes)

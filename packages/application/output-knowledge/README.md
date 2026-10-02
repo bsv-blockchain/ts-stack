@@ -1219,8 +1219,9 @@ its domain semantics, immutable chain policy and actual wallet controller.
 The explicit `private/node` entry exposes this composition, including native
 custody, coordinator, release verification, wallet bridge and recovery workers.
 [Authenticated acquisition and recovery](../../../docs/guides/private-acquisition-recovery.md)
-connects it to the opt-in Overlay Express host/router. Concrete domain adapters,
-the durable buyer client and complete mutation/hosted qualification remain open.
+connects it to the opt-in Overlay Express host/router. The optional `private/buyer` entry now composes durable original acquisition,
+one local recoverable payment and immutable delivered-result custody. Concrete
+domain adapters and complete mutation/hosted qualification remain open.
 The [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md) tracks
 that work and the distinction between native checks and complete qualification.
 
@@ -1251,3 +1252,14 @@ reuses the existing protected ledger. Missing original storage or custody never
 creates a replacement. Logical reservations do not prevent quota exhaustion,
 browser eviction or rollback of a complete valid database. See the
 [operation-object guide](../../../docs/guides/protected-operation-objects.md).
+
+### Durable private lookup buyer
+
+The portable `private/buyer` entry exports `PrivateLookupBuyer`, its public
+installation binding and `WalletToolboxBuyerPayment`. Explicit initialization
+reserves all original/result slots before financial effects; opening and recovery
+never replace missing state or dispatch payment. Received, independently validated
+and currently usable material remain distinct. The native adapter uses one stable
+local noSend action, with current authority at new signing boundaries and exact
+final-byte recovery. See the [buyer guide](../../../docs/guides/durable-private-lookup-buyer.md)
+for installation, concurrency, shutdown and the complete HTTP demonstration.

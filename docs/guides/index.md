@@ -3,8 +3,8 @@ id: guides-overview
 title: 'Guides'
 kind: meta
 version: '1.0.0'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [guides, tutorials, how-to]
@@ -128,3 +128,10 @@ disclosure layers behind explicitly selected BRC-194 endpoints.
 [Retain original requests, contracts and results](./protected-operation-objects.md)
 with explicit native/browser custody, complete logical capacity reservations,
 immutable first bytes and recovery through the original operation.
+
+### [Durable Private Lookup Buyer](./durable-private-lookup-buyer.md)
+
+Compose original capability and request custody, an explicitly authorized durable
+wallet action, unpaid recovery, immutable delivered results and independent current
+material validation. Includes the complete native buyer/seller HTTP example and
+its qualification limits.

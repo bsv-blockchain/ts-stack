@@ -1,3 +1,4 @@
+import { createOverlayTestProjects } from '../../packages/overlays/overlay-express/jest.projects.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -43,6 +44,14 @@ function jestTarget(
       ...(esm ? { testRunnerNodeArgs: ['--experimental-vm-modules'] } : {})
     }
   }
+}
+
+function overlayJestTarget(testMatch, options = {}) {
+  return jestTarget('jest.config.js', testMatch, {
+    ...options,
+    esm: true,
+    config: { ...options.config, projects: createOverlayTestProjects(testMatch) }
+  })
 }
 
 function vitestTarget(configFile) {
@@ -775,29 +784,28 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/overlays/overlay-express/src/__tests__/RootEvictionResponseGuard.property.test.ts',
       mutate: ['src/RootEvictionResponseGuard.ts'],
       additionalInputs: [
+        'jest.projects.mjs',
+        'jest.config.js',
+        'src/__tests__/setup.ts',
         'src/__tests__/RootEvictionResponseGuard.fixture.ts',
         '../../application/output-knowledge/src/root-eviction/**',
         '../../application/output-knowledge/test/root-eviction-fixture.ts',
         '../../middleware/auth-express-middleware/src/**',
         '../../middleware/auth-express-middleware/mod.ts'
       ],
-      ...jestTarget(
-        'jest.config.js',
-        ['<rootDir>/src/__tests__/RootEvictionResponseGuard*.test.ts'],
-        {
-          config: {
-            moduleNameMapper: {
-              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/root-eviction-fixture\.js$`]:
-                resolve(
-                  repositoryRoot,
-                  'packages/application/output-knowledge/test/root-eviction-fixture.ts'
-                ),
-              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
-              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
-            }
+      ...overlayJestTarget(['<rootDir>/src/__tests__/RootEvictionResponseGuard*.test.ts'], {
+        config: {
+          moduleNameMapper: {
+            [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/root-eviction-fixture\.js$`]:
+              resolve(
+                repositoryRoot,
+                'packages/application/output-knowledge/test/root-eviction-fixture.ts'
+              ),
+            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+            '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
           }
         }
-      )
+      })
     },
     'overlay-proposal-http': {
       packageDirectory: 'packages/overlays/overlay-express',
@@ -811,6 +819,9 @@ export function buildMutationTargets(repositoryRoot) {
         'src/ProposalHTTPPorts.ts'
       ],
       additionalInputs: [
+        'jest.projects.mjs',
+        'jest.config.js',
+        'src/__tests__/setup.ts',
         'src/__tests__/ProposalRoutes.fixture.ts',
         'src/OverlayExpress.ts',
         'src/RootEvictionHTTPPolicy.ts',
@@ -821,8 +832,7 @@ export function buildMutationTargets(repositoryRoot) {
         '../../middleware/auth-express-middleware/src/**',
         '../../middleware/auth-express-middleware/mod.ts'
       ],
-      ...jestTarget(
-        'jest.config.js',
+      ...overlayJestTarget(
         [
           '<rootDir>/src/__tests__/Proposal*.test.ts',
           '<rootDir>/src/__tests__/OverlayExpress.test.ts'
@@ -851,6 +861,9 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/overlays/overlay-express/src/__tests__/RootEvictionRoutes.property.test.ts',
       mutate: ['src/RootEvictionRoutes.ts', 'src/RootEvictionHTTPPolicy.ts'],
       additionalInputs: [
+        'jest.projects.mjs',
+        'jest.config.js',
+        'src/__tests__/setup.ts',
         'src/__tests__/RootEvictionRoutes.fixture.ts',
         'src/RootEvictionHTTPPorts.ts',
         'src/RootEvictionResponseGuard.ts',
@@ -862,7 +875,7 @@ export function buildMutationTargets(repositoryRoot) {
         '../../middleware/auth-express-middleware/src/**',
         '../../middleware/auth-express-middleware/mod.ts'
       ],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests__/RootEvictionRoutes*.test.ts'], {
+      ...overlayJestTarget(['<rootDir>/src/__tests__/RootEvictionRoutes*.test.ts'], {
         config: {
           moduleNameMapper: {
             ...Object.fromEntries(
@@ -892,11 +905,13 @@ export function buildMutationTargets(repositoryRoot) {
         'src/OutputLookupResponseGuard.ts'
       ],
       additionalInputs: [
+        'jest.projects.mjs',
+        'jest.config.js',
+        'src/__tests__/setup.ts',
         '../../application/output-knowledge/src/lookup/**',
         '../../application/output-knowledge/test/lookup-provider-fixture.ts'
       ],
-      ...jestTarget(
-        'jest.config.js',
+      ...overlayJestTarget(
         [
           '<rootDir>/src/__tests__/OutputLookupRoutes.test.ts',
           '<rootDir>/src/__tests__/OutputLookupRoutes.property.test.ts',
@@ -1208,6 +1223,9 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts',
       additionalInputs: [
+        'jest.projects.mjs',
+        'jest.config.js',
+        'src/__tests__/setup.ts',
         'src/__tests__/PrivatePublication*.ts',
         'src/RootEvictionHTTPPolicy.ts',
         'src/OutputLookupHTTPPolicy.ts',
@@ -1225,7 +1243,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/PrivatePublicationResponseGuard.ts',
         'src/PrivatePublicationRoutes.ts'
       ],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests__/PrivatePublication*.test.ts'], {
+      ...overlayJestTarget(['<rootDir>/src/__tests__/PrivatePublication*.test.ts'], {
         esm: true,
         maxTestRunnerReuse: 8,
         config: {
@@ -1251,6 +1269,9 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/overlays/overlay-express/src/__tests__/PrivateAcquisitionRoutes.property.test.ts',
       additionalInputs: [
+        'jest.projects.mjs',
+        'jest.config.js',
+        'src/__tests__/setup.ts',
         'src/__tests__/PrivatePublication*.ts',
         'src/__tests__/PrivateAcquisition*.ts',
         'src/__tests__/PrivateOverlayHost*.ts',
@@ -1275,8 +1296,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/PrivateAcquisitionRoutes.ts',
         'src/PrivateOverlayHost.ts'
       ],
-      ...jestTarget(
-        'jest.config.js',
+      ...overlayJestTarget(
         [
           '<rootDir>/src/__tests__/PrivateAcquisition*.test.ts',
           '<rootDir>/src/__tests__/PrivateOverlayHost*.test.ts',
@@ -1709,6 +1729,49 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/proposal-bitcoin-core.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
+    'private-lookup-buyer': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-lookup-buyer.property.test.ts',
+      mutate: [
+        'src/private/PrivateLookupBuyer.ts',
+        'src/private/PrivateLookupBuyerPorts.ts',
+        'src/private/WalletToolboxBuyerPayment.ts',
+        'src/private/buyer.ts'
+      ],
+      additionalInputs: [
+        'src/operations/**',
+        'src/private/**',
+        'src/internal/BoundedOutputWork.ts',
+        'src/storage/SQLiteTransactionDomain.ts',
+        'test/private-*buyer*.ts',
+        'test/private-buyer*.ts',
+        'test/private-acquisition*fixture.ts',
+        'test/protected-operation-object.fixture.ts',
+        'test/protected-ledger*fixture.ts',
+        '../../wallet/wallet-toolbox/src/**',
+        '../../wallet/wallet-toolbox/test/utils/**',
+        '../../wallet/wallet-toolbox/tsconfig*.json',
+        '../../wallet/wallet-toolbox/package.json',
+        '../../sdk/src/primitives/**',
+        '../../sdk/src/wallet/**',
+        '../../sdk/src/overlay-tools/**',
+        '../../sdk/src/auth/**'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-lookup-buyer.test.ts',
+          '<rootDir>/test/private-buyer-payment.test.ts'
+        ],
+        {
+          esm: true,
+          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          maxTestRunnerReuse: 8
+        }
       )
     },
     'protected-operation-objects': {
@@ -2230,10 +2293,10 @@ export function buildMutationTargets(repositoryRoot) {
     'reorg-stream': {
       packageDirectory: 'packages/overlays/overlay-express',
       manifest: 'packages/overlays/overlay-express/package.json',
+      additionalInputs: ['jest.projects.mjs', 'jest.config.js', 'src/__tests__/setup.ts'],
       propertyTest: 'packages/overlays/overlay-express/src/__tests/ReorgStream.property.test.ts',
       mutate: ['src/ReorgStream.ts'],
-      ...jestTarget(
-        'jest.config.js',
+      ...overlayJestTarget(
         [
           '<rootDir>/src/__tests/ReorgStream*.test.ts',
           '<rootDir>/src/__tests__/ReorgStream*.test.ts'

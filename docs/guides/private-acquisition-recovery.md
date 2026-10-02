@@ -1,3 +1,15 @@
+---
+id: private-acquisition-recovery
+title: 'Authenticated Private Acquisition and Recovery'
+kind: guide
+version: '1.0.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
+review_cadence_days: 30
+status: experimental
+tags: [overlay, custody, recovery, wallet]
+---
+
 # Authenticated private acquisition and recovery
 
 BRC-195 acquisition exchanges a retained right to private application material

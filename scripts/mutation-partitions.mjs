@@ -3,6 +3,10 @@ import path from 'node:path'
 const partitionFile = specification => specification.replace(/:\d+(?:-\d+)?$/, '')
 const plans = new Map([
   [
+    'private-lookup-buyer',
+    { fallback: 'buyer', files: new Map([['src/private/WalletToolboxBuyerPayment.ts', 'payment']]) }
+  ],
+  [
     'protected-operation-objects',
     {
       fallback: 'plan',

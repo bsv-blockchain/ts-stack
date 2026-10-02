@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 120)
+  assert.equal(Object.keys(configured).length, 121)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -845,4 +845,60 @@ test('immutable operation objects qualify all native/browser modules and complet
       'src/private/**'
     ])
       assert.ok(configured[id].additionalInputs.includes(input))
+})
+
+test('durable buyer qualifies every complete owner and retains native one-action recovery evidence', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    buyer = configured['private-lookup-buyer']
+  assert.deepEqual(buyer.mutate, [
+    'src/private/PrivateLookupBuyer.ts',
+    'src/private/PrivateLookupBuyerPorts.ts',
+    'src/private/WalletToolboxBuyerPayment.ts',
+    'src/private/buyer.ts'
+  ])
+  assert.deepEqual(buyer.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-lookup-buyer.test.ts',
+    '<rootDir>/test/private-buyer-payment.test.ts'
+  ])
+  assert.equal(
+    buyer.runnerOptions.buildCommand,
+    'pnpm --filter @bsv/wallet-toolbox build && pnpm build'
+  )
+  assert.equal(buyer.runnerOptions.maxTestRunnerReuse, 8)
+  for (const input of [
+    'src/operations/**',
+    '../../wallet/wallet-toolbox/src/**',
+    '../../sdk/src/auth/**'
+  ])
+    assert.ok(buyer.additionalInputs.includes(input))
+  assert.ok(
+    selectAffectedMutationTargets(configured, [
+      'packages/wallet/wallet-toolbox/src/signer/actionRecovery/RecoverableActionController.ts'
+    ]).includes('private-lookup-buyer')
+  )
+})
+
+test('host qualification preserves complete selected unions in disjoint legacy and private module environments', () => {
+  for (const target of Object.values(buildMutationTargets(REPOSITORY_ROOT))) {
+    if (target.packageDirectory !== 'packages/overlays/overlay-express') continue
+    const options = target.runnerOptions.jest.config,
+      projects = options.projects,
+      ordinary = projects.find(project => project.displayName === 'legacy-commonjs'),
+      privateProject = projects.find(project => project.displayName === 'private-esm')
+    assert.equal(projects.length, 2)
+    assert.deepEqual(ordinary.testMatch, options.testMatch)
+    assert.deepEqual(privateProject.testMatch, options.testMatch)
+    assert.deepEqual(ordinary.extensionsToTreatAsEsm, [])
+    assert.deepEqual(privateProject.extensionsToTreatAsEsm, ['.ts', '.tsx'])
+    assert.deepEqual(target.runnerOptions.testRunnerNodeArgs, ['--experimental-vm-modules'])
+    const legacy = '/fixture/src/__tests__/OverlayExpress.test.ts',
+      privatePath = '/fixture/src/__tests__/PrivateBuyerHTTP.integration.test.ts',
+      ignores = (project, file) =>
+        project.testPathIgnorePatterns.some(pattern => new RegExp(pattern).test(file))
+    assert.equal(ignores(ordinary, legacy), false)
+    assert.equal(ignores(privateProject, legacy), true)
+    assert.equal(ignores(ordinary, privatePath), true)
+    assert.equal(ignores(privateProject, privatePath), false)
+    assert.ok(target.additionalInputs.includes('jest.projects.mjs'))
+  }
 })

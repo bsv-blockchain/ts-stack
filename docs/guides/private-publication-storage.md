@@ -1,3 +1,15 @@
+---
+id: private-publication-storage
+title: 'Private Publication Storage'
+kind: guide
+version: '1.0.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
+review_cadence_days: 30
+status: experimental
+tags: [overlay, custody, recovery, wallet]
+---
+
 # Native private publication storage
 
 This branch contains an internal Node reference foundation for BRC-195 publication.

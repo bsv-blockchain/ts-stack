@@ -37,6 +37,23 @@ export class RecoverableActionController {
     validateOriginator(originator)
   }
 
+  /** Independently inspect the installed local owner before composing a durable payment adapter. */
+  configuration(): {
+    protocol: 'wallet-action-recovery-v1'
+    walletIdentity: string
+    storageIdentity: string
+    chain: string
+    originator: string
+  } {
+    return {
+      protocol: 'wallet-action-recovery-v1',
+      walletIdentity: this.wallet.identityKey,
+      storageIdentity: this.store.storage.getSettings().storageIdentityKey,
+      chain: this.wallet.chain,
+      originator: this.originator
+    }
+  }
+
   async prepare(operationId: string, request: CreateActionArgs): Promise<CreateActionResult> {
     return await this.operation(operationId, request, async operation => {
       const result = await createAction(this.store.storage, operation.auth, operation.args, undefined, operation.record)

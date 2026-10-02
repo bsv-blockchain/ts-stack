@@ -398,3 +398,14 @@ test('paid acquisition and proposal HTTP parts preserve exact whole-source/test 
     }
   }
 })
+
+test('durable buyer parts retain the complete source union and identical native recovery tests', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['private-lookup-buyer'],
+    parts = partitionMutationTarget('private-lookup-buyer', target)
+  assert.deepEqual(parts.map(part => part.id).sort(), ['buyer', 'payment'])
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...target.mutate].sort())
+  for (const part of parts) assert.equal(part.target.runnerOptions, target.runnerOptions)
+  assert.deepEqual(parts.find(part => part.id === 'payment').target.mutate, [
+    'src/private/WalletToolboxBuyerPayment.ts'
+  ])
+})

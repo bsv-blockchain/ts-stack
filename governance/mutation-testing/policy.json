@@ -1216,6 +1216,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-lookup-buyer",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-lookup-buyer.property.test.ts",
+      "boundary": "Durable original private acquisition, one payment and immutable protected result custody under interruption, expiry, conflict and reopen",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

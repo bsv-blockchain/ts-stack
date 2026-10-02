@@ -53,7 +53,8 @@ afterEach(async () => {
 /** Fresh disposable native wallet with explicitly installed synthetic-chain evidence. */
 export async function acquisitionNativeWalletFixture(
   chain: { network: 'main' | 'test' | 'mock'; genesisHash: string },
-  tracker: ChainTracker
+  tracker: ChainTracker,
+  rootKey = 83
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'acquisition-wallet-native-'))
   const opened = new Set<() => Promise<void>>()
@@ -80,7 +81,7 @@ export async function acquisitionNativeWalletFixture(
     })
     if (create) await active.migrate('acquisition-native', 'synthetic-acquisition-wallet-storage')
     await active.makeAvailable()
-    const keyDeriver = new CachedKeyDeriver(new PrivateKey(83)),
+    const keyDeriver = new CachedKeyDeriver(new PrivateKey(rootKey)),
       storage = new WalletStorageManager(keyDeriver.identityKey, active)
     await storage.makeAvailable()
     const services = chain.network === 'mock' ? new MockServices(knex) : new Services(chain.network)

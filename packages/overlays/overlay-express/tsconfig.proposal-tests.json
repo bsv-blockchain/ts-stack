@@ -15,7 +15,8 @@
     "src/PrivateAcquisition*.ts",
     "src/__tests__/PrivateAcquisition*.ts",
     "src/PrivateOverlayHost.ts",
-    "src/__tests__/PrivateOverlayHost*.ts"
+    "src/__tests__/PrivateOverlayHost*.ts",
+    "src/__tests__/PrivateBuyerHTTP.integration.test.ts"
   ],
   "exclude": ["dist", "node_modules", ".stryker-tmp"]
 }

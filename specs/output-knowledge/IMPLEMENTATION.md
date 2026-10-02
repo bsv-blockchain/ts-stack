@@ -2527,3 +2527,69 @@ Canonical follow-up validation passes 618 tests across 24 suites, the complete
 suite completed in 21.3 seconds locally with the original test deadlines. This
 local result does not establish hosted Linux completion. Mutation qualification
 will use the corrected replay model and preserve all prior targets and gates.
+
+## Durable buyer composition, 2026-10-02
+
+The optional `private/buyer` entry now retains original capability/request/suffix,
+reserves five complete protected immutable objects before financial effects, and
+uses separate encrypted workflow control. `open` verifies existing originals;
+`recover` reconciles only original wallet and unpaid seller status. Explicit
+`advance` authorizes the original payment and rechecks its deadline/current access.
+First delivery is retained before independent evidence/material validation;
+received, validated and usable stages remain distinct. Current usability and
+control revision are rechecked before material is returned to an application.
+
+`WalletToolboxBuyerPayment` composes the existing durable local noSend action
+controller through an additive read-only configuration descriptor. The installed
+wallet/storage/network/originator and derivation wallet must match independently
+selected bindings. One stable action ID retains exact signed BRC-105 payment
+bytes; recovery never prepares or signs, and neither adapter broadcasts. A lost
+prepared/finalized reply remains the same action. Current authority is checked at
+new preparation/signing boundaries, while existing finals remain recoverable
+following expiry. The actual wallet controller's existing behaviors remain intact.
+
+Native checks passed 21 controller tests and 11 buyer/payment tests, including
+cancellation holding physical capacity, shutdown drain, changed capability refusal,
+revoked validation access, retained prepared allocation and exact-final recovery.
+The governed buyer model passed 300 histories with seed 3242026 plus three encrypted
+CAS lost-ack boundaries (four property tests, 78.728 seconds). Its earlier generated
+counterexample exposed an overly narrow test expectation after an already usable
+result was advanced again; the corrected model and deterministic regression
+require usability to remain preserved. The production stage behavior was unchanged.
+
+The complete `PrivateBuyerHTTP.integration.test.ts` uses native buyer and seller
+wallets, actual authenticated HTTP and encrypted custody, loses the first delivery
+reply after one credit, reopens, recovers unpaid after expiry and independently
+checks the listing/payment through Script/SPV before usability. This is synthetic
+loopback evidence, not TLS, broadcast, mining, LCH playback or covenant acquisition.
+The generic domain policy fixture is explicitly synthetic. Concrete BRC-198
+material and covenant/POTATOES flows remain subsequent integration work.
+
+The optional browser entry excludes Node/native storage and seller coordination.
+Exact-tarball graphs measure Vite 532712/139158/116367 and esbuild
+412901/127650/109218 raw/gzip/Brotli bytes, with independent rounded limits retaining
+at least 10% headroom. All previous budgets are preserved. Packed conditional
+exports and 50 compiled examples pass. The additive critical whole-source target
+`private-lookup-buyer` and its property registration increase this branch's inventory
+from 120 to 121; complete aggregate 90%/zero uncovered/invalid qualification remains
+required. The peer #757 acknowledged the exact shared registry and wallet descriptor
+ownership. Preserve the final union when reconciling its independent wallet targets.
+
+Four guides now carry required site metadata. Overlay Express scripts now launch
+Jest with its required ESM runtime flag, addressing hosted suite compilation failures;
+complete host coverage is being verified. Hosted head 0431bdb62 still has unresolved
+Sonar findings and failed package coverage. Main advanced through dependency PR #734,
+which must be reconciled without weakening any existing gates or first-party contracts.
+This increment is not checkpoint-two completion; the acceptance inventory remains
+its explicit end-to-end authority.
+
+Full host coverage exposed legacy hoisted CommonJS mocks alongside private ESM
+fixtures. A shared project factory now partitions the unchanged complete selected
+suite union into ordinary CommonJS execution and private ESM execution. Both use
+the original TypeScript import-resolution settings; their extension/runtime modes
+preserve the respective mock semantics. Ordinary scripts and all host mutation
+registrations use those same projects. Discovery lists 45 distinct suites, each
+exactly once. A no-cache smoke run passed 163 tests across legacy Overlay Express,
+lookup properties and the complete native private buyer HTTP flow. The expanded
+root inventory checks passed 83 tests. Full host coverage remains in progress;
+the earlier failed runs remain diagnostic evidence and are not qualification.

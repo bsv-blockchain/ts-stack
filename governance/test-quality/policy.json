@@ -1479,6 +1479,18 @@
           "All completion slots are reserved before financial effects; conflicts and lost acknowledgements never replace the first object.",
           "Concurrent browser writers commit one authenticated inventory and complete chunk set atomically."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-lookup-buyer.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable original private acquisition, one payment and immutable protected result custody under interruption, expiry, conflict and reopen",
+        "target": "At least 300 original quote/payment/custody/validation/recovery histories",
+        "invariants": [
+          "Recovery never prepares, signs, dispatches payment or replaces the original request, seller or custody.",
+          "The first delivered result is immutable and received, independently validated and currently usable remain separate.",
+          "Current authority is required for new work and retained final bytes remain recoverable after expiry."
+        ]
       }
     ],
     "exclusions": [

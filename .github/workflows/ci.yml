@@ -698,6 +698,11 @@ jobs:
         with:
           pattern: mutation-overlay-proposal-http-*
           path: .mutation-parts/overlay-proposal-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-lookup-buyer')
+        with:
+          pattern: mutation-private-lookup-buyer-*
+          path: .mutation-parts/private-lookup-buyer
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
