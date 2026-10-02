@@ -2625,3 +2625,45 @@ coverage gates or mutation gates were removed. Wallet-toolbox and Overlay
 Express builds and 58 dependency/container/mutation/release contract tests
 also pass. This reconciled step does not complete checkpoint two's domain,
 covenant, root and workbench integration or exact-head hosted qualification.
+
+### October 2 buyer domain preflight and BRC-198 codec foundation
+
+Buyer policies now provide mandatory original-domain/challenge preflight before
+new quotes, wallet planning/preparation and paid dispatch. Arguments are owned
+copies; current installation, access and deadline checks repeat after each await.
+Recovery of original already-funded obligations does not depend on new Offer
+eligibility. Sixteen buyer/native tests, actual buyer/seller HTTP recovery, and
+300 generated interruption histories with lost-CAS acknowledgements pass.
+
+The optional LCH overlay-acquisition entry adds exact CBOR/JCS codecs and
+BRC-197 collector state checks. It preserves ordinary BRC-170 imports and
+CORE_CAPABILITIES. Context remains explicitly unverified: representation and
+budget checks alone do not authenticate a License or authorize playback. Full
+domain preflight, typed role/authority verification, independent settlement and
+content/key validation, issuer composition and end-to-end playback remain next
+steps, together with the other unchecked checkpoint-two workflow rows.
+
+The subsequent optional fixed-render/direct-collector paid domain authenticates
+complete original consent and finite role authorities, concrete ODRL compensation,
+independent buyer-side BRC-29 Script/SPV funding, selected listing/release evidence,
+exact License rights and recipient-bound BRC-78 grants. Two protected native SQLite
+slots retain original terms and the positive verification receipt. Actual licensed
+playback survives close/reopen and Offer expiry; equivalent License reissues retain
+the same rights, Agreement and settlement basis while using new signatures and key
+encryption randomness. Later playback reauthenticates the representation without
+repeating online proof calls. Fingerprints alone never authenticate a License.
+The new public entry uses a minor LCH candidate and a whole-source mutation target;
+ordinary imports and CORE_CAPABILITIES remain unchanged. Complete seller issuance,
+HTTP/workbench and covenant demonstrations and final campaigns remain open.
+
+The complete LCH package passes 24 suites/188 tests and its unchanged coverage
+gate (96.74% lines, 89.23% branches). Strict types, lint, clean packed ESM/CLI
+consumers and both exact-tarball browser entries pass. The optional acquisition
+graph measures Vite 274296/81388/69343 and esbuild 230529/77657/68092
+raw/gzip/Brotli bytes, one chunk and only LCH/SDK, with separately rounded 12%
+headroom. The ordinary entry's limits remain unchanged. Buyer/funding regression
+qualification passes 28 tests across four suites, including 300 generated
+interruption histories. The actual authenticated HTTP test now independently
+derives and verifies the funding output with the buyer wallet, without seller
+private-key access. These local checks do not complete full mutation or exact-head
+hosted qualification.

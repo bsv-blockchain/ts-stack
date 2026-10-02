@@ -1491,6 +1491,18 @@
           "The first delivered result is immutable and received, independently validated and currently usable remain separate.",
           "Current authority is required for new work and retained final bytes remain recoverable after expiry."
         ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-codec.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Optional BRC-198 original consent, role authority, exact settlement, recipient-bound key delivery and protected retained entitlement before playback",
+        "target": "At least 300 deterministic typed-evidence and signed-envelope representation histories",
+        "invariants": [
+          "Complete CBOR and embedded JCS bytes remain unchanged across encoding and decoding.",
+          "Duplicate typed body IDs, unsupported fields and wrong-mode evidence fail closed.",
+          "Aggregate signature and finite typed-evidence budgets apply before authentication work."
+        ]
       }
     ],
     "exclusions": [

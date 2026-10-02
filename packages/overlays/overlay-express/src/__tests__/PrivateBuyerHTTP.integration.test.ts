@@ -76,7 +76,7 @@ it('recovers a lost authenticated delivery with one actual buyer action and one 
     }),
     funding = new SDKPrivateAcquisitionFunding(
       resolver,
-      new ProtoWallet(new PrivateKey(83)),
+      new ProtoWallet(new PrivateKey(84)),
       snapshot
     ),
     listing = new SDKEvidenceVerifier(resolver)
@@ -88,8 +88,12 @@ it('recovers a lost authenticated delivery with one actual buyer action and one 
     fetch: wire,
     validation: {
       id: 'urn:test:independent-buyer-script-and-material',
+      async preflight(request, challenge) {
+        expect(request).toEqual(host.request)
+        if (challenge !== null) expect(challenge.satoshis).toBe('100')
+      },
       async verify(request, challenge, payment, delivered, active) {
-        const paid = await funding.verify(payment, challenge, request.listing.chain, active)
+        const paid = await funding.verifyForBuyer(payment, challenge, request.listing.chain, active)
         expect(delivered.funding).toEqual(paid.operation.funding)
         const evidence = delivered.result!.evidence,
           verified = await listing.verify(

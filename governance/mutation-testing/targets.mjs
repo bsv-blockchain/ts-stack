@@ -2605,6 +2605,34 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true }
       )
     },
+    'lch-overlay-acquisition': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest: 'packages/content/lch/test/overlay-acquisition-codec.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/overlay-acquisition*.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      mutate: [
+        'src/overlayAcquisition.ts',
+        'src/overlayAcquisitionCodec.ts',
+        'src/overlayAcquisitionPolicy.ts',
+        'src/overlayAcquisitionTerms.ts',
+        'src/overlayAcquisitionAuthority.ts',
+        'src/overlayAcquisitionSettlement.ts',
+        'src/overlayAcquisitionCustody.ts',
+        'src/overlayAcquisitionEntitlement.ts',
+        'src/overlayAcquisitionPaid.ts'
+      ],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
+        esm: true,
+        buildCommand: 'pnpm --filter @bsv/output-knowledge build && pnpm build'
+      })
+    },
     'lch-cbor': {
       packageDirectory: 'packages/content/lch',
       manifest: 'packages/content/lch/package.json',

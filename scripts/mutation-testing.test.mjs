@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 121)
+  assert.equal(Object.keys(configured).length, 122)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -875,6 +875,35 @@ test('durable buyer qualifies every complete owner and retains native one-action
     selectAffectedMutationTargets(configured, [
       'packages/wallet/wallet-toolbox/src/signer/actionRecovery/RecoverableActionController.ts'
     ]).includes('private-lookup-buyer')
+  )
+})
+
+test('optional LCH acquisition qualifies every whole module and its complete cryptographic test union', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    target = configured['lch-overlay-acquisition']
+  assert.deepEqual(target.mutate, [
+    'src/overlayAcquisition.ts',
+    'src/overlayAcquisitionCodec.ts',
+    'src/overlayAcquisitionPolicy.ts',
+    'src/overlayAcquisitionTerms.ts',
+    'src/overlayAcquisitionAuthority.ts',
+    'src/overlayAcquisitionSettlement.ts',
+    'src/overlayAcquisitionCustody.ts',
+    'src/overlayAcquisitionEntitlement.ts',
+    'src/overlayAcquisitionPaid.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/overlay-acquisition*.test.ts'
+  ])
+  assert.equal(
+    target.propertyTest,
+    'packages/content/lch/test/overlay-acquisition-codec.property.test.ts'
+  )
+  assert.ok(target.additionalInputs.includes('../../application/output-knowledge/src/**'))
+  assert.ok(
+    selectAffectedMutationTargets(configured, [
+      'packages/content/lch/src/overlayAcquisitionPaid.ts'
+    ]).includes('lch-overlay-acquisition')
   )
 })
 

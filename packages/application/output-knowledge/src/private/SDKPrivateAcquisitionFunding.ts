@@ -71,6 +71,28 @@ export class SDKPrivateAcquisitionFunding {
     chainInput: OutputChain,
     signal: AbortSignal = new AbortController().signal
   ): Promise<VerifiedPrivateAcquisitionFunding> {
+    return this.verifyWallet(paymentInput, challengeInput, chainInput, signal, 'seller')
+  }
+
+  /** Independently derive the seller's BRC-29 output with the buyer wallet.
+   * No seller private key, receiving action, signature or broadcast is needed.
+   */
+  async verifyForBuyer(
+    paymentInput: unknown,
+    challengeInput: unknown,
+    chainInput: OutputChain,
+    signal: AbortSignal = new AbortController().signal
+  ): Promise<VerifiedPrivateAcquisitionFunding> {
+    return this.verifyWallet(paymentInput, challengeInput, chainInput, signal, 'buyer')
+  }
+
+  private async verifyWallet(
+    paymentInput: unknown,
+    challengeInput: unknown,
+    chainInput: OutputChain,
+    signal: AbortSignal,
+    role: 'buyer' | 'seller'
+  ): Promise<VerifiedPrivateAcquisitionFunding> {
     const payment = parseOutputPaidLookupPayment(paymentInput),
       challenge = parseOutputPaidLookupChallenge(challengeInput),
       chain = parseOutputChain(chainInput)
@@ -82,7 +104,7 @@ export class SDKPrivateAcquisitionFunding {
     )
     const identity = await this.publicKey({ identityKey: true }, signal)
     outputAssert(
-      identity === challenge.seller,
+      identity === challenge[role],
       'Acquisition funding wallet identity differs',
       'context-changed'
     )
@@ -90,8 +112,8 @@ export class SDKPrivateAcquisitionFunding {
       {
         protocolID: [2, '3241645161d8'],
         keyID: `${payment.derivationPrefix} ${payment.derivationSuffix}`,
-        counterparty: challenge.buyer,
-        forSelf: true
+        counterparty: role === 'seller' ? challenge.buyer : challenge.seller,
+        forSelf: role === 'seller'
       },
       signal
     )

@@ -31,6 +31,15 @@ export type PrivateLookupBuyerPaymentOutcome =
 /** Installed application policy, independent of a seller's authenticated report. */
 export interface PrivateLookupBuyerValidation {
   readonly id: string
+  /** Check original domain terms and selected material before any new quote or payment.
+   * Null challenge checks discovery; a retained challenge must also match those terms.
+   * This must not allocate, sign, broadcast, or release delivered plaintext.
+   */
+  preflight(
+    request: OutputPaidLookupAcquire,
+    challenge: OutputPaidLookupChallenge | null,
+    signal: AbortSignal
+  ): Promise<void>
   verify(
     request: OutputPaidLookupAcquire,
     challenge: OutputPaidLookupChallenge,

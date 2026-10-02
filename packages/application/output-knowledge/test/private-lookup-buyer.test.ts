@@ -157,3 +157,87 @@ it('rejects installation replacement and access withdrawal during independent va
   expect(f.counts.finish).toBe(1)
   wire.send.mockRestore()
 })
+
+it('refuses invalid original domain terms before a quote or wallet effect', async () => {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f),
+    owner = await f.open(true)
+  f.setValid(false)
+  await expect(owner.buyer.advance()).rejects.toThrow('domain terms are invalid')
+  expect(await owner.buyer.status()).toBe('ready')
+  expect(wire.calls).toEqual([])
+  expect(f.counts).toMatchObject({ plan: 0, finish: 0, preflight: 1 })
+  expect(await owner.buyer.recover()).toBeUndefined()
+  expect(f.counts.preflight).toBe(1)
+})
+it('checks the retained challenge before wallet construction and preserves original inputs', async () => {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f),
+    original = structuredClone(f.partial.original)
+  jest.spyOn(f.partial.validation, 'preflight').mockImplementation(async (request, challenge) => {
+    request.requestId = 'changed-only-in-validation-copy'
+    if (challenge !== null) {
+      challenge.satoshis = '999'
+      throw new Error('Domain quote differs')
+    }
+  })
+  const owner = await f.open(true)
+  await expect(owner.buyer.advance()).rejects.toThrow('Domain quote differs')
+  expect(wire.calls).toEqual(['quote'])
+  expect(await owner.buyer.status()).toBe('quoted')
+  expect(f.partial.original).toEqual(original)
+  expect(f.counts).toMatchObject({ plan: 0, finish: 0 })
+  expect((await owner.buyer.recover())?.status).toBe('quoted')
+})
+it('rechecks current access after asynchronous domain validation before effects', async () => {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f)
+  jest.spyOn(f.partial.validation, 'preflight').mockImplementation(async () => {
+    await Promise.resolve()
+    f.setAccess(false)
+  })
+  const owner = await f.open(true)
+  await expect(owner.buyer.advance()).rejects.toMatchObject({ code: 'unauthorized' })
+  expect(wire.calls).toEqual([])
+  expect(f.counts).toMatchObject({ plan: 0, finish: 0 })
+})
+it('recovers already funded delivery after offer expiry without rerunning new-work preflight', async () => {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f),
+    owner = await f.open(true)
+  wire.lose('pay')
+  await expect(owner.buyer.advance()).rejects.toThrow('Lost original')
+  const checked = f.counts.preflight
+  f.setValid(false)
+  f.setNow('200')
+  const reopened = await f.open()
+  expect((await reopened.buyer.recover())?.status).toBe('delivered')
+  expect(f.counts.preflight).toBe(checked)
+  expect(f.counts.finish).toBe(1)
+  await expect(reopened.buyer.validate()).rejects.toThrow('material is invalid')
+  expect(await reopened.buyer.status()).toBe('received')
+})
+
+it('retains the latest checked wallet time across restart and refuses backwards-clock paid dispatch', async () => {
+  const f = await buyerFixture(),
+    wire = buyerRemote(f),
+    finish = f.partial.payment.finish
+  jest.spyOn(f.partial.payment, 'finish').mockImplementation(async (...args) => {
+    f.setNow('80')
+    const payment = await finish(...args)
+    f.setNow('70')
+    return payment
+  })
+  const owner = await f.open(true)
+  await expect(owner.buyer.advance()).rejects.toMatchObject({ code: 'context-changed' })
+  expect(await owner.buyer.status()).toBe('paid')
+  expect(wire.calls).toEqual(['quote'])
+  const reopened = await f.open()
+  await expect(reopened.buyer.advance()).rejects.toMatchObject({ code: 'context-changed' })
+  expect(f.counts.finish).toBe(1)
+  expect(wire.calls.filter(operation => operation === 'pay')).toEqual([])
+  f.setNow('81')
+  expect((await reopened.buyer.advance())?.status).toBe('delivered')
+  expect(f.counts.finish).toBe(1)
+  expect(wire.calls.filter(operation => operation === 'pay')).toHaveLength(1)
+})

@@ -1226,6 +1226,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-acquisition",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-codec.property.test.ts",
+      "risk": "critical",
+      "boundary": "Optional BRC-198 original consent, role authority, exact settlement, recipient-bound key delivery and protected retained entitlement before playback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

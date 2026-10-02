@@ -213,3 +213,54 @@ See [BRC-170](https://bsv.brc.dev/apps/0170) for the normative protocol. If this
 
 This package is licensed under the [Open BSV License Version 6](./LICENSE.txt).
 The npm artifact also carries a scoped [third-party notice](./THIRD_PARTY_NOTICES.md). The package incorporates no third-party source; its SDK and optional CHIRP peers retain their own license payloads.
+
+## Optional private-overlay representations
+
+The separate `@bsv/lch/overlay-acquisition` entry implements the BRC-198 wire
+representations for paid-lookup and listing-covenant acquisition. It requires
+the coordinated SDK3 output-protocol and revenue-listing companions. Ordinary
+imports and `CORE_CAPABILITIES` retain their BRC-170 behavior and SDK2 support.
+
+`decodeLCHOverlayBinding` checks the exact seller key, chain, canonical HTTPS
+base and mode-specific anchor/policy fields. `decodeLCHCollectorRevenue` checks
+the initial collector schedule with the same state validator as the executable
+BRC-197 family, including sorted unique recipients, integer weights and the
+unanimous-consent, retained-remainder and external retirement top-up rules.
+These representation checks do not establish seller/genesis authority.
+
+`decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR
+objects and exact UTF-8 JCS settlement/evidence bytes. It checks the 2 MiB
+context ceiling, 128 typed objects, 256 aggregate signatures, explicit allowed
+evidence domains, canonical ordering and duplicate body IDs. It rejects
+unknown fields and the other mode's evidence rather than normalizing them.
+`encodeLCHOverlayContext` accepts only a representation that the decoder also
+accepts. Neither method verifies signatures or grants permission to decrypt.
+An acquisition adapter must independently verify all repeated commitments,
+roles, rights, payment/release evidence, selected ciphertext and key grants
+before playback.
+
+`LCHOverlayPaidDomain` supplies a concrete fixed-render, whole-Asset,
+direct-collector buyer domain. It authenticates original Offer/Request consent,
+selected capability mechanisms and finite role authorities before funding. It
+derives the exact ODRL Agreement by removing only the paid compensation duty,
+verifies the retained settlement against locally installed Script/SPV and
+release-policy sources, and checks License rights and recipient-bound BRC-78
+keys before AES-GCM playback. Unknown policy terms and other profiles fail
+before money is allocated.
+
+Initialize protected original and verification reservations before installing
+the domain in a durable buyer. Read-only reopen retains the original terms
+after Offer expiry. Once a complete entitlement has been independently verified
+and retained, playback uses that receipt without repeating online funding,
+listing or release checks. Equivalent reissuance may change signature and
+encryption randomness or issuance time, but cannot change the rights, Agreement,
+parties, key commitments or settlement basis. Every representation still needs
+its own valid signature and decryptable, correctly bound grants; a fingerprint
+alone never authenticates it. Ciphertext must remain available in an installed
+bounded source, such as a local cache.
+
+See the [overlay acquisition guide](../../../docs/guides/lch-overlay-acquisition.md)
+for the installed proof/custody boundaries and executable tests. Full seller
+HTTP composition, covenant purchase and complete reference demonstrations
+remain checkpoint-two work. Ordinary BRC-170 imports and `CORE_CAPABILITIES`
+do not advertise these optional profiles.

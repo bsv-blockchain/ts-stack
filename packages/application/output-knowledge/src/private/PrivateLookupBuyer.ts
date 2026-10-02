@@ -141,6 +141,7 @@ export class PrivateLookupBuyer {
   private readonly stopping = new AbortController()
   private readonly work: BoundedOutputWork
   private readonly physical = new Set<Promise<void>>()
+  private latestObservedAt = 0n
   private constructor(private readonly ports: PrivateLookupBuyerOptions) {
     this.trust = {
       ...ports.trust,
@@ -204,6 +205,7 @@ export class PrivateLookupBuyer {
       pin(ports.payment, 'plan'),
       pin(ports.payment, 'recover'),
       pin(ports.payment, 'finish'),
+      pin(ports.validation, 'preflight'),
       pin(ports.validation, 'verify'),
       pin(ports.validation, 'usable')
     ]
@@ -357,7 +359,17 @@ export class PrivateLookupBuyer {
   }
   private async save(snapshot: OperationStateSnapshot, progress: Progress): Promise<void> {
     this.installed()
-    const result = await this.ports.state.compareAndSwap(snapshot.revision, object(progress, 16384))
+    const previous =
+        canonicalOutputJSON(snapshot.value) === canonicalOutputJSON(PRIVATE_LOOKUP_BUYER_INITIAL)
+          ? 0n
+          : outputU64(snapshot.value.observedAt),
+      supplied = outputU64(progress.observedAt),
+      retained = previous > supplied ? previous : supplied,
+      observedAt = this.latestObservedAt > retained ? this.latestObservedAt : retained
+    const result = await this.ports.state.compareAndSwap(
+      snapshot.revision,
+      object({ ...progress, observedAt: observedAt.toString() }, 16384)
+    )
     this.installed()
     outputAssert(result.status !== 'conflict', 'Buyer advanced in another owner', 'conflict')
   }
@@ -385,10 +397,11 @@ export class PrivateLookupBuyer {
     this.access(signal)
     const now = outputU64(this.ports.clock())
     outputAssert(
-      now >= outputU64(progress.observedAt),
+      now >= outputU64(progress.observedAt) && now >= this.latestObservedAt,
       'Buyer clock moved backwards',
       'context-changed'
     )
+    this.latestObservedAt = now
     if (progress.challenge)
       outputAssert(
         now < outputU64(progress.challenge.payableUntil),
@@ -401,6 +414,15 @@ export class PrivateLookupBuyer {
         ...this.contract.freshness,
         now: now.toString()
       })
+  }
+  private async preflight(progress: Progress, signal: AbortSignal): Promise<void> {
+    this.newWork(progress, signal)
+    await this.ports.validation.preflight(
+      structuredClone(this.request),
+      structuredClone(progress.challenge),
+      signal
+    )
+    this.newWork(progress, signal)
   }
   private transport(
     operation: 'quote' | 'pay' | 'recover',
@@ -442,11 +464,9 @@ export class PrivateLookupBuyer {
       if (!['received', 'validated', 'usable'].includes(progress.phase)) progress.phase = 'received'
     } else if (progress.phase === 'ready') progress.phase = 'quoted'
     progress.challenge = challenge
-    progress.observedAt = (
-      outputU64(this.ports.clock()) > outputU64(progress.observedAt)
-        ? outputU64(this.ports.clock())
-        : outputU64(progress.observedAt)
-    ).toString()
+    const now = outputU64(this.ports.clock()),
+      previous = outputU64(progress.observedAt)
+    progress.observedAt = (now > previous ? now : previous).toString()
     await this.save(snapshot, progress)
   }
   private async reconcile(signal: AbortSignal): Promise<OutputPaidLookupAcquired | undefined> {
@@ -514,10 +534,10 @@ export class PrivateLookupBuyer {
       }
       let { snapshot, progress } = await this.load()
       if (!progress.challenge) {
-        this.newWork(progress, active)
+        await this.preflight(progress, active)
         progress.quoteAttempted = true
         await this.save(snapshot, progress)
-        this.newWork(progress, active)
+        await this.preflight(progress, active)
         const quote = await this.transport('quote', null).send(active)
         outputAssert('kind' in quote, 'Buyer quote returned wrong operation')
         if (quote.kind === 'status') {
@@ -534,7 +554,7 @@ export class PrivateLookupBuyer {
       }
       let plan = await this.get('plan')
       if (plan === undefined) {
-        this.newWork(progress, active)
+        await this.preflight(progress, active)
         plan = object(
           await this.ports.payment.plan(
             buyerDigest('buyer-action', this.binding),
@@ -548,7 +568,7 @@ export class PrivateLookupBuyer {
       }
       let payment = await this.get('payment')
       if (payment === undefined) {
-        this.newWork(progress, active)
+        await this.preflight(progress, active)
         await this.save(snapshot, { ...progress, phase: 'funding' })
         const finalized = await this.ports.payment.finish(
           plan,
@@ -561,9 +581,9 @@ export class PrivateLookupBuyer {
         await this.save(latest.snapshot, { ...latest.progress, phase: 'paid' })
       }
       const latest = await this.load()
-      this.newWork(latest.progress, active)
+      await this.preflight(latest.progress, active)
       await this.save(latest.snapshot, { ...latest.progress, payAttempted: true })
-      this.newWork(latest.progress, active)
+      await this.preflight(latest.progress, active)
       const response = await this.transport(
         'pay',
         latest.progress.challenge,

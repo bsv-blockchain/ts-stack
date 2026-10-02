@@ -424,3 +424,13 @@ expiry, validation and reopen histories. Four workers, reuse eight, 45-minute
 parts and complete aggregate 90%/zero uncovered/invalid remain required. Existing
 targets and ordinary PR mutation deferral are preserved; deferred CI is not
 complete-campaign evidence.
+
+`lch-overlay-acquisition` qualifies every complete optional acquisition module
+and the complete `overlay-acquisition*.test.ts` union, including actual signatures,
+funding verification, native encrypted custody and licensed playback. Ordinary LCH
+and SDK/application prerequisites remain registered inputs. Its separate 300-case
+seeded codec/property entry covers both modes and original-byte evidence histories.
+The new critical target retains a complete aggregate 90% minimum and zero uncovered
+or invalid mutants. Existing wallet targets, source/test unions, thresholds,
+deadlines and complete-campaign policy remain unchanged. Registration alone is not
+passing campaign evidence.

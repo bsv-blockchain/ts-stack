@@ -108,6 +108,22 @@ can dispatch the same retained payment. Concurrent network attempts can therefor
 repeat identical bytes; durable buyer action identity and the seller's funding
 fence establish one economic payment rather than an exactly-once HTTP guarantee.
 
+The installed validation policy must also provide `preflight(request, challenge,
+signal)`. A null challenge checks the original domain terms before a new quote;
+a retained challenge additionally checks its price, deadlines and release terms
+before wallet construction, preparation or paid dispatch. The buyer passes copies
+of its immutable originals and repeats current access and deadline checks after
+each asynchronous preflight. The owner remembers its latest checked new-work time and retains it monotonically
+in subsequent control commits, so a backwards clock cannot enable another paid
+dispatch after restart. This observation is not protection against restoring an
+older backup or a clock change during an unacknowledged external operation.
+This policy must validate any required agreement,
+licensing authority, supported critical mechanisms and selected ciphertext before
+payment; it cannot allocate, sign, broadcast or release plaintext. Ordinary
+recovery never reruns new-work preflight: withdrawal or expiry of an offer does
+not erase a payment already made. Independent delivered-result validation still
+applies to recovered material.
+
 The first delivered response is retained immutably before independent validation.
 The public stages are `ready`, `quoted`, `funding`, `paid`, `received`, `validated`
 and `usable`. `PrivateLookupBuyerValidation.verify` checks the original listing,

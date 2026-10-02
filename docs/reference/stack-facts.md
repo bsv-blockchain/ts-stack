@@ -38,7 +38,7 @@ authorized release action.
 | Area | Package | Source version | Project profile | Consumer profiles | Runtime targets | Node engine | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | application | `@bsv/output-knowledge` | `0.1.0` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/application/output-knowledge](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge) |
-| content | `@bsv/lch` | `0.2.1` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/content/lch](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch) |
+| content | `@bsv/lch` | `0.3.0` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/content/lch](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch) |
 | helpers | `@bsv/air-gap` | `0.1.3` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/helpers/air-gap](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/air-gap) |
 | helpers | `@bsv/amountinator` | `2.1.7` | node-library | node-cjs, node-esm | node | `>=22` | [packages/helpers/amountinator](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator) |
 | helpers | `@bsv/did` | `0.3.0` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/helpers/did](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did) |

@@ -135,3 +135,9 @@ Compose original capability and request custody, an explicitly authorized durabl
 wallet action, unpaid recovery, immutable delivered results and independent current
 material validation. Includes the complete native buyer/seller HTTP example and
 its qualification limits.
+
+### [LCH Overlay Acquisition](./lch-overlay-acquisition.md)
+
+Bind original signed consent, finite role authority, concrete compensation,
+independent funding and recipient-bound keys to a protected retained entitlement.
+Covers the optional paid domain, native recovery and authenticated offline playback.

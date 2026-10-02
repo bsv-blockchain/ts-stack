@@ -52,7 +52,7 @@ export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions>
     now = '20',
     usable = true,
     valid = true
-  const counts = { plan: 0, finish: 0, recover: 0, verify: 0, usable: 0 }
+  const counts = { preflight: 0, plan: 0, finish: 0, recover: 0, verify: 0, usable: 0 }
   const payment: PrivateLookupBuyerOptions['payment'] = {
     configuration: { protocol: 'synthetic-durable-payment', wallet: f.f.buyer, storage: 'fixture' },
     async plan(id, challenge, suffix) {
@@ -72,6 +72,10 @@ export async function buyerFixture(overrides: Partial<PrivateLookupBuyerOptions>
   }
   const validation: PrivateLookupBuyerOptions['validation'] = {
     id: 'urn:test:buyer-material',
+    async preflight() {
+      counts.preflight++
+      if (!valid) throw new Error('Synthetic domain terms are invalid')
+    },
     async verify() {
       counts.verify++
       if (!valid) throw new Error('Synthetic material is invalid')

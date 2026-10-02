@@ -40,6 +40,38 @@ async function fixture() {
   return { ...f, wallet, transaction, payment }
 }
 describe('native BRC-29 acquisition funding verification', () => {
+  it('independently verifies the seller output using only the buyer wallet', async () => {
+    const f = await fixture(),
+      buyer = new ProtoWallet(new PrivateKey(84)),
+      verifier = new SDKPrivateAcquisitionFunding(resolver, buyer, () => context())
+    const result = await verifier.verifyForBuyer(f.payment, f.challenge, chain)
+    expect(result.sellerPaymentKey).toBe(f.sellerPaymentKey)
+    expect(result.operation.funding).toEqual({
+      chain,
+      txid: f.transaction.id('hex'),
+      outputIndex: 0
+    })
+    await expect(
+      new SDKPrivateAcquisitionFunding(resolver, f.wallet, () => context()).verifyForBuyer(
+        f.payment,
+        f.challenge,
+        chain
+      )
+    ).rejects.toMatchObject({ code: 'context-changed' })
+    const changed = new Transaction(
+      f.transaction.version,
+      f.transaction.inputs,
+      [...f.transaction.outputs, { satoshis: 1, lockingScript: LockingScript.fromHex('51') }],
+      f.transaction.lockTime
+    )
+    await expect(
+      verifier.verifyForBuyer(
+        { ...f.payment, transaction: Utils.toBase64(changed.toAtomicBEEF()) },
+        f.challenge,
+        chain
+      )
+    ).rejects.toMatchObject({ code: 'invalid' })
+  })
   it('derives the seller output and verifies its signed transaction and ancestry', async () => {
     const f = await fixture(),
       selected = context()

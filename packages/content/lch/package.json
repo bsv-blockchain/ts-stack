@@ -1,6 +1,6 @@
 {
   "name": "@bsv/lch",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "BRC-170 Licensed Content Header reference implementation",
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -20,7 +20,12 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./overlay-acquisition": {
+      "types": "./dist/overlayAcquisition.d.ts",
+      "import": "./dist/overlayAcquisition.js",
+      "default": "./dist/overlayAcquisition.js"
+    }
   },
   "bin": {
     "lch": "./dist/cli.js"
@@ -37,11 +42,11 @@
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/content/lch/**/*.{json,md,ts}\"",
     "lint": "oxlint src test --deny-warnings",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
-    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/cbor.property.test.ts",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/cbor.property.test.ts test/overlay-acquisition-codec.property.test.ts",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
     "vectors:update": "pnpm build && node scripts/regenerate-brc170-vectors.mjs",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports LCHPublisher,LCHReader,LCHIssuer,LCHComposer,LCHMultipayBuyer,LCHHttpServer,WalletPaymentReceiver,encodeDeterministicCbor,parseLCH,encryptSegmented --bin lch --bin-args --help",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports LCHPublisher,LCHReader,LCHIssuer,LCHComposer,LCHMultipayBuyer,LCHHttpServer,WalletPaymentReceiver,encodeDeterministicCbor,parseLCH,encryptSegmented --bin lch --bin-args --help --entry-exports \"./overlay-acquisition=LCH_OVERLAY_PROFILES|LCH_OVERLAY_LIMITS|decodeLCHOverlayBinding|decodeLCHCollectorRevenue|decodeLCHOverlayJSON|decodeUnverifiedLCHOverlayContext|encodeLCHOverlayContext|decodeLCHOverlayReleasePolicy|LCHOverlayPaidDomain|LCHOverlayPaidCustody|lchOverlayCustodyBinding|lchOverlayPaidEntitlementDigest|validateLCHOverlayFixedRenderPolicy|createLCHOverlayFixedRenderAgreement|validateLCHOverlayFixedRenderAgreement|LCH_OVERLAY_PAID_MECHANISMS|validateLCHOverlayCapability|validateLCHOverlayPaidTerms|validateLCHOverlayPaidWindow|validateLCHOverlayPaidPromise|validateLCHOverlayAuthority|validateLCHOverlayPaidRoles|decodeLCHLookupSettlement|decodeLCHOverlayPaymentEvidence|bindLCHOverlayPaidSettlement\"",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
@@ -82,5 +87,12 @@
     "licensed-content",
     "odrl",
     "c2pa"
-  ]
+  ],
+  "typesVersions": {
+    "*": {
+      "overlay-acquisition": [
+        "dist/overlayAcquisition.d.ts"
+      ]
+    }
+  }
 }
