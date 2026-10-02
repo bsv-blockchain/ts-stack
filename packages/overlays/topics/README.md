@@ -144,7 +144,7 @@ otherwise. Every deploy and authority output must be owned by a trusted issuer
 and proven by one, and every authority coin a transaction spends must be owned
 by one: removing a key from the set takes away the authority coins it holds (to
 rotate a key, move its authority coins to the new key first). Trusted issuers
-and `membershipExempt` keys (validated the same way) skip access mode
+and `membershipExempt` keys (held to the same key spelling) skip access mode
 and registry membership. The set is configuration and never asset state.
 Sanctions are answered by a `ScreeningProvider` that must return exact
 booleans; registry membership is an optional `MembershipProvider`, enforced as
