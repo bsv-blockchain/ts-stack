@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals'
+import { beforeEach, describe, expect, it } from '@jest/globals'
 import { outputPacketDigest, Utils, type OutputSignedProposal } from '@bsv/sdk'
 import {
   ProposalTransitions,
@@ -6,11 +6,14 @@ import {
   type ProposalAdmissionOutcome,
   type ProposalChannelRecord
 } from '../src/proposals/index.js'
-import { author, recipient, scope, registry, signed, finalize } from './proposal-fixture.js'
+import { author, recipient, scope, createRegistry, signed, finalize } from './proposal-fixture.js'
 
-const lifecycle = new ProposalTransitions(registry, scope, {
-  maxLifetimeSeconds: '100',
-  futureSkewSeconds: '2'
+let lifecycle: ProposalTransitions
+beforeEach(() => {
+  lifecycle = new ProposalTransitions(createRegistry(), scope, {
+    maxLifetimeSeconds: '100',
+    futureSkewSeconds: '2'
+  })
 })
 function active(proposal = signed()): ProposalChannelRecord {
   return lifecycle.put(undefined, proposal, author, '10').next
@@ -304,7 +307,7 @@ describe('proposal lifecycle transition plans', () => {
     )
     expect(
       () =>
-        new ProposalTransitions(registry, scope, {
+        new ProposalTransitions(createRegistry(), scope, {
           maxLifetimeSeconds: '0',
           futureSkewSeconds: '0'
         })

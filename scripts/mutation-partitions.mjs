@@ -48,10 +48,20 @@ const plans = new Map([
       files: new Map([
         ['src/proposals/SQLiteProposalFeedWriter.ts', 'writer'],
         ['src/proposals/SQLiteProposalFeedInventory.ts', 'inventory'],
-        ['src/proposals/ProposalChannelFeedCapacity.ts', 'contract'],
-        ['src/proposals/ProposalChannelFeedRecords.ts', 'contract'],
-        ['src/proposals/ProposalFeedPrivacy.ts', 'contract'],
-        ['src/proposals/AuthorDocumentPolicy.ts', 'contract']
+        ['src/proposals/ProposalChannelFeedCapacity.ts', 'capacity'],
+        ['src/proposals/ProposalChannelFeedRecords.ts', 'records'],
+        ['src/proposals/ProposalFeedPrivacy.ts', 'privacy'],
+        ['src/proposals/AuthorDocumentPolicy.ts', 'policy']
+      ])
+    }
+  ],
+  [
+    'protected-ledger',
+    {
+      fallback: 'store',
+      files: new Map([
+        ['src/private/ProtectedLedgerCodec.ts', 'codec'],
+        ['src/private/NodeProtectedPayloadCodec.ts', 'codec']
       ])
     }
   ],

@@ -7,7 +7,15 @@ import {
 import { ProposalVerificationPool } from '../src/proposals/ProposalVerificationPool.js'
 import { ProposalSourcePolicy } from '../src/proposals/ProposalSourcePolicy.js'
 import type { ReceivedSourceGroup } from '../src/SourceMembership.js'
-import { author, recipient, registry, reference, signed, chain, scope } from './proposal-fixture.js'
+import {
+  author,
+  recipient,
+  createRegistry,
+  reference,
+  signed,
+  chain,
+  scope
+} from './proposal-fixture.js'
 const source = {
   chain,
   provider: author,
@@ -19,7 +27,7 @@ const source = {
 }
 function setup() {
   const { epoch: _epoch, ...selection } = source
-  const policy = new ProposalSourcePolicy(registry, recipient, [
+  const policy = new ProposalSourcePolicy(createRegistry(), recipient, [
     {
       source: selection,
       proposalService: scope.service,

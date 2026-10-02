@@ -1015,6 +1015,26 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'protected-ledger': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/protected-ledger.property.test.ts',
+      additionalInputs: ['src/private/**', 'src/storage/**', 'test/protected-ledger-fixture.ts'],
+      mutate: [
+        'src/private/SQLiteProtectedLedger.ts',
+        'src/private/ProtectedLedgerCodec.ts',
+        'src/private/NodeProtectedPayloadCodec.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-ledger.test.ts',
+          '<rootDir>/test/protected-ledger.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
     'proposal-channel-storage': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',

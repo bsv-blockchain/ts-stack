@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 107)
+  assert.equal(Object.keys(configured).length, 108)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -440,4 +440,20 @@ test('compound mutation execution recycles workers without changing canonical wo
   assert.equal(targets['proposal-channel-storage'].runnerOptions.maxTestRunnerReuse, 8)
   assert.equal(targets['proposal-client-verification'].runnerOptions.maxTestRunnerReuse, undefined)
   assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
+})
+
+test('protected ledger retains complete storage and custody source with native canonical qualification', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['protected-ledger']
+  assert.deepEqual(target.mutate, [
+    'src/private/SQLiteProtectedLedger.ts',
+    'src/private/ProtectedLedgerCodec.ts',
+    'src/private/NodeProtectedPayloadCodec.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/protected-payload.test.ts',
+    '<rootDir>/test/protected-ledger.test.ts',
+    '<rootDir>/test/protected-ledger.property.test.ts'
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  assert.ok(target.additionalInputs.includes('src/storage/**'))
 })

@@ -7,9 +7,10 @@ import {
   type OutputCapabilityRequest
 } from '@bsv/sdk'
 import { ProposalTransitions } from '../src/proposals/index.js'
-import { author, authorKey, scope, registry } from './proposal-fixture.js'
+import { author, authorKey, scope, createRegistry } from './proposal-fixture.js'
 
 export function proposalCapabilityFixture() {
+  const registry = createRegistry()
   const lifecycle = new ProposalTransitions(registry, scope, {
     maxLifetimeSeconds: '100',
     futureSkewSeconds: '2'

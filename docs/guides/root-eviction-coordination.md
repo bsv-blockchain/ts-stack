@@ -789,3 +789,13 @@ The companion provides durable storage and complete-coverage fencing. The instal
 rule evaluator, verified advertisement/currentness inputs, host lifecycle and every
 serving/admission/cache/live/GASP adapter still require explicit composition. It
 must not be used alone to advertise a complete BRC-199 root service.
+
+### Repeated request authentication
+
+Each native root-request journal retains at most 256 positive authentication
+results, keyed by SHA-256 of the exact canonical signed packet and its selected
+root, chain and requester. It retains no request bodies in this FIFO and discards
+the cache on restart. A different signature or selection requires verification;
+failed signatures are never cached. Packet parsing, persisted row bindings,
+clock windows, immutable request-ID fences, current authority and serving guards
+remain live checks. This changes no wire packet, stored record or permission.

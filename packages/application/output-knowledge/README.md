@@ -1178,3 +1178,13 @@ See the [private channel storage guide](../../../docs/guides/non-final-proposals
 for contracts, migration boundaries, wire/capacity choices and remaining
 qualification. No automatic migration, compaction, new finalization or public
 GASP disclosure is enabled by this factory.
+
+## Protected private-service storage foundation
+
+The internal Node storage implementation provides encrypted private records,
+authenticated inventory, atomic record/capacity/completion reservations and
+current authorization at synchronous response enqueue. It has no remote mutation
+endpoint and does not itself implement private publication, paid acquisition or
+POTATOES delivery. See the [storage and custody guide](../../../docs/guides/protected-private-service-storage.md)
+for limits, process-loss behavior and the required recovery boundary. Existing
+public entry points and wire formats are unchanged.

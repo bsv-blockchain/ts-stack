@@ -208,12 +208,10 @@ for (const [targetId, fallback, expected] of [
       ],
       writer: ['src/proposals/SQLiteProposalFeedWriter.ts'],
       inventory: ['src/proposals/SQLiteProposalFeedInventory.ts'],
-      contract: [
-        'src/proposals/ProposalChannelFeedCapacity.ts',
-        'src/proposals/ProposalChannelFeedRecords.ts',
-        'src/proposals/ProposalFeedPrivacy.ts',
-        'src/proposals/AuthorDocumentPolicy.ts'
-      ]
+      capacity: ['src/proposals/ProposalChannelFeedCapacity.ts'],
+      records: ['src/proposals/ProposalChannelFeedRecords.ts'],
+      privacy: ['src/proposals/ProposalFeedPrivacy.ts'],
+      policy: ['src/proposals/AuthorDocumentPolicy.ts']
     }
   ],
   [
@@ -261,3 +259,24 @@ for (const [targetId, fallback, expected] of [
     assert.equal(selectedMutationPartition(targetId, canonical), canonical)
     assert.throws(() => selectedMutationPartition(targetId, canonical, 'absent'))
   })
+
+test('protected ledger parts preserve every complete file and all canonical configuration', () => {
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)['protected-ledger']
+  const parts = partitionMutationTarget('protected-ledger', canonical)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['store', 'codec']
+  )
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+  for (const part of parts) {
+    const { mutate: _partial, ...actual } = part.target
+    const { mutate: _whole, ...original } = canonical
+    assert.deepEqual(actual, original)
+  }
+  const future = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
+  assert.ok(
+    partitionMutationTarget('protected-ledger', future)
+      .find(part => part.id === 'store')
+      .target.mutate.includes('src/private/FutureCompanion.ts')
+  )
+})

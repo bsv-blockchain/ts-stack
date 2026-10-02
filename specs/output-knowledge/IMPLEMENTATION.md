@@ -1885,3 +1885,55 @@ Hosted 4ec3 subsequently reported six root-eviction failures at the five-minute
 initial-test deadline: service, maintenance, coordination, commit, requests and
 serving. None produced a mutation score. Their logs are retained and their
 canonical native-test costs require remediation before complete CI acceptance.
+
+### Protected-storage and root-verification follow-up
+
+The complete compound contract campaign at 826bc359d finished in 43 minutes
+7 seconds, covering all 431 mutants: 390 killed, 32 survived and nine runtime
+errors, with no uncovered mutants. The valid-mutant score was 92.42%, but the
+zero-invalid gate failed. All 9,964 captured inputs and HEAD were unchanged.
+The nine errors came from importing a shared registry fixture before tests were
+registered. Registry/lifecycle construction now happens in explicit fixture calls
+or test lifecycle hooks, preserving all canonical cases. All nine exact runtime
+negative controls now produce ordinary failing tests with zero runtime-error
+suites; each runs the entire 270-case selection. New complete qualification is
+still required; the former failed result is not a successful gate. The four complete contract files now have separate
+capacity, records, privacy and policy execution parts with the same canonical
+test/configuration union and final aggregate requirements.
+
+A bounded exact-packet/selection root-authentication cache was profiled and
+tested outside the checkout before adoption: all 295 canonical root tests across
+30 suites passed, followed by seven focused cache and large-envelope cases. The
+identical seeded 300-case history took 28.657 seconds before and 16.225 seconds
+after the change in that local comparison. The cache stores only positive
+cryptographic identities; current policy, clocks, persisted bindings and native
+serving authorization remain live. This local comparison does not establish a
+hosted performance guarantee.
+
+The protected-ledger foundation adds local Node custody framing, complete record
+codecs and one native SQLite transaction owner. It protects private bodies,
+authenticates inventory, preserves immutable configuration, reserves bytes and
+completion revisions and rechecks local authorization under the enqueue gate.
+It deliberately provides no automatic initialization, fence deletion or
+compaction. The installed-codec capacity is checked before creation. Its 75
+isolated tests include 300 native restart schedules, actual process loss,
+independent-process CAS, key rotation, corruption, malformed input and the final
+reserved completion revisions. A newly added fault regression first reproduced
+a metadata-sealing rollback error; moving metadata and records into the same
+savepoint fixed it and the complete isolated suite passed. This is an internal
+foundation: typed private publication/acquisition state machines, permanent
+keyed identity mappings, actual wallet/admission composition and usable delivery
+remain unfinished. Source adoption includes a critical complete-source mutation
+target and all required execution-part aggregation; no gate was weakened.
+
+After adoption, strict package types and build passed, followed by all 82 native
+protected-ledger/payload and root-cache tests across four suites. This includes
+the actual compiled package in the process-loss and independent-process cases.
+Root health, lint, formatting and workspace types passed. The first root health check
+identified the new property's missing standard configuration hook; the test now
+uses the governed seeded hook and retains its 300-case minimum and replay path.
+Package artifact validation and all 42 compiled examples against 22 exact
+tarballs also passed. Existing repository maintenance advisories remain visible
+in the successful health report; this batch does not waive or extend them.
+Full native coverage, mutation aggregates and exact-head hosted qualification
+remain required for this batch.

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from '@jest/globals'
+import { beforeEach, afterEach, describe, expect, it } from '@jest/globals'
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,10 +24,13 @@ import {
 } from '../src/proposals/index.js'
 import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
 import { ProposalJournalState } from '../src/proposals/ProposalJournalState.js'
-import { author, recipient, scope, registry, signed, finalize } from './proposal-fixture.js'
+import { author, recipient, scope, createRegistry, signed, finalize } from './proposal-fixture.js'
 
 const clock = { maxLifetimeSeconds: '100', futureSkewSeconds: '2' }
-const lifecycle = new ProposalTransitions(registry, scope, clock)
+let lifecycle: ProposalTransitions
+beforeEach(() => {
+  lifecycle = new ProposalTransitions(createRegistry(), scope, clock)
+})
 const stores: ProposalJournalStorage[] = []
 const directories: string[] = []
 function path(): string {

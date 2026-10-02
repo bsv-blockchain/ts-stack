@@ -8,7 +8,7 @@ import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js
 import { ProposalJournalMaintenance } from '../src/proposals/ProposalMaintenance.js'
 import { ProposalScheduler } from '../src/proposals/ProposalScheduler.js'
 import { ProposalTransitions } from '../src/proposals/ProposalTransitions.js'
-import { author, scope, registry, signed, finalize } from './proposal-fixture.js'
+import { author, scope, createRegistry, signed, finalize } from './proposal-fixture.js'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -41,6 +41,7 @@ it(
           append: fc.boolean()
         }),
         async schedule => {
+          const registry = createRegistry()
           const directory = mkdtempSync(join(tmpdir(), 'proposal-inventory-property-')),
             path = join(directory, 'journal.sqlite')
           const lifecycle = new ProposalTransitions(registry, scope, {

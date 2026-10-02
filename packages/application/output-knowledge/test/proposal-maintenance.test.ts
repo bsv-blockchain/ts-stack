@@ -11,13 +11,14 @@ import type {
   ProposalJournalStorage,
   ProposalJournalEntry
 } from '../src/proposals/ProposalJournal.js'
-import { author, scope, registry, signed, finalize } from './proposal-fixture.js'
+import { author, scope, createRegistry, signed, finalize } from './proposal-fixture.js'
 
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
 function fixture() {
+  const registry = createRegistry()
   const directory = mkdtempSync(join(tmpdir(), 'proposal-maintenance-'))
   const lifecycle = new ProposalTransitions(registry, scope, {
     maxLifetimeSeconds: '100',

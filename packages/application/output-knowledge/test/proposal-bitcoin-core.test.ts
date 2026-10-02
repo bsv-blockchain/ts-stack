@@ -20,7 +20,7 @@ import type { SourceBatch } from '../src/ports.js'
 import {
   author,
   recipient,
-  registry,
+  createRegistry,
   reference,
   signed,
   scope as proposalScope
@@ -37,7 +37,7 @@ const source = {
 }
 function policy(reader = recipient) {
   const { epoch: _epoch, ...selected } = source
-  return new ProposalSourcePolicy(registry, reader, [
+  return new ProposalSourcePolicy(createRegistry(), reader, [
     {
       source: selected,
       proposalService: proposalScope.service,
@@ -393,7 +393,7 @@ describe('opt-in proposal qualification inside the Bitcoin journal', () => {
 
   it('rejects cross-service mappings before opening an observation journal', () => {
     const { epoch: _epoch, ...selected } = source
-    const proposals = new ProposalSourcePolicy(registry, recipient, [
+    const proposals = new ProposalSourcePolicy(createRegistry(), recipient, [
       {
         source: { ...selected, service: 'other-lookup' },
         proposalService: proposalScope.service,

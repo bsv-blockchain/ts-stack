@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 107)
+  assert.equal(result.summary.propertySuites, 108)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 107)
+  assert.equal(result.summary.mutationTargets, 108)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -792,4 +792,14 @@ test('output knowledge discovery ignores nested generated sandboxes without hidi
     ),
     true
   )
+})
+
+test('protected ledger has no reduced mutation or property acceptance gate', () => {
+  const registration = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  ).targets.find(target => target.id === 'protected-ledger')
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumNoCoverage, 0)
+  assert.equal(registration.maximumInvalid, 0)
+  assert.ok(policy.propertyTesting.suites.some(suite => suite.path === registration.propertyTest))
 })

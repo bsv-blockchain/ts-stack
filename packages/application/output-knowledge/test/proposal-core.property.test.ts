@@ -1,4 +1,4 @@
-import { expect, it } from '@jest/globals'
+import { beforeEach, expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { BitcoinKnowledge } from '../src/BitcoinKnowledge.js'
 import { KnowledgeStore } from '../src/KnowledgeStore.js'
@@ -9,7 +9,7 @@ import type { SourceBatch, EvidenceVerifier } from '../src/ports.js'
 import {
   author,
   recipient,
-  registry,
+  createRegistry,
   reference,
   signed,
   scope as proposalScope
@@ -25,15 +25,18 @@ const source = {
   epoch: 'one'
 }
 const { epoch: _epoch, ...selection } = source
-const policy = new ProposalSourcePolicy(registry, recipient, [
-  {
-    source: selection,
-    proposalService: proposalScope.service,
-    policy: reference,
-    maxLifetimeSeconds: '90',
-    futureSkewSeconds: '2'
-  }
-])
+let policy: ProposalSourcePolicy
+beforeEach(() => {
+  policy = new ProposalSourcePolicy(createRegistry(), recipient, [
+    {
+      source: selection,
+      proposalService: proposalScope.service,
+      policy: reference,
+      maxLifetimeSeconds: '90',
+      futureSkewSeconds: '2'
+    }
+  ])
+})
 // These four signed bodies are fixed inputs, not generated schedule choices.
 // Reuse owned copies while still verifying each case through the actual core.
 const proposals = Array.from({ length: 4 }, (_, index) =>

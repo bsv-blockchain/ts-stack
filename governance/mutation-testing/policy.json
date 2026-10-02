@@ -1086,6 +1086,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "protected-ledger",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/protected-ledger.property.test.ts",
+      "risk": "critical",
+      "boundary": "Protected private-service custody, authenticated inventory, atomic multi-record reservation, monotonic observation and current disclosure guards",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

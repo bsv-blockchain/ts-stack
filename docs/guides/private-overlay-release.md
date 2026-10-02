@@ -198,3 +198,9 @@ The [local funding recovery guide](./local-funding-recovery.md) describes the
 opt-in SQLite wallet adapter for `internalizeOnce` and durable receipt lookup.
 It commits ownership and its receipt together, leaving acquisition authorization,
 release eligibility and protected delivery with the seller service.
+
+The internal [protected private-service ledger](./protected-private-service-storage.md)
+provides encrypted native records, atomic capacity/completion reservations and
+current authorization at response enqueue. It is a foundation for the separate
+publication and acquisition state machines; it does not make an arbitrary
+legacy lookup or topic submit a conforming private-sale endpoint.

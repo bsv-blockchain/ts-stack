@@ -231,7 +231,7 @@ logs.
 
 The `proposal-channel-storage` target qualifies the complete atomic private
 channel owner, writer, deadline inventory, privacy/representation contract and
-session bootstrap. Its factory, writer, inventory and contract execution parts
+session bootstrap. Its factory, writer, inventory, capacity, records, privacy and policy execution parts
 split whole files only; new files fall back to factory. Every part retains the
 canonical tests, 300-case native property budget, configuration and thresholds.
 The final canonical aggregate remains mandatory. Passing an isolated draft or
@@ -252,3 +252,15 @@ execution-lifetime setting, not permission to omit a failing mutant or test.
 Other targets retain their existing settings. Fresh complete qualification is
 required; the preceding worker SIGABRT and missing-report timeout remain negative
 evidence.
+
+The protected-ledger target separates the complete SQLite owner from the complete
+record/payload codecs. Both parts retain the same canonical custody, process-loss,
+independent-process, authorization and 300-case restart tests, four workers,
+deadlines and final critical gates. Workers recycle after eight executions; no
+mutant or test is omitted. Both reports and the complete aggregate are required.
+
+The former four-file compound contract execution is divided by complete file
+into capacity, records, privacy and policy parts after the measured execution
+approached its 45-minute bound. Factory, writer and inventory remain unchanged.
+Every part retains the entire canonical test selection; no source, mutant,
+property case or final gate is removed. Canonical aggregation remains required.

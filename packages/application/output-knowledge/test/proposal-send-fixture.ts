@@ -5,9 +5,10 @@ import { canonicalOutputJSON } from '@bsv/sdk'
 import { ProposalTransitions } from '../src/proposals/ProposalTransitions.js'
 import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
 import { proposalChannelKey } from '../src/proposals/ProposalPolicyRegistry.js'
-import { author, registry, scope, signed } from './proposal-fixture.js'
+import { author, createRegistry, scope, signed } from './proposal-fixture.js'
 
 export async function proposalSendFixture() {
+  const registry = createRegistry()
   const directory = mkdtempSync(join(tmpdir(), 'proposal-send-'))
   const file = join(directory, 'journal.sqlite')
   const lifecycle = new ProposalTransitions(registry, scope, {

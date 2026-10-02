@@ -631,6 +631,11 @@ jobs:
         with:
           pattern: mutation-wallet-recovery-encoding-*
           path: .mutation-parts/wallet-recovery-encoding
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'protected-ledger')
+        with:
+          pattern: mutation-protected-ledger-*
+          path: .mutation-parts/protected-ledger
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:

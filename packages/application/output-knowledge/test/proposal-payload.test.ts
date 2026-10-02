@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals'
+import { beforeEach, describe, expect, it } from '@jest/globals'
 import { canonicalOutputJSON, type OutputJSONObject } from '@bsv/sdk'
 import {
   proposalPayload,
@@ -6,13 +6,17 @@ import {
   validateProposalLocalContext
 } from '../src/proposals/ProposalJournalPayload.js'
 import { ProposalTransitions, proposalCommitKey } from '../src/proposals/index.js'
-import { author, registry, scope, signed } from './proposal-fixture.js'
+import { author, createRegistry, scope, signed } from './proposal-fixture.js'
 
-const lifecycle = new ProposalTransitions(registry, scope, {
-  maxLifetimeSeconds: '100',
-  futureSkewSeconds: '2'
+let lifecycle: ProposalTransitions
+let plan: ReturnType<ProposalTransitions['put']>
+beforeEach(() => {
+  lifecycle = new ProposalTransitions(createRegistry(), scope, {
+    maxLifetimeSeconds: '100',
+    futureSkewSeconds: '2'
+  })
+  plan = lifecycle.put(undefined, signed(), author, '10')
 })
-const plan = lifecycle.put(undefined, signed(), author, '10')
 const local = { profile: 'urn:test:proposal-context:1', version: 1 }
 
 describe('versioned proposal local context storage', () => {

@@ -20,7 +20,7 @@ import {
 } from '../src/proposals/index.js'
 import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
 import { context, resolver, chain, transactions, candidate } from './evidence-fixture.js'
-import { author, registry, signed, authorKey, scope } from './proposal-fixture.js'
+import { author, createRegistry, signed, authorKey, scope } from './proposal-fixture.js'
 import { proposalCapabilityFixture } from './proposal-capability-fixture.js'
 
 async function verifiedFinalization() {
@@ -63,7 +63,7 @@ it('checks a real signed PRP1 transaction and its complete anchored ancestry bef
   expect(await evidence.verify(request, proposal)).toBe(Utils.toBase64(transaction.toBinary()))
   const directory = mkdtempSync(join(tmpdir(), 'proposal-verified-'))
   const lifecycle = new ProposalTransitions(
-    registry,
+    createRegistry(),
     { ...scope, chain },
     { maxLifetimeSeconds: '100', futureSkewSeconds: '2' }
   )

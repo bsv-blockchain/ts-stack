@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from '@jest/globals'
+import { beforeEach, afterEach, expect, it } from '@jest/globals'
 import { mkdtempSync, rmSync, existsSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,11 +6,14 @@ import { DatabaseSync } from 'node:sqlite'
 import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
 import { ProposalTransitions } from '../src/proposals/ProposalTransitions.js'
 import { proposalChannelKey } from '../src/proposals/ProposalPolicyRegistry.js'
-import { author, scope, registry, signed } from './proposal-fixture.js'
+import { author, scope, createRegistry, signed } from './proposal-fixture.js'
 
-const lifecycle = new ProposalTransitions(registry, scope, {
-  maxLifetimeSeconds: '100',
-  futureSkewSeconds: '2'
+let lifecycle: ProposalTransitions
+beforeEach(() => {
+  lifecycle = new ProposalTransitions(createRegistry(), scope, {
+    maxLifetimeSeconds: '100',
+    futureSkewSeconds: '2'
+  })
 })
 const stores: SQLiteProposalJournal[] = [],
   directories: string[] = []
@@ -111,7 +114,7 @@ it('requires the same sealed limits and installed interpretation on reopen', asy
   expect(() =>
     SQLiteProposalJournal.open(path, 'original', author, lifecycle, { entries: 100 })
   ).toThrow(expect.objectContaining({ code: 'context-changed' }))
-  const changed = new ProposalTransitions(registry, scope, {
+  const changed = new ProposalTransitions(createRegistry(), scope, {
     maxLifetimeSeconds: '101',
     futureSkewSeconds: '2'
   })

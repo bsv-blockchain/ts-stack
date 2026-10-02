@@ -1331,6 +1331,17 @@
           "A rejected member rolls back all journal entries, current rows and live groups in its domain change.",
           "A partial expiry pass never advances the complete timer floor, including after restart; exact retries append no duplicate group."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/protected-ledger.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Protected private-service custody, authenticated inventory, atomic multi-record reservation, monotonic observation and current disclosure guards",
+        "target": "At least 300 native protected-record CAS, clock and restart schedules",
+        "invariants": [
+          "A rejected or stale operation cannot partially update a protected record group or discard a reserved completion.",
+          "Restart preserves exact private values, record versions, monotonic receipt time and every outstanding reservation."
+        ]
       }
     ],
     "exclusions": [

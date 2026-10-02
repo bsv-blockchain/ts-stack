@@ -1,5 +1,7 @@
 import {
   canonicalOutputJSON,
+  Hash,
+  Utils,
   outputAssert,
   outputHex32,
   outputPacketDigest,
@@ -21,7 +23,23 @@ type SavedAction = Omit<OutputRootEvictionOutcome, 'service' | 'outpoint' | 'ser
 
 /** Internal request/immutable-terminal-action records. All calls hold the root gate. */
 export class RootEvictionRequests {
+  private readonly authenticatedRequests = new Set<string>()
   constructor(private readonly database: SQLiteRootEvictionDatabase) {}
+
+  /** Exact positive cryptographic result only; clocks, records and serving guards stay live. */
+  private authenticate(
+    packet: Parameters<typeof verifyOutputRootEvictionRequest>[0],
+    selected: Parameters<typeof verifyOutputRootEvictionRequest>[1]
+  ): void {
+    const key = Utils.toHex(
+      Hash.sha256(Utils.toArray(canonicalOutputJSON({ packet, selected }), 'utf8'))
+    )
+    if (this.authenticatedRequests.has(key)) return
+    verifyOutputRootEvictionRequest(packet, selected)
+    if (this.authenticatedRequests.size >= 256)
+      this.authenticatedRequests.delete(this.authenticatedRequests.values().next().value!)
+    this.authenticatedRequests.add(key)
+  }
 
   private decode(row: Record<string, unknown>): RootEvictionRetainedRequest {
     outputAssert(
@@ -31,7 +49,7 @@ export class RootEvictionRequests {
     )
     const packet = parseOutputRootEvictionRequest(parseOutputJSON(row.packet, { bytes: 1048576 }))
     const { root, chain } = this.database.configuration
-    verifyOutputRootEvictionRequest(packet, { root, chain, requester: String(row.requester) })
+    this.authenticate(packet, { root, chain, requester: String(row.requester) })
     const digest = outputPacketDigest('root-eviction-request', packet.body)
     outputAssert(
       digest === row.digest &&
@@ -77,7 +95,7 @@ export class RootEvictionRequests {
     const packet = parseOutputRootEvictionRequest(input)
     // Authenticate before looking up the retained key. A changed recipient in an
     // otherwise authenticated, retained body is still an idempotency conflict.
-    verifyOutputRootEvictionRequest(packet, {
+    this.authenticate(packet, {
       root: packet.body.recipient,
       chain: packet.body.chain,
       requester
@@ -93,7 +111,7 @@ export class RootEvictionRequests {
       return previous
     }
     const configuration = this.database.configuration
-    verifyOutputRootEvictionRequest(packet, {
+    this.authenticate(packet, {
       root: configuration.root,
       chain: configuration.chain,
       requester
