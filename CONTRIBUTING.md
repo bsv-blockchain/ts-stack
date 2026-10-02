@@ -184,7 +184,9 @@ pnpm test:mutation --target <target>
 
 Use the package’s declared `test:browser`, `test:mobile`, `test:consumers`, or
 other profile command when applicable. Root toolchain, SDK, CI, or governance
-changes may select the full workspace and mutation registry. Infrastructure or
+changes may select the full workspace test scope. Mutation testing does not run
+on pull requests; the full registry runs on a manual `CI` dispatch, the
+scheduled `Mutation quality` workflow, and release qualification. Infrastructure or
 container changes require their root CI matrix and runtime-contract evidence;
 do not substitute a macOS image build for hosted Linux/amd64 validation.
 
