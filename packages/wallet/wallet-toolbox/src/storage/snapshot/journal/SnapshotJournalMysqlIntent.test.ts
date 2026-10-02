@@ -7,11 +7,14 @@ import {
   type SnapshotJournalMysqlBinding
 } from './SnapshotJournalMysqlIntent'
 import { snapshotJournalRevision } from './SnapshotJournalRevision'
-const binding: SnapshotJournalMysqlBinding = {
-  source: 'a'.repeat(64),
-  plan: 'b'.repeat(64),
-  ceiling: snapshotJournalRevision('9223372036854775807')
-}
+let binding: SnapshotJournalMysqlBinding
+beforeEach(() => {
+  binding = {
+    source: 'a'.repeat(64),
+    plan: 'b'.repeat(64),
+    ceiling: snapshotJournalRevision('9223372036854775807')
+  }
+})
 const epoch = '12345678-1234-4123-8123-123456789abc'
 const captured: Record<string, Array<Record<string, unknown>>> = JSON.parse(
   readFileSync(join(__dirname, '../../../../test/fixtures/snapshotJournal/mysql-intent-metadata-fixture.json'), 'utf8')
@@ -84,7 +87,7 @@ test('native metadata and exact signed63 binding resume the persisted epoch', as
     await f.database.destroy()
   }
 })
-test.each(['8.0.21', '8.0.40-commercial', '8.4.0'])(
+test.each(['8.0.21', '8.0.40-commercial', '8.4.0', '8.10.0'])(
   'supported %s binds intent values and reads back its newly generated epoch',
   async version => {
     const f = await fixture()
@@ -100,7 +103,7 @@ test.each(['8.0.21', '8.0.40-commercial', '8.4.0'])(
     }
   }
 )
-test.each(['8.0.20', '5.7.44', '10.11.8-MariaDB', '9.0.0', 'unknown'])(
+test.each(['8.0.20', '5.7.44', '10.11.8-MariaDB', '9.0.0', 'unknown', 'prefix-8.4.0'])(
   'unsupported atomic-DDL baseline %s performs no DDL',
   async version => {
     const f = await fixture()
@@ -136,6 +139,10 @@ test('implicit DDL never commits a caller-owned transaction', async () => {
 })
 test.each([
   { source: 'A'.repeat(64) },
+  { source: 'x' + 'a'.repeat(64) },
+  { source: 'a'.repeat(64) + 'x' },
+  { plan: 'x' + 'b'.repeat(64) },
+  { plan: 'b'.repeat(64) + 'x' },
   { plan: 'bad' },
   { source: { toString: () => 'a'.repeat(64) } },
   { plan: { toString: () => 'b'.repeat(64) } },
@@ -208,6 +215,8 @@ test.each([
   { id: 2 },
   { version: 2 },
   { epoch: 'wrong' },
+  { epoch: 'x' + epoch },
+  { epoch: epoch + 'x' },
   { source: 'c'.repeat(64) },
   { plan: 'c'.repeat(64) },
   { ceiling: '1' },
@@ -233,6 +242,16 @@ test.each(['missing', 'extra'])('%s intent row refuses', async kind => {
         .database('snapshot_journal_generation')
         .insert({ ...(await f.database('snapshot_journal_generation').first()), id: 2 })
     await expect(readSnapshotJournalMysqlIntent(f.k, binding)).rejects.toThrow('Invalid or unowned')
+  } finally {
+    await f.database.destroy()
+  }
+})
+
+test('legacy MySQL alias can resume its exact persisted intent', async () => {
+  const f = await fixture()
+  try {
+    f.k.client.config.client = 'mysql'
+    expect(await readSnapshotJournalMysqlIntent(f.k, binding)).toMatchObject({ ...binding, epoch })
   } finally {
     await f.database.destroy()
   }

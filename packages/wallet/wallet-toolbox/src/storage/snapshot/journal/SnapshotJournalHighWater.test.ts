@@ -118,7 +118,13 @@ test.each([
   try {
     await expect(
       readSnapshotJournalHighWater(k, id, minimum as SnapshotJournalRevision, floor as SnapshotJournalRevision)
-    ).rejects.toThrow()
+    ).rejects.toThrow(
+      id < 1 || !Number.isSafeInteger(id)
+        ? 'Invalid snapshot journal profile'
+        : minimum === '01'
+          ? 'Invalid snapshot journal revision'
+          : 'Snapshot journal continuity was collected'
+    )
     expect(queries).toBe(0)
   } finally {
     await k.destroy()
@@ -154,4 +160,64 @@ test('pinned WAL heads remain coherent after an independent writer commits', asy
     await writer.destroy()
     await rm(directory, { recursive: true, force: true })
   }
+})
+
+test.each(['mysql', 'mysql2'])('MySQL high-water alias %s uses exact fifteen bounded index seeks', async client => {
+  const k = knex({ client: 'mysql2' })
+  k.client.config.client = client
+  const queries: Array<{ sql: string; bindings: unknown[] }> = []
+  const connection = {
+    query(
+      query: { sql: string },
+      bindings: unknown[],
+      callback: (error: Error | null, rows?: unknown[], fields?: unknown[]) => void
+    ) {
+      queries.push({ sql: query.sql, bindings })
+      const revisionText = queries.length === 9 ? '9007199254740997' : '9007199254740993'
+      callback(null, [{ revisionText }], [])
+    }
+  }
+  jest.spyOn(k.client, 'acquireConnection').mockResolvedValue(connection)
+  jest.spyOn(k.client, 'releaseConnection').mockResolvedValue(undefined)
+  try {
+    expect(await readSnapshotJournalHighWater(k, 41, rev('9007199254740992'), rev('0'))).toBe('9007199254740997')
+    expect(queries).toHaveLength(15)
+    queries.forEach((query, i) => {
+      const scope = i < 13,
+        table = scope ? 'scope' : 'physical',
+        tableId = scope ? i : i - 5
+      expect(query.sql).toBe(
+        'select CAST(`j`.`revision` AS CHAR) as `revisionText` from `snapshot_journal_' +
+          table +
+          '` AS `j` FORCE INDEX (`snapshot_journal_' +
+          table +
+          '_page`) where `j`.`tableId` = ?' +
+          (scope ? ' and `j`.`userId` = ?' : '') +
+          ' order by `j`.`revision` desc limit ?'
+      )
+      expect(query.bindings).toEqual(scope ? [tableId, 41, 1] : [tableId, 1])
+    })
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('SQLite legacy driver alias retains indexed exact high-water reads', async () => {
+  const k = open()
+  k.client.config.client = 'sqlite3'
+  try {
+    await install(k)
+    expect(await readSnapshotJournalHighWater(k, 1, rev('9007199254740993'), rev('0'))).toBe('9007199254740993')
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('unsupported high-water driver refuses before query construction', async () => {
+  const raw = jest.fn(),
+    k = { client: { config: { client: 'unsupported' } }, raw } as unknown as Knex
+  await expect(readSnapshotJournalHighWater(k, 1, rev('0'), rev('0'))).rejects.toThrow(
+    'Unsupported snapshot journal SQL driver'
+  )
+  expect(raw).not.toHaveBeenCalled()
 })

@@ -8,7 +8,7 @@ import {
   readSnapshotJournalMysqlGeneration
 } from './SnapshotJournalMysqlGeneration'
 import { readSnapshotJournalMysqlBinding } from './SnapshotJournalMysqlSource'
-import { snapshotJournalRevision } from './SnapshotJournalRevision'
+import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
 jest.mock('./SnapshotJournalMysqlSource', () => ({ readSnapshotJournalMysqlBinding: jest.fn() }))
 interface Capture {
   sql: string
@@ -24,7 +24,10 @@ const captured: Capture[] = JSON.parse(
 const nativeState = JSON.parse(
   readFileSync(join(__dirname, '../../../../test/fixtures/snapshotJournal/mysql-generation-state-fixture.json'), 'utf8')
 ) as Record<string, string | number>
-const ceiling = snapshotJournalRevision('9223372036854775807')
+let ceiling: SnapshotJournalRevision
+beforeEach(() => {
+  ceiling = snapshotJournalRevision('9223372036854775807')
+})
 const readBinding = jest.mocked(readSnapshotJournalMysqlBinding)
 const nativeDdl: { epoch: string; ddl: Array<{ sql: string; bindings: unknown[] }> } = JSON.parse(
   readFileSync(join(__dirname, '../../../../test/fixtures/snapshotJournal/mysql-generation-ddl-fixture.json'), 'utf8')

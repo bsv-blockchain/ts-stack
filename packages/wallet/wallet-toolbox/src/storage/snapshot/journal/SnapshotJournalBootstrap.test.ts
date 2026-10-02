@@ -5,7 +5,7 @@ import {
 } from './SnapshotJournalSqliteObservers'
 import { installSnapshotJournalSqliteClock } from './SnapshotJournalSqliteClock'
 import { snapshotJournalRevision } from './SnapshotJournalRevision'
-// Outside-checkout design experiment. This is not a registered migration or API.
+// Internal journal foundation. Registered migration and reader adoption remain separate.
 import { knex, type Knex } from 'knex'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -130,8 +130,11 @@ test('exact bootstrap copies bounded pages, resumes and preserves newer low-key 
       complete = false,
       max = 0,
       insertQueries = 0
-    const count = (q: { sql: string }) => {
-      if (/^insert into `snapshot_journal_(physical|scope)`/i.test(q.sql)) insertQueries++
+    const count = (q: { sql: string; bindings: unknown[] }) => {
+      if (/^insert into `snapshot_journal_(physical|scope)`/i.test(q.sql)) {
+        insertQueries++
+        expect(q.bindings.length).toBeLessThanOrEqual(64 * 7)
+      }
     }
     k.on('query', count)
     writer.on('query', count)
@@ -317,6 +320,28 @@ test('malformed SQLite clock response rolls back allocation and bootstrap progre
     })
   } finally {
     k.off('query-response', listener)
+    await k.destroy()
+  }
+})
+
+test('legacy SQLite alias bootstraps an exact 400-byte historical key', async () => {
+  const k = await emptyFixture()
+  k.client.config.client = 'sqlite3'
+  try {
+    const fieldName = '😀'.repeat(100)
+    await k('certificate_fields').insert({ ...value('certificate_fields', 1, 1, 1), fieldName })
+    await beginBootstrap(k)
+    await k('snapshot_journal_bootstrap').update({ stream: 12 })
+    expect(await copySnapshotJournalBootstrapPage(k)).toMatchObject({
+      selected: 1,
+      invalidated: false
+    })
+    expect((await k('snapshot_journal_physical').first()).exactText).toBe(fieldName)
+    expect(await copySnapshotJournalBootstrapPage(k)).toMatchObject({
+      selected: 0,
+      invalidated: false
+    })
+  } finally {
     await k.destroy()
   }
 })

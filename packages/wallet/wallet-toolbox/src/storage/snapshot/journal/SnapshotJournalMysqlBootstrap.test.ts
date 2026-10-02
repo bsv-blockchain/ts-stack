@@ -81,7 +81,8 @@ async function driver() {
     oversized: false,
     failMetadata: false,
     missingRevisionClock: false,
-    nonBinaryText: false
+    nonBinaryText: false,
+    invalidIdentity: undefined as unknown
   }
   const queries: Query[] = []
   const connection = {
@@ -147,6 +148,8 @@ async function driver() {
     const result = await db.raw(sql, q.bindings)
     if (state.nonBinaryText && Array.isArray(result) && q.sql.includes('`boundedText`'))
       for (const row of result) row.boundedText = 'not bytes'
+    if (Array.isArray(result) && sql.startsWith('select `s`.') && state.invalidIdentity !== undefined)
+      for (const row of result) row.transactionId = state.invalidIdentity
     if (Array.isArray(result))
       return respond(
         state.oversized && sql.startsWith('select `s`.') ? Array.from({ length: 257 }, () => result[0]) : result
@@ -248,7 +251,9 @@ test('MySQL bootstrap bounds each page and preserves an already observed newer g
     })
     const page = await copySnapshotJournalBootstrapPage(f.k)
     expect(page.selected).toBe(256)
-    expect(f.queries.filter(q => q.sql.startsWith('insert into `snapshot_journal_physical`'))).toHaveLength(4)
+    const writes = f.queries.filter(q => q.sql.startsWith('insert into `snapshot_journal_physical`'))
+    expect(writes).toHaveLength(4)
+    writes.forEach(query => expect(query.bindings.length).toBeLessThanOrEqual(64 * 7))
     const preserved = await f
       .db('snapshot_journal_physical')
       .where({ tableId: 0, id1: 1 })
@@ -428,3 +433,89 @@ test.each(['missingRevisionClock', 'nonBinaryText'] as const)(
     }
   }
 )
+
+test.each([14, 15, 16])('MySQL stream %s preserves absent membership and its physical-table mapping', async stream => {
+  const f = await driver()
+  try {
+    const source = identities[stream],
+      extra = source.extra!
+    const present = sample(stream, 1),
+      absent = { ...sample(stream, 2), [extra]: 0 }
+    if (stream === 16) absent.tableId = 1
+    await f.db('snapshot_journal_bootstrap').update({ stream })
+    await f.db(source.table).insert([present, absent])
+    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+      selected: 2,
+      invalidated: false
+    })
+    const rows = await f.db('snapshot_journal_scope').orderBy('id1')
+    expect(rows.map(row => ({ tableId: row.tableId, id1: row.id1, present: row.present }))).toEqual([
+      { tableId: stream === 14 ? 10 : stream === 15 ? 12 : 9, id1: 1, present: 1 },
+      { tableId: stream === 14 ? 10 : stream === 15 ? 12 : 8, id1: 2, present: 0 }
+    ])
+  } finally {
+    await f.close()
+  }
+})
+
+test.each(['10', '9223372036854775807'])('MySQL can allocate the exact final allowed revision %s', async ceiling => {
+  const f = await driver()
+  f.k.client.config.client = 'mysql'
+  try {
+    await f.db('transactions').insert({ transactionId: 1 })
+    await f.db('snapshot_journal_clock').update({ ceiling })
+    f.state.next = BigInt(ceiling)
+    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+      selected: 1,
+      invalidated: false
+    })
+    expect(await f.db('snapshot_journal_physical').select(f.db.raw('CAST(revision AS TEXT) revision'))).toEqual([
+      { revision: ceiling }
+    ])
+    expect(await f.db('snapshot_journal_invalid')).toEqual([])
+  } finally {
+    await f.close()
+  }
+})
+
+test.each([-1, 0, 1.5, 'invalid', 9007199254740992])(
+  'MySQL invalid historical identity %p invalidates atomically and preserves source',
+  async transactionId => {
+    const f = await driver()
+    try {
+      const malformedResponse = typeof transactionId !== 'number' || !Number.isInteger(transactionId)
+      await f.db('transactions').insert({ transactionId: malformedResponse ? 1 : transactionId })
+      if (malformedResponse) f.state.invalidIdentity = transactionId
+      expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+        selected: 1,
+        invalidated: true
+      })
+      expect(await f.db('snapshot_journal_invalid')).toEqual([{ id: 1, reason: 'key-out-of-range' }])
+      expect(await f.db('snapshot_journal_physical')).toEqual([])
+      expect((await f.db('snapshot_journal_bootstrap').first()).cursor).toBeNull()
+      expect((await f.db('transactions').first()).transactionId).toBe(malformedResponse ? 1 : transactionId)
+    } finally {
+      await f.close()
+    }
+  }
+)
+
+test('MySQL accepts a 400-byte key through the final composite bootstrap cursor', async () => {
+  const f = await driver()
+  try {
+    const fieldName = '😀'.repeat(100)
+    await f.db('snapshot_journal_bootstrap').update({ stream: 12 })
+    await f.db('certificate_fields').insert({ fieldName, certificateId: 1 })
+    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+      selected: 1,
+      invalidated: false
+    })
+    expect(Buffer.from((await f.db('snapshot_journal_physical').first()).exactText).toString('utf8')).toBe(fieldName)
+    expect(await copySnapshotJournalBootstrapPage(f.k)).toMatchObject({
+      selected: 0,
+      invalidated: false
+    })
+  } finally {
+    await f.close()
+  }
+})

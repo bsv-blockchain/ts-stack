@@ -202,3 +202,44 @@ test('native clock constraints refuse invalid continuity states atomically', asy
     await k.destroy()
   }
 })
+
+test.each(['sqlite3', 'better-sqlite3'])(
+  'SQLite clock alias %s creates and advances an exact event window',
+  async client => {
+    const k = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true
+    })
+    k.client.config.client = client
+    try {
+      await installSnapshotJournalSqliteClock(k, rev('9007199254740993'))
+      expect(
+        await k('snapshot_journal_clock').select(
+          'revision',
+          k.raw('CAST(ceiling AS TEXT) ceiling'),
+          'enabled',
+          'reason'
+        )
+      ).toEqual([{ revision: 0, ceiling: '9007199254740993', enabled: 1, reason: null }])
+    } finally {
+      await k.destroy()
+    }
+  }
+)
+
+test('empty SQLite clock event window refuses with the stable error before DDL', async () => {
+  const k = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true
+    }),
+    query = jest.fn()
+  k.on('query', query)
+  try {
+    await expect(installSnapshotJournalSqliteClock(k, rev('0'))).rejects.toThrow('Empty snapshot journal event window')
+    expect(query).not.toHaveBeenCalled()
+  } finally {
+    await k.destroy()
+  }
+})

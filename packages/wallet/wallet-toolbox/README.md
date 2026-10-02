@@ -61,6 +61,10 @@ capture receipts, receiver/primary integration and the remaining issue #544
 acceptance work are still required; see the
 [journal foundation](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#internal-journal-foundation-unadvertised).
 
+Required wallet CI shard 1 also runs both native journal entry points from the
+same-head build after the existing archive fixtures. The complete journal mutation
+aggregate and native recovery checks are separate qualification requirements.
+
 Both native archive entry points include interrupted auxiliary profile and numeric
 relation migrations through the real migrator. The numeric relation fixture
 terminates seven migration boundaries, repairs the abandoned migration lock and

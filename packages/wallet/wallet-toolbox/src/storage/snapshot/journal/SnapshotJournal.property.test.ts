@@ -93,6 +93,7 @@ describe('SnapshotJournalRevision', () => {
     '1'.repeat(10000)
   ])('refuses a noncanonical or out-of-range revision %p', value => {
     expect(() => snapshotJournalRevision(value)).toThrow(WERR_INVALID_OPERATION)
+    expect(() => snapshotJournalRevision(value)).toThrow('Invalid snapshot journal revision')
   })
 
   test('canonical ordering agrees with independent bigint arithmetic through the entire range', () => {
@@ -169,15 +170,18 @@ describe('SnapshotJournalRevision', () => {
 
 describe('SnapshotJournalPage', () => {
   const base = 9007199254740992n
-  const interval: SnapshotJournalInterval = {
-    stream: 'scope',
-    tableId: 12,
-    userId: 1,
-    floor: rev('0'),
-    low: rev(String(base)),
-    high: rev(String(base + 10n)),
-    limit: 2
-  }
+  let interval: SnapshotJournalInterval
+  beforeEach(() => {
+    interval = {
+      stream: 'scope',
+      tableId: 12,
+      userId: 1,
+      floor: rev('0'),
+      low: rev(String(base)),
+      high: rev(String(base + 10n)),
+      limit: 2
+    }
+  })
 
   async function database(): Promise<Knex> {
     const k = knex({
@@ -343,15 +347,15 @@ describe('SnapshotJournalPage', () => {
     { tableId: -1 },
     { stream: 'physical', tableId: 12 },
     { stream: 'unknown' },
-    { high: rev('0') },
+    { high: '0' },
     { low: '01' },
     { high: '9223372036854775808' },
-    { after: { revision: interval.low, id1: 1, id2: 0, exactText: '' } },
-    { after: { revision: rev(String(base + 11n)), id1: 1, id2: 0, exactText: '' } },
-    { after: { revision: interval.high, id1: 0, id2: 0, exactText: '' } },
-    { after: { revision: interval.high, id1: 1, id2: -1, exactText: '' } },
-    { after: { revision: interval.high, id1: 1, id2: 0, exactText: '😀'.repeat(101) } },
-    { after: { revision: interval.high, id1: 1, id2: 0, exactText: '\ud800' } }
+    { after: { revision: String(base), id1: 1, id2: 0, exactText: '' } },
+    { after: { revision: String(base + 11n), id1: 1, id2: 0, exactText: '' } },
+    { after: { revision: String(base + 10n), id1: 0, id2: 0, exactText: '' } },
+    { after: { revision: String(base + 10n), id1: 1, id2: -1, exactText: '' } },
+    { after: { revision: String(base + 10n), id1: 1, id2: 0, exactText: '😀'.repeat(101) } },
+    { after: { revision: String(base + 10n), id1: 1, id2: 0, exactText: '\ud800' } }
   ])('malformed request refuses before SQL: %p', async change => {
     const k = await database()
     const seen = jest.fn()
@@ -599,6 +603,7 @@ describe('SnapshotJournalSqliteObservers', () => {
         for (const table of tables)
           await k.schema.alterTable(table, t => {
             void t.text('payload')
+            void t.text('quoted"payload')
             void t.integer('updated_at').notNullable().defaultTo(0)
           })
         const plan = await installGeneration(k)
@@ -612,11 +617,17 @@ describe('SnapshotJournalSqliteObservers', () => {
             })
         await exact(k)
         const before = await k('snapshot_journal_physical').orderBy(physicalKey.split(','))
+        const scopeBefore = await k('snapshot_journal_scope').orderBy(scopeKey.split(','))
         for (const table of tables) await k(table).update({ payload: 'same-timestamp update' })
         await exact(k)
         const after = await k('snapshot_journal_physical').orderBy(physicalKey.split(','))
         expect(after.map(r => r.generation)).toEqual(before.map(r => r.generation))
         after.forEach((r, i) => expect(r.revision).toBeGreaterThan(before[i].revision))
+        const scopeAfter = await k('snapshot_journal_scope').orderBy(scopeKey.split(','))
+        expect(scopeAfter).toHaveLength(scopeBefore.length)
+        scopeAfter.forEach((row, i) => {
+          if (row.tableId !== 8 && row.tableId !== 9) expect(row.revision).toBeGreaterThan(scopeBefore[i].revision)
+        })
         for (const table of tables) await k(table).update({ payload: 'same-timestamp update' })
         expect(await k('snapshot_journal_physical').orderBy(physicalKey.split(','))).toEqual(after)
         await k.raw(
@@ -835,6 +846,58 @@ describe('SnapshotJournalSqliteObservers', () => {
     await installCandidate(k, false)
     return k
   }
+
+  test.each(tables)(
+    'changing a %s key preserves the old tombstone and starts a new physical generation',
+    async table => {
+      const k = await journalFixture()
+      try {
+        const tableId = tables.indexOf(table)
+        await k(table).insert(value(table, 1, 1, 1))
+        const before = await k('snapshot_journal_physical').where('tableId', tableId).first()
+        const original = keyOf(table, 1, 1)
+        const changed = keyOf(table, 2, 2)
+        await k(table).where(original).update(changed)
+        expect(await k(table).where(original)).toEqual([])
+        expect(await k(table).where(changed)).toHaveLength(1)
+        const old = await k('snapshot_journal_physical')
+          .where({
+            tableId,
+            id1: before.id1,
+            id2: before.id2,
+            exactText: before.exactText
+          })
+          .first()
+        expect(old.present).toBe(0)
+        expect(old.generation).toBe(before.generation)
+        expect(old.revision).toBeGreaterThan(before.revision)
+        const current = await k('snapshot_journal_physical').where({ tableId, present: 1 }).first()
+        expect(current).toBeDefined()
+        expect(current.generation).toBeGreaterThan(before.generation)
+        expect(current.revision).toBe(current.generation)
+      } finally {
+        await k.destroy()
+      }
+    }
+  )
+
+  test.each(['sqlite3', 'better-sqlite3'])('SQLite observer alias %s prepares every table', async client => {
+    const k = await journalFixture()
+    k.client.config.client = client
+    try {
+      const definitions = await snapshotJournalSqliteObserverSql(k)
+      expect(definitions).toHaveLength(51)
+    } finally {
+      await k.destroy()
+    }
+  })
+
+  test('SQLite observer preparation refuses a foreign driver before querying its schema', async () => {
+    const raw = jest.fn(),
+      k = { client: { config: { client: 'mysql2' } }, raw } as unknown as Knex
+    await expect(snapshotJournalSqliteObserverSql(k)).rejects.toThrow('Snapshot journal observers require SQLite')
+    expect(raw).not.toHaveBeenCalled()
+  })
 
   test('all thirteen observers preserve exact revision and generation values above 2^53', async () => {
     const k = await journalFixture()

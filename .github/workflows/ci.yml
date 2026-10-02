@@ -1033,6 +1033,18 @@ jobs:
         env:
           TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
         run: node test/storage/runSnapshotArchiveMysql.cjs
+      - name: Verify native journal SQLite recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 3
+        run: node test/storage/snapshotJournalSqliteCrash.cjs
+      - name: Verify native journal MySQL recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 10
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/runSnapshotJournalMysql.cjs
       - name: Generate wallet-toolbox coverage shard
         env:
           WALLET_SHARD: ${{ matrix.shard }}

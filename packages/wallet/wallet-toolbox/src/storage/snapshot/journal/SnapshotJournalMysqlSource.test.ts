@@ -381,3 +381,143 @@ test.each(['missing', 'non-InnoDB', 'view'])(
     }
   }
 )
+
+test.each(['mysql', 'mysql2'])('MySQL source alias %s accepts explicit display widths', async client => {
+  const k = await metadata()
+  k.client.config.client = client
+  try {
+    await k('COLUMNS')
+      .withSchema('information_schema')
+      .where('COLUMN_TYPE', 'int unsigned')
+      .update({ COLUMN_TYPE: 'int(10) unsigned' })
+    await expect(validateSnapshotJournalMysqlSource(k)).resolves.toBeUndefined()
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each(['COLUMNS', 'STATISTICS'])('source validation alone bounds %s metadata at 512 entries', async table => {
+  const k = await metadata()
+  try {
+    const query = () => k(table).withSchema('information_schema')
+    const sourceTables = [
+      'transactions',
+      'outputs',
+      'certificates',
+      'tx_labels',
+      'output_baskets',
+      'output_tags',
+      'commissions',
+      'sync_states',
+      'proven_txs',
+      'proven_tx_reqs',
+      'tx_labels_map',
+      'output_tags_map',
+      'certificate_fields'
+    ]
+    const count = Number((await query().whereIn('TABLE_NAME', sourceTables).count('* AS n').first())!.n)
+    const example = await query().where('TABLE_NAME', 'outputs').first()
+    for (let i = count; i < 512; i++)
+      await query().insert(
+        table === 'COLUMNS'
+          ? { ...example, COLUMN_NAME: 'extra_' + i }
+          : { ...example, INDEX_NAME: 'extra_' + i, NON_UNIQUE: 1 }
+      )
+    await expect(validateSnapshotJournalMysqlSource(k)).resolves.toBeUndefined()
+    await query().insert(
+      table === 'COLUMNS'
+        ? { ...example, COLUMN_NAME: 'overflow' }
+        : { ...example, INDEX_NAME: 'overflow', NON_UNIQUE: 1 }
+    )
+    await expect(validateSnapshotJournalMysqlSource(k)).rejects.toThrow(
+      'Unsupported or incomplete MySQL snapshot journal source'
+    )
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('a source owner cannot acquire auto-increment identity semantics', async () => {
+  const k = await metadata()
+  try {
+    await k('COLUMNS')
+      .withSchema('information_schema')
+      .where({ TABLE_NAME: 'tx_labels', COLUMN_NAME: 'userId' })
+      .update({ EXTRA: 'auto_increment' })
+    await expect(validateSnapshotJournalMysqlSource(k)).rejects.toThrow(
+      'Unsupported or incomplete MySQL snapshot journal source'
+    )
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('every expected journal observer is excluded from the stable pre-install source binding', async () => {
+  const k = await metadata()
+  try {
+    const before = await readSnapshotJournalMysqlBinding(k)
+    const original = await k('TRIGGERS').withSchema('information_schema').first()
+    const names = [
+      ...Array.from({ length: 4 }, (_, i) => 'snapshot_journal_scope_' + i),
+      ...Array.from({ length: 13 }, (_, i) => 'snapshot_journal_physical_' + i)
+    ].flatMap(prefix => ['INSERT', 'UPDATE', 'DELETE'].map(event => prefix + '_' + event))
+    for (const name of names)
+      await k('TRIGGERS')
+        .withSchema('information_schema')
+        .insert({ ...original, TRIGGER_NAME: name, ACTION_STATEMENT: 'BEGIN DO 1; END' })
+    expect(await readSnapshotJournalMysqlBinding(k)).toBe(before)
+  } finally {
+    await k.destroy()
+  }
+})
+
+test.each(['single oversized value', 'multibyte value', '513 rows', 'nonarray'])(
+  'binding independently refuses %s from the driver',
+  async kind => {
+    const k = await metadata(),
+      process = jest.mocked(k.client.processResponse).getMockImplementation()!
+    let altered = false
+    jest.mocked(k.client.processResponse).mockImplementation((...args: unknown[]) => {
+      const query = args[0] as { sql: string },
+        result = process(...args)
+      if (query.sql.includes('ORDINAL_POSITION position')) {
+        altered = true
+        if (kind === 'nonarray') return [null]
+        if (kind === '513 rows')
+          return [Array.from({ length: 513 }, (_, i) => ({ ...result[0][0], name: 'column_' + i }))]
+        result[0][0].defaultValue = kind === 'multibyte value' ? '😀'.repeat(4097) : 'x'.repeat(16385)
+      }
+      return result
+    })
+    try {
+      await expect(readSnapshotJournalMysqlBinding(k)).rejects.toThrow(
+        'Unsupported or incomplete MySQL snapshot journal source'
+      )
+      expect(altered).toBe(true)
+    } finally {
+      await k.destroy()
+    }
+  }
+)
+
+test('binding accepts exactly 512 driver rows and one 16384-byte definition', async () => {
+  const k = await metadata(),
+    process = jest.mocked(k.client.processResponse).getMockImplementation()!
+  let altered = false
+  jest.mocked(k.client.processResponse).mockImplementation((...args: unknown[]) => {
+    const query = args[0] as { sql: string },
+      result = process(...args)
+    if (query.sql.includes('ORDINAL_POSITION position')) {
+      altered = true
+      while (result[0].length < 512) result[0].push({ name: 'extra_' + result[0].length })
+      result[0][0].defaultValue = '😀'.repeat(4096)
+    }
+    return result
+  })
+  try {
+    expect(await readSnapshotJournalMysqlBinding(k)).toMatch(/^[0-9a-f]{64}$/)
+    expect(altered).toBe(true)
+  } finally {
+    await k.destroy()
+  }
+})

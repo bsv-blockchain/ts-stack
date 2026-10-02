@@ -10,8 +10,11 @@ import {
   SNAPSHOT_JOURNAL_SQLITE_GENERATION as metadata
 } from './SnapshotJournalSqliteGeneration'
 import { copySnapshotJournalBootstrapPage } from './SnapshotJournalBootstrap'
-import { snapshotJournalRevision } from './SnapshotJournalRevision'
-const ceiling = snapshotJournalRevision('1000000')
+import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
+let ceiling: SnapshotJournalRevision
+beforeEach(() => {
+  ceiling = snapshotJournalRevision('1000000')
+})
 async function fixture() {
   const k = knex({
     client: 'better-sqlite3',
@@ -298,3 +301,81 @@ test.each(['users', 'settings'])('source metadata must include %s in the ownersh
     await source.destroy()
   }
 })
+
+test('legacy SQLite alias preserves installation identity through completion', async () => {
+  const { k, source } = await fixture()
+  k.client.config.client = 'sqlite3'
+  try {
+    const installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+    await finish(k)
+    expect(await completeSnapshotJournalSqliteGeneration(k)).toEqual({
+      ...installed,
+      complete: true
+    })
+    expect(await readSnapshotJournalSqliteGeneration(k)).toEqual({ ...installed, complete: true })
+  } finally {
+    await source.destroy()
+  }
+})
+
+test.each(['install', 'read', 'complete'])(
+  'SQLite generation %s refuses a foreign client before I/O',
+  async operation => {
+    const transaction = jest.fn(),
+      raw = jest.fn()
+    const k = { client: { config: { client: 'mysql2' } }, transaction, raw } as unknown as Knex
+    const result =
+      operation === 'install'
+        ? installSnapshotJournalSqliteGeneration(k, ceiling)
+        : operation === 'read'
+          ? readSnapshotJournalSqliteGeneration(k)
+          : completeSnapshotJournalSqliteGeneration(k)
+    await expect(result).rejects.toThrow('Invalid or unowned SQLite snapshot journal generation')
+    expect(transaction).not.toHaveBeenCalled()
+    expect(raw).not.toHaveBeenCalled()
+  }
+)
+
+test('empty SQLite generation event window refuses before transaction admission', async () => {
+  const transaction = jest.fn(),
+    k = { client: { config: { client: 'sqlite3' } }, transaction } as unknown as Knex
+  await expect(installSnapshotJournalSqliteGeneration(k, snapshotJournalRevision('0'))).rejects.toThrow(
+    'Invalid or unowned SQLite snapshot journal generation'
+  )
+  expect(transaction).not.toHaveBeenCalled()
+})
+
+test.each(['prefix', 'suffix'])(
+  'SQLite generation rejects an epoch with a valid UUID only as a %s substring',
+  async side => {
+    const { k, source } = await fixture()
+    try {
+      const installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+      await k(metadata).update({
+        epoch: side === 'prefix' ? installed.epoch + 'x' : 'x' + installed.epoch
+      })
+      await expect(readSnapshotJournalSqliteGeneration(k)).rejects.toThrow(
+        'Invalid or unowned SQLite snapshot journal generation'
+      )
+    } finally {
+      await source.destroy()
+    }
+  }
+)
+
+test.each(['revision-exhausted', 'key-out-of-range'])(
+  'SQLite %s state remains readable but cannot publish completion',
+  async reason => {
+    const { k, source } = await fixture()
+    try {
+      const installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+      await k('snapshot_journal_clock').update({ enabled: 0, reason })
+      expect(await readSnapshotJournalSqliteGeneration(k)).toEqual({ ...installed, enabled: false })
+      await expect(completeSnapshotJournalSqliteGeneration(k)).rejects.toThrow(
+        'Invalid or unowned SQLite snapshot journal generation'
+      )
+    } finally {
+      await source.destroy()
+    }
+  }
+)

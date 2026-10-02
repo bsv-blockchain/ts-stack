@@ -519,3 +519,18 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
   })
   assert.notEqual(failedBuild.status, 0)
 })
+
+test('journal native recovery remains mandatory alongside all archive fixture families', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const archive = onlyFixtureStep(steps, 'node test/storage/runSnapshotArchiveMysql.cjs')
+  const sqlite = onlyFixtureStep(steps, 'node test/storage/snapshotJournalSqliteCrash.cjs')
+  const mysql = onlyFixtureStep(steps, 'node test/storage/runSnapshotJournalMysql.cjs')
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
+  )
+  assert.match(steps[sqlite], /^        timeout-minutes: 3$/m)
+  assert.match(steps[mysql], /^        timeout-minutes: 10$/m)
+  assert.ok(steps[mysql].includes("TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'"))
+  assert.ok(archive < sqlite && sqlite < mysql && mysql < coverage)
+  assertNativeWalletJob(wallet)
+})

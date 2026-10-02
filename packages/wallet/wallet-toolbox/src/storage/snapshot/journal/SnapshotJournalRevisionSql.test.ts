@@ -62,3 +62,27 @@ test.each(['pg', 'mssql', 'mysql-custom', undefined])('unknown driver %p refuses
     'Unsupported snapshot journal SQL driver'
   )
 })
+
+test.each([
+  ['better-sqlite3', 'TEXT', 'INTEGER'],
+  ['sqlite3', 'TEXT', 'INTEGER'],
+  ['mysql', 'CHAR', 'SIGNED'],
+  ['mysql2', 'CHAR', 'SIGNED']
+])('driver alias %s preserves the explicit selected and operand types', async (client, selected, operand) => {
+  const k = knex({ client: 'mysql2' })
+  // Compile through an installed client; alias selection must not open a connection.
+  k.client.config.client = client
+  const query = jest.fn()
+  k.on('query', query)
+  try {
+    const text = snapshotJournalRevisionText(k, 'revision').toSQL()
+    const value = snapshotJournalRevisionOperand(k, snapshotJournalRevision('9223372036854775807')).toSQL()
+    expect(text.sql).toBe('CAST(`revision` AS ' + selected + ')')
+    expect(text.bindings).toEqual([])
+    expect(value.sql).toBe('CAST(? AS ' + operand + ')')
+    expect(value.bindings).toEqual(['9223372036854775807'])
+    expect(query).not.toHaveBeenCalled()
+  } finally {
+    await k.destroy()
+  }
+})

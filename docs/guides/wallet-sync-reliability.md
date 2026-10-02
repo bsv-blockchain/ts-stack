@@ -1064,3 +1064,10 @@ uncovered/invalid mutants, 300 cases with seed 3242026, four workers, runner reu
 bounds remain in force. Native ownership, client/server process-loss and broader
 platform/performance evidence are separate required validation; source helpers
 alone do not establish deployment, replication, PXC or power-loss readiness.
+
+Required wallet CI shard 1 runs the SQLite journal process-loss fixture and the
+owned disposable MySQL client/server recovery fixtures after the existing archive
+proofs, using the same-head build. The journal steps have three- and ten-minute
+job-step bounds respectively. Each mutation part enforces zero uncovered and
+invalid mutants; the complete disjoint aggregate must also reach 90%. A successful
+part or a retried native worker does not establish complete-target qualification.
