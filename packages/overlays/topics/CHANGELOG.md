@@ -34,7 +34,11 @@ All notable changes to this project will be documented in this file. The format 
     `MandalaStorageManager` to admission and lookup.
   - Refusals are a typed `MandalaReject { code, reason }` with one of the
     `ERR_*` codes, not a free-text `Error`. Registry membership is an explicit
-    `MembershipProvider` dependency, answered as `ERR_MEMBERSHIP`.
+    `MembershipProvider` dependency, answered as `ERR_MEMBERSHIP`. The reason
+    strings change with the catalog (`Reasons`): the no-linkage refusal
+    `output N: MandalaToken-decodable output with no verified linkage` is now
+    `output N: token output with no verified linkage`, so do not match on the
+    old text.
   - The v2 linkage payload is replaced by the v3 envelope
     `{ inputs, outputs, admin, deploySig }`. The `MandalaLinkagePayload` type is
     removed; use `MandalaEnvelope`, `encodeEnvelope` and `decodeEnvelope`.
@@ -85,12 +89,15 @@ All notable changes to this project will be documented in this file. The format 
   admitted owner before admittance, repairs a missing owner-index row inline,
   and the lookup service carries the eviction API (`outputEvicted`,
   `purgeAndRefold`, `restoreInputRow`).
-- `foldAction`, `defaultAssetState` and the `AssetAdminState` / `FoldContext` /
-  `FrozenRef` types are exported from the package entry point, so consumers can
-  replay Mandala admin history themselves (for example to rebuild an asset's
-  state while excluding an evicted transaction) with the exact reducer the
-  lookup service uses. The `exports` map is unchanged; no consumer migration is
-  required.
+- Version 1.9.0 (1.x history): `foldAction`, `defaultAssetState` and the
+  `AssetAdminState` / `FoldContext` / `FrozenRef` types are exported from the
+  package entry point, so consumers can replay Mandala admin history themselves
+  (for example to rebuild an asset's state while excluding an evicted
+  transaction) with the exact reducer the lookup service uses. The `exports`
+  map was unchanged in 1.9.0. 2.0.0 keeps these exports but changes the
+  signatures and keys of `foldAction`, `defaultAssetState` and
+  `AssetAdminState` (see the Mandala entry under Removed (2.0.0 candidate)
+  above).
 - `tm_uora_dpp` / `ls_uora_dpp`: admission and lookup for UORA attestation
   anchors (`uora-anchor-v3`), keyed on the `did:key` of the party that made the
   claim. Anchors name their anchoring service in the output and lock to its
@@ -118,15 +125,18 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
-- `tm_mandala`: a `MandalaToken`-shaped output with no linkage at its index, a
-  linkage that verifies to a different key than the output is locked to, or a
-  linkage the verifier cannot open now REJECTS the whole transaction with
+- Version 1.7.3 (1.x history; 2.0.0 refuses with a different reason string,
+  `output N: token output with no verified linkage`, see the Mandala entry
+  under Removed (2.0.0 candidate) above): `tm_mandala`: a
+  `MandalaToken`-shaped output with no linkage at its index, a linkage that
+  verifies to a different key than the output is locked to, or a linkage the
+  verifier cannot open now REJECTS the whole transaction with
   `output N: MandalaToken-decodable output with no verified linkage` (wire
-  contract §6, byte-identical to the Go engine). Previously `verifyFtOutputs`
-  skipped such an output and `conservationHolds` summed only the admitted
-  subset, so a transaction could carry an extra token output of any value,
-  still have its siblings admitted, receive the admission signature and be
-  broadcast — a phantom coin mined inside an attested transaction that an
+  contract §6 as of 1.7.3, byte-identical to the Go engine then). Previously
+  `verifyFtOutputs` skipped such an output and `conservationHolds` summed only
+  the admitted subset, so a transaction could carry an extra token output of
+  any value, still have its siblings admitted, receive the admission signature
+  and be broadcast — a phantom coin mined inside an attested transaction that an
   offline verifier stopping at "this txid was admitted" would credit.
 
 - Version 1.7.2 aligns `tm_uora_dpp` with the versioned UORA v3 format: compressed locking keys, exact drop tails, and printable UTF-8 fields. Valid anchors retain their bytes and admission result. The shared reference fixture covers key and tail validation. Coordinate reader upgrades and audit previously indexed nonconforming outputs before rebuilding the topic; this change does not claim a complete inventory of historical anchors.
@@ -138,22 +148,32 @@ All notable changes to this project will be documented in this file. The format 
   exact-integer range. Valid canonical amounts and topic identifiers are
   unchanged.
 
-- Version 1.8.0 requires admitted per-asset admin history for every non-genesis
-  Mandala action. The reference storage manager provides the verifier; custom
-  adapters must implement it. Registration uses its own genesis outpoint.
-- Token spends require authoritative stored ownership matching the source
-  outpoint, asset and amount. Optional linkage corroborates the stored owner
-  and source key. Sender blinding remains supported.
-- Reject duplicate or invalid linkage indices and normalize sanctions key
-  casing. Valid wire fields and encodings are unchanged.
-- Canonicalize Mandala administrative identities and outpoints and compare
-  historical policy state case-insensitively, preventing case variants from
-  bypassing identity blocks, output freezes, or eviction records.
-- Make Mandala lookup balance accounting idempotent across repeated admission,
-  spend, and eviction callbacks, and reject conflicting token metadata for an
-  outpoint that is already indexed.
-- Back up and audit historical admin and ownership records before replay, and
-  coordinate admission and lookup upgrades. See the README migration guide.
+- Mandala hardening from 1.8.0 and 1.8.4, written for the 1.x admission design
+  that 2.0.0 replaces (see the Mandala entries under Removed (2.0.0 candidate)
+  above). These bullets are 1.x history, not 2.0.0 behavior or requirements: in
+  particular the admin-history verifier that custom adapters had to implement
+  no longer exists, because admin continuity is now an admitted authority
+  input.
+  - Version 1.8.0 requires admitted per-asset admin history for every
+    non-genesis Mandala action. The reference storage manager provides the
+    verifier; custom adapters must implement it. Registration uses its own
+    genesis outpoint.
+  - Version 1.8.0: token spends require authoritative stored ownership matching
+    the source outpoint, asset and amount. Optional linkage corroborates the
+    stored owner and source key. Sender blinding remains supported.
+  - Version 1.8.0: reject duplicate or invalid linkage indices and normalize
+    sanctions key casing. Valid wire fields and encodings are unchanged.
+  - Version 1.8.4: canonicalize Mandala administrative identities and outpoints
+    and compare historical policy state case-insensitively, preventing case
+    variants from bypassing identity blocks, output freezes, or eviction
+    records.
+  - Version 1.8.4: make Mandala lookup balance accounting idempotent across
+    repeated admission, spend, and eviction callbacks, and reject conflicting
+    token metadata for an outpoint that is already indexed.
+  - Version 1.8.0: back up and audit historical admin and ownership records
+    before replay, and coordinate admission and lookup upgrades. 2.0.0 is a
+    clean break with no data migration (see the persisted-schema entry under
+    Removed (2.0.0 candidate) above).
 
 ## [1.6.0] - 2026-07-10
 
