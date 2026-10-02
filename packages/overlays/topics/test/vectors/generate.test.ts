@@ -23,7 +23,9 @@
 //                       provider) and registryTokenId the claimed registry (absent: none)
 //     expected          { code, reason } for a refusal, { outputsToAdmit } for an admission
 // The engine admitted every outpoint named by previousCoins, so findAdmittedOutput answers for
-// exactly those, with the source output's script from the BEEF; it knows no other output.
+// exactly those, with the source output's script from the BEEF; it knows no other output. An input
+// outside previousCoins is ignored even when the BEEF shows a token-shaped source for it: an
+// authority or value coin the engine did not admit grants no authority and counts for no value.
 //
 // Every key is derived from a fixed scalar, so each is a real compressed secp256k1 point and the
 // deploySig signatures are deterministic (RFC 6979). The expected reasons below are literals, not
@@ -1407,6 +1409,48 @@ const registryCases: Group = async w => {
   ]
 }
 
+// ---- inputs the engine did not admit (the unanchored-prior class)
+// The BEEF shows a token-shaped source, but previousCoins names none, so the input is ignored.
+
+const unadmitted = (b: Built): Built => ({ ...b, previousCoins: [] })
+
+const unadmittedInputCases: Group = async w => {
+  const { token: t, authority, coin, registry } = w
+  const opts = { topic: REGISTRY_TOPIC }
+  const spendsRegistry = await act(
+    { b: registry.deploy, vout: 0 },
+    registry.token,
+    encodeAdminDetails({ kind: 'admitIdentity', identityKey: holder.key })
+  )
+  return [
+    record(
+      'authority-input-not-admitted',
+      unadmitted(await build([authority], [authorityOut(t)])),
+      w.afterIssue(),
+      refused(
+        'ERR_AUTHORITY',
+        `output 0: authority output without an admitted authority input of token ${t}`
+      )
+    ),
+    record(
+      'value-input-not-admitted',
+      unadmitted(await build([coin], [valueOut(t, holder, 100n, holder)])),
+      w.afterIssue(),
+      refused('ERR_CONSERVATION', `token ${t}: value in 0 != value out 100 without an authority`)
+    ),
+    record(
+      'registry-authority-input-not-admitted',
+      unadmitted(spendsRegistry),
+      registry.state(),
+      refused(
+        'ERR_AUTHORITY',
+        `output 0: authority output without an admitted authority input of token ${registry.token}`
+      ),
+      opts
+    )
+  ]
+}
+
 // ---- admissions
 
 const admitCases: Group = async w => {
@@ -1436,6 +1480,7 @@ const GROUPS: Group[] = [
   reissueCases,
   controlCases,
   registryCases,
+  unadmittedInputCases,
   admitCases
 ]
 
