@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.3.5'
+version: '1.3.6'
 last_updated: '2026-10-01'
 last_verified: '2026-10-01'
 review_cadence_days: 30
@@ -228,6 +228,12 @@ runtime, dev, optional and peer dependencies, cross-package static imports,
 package helpers, fixtures and manifests. Removed dependency edges remain in the
 union. Computed module inputs, unresolved aliases, unknown ownership, unproved
 lock resolution and shared execution controls retain required qualification.
+The prepare build then adds the workspace dependency closure of every required
+mutation target. Those jobs restore only archived `dist` and `out` trees and
+load package entry points such as `@bsv/wallet-toolbox-client` and `@bsv/btms`.
+A target can be required while its package stays outside the test scope; the
+build still has to exist or the initial test run fails before any mutant
+executes. Test, typecheck, and coverage selection stay on the affected set.
 Results report newly deferred targets separately from targets the prior selector
 already omitted. Canonical registry order remains stable to avoid moving long
 jobs behind short work in the six-runner queue.
