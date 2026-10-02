@@ -2156,3 +2156,26 @@ settlement handlers immediately and releases the stalled read in a finally block
 A deliberately inverted contract-identity check reaches one ordinary failed Jest
 assertion with a complete report. Production code and all canonical tests/gates
 are unchanged; a fresh complete campaign is required.
+
+
+The corrected complete private-admission campaign on8317369c9 finished all362
+mutants in315.137 seconds, with10014 unchanged captured inputs and HEAD:
+276 killed,86 survived,76.24%,zero uncovered and invalid. This remains a failed
+90% gate, with no worker-crash waiver. The next test-only batch independently
+exercises signed service/profile selection, every retained header/digest, current
+storage/admission/history/scope identity, explicit public reuse configuration,
+critical extensions, HTTPS, complete request/context bounds, full result framing
+and a fixed original assessment vector. Production source and gates are unchanged.
+
+The expanded complete canonical selection passes145 tests in four suites in
+12.023 seconds with both300-case properties and seed3242026. Its first136-test
+run had one fixture failure: the scope accessor returns an owned copy, so the
+corrected replacement test changes actual installed storage scope. Initial strict
+types also prevented direct assignment to readonly history; the malformed-host
+fixture now uses explicit runtime property replacement. One initial chain control
+still survived because its fixture also had a conflicting derived publication ID.
+The revised fixture recomputes that ID to isolate the original-chain check.
+Eight exact former survivors then reach ordinary failed assertions in an isolated strictly compiled
+harness, including installed rules, scope, history ownership, capability headers,
+original chain, result framing, critical extensions and assessment digest. Fresh
+complete qualification, rather than these controls, determines acceptance.
