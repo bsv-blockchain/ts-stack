@@ -13,25 +13,27 @@
     "lint": "oxlint src test --deny-warnings",
     "format:check": "pnpm --workspace-root exec prettier --check \"apps/output-knowledge-reference/**/*.{css,html,json,md,mjs,ts}\"",
     "test": "vitest run",
-    "test:browser": "pnpm build && node scripts/check-browser.mjs"
+    "test:browser": "pnpm build && node scripts/check-browser.mjs && node scripts/check-admission-browser.mjs",
+    "test:browser:admission": "pnpm build && node scripts/check-admission-browser.mjs"
   },
   "dependencies": {
-    "@bsv/sdk": "workspace:^",
+    "@bsv/auth-express-middleware": "workspace:^",
     "@bsv/output-knowledge": "workspace:^",
     "@bsv/overlay": "workspace:^",
     "@bsv/overlay-express": "workspace:^",
-    "@bsv/auth-express-middleware": "workspace:^",
+    "@bsv/sdk": "workspace:^",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.1"
+    "express-rate-limit": "^8.6.1",
+    "mongodb": "7.6.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
     "oxlint": "^1.76.0",
+    "puppeteer-core": "^25.4.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "^8.1.5",
-    "vitest": "^5.0.1",
-    "puppeteer-core": "^25.4.0"
+    "vitest": "^5.0.1"
   }
 }

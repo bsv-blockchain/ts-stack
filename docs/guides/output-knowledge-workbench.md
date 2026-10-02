@@ -2,9 +2,9 @@
 id: output-knowledge-workbench
 title: 'Running the Output Knowledge Workbench'
 kind: guide
-version: '1.0.0'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+version: '1.1.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, overlay, application, recovery, sqlite, indexeddb]
@@ -43,6 +43,41 @@ directory. Initial installation is explicit. For later restarts, use the same
 role and directory and omit `REFERENCE_CREATE`. A missing database does not
 authorize creating an empty replacement under the old service identity.
 
+## Install actual topic admission
+
+The default commands preserve the original direct-index fixture model. To drive
+the same page from actual admission, use an isolated loopback Mongo replica set,
+a fresh database whose name begins `output_reference_`, and a separate SQLite
+data directory. Set `REFERENCE_ADMISSION_URI` to a single loopback seed (for
+example `mongodb://127.0.0.1:27017/?replicaSet=reference`) and set
+`REFERENCE_ADMISSION_DATABASE` to that fresh database in both host terminals.
+The URI contains no credentials; this remains a public-fixture experiment.
+Then initialize the two roles explicitly as above. Their Mongo node scopes,
+identities, SQLite commands and provider indexes are independent.
+
+The producer retains its original command before the first Engine call. Engine
+verifies Script/SPV in historical mode, commits through the majority-acknowledged
+Mongo admission adapter, and retains the exact original topical receipt. The
+producer verifies that provenance and output admission, then reads actual current
+stored outputs. The point reader may omit ancestor bytes, so the producer binds
+the stored subject/script/value to its pinned complete fixture closure before
+independent verification and projection. A stored row alone is never verification.
+
+Mongo admission and SQLite lookup state are separate commits. A lost reply leaves
+the original command pending; **Recover saved producer command** reads retained
+admissions and repairs only that command's original groups. It never treats a
+missing receipt as proof of failure or chooses another transaction. Initial
+publication retains two bounded groups, and a replacement's removal/new output
+remain one group, fitting the client's negotiated two-observation limit.
+
+Restart with the same Mongo database, role, identity and SQLite files and omit
+`REFERENCE_CREATE`. A missing ownership marker or command namespace fails visibly.
+Do not initialize an empty replacement or clear files to manufacture recovery.
+Shutdown drains started admission/projection calls before closing stores. The
+producer does not broadcast or propagate through GASP. Its receipt establishes
+local topic admission; lookup visibility, Bitcoin mining, current unspentness and
+protected content release remain separate questions.
+
 ## Observe, disconnect and recover
 
 Open host one's page in two tabs. Select Alice in one and Bob in the other.
@@ -69,10 +104,11 @@ and cursor recover the missed changes. Local receipt commitment precedes cursor
 advancement. A missing control record fails visibly; the application does not
 silently substitute a new opening.
 
-Reintroduce the old first output. Membership returns, but its verified spent
-state remains. Open host two's producer page and publish there too. Both clients
-can then see two independent memberships for that old output while retaining
-the same verified spend. Host two's publication also restores its own membership
+Try to reintroduce the old first output. With the default fixture producer,
+membership returns while its verified spent state remains. With actual admission,
+the host's spent record prevents that membership from returning. Open host two's
+producer page and publish there too. Its independent source can expose that
+original output, but neither client forgets the verified spend it already learned. Host two's publication also restores its own membership
 for the independent record that host one withdrew. This is legitimate source
 divergence, not a Bitcoin consensus disagreement.
 
@@ -86,9 +122,12 @@ assessments. Refreshing or projecting that data never authorizes a wallet action
 registered collection query policy. Its producer verifies known fixture evidence
 before writing the read model. Independent publication groups commit separately;
 the replacement's withdrawal and new output share one index transaction. This
-producer is not an ordinary topic-admission bridge or an on-chain broadcaster.
-Production admission must provide its own verified rules, guarded state reads,
-durable receipt and atomic projection offset/outbox.
+default producer is not a topic-admission bridge. The optional
+`referenceAdmissionProducer.ts` installs actual retained topic admission and
+separate recoverable projection; its four fixed fixtures and topic policy remain
+application examples. Production admission must provide its own verified rules,
+guarded state reads, durable receipt and projection offset/outbox. Neither
+reference producer broadcasts on-chain transactions.
 
 `referenceClient.ts` takes a journal and a control-store factory. The Node
 integration supplies SQLite; the UI supplies native IndexedDB. The rest of the
@@ -111,7 +150,11 @@ over actual HTTP, SQLite restart, missed live groups, and the distinction
 between a withdrawal and a spend. The production-bundle browser check uses
 two provider processes and Chrome/Chromium's native IndexedDB. It closes a tab
 without an application shutdown hook, resumes its saved view, and verifies
-both source memberships without losing spend knowledge.
+the independent source memberships without losing spend knowledge. The ordinary
+`test:browser` script runs both producer modes. The additional admission run owns
+a fresh three-member Mongo replica set and verifies the actual interactive topic
+path; `test:browser:admission` selects only that profile. Separate native cases
+cover lost admission/projection replies, missing custody and stalled physical work.
 
 The browser harness uses foreground clicks and DOM-mutation waits so background
 animation-frame throttling does not masquerade as an application failure. It

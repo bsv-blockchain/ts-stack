@@ -24,13 +24,16 @@ does not make it current. Each provider has its own identity, index and retained
 sessions. A disconnected client resumes its original local control record and
 cursor, rather than inventing another Open.
 
-The interactive producer verifies the fixed evidence before explicitly updating
-the lookup read model. A separate automated proposal pipeline now connects the
-public SDK client, authenticated HTTP, real Script/SPV verification, ordinary
-Engine/Mongo admission and SQLite reservation recovery. The interactive lookup
-producer is not yet driven by that admission pipeline. Private publication, paid
-acquisition, protected release, covenant purchase flows and root-host eviction
-remain separate integrations under construction.
+The default producer preserves the original direct-index fixture behavior. An
+explicit admission installation connects the same interactive page to actual
+Engine/Mongo topic admission, retained original receipts and a recoverable SQLite
+lookup projection. A saved command precedes its first admission effect; recovery
+repairs its original bounded groups after a lost admission or projection reply.
+Source withdrawal does not spend the output, and this producer cannot reintroduce
+an output its admission store already knows was spent. A separate automated
+proposal pipeline composes non-final reservation, ordinary admission and receipt
+recovery. Private publication, paid acquisition, protected release, covenant
+purchase flows and root-host eviction remain further workbench integrations.
 
 ## Fixture provenance
 
@@ -70,6 +73,18 @@ Missing or inconsistent state is an error; never clear it to simulate recovery.
 A new browser workspace name starts a separate experiment; **Resume saved view**
 opens existing control records and does not rediscover a replacement contract.
 
+For actual admission, install an isolated loopback Mongo replica set and explicitly
+set `REFERENCE_ADMISSION_URI` to its single loopback seed URI and
+`REFERENCE_ADMISSION_DATABASE` to a fresh name beginning `output_reference_`.
+Use a separate `REFERENCE_DATA` directory for this installation. Both roles may
+share the replica set while retaining independent node scopes and commands.
+Initialization requires `REFERENCE_CREATE=1`; restart with the same Mongo database,
+role, identity and SQLite files and omit it. **Recover saved producer command**
+finishes retained work. A missing Mongo ownership marker or command namespace
+refuses recovery instead of creating replacement custody. Mongo admission and
+SQLite projection are separate commits: the original command reconciles the gap,
+so a topical receipt alone does not imply lookup visibility or mining.
+
 Use the [workbench guide](../../docs/guides/output-knowledge-workbench.md) for the
 expected results, storage boundaries and qualification limits.
 
@@ -90,11 +105,17 @@ also works with discovery/evidence access unavailable and the original manifest
 expired. Restoring caller authorization is still required to disclose the result.
 
 `pnpm --filter output-knowledge-reference-app test:browser` builds the production
-bundles and runs Chrome/Chromium with native IndexedDB, two actual local providers,
-two clients, page-close recovery and independent source membership. It requires
+bundles and runs both producer modes in Chrome/Chromium with native IndexedDB,
+two actual local providers, two clients, page-close recovery and independent
+source membership. Its admission run owns a fresh three-member Mongo fixture;
+it never contacts an operator's database. It requires
 free ports 4174 and 4175 and closes only the servers/profile it creates.
-The browser check writes a review screenshot under
-`artifacts/reference-workbench/workbench.png`.
+The browser checks write review screenshots under `artifacts/reference-workbench/`
+and `artifacts/reference-workbench-admission/`. Run only the admission profile with
+`pnpm --filter output-knowledge-reference-app test:browser:admission`.
+`test/referenceAdmission.test.ts` separately proves actual admission-driven
+progressive/live native recovery, both lost-reply boundaries, physical drain,
+changed-subject refusal and missing-custody recovery refusal.
 
 The proposal test exercises ordinary Topic Manager admission on the pinned
 synthetic chain. It does not establish mining, current unspentness, protected

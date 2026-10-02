@@ -9,7 +9,16 @@ import puppeteer from 'puppeteer-core'
 const directory = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(path.join(tmpdir(), 'output-reference-browser-'))
 const servers = []
+const admitted = Boolean(process.env.REFERENCE_ADMISSION_URI)
 let browser
+let interrupted = false
+function interrupt() {
+  interrupted = true
+  void browser?.close().catch(() => undefined)
+  void Promise.all(servers.map(child => stop(child)))
+}
+process.once('SIGINT', interrupt)
+process.once('SIGTERM', interrupt)
 async function executable() {
   for (const candidate of [
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -25,6 +34,7 @@ async function executable() {
   throw new Error('Chrome or Chromium is required; this check cannot substitute fake IndexedDB')
 }
 async function start(role) {
+  if (interrupted) throw new Error('Reference browser check interrupted')
   const child = spawn(process.execPath, ['dist-server/nodeServer.js'], {
     cwd: directory,
     env: { ...process.env, REFERENCE_HOST: role, REFERENCE_CREATE: '1', REFERENCE_DATA: temporary },
@@ -36,6 +46,7 @@ async function start(role) {
     let output = ''
     child.stderr.on('data', chunk => {
       output = (output + chunk).slice(-4096)
+      if (admitted) process.stderr.write(chunk)
     })
     child.once('error', error => {
       clearTimeout(timer)
@@ -70,6 +81,8 @@ async function page(account, resume = false, origin = 'http://127.0.0.1:4174', f
   const tab = await browser.newPage()
   tab.on('pageerror', error => errors.push(error.message))
   await tab.goto(origin, { waitUntil: 'networkidle0' })
+  const mode = await tab.$eval('#producer-mode', element => element.textContent)
+  assert.equal(mode.includes('actual topic admission'), admitted)
   console.log('Browser loaded', account)
   await tab.select('#account', account)
   if (federate) await tab.click('#federate')
@@ -142,17 +155,22 @@ try {
   await record(bob, 'Q', 'memberships', '0')
   assert.equal(await bob.$eval('[data-record="Q"]', element => element.dataset.spent), 'false')
   await click(alice, '[data-command="reintroduce"]')
-  await record(bob, 'A', 'memberships', '1')
+  await record(bob, 'A', 'memberships', admitted ? '0' : '1')
   await record(bob, 'A', 'spent', 'true')
   const producerTwo = await page('alice', false, 'http://127.0.0.1:4175', false)
   await click(producerTwo, '[data-command="publish"]')
-  await record(bob, 'A', 'memberships', '2')
+  await record(bob, 'A', 'memberships', admitted ? '1' : '2')
   await record(bob, 'Q', 'memberships', '1')
   await record(bob, 'A', 'spent', 'true')
-  await record(alice, 'A', 'memberships', '2')
+  await record(alice, 'A', 'memberships', admitted ? '1' : '2')
   await record(alice, 'Q', 'memberships', '1')
   await alice.setViewport({ width: 1440, height: 1180 })
-  const artifacts = path.resolve(directory, '../../artifacts/reference-workbench')
+  const artifacts = path.resolve(
+    directory,
+    admitted
+      ? '../../artifacts/reference-workbench-admission'
+      : '../../artifacts/reference-workbench'
+  )
   await mkdir(artifacts, { recursive: true })
   await alice.screenshot({ path: path.join(artifacts, 'workbench.png'), fullPage: true })
   await alice.setViewport({ width: 390, height: 844 })
@@ -160,9 +178,13 @@ try {
   await alice.screenshot({ path: path.join(artifacts, 'workbench-narrow.png'), fullPage: true })
   assert.deepEqual(errors, [])
   console.log(
-    'Native browser: two authenticated hosts, two clients, live Script/SPV updates, offline replay, reload, independent source membership and persistent spent state passed.'
+    'Native browser (' +
+      (admitted ? 'actual admission' : 'fixture producer') +
+      '): two authenticated hosts, two clients, live Script/SPV updates, offline replay, reload, independent source membership and persistent spent state passed.'
   )
 } finally {
+  process.removeListener('SIGINT', interrupt)
+  process.removeListener('SIGTERM', interrupt)
   if (browser) await browser.close()
   await Promise.all(servers.map(child => stop(child)))
   await rm(temporary, { recursive: true, force: true })

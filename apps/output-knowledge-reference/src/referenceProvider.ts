@@ -33,12 +33,31 @@ export const REFERENCE_SERVICE = 'reference-records'
 export const referenceNow = () => String(Math.floor(Date.now() / 1000))
 const binding = { application: 'output-knowledge-reference', version: 1 }
 
-/** Loopback workbench. A trusted fixture producer writes this read model, not a topic admission service. */
+export interface ReferenceProducerContext {
+  path: string
+  create: boolean
+  identity: string
+  index: SQLiteLookupIndex
+}
+export interface ReferenceProducer {
+  publish(): Promise<string>
+  replace(): Promise<string>
+  withdraw(): Promise<string>
+  reintroduce(): Promise<string>
+  recover(): Promise<string>
+  close(): Promise<void>
+}
+export type ReferenceProducerFactory = (
+  context: ReferenceProducerContext
+) => ReferenceProducer | Promise<ReferenceProducer>
+
+/** Loopback workbench. Admission and fixture producers are explicit installations. */
 export async function createReferenceProvider(options: {
   path: string
   create: boolean
   baseURL: string
   identityKey: PrivateKey
+  producer?: ReferenceProducerFactory
 }) {
   const index = options.create
     ? SQLiteLookupIndex.create(options.path, REFERENCE_SERVICE, binding)
@@ -184,6 +203,24 @@ export async function createReferenceProvider(options: {
       })
       return group.sequence
     }
+    const producer: ReferenceProducer = options.producer
+      ? await options.producer({
+          path: options.path,
+          create: options.create,
+          identity: trust.identity,
+          index
+        })
+      : {
+          publish: async () => {
+            await update(['A', 'Q'], [])
+            return update(['X'], [])
+          },
+          replace: () => update(['AC'], ['A']),
+          withdraw: () => update([], ['Q']),
+          reintroduce: () => update(['A'], []),
+          recover: async () => (await index.head()).sequence,
+          close: () => Promise.resolve()
+        }
     return {
       index,
       sessions,
@@ -192,14 +229,19 @@ export async function createReferenceProvider(options: {
       contracts,
       trust,
       manifest: () => structuredClone(manifest),
-      publish: async () => {
-        await update(['A', 'Q'], [])
-        return update(['X'], [])
-      },
-      replace: () => update(['AC'], ['A']),
-      withdraw: () => update([], ['Q']),
-      reintroduce: () => update(['A'], []),
-      close: () => index.close()
+      producerKind: options.producer ? ('admission' as const) : ('fixture' as const),
+      publish: () => producer.publish(),
+      replace: () => producer.replace(),
+      withdraw: () => producer.withdraw(),
+      reintroduce: () => producer.reintroduce(),
+      recover: () => producer.recover(),
+      close: async () => {
+        try {
+          await producer.close()
+        } finally {
+          await index.close()
+        }
+      }
     }
   } catch (error) {
     await index.close()

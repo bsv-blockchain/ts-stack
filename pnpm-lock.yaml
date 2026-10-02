@@ -103,6 +103,9 @@ importers:
       express-rate-limit:
         specifier: ^8.6.1
         version: 8.7.0(express@5.2.1)
+      mongodb:
+        specifier: 7.6.0
+        version: 7.6.0
     devDependencies:
       '@types/express':
         specifier: ^5.0.6

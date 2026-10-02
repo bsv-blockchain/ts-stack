@@ -2800,3 +2800,41 @@ holds and protected same-run release orchestration remain intact. The only merge
 conflict is this branch's older container-guide metadata; the current main
 version/date is retained with both branches' substantive guide content. This
 reconciliation does not authorize a release or claim full mutation qualification.
+
+### October 2 admission-backed two-host reference workbench
+
+The reference application now optionally installs a real topic manager, Engine
+and retained Mongo admission history. Engine verifies the fixed public synthetic
+transactions with Script/SPV before the producer projects their stored outputs
+into its durable lookup index. The producer binds each stored subject transaction,
+script and value to its original complete fixture ancestor closure and independently
+verifies that closure. A point output read alone is not a complete BEEF guarantee.
+The fixture publishes two bounded live groups, preserving the clients' negotiated
+two-observation maximum rather than splitting an atomic commit during delivery.
+
+An original command is saved before admission. Retained admission is recovered
+after an uncertain Engine reply; projection is repaired after an uncertain SQLite
+reply without choosing another command or repeating a committed live group.
+Separate majority Mongo and WAL/FULL SQLite commits are explicitly not atomic.
+Physical work drains before its owner releases the command store, including every
+started projection read after one fails. Opening a missing command namespace or
+Mongo ownership marker refuses replacement custody. The explicit loopback-only
+installer creates no broadcast, payment or GASP traffic.
+
+All five application suites pass 18 tests, including nine real Mongo/SQLite
+admission, recovery, bounded ownership and progressive/live restart cases. Both
+native Chrome profiles pass: the original direct-fixture producer and the actual
+admission producer. Each starts two authenticated hosts and two clients, verifies
+live Script/SPV evidence, closes an offline client's tab, resumes its committed
+IndexedDB cursor, and preserves verified spend knowledge while source-local
+membership changes independently. Actual admission refuses resurrection of the
+known spent predecessor. Both wide and narrow application views are captured and
+the narrow view has no horizontal overflow. These public fixed-chain workflows do
+not qualify production TLS, funding, private purchase or non-final proposal UI.
+
+The optional LCH authority validator delegates each existing controller/path check
+to a local helper, reducing nested callback depth while preserving sequential
+signature/revocation validation. Its 20 authority, paid-domain and seller regressions,
+strict types and clean packed ESM/CLI consumers pass. The previous published
+84656bbe6 head has one remaining new Sonar finding addressed by this extraction;
+the new batch still requires exact-head hosted qualification and complete mutation.

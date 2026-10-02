@@ -59,11 +59,22 @@ async function boundedJSON(url: string): Promise<unknown> {
 // Bootstrap comes from the same loopback application, not arbitrary peer discovery.
 const configuration = (await boundedJSON('/demo/config')) as {
   fixture: boolean
+  producer?: 'fixture' | 'admission'
   host: ReferenceHost
   peers: ReferenceHost[]
 }
 if (configuration.fixture !== true || configuration.peers.length > 1)
   throw new Error('Invalid reference bootstrap')
+if (
+  configuration.producer !== undefined &&
+  !['fixture', 'admission'].includes(configuration.producer)
+)
+  throw new Error('Invalid reference producer')
+const producerMode = configuration.producer ?? 'fixture'
+element('producer-mode').textContent =
+  producerMode === 'admission'
+    ? 'Records enter through actual topic admission. The saved producer command repairs its lookup projection after a lost reply. Republishing a known spent output cannot restore it here.'
+    : 'The fixture producer writes verified records directly to the lookup index. It can republish a spent output so you can observe that source membership does not undo spend knowledge.'
 let client: ReferenceClient | undefined
 let hosts: ReferenceHost[] = []
 let busy = false

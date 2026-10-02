@@ -146,6 +146,41 @@ export async function validateLCHOverlayAuthority(
     'ERR_LCH_AUTHORITY',
     'Asset interests are absent'
   )
+  const validateController = async (interest: string, right: Readonly<Record<string, unknown>>) => {
+    lchAssert(
+      right.controller instanceof Uint8Array,
+      'ERR_LCH_AUTHORITY',
+      'Rights controller is invalid'
+    )
+    if (toHex(right.controller) === toHex(actor)) return
+    const selected = owned.filter(
+      path =>
+        path.interest === interest &&
+        path.capability === capability &&
+        toHex(path.actor) === toHex(actor) &&
+        toHex(path.controller) === toHex(right.controller as Uint8Array)
+    )
+    lchAssert(selected.length === 1, 'ERR_LCH_AUTHORITY', 'Authority path is missing or ambiguous')
+    await validateAuthorityChain(
+      selected[0].chain as unknown as ReadonlyArray<{
+        body: AuthorityBody
+        signatures: Uint8Array[]
+      }>,
+      {
+        controller: right.controller,
+        actor,
+        assetId: terms.inspected.assetId,
+        interest,
+        capability,
+        policyAction: terms.policy.action,
+        usageProfile: terms.offer.body.usageProfile as string,
+        now,
+        network
+      },
+      verifier,
+      revocationSource
+    )
+  }
   await Array.from(interests).reduce(
     (sequence, interest) =>
       sequence.then(async () => {
@@ -158,47 +193,8 @@ export async function validateLCHOverlayAuthority(
           'ERR_LCH_AUTHORITY',
           'Required interest has no Asset controller'
         )
-        await Array.from(controllers).reduce(
-          (sequence, right) =>
-            sequence.then(async () => {
-              lchAssert(
-                right.controller instanceof Uint8Array,
-                'ERR_LCH_AUTHORITY',
-                'Rights controller is invalid'
-              )
-              if (toHex(right.controller) === toHex(actor)) return
-              const selected = owned.filter(
-                path =>
-                  path.interest === interest &&
-                  path.capability === capability &&
-                  toHex(path.actor) === toHex(actor) &&
-                  toHex(path.controller) === toHex(right.controller as Uint8Array)
-              )
-              lchAssert(
-                selected.length === 1,
-                'ERR_LCH_AUTHORITY',
-                'Authority path is missing or ambiguous'
-              )
-              await validateAuthorityChain(
-                selected[0].chain as unknown as ReadonlyArray<{
-                  body: AuthorityBody
-                  signatures: Uint8Array[]
-                }>,
-                {
-                  controller: right.controller,
-                  actor,
-                  assetId: terms.inspected.assetId,
-                  interest,
-                  capability,
-                  policyAction: terms.policy.action,
-                  usageProfile: terms.offer.body.usageProfile as string,
-                  now,
-                  network
-                },
-                verifier,
-                revocationSource
-              )
-            }),
+        await controllers.reduce(
+          (sequence, right) => sequence.then(() => validateController(interest, right)),
           Promise.resolve()
         )
       }),

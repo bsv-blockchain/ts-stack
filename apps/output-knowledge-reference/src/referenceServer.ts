@@ -8,6 +8,7 @@ import { createOutputLookupRouter } from '@bsv/overlay-express/output-lookup'
 import { createReferenceProvider, REFERENCE_SERVICE, referenceNow } from './referenceProvider.js'
 import { fixtureChain } from './fixtureChain.js'
 import type { ReferenceHost } from './referenceClient.js'
+import type { ReferenceProducerFactory } from './referenceProvider.js'
 
 /** Deliberately loopback-only. The public fixture keys provide no production access control. */
 export async function startReferenceServer(options: {
@@ -19,6 +20,8 @@ export async function startReferenceServer(options: {
   allowedOrigins?: string[]
   peers?: ReferenceHost[]
   staticDirectory?: string
+  producer?: ReferenceProducerFactory
+  reportProducerFailure?: (error: unknown) => void
 }) {
   const app = express()
   app.disable('x-powered-by')
@@ -79,7 +82,7 @@ export async function startReferenceServer(options: {
       })
     )
     app.get('/demo/config', (_req, res) => {
-      res.json({ fixture: true, host, peers: options.peers ?? [] })
+      res.json({ fixture: true, producer: provider.producerKind, host, peers: options.peers ?? [] })
     })
     const writers = new Set([91, 92].map(key => new PrivateKey(key).toPublicKey().toString()))
     app.post(
@@ -100,7 +103,8 @@ export async function startReferenceServer(options: {
             publish: provider.publish,
             replace: provider.replace,
             withdraw: provider.withdraw,
-            reintroduce: provider.reintroduce
+            reintroduce: provider.reintroduce,
+            recover: provider.recover
           }
           if (typeof body.action !== 'string' || !Object.hasOwn(commands, body.action)) {
             res.status(400).json({ error: 'invalid-command' })
@@ -108,7 +112,8 @@ export async function startReferenceServer(options: {
           }
           const sequence = await commands[body.action as keyof typeof commands]()
           res.json({ sequence })
-        } catch {
+        } catch (error) {
+          options.reportProducerFailure?.(error)
           res.status(409).json({ error: 'command-not-committed' })
         }
       }
