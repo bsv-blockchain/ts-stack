@@ -702,7 +702,7 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0
       joi:
-        specifier: ^18.2.5
+        specifier: ^18.2.6
         version: 18.2.6
     devDependencies:
       '@bsv/sdk':
