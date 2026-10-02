@@ -1,6 +1,6 @@
 # ── Stage 1: build ──────────────────────────────────────────
-# Base version 24.18.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS build
+# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS build
 
 # better-sqlite3 13 has no musl prebuilt for this Node 24 image. Keep the
 # compiler toolchain in the disposable build stage so both audited rebuilds
@@ -21,14 +21,13 @@ RUN npm ci --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3
 
 # ── Stage 2: production ────────────────────────────────────
-FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
-# that we don't need at runtime. Alpine 3.24.1's pinned Node image contains
-# OpenSSL 3.5.7-r0, so install the fixed 3.5.8-r0 runtime packages for
-# CVE-2026-14456 in the same layer.
-RUN apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+# that we don't need at runtime. Install the reviewed Alpine libcrypto3/libssl3
+# 3.5.9-r0 pin for CVE-2026-84782 in the same layer.
+RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 ARG APP_COMMIT
