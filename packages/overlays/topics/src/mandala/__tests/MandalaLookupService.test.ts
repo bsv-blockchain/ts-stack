@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
 import { Hash, P2PKH, PrivateKey, ProtoWallet, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
@@ -431,6 +432,158 @@ describe('MandalaLookupService admission', () => {
     await service.outputAdmittedByTopic(payloadOf(b, 1))
     expect(await db.collection('mandalaTokens').countDocuments()).toBe(0)
     expect(await db.collection('mandalaAuthorities').countDocuments()).toBe(0)
+  })
+})
+
+// The engine notifies each output once and only logs a throw, so a lost write is never retried.
+describe('MandalaLookupService lost writes', () => {
+  /** Notifies every output, as the engine does, and returns what each notification threw. */
+  async function settleCatching(b: Built): Promise<unknown[]> {
+    await storage.recordOwners(b.outs.map((_, i) => journalRow(b, i)))
+    const thrown: unknown[] = []
+    for (const i of b.outs.keys()) {
+      await service.outputAdmittedByTopic(payloadOf(b, i)).catch((e: unknown) => thrown.push(e))
+    }
+    return thrown
+  }
+
+  const fault = new Error('write concern timeout')
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  it.each([['storeAuthorityIfAbsent'], ['storeLinkage']] as const)(
+    'records and folds a committed action even when %s fails for its output',
+    async method => {
+      const { tokenId, deploy } = await deployed()
+      const freeze = adminTx(tokenId, [{ tx: deploy.tx, vout: 0 }], { kind: 'pause' })
+      freeze.env.outputs = [{ index: 0, linkage: { prover: ISSUER } as unknown as SpecificLinkage }]
+      jest.spyOn(storage, method).mockRejectedValueOnce(fault)
+      expect(await settleCatching(freeze)).toEqual([fault])
+      expect(await historyOf(tokenId)).toHaveLength(1)
+      expect((await storage.getAssetState(tokenId)).isPaused).toBe(true)
+      // the other owner record of the output is still written
+      const other = method === 'storeLinkage' ? 'mandalaAuthorities' : 'mandalaLinkageRecords'
+      expect(await db.collection(other).countDocuments({ txid: freeze.txid })).toBe(1)
+    }
+  )
+
+  it('keeps a deploy metadata and first state with its fee rate when its authority row fails', async () => {
+    const deploy = deployTx()
+    const tokenId = `${deploy.txid}_0`
+    jest.spyOn(storage, 'storeAuthorityIfAbsent').mockRejectedValueOnce(fault)
+    expect(await settleCatching(deploy)).toEqual([fault])
+    expect(await storage.findMetadata(tokenId)).toMatchObject({ sym: 'USD', feeRatePerKb: 50 })
+    expect(await storage.getAssetState(tokenId)).toEqual(defaultAssetState(tokenId, 50))
+    expect(await storage.getAuthorityRow(deploy.txid, 0)).toBeNull()
+  })
+
+  it('still indexes the owner when the history append fails, and rethrows the fault', async () => {
+    const { tokenId, deploy } = await deployed()
+    const pause = adminTx(tokenId, [{ tx: deploy.tx, vout: 0 }], { kind: 'pause' })
+    jest.spyOn(storage, 'appendAdminHistory').mockRejectedValueOnce(fault)
+    expect(await settleCatching(pause)).toEqual([fault])
+    expect(await storage.getAuthorityRow(pause.txid, 0)).not.toBeNull()
+    expect(await historyOf(tokenId)).toEqual([])
+  })
+
+  it('rethrows the first fault when several writes fail', async () => {
+    const { tokenId, deploy } = await deployed()
+    const pause = adminTx(tokenId, [{ tx: deploy.tx, vout: 0 }], { kind: 'pause' })
+    const later = new Error('second fault')
+    jest.spyOn(storage, 'appendAdminHistory').mockRejectedValueOnce(fault)
+    jest.spyOn(storage, 'storeAuthorityIfAbsent').mockRejectedValueOnce(later)
+    expect(await settleCatching(pause)).toEqual([fault])
+  })
+
+  it('keeps the action when the freeze context cannot be read, for the refold to fold', async () => {
+    const { tokenId, issue } = await issued()
+    const outpoint = `${issue.txid}.0`
+    const freeze = adminTx(tokenId, [{ tx: issue.tx, vout: 1 }], { kind: 'freezeOutput', outpoint })
+    jest.spyOn(storage, 'getTokenRow').mockRejectedValueOnce(fault)
+    expect(await settleCatching(freeze)).toEqual([fault])
+    const [, row] = await historyOf(tokenId)
+    expect(row).toMatchObject({ kind: 'freezeOutput' })
+    expect(row).not.toHaveProperty('frozenAmount')
+    expect((await storage.getAssetState(tokenId)).frozenOutpoints).toEqual([])
+    await service.rebuildState(tokenId)
+    expect((await storage.getAssetState(tokenId)).frozenOutpoints).toEqual([
+      { outpoint, amount: 100, owner: HOLDER }
+    ])
+  })
+})
+
+describe('MandalaLookupService freeze fold context', () => {
+  async function frozenAfter(target: (issue: Built) => string) {
+    const { tokenId, issue } = await issued()
+    const outpoint = target(issue)
+    const freeze = adminTx(tokenId, [{ tx: issue.tx, vout: 1 }], { kind: 'freezeOutput', outpoint })
+    await settle(freeze)
+    const [, row] = await historyOf(tokenId)
+    return { tokenId, issue, outpoint, row }
+  }
+
+  it('records the frozen amount and owner on the history row', async () => {
+    const { row } = await frozenAfter(issue => `${issue.txid}.0`)
+    expect(row).toMatchObject({ kind: 'freezeOutput', frozenAmount: 100, frozenOwner: HOLDER })
+  })
+
+  it('refolds with the recorded context, whatever happened to the frozen row since', async () => {
+    const { tokenId, issue, outpoint } = await frozenAfter(i => `${i.txid}.0`)
+    const live = await storage.getAssetState(tokenId)
+    await storage.takeToken(issue.txid, 0)
+    await service.rebuildState(tokenId)
+    expect(await storage.getAssetState(tokenId)).toEqual(live)
+    expect(live.frozenOutpoints).toEqual([{ outpoint, amount: 100, owner: HOLDER }])
+  })
+
+  it('freezes a coin with no row at 0 and keeps it at 0 when the row appears later', async () => {
+    const { tokenId, issue, row } = await frozenAfter(i => `${i.txid}.7`)
+    expect(row).toMatchObject({ frozenAmount: 0, frozenOwner: '' })
+    // the row is repaired after the freeze was folded: a refold must not read it now
+    await storage.storeTokenIfAbsent({
+      txid: issue.txid,
+      outputIndex: 7,
+      tokenId,
+      amount: 55,
+      identityKey: RECEIVER,
+      createdAt: new Date()
+    })
+    await service.rebuildState(tokenId)
+    expect((await storage.getAssetState(tokenId)).frozenOutpoints).toEqual([
+      { outpoint: `${issue.txid}.7`, amount: 0, owner: '' }
+    ])
+  })
+
+  it('freezes a coin of another token at 0, so a reissue can never mint its amount', async () => {
+    const other = await issued([[RECEIVER, 900n]])
+    const { tokenId, issue } = await issued()
+    const outpoint = `${other.issue.txid}.0`
+    await settle(adminTx(tokenId, [{ tx: issue.tx, vout: 1 }], { kind: 'freezeOutput', outpoint }))
+    expect((await storage.getAssetState(tokenId)).frozenOutpoints).toEqual([
+      { outpoint, amount: 0, owner: '' }
+    ])
+  })
+
+  it('records no fold context for any other kind', async () => {
+    const { tokenId } = await issued()
+    expect(await historyOf(tokenId)).toEqual([
+      expect.not.objectContaining({ frozenAmount: expect.anything() })
+    ])
+  })
+})
+
+describe('MandalaLookupService tokenIdsWithHistory', () => {
+  it('lists every token with admin history once, and none without', async () => {
+    const first = await issued()
+    const second = await issued()
+    await deployed()
+    const pause = adminTx(first.tokenId, [{ tx: first.issue.tx, vout: 1 }], { kind: 'pause' })
+    await settle(pause)
+    expect((await service.tokenIdsWithHistory()).sort()).toEqual(
+      [first.tokenId, second.tokenId].sort()
+    )
   })
 })
 

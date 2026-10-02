@@ -388,6 +388,12 @@ export class MandalaStorageManager implements MandalaStateStore {
     return await cursor.toArray()
   }
 
+  /** Every token with admin history: the set the boot refold must rebuild (spec §6.6). */
+  async tokenIdsWithHistory(): Promise<string[]> {
+    await this.ensureIndexes()
+    return await this.adminHistory.distinct('tokenId')
+  }
+
   /** Every token a transaction has admin history for: the set an eviction must refold. */
   async tokensTouchedBy(txid: string): Promise<string[]> {
     await this.ensureIndexes()

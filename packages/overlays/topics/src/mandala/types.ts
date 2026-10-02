@@ -79,6 +79,9 @@ export interface AdminHistoryEntry {
   offset: number
   admitSeq: number
   createdAt: Date
+  /** freezeOutput rows: the frozen coin's amount and owner the action was folded with. */
+  frozenAmount?: number
+  frozenOwner?: string
 }
 
 export interface MandalaLinkageRecord {

@@ -44,7 +44,7 @@ describe('stateful lookup coverage', () => {
   it('rebuilds frozen Mandala state from authoritative token ownership', async () => {
     const storage = mandalaStorage({
       findAdminHistory: jest.fn(async () => [freezeRow]),
-      getTokenRow: jest.fn(async () => ({ amount: 7, identityKey: 'OwnerKey' }))
+      getTokenRow: jest.fn(async () => ({ tokenId, amount: 7, identityKey: 'OwnerKey' }))
     })
 
     await serviceOn(storage).rebuildState(tokenId)

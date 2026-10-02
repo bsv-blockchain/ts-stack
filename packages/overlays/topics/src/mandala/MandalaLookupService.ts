@@ -144,6 +144,44 @@ function deltaOf({ tx, txid, output, outputs }: Admitted): number {
   return ledger === undefined ? 0 : Number(ledger.valueOut - ledger.valueIn)
 }
 
+/**
+ * Runs every step in order even when one fails, then rethrows the first fault: one lost write must
+ * not take the writes after it down too.
+ */
+async function everyStep(steps: ReadonlyArray<() => Promise<void>>): Promise<void> {
+  const faults: unknown[] = []
+  await eachInOrder(steps, async step => {
+    try {
+      await step()
+    } catch (fault) {
+      faults.push(fault)
+    }
+  })
+  if (faults.length > 0) throw faults[0]
+}
+
+type Settled<T> = { ok: true; value: T } | { ok: false; fault: unknown }
+
+const settled = async <T>(work: Promise<T>): Promise<Settled<T>> => {
+  try {
+    return { ok: true, value: await work }
+  } catch (fault) {
+    return { ok: false, fault }
+  }
+}
+
+const folded = (
+  state: AssetAdminState,
+  details: AdminDetails,
+  at: FoldPosition,
+  context: FoldContext
+): AssetAdminState => ({
+  ...foldAction(state, details, context),
+  lastProcessedHeight: at.height,
+  lastProcessedOffset: at.offset,
+  lastAdmitSeq: at.admitSeq
+})
+
 interface Action {
   details: AdminDetails
   detailsHex: string
@@ -173,16 +211,23 @@ export class MandalaLookupService implements LookupService {
 
   constructor(private readonly deps: MandalaLookupDeps) {}
 
+  /**
+   * The engine notifies each admitted output once and only logs what this throws, so a write that
+   * fails here is never retried. The records nothing can rebuild come first (the committed action,
+   * the deploy metadata and first state, the linkage record), and every step runs whatever an
+   * earlier one did; the first fault is rethrown once all have run. The owner row and balance come
+   * last: they are an index the next spend or the reconciler repairs from the owner journal.
+   */
   async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'whole-tx' || payload.topic !== MANDALA_TOPIC) return
     const admitted = admittedOutput(Transaction.fromBEEF(payload.atomicBEEF), payload.outputIndex)
     if (admitted === undefined) return
     const env = decodeEnvelope(payload.offChainValues)
-    const owner = await this.ownerOf(admitted, env)
-    // No owner: the row is left for the reconciler; the token's own records still follow.
-    if (owner !== undefined) await this.indexOwner(admitted, owner, env)
-    if (admitted.output.role === 'deploy') await this.indexDeploy(admitted)
-    await this.recordAction(admitted, env)
+    await everyStep([
+      async () => await this.recordAction(admitted, env),
+      async () => await this.indexDeploy(admitted),
+      async () => await this.indexOwner(admitted, env)
+    ])
   }
 
   /** The journalled owner, else the owner the output's linkage proves, else none. */
@@ -198,20 +243,40 @@ export class MandalaLookupService implements LookupService {
     }
   }
 
-  private async indexOwner(
+  /**
+   * The linkage record (it lives only in this notification's off-chain values), then the owner row
+   * with its balance credit. No owner: the row is left for the reconciler.
+   */
+  private async indexOwner(admitted: Admitted, env: MandalaEnvelope): Promise<void> {
+    const identityKey = await this.ownerOf(admitted, env)
+    if (identityKey === undefined) return
+    const createdAt = new Date()
+    await everyStep([
+      async () => await this.storeLinkage(admitted, identityKey, env, createdAt),
+      async () => await this.storeOwnerRow(admitted, identityKey, createdAt)
+    ])
+  }
+
+  private async storeLinkage(
     { txid, output }: Admitted,
     identityKey: string,
-    env: MandalaEnvelope
+    env: MandalaEnvelope,
+    createdAt: Date
+  ): Promise<void> {
+    const outputIndex = output.index
+    const linkage = env.outputs.find(entry => entry.index === outputIndex)?.linkage
+    if (linkage === undefined) return
+    await this.deps.storage.storeLinkage({ txid, outputIndex, identityKey, linkage, createdAt })
+  }
+
+  private async storeOwnerRow(
+    { txid, output }: Admitted,
+    identityKey: string,
+    createdAt: Date
   ): Promise<void> {
     const { storage } = this.deps
     const { index: outputIndex, tokenId } = output
-    const createdAt = new Date()
-    if (output.role === 'value') {
-      const amount = Number(output.amount)
-      const row = { txid, outputIndex, tokenId, amount, identityKey, createdAt }
-      // credit on insert only, so a replay never credits twice
-      if (await storage.storeTokenIfAbsent(row)) await storage.adjustBalance(identityKey, amount)
-    } else {
+    if (output.role !== 'value') {
       await storage.storeAuthorityIfAbsent({
         txid,
         outputIndex,
@@ -220,28 +285,37 @@ export class MandalaLookupService implements LookupService {
         identityKey,
         createdAt
       })
+      return
     }
-    const linkage = env.outputs.find(entry => entry.index === outputIndex)?.linkage
-    if (linkage !== undefined) {
-      await storage.storeLinkage({ txid, outputIndex, identityKey, linkage, createdAt })
-    }
+    const amount = Number(output.amount)
+    const row = { txid, outputIndex, tokenId, amount, identityKey, createdAt }
+    // credit on insert only, so a replay never credits twice
+    if (await storage.storeTokenIfAbsent(row)) await storage.adjustBalance(identityKey, amount)
   }
 
   /** The decoded deploy payload, and the token's first state with its fee rate. */
   private async indexDeploy({ txid, output }: Admitted): Promise<void> {
+    if (output.role !== 'deploy') return
     const { storage } = this.deps
     const metadata = deployMetadata(output.payload, output.payloadCanonical)
     await storage.storeMetadata({ tokenId: output.tokenId, txid, outputIndex: 0, ...metadata })
     await storage.putAssetStateIfAbsent(defaultAssetState(output.tokenId, metadata.feeRatePerKb))
   }
 
-  /** Appends the committed action to the history and, on that first append only, folds it. */
+  /**
+   * Appends the committed action to the history and, on that first append only, folds it. A
+   * freeze's fold context is read once, here, and kept on its history row, so every later refold
+   * folds exactly what the live fold did, whatever has happened to the frozen coin's row since. A
+   * failed context read must not cost the action: the row is appended without it (a refold then
+   * reads it live) and the fold is left to the refold.
+   */
   private async recordAction(admitted: Admitted, env: MandalaEnvelope): Promise<void> {
     const action = committedAction(admitted.output, env)
     if (action === undefined) return
     const { storage } = this.deps
     const { txid, output } = admitted
     const { height, offset } = txOrdering(admitted.tx)
+    const read = await settled(this.liveFoldContext(action.details, output.tokenId))
     const entry: AdminHistoryEntry = {
       tokenId: output.tokenId,
       txid,
@@ -253,38 +327,38 @@ export class MandalaLookupService implements LookupService {
       height,
       offset,
       admitSeq: await storage.nextAdmitSeq(),
-      createdAt: new Date()
+      createdAt: new Date(),
+      ...(read.ok ? read.value : {})
     }
     if (!(await storage.appendAdminHistory(entry))) return
+    if (!read.ok) throw read.fault
     // A crash or a store fault from here on leaves the action in the history but not in the
     // state, and no replay folds it (the append above returns false). The overlay recovers by
-    // calling rebuildState at boot for every token with history (a P2 duty).
+    // calling rebuildState for every token in tokenIdsWithHistory() at boot (a P2 duty).
     const state = await storage.getAssetState(output.tokenId)
-    await storage.putAssetState(await this.folded(state, action.details, entry))
-  }
-
-  private async folded(
-    state: AssetAdminState,
-    details: AdminDetails,
-    at: FoldPosition
-  ): Promise<AssetAdminState> {
-    return {
-      ...foldAction(state, details, await this.foldContext(details)),
-      lastProcessedHeight: at.height,
-      lastProcessedOffset: at.offset,
-      lastAdmitSeq: at.admitSeq
-    }
+    await storage.putAssetState(folded(state, action.details, entry, read.value))
   }
 
   // A freeze records the frozen row's amount and owner. The row, not the
   // journal: a coin already spent has no row, so it freezes at 0 and can never
-  // be reissued as value that has moved on.
-  private async foldContext(details: AdminDetails): Promise<FoldContext> {
+  // be reissued as value that has moved on. A row of another token is no
+  // target either: it would let a reissue of this token mint that coin's amount.
+  private async liveFoldContext(details: AdminDetails, tokenId: string): Promise<FoldContext> {
     const outpoint = details.kind === 'freezeOutput' ? details.outpoint : undefined
     if (outpoint === undefined) return {}
     const [txid, vout] = outpoint.split('.')
     const row = await this.deps.storage.getTokenRow(txid, Number(vout))
-    return row === null ? {} : { frozenAmount: row.amount, frozenOwner: row.identityKey }
+    if (row === null || row.tokenId !== tokenId) return { frozenAmount: 0, frozenOwner: '' }
+    return { frozenAmount: row.amount, frozenOwner: row.identityKey }
+  }
+
+  /** The context the row was folded with; a row written before it was recorded reads it live. */
+  private async recordedFoldContext(
+    entry: AdminHistoryEntry,
+    details: AdminDetails
+  ): Promise<FoldContext> {
+    if (entry.frozenAmount === undefined) return await this.liveFoldContext(details, entry.tokenId)
+    return { frozenAmount: entry.frozenAmount, frozenOwner: entry.frozenOwner ?? '' }
   }
 
   async outputSpent(payload: OutputSpent): Promise<void> {
@@ -336,9 +410,10 @@ export class MandalaLookupService implements LookupService {
 
   /**
    * Refolds the token's state from its history in `(height, offset, admitSeq)` order, leaving out
-   * `excludeTxid`, starting from the deploy's fee rate (fees off once the deploy is gone). Run at
-   * boot for every token with history, before admissions start, it also restores an action whose
-   * fold was lost after its history row was written.
+   * `excludeTxid`, starting from the deploy's fee rate (fees off once the deploy is gone), with each
+   * freeze's recorded fold context. Run at boot for every token in `tokenIdsWithHistory()`, before
+   * admissions start, it also restores an action whose fold was lost after its history row was
+   * written. It reads and then writes the state, so it must never run beside a live fold.
    */
   async rebuildState(tokenId: string, excludeTxid?: string): Promise<void> {
     const { storage } = this.deps
@@ -347,9 +422,14 @@ export class MandalaLookupService implements LookupService {
     await eachInOrder(await storage.findAdminHistory(tokenId), async entry => {
       if (entry.txid === excludeTxid) return
       const { details } = decodeAdminDetails(entry.detailsHex, ADMIN_KINDS, entry.outputIndex)
-      state = await this.folded(state, details, entry)
+      state = folded(state, details, entry, await this.recordedFoldContext(entry, details))
     })
     await storage.putAssetState(state)
+  }
+
+  /** Every token with admin history: the set the boot refold runs `rebuildState` over. */
+  async tokenIdsWithHistory(): Promise<string[]> {
+    return await this.deps.storage.tokenIdsWithHistory()
   }
 
   /**
@@ -365,7 +445,11 @@ export class MandalaLookupService implements LookupService {
     return tokenIds
   }
 
-  /** Eviction restore of a coin that is live again: its row from the journal, credited once. */
+  /**
+   * Eviction restore of an input coin: its row from the journal, credited once. It does not check
+   * that the coin is live: call it only after the engine confirms the input is unspent and admitted
+   * again, or it restores a row (and a balance) for a coin that is gone.
+   */
   async restoreInputRow(journal: MandalaOwnerRecord): Promise<boolean> {
     return (await this.deps.storage.repairOwnerRow(journal)).inserted
   }
