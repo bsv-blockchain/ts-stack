@@ -89,9 +89,16 @@ async function announceStored(
   req: ExpressRequest,
   payload: unknown
 ): Promise<void> {
+  const body = req.body as
+    { message?: { messageBox?: unknown; body?: unknown }; payment?: unknown } | undefined
   const results = (payload as { status?: unknown; results?: unknown } | undefined)?.results
-  const sent = (req.body as { message?: { messageBox?: unknown; body?: unknown } } | undefined)
-    ?.message
+  const sent = body?.message
+  // A paid send stores `{ message, payment }` per recipient, but the push
+  // carries only the request body. The live handler never internalizes a
+  // payment, so a consumer that acknowledges on the push would delete the row
+  // before the recipient's wallet saw the output. Leave paid sends to
+  // `listMessages`, which does internalize.
+  if (body?.payment != null) return
   if (
     (payload as { status?: unknown } | undefined)?.status !== 'success' ||
     !Array.isArray(results) ||

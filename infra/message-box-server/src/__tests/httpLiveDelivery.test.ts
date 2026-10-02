@@ -2,8 +2,17 @@ import { createServer, type Server as HttpServer } from 'node:http'
 import express from 'express'
 import request from 'supertest'
 import { MessageBoxClient } from '@bsv/message-box-client'
-import { PrivateKey, ProtoWallet, type WalletInterface } from '@bsv/sdk'
+import {
+  Beef,
+  P2PKH,
+  PrivateKey,
+  ProtoWallet,
+  PublicKey,
+  Transaction,
+  type WalletInterface
+} from '@bsv/sdk'
 import knexFactory, { type Knex } from 'knex'
+import { KnexPaymentReplayStore } from '../security/KnexPaymentReplayStore.js'
 import {
   attachMessageBoxWebSockets,
   closeMessageBoxWebSockets,
@@ -50,6 +59,53 @@ async function createSchema(database: Knex): Promise<void> {
     table.string('identity_key').primary()
     table.timestamp('updated_at').notNullable()
   })
+  await database.schema.createTable('payment_replays', table => {
+    table.string('transaction_id', 64).primary()
+    table.timestamp('created_at').notNullable()
+    table.timestamp('expires_at').nullable()
+  })
+  await database.schema.createTable('message_payment_intents', table => {
+    table.string('transaction_id', 64).primary()
+    table.string('request_digest', 64).notNullable()
+    table.string('status', 32).notNullable()
+    table.string('attempt_token', 64).notNullable()
+    table.timestamp('created_at').notNullable()
+    table.timestamp('updated_at').notNullable()
+  })
+}
+
+/** A BRC-29 output locked to `recipient`, the shape a recipient fee is paid in. */
+async function recipientPayment(recipient: string): Promise<Record<string, unknown>> {
+  const derivationPrefix = 'cHJlZml4'
+  const derivationSuffix = 'c3VmZml4'
+  const anyone = new ProtoWallet('anyone')
+  const { publicKey } = await anyone.getPublicKey({
+    protocolID: [2, '3241645161d8'],
+    keyID: `${derivationPrefix} ${derivationSuffix}`,
+    counterparty: recipient
+  })
+  const transaction = new Transaction()
+  transaction.addOutput({
+    satoshis: 1,
+    lockingScript: new P2PKH().lock(PublicKey.fromString(publicKey).toAddress())
+  })
+  const beef = new Beef()
+  beef.mergeTransaction(transaction)
+  return {
+    tx: beef.toBinaryAtomic(transaction.id('hex')),
+    outputs: [
+      {
+        outputIndex: 0,
+        protocol: 'wallet payment',
+        paymentRemittance: {
+          derivationPrefix,
+          derivationSuffix,
+          senderIdentityKey: (await anyone.getPublicKey({ identityKey: true })).publicKey
+        }
+      }
+    ],
+    description: 'Recipient payment'
+  }
 }
 
 function serverWallet(): WalletInterface {
@@ -181,6 +237,49 @@ describe('HTTP sendMessage live delivery', () => {
 
     await settle(pushes)
     expect(pushes).toEqual([{ sender: senderKey, messageId: 'm-1', body: 'hi' }])
+    await closeMessageBoxWebSockets(io)
+  })
+
+  it('does not push an HTTP-stored message that carries a recipient payment', async () => {
+    // The push carries the request body, which has no payment in it, and the
+    // live handler never internalizes one. A consumer that acknowledges on the
+    // push would delete the stored row before the recipient's wallet ever saw
+    // the output, so the sender pays and the recipient receives nothing.
+    const ctx = createMessageBoxContext({
+      knex: database,
+      wallet: serverWallet(),
+      enableWebSockets: true,
+      enableSwagger: false,
+      paymentReplayStore: new KnexPaymentReplayStore(database, 1),
+      paymentTransactionVerifier: async () => true
+    })
+    const app = buildApp(ctx, senderKey)
+    httpServer = createServer(app)
+    const io = attachMessageBoxWebSockets(httpServer, ctx)
+    const pushes: Push[] = []
+    const recipientKey = await joinRecipient(await listen(httpServer), pushes)
+    await database('message_permissions').insert({
+      recipient: recipientKey,
+      sender: null,
+      sender_scope: '',
+      message_box: BOX,
+      recipient_fee: 1
+    })
+
+    const response = await request(app)
+      .post('/sendMessage')
+      .send({
+        message: { recipient: recipientKey, messageBox: BOX, messageId: 'm-paid', body: 'hi' },
+        payment: await recipientPayment(recipientKey)
+      })
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('success')
+
+    const stored = await database('messages').where({ messageId: 'm-paid' }).first('body')
+    expect(JSON.parse(stored.body).payment).toBeDefined()
+
+    await new Promise(resolve => setTimeout(resolve, QUIET_MS))
+    expect(pushes).toEqual([])
     await closeMessageBoxWebSockets(io)
   })
 
