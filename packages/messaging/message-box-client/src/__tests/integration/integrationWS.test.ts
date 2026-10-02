@@ -11,6 +11,8 @@ jest.setTimeout(20000)
 const WS_URL = process.env.MESSAGE_BOX_INTEGRATION_HOST!
 
 let recipientKey: string
+/** Set by the test that needs it, so the subscription is made before the send. */
+let onDelivery: ((message: PeerMessage) => void) | undefined
 const messageBox = 'testBox'
 const testMessage = 'Hello, this is a WebSocket integration test.'
 
@@ -145,25 +147,33 @@ describe('MessageBoxClient WebSocket Integration Tests', () => {
     expect(received.sender).toBe(recipientKey)
   }, 15000)
 
-  /** TEST 6: A new socket joins for itself, against a real server **/
-  test('resubscribes after the WebSocket is disconnected', async () => {
+  /**
+   * TEST 6: the deterministic repro, against a real server. Membership belongs
+   * to the socket that joined, so a replacement has to join for itself. This
+   * used to emit no joinRoom at all, leaving a connected and authenticated
+   * socket that was pushed nothing.
+   **/
+  test('joins its room again on a socket built after a disconnect', async () => {
     await messageBoxClient.disconnectWebSocket()
     expect(messageBoxClient.getJoinedRooms().size).toBe(0)
 
-    const resubscribed = 'Message after a reconnect'
-    const messagePromise = new Promise<PeerMessage>((resolve, reject) => {
-      messageBoxClient
-        .listenForLiveMessages({
-          messageBox,
-          onMessage: (message: PeerMessage) => {
-            resolve(message)
-          }
-        })
-        .catch(reject)
-
-      setTimeout(() => {
-        reject(new Error('Test timed out: the rebuilt socket never joined its room'))
+    const body = 'Message after a fresh socket'
+    let received: PeerMessage | undefined
+    const delivered = new Promise<PeerMessage>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('Test timed out: the new socket never received its room message'))
       }, 10000)
+      onDelivery = (message: PeerMessage) => {
+        clearTimeout(timer)
+        received = message
+        resolve(message)
+      }
+    })
+
+    // Awaited: the room is only joined once this resolves.
+    await messageBoxClient.listenForLiveMessages({
+      messageBox,
+      onMessage: (message: PeerMessage) => onDelivery?.(message)
     })
 
     const identityKey = await messageBoxClient.getIdentityKey()
@@ -172,12 +182,12 @@ describe('MessageBoxClient WebSocket Integration Tests', () => {
     const response = await messageBoxClient.sendLiveMessage({
       recipient: recipientKey,
       messageBox,
-      body: resubscribed,
+      body,
       skipEncryption: true
     })
     expect(response).toHaveProperty('status', 'success')
 
-    const received = await messagePromise
-    expect(received.body).toBe(resubscribed)
+    await delivered
+    expect(received?.body).toBe(body)
   }, 20000)
 })

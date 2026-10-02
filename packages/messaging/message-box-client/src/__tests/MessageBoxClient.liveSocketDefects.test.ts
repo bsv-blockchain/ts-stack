@@ -464,6 +464,51 @@ describe('live-socket reconnection', () => {
     expect(onMessage).toHaveBeenCalledTimes(1)
   })
 
+  /** Subscribers share one listener, so they must not share its failures. */
+  it('delivers to the other subscribers when one throws', async () => {
+    const client = await connected()
+    const thrower = jest.fn(() => {
+      throw new Error('subscriber blew up')
+    })
+    const after = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: thrower })
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: after })
+    const socket = latest()
+
+    const handlers = socket.handlers[`sendMessage-${ROOM}`] ?? []
+    expect(handlers).toHaveLength(1)
+    handlers[0]({ sender: IDENTITY, messageId: 'm1', body: 'hello' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(thrower).toHaveBeenCalledTimes(1)
+    expect(after).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Each send used to attach its own acknowledgement listener and rely on
+   * `off` to take it away. The socket wrapper has none, so they accumulated:
+   * every ack walked every listener a busy sender had ever left behind.
+   */
+  it('keeps one acknowledgement listener however many messages it sends', async () => {
+    const client = await connected()
+    const socket = latest()
+    const ackEvent = `sendMessageAck-${ROOM}`
+
+    for (let index = 0; index < 5; index++) {
+      const sending = client.sendLiveMessage({
+        recipient: IDENTITY,
+        messageBox: BOX,
+        body: `m${index}`,
+        skipEncryption: true
+      })
+      await new Promise(resolve => setTimeout(resolve, 20))
+      fireOn(socket, ackEvent, { status: 'success', messageId: `m${index}` })
+      await expect(sending).resolves.toMatchObject({ status: 'success' })
+    }
+
+    expect(socket.handlers[ackEvent] ?? []).toHaveLength(1)
+  }, 30000)
+
   /** A room left is a room no longer delivered to, on the socket that stays. */
   it('stops delivering to a room it has left', async () => {
     const client = await connected()

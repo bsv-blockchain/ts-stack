@@ -962,6 +962,14 @@ export class MessageBoxClient {
    */
   private readonly dispatchedEvents: Set<string> = new Set()
   /**
+   * Sends waiting on an acknowledgement, oldest first, by ack event. A refusal
+   * carries no messageId, so the ack can only go to the oldest send in flight;
+   * that is what a listener per send did, since the settled ones returned at
+   * once and the first unsettled one took it.
+   */
+  private readonly pendingAcks: Map<string, Array<(response?: SendMessageResponse) => void>> =
+    new Map()
+  /**
    * A wait timed out with the socket still down. Covers bounded
    * `reconnectionAttempts` running out, which the wrapper gives no way to
    * observe; `reconnection: false` is read up front instead.
@@ -1298,7 +1306,11 @@ export class MessageBoxClient {
         ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
       })
       this.socket = socket
+      // A new socket carries none of the old one's listeners. Sends that were
+      // waiting on the old one fall back when they time out, as they did when
+      // their listener went with it.
       this.dispatchedEvents.clear()
+      this.pendingAcks.clear()
       for (const { event } of this.roomHandlers) this.dispatchLive(socket, event)
 
       // Fires on the first connection and on every Socket.IO reconnection.
@@ -1752,11 +1764,37 @@ export class MessageBoxClient {
         // Read after the decrypt so a subscription that went away while it ran
         // is not delivered to.
         await this.readLiveBody(message)
+        // Isolated: subscribers share one listener now, so a throw must not
+        // cost the rest of the room its message.
         for (const entry of this.roomHandlers) {
-          if (entry.event === event) entry.onMessage(message)
+          if (entry.event !== event) continue
+          try {
+            entry.onMessage(message)
+          } catch {
+            Logger.error('[MB CLIENT ERROR] A live message subscriber threw')
+          }
         }
       })()
     })
+  }
+
+  /** Attaches this socket's only acknowledgement listener for a room. */
+  private dispatchAcks(socket: ReturnType<typeof AuthSocketClient>, event: string): void {
+    if (this.dispatchedEvents.has(event)) return
+    this.dispatchedEvents.add(event)
+    socket.on(event, (response?: SendMessageResponse) => {
+      if (this.socket !== socket) return
+      this.pendingAcks.get(event)?.[0]?.(response)
+    })
+  }
+
+  /** Takes a settled or abandoned send out of its room's queue. */
+  private dropPendingAck(event: string, handler: (response?: SendMessageResponse) => void): void {
+    const waiting = this.pendingAcks.get(event)
+    if (waiting == null) return
+    const index = waiting.indexOf(handler)
+    if (index >= 0) waiting.splice(index, 1)
+    if (waiting.length === 0) this.pendingAcks.delete(event)
   }
 
   /** Decrypts or parses a live message in place, exactly once per arrival. */
@@ -1892,10 +1930,7 @@ export class MessageBoxClient {
           timeoutId = undefined
         }
 
-        const socketAny = this.socket as any
-        if (typeof socketAny?.off === 'function') {
-          socketAny.off(ackEvent, ackHandler)
-        }
+        this.dropPendingAck(ackEvent, ackHandler)
 
         Logger.log('[MB CLIENT] Received a WebSocket acknowledgment')
 
@@ -1912,8 +1947,11 @@ export class MessageBoxClient {
         }
       }
 
-      // Attach acknowledgment listener
-      this.socket?.on(ackEvent, ackHandler)
+      // One listener per room, with this send queued behind any already waiting.
+      const waiting = this.pendingAcks.get(ackEvent) ?? []
+      waiting.push(ackHandler)
+      this.pendingAcks.set(ackEvent, waiting)
+      if (this.socket != null) this.dispatchAcks(this.socket, ackEvent)
 
       // Emit message to room
       this.socket?.emit('sendMessage', {
@@ -1930,10 +1968,8 @@ export class MessageBoxClient {
         if (!handled) {
           handled = true
           timeoutId = undefined
-          const socketAny = this.socket as any
-          if (typeof socketAny?.off === 'function') {
-            socketAny.off(ackEvent, ackHandler)
-          }
+          // Dropped from the queue, or it would take an ack meant for a later send.
+          this.dropPendingAck(ackEvent, ackHandler)
           Logger.warn('[CLIENT] WebSocket acknowledgment timed out, falling back to HTTP')
           this.sendMessage(fallbackMessage(finalMessageId), overrideHost)
             .then(resolve)
@@ -2018,6 +2054,7 @@ export class MessageBoxClient {
     this.requestedRooms.clear()
     this.roomHandlers = []
     this.dispatchedEvents.clear()
+    this.pendingAcks.clear()
     // A rebuild in flight would undo the close.
     clearTimeout(this.rebuildTimer)
     clearTimeout(this.rebuildHoldTimer)

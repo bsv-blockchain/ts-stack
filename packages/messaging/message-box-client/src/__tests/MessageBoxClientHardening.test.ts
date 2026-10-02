@@ -1215,12 +1215,15 @@ describe('MessageBoxClient hardening branches', () => {
         status: 'success',
         messageId: 'fallback'
       })
-      const waitForAckHandler = async (
-        previous?: (response?: unknown) => void
-      ): Promise<(response?: unknown) => void> => {
-        for (let attempt = 0; attempt < 20; attempt++) {
-          const handler = listeners.get(`sendMessageAck-${recipientA}-inbox`)
-          if (handler != null && handler !== previous) return handler
+      // One acknowledgement listener serves the room, and each send queues
+      // behind it, so wait for the send to be queued rather than for a
+      // listener of its own.
+      const ackEvent = `sendMessageAck-${recipientA}-inbox`
+      const waitForAckHandler = async (): Promise<(response?: unknown) => void> => {
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const queued = ((client as any).pendingAcks.get(ackEvent) ?? []).length
+          const handler = listeners.get(ackEvent)
+          if (handler != null && queued > 0) return handler
           await new Promise(resolve => setImmediate(resolve))
         }
         throw new Error('WebSocket acknowledgement handler was not registered')
@@ -1248,7 +1251,8 @@ describe('MessageBoxClient hardening branches', () => {
         skipEncryption: true,
         maximumPayment: 7
       })
-      const failedAck = await waitForAckHandler(successfulAck)
+      const failedAck = await waitForAckHandler()
+      expect(failedAck).toBe(successfulAck)
       failedAck({ status: 'error' })
       await expect(fallbackSend).resolves.toMatchObject({ messageId: 'fallback' })
       expect(fallback).toHaveBeenCalledWith(

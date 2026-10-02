@@ -25,12 +25,15 @@ All notable changes to this project will be documented in this file. The format 
   `connect`, because the server refuses joins from an unauthenticated socket.
   Membership is cleared on a drop, since it belongs to the server-side socket
   that joined.
-- Re-attach live-message handlers to a rebuilt socket exactly once. There is no
-  `off` on the socket wrapper, so a second attach would double delivery
-  permanently.
-- Rebuild once after `io server disconnect`, which Socket.IO never retries, so a
-  subscriber that makes no calls of its own recovers. Bounded to one attempt per
-  successful authentication; a failure falls back to the next caller.
+- Rebuild after `io server disconnect`, which Socket.IO never retries, so a
+  subscriber that makes no calls of its own recovers. Only a socket that
+  authenticated is rebuilt, so a server refusing authentication is not retried
+  in a loop. The first rebuild is immediate and each further one doubles from
+  one second to a thirty-second cap. The count resets once a socket holds its
+  authentication for as long as the next delay would have been, so a relay that
+  drops its sockets a little after that window still gets an immediate rebuild
+  each time; the backoff bites when drops come faster than the current delay.
+  `disconnectWebSocket` cancels a rebuild in flight.
 - Read `socketOptions.managerOptions.reconnection` and honour `false` by
   disposing on a drop. Nothing rebuilds on its own under that setting, which is
   the host's choice and is documented on the option.
@@ -43,23 +46,25 @@ All notable changes to this project will be documented in this file. The format 
   been emitted and were never listened for, so a refused join left the client
   certain it was subscribed to a room it had never been given. The record is
   still made optimistically on emit, so a server that answers nothing behaves
-  as before; an answer only corrects it. A refusal that re-emitting can never
-  clear also stops being asked for on every reconnect.
+  exactly as before. **Correcting it needs a server that names the room on
+  `joinFailed`**, which is new alongside this release: without a room the event
+  cannot be attributed to any of the joins that may be in flight, and it is
+  logged and otherwise ignored.
 - One live-message listener per room per socket, reading its subscribers at
   delivery time. `leaveRoom` followed by another `listenForLiveMessages` used
   to attach a second listener — there is no `off` — and every message after
-  that arrived twice for the life of the socket. A message is also decrypted
-  once now, however many subscribers a room has.
+  that arrived twice for the life of the socket. A message is decrypted once
+  however many subscribers a room has, and a subscriber that throws no longer
+  costs the rest of the room its message.
+- One acknowledgement listener per room, with sends queued behind it. Each
+  `sendLiveMessage` used to attach its own and rely on an `off` the socket
+  wrapper does not have, so they accumulated for the life of the socket and
+  every acknowledgement walked all of them. A refusal carries no `messageId`,
+  so the oldest send in flight still takes the acknowledgement, as before.
 - **A live message is delivered a tick after it arrives.** It already was for
   an encrypted message; now it always is, because the body is read before any
   subscriber is called. A consumer asserting synchronous delivery in a test
   needs to let the microtask run.
-- Back off the rebuild after `io server disconnect`. The first is still
-  immediate; the rest double from one second to a thirty-second cap, and the
-  count resets once a socket has held its authentication that long. A relay
-  that authenticated and dropped in a loop previously got one rebuild per
-  authentication with nothing in between. `disconnectWebSocket` cancels a
-  rebuild in flight.
 
 ### 2.5.4 candidate — require the BRC-29 acceptance fix
 
