@@ -111,7 +111,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
-    "fast-check": "^4.10.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.5.1",
     "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",

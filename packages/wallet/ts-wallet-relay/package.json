@@ -117,7 +117,7 @@
     "babel-jest": "30.5.1",
     "esbuild": "^0.28.2",
     "express": "^5.2.1",
-    "fast-check": "^4.10.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.5.1",
     "jest-environment-jsdom": "^30.5.1",
     "oxlint": "^1.83.0",

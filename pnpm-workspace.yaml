@@ -58,6 +58,10 @@ overrides:
   # retaining Metro's CommonJS default-function contract. The mobile platform
   # gate exercises image dimensions, bundling, and Hermes compilation.
   'metro@0.87.0>image-size': 2.0.4
+  # Mermaid 12 reaches chevrotain 11.1.2, which pins lodash-es 4.17.23, affected
+  # by GHSA-r5fr-rjxr-66jc (_.template imports key-name code injection). Select
+  # the patched release already used elsewhere in the graph; the API is unchanged.
+  lodash-es@<4.18.0: 4.18.1
 strictDepBuilds: true
 trustPolicy: no-downgrade
 # Apply provenance downgrade checks to the recent supply-chain window. Older
