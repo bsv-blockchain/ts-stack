@@ -1976,3 +1976,32 @@ executions. All original source ranges, 99 canonical tests, property budgets,
 workers, deadlines and score/coverage/invalid gates remain; the union regression
 permits exactly this one explicit execution-setting difference from traversal.
 Fresh complete execution and final exact-head CI are still required.
+
+### Protected-store integrity and boundary qualification
+
+The complete local b4b96d772 protected-ledger target did not meet its unchanged
+90% requirement. The codec part killed 258 of 274 mutants (94.16%); the store
+part killed 237 of 335 (70.75%). Both completed with zero uncovered or invalid
+mutants, identical 9,980 captured inputs and unchanged HEAD. Their complete,
+disjoint three-file union therefore scored 81.28% across 609 mutants. This is a
+failed local aggregate, not hosted qualification or checkpoint approval.
+
+The follow-up retains every original source and canonical test and adds native
+restoration and boundary cases. Synthetic custody-authorized restoration verifies
+that authenticated ciphertext still requires valid head, inventory, revision,
+UTF-8, canonical JSON and declared-length semantics. Exact error classifications
+distinguish unavailable restoration, limited capacity and stale-revision conflicts.
+Other cases exercise inclusive 64-record batches, exact payload reservations,
+updates at full slot capacity, reservation-delta accounting, atomic rollback,
+and rejection of async callbacks before their bodies can execute. No gate,
+threshold, property budget, source range or prior test was removed.
+
+The expanded private selection passes all 168 tests across six suites in 9.702
+seconds with the canonical 300-case property budget and seed 3242026. The first
+new restoration run exposed three fixture cases rejected by the shared numeric
+JSON parser before reaching head validation; the corrected cases use valid JSON
+values with invalid field types to test that distinct boundary. One initial
+runner invocation used an absent root Jest path and ran no tests; the successful
+run uses the package-local installation. All 29 mutation-registry/partition
+regressions, root health/lint/format/types and strict package types pass. Complete
+fresh mutation parts and their unchanged-policy aggregate remain required.

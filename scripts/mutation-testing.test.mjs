@@ -452,6 +452,8 @@ test('protected ledger retains complete storage and custody source with native c
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/protected-payload.test.ts',
     '<rootDir>/test/protected-ledger-codec.test.ts',
+    '<rootDir>/test/protected-ledger-integrity.test.ts',
+    '<rootDir>/test/protected-ledger-boundaries.test.ts',
     '<rootDir>/test/protected-ledger.test.ts',
     '<rootDir>/test/protected-ledger.property.test.ts'
   ])

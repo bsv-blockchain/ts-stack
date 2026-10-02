@@ -1021,7 +1021,12 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
       propertyTest: 'packages/application/output-knowledge/test/protected-ledger.property.test.ts',
-      additionalInputs: ['src/private/**', 'src/storage/**', 'test/protected-ledger-fixture.ts'],
+      additionalInputs: [
+        'src/private/**',
+        'src/storage/**',
+        'test/protected-ledger-fixture.ts',
+        'test/protected-ledger-restoration-fixture.ts'
+      ],
       mutate: [
         'src/private/SQLiteProtectedLedger.ts',
         'src/private/ProtectedLedgerCodec.ts',
@@ -1032,6 +1037,8 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/test/protected-payload.test.ts',
           '<rootDir>/test/protected-ledger-codec.test.ts',
+          '<rootDir>/test/protected-ledger-integrity.test.ts',
+          '<rootDir>/test/protected-ledger-boundaries.test.ts',
           '<rootDir>/test/protected-ledger.test.ts',
           '<rootDir>/test/protected-ledger.property.test.ts'
         ],
