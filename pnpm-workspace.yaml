@@ -57,11 +57,6 @@ overrides:
   # jsdom, webpack-cli) still pulls js-yaml 3.15.1, affected by unbounded CPU
   # use on empty merge sources. Select the first patched 3.x release.
   js-yaml@<3.15.2: 3.15.2
-  # Metro 0.87 still declares image-size ^1.0.2. Use the first maintained
-  # release after the HEIF/JXL and ICNS non-progressing-parser advisories while
-  # retaining Metro's CommonJS default-function contract. The mobile platform
-  # gate exercises image dimensions, bundling, and Hermes compilation.
-  'metro@0.87.0>image-size': 2.0.4
   # Mermaid 12 reaches chevrotain 11.1.2, which pins lodash-es 4.17.23, affected
   # by GHSA-r5fr-rjxr-66jc (_.template imports key-name code injection). Select
   # the patched release already used elsewhere in the graph; the API is unchanged.

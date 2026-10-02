@@ -163,11 +163,6 @@ The root workspace carries seven narrow audited dependency overrides:
 - Jest's Istanbul reporting chain and the standalone WAB server can still
   select `js-yaml` 3.15.1. The workspace and WAB lock select the compatible
   3.15.2 security release until those parent ranges advance naturally.
-- Metro 0.87 still declares vulnerable `image-size` 1.x. A parent-scoped
-  substitution selects 2.0.4, which retains Metro's CommonJS default-function
-  call shape while moving past the malformed HEIF/JXL and ICNS parser
-  advisories. The child-process regression plus Metro and Hermes mobile gates
-  verify the substitution.
 
 These substitutions are verified through their affected Jest, mutation,
 documentation, and build paths and have owners, evidence, review dates, and
@@ -186,11 +181,12 @@ Jest, Stryker, and socket.io still admit the vulnerable `brace-expansion` and
 `engine.io` ranges, so those two substitutions stay. The earlier findings still
 hold for the rest: the supported graphs select exact `gaxios@7.1.3`, admit
 `uuid@9`, and pin `qs@6.15.1` without their registered substitutions, while the
-current frontmatter plugin still requests TOML 3.x and Metro 0.87 still
-requests `image-size` 1.x. New upstream majors can remove some legacy paths
-only through a coordinated Stryker or Google Cloud migration. The Metro-scoped
-`image-size` substitution is independently verified through the mobile platform
-contract. The method, result, count, and next rehearsal are enforced in
+current frontmatter plugin still requests TOML 3.x. New upstream majors can
+remove some legacy paths only through a coordinated Stryker or Google Cloud
+migration. Metro 0.87.1 replaced its `image-size` dependency with an in-tree
+parser, so the former Metro-scoped substitution was retired; the mobile
+platform contract verifies that boundary. The method, result, count, and next
+rehearsal are enforced in
 `governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly

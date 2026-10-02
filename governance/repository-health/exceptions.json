@@ -242,24 +242,6 @@
       "removeWhen": "Remove when remark-mdx-frontmatter or its supported successor natively resolves TOML 4.2.0 or newer and docs validation, tests, production build, and the frozen high-severity audit remain green."
     },
     {
-      "id": "metro-image-size-security-override",
-      "category": "override",
-      "target": "pnpm-workspace.yaml parent-scoped Metro 0.87 image-size 2.0.4 substitution",
-      "owner": "ts-stack-maintainers",
-      "reason": "Metro 0.87 still declares image-size ^1.0.2, whose complete release line is affected by GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq. image-size 2.0.4 retains the CommonJS default imageSize function used by Metro while moving the development-only graph past the vulnerable <=2.0.2 range. The child-process parser regression and complete Metro/Hermes mobile gate verify the major substitution.",
-      "evidence": [
-        "pnpm-workspace.yaml#overrides",
-        "pnpm-lock.yaml#overrides",
-        "governance/dependency-release-policy.json#overrideRegistry",
-        "packages/wallet/wallet-toolbox/mobile/test/image-size-security.test.ts",
-        "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
-        "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq"
-      ],
-      "created": "2026-09-16",
-      "reviewBy": "2026-10-16",
-      "removeWhen": "Remove when the supported Metro release natively accepts image-size 2.0.4 or newer and the frozen audit plus complete mobile platform contract remain green without the substitution."
-    },
-    {
       "id": "openapi-typescript-redocly-overrides",
       "category": "override",
       "target": "tools/codegen/node/package.json overrides for @redocly/openapi-core@1.34.17",

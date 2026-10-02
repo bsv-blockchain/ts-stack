@@ -74,9 +74,9 @@
     }
   },
   "scripts": {
-    "test": "pnpm build && jest --runInBand --watchman=false",
-    "test:watch": "pnpm build && jest --watch",
-    "test:coverage": "pnpm build && jest --coverage --runInBand --watchman=false",
+    "test": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:watch": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
     "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/BASM.property.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
