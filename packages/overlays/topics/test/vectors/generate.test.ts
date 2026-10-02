@@ -1476,6 +1476,31 @@ const admitCases: Group = async w => {
   ]
 }
 
+// ---- revocation (proposed §4.3 rule 1 amendment): an authority input's owner must be trusted.
+// Appended last, so the cases before it keep their bytes.
+
+const revocationCases: Group = async w => {
+  const { token: t, authority } = w
+  const issue = encodeAdminDetails({ kind: 'issue' })
+  // A key removed from the trusted set keeps no authority: the authority coin it still holds
+  // cannot be spent, even into a trusted issuer's output that commits an action (retryable,
+  // never persisted, lifted by re-trusting the key).
+  const detrusted = w.afterIssue()
+  for (const row of [...detrusted.authorities, ...detrusted.owners]) {
+    if (at(authority.b.txid, authority.vout)(row)) row.identityKey = rogue.key
+  }
+  return [
+    record(
+      'authority-input-owned-by-an-untrusted-key',
+      await build([authority], [valueOut(t, holder, 50n), authorityOut(t, commitTo(issue))], {
+        admin: [{ index: 1, details: hexOf(issue) }]
+      }),
+      detrusted,
+      refused('ERR_UNTRUSTED', `input 0: authority owner ${rogue.key} is not a trusted issuer`)
+    )
+  ]
+}
+
 // ---- the file ----------------------------------------------------------------------------------
 
 const GROUPS: Group[] = [
@@ -1493,7 +1518,8 @@ const GROUPS: Group[] = [
   controlCases,
   registryCases,
   unadmittedInputCases,
-  admitCases
+  admitCases,
+  revocationCases
 ]
 
 async function buildVectors(): Promise<Vectors> {

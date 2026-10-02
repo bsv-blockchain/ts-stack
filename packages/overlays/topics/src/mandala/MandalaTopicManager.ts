@@ -189,7 +189,7 @@ export class MandalaTopicManager implements TopicManager {
     })
 
     // layers C and D
-    const auth = await checkAuthority(txid, ledger, outputs, owners, env, {
+    const auth = await checkAuthority(txid, ledger, outputs, owners, inputOwners, env, {
       trustedIssuers: this.trusted,
       store,
       registry: false

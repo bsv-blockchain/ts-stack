@@ -111,7 +111,12 @@ interface Case {
   supply?: bigint | Error
   state?: Partial<AssetAdminState> | Error
   trusted?: string[]
+  /** Input index → resolved owner; by default ISSUER_A owns authority inputs, HOLDER value inputs. */
+  inputOwners?: Map<number, string>
 }
+
+const defaultInputOwners = (inputs: readonly Brc162Input[]): Map<number, string> =>
+  new Map(inputs.map(i => [i.index, i.role === 'value' ? HOLDER : ISSUER_A]))
 
 function storeFor(c: Case) {
   const circulatingSupply = jest.fn(async (_tokenId: string) => {
@@ -153,6 +158,7 @@ async function run(c: Case): Promise<AuthorityResult> {
     buildLedger(TXID, c.outputs, inputs),
     c.outputs,
     c.owners ?? c.outputs.map(o => ownerOf(o, o.role === 'value' ? HOLDER : ISSUER_A)),
+    c.inputOwners ?? defaultInputOwners(inputs),
     env,
     {
       trustedIssuers: new Set(c.trusted ?? [ISSUER_A, ISSUER_B]),
@@ -269,6 +275,60 @@ describe('checkAuthority — deploys and trust', () => {
       'ERR_UNTRUSTED',
       `output 0: owner ${ROGUE} is not a trusted issuer`
     )
+  })
+
+  // A key removed from the trusted set keeps no authority: it cannot spend an authority coin it
+  // still holds into an output locked to (and replaying the linkage of) a trusted issuer.
+  test('refuses an authority input owned by an identity outside the trusted set', async () => {
+    const issue = committed(1, { kind: 'issue' })
+    await expectReject(
+      {
+        outputs: [valueOut(0, 1_000_000n), issue.out],
+        inputs: [authIn(0)],
+        admin: [issue.entry],
+        inputOwners: new Map([[0, ROGUE]])
+      },
+      'ERR_UNTRUSTED',
+      `input 0: authority owner ${ROGUE} is not a trusted issuer`
+    )
+  })
+
+  test('judges authority inputs in input order, after the output owners and provers', async () => {
+    const auth = authOut(0)
+    const inputs = [valueIn(0, 5n), authIn(1, U), authIn(2)]
+    const outputs = [auth, authOut(1, U), valueOut(2, 5n)]
+    const inputOwners = new Map([
+      [0, ROGUE],
+      [1, ISSUER_B.toUpperCase()],
+      [2, ROGUE]
+    ])
+    await expectReject(
+      { outputs, inputs, inputOwners },
+      'ERR_UNTRUSTED',
+      `input 2: authority owner ${ROGUE} is not a trusted issuer`
+    )
+    await expectReject(
+      { outputs, inputs, inputOwners, owners: outputs.map(o => ownerOf(o, ISSUER_A, ROGUE)) },
+      'ERR_UNTRUSTED',
+      `output 0: linkage prover ${ROGUE} is not a trusted issuer`
+    )
+    // a value input's owner is never held to the trusted set
+    const result = await run({
+      outputs,
+      inputs,
+      inputOwners: new Map([
+        [0, ROGUE],
+        [1, ISSUER_B],
+        [2, ISSUER_A]
+      ])
+    })
+    expect([...result.adminTokens].sort()).toEqual([T, U].sort())
+  })
+
+  test('treats an authority input with no resolved owner as a programming error', async () => {
+    const work = run({ outputs: [authOut(0)], inputs: [authIn(0)], inputOwners: new Map() })
+    await expect(work).rejects.toThrow('no resolved owner for input 0')
+    await expect(work).rejects.not.toHaveProperty('code')
   })
 
   test('does not hold value output owners to the trusted-issuer set', async () => {
@@ -601,6 +661,7 @@ describe('checkAuthority — supply delta and caps', () => {
       buildLedger(TXID, c.outputs, c.inputs ?? []),
       c.outputs,
       c.outputs.map(o => ownerOf(o)),
+      defaultInputOwners(c.inputs ?? []),
       { inputs: [], outputs: [], admin: [] },
       { trustedIssuers: new Set([ISSUER_A]), store, registry: false }
     )

@@ -73,10 +73,10 @@ export class RegistryTopicManager implements TopicManager {
     const inputs = classifyAdmittedInputs(tx, previousCoins)
     const ledger = buildLedger(txid, outputs, inputs)
 
-    // layer B (input owners are resolved for their repair and linkage checks only)
+    // layer B
     requireValidTokenOutputs(invalid, outputs)
     const owners = await verifyOutputOwners(outputs, env, verifierWallet)
-    await resolveInputOwners(inputs, tx, env, {
+    const inputOwners = await resolveInputOwners(inputs, tx, env, {
       store,
       engine,
       verifierWallet,
@@ -85,7 +85,7 @@ export class RegistryTopicManager implements TopicManager {
     })
 
     // layer C, then the registry's own rule: the first trusted deploy wins
-    await checkAuthority(txid, ledger, outputs, owners, env, {
+    await checkAuthority(txid, ledger, outputs, owners, inputOwners, env, {
       trustedIssuers: this.trusted,
       store,
       registry: true

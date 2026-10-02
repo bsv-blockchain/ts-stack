@@ -106,6 +106,8 @@ export const Reasons = {
     untrusted(`output ${i}: owner ${k} is not a trusted issuer`),
   untrustedProver: (i: number, k: string) =>
     untrusted(`output ${i}: linkage prover ${k} is not a trusted issuer`),
+  untrustedAuthorityInput: (i: number, k: string) =>
+    untrusted(`input ${i}: authority owner ${k} is not a trusted issuer`),
   fixedSupply: () => authority('output 0: fixed-supply deploys are not allowed'),
   deploySig: () => authority('output 0: deploy requires a valid deploySig over this txid'),
   deployNotAtZero: (i: number) => shape(`output ${i}: a deploy must be output 0`),

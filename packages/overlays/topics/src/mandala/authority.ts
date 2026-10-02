@@ -114,7 +114,7 @@ async function requireValidDeploys(
 
 // ---- 2. trusted identities (D4) ----
 
-function requireTrustedIdentities(
+function requireTrustedOutputs(
   owners: readonly VerifiedOwner[],
   trusted: ReadonlySet<string>
 ): void {
@@ -126,6 +126,22 @@ function requireTrustedIdentities(
     if (!trusted.has(owner.prover.toLowerCase())) {
       throw Reasons.untrustedProver(owner.index, owner.prover)
     }
+  }
+}
+
+// A key removed from the trusted set loses the authority coins it holds: without this, it could
+// still spend one into an output owned by (and replaying the linkage of) a trusted issuer and
+// commit any action on the way. Input order; never persisted, so re-trusting lifts it.
+function requireTrustedAuthorityInputs(
+  ledgers: readonly TokenLedger[],
+  inputOwners: ReadonlyMap<number, string>,
+  trusted: ReadonlySet<string>
+): void {
+  const indices = ledgers.flatMap(ledger => ledger.authorityIn).sort((a, b) => a - b)
+  for (const index of indices) {
+    const owner = inputOwners.get(index)
+    if (owner === undefined) throw new Error(`no resolved owner for input ${index}`)
+    if (!trusted.has(owner.toLowerCase())) throw Reasons.untrustedAuthorityInput(index, owner)
   }
 }
 
@@ -298,21 +314,25 @@ async function requireValidReissues(
 }
 
 /**
- * Layer C for one transaction (brief order): deploys, trusted identities,
- * authority inputs, continuity, commitments, registry value outputs, supply
- * delta, caps, reissue. `outputs` and `owners` come from layers A and B.
+ * Layer C for one transaction (brief order): deploys, trusted identities (deploy and authority
+ * output owners and provers, then authority input owners), authority inputs, continuity,
+ * commitments, registry value outputs, supply delta, caps, reissue. `outputs`, `owners` and
+ * `inputOwners` come from layers A and B.
  */
 export async function checkAuthority(
   txid: string,
   ledger: Map<string, TokenLedger>,
   outputs: readonly Brc162Output[],
   owners: readonly VerifiedOwner[],
+  inputOwners: ReadonlyMap<number, string>,
   env: MandalaEnvelope,
   deps: AuthorityDeps
 ): Promise<AuthorityResult> {
   const ledgers = [...ledger.values()]
+  const trusted = lowered(deps.trustedIssuers)
   await requireValidDeploys(txid, outputs, owners, env)
-  requireTrustedIdentities(owners, lowered(deps.trustedIssuers))
+  requireTrustedOutputs(owners, trusted)
+  requireTrustedAuthorityInputs(ledgers, inputOwners, trusted)
   requireAuthorityInputs(ledgers)
   requireContinuity(ledgers)
   const actions = committedActions(ledgers, outputs, env, deps.registry)

@@ -83,6 +83,12 @@ const catalog: Array<[string, MandalaReject, MandalaRejectCode, string]> = [
     `output 5: linkage prover ${k} is not a trusted issuer`
   ],
   [
+    'untrustedAuthorityInput',
+    Reasons.untrustedAuthorityInput(2, k),
+    'ERR_UNTRUSTED',
+    `input 2: authority owner ${k} is not a trusted issuer`
+  ],
+  [
     'fixedSupply',
     Reasons.fixedSupply(),
     'ERR_AUTHORITY',
