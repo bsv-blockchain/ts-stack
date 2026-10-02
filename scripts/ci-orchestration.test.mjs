@@ -177,9 +177,9 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 })
 
 test('wallet mutation allowances preserve other limits and complete campaign execution', () => {
-  for (const [path, defaultMinutes] of [
-    [CI_PATH, 45],
-    [MUTATION_PATH, 45]
+  for (const [path, defaultMinutes, maxParallel] of [
+    [CI_PATH, 45, 6],
+    [MUTATION_PATH, 45, 20]
   ]) {
     const job = workflowJobBlocks(readFileSync(path, 'utf8')).find(
       job => job.name === 'mutation-tests'
@@ -187,7 +187,7 @@ test('wallet mutation allowances preserve other limits and complete campaign exe
     assert.ok(job, path)
     assertWalletMutationTimeout(job, defaultMinutes)
     assert.match(job.source, /^      fail-fast: false$/m)
-    assert.match(job.source, /^      max-parallel: 6$/m)
+    assert.match(job.source, new RegExp(`^      max-parallel: ${maxParallel}$`, 'm'))
     assert.match(
       job.source,
       /^        run: node scripts\/mutation-testing\.mjs --target "\$\{\{ matrix\.target \}\}" --partition "\$\{\{ matrix\.partition \}\}"$/m
