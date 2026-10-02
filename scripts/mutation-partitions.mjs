@@ -57,7 +57,8 @@ const plans = new Map([
         ['src/storage/snapshot/journal/SnapshotJournalMysqlSource.ts', 'mysql-source'],
         ['src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts', 'sqlite-generation'],
         ['src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts', 'mysql-intent'],
-        ['src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts', 'mysql-generation']
+        ['src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts', 'mysql-generation'],
+        ['src/storage/snapshot/journal/SnapshotJournalReceipt.ts', 'receipts']
       ])
     }
   ],

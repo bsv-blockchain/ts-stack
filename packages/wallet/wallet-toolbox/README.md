@@ -54,11 +54,14 @@ unproved cleanup fails qualification. Other wallet shards do not start MySQL.
 The candidate also contains internal SQL journal primitives for exact revisions,
 bounded metadata pages, bootstrap with a durable explicit row allowance,
 source-table observers, and recovery of an
-interrupted journal installation. Run `pnpm test:snapshot-journal-crash` for the
+interrupted journal installation. Owned generations also bind explicit receipt
+capacity/lifetime policy; exact receipts are persisted, read and collected in
+bounded caller-owned transactions. Receipts prove a captured prefix and cannot
+reopen a lost retained view. The capture controller remains unfinished. Run `pnpm test:snapshot-journal-crash` for the
 SQLite process-loss fixture and `pnpm test:snapshot-journal-mysql` for the isolated
 MySQL client/server-process recovery fixtures. These helpers do not register a
 migration or advertise incremental synchronization. Full retention quotas,
-capture receipts, receiver/primary integration and the remaining issue #544
+capture publication, continuity floors, receiver/primary integration and the remaining issue #544
 acceptance work are still required; see the
 [journal foundation](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#internal-journal-foundation-unadvertised).
 

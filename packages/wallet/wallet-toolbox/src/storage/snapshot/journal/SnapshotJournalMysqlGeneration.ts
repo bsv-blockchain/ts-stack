@@ -6,7 +6,16 @@ import { SNAPSHOT_JOURNAL_MYSQL_CLOCK_DDL } from './SnapshotJournalMysqlClock'
 import { SNAPSHOT_JOURNAL_MYSQL_METADATA_DDL, snapshotJournalMysqlObserverSql } from './SnapshotJournalMysqlObservers'
 import { SNAPSHOT_JOURNAL_BOOTSTRAP_DDL, validSnapshotJournalBootstrapBudget } from './SnapshotJournalBootstrap'
 import { readSnapshotJournalMysqlBinding } from './SnapshotJournalMysqlSource'
-import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
+import {
+  compareSnapshotJournalRevisions,
+  snapshotJournalRevision,
+  type SnapshotJournalRevision
+} from './SnapshotJournalRevision'
+import {
+  snapshotJournalReceiptDdl,
+  snapshotJournalReceiptPolicy,
+  type SnapshotJournalReceiptPolicy
+} from './SnapshotJournalReceipt'
 import {
   createSnapshotJournalMysqlIntent,
   readSnapshotJournalMysqlIntent,
@@ -32,7 +41,8 @@ interface Table {
   columns: Column[]
   indexes: Index[]
   checks: string[]
-  seed?: 'clock' | 'bootstrap'
+  seed?: 'clock' | 'bootstrap' | 'retention'
+  charset?: 'ascii'
 }
 interface Trigger {
   name: string
@@ -53,6 +63,7 @@ interface Plan {
   binding: SnapshotJournalMysqlBinding
   objects: ObjectDefinition[]
   context: Context
+  receiptPolicy: SnapshotJournalReceiptPolicy
 }
 export interface SnapshotJournalMysqlGeneration extends SnapshotJournalMysqlIntent {
   enabled: boolean
@@ -72,12 +83,14 @@ const physicalKey = ['tableId', 'id1', 'id2', 'exactText']
 const physicalColumns = [integer('tableId'), big('id1'), big('id2'), column('exactText', 'varbinary(400)')]
 const metadataColumns = [big('revision'), column('present', 'tinyint')]
 const tail = ' ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin ROW_FORMAT=DYNAMIC'
+const objectCount = 59
 
-function tables(): Table[] {
+function tables(k: Knex): Table[] {
   const ddl = [
     ...SNAPSHOT_JOURNAL_MYSQL_CLOCK_DDL,
     ...SNAPSHOT_JOURNAL_MYSQL_METADATA_DDL,
-    SNAPSHOT_JOURNAL_BOOTSTRAP_DDL
+    SNAPSHOT_JOURNAL_BOOTSTRAP_DDL,
+    ...snapshotJournalReceiptDdl(k)
   ]
   const specs: Omit<Table, 'sql'>[] = [
     {
@@ -146,12 +159,50 @@ function tables(): Table[] {
         '((`rowLimit` is null) or (`rowsUsed` <= `rowLimit`))'
       ],
       seed: 'bootstrap'
+    },
+    {
+      name: 'snapshot_journal_retention',
+      columns: [
+        integer('id'),
+        column('floor', 'varchar(19)'),
+        integer('receiptLimit'),
+        column('receiptLifetimeMs', 'bigint')
+      ],
+      indexes: [primary('id')],
+      checks: ['(`id` = 1)', '(`receiptLimit` between 1 and 128)', '(`receiptLifetimeMs` between 1 and 2592000000)'],
+      seed: 'retention',
+      charset: 'ascii'
+    },
+    {
+      name: 'snapshot_journal_receipts',
+      columns: [
+        column('requestId', 'varchar(64)'),
+        column('binding', 'varchar(64)'),
+        column('highWater', 'varchar(19)'),
+        column('floor', 'varchar(19)'),
+        column('expiresAt', 'bigint')
+      ],
+      indexes: [
+        primary('requestId'),
+        { name: 'snapshot_journal_receipts_expiry', columns: ['expiresAt', 'requestId'], unique: false }
+      ],
+      checks: ['(`expiresAt` between 1 and 9007199254740991)'],
+      charset: 'ascii'
     }
   ]
-  return specs.map((spec, i) => ({ ...spec, sql: ddl[i].replace(/ ENGINE=InnoDB$/, '') + tail }))
+  return specs.map((spec, i) => ({
+    ...spec,
+    sql: spec.charset === 'ascii' ? ddl[i] : ddl[i].replace(/ ENGINE=InnoDB$/, '') + tail
+  }))
 }
 
-async function plan(k: Knex, ceiling: SnapshotJournalRevision, config?: Knex.MigratorConfig): Promise<Plan> {
+async function plan(
+  k: Knex,
+  ceiling: SnapshotJournalRevision,
+  receiptPolicy: SnapshotJournalReceiptPolicy,
+  config?: Knex.MigratorConfig
+): Promise<Plan> {
+  const policy = snapshotJournalReceiptPolicy(receiptPolicy)
   client(k)
   if (snapshotJournalRevision(ceiling) === '0') return invalid()
   const source = await readSnapshotJournalMysqlBinding(k, config)
@@ -178,16 +229,16 @@ async function plan(k: Knex, ceiling: SnapshotJournalRevision, config?: Knex.Mig
     return { name: match[1], event: match[2], table: match[3], body: match[4], sql }
   })
   const objects: ObjectDefinition[] = [
-    ...tables().map(definition => ({ type: 'table' as const, definition })),
+    ...tables(k).map(definition => ({ type: 'table' as const, definition })),
     ...triggers.map(definition => ({ type: 'trigger' as const, definition }))
   ]
-  if (objects.length !== 57 || new Set(objects.map(object => object.definition.name)).size !== objects.length)
+  if (objects.length !== objectCount || new Set(objects.map(object => object.definition.name)).size !== objects.length)
     return invalid()
   const digest = createHash('sha256')
     .update('snapshot-journal-mysql-plan-v1\n')
-    .update(JSON.stringify([objects, context]))
+    .update(JSON.stringify([objects, context, policy]))
     .digest('hex')
-  return { binding: { source, ceiling, plan: digest }, objects, context }
+  return { binding: { source, ceiling, plan: digest }, objects, context, receiptPolicy: policy }
 }
 
 async function reserved(k: Knex): Promise<Array<{ name: string; type: string }>> {
@@ -197,7 +248,7 @@ async function reserved(k: Knex): Promise<Array<{ name: string; type: string }>>
   const [triggers]: Array<Array<{ name: string; type: string }>> = await k.raw(
     "SELECT TRIGGER_NAME name,'TRIGGER' type FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND LOWER(LEFT(TRIGGER_NAME,17))='snapshot_journal_' ORDER BY TRIGGER_NAME LIMIT 130"
   )
-  if (tables.length + triggers.length > 58) return invalid()
+  if (tables.length + triggers.length > objectCount + 1) return invalid()
   return [...tables, ...triggers]
 }
 const owner = (epoch: string): string => 'snapshot-journal-owner:' + epoch
@@ -206,6 +257,7 @@ function triggerBody(trigger: Trigger, epoch: string): string {
 }
 
 async function validateTable(k: Knex, table: Table, epoch: string): Promise<void> {
+  const charset = table.charset ?? 'utf8mb4'
   const [actual]: Array<
     Array<{
       engine: string
@@ -223,7 +275,7 @@ async function validateTable(k: Knex, table: Table, epoch: string): Promise<void
     actual.length !== 1 ||
     actual[0].engine !== 'InnoDB' ||
     actual[0].type !== 'BASE TABLE' ||
-    actual[0].collation !== 'utf8mb4_bin' ||
+    actual[0].collation !== charset + '_bin' ||
     actual[0].rowFormat !== 'Dynamic' ||
     actual[0].options !== 'row_format=DYNAMIC' ||
     actual[0].comment !== owner(epoch)
@@ -255,8 +307,8 @@ async function validateTable(k: Knex, table: Table, epoch: string): Promise<void
         actual.nullable !== (expected.nullable ? 'YES' : 'NO') ||
         actual.defaultValue !== null ||
         actual.extra !== (expected.auto ? 'auto_increment' : '') ||
-        actual.charset !== (text ? 'utf8mb4' : null) ||
-        actual.collation !== (text ? 'utf8mb4_bin' : null) ||
+        actual.charset !== (text ? charset : null) ||
+        actual.collation !== (text ? charset + '_bin' : null) ||
         actual.expression !== ''
       )
     })
@@ -314,7 +366,8 @@ async function validateObject(
   k: Knex,
   object: ObjectDefinition,
   state: SnapshotJournalMysqlIntent,
-  context: Context
+  context: Context,
+  policy: SnapshotJournalReceiptPolicy
 ): Promise<void> {
   if (object.type === 'table') {
     await validateTable(k, object.definition, state.epoch)
@@ -322,7 +375,7 @@ async function validateObject(
       const clocks = await k('snapshot_journal_clock').select('id', k.raw('CAST(ceiling AS CHAR) ceiling')).limit(2)
       if (clocks.length !== 1 || clocks[0].id !== 1 || clocks[0].ceiling !== state.ceiling) return invalid()
     }
-    if (object.definition.seed === 'bootstrap' && state.nextObject < 57) {
+    if (object.definition.seed === 'bootstrap' && state.nextObject < objectCount) {
       const progress = await k('snapshot_journal_bootstrap').select('*').limit(2)
       if (
         progress.length !== 1 ||
@@ -331,6 +384,29 @@ async function validateObject(
         progress[0].cursor !== null ||
         progress[0].rowLimit !== null ||
         progress[0].rowsUsed !== 0
+      )
+        return invalid()
+    }
+    if (object.definition.seed === 'retention') {
+      const rows = await k('snapshot_journal_retention')
+        .select(
+          'id',
+          'receiptLimit',
+          k.raw('CAST(receiptLifetimeMs AS CHAR) receiptLifetimeMs'),
+          k.raw('SUBSTRING(floor,1,20) floor')
+        )
+        .limit(2)
+      if (
+        rows.length !== 1 ||
+        rows[0].id !== 1 ||
+        rows[0].receiptLimit !== policy.receiptLimit ||
+        rows[0].receiptLifetimeMs !== String(policy.receiptLifetimeMs)
+      )
+        return invalid()
+      const floor = snapshotJournalRevision(rows[0].floor)
+      if (
+        compareSnapshotJournalRevisions(floor, state.ceiling) > 0 ||
+        (state.nextObject < objectCount && floor !== '0')
       )
         return invalid()
     }
@@ -389,7 +465,7 @@ async function validateObjects(k: Knex, p: Plan, state: SnapshotJournalMysqlInte
     const found = actual.filter(row => row.name === object.definition.name)
     if ((i < state.nextObject && found.length !== 1) || found.length > 1) return invalid()
     if (found.length === 1) {
-      await validateObject(k, object, state, p.context)
+      await validateObject(k, object, state, p.context, p.receiptPolicy)
       if (i === state.nextObject) currentExists = true
     }
   })
@@ -402,6 +478,10 @@ async function validateState(
   state: SnapshotJournalMysqlIntent
 ): Promise<SnapshotJournalMysqlGeneration> {
   if (await k('snapshot_journal_events').first('revision')) return invalid()
+  const receipts = await k('snapshot_journal_receipts')
+    .select(k.raw('1 AS occupied'))
+    .limit(p.receiptPolicy.receiptLimit + 1)
+  if (receipts.length > p.receiptPolicy.receiptLimit) return invalid()
   const clocks = await k('snapshot_journal_clock').select('id', k.raw('CAST(ceiling AS CHAR) ceiling')).limit(2)
   if (clocks.length !== 1 || clocks[0].id !== 1 || clocks[0].ceiling !== p.binding.ceiling) return invalid()
   const progress = await k('snapshot_journal_bootstrap').select('*').limit(2)
@@ -438,10 +518,11 @@ async function validateState(
 export async function installSnapshotJournalMysqlGeneration(
   k: Knex,
   ceiling: SnapshotJournalRevision,
+  receiptPolicy: SnapshotJournalReceiptPolicy,
   config?: Knex.MigratorConfig
 ): Promise<SnapshotJournalMysqlGeneration> {
   if (k.isTransaction) return invalid()
-  const p = await plan(k, ceiling, config)
+  const p = await plan(k, ceiling, receiptPolicy, config)
   const existing = await reserved(k)
   let state =
     existing.length === 0
@@ -460,9 +541,14 @@ export async function installSnapshotJournalMysqlGeneration(
         if (table.seed === 'clock') await k.raw(sql + ' SELECT 1 id,? ceiling', [ceiling])
         else if (table.seed === 'bootstrap')
           await k.raw(sql + ' SELECT 1 id,0 stream,NULL `cursor`,NULL rowLimit,0 rowsUsed')
+        else if (table.seed === 'retention')
+          await k.raw(sql + " SELECT 1 id,'0' floor,? receiptLimit,? receiptLifetimeMs", [
+            p.receiptPolicy.receiptLimit,
+            p.receiptPolicy.receiptLifetimeMs
+          ])
         else await k.raw(sql)
       }
-      await validateObject(k, object, state, p.context)
+      await validateObject(k, object, state, p.context, p.receiptPolicy)
     }
     const updated = await k(SNAPSHOT_JOURNAL_MYSQL_INTENT)
       .where({ id: 1, epoch: state.epoch, nextObject: i, complete: 0 })
@@ -478,9 +564,10 @@ export async function installSnapshotJournalMysqlGeneration(
 export async function readSnapshotJournalMysqlGeneration(
   k: Knex,
   ceiling: SnapshotJournalRevision,
+  receiptPolicy: SnapshotJournalReceiptPolicy,
   config?: Knex.MigratorConfig
 ): Promise<SnapshotJournalMysqlGeneration> {
-  const p = await plan(k, ceiling, config),
+  const p = await plan(k, ceiling, receiptPolicy, config),
     state = await readSnapshotJournalMysqlIntent(k, p.binding)
   if (state.nextObject !== p.objects.length) return invalid()
   await validateObjects(k, p, state)
@@ -491,13 +578,14 @@ export async function readSnapshotJournalMysqlGeneration(
 export async function completeSnapshotJournalMysqlGeneration(
   k: Knex,
   ceiling: SnapshotJournalRevision,
+  receiptPolicy: SnapshotJournalReceiptPolicy,
   config?: Knex.MigratorConfig
 ): Promise<SnapshotJournalMysqlGeneration> {
-  const validated = await readSnapshotJournalMysqlGeneration(k, ceiling, config)
+  const validated = await readSnapshotJournalMysqlGeneration(k, ceiling, receiptPolicy, config)
   return await k.transaction(async t => {
     if (!(await t('snapshot_journal_clock').where('id', 1).forUpdate().noWait().first('id'))) return invalid()
     const state = await readSnapshotJournalMysqlIntent(t, validated)
-    if (state.epoch !== validated.epoch || state.nextObject !== 57) return invalid()
+    if (state.epoch !== validated.epoch || state.nextObject !== objectCount) return invalid()
     const progress = await t('snapshot_journal_bootstrap').where('id', 1).first('stream', 'cursor')
     if (
       !progress ||
@@ -507,7 +595,7 @@ export async function completeSnapshotJournalMysqlGeneration(
     )
       return invalid()
     const updated = await t(SNAPSHOT_JOURNAL_MYSQL_INTENT)
-      .where({ id: 1, epoch: state.epoch, nextObject: 57 })
+      .where({ id: 1, epoch: state.epoch, nextObject: objectCount })
       .update({ complete: 1 })
     if (updated !== 1) return invalid()
     return { ...state, complete: true, enabled: true }

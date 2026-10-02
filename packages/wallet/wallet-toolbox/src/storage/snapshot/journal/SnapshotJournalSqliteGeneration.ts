@@ -1,3 +1,8 @@
+import {
+  snapshotJournalReceiptDdl,
+  snapshotJournalReceiptPolicy,
+  type SnapshotJournalReceiptPolicy
+} from './SnapshotJournalReceipt'
 import type { Knex } from 'knex'
 import { createHash, randomUUID } from 'node:crypto'
 import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
@@ -53,6 +58,7 @@ async function plan(k: Knex, config?: Knex.MigratorConfig): Promise<Plan> {
     SNAPSHOT_JOURNAL_SQLITE_CLOCK_DDL,
     ...SNAPSHOT_JOURNAL_SQLITE_METADATA_DDL,
     SNAPSHOT_JOURNAL_BOOTSTRAP_DDL,
+    ...snapshotJournalReceiptDdl(k),
     ...(await snapshotJournalSqliteObserverSql(k))
   ]
   const objects = ddl.map(sql => {
@@ -93,7 +99,11 @@ async function reserved(k: Knex): Promise<SchemaObject[]> {
     .orderBy(['type', 'name'])
     .limit(513)
 }
-async function validate(k: Knex, p: Plan): Promise<SnapshotJournalSqliteGeneration> {
+async function validate(
+  k: Knex,
+  p: Plan,
+  policy: SnapshotJournalReceiptPolicy
+): Promise<SnapshotJournalSqliteGeneration> {
   const actual = await reserved(k)
   if (actual.length !== p.objects.length) return invalid()
   for (const expected of p.objects) {
@@ -149,6 +159,21 @@ async function validate(k: Knex, p: Plan): Promise<SnapshotJournalSqliteGenerati
     (position.rowLimit === null && (position.stream !== 0 || position.cursor !== null))
   )
     return invalid()
+  const retention = await k('snapshot_journal_retention')
+    .select('id', 'receiptLimit', 'receiptLifetimeMs', k.raw('substr(??,1,20) AS ??', ['floor', 'floor']))
+    .limit(2)
+  if (
+    retention.length !== 1 ||
+    retention[0].id !== 1 ||
+    retention[0].receiptLimit !== policy.receiptLimit ||
+    retention[0].receiptLifetimeMs !== policy.receiptLifetimeMs ||
+    compareSnapshotJournalRevisions(snapshotJournalRevision(retention[0].floor), ceiling) > 0
+  )
+    return invalid()
+  const receipts = await k('snapshot_journal_receipts')
+    .select(k.raw('1 AS occupied'))
+    .limit(policy.receiptLimit + 1)
+  if (receipts.length > policy.receiptLimit) return invalid()
   return {
     epoch: row.epoch,
     source: p.source,
@@ -162,8 +187,10 @@ async function validate(k: Knex, p: Plan): Promise<SnapshotJournalSqliteGenerati
 export async function installSnapshotJournalSqliteGeneration(
   k: Knex,
   ceiling: SnapshotJournalRevision,
+  receiptPolicy: SnapshotJournalReceiptPolicy,
   config?: Knex.MigratorConfig
 ): Promise<SnapshotJournalSqliteGeneration> {
+  const policy = snapshotJournalReceiptPolicy(receiptPolicy)
   if (!local(k) || snapshotJournalRevision(ceiling) === '0') return invalid()
   return await k.transaction(async t => {
     if ((await readGenerationIndexState(t, config)) !== 'v2') return invalid()
@@ -173,7 +200,7 @@ export async function installSnapshotJournalSqliteGeneration(
     const p = await plan(t, config),
       existing = await reserved(t)
     if (existing.length) {
-      const current = await validate(t, p)
+      const current = await validate(t, p, policy)
       if (current.ceiling !== ceiling) return invalid()
       return current
     }
@@ -197,30 +224,35 @@ export async function installSnapshotJournalSqliteGeneration(
       reason: null
     })
     await t('snapshot_journal_bootstrap').insert({ id: 1, stream: 0, cursor: null, rowLimit: null, rowsUsed: 0 })
-    return await validate(t, p)
+    await t('snapshot_journal_retention').insert({ id: 1, floor: '0', ...policy })
+    return await validate(t, p, policy)
   })
 }
 
 /** Validate in the caller's pinned view; migration publication remains a separate prerequisite. */
 export async function readSnapshotJournalSqliteGeneration(
   k: Knex,
+  receiptPolicy: SnapshotJournalReceiptPolicy,
   config?: Knex.MigratorConfig
 ): Promise<SnapshotJournalSqliteGeneration> {
-  return await validate(k, await plan(k, config))
+  const policy = snapshotJournalReceiptPolicy(receiptPolicy)
+  return await validate(k, await plan(k, config), policy)
 }
 
 /** Atomic completion cannot be inferred from a caller's last-page acknowledgement. */
 export async function completeSnapshotJournalSqliteGeneration(
   k: Knex,
+  receiptPolicy: SnapshotJournalReceiptPolicy,
   config?: Knex.MigratorConfig
 ): Promise<SnapshotJournalSqliteGeneration> {
+  const policy = snapshotJournalReceiptPolicy(receiptPolicy)
   if (!local(k)) return invalid()
   return await k.transaction(async t => {
     await t(indexMetadata)
       .where('id', 0)
       .update({ complete: t.ref('complete') })
     const p = await plan(t, config),
-      state = await validate(t, p)
+      state = await validate(t, p, policy)
     const progress = await t('snapshot_journal_bootstrap').select('*').limit(2)
     const clock = await t('snapshot_journal_clock').where('id', 1).first('enabled')
     if (

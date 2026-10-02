@@ -9,6 +9,9 @@ import {
 } from './SnapshotJournalMysqlGeneration'
 import { readSnapshotJournalMysqlBinding } from './SnapshotJournalMysqlSource'
 import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
+
+const journalReceiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
+
 jest.mock('./SnapshotJournalMysqlSource', () => ({ readSnapshotJournalMysqlBinding: jest.fn() }))
 interface Capture {
   sql: string
@@ -56,6 +59,13 @@ async function fixture() {
   })
   await database.raw('CREATE TABLE snapshot_journal_invalid(id INTEGER,reason TEXT)')
   await database.raw('CREATE TABLE snapshot_journal_events(revision TEXT)')
+  await database.raw(
+    'CREATE TABLE snapshot_journal_retention(id INTEGER,floor TEXT,receiptLimit INTEGER,receiptLifetimeMs BIGINT)'
+  )
+  await database('snapshot_journal_retention').insert({ id: 1, floor: '0', ...journalReceiptPolicy })
+  await database.raw(
+    'CREATE TABLE snapshot_journal_receipts(requestId TEXT,binding TEXT,highWater TEXT,floor TEXT,expiresAt BIGINT)'
+  )
   const metadata = structuredClone(captured),
     writes: string[] = []
   database.on('query', query => {
@@ -78,7 +88,15 @@ async function fixture() {
     }
   }
   const raw = jest.fn((sql: string, values?: unknown[]) => {
-    if (sql === 'CAST(ceiling AS CHAR) ceiling') return database.raw(sql)
+    if (
+      [
+        'CAST(ceiling AS CHAR) ceiling',
+        'CAST(receiptLifetimeMs AS CHAR) receiptLifetimeMs',
+        'SUBSTRING(floor,1,20) floor',
+        '1 AS occupied'
+      ].includes(sql)
+    )
+      return database.raw(sql)
     if (sql === 'SELECT VERSION() version') return Promise.resolve([[{ version: '8.4.0' }]])
     const name = /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(sql)?.[1]
     if (name)
@@ -109,6 +127,8 @@ async function fixture() {
         if (name === 'snapshot_journal_clock') await database(name).insert({ id: 1, ceiling: values![0] })
         if (name === 'snapshot_journal_bootstrap')
           await database(name).insert({ id: 1, stream: 0, cursor: null, rowLimit: null, rowsUsed: 0 })
+        if (name === 'snapshot_journal_retention')
+          await database(name).insert({ id: 1, floor: '0', receiptLimit: values![0], receiptLifetimeMs: values![1] })
         available.add(name)
         fail('after:' + name)
         return {}
@@ -168,7 +188,9 @@ async function fixture() {
       'snapshot_journal_clock',
       'snapshot_journal_bootstrap',
       'snapshot_journal_invalid',
-      'snapshot_journal_events'
+      'snapshot_journal_events',
+      'snapshot_journal_retention',
+      'snapshot_journal_receipts'
     ])
       await database(table).delete()
     available = new Set()
@@ -186,17 +208,17 @@ async function fixture() {
 test('native metadata resumes the complete persisted generation without writes', async () => {
   const f = await fixture()
   try {
-    expect(await readSnapshotJournalMysqlGeneration(f.k, ceiling)).toEqual({
+    expect(await readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toEqual({
       source: nativeState.source,
       plan: nativeState.plan,
       ceiling,
       epoch: nativeState.epoch,
-      nextObject: 57,
+      nextObject: 59,
       complete: true,
       enabled: true
     })
-    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling)).toEqual(
-      await readSnapshotJournalMysqlGeneration(f.k, ceiling)
+    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toEqual(
+      await readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)
     )
     expect(f.writes).toEqual([])
   } finally {
@@ -206,13 +228,13 @@ test('native metadata resumes the complete persisted generation without writes',
 test('lost final object acknowledgement resumes its epoch and advances only the durable intent', async () => {
   const f = await fixture()
   try {
-    await f.database('snapshot_journal_generation').update({ nextObject: 56, complete: 0 })
+    await f.database('snapshot_journal_generation').update({ nextObject: 58, complete: 0 })
     await f.database('snapshot_journal_bootstrap').update({ stream: 0, rowLimit: null })
     f.writes.length = 0
-    const resumed = await installSnapshotJournalMysqlGeneration(f.k, ceiling)
+    const resumed = await installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)
     expect(resumed).toMatchObject({
       epoch: nativeState.epoch,
-      nextObject: 57,
+      nextObject: 59,
       complete: false,
       enabled: true
     })
@@ -226,7 +248,9 @@ test.each(['sqlite3', 'better-sqlite3', 'pg'])('unsupported driver %s performs n
   const f = await fixture()
   try {
     f.k.client.config.client = client
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(f.raw).not.toHaveBeenCalled()
   } finally {
     await f.database.destroy()
@@ -236,7 +260,9 @@ test('DDL refuses a caller-owned transaction', async () => {
   const f = await fixture()
   try {
     Object.defineProperty(f.k, 'isTransaction', { value: true })
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(f.raw).not.toHaveBeenCalled()
   } finally {
     await f.database.destroy()
@@ -246,7 +272,7 @@ test('generation reads accept the caller pinned view without DDL', async () => {
   const f = await fixture()
   try {
     Object.defineProperty(f.k, 'isTransaction', { value: true })
-    expect(await readSnapshotJournalMysqlGeneration(f.k, ceiling)).toMatchObject({
+    expect(await readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toMatchObject({
       epoch: nativeState.epoch,
       complete: true,
       enabled: true
@@ -260,7 +286,9 @@ test('persisted allocator rows cannot establish event continuity', async () => {
   const f = await fixture()
   try {
     await f.database('snapshot_journal_events').insert({ revision: '1' })
-    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
   } finally {
     await f.database.destroy()
   }
@@ -268,7 +296,9 @@ test('persisted allocator rows cannot establish event continuity', async () => {
 test.each(['0', '01', '9223372036854775808'])('invalid ceiling %s refuses before metadata', async value => {
   const f = await fixture()
   try {
-    await expect(installSnapshotJournalMysqlGeneration(f.k, value as typeof ceiling)).rejects.toThrow()
+    await expect(
+      installSnapshotJournalMysqlGeneration(f.k, value as typeof ceiling, journalReceiptPolicy)
+    ).rejects.toThrow()
     expect(f.raw).not.toHaveBeenCalled()
   } finally {
     await f.database.destroy()
@@ -306,7 +336,9 @@ test.each([
   const f = await fixture()
   try {
     f.rows(fragment as string, 'snapshot_journal_clock')[0][field as string] = value
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(f.writes).toEqual([])
   } finally {
     await f.database.destroy()
@@ -318,7 +350,9 @@ test.each(['TABLE_COMMENT comment', 'ORDINAL_POSITION LIMIT 9', 'SEQ_IN_INDEX LI
     const f = await fixture()
     try {
       f.rows(fragment, 'snapshot_journal_clock').pop()
-      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
     } finally {
       await f.database.destroy()
     }
@@ -330,7 +364,9 @@ test.each(['EVENT_OBJECT_TABLE=? LIMIT 1', 'PARTITION_NAME IS NOT NULL LIMIT 1',
     const f = await fixture()
     try {
       f.rows(fragment, 'snapshot_journal_clock').push({ name: 'foreign' })
-      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
     } finally {
       await f.database.destroy()
     }
@@ -351,7 +387,9 @@ test.each([
   const f = await fixture()
   try {
     f.rows('SUBSTRING(ACTION_STATEMENT,1,?)', 'snapshot_journal_scope_0_INSERT')[0][field] = value
-    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
   } finally {
     await f.database.destroy()
   }
@@ -379,7 +417,9 @@ test.each(['unknown', 'view', 'missing-prior', 'duplicate', 'future', 'many'])(
           }))
         )
       f.writes.length = 0
-      await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
       expect(f.writes).toEqual([])
     } finally {
       await f.database.destroy()
@@ -387,8 +427,8 @@ test.each(['unknown', 'view', 'missing-prior', 'duplicate', 'future', 'many'])(
   }
 )
 test.each([
+  { nextObject: 60 },
   { nextObject: 58 },
-  { nextObject: 56 },
   { source: 'a'.repeat(64) },
   { plan: 'a'.repeat(64) },
   { ceiling: '1' }
@@ -396,7 +436,9 @@ test.each([
   const f = await fixture()
   try {
     await f.database('snapshot_journal_generation').update(patch)
-    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
   } finally {
     await f.database.destroy()
   }
@@ -413,7 +455,9 @@ test.each([
   const f = await fixture()
   try {
     await f.database('snapshot_journal_bootstrap').update(patch)
-    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
   } finally {
     await f.database.destroy()
   }
@@ -424,7 +468,9 @@ test.each(['snapshot_journal_clock', 'snapshot_journal_bootstrap'])(
     const f = await fixture()
     try {
       await f.database(table).delete()
-      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
     } finally {
       await f.database.destroy()
     }
@@ -436,7 +482,7 @@ test.each(['capacity-exhausted', 'revision-exhausted', 'key-out-of-range'])(
     const f = await fixture()
     try {
       await f.database('snapshot_journal_invalid').insert({ id: 1, reason })
-      expect(await readSnapshotJournalMysqlGeneration(f.k, ceiling)).toMatchObject({
+      expect(await readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toMatchObject({
         complete: true,
         enabled: false
       })
@@ -452,7 +498,9 @@ test.each([
   const f = await fixture()
   try {
     await f.database('snapshot_journal_invalid').insert(row)
-    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
   } finally {
     await f.database.destroy()
   }
@@ -465,14 +513,14 @@ test('fresh installation uses the independently captured native DDL and atomical
   const f = await fixture()
   try {
     await f.fresh()
-    const state = await installSnapshotJournalMysqlGeneration(f.k, ceiling)
-    expect(state).toMatchObject({ nextObject: 57, complete: false, enabled: true })
+    const state = await installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)
+    expect(state).toMatchObject({ nextObject: 59, complete: false, enabled: true })
     expect(state.epoch).not.toBe(nativeState.epoch)
     expect(await f.database('snapshot_journal_clock')).toEqual([{ id: 1, ceiling }])
     expect(await f.database('snapshot_journal_bootstrap')).toEqual([
       { id: 1, stream: 0, cursor: null, rowLimit: null, rowsUsed: 0 }
     ])
-    expect(objectNames).toHaveLength(58)
+    expect(objectNames).toHaveLength(60)
   } finally {
     await f.database.destroy()
   }
@@ -482,13 +530,15 @@ test.each(objectNames)('every DDL acknowledgement loss resumes without adopting/
   try {
     await f.fresh()
     f.fault.phase = 'after:' + name
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('lost reply')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'lost reply'
+    )
     const before = await f.database('snapshot_journal_generation').first()
-    const resumed = await installSnapshotJournalMysqlGeneration(f.k, ceiling)
+    const resumed = await installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)
     expect(f.fault.fired).toBe(true)
     expect(resumed).toMatchObject({
       epoch: before.epoch,
-      nextObject: 57,
+      nextObject: 59,
       complete: false,
       enabled: true
     })
@@ -501,14 +551,16 @@ test.each(objectNames)('every DDL acknowledgement loss resumes without adopting/
     await f.database.destroy()
   }
 })
-test.each([0, 1, 5, 6, 57])('before DDL boundary %i creates no undocumented object', async index => {
+test.each([0, 1, 5, 6, 7, 8, 59])('before DDL boundary %i creates no undocumented object', async index => {
   const f = await fixture()
   try {
     await f.fresh()
     f.fault.phase = 'before:' + objectNames[index]
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('lost reply')
-    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling)).toMatchObject({
-      nextObject: 57,
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'lost reply'
+    )
+    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toMatchObject({
+      nextObject: 59,
       complete: false,
       enabled: true
     })
@@ -516,15 +568,17 @@ test.each([0, 1, 5, 6, 57])('before DDL boundary %i creates no undocumented obje
     await f.database.destroy()
   }
 })
-test.each([1, 6, 7, 57])('lost progress acknowledgement %i resumes committed state', async position => {
+test.each([1, 6, 7, 8, 9, 59])('lost progress acknowledgement %i resumes committed state', async position => {
   const f = await fixture()
   try {
     await f.fresh()
     f.fault.phase = 'ack:' + position
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('lost reply')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'lost reply'
+    )
     expect((await f.database('snapshot_journal_generation').first()).nextObject).toBe(position)
-    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling)).toMatchObject({
-      nextObject: 57,
+    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toMatchObject({
+      nextObject: 59,
       complete: false,
       enabled: true
     })
@@ -535,9 +589,9 @@ test.each([1, 6, 7, 57])('lost progress acknowledgement %i resumes committed sta
 test('completion commits once and can be read in the same retained generation', async () => {
   const f = await fixture()
   try {
-    expect(await completeSnapshotJournalMysqlGeneration(f.k, ceiling)).toMatchObject({
+    expect(await completeSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toMatchObject({
       epoch: nativeState.epoch,
-      nextObject: 57,
+      nextObject: 59,
       complete: true,
       enabled: true
     })
@@ -553,9 +607,11 @@ test.each(['complete:before', 'complete:after'])(
     try {
       await f.database('snapshot_journal_generation').update({ complete: 0 })
       f.fault.phase = phase
-      await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('lost reply')
+      await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'lost reply'
+      )
       expect((await f.database('snapshot_journal_generation').first()).complete).toBe(0)
-      expect(await completeSnapshotJournalMysqlGeneration(f.k, ceiling)).toMatchObject({
+      expect(await completeSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toMatchObject({
         complete: true,
         enabled: true
       })
@@ -570,7 +626,9 @@ test.each(['incomplete', 'invalidated'])('completion refuses %s progress without
     await f.database('snapshot_journal_generation').update({ complete: 0 })
     if (kind === 'incomplete') await f.database('snapshot_journal_bootstrap').update({ stream: 16 })
     else await f.database('snapshot_journal_invalid').insert({ id: 1, reason: 'capacity-exhausted' })
-    await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect((await f.database('snapshot_journal_generation').first()).complete).toBe(0)
   } finally {
     await f.database.destroy()
@@ -591,7 +649,9 @@ test.each(['missing row', 'extra row', 'missing field', 'extra field', 'numeric 
       if (kind === 'extra field') rows[0].unexpected = 'unknown'
       if (kind === 'numeric field') rows[0].charset = 1
       if (kind === 'oversized field') rows[0].sqlMode = 'x'.repeat(4097)
-      await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
       expect(f.writes).toEqual([])
     } finally {
       await f.database.destroy()
@@ -609,7 +669,9 @@ test.each(['malformed trigger', 'missing trigger', 'duplicate trigger'])(
       if (kind === 'missing trigger') definitions.pop()
       if (kind === 'duplicate trigger') definitions[1] = definitions[0]
       spy = jest.spyOn(observers, 'snapshotJournalMysqlObserverSql').mockResolvedValue(definitions)
-      await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
       expect(f.writes).toEqual([])
     } finally {
       spy?.mockRestore()
@@ -620,9 +682,9 @@ test.each(['malformed trigger', 'missing trigger', 'duplicate trigger'])(
 test('zero journal capacity refuses before metadata reads or writes', async () => {
   const f = await fixture()
   try {
-    await expect(installSnapshotJournalMysqlGeneration(f.k, snapshotJournalRevision('0'))).rejects.toThrow(
-      'Invalid or unowned'
-    )
+    await expect(
+      installSnapshotJournalMysqlGeneration(f.k, snapshotJournalRevision('0'), journalReceiptPolicy)
+    ).rejects.toThrow('Invalid or unowned')
     expect(f.raw).not.toHaveBeenCalled()
     expect(f.writes).toEqual([])
   } finally {
@@ -634,7 +696,9 @@ test('installation refuses a changed source binding before returning generation 
   const f = await fixture()
   try {
     readBinding.mockResolvedValueOnce(String(nativeState.source)).mockResolvedValueOnce('f'.repeat(64))
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(f.writes).toEqual([])
   } finally {
     await f.database.destroy()
@@ -645,11 +709,13 @@ test('lost update ownership cannot acknowledge an installation object', async ()
   try {
     await f.fresh()
     f.fault.zeroNext = true
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect((await f.database('snapshot_journal_generation').first()).nextObject).toBe(0)
     f.fault.zeroNext = false
-    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling)).toMatchObject({
-      nextObject: 57,
+    expect(await installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).toMatchObject({
+      nextObject: 59,
       complete: false
     })
   } finally {
@@ -661,7 +727,9 @@ test('lost update ownership cannot publish completion', async () => {
   try {
     await f.database('snapshot_journal_generation').update({ complete: 0 })
     f.fault.zeroComplete = true
-    await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect((await f.database('snapshot_journal_generation').first()).complete).toBe(0)
   } finally {
     await f.database.destroy()
@@ -679,11 +747,13 @@ test.each(['clock missing', 'epoch changed', 'progress changed', 'bootstrap miss
           await t('snapshot_journal_generation').update({
             epoch: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
           })
-        if (kind === 'progress changed') await t('snapshot_journal_generation').update({ nextObject: 56 })
+        if (kind === 'progress changed') await t('snapshot_journal_generation').update({ nextObject: 58 })
         if (kind === 'bootstrap missing') await t('snapshot_journal_bootstrap').delete()
         if (kind === 'invalidated') await t('snapshot_journal_invalid').insert({ id: 1, reason: 'capacity-exhausted' })
       }
-      await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
       expect((await f.database('snapshot_journal_generation').first()).complete).toBe(0)
       expect(await f.database('snapshot_journal_clock')).toEqual([{ id: 1, ceiling }])
       expect(await f.database('snapshot_journal_invalid')).toEqual([])
@@ -695,21 +765,25 @@ test.each(['clock missing', 'epoch changed', 'progress changed', 'bootstrap miss
 test('installation refuses a partial bootstrap cursor before resuming DDL', async () => {
   const f = await fixture()
   try {
-    await f.database('snapshot_journal_generation').update({ nextObject: 56, complete: 0 })
+    await f.database('snapshot_journal_generation').update({ nextObject: 58, complete: 0 })
     await f.database('snapshot_journal_bootstrap').update({ stream: 1 })
     f.writes.length = 0
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(f.writes).toEqual([])
   } finally {
     await f.database.destroy()
   }
 })
-test.each([58, 56])('installation refuses invalid complete next-object position %i', async nextObject => {
+test.each([60, 58])('installation refuses invalid complete next-object position %i', async nextObject => {
   const f = await fixture()
   try {
     await f.database('snapshot_journal_generation').update({ nextObject })
     f.writes.length = 0
-    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(f.writes).toEqual([])
   } finally {
     await f.database.destroy()
@@ -723,7 +797,9 @@ test('generation requires its intent in the reserved-object inventory', async ()
       rows.findIndex(row => row.name === 'snapshot_journal_generation'),
       1
     )
-    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(f.writes).toEqual([])
   } finally {
     await f.database.destroy()
@@ -741,10 +817,120 @@ test('final state rechecks a clock response after object validation', async () =
   }
   f.database.on('query-response', listener)
   try {
-    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(reads).toBe(2)
   } finally {
     f.database.off('query-response', listener)
+    await f.database.destroy()
+  }
+})
+
+test('receipt policy is immutable across installation, reads and completion', async () => {
+  const f = await fixture()
+  try {
+    for (const policy of [
+      { ...journalReceiptPolicy, receiptLimit: 127 },
+      { ...journalReceiptPolicy, receiptLifetimeMs: 1000 }
+    ]) {
+      await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, policy)).rejects.toThrow()
+      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, policy)).rejects.toThrow()
+      await expect(completeSnapshotJournalMysqlGeneration(f.k, ceiling, policy)).rejects.toThrow()
+    }
+    expect(f.writes).toEqual([])
+    expect(await f.database('snapshot_journal_retention')).toEqual([{ id: 1, floor: '0', ...journalReceiptPolicy }])
+  } finally {
+    await f.database.destroy()
+  }
+})
+
+test('opening snapshots the policy before an asynchronous source read', async () => {
+  const f = await fixture()
+  try {
+    const policy = { ...journalReceiptPolicy }
+    readBinding.mockImplementationOnce(async () => {
+      policy.receiptLimit = 1
+      policy.receiptLifetimeMs = 1
+      return String(nativeState.source)
+    })
+    await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, policy)).resolves.toMatchObject({ complete: true })
+    expect(f.writes).toEqual([])
+  } finally {
+    await f.database.destroy()
+  }
+})
+
+test.each([
+  null,
+  undefined,
+  [],
+  {},
+  { receiptLimit: 0, receiptLifetimeMs: 1 },
+  { receiptLimit: 129, receiptLifetimeMs: 1 },
+  { receiptLimit: 1.5, receiptLifetimeMs: 1 },
+  { receiptLimit: 1, receiptLifetimeMs: 0 },
+  { receiptLimit: 1, receiptLifetimeMs: 2592000001 }
+])('invalid receipt policy %o refuses before SQL', async policy => {
+  const f = await fixture()
+  try {
+    f.raw.mockClear()
+    await expect(
+      installSnapshotJournalMysqlGeneration(f.k, ceiling, policy as typeof journalReceiptPolicy)
+    ).rejects.toThrow()
+    await expect(
+      readSnapshotJournalMysqlGeneration(f.k, ceiling, policy as typeof journalReceiptPolicy)
+    ).rejects.toThrow()
+    await expect(
+      completeSnapshotJournalMysqlGeneration(f.k, ceiling, policy as typeof journalReceiptPolicy)
+    ).rejects.toThrow()
+    expect(f.raw).not.toHaveBeenCalled()
+    expect(f.writes).toEqual([])
+  } finally {
+    await f.database.destroy()
+  }
+})
+
+test.each(['missing', 'duplicate', 'limit', 'lifetime', 'floor', 'capacity'])(
+  'refuses invalid retained receipt state: %s',
+  async kind => {
+    const f = await fixture()
+    try {
+      if (kind === 'missing') await f.database('snapshot_journal_retention').delete()
+      if (kind === 'duplicate')
+        await f.database('snapshot_journal_retention').insert({ id: 2, floor: '0', ...journalReceiptPolicy })
+      if (kind === 'limit') await f.database('snapshot_journal_retention').update({ receiptLimit: 127 })
+      if (kind === 'lifetime') await f.database('snapshot_journal_retention').update({ receiptLifetimeMs: 1000 })
+      if (kind === 'floor') await f.database('snapshot_journal_retention').update({ floor: '01' })
+      if (kind === 'capacity')
+        await f.database('snapshot_journal_receipts').insert(
+          Array.from({ length: 129 }, (_, n) => ({
+            requestId: String(n),
+            binding: 'b',
+            highWater: '1',
+            floor: '0',
+            expiresAt: 1
+          }))
+        )
+      f.writes.length = 0
+      await expect(readSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow()
+      expect(f.writes).toEqual([])
+    } finally {
+      await f.database.destroy()
+    }
+  }
+)
+
+test('partially installed retention cannot claim a progressed floor', async () => {
+  const f = await fixture()
+  try {
+    await f.database('snapshot_journal_generation').update({ nextObject: 58, complete: 0 })
+    await f.database('snapshot_journal_bootstrap').update({ stream: 0, cursor: null, rowLimit: null, rowsUsed: 0 })
+    await f.database('snapshot_journal_retention').update({ floor: '1' })
+    f.writes.length = 0
+    await expect(installSnapshotJournalMysqlGeneration(f.k, ceiling, journalReceiptPolicy)).rejects.toThrow()
+    expect(f.writes).toEqual([])
+  } finally {
     await f.database.destroy()
   }
 })

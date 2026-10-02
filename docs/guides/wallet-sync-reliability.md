@@ -1068,17 +1068,38 @@ Native recovery fixtures include allowance binding, metadata insertion, progress
 update and commit boundaries, then independently count the fully bootstrapped
 streams to detect lost or repeated charges after recovery.
 
+Owned generations take an explicit receipt policy: 1–128 retained records and
+a lifetime from 1 millisecond through 30 days. Installation snapshots this policy;
+resume/read/completion refuse a mismatch. SQLite owns both tables and their expiry
+index atomically; MySQL binds the policy into the durable installation plan and
+validates each table's exact typed metadata, ownership and seed after implicit DDL.
+
+The internal receipt store binds backend, generation, schema/source, storage and
+profile identity. Exact retries preserve the original high-water, expiry and
+captured floor; a missing receipt refuses continuity even if newer writes have
+surpassed its revision. MySQL decisions use current, nonwaiting locking reads,
+including after an older transaction view. SQLite mutation transactions require
+zero busy timeout. Expired records remain charged until collection commits; each
+indexed collection removes at most 64 records. Stored text projections and
+capacity probes are bounded. Receipt record/collection process-loss fixtures
+check state before and after commit under both MySQL isolation levels.
+
+A caller must reserve the reader before taking the short writer barrier, pin its
+view before recording the proof, and publish only after receipt commit. That
+capture controller and atomic floor/tombstone lifecycle are still unfinished.
+A durable prefix proof does not reopen a killed database read transaction.
+
 This foundation adds no registered migration, public capability or reader
 advertisement. Its event-window invalidation is not a complete retention or
-resource policy. Full quotas, durable capture/receipt/floor ownership,
+resource policy. Full quotas, capture publication and continuity-floor ownership,
 generation-aware receiver/primary integration, and remaining remote/IndexedDB,
 streaming and staged-import acceptance remain unfinished. Do not infer full
 incremental continuity or completed issue #544 from these helpers.
 
-The wallet-snapshot-journal mutation target owns all thirteen complete source
-modules in eleven execution parts. Every part retains the complete canonical
+The wallet-snapshot-journal mutation target owns all fourteen complete source
+modules in twelve execution parts, including the whole receipt module. Every part retains the complete canonical
 journal tests and fixtures, including one governed property entry for exact
-revision/page and generated source-observer schedules. A minimum score of 90%, zero
+revision/page, generated source-observer and committed receipt-state schedules. A minimum score of 90%, zero
 uncovered/invalid mutants, 300 cases with seed 3242026, four workers, runner reuse 8 and 90-minute
 bounds remain in force. Native ownership, client/server process-loss and broader
 platform/performance evidence are separate required validation; source helpers

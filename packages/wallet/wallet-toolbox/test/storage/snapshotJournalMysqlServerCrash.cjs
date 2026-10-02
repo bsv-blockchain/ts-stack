@@ -1,3 +1,4 @@
+const receiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
 const assert = require('node:assert/strict'),
   { fork } = require('node:child_process'),
   { mkdtemp, rm } = require('node:fs/promises'),
@@ -91,7 +92,7 @@ async function finish(k) {
   for (let i = 0; i < 100; i++) {
     const page = await copy(k, 1000000)
     assert(!page.invalidated)
-    if (page.complete) return await complete(k, ceiling)
+    if (page.complete) return await complete(k, ceiling, receiptPolicy)
     assert(i < 99)
   }
 }
@@ -143,7 +144,7 @@ async function child() {
   })
   try {
     await isolate(k, isolation)
-    await install(k, ceiling)
+    await install(k, ceiling, receiptPolicy)
     if (boundary.startsWith('bootstrap-')) {
       await copy(k, 1000000)
       park('bootstrap-after-commit')
@@ -155,7 +156,7 @@ async function child() {
         assert(i < 99)
       }
       completing = true
-      await complete(k, ceiling)
+      await complete(k, ceiling, receiptPolicy)
       park('complete-after-commit')
     }
     throw new Error('Crash boundary missed: ' + boundary)
@@ -201,6 +202,8 @@ async function main() {
     const boundaries = [
       'after-snapshot_journal_generation',
       'after-snapshot_journal_clock',
+      'after-snapshot_journal_retention',
+      'after-snapshot_journal_receipts',
       'after-snapshot_journal_scope_0_INSERT',
       'after-snapshot_journal_physical_12_DELETE',
       'bootstrap-after-budget-bind',
@@ -234,7 +237,7 @@ async function main() {
               : null
           )
         }
-        const resumed = await install(k, ceiling)
+        const resumed = await install(k, ceiling, receiptPolicy)
         assert.equal(resumed.epoch, saved.epoch)
         await finish(k)
         let charged = 0

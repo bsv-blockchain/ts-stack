@@ -6,7 +6,7 @@ const { join } = require('node:path')
 const assert = require('node:assert/strict')
 const { executable, context, image, validateContext, validateContainer } = require('./snapshotArchiveDocker.cjs')
 const { runInSeries } = require('../../out/src/utility/runInSeries.js')
-const journalFixtureGroups = Object.freeze(['generation', 'server-crash'])
+const journalFixtureGroups = Object.freeze(['generation', 'server-crash', 'receipts'])
 const execute = (file, args, options) =>
   new Promise((resolve, reject) => {
     execFile(
@@ -109,7 +109,14 @@ async function runFixture(group) {
       const result = await execute(
         process.execPath,
         [
-          join(__dirname, group === 'generation' ? 'snapshotJournalMysql.cjs' : 'snapshotJournalMysqlServerCrash.cjs'),
+          join(
+            __dirname,
+            group === 'generation'
+              ? 'snapshotJournalMysql.cjs'
+              : group === 'server-crash'
+                ? 'snapshotJournalMysqlServerCrash.cjs'
+                : 'snapshotJournalReceiptMysql.cjs'
+          ),
           group
         ],
         {
@@ -121,7 +128,7 @@ async function runFixture(group) {
             TS_STACK_SNAPSHOT_MYSQL_SECRET: secret
           },
           signal: cancellation.signal,
-          timeout: group === 'generation' ? 180000 : 240000
+          timeout: group === 'generation' ? 180000 : group === 'server-crash' ? 240000 : 60000
         }
       )
       process.stdout.write(result)

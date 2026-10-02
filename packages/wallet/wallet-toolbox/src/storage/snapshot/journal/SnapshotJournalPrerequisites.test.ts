@@ -9,10 +9,12 @@ import { snapshotJournalSqliteObserverSql } from './SnapshotJournalSqliteObserve
 import { snapshotJournalMysqlObserverSql } from './SnapshotJournalMysqlObservers'
 import { snapshotJournalRevision as rev } from './SnapshotJournalRevision'
 
+const journalReceiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
+
 test.each([
   ['bootstrap', (k: Knex) => copySnapshotJournalBootstrapPage(k, 1000000)],
-  ['SQLite generation read', (k: Knex) => readSnapshotJournalSqliteGeneration(k)],
-  ['SQLite generation completion', (k: Knex) => completeSnapshotJournalSqliteGeneration(k)],
+  ['SQLite generation read', (k: Knex) => readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)],
+  ['SQLite generation completion', (k: Knex) => completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)],
   ['high-water', (k: Knex) => readSnapshotJournalHighWater(k, 1, rev('0'), rev('0'))],
   ['SQLite observers', (k: Knex) => snapshotJournalSqliteObserverSql(k)],
   ['MySQL observers', (k: Knex) => snapshotJournalMysqlObserverSql(k)]

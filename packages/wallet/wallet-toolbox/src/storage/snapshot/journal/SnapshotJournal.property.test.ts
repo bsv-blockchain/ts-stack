@@ -1005,3 +1005,119 @@ describe('SnapshotJournalSqliteObservers', () => {
     }
   })
 })
+
+// The receipt store's model is independent of SQL affected-row counts, database
+// snapshots and the implementation's parser. It exercises actual SQLite commits.
+test('bounded receipt schedules preserve exact committed identity, expiry, floor and capacity', async () => {
+  const Receipt = await import('./SnapshotJournalReceipt')
+  const ArchiveClock = await import('../archive/SnapshotArchiveSql')
+  const k = knex({
+    client: 'better-sqlite3',
+    connection: { filename: ':memory:' },
+    useNullAsDefault: true,
+    pool: { min: 1, max: 1 }
+  })
+  let clock = 1000000
+  const now = jest.spyOn(ArchiveClock, 'snapshotArchiveDatabaseNow').mockImplementation(async () => clock)
+  try {
+    await k.raw('PRAGMA busy_timeout=0')
+    for (const sql of Receipt.snapshotJournalReceiptDdl(k)) await k.raw(sql)
+    await k('snapshot_journal_retention').insert({ id: 1, floor: '0', receiptLimit: 3, receiptLifetimeMs: 1000 })
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            kind: fc.integer({ min: 0, max: 4 }),
+            key: fc.integer({ min: 1, max: 8 }),
+            other: fc.boolean(),
+            rollback: fc.boolean(),
+            step: fc.integer({ min: 0, max: 80 })
+          }),
+          { minLength: 1, maxLength: 32 }
+        ),
+        async commands => {
+          clock = 1000000
+          let floor = 0n
+          const model = new Map<
+            string,
+            { requestId: string; binding: string; highWater: string; floor: string; expiresAt: number }
+          >()
+          await k('snapshot_journal_receipts').delete()
+          await k('snapshot_journal_retention').update({ floor: '0' })
+          const binding = {
+            backend: '11'.repeat(32),
+            epoch: '12345678-1234-4234-9234-123456789012',
+            source: '22'.repeat(32),
+            schema: '33'.repeat(32),
+            storageIdentity: 'synthetic-receipt-model',
+            identityKey: '02' + '44'.repeat(32),
+            userId: 1,
+            chain: 'test'
+          }
+          const rollback = new Error('model rollback')
+          for (const command of commands) {
+            const high = 9007199254740992n + BigInt(command.key)
+            const request = {
+              requestId: command.key.toString(16).padStart(64, '0'),
+              highWater: snapshotJournalRevision(high.toString()),
+              expiresAt: 1000100 + command.key * 20
+            }
+            const owner = { ...binding, userId: command.other ? 2 : 1 }
+            const digest = Receipt.snapshotJournalReceiptBinding(owner)
+            const prior = model.get(request.requestId)
+            if (command.kind === 0) {
+              const valid =
+                request.expiresAt > clock &&
+                high >= floor &&
+                (prior === undefined ? model.size < 3 : prior.binding === digest)
+              const result = { ...request, binding: digest, floor: floor.toString() }
+              const operation = k.transaction(async t => {
+                const value = await Receipt.recordSnapshotJournalReceipt(t, owner, request)
+                if (command.rollback) throw rollback
+                return value
+              })
+              if (!valid || command.rollback) await expect(operation).rejects.toThrow()
+              else {
+                await expect(operation).resolves.toEqual(prior ?? result)
+                if (prior === undefined) model.set(request.requestId, result)
+              }
+            } else if (command.kind === 1) {
+              const valid =
+                prior !== undefined && prior.binding === digest && request.expiresAt > clock && high >= floor
+              const operation = k.transaction(t => Receipt.readSnapshotJournalReceipt(t, owner, request))
+              if (valid) await expect(operation).resolves.toEqual(prior)
+              else await expect(operation).rejects.toThrow()
+            } else if (command.kind === 2) {
+              const removed = [...model.values()].filter(row => row.expiresAt <= clock)
+              const operation = k.transaction(async t => {
+                expect(await Receipt.collectSnapshotJournalReceipts(t)).toBe(removed.length)
+                if (command.rollback) throw rollback
+              })
+              if (command.rollback) await expect(operation).rejects.toThrow('model rollback')
+              else {
+                await operation
+                for (const row of removed) model.delete(row.requestId)
+              }
+            } else if (command.kind === 3) {
+              clock += command.step
+            } else {
+              const next = high > floor ? high : floor
+              await k.transaction(async t => {
+                await t('snapshot_journal_retention').update({ floor: next.toString() })
+                if (command.rollback) await t.rollback()
+              })
+              if (!command.rollback) floor = next
+            }
+            const rows = await k('snapshot_journal_receipts').select('*').orderBy('requestId')
+            expect(rows).toEqual([...model.values()].sort((a, b) => a.requestId.localeCompare(b.requestId)))
+            expect(rows.length).toBeLessThanOrEqual(3)
+          }
+        }
+      ),
+      propertyParameters
+    )
+  } finally {
+    now.mockRestore()
+    await k.destroy()
+  }
+})

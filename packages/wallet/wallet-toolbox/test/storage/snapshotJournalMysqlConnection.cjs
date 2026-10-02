@@ -21,5 +21,14 @@ const connection = {
   timezone: 'Z'
 }
 
-const open = () => knex({ client: 'mysql2', connection, pool: { min: 1, max: 1 }, acquireConnectionTimeout: 5000 })
+const open = bigNumberStrings =>
+  knex({
+    client: 'mysql2',
+    connection: {
+      ...connection,
+      ...(typeof bigNumberStrings === 'boolean' ? { supportBigNumbers: true, bigNumberStrings } : {})
+    },
+    pool: { min: 1, max: 1 },
+    acquireConnectionTimeout: 5000
+  })
 module.exports = { open, ...require('./snapshotJournalNativeFixture.cjs') }

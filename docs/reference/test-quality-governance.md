@@ -270,6 +270,14 @@ independent critical score and zero-uncovered/invalid gates. Aggregation require
 the complete disjoint source union and fresh matching provenance; no target,
 property budget, dependency-selection rule or acceptance threshold changes.
 
+The journal target includes the complete receipt module in its own execution
+part. All twelve journal parts retain the common complete tests/fixtures and
+the existing governed property suite, including generated receipt histories.
+The native receipt fixture is an explicit additional input and a 60-second group
+alongside the unchanged owned MySQL generation/server-crash groups. Target and
+property counts, 90% aggregate gate, zero invalid/uncovered requirement, 300-case
+seeded property settings, worker/reuse limits and existing deadlines are preserved.
+
 PR CI downloads each selected target's complete partition artifacts before
 canonical verification. The orchestration regression derives the required
 downloads from the canonical target registry and execution map, preventing a

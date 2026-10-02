@@ -501,6 +501,7 @@ export function buildMutationTargets(repositoryRoot) {
         'test/storage/snapshotJournalMysqlConnection.cjs',
         'test/storage/snapshotJournalMysql.cjs',
         'test/storage/snapshotJournalMysqlServerCrash.cjs',
+        'test/storage/snapshotJournalReceiptMysql.cjs',
         'test/storage/snapshotJournalSqliteCrash.cjs',
         'test/storage/runSnapshotJournalMysql.cjs',
         'test/storage/snapshotArchiveDocker.cjs'
@@ -520,7 +521,8 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/snapshot/journal/SnapshotJournalMysqlSource.ts',
         'src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts',
         'src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts',
-        'src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts'
+        'src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts',
+        'src/storage/snapshot/journal/SnapshotJournalReceipt.ts'
       ],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/journal/*.test.ts'], {
         maxTestRunnerReuse: 8,

@@ -1,3 +1,4 @@
+const receiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
 const assert = require('node:assert/strict'),
   { fork } = require('node:child_process'),
   { mkdtemp, rm } = require('node:fs/promises'),
@@ -44,6 +45,7 @@ async function child() {
     if (sql.startsWith('create trigger snapshot_journal_physical_12_delete')) park('install-after-ddl')
     if (sql.startsWith('insert into `snapshot_journal_generation`')) park('install-after-generation')
     if (sql.startsWith('insert into `snapshot_journal_bootstrap`')) park('install-after-bootstrap')
+    if (sql.startsWith('insert into `snapshot_journal_retention`')) park('install-after-retention')
     if (sql.startsWith('update `snapshot_journal_generation`')) park('complete-after-state')
     if (sql.startsWith('update `snapshot_journal_bootstrap` set `rowlimit`')) park('bootstrap-after-budget-bind')
     if (sql.startsWith('insert into `snapshot_journal_physical`')) park('bootstrap-after-metadata')
@@ -54,13 +56,13 @@ async function child() {
   })
   try {
     if (boundary.startsWith('install-')) {
-      await install(k, '1000000')
+      await install(k, '1000000', receiptPolicy)
       park('install-after-commit')
     } else if (boundary.startsWith('bootstrap-')) {
       await copy(k, 1000000)
       park('bootstrap-after-commit')
     } else {
-      await complete(k)
+      await complete(k, receiptPolicy)
       park('complete-after-commit')
     }
     throw new Error('Boundary not reached')
@@ -94,6 +96,7 @@ async function main() {
       'install-after-ddl',
       'install-after-generation',
       'install-after-bootstrap',
+      'install-after-retention',
       'install-after-commit',
       'bootstrap-after-budget-bind',
       'bootstrap-after-metadata',
@@ -115,9 +118,9 @@ async function main() {
         await seedArchiveClosure(source, user.userId, other.userId)
         const original = {}
         for (const table of tables) original[table] = await k(table)
-        if (boundary.startsWith('bootstrap-')) await install(k, '1000000')
+        if (boundary.startsWith('bootstrap-')) await install(k, '1000000', receiptPolicy)
         if (boundary.startsWith('complete-')) {
-          await install(k, '1000000')
+          await install(k, '1000000', receiptPolicy)
           await finish(k)
         }
         const killed = await killAt(filename, boundary)
@@ -128,9 +131,9 @@ async function main() {
         })
         const objects = await k('sqlite_master').whereRaw('lower(substr(name,1,17))=?', ['snapshot_journal_'])
         const committed = boundary.endsWith('after-commit')
-        if (boundary.startsWith('install-')) assert.equal(objects.length, committed ? 58 : 0)
+        if (boundary.startsWith('install-')) assert.equal(objects.length, committed ? 61 : 0)
         else if (boundary.startsWith('bootstrap-')) {
-          assert.equal((await read(k)).complete, false)
+          assert.equal((await read(k, receiptPolicy)).complete, false)
           const progress = await k('snapshot_journal_bootstrap').first()
           assert.equal(progress.rowsUsed, committed ? original.transactions.length : 0)
           assert.equal(progress.rowLimit, committed ? 1000000 : null)
@@ -138,11 +141,11 @@ async function main() {
             progress.cursor,
             committed ? JSON.stringify([Math.max(...original.transactions.map(row => row.transactionId))]) : null
           )
-        } else assert.equal((await read(k)).complete, committed)
-        await install(k, '1000000')
+        } else assert.equal((await read(k, receiptPolicy)).complete, committed)
+        await install(k, '1000000', receiptPolicy)
         await finish(k)
-        await complete(k)
-        assert.equal((await read(k)).complete, true)
+        await complete(k, receiptPolicy)
+        assert.equal((await read(k, receiptPolicy)).complete, true)
         await exact(k)
         let charged = 0
         for (const table of [

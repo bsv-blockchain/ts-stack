@@ -11,6 +11,9 @@ import {
 } from './SnapshotJournalSqliteGeneration'
 import { copySnapshotJournalBootstrapPage } from './SnapshotJournalBootstrap'
 import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
+
+const journalReceiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
+
 let ceiling: SnapshotJournalRevision
 beforeEach(() => {
   ceiling = snapshotJournalRevision('1000000')
@@ -44,21 +47,21 @@ test('atomic installation resumes its epoch and publishes only completed durable
   const { k, source } = await fixture()
   try {
     const rows = await k('transactions'),
-      installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+      installed = await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
     expect(installed).toMatchObject({ complete: false, enabled: true, ceiling })
     expect(installed.epoch).toMatch(/^[0-9a-f-]{36}$/)
-    await expect(completeSnapshotJournalSqliteGeneration(k)).rejects.toThrow('Invalid or unowned')
+    await expect(completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toThrow('Invalid or unowned')
     await copySnapshotJournalBootstrapPage(k, 1000000)
     const progress = await k('snapshot_journal_bootstrap').first()
-    expect(await installSnapshotJournalSqliteGeneration(k, ceiling)).toEqual(installed)
+    expect(await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).toEqual(installed)
     expect(await k('snapshot_journal_bootstrap').first()).toEqual(progress)
     await finish(k)
-    expect(await readSnapshotJournalSqliteGeneration(k)).toEqual(installed)
-    expect(await completeSnapshotJournalSqliteGeneration(k)).toEqual({
+    expect(await readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual(installed)
+    expect(await completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual({
       ...installed,
       complete: true
     })
-    expect(await readSnapshotJournalSqliteGeneration(k)).toEqual({ ...installed, complete: true })
+    expect(await readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual({ ...installed, complete: true })
     expect(await k('transactions')).toEqual(rows)
   } finally {
     await source.destroy()
@@ -74,7 +77,9 @@ test.each([
   try {
     await k.raw(ddl)
     const before = await k('sqlite_master').orderBy(['type', 'name'])
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(await k('sqlite_master').orderBy(['type', 'name'])).toEqual(before)
   } finally {
     await source.destroy()
@@ -85,14 +90,16 @@ test.each(['observer', 'index', 'same-name view', 'unknown reserved'])(
   async kind => {
     const { k, source } = await fixture()
     try {
-      await installSnapshotJournalSqliteGeneration(k, ceiling)
+      await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
       if (kind === 'observer') await k.raw('DROP TRIGGER snapshot_journal_scope_0_INSERT')
       if (kind === 'index') await k.raw('DROP INDEX snapshot_journal_scope_page')
       if (kind === 'same-name view') await k.raw('CREATE VIEW snapshot_journal_scope_0_INSERT AS SELECT 1')
       if (kind === 'unknown reserved') await k.raw('CREATE TABLE snapshot_journal_foreign(id INTEGER)')
       const before = await k('sqlite_master').orderBy(['type', 'name']),
         rows = await k('transactions')
-      await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+      await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+        'Invalid or unowned'
+      )
       expect(await k('sqlite_master').orderBy(['type', 'name'])).toEqual(before)
       expect(await k('transactions')).toEqual(rows)
     } finally {
@@ -104,10 +111,10 @@ test('complete source binding includes user observers and preserves literal whit
   const { k, source } = await fixture()
   try {
     await k.raw("CREATE TRIGGER application_user AFTER INSERT ON users BEGIN SELECT 'a  b'; END")
-    await installSnapshotJournalSqliteGeneration(k, ceiling)
+    await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
     await k.raw('DROP TRIGGER application_user')
     await k.raw("CREATE TRIGGER application_user AFTER INSERT ON users BEGIN SELECT 'a b'; END")
-    await expect(readSnapshotJournalSqliteGeneration(k)).rejects.toThrow('Invalid or unowned')
+    await expect(readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toThrow('Invalid or unowned')
   } finally {
     await source.destroy()
   }
@@ -126,7 +133,7 @@ test.each([
 ])('persisted %s damage refuses', async kind => {
   const { k, source } = await fixture()
   try {
-    await installSnapshotJournalSqliteGeneration(k, ceiling)
+    await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
     if (kind === 'metadata missing') await k(metadata).delete()
     if (kind === 'metadata epoch') await k(metadata).update({ epoch: 'foreign' })
     if (kind === 'metadata source') await k(metadata).update({ source: '0'.repeat(64) })
@@ -137,7 +144,7 @@ test.each([
     if (kind === 'bootstrap extra') await k('snapshot_journal_bootstrap').update({ stream: 0.5 })
     if (kind === 'bootstrap cursor') await k('snapshot_journal_bootstrap').update({ cursor: 'x'.repeat(2049) })
     if (kind === 'false completion') await k(metadata).update({ complete: 1 })
-    await expect(readSnapshotJournalSqliteGeneration(k)).rejects.toThrow()
+    await expect(readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toThrow()
   } finally {
     await source.destroy()
   }
@@ -145,14 +152,20 @@ test.each([
 test('configured event exhaustion preserves source writes and refuses completion', async () => {
   const { k, source } = await fixture()
   try {
-    const installed = await installSnapshotJournalSqliteGeneration(k, snapshotJournalRevision('1'))
+    const installed = await installSnapshotJournalSqliteGeneration(
+      k,
+      snapshotJournalRevision('1'),
+      journalReceiptPolicy
+    )
     await k('tx_labels').where('txLabelId', 1).update({ label: 'first' })
     await k('tx_labels').where('txLabelId', 1).update({ label: 'ordinary after exhaustion' })
     expect((await k('tx_labels').where('txLabelId', 1).first()).label).toBe('ordinary after exhaustion')
-    expect(await readSnapshotJournalSqliteGeneration(k)).toEqual({ ...installed, enabled: false })
+    expect(await readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual({ ...installed, enabled: false })
     await k('snapshot_journal_bootstrap').update({ stream: 17, cursor: null, rowLimit: 1000000 })
-    await expect(completeSnapshotJournalSqliteGeneration(k)).rejects.toThrow('Invalid or unowned')
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
   } finally {
     await source.destroy()
   }
@@ -171,12 +184,12 @@ test.each([
     }
     k.on('query', listener)
     try {
-      await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toBe(failure)
+      await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toBe(failure)
     } finally {
       k.off('query', listener)
     }
     expect(await k('sqlite_master').orderBy(['type', 'name'])).toEqual(before)
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).resolves.toMatchObject({
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).resolves.toMatchObject({
       complete: false,
       enabled: true
     })
@@ -187,7 +200,7 @@ test.each([
 test('completion rollback retains the unfinished generation and can resume', async () => {
   const { k, source } = await fixture()
   try {
-    const installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+    const installed = await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
     await finish(k)
     const failure = new Error('synthetic completion failure'),
       listener = (query: { sql: string }) => {
@@ -195,12 +208,12 @@ test('completion rollback retains the unfinished generation and can resume', asy
       }
     k.on('query', listener)
     try {
-      await expect(completeSnapshotJournalSqliteGeneration(k)).rejects.toBe(failure)
+      await expect(completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toBe(failure)
     } finally {
       k.off('query', listener)
     }
-    expect(await readSnapshotJournalSqliteGeneration(k)).toEqual(installed)
-    await expect(completeSnapshotJournalSqliteGeneration(k)).resolves.toMatchObject({
+    expect(await readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual(installed)
+    await expect(completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).resolves.toMatchObject({
       complete: true
     })
   } finally {
@@ -214,10 +227,14 @@ test('unsupported client and missing published SQLite prerequisites refuse befor
     useNullAsDefault: true
   })
   try {
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(await k('sqlite_master')).toEqual([])
     k.client.config.client = 'mysql2'
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
   } finally {
     await k.destroy()
   }
@@ -228,7 +245,7 @@ test.each(['zero ceiling', 'invalid clock reason', 'replaced observer'])(
   async kind => {
     const { k, source } = await fixture()
     try {
-      await installSnapshotJournalSqliteGeneration(k, ceiling)
+      await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
       if (kind === 'zero ceiling') await k(metadata).update({ ceiling: '0' })
       if (kind === 'invalid clock reason') {
         await k.raw('PRAGMA ignore_check_constraints=ON')
@@ -240,7 +257,7 @@ test.each(['zero ceiling', 'invalid clock reason', 'replaced observer'])(
         await k.raw('CREATE TRIGGER snapshot_journal_scope_0_INSERT AFTER INSERT ON transactions BEGIN SELECT 1; END')
       }
       const before = await k('transactions')
-      await expect(readSnapshotJournalSqliteGeneration(k)).rejects.toThrow('Invalid or unowned')
+      await expect(readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toThrow('Invalid or unowned')
       expect(await k('transactions')).toEqual(before)
     } finally {
       await source.destroy()
@@ -261,7 +278,9 @@ test.each(['rows', 'definition', 'aggregate'])('source binding refuses an oversi
         )
     }
     const before = await k('sqlite_master').select('type', 'name', 'sql').orderBy(['type', 'name'])
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(await k('sqlite_master').select('type', 'name', 'sql').orderBy(['type', 'name'])).toEqual(before)
   } finally {
     await source.destroy()
@@ -274,7 +293,9 @@ test('invalid generated DDL cannot enter the persisted SQLite ownership plan', a
     .spyOn(observers, 'snapshotJournalSqliteObserverSql')
     .mockResolvedValue(['CREATE TABLE application_table(id INTEGER)'])
   try {
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(await k('sqlite_master').where('name', 'application_table')).toEqual([])
   } finally {
     spy.mockRestore()
@@ -294,7 +315,9 @@ test.each(['users', 'settings'])('source metadata must include %s in the ownersh
   }
   k.on('query-response', listener)
   try {
-    await expect(installSnapshotJournalSqliteGeneration(k, ceiling)).rejects.toThrow('Invalid or unowned')
+    await expect(installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)).rejects.toThrow(
+      'Invalid or unowned'
+    )
     expect(altered).toBe(true)
   } finally {
     k.off('query-response', listener)
@@ -306,13 +329,13 @@ test('legacy SQLite alias preserves installation identity through completion', a
   const { k, source } = await fixture()
   k.client.config.client = 'sqlite3'
   try {
-    const installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+    const installed = await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
     await finish(k)
-    expect(await completeSnapshotJournalSqliteGeneration(k)).toEqual({
+    expect(await completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual({
       ...installed,
       complete: true
     })
-    expect(await readSnapshotJournalSqliteGeneration(k)).toEqual({ ...installed, complete: true })
+    expect(await readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual({ ...installed, complete: true })
   } finally {
     await source.destroy()
   }
@@ -326,10 +349,10 @@ test.each(['install', 'read', 'complete'])(
     const k = { client: { config: { client: 'mysql2' } }, transaction, raw } as unknown as Knex
     const result =
       operation === 'install'
-        ? installSnapshotJournalSqliteGeneration(k, ceiling)
+        ? installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
         : operation === 'read'
-          ? readSnapshotJournalSqliteGeneration(k)
-          : completeSnapshotJournalSqliteGeneration(k)
+          ? readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)
+          : completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)
     await expect(result).rejects.toThrow('Invalid or unowned SQLite snapshot journal generation')
     expect(transaction).not.toHaveBeenCalled()
     expect(raw).not.toHaveBeenCalled()
@@ -339,9 +362,9 @@ test.each(['install', 'read', 'complete'])(
 test('empty SQLite generation event window refuses before transaction admission', async () => {
   const transaction = jest.fn(),
     k = { client: { config: { client: 'sqlite3' } }, transaction } as unknown as Knex
-  await expect(installSnapshotJournalSqliteGeneration(k, snapshotJournalRevision('0'))).rejects.toThrow(
-    'Invalid or unowned SQLite snapshot journal generation'
-  )
+  await expect(
+    installSnapshotJournalSqliteGeneration(k, snapshotJournalRevision('0'), journalReceiptPolicy)
+  ).rejects.toThrow('Invalid or unowned SQLite snapshot journal generation')
   expect(transaction).not.toHaveBeenCalled()
 })
 
@@ -350,11 +373,11 @@ test.each(['prefix', 'suffix'])(
   async side => {
     const { k, source } = await fixture()
     try {
-      const installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+      const installed = await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
       await k(metadata).update({
         epoch: side === 'prefix' ? installed.epoch + 'x' : 'x' + installed.epoch
       })
-      await expect(readSnapshotJournalSqliteGeneration(k)).rejects.toThrow(
+      await expect(readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toThrow(
         'Invalid or unowned SQLite snapshot journal generation'
       )
     } finally {
@@ -368,10 +391,13 @@ test.each(['revision-exhausted', 'key-out-of-range'])(
   async reason => {
     const { k, source } = await fixture()
     try {
-      const installed = await installSnapshotJournalSqliteGeneration(k, ceiling)
+      const installed = await installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
       await k('snapshot_journal_clock').update({ enabled: 0, reason })
-      expect(await readSnapshotJournalSqliteGeneration(k)).toEqual({ ...installed, enabled: false })
-      await expect(completeSnapshotJournalSqliteGeneration(k)).rejects.toThrow(
+      expect(await readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).toEqual({
+        ...installed,
+        enabled: false
+      })
+      await expect(completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)).rejects.toThrow(
         'Invalid or unowned SQLite snapshot journal generation'
       )
     } finally {
@@ -379,3 +405,80 @@ test.each(['revision-exhausted', 'key-out-of-range'])(
     }
   }
 )
+
+test('receipt policy is explicit, detached and immutable throughout generation resume', async () => {
+  const { k, source } = await fixture()
+  try {
+    const policy = { receiptLimit: 2, receiptLifetimeMs: 1000 }
+    const opening = installSnapshotJournalSqliteGeneration(k, ceiling, policy)
+    policy.receiptLimit = 3
+    const installed = await opening
+    const original = { receiptLimit: 2, receiptLifetimeMs: 1000 }
+    expect(await k('snapshot_journal_retention').first()).toEqual({ id: 1, floor: '0', ...original })
+    expect(await installSnapshotJournalSqliteGeneration(k, ceiling, original)).toEqual(installed)
+    for (const changed of [policy, { ...original, receiptLifetimeMs: 1001 }]) {
+      await expect(installSnapshotJournalSqliteGeneration(k, ceiling, changed)).rejects.toThrow('Invalid or unowned')
+      await expect(readSnapshotJournalSqliteGeneration(k, changed)).rejects.toThrow('Invalid or unowned')
+      await expect(completeSnapshotJournalSqliteGeneration(k, changed)).rejects.toThrow('Invalid or unowned')
+    }
+    expect(await k('snapshot_journal_retention').first()).toEqual({ id: 1, floor: '0', ...original })
+  } finally {
+    await source.destroy()
+  }
+})
+
+test.each([
+  null,
+  undefined,
+  [],
+  {},
+  { receiptLimit: 0, receiptLifetimeMs: 1 },
+  { receiptLimit: 129, receiptLifetimeMs: 1 },
+  { receiptLimit: 1.5, receiptLifetimeMs: 1 },
+  { receiptLimit: 1, receiptLifetimeMs: 0 },
+  { receiptLimit: 1, receiptLifetimeMs: 2592000001 },
+  { receiptLimit: 1, receiptLifetimeMs: NaN }
+])('invalid receipt installation policy %p fails before source access', async policy => {
+  const k = knex({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
+  const queries: string[] = []
+  k.on('query', (query: { sql: string }) => queries.push(query.sql))
+  try {
+    await expect(
+      installSnapshotJournalSqliteGeneration(k, ceiling, policy as typeof journalReceiptPolicy)
+    ).rejects.toThrow()
+    await expect(readSnapshotJournalSqliteGeneration(k, policy as typeof journalReceiptPolicy)).rejects.toThrow()
+    await expect(completeSnapshotJournalSqliteGeneration(k, policy as typeof journalReceiptPolicy)).rejects.toThrow()
+    expect(queries).toEqual([])
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('generation validates the receipt floor and capacity with bounded metadata reads', async () => {
+  const { k, source } = await fixture(),
+    policy = { receiptLimit: 2, receiptLifetimeMs: 1000 }
+  try {
+    await installSnapshotJournalSqliteGeneration(k, ceiling, policy)
+    const baseline = await k('transactions')
+    for (const floor of ['01', '9223372036854775807']) {
+      await k('snapshot_journal_retention').update({ floor })
+      await expect(readSnapshotJournalSqliteGeneration(k, policy)).rejects.toThrow()
+    }
+    await k('snapshot_journal_retention').update({ floor: '0' })
+    await k('snapshot_journal_receipts').insert(
+      [1, 2, 3].map(id => ({
+        requestId: id.toString(16).padStart(64, '0'),
+        binding: 'a'.repeat(64),
+        highWater: '1',
+        floor: '0',
+        expiresAt: 1
+      }))
+    )
+    await expect(readSnapshotJournalSqliteGeneration(k, policy)).rejects.toThrow('Invalid or unowned')
+    await k('snapshot_journal_receipts').where('requestId', '3'.padStart(64, '0')).delete()
+    expect((await readSnapshotJournalSqliteGeneration(k, policy)).enabled).toBe(true)
+    expect(await k('transactions')).toEqual(baseline)
+  } finally {
+    await source.destroy()
+  }
+})

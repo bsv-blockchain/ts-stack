@@ -1,3 +1,4 @@
+const receiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
 const assert = require('node:assert/strict'),
   { fork } = require('node:child_process'),
   { mkdtemp, rm } = require('node:fs/promises'),
@@ -33,7 +34,7 @@ async function finish(k) {
   for (let i = 0; i < 100; i++) {
     const page = await copy(k, 1000000)
     assert(!page.invalidated)
-    if (page.complete) return await complete(k, ceiling)
+    if (page.complete) return await complete(k, ceiling, receiptPolicy)
     assert(i < 99)
   }
 }
@@ -84,7 +85,7 @@ async function child() {
   })
   try {
     await isolate(k, isolation)
-    await install(k, ceiling)
+    await install(k, ceiling, receiptPolicy)
     if (boundary.startsWith('bootstrap-')) {
       await copy(k, 1000000)
       park('bootstrap-after-commit')
@@ -96,7 +97,7 @@ async function child() {
         assert(i < 99)
       }
       completing = true
-      await complete(k, ceiling)
+      await complete(k, ceiling, receiptPolicy)
       park('complete-after-commit')
     }
     throw new Error('Crash boundary missed: ' + boundary)
@@ -136,13 +137,13 @@ async function main() {
     for (const isolation of ['READ COMMITTED', 'REPEATABLE READ']) {
       await isolate(k, isolation)
       await clear(k)
-      const created = await install(k, ceiling)
-      assert.equal(created.nextObject, 57)
+      const created = await install(k, ceiling, receiptPolicy)
+      assert.equal(created.nextObject, 59)
       assert.equal(created.complete, false)
       assert.equal(created.enabled, true)
-      assert.deepEqual(await install(k, ceiling), created)
-      assert.deepEqual(await read(k, ceiling), created)
-      await assert.rejects(complete(k, ceiling), /Invalid or unowned/)
+      assert.deepEqual(await install(k, ceiling, receiptPolicy), created)
+      assert.deepEqual(await read(k, ceiling, receiptPolicy), created)
+      await assert.rejects(complete(k, ceiling, receiptPolicy), /Invalid or unowned/)
       const outer = await k.transaction(),
         independent = open()
       try {
@@ -160,9 +161,9 @@ async function main() {
       await exact(k)
       assert.equal(completed.complete, true)
       assert.equal(completed.epoch, created.epoch)
-      assert.deepEqual(await read(k, ceiling), completed)
-      assert.deepEqual(await complete(k, ceiling), completed)
-      await k.transaction(async t => assert.deepEqual(await read(t, ceiling), completed))
+      assert.deepEqual(await read(k, ceiling, receiptPolicy), completed)
+      assert.deepEqual(await complete(k, ceiling, receiptPolicy), completed)
+      await k.transaction(async t => assert.deepEqual(await read(t, ceiling, receiptPolicy), completed))
       for (const [_name, up, down] of [
         [
           'owner-comment',
@@ -191,22 +192,22 @@ async function main() {
         ]
       ]) {
         await k.raw(up)
-        await assert.rejects(read(k, ceiling), /Invalid or unowned/)
-        await assert.rejects(install(k, ceiling), /Invalid or unowned/)
+        await assert.rejects(read(k, ceiling, receiptPolicy), /Invalid or unowned/)
+        await assert.rejects(install(k, ceiling, receiptPolicy), /Invalid or unowned/)
         await k.raw(down)
-        assert.deepEqual(await read(k, ceiling), completed)
+        assert.deepEqual(await read(k, ceiling, receiptPolicy), completed)
       }
-      await k(intent).update({ nextObject: 56, complete: 0 })
+      await k(intent).update({ nextObject: 58, complete: 0 })
       await k.raw('CREATE TABLE snapshot_journal_foreign(id INT)')
-      await assert.rejects(install(k, ceiling), /Invalid or unowned/)
+      await assert.rejects(install(k, ceiling, receiptPolicy), /Invalid or unowned/)
       assert(await k.schema.hasTable('snapshot_journal_foreign'))
       await k.schema.dropTable('snapshot_journal_foreign')
-      await k(intent).update({ nextObject: 57, complete: 1 })
+      await k(intent).update({ nextObject: 59, complete: 1 })
       await k('snapshot_journal_clock').delete()
-      await assert.rejects(install(k, ceiling), /Invalid or unowned/)
+      await assert.rejects(install(k, ceiling, receiptPolicy), /Invalid or unowned/)
       await k('snapshot_journal_clock').insert({ id: 1, ceiling })
       await k('snapshot_journal_bootstrap').update({ stream: 16, cursor: null })
-      await assert.rejects(read(k, ceiling), /Invalid or unowned/)
+      await assert.rejects(read(k, ceiling, receiptPolicy), /Invalid or unowned/)
       await k('snapshot_journal_bootstrap').update({ stream: 17, cursor: null })
       await exact(k)
       assert.deepEqual(await rows(k), baseline)
@@ -217,10 +218,14 @@ async function main() {
         'before-snapshot_journal_clock',
         'after-snapshot_journal_clock',
         'after-snapshot_journal_bootstrap',
+        'before-snapshot_journal_retention',
+        'after-snapshot_journal_retention',
+        'before-snapshot_journal_receipts',
+        'after-snapshot_journal_receipts',
         'after-snapshot_journal_scope_0_INSERT',
         'after-ack-7',
         'after-snapshot_journal_physical_12_DELETE',
-        'after-ack-57',
+        'after-ack-59',
         'bootstrap-after-budget-bind',
         'bootstrap-after-metadata',
         'bootstrap-after-progress',
@@ -244,7 +249,7 @@ async function main() {
               : null
           )
         }
-        const resumed = await install(k, ceiling)
+        const resumed = await install(k, ceiling, receiptPolicy)
         if (saved) assert.equal(resumed.epoch, saved.epoch)
         await finish(k)
         let charged = 0
@@ -272,7 +277,7 @@ async function main() {
       }
       results.push({
         isolation,
-        installedObjects: 58,
+        installedObjects: 60,
         exactResumeAndSourcePreserved: true,
         bootstrapAndObservers: true,
         refusals: true,
