@@ -384,7 +384,7 @@ export class MandalaStorageManager implements MandalaStateStore {
 }
 
 /** The read and repair surface the validation layers need (ownership, authority, controls). */
-export interface MandalaStateStore extends Pick<
+export type MandalaStateStore = Pick<
   MandalaStorageManager,
   | 'getAssetState'
   | 'getTokenRow'
@@ -393,4 +393,4 @@ export interface MandalaStateStore extends Pick<
   | 'recordOwners'
   | 'repairOwnerRow'
   | 'circulatingSupply'
-> {}
+>
