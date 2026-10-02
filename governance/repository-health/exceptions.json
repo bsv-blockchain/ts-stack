@@ -73,9 +73,9 @@
     {
       "id": "brace-expansion-jest-override",
       "category": "override",
-      "target": "pnpm-workspace.yaml brace-expansion@<5.0.11 and four standalone Jest service manifests pinning brace-expansion 5.0.9",
+      "target": "pnpm-workspace.yaml brace-expansion@<5.0.11 and four standalone Jest service manifests pinning brace-expansion 5.0.12",
       "owner": "ts-stack-maintainers",
-      "reason": "Jest 30.4.2 and Stryker still constrain reporting and coverage paths to minimatch releases that admit older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8 and GHSA-rgw5-rvv9-x895 required 5.0.9. GHSA-6j4f-fj2g-mc7p requires 5.0.10 and GHSA-qhr7-859c-m2p7 requires 5.0.11, so the workspace substitution selects 5.0.11. The four standalone Jest service manifests still pin 5.0.9 until those independent npm locks are regenerated.",
+      "reason": "Jest 30.4.2 and Stryker still constrain reporting and coverage paths to minimatch releases that admit older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8, GHSA-rgw5-rvv9-x895 required 5.0.9, GHSA-6j4f-fj2g-mc7p requires 5.0.10, and GHSA-qhr7-859c-m2p7 requires 5.0.11. GHSA-q2hr-2g5m-vwhr affects every release below 5.0.12, so the four standalone Jest service manifests pin 5.0.12. The workspace substitution remains 5.0.11.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
@@ -88,11 +88,12 @@
         "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
         "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
         "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+        "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
       "reviewBy": "2026-10-31",
-      "removeWhen": "Remove after the supported Jest and Stryker dependency graphs natively resolve brace-expansion 5.0.11 or newer across every coverage and reporting path, and the standalone service locks no longer need their own pin."
+      "removeWhen": "Remove after the supported Jest and Stryker dependency graphs natively resolve brace-expansion 5.0.12 or newer across every coverage and reporting path, and the standalone service locks no longer need their own pin."
     },
     {
       "id": "engine-io-socket-advisory-override",
@@ -180,6 +181,35 @@
       "removeWhen": "Remove when Jest's istanbul reporting chain and the WAB server's transitive graph naturally resolve js-yaml 3.15.2 or newer and the frozen audit remains green."
     },
     {
+      "id": "libp2p-yamux-utils-interface-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override of @libp2p/utils inside @chainsafe/libp2p-yamux",
+      "owner": "ts-stack-maintainers",
+      "reason": "@chainsafe/libp2p-yamux 8.0.1 is the current release and declares @libp2p/utils ^7.0.0. The frozen lock selected 7.3.0. libp2p 3.3.11 requires @libp2p/interface 3.3.0, whose Stream type includes readableEnded, and @libp2p/utils 7.4.1 is the release that implements that field on AbstractStream. YamuxStream extends AbstractStream, so 7.4.1 makes the muxer assignable to libp2p's StreamMuxerFactory. The selector is scoped to yamux and stays inside yamux's declared range.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "packages/network/ts-p2p/src/index.ts",
+        "https://github.com/libp2p/js-libp2p/blob/main/packages/utils/src/abstract-message-stream.ts"
+      ],
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-01",
+      "removeWhen": "Remove when @chainsafe/libp2p-yamux resolves @libp2p/utils 7.4.1 or newer without a workspace selector and the teranode listener typecheck remains green."
+    },
+    {
+      "id": "lodash-es-chevrotain-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override lodash-es releases below 4.18.0",
+      "owner": "ts-stack-maintainers",
+      "reason": "Mermaid 12 resolves @mermaid-js/parser and chevrotain 11.1.2, whose packages pin lodash-es 4.17.23 exactly, affected by GHSA-r5fr-rjxr-66jc (code injection through _.template imports key names). The first patched release is 4.18.0; selecting 4.18.1, already resolved elsewhere in the workspace graph, is the narrowest compatible remediation and leaves the lodash-es API unchanged for the docs diagram toolchain.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "https://github.com/advisories/GHSA-r5fr-rjxr-66jc"
+      ],
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-01",
+      "removeWhen": "Remove when chevrotain and the Mermaid parser chain naturally resolve lodash-es 4.18.0 or newer and dependency review remains green."
+    },
+    {
       "id": "nanoid-postcss-advisory-override",
       "category": "override",
       "target": "pnpm-workspace.yaml override nanoid releases below 3.3.18",
@@ -210,24 +240,6 @@
       "created": "2026-09-04",
       "reviewBy": "2026-10-04",
       "removeWhen": "Remove when remark-mdx-frontmatter or its supported successor natively resolves TOML 4.2.0 or newer and docs validation, tests, production build, and the frozen high-severity audit remain green."
-    },
-    {
-      "id": "metro-image-size-security-override",
-      "category": "override",
-      "target": "pnpm-workspace.yaml parent-scoped Metro 0.87 image-size 2.0.4 substitution",
-      "owner": "ts-stack-maintainers",
-      "reason": "Metro 0.87 still declares image-size ^1.0.2, whose complete release line is affected by GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq. image-size 2.0.4 retains the CommonJS default imageSize function used by Metro while moving the development-only graph past the vulnerable <=2.0.2 range. The child-process parser regression and complete Metro/Hermes mobile gate verify the major substitution.",
-      "evidence": [
-        "pnpm-workspace.yaml#overrides",
-        "pnpm-lock.yaml#overrides",
-        "governance/dependency-release-policy.json#overrideRegistry",
-        "packages/wallet/wallet-toolbox/mobile/test/image-size-security.test.ts",
-        "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
-        "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq"
-      ],
-      "created": "2026-09-16",
-      "reviewBy": "2026-10-16",
-      "removeWhen": "Remove when the supported Metro release natively accepts image-size 2.0.4 or newer and the frozen audit plus complete mobile platform contract remain green without the substitution."
     },
     {
       "id": "openapi-typescript-redocly-overrides",

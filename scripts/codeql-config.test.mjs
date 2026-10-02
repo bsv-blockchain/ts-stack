@@ -8,7 +8,7 @@ import { REPOSITORY_ROOT } from './repository-health.mjs'
 const CODEQL_CONFIG_PATH = join(REPOSITORY_ROOT, '.github/codeql/codeql-config.yml')
 const CODEQL_WORKFLOW_PATH = join(REPOSITORY_ROOT, '.github/workflows/codeql.yml')
 const PROJECTS_PATH = join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
-const CODEQL_ACTION_SHA = 'e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81'
+const CODEQL_ACTION_SHA = 'b96794f015dfd88f77b49b1c93e0fa7110f94c63'
 
 function matchesGeneratedBoundary(path, boundary) {
   if (boundary.endsWith('/**')) {

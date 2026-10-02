@@ -145,12 +145,18 @@
   },
   "overrideRemovalReview": {
     "reviewedAt": "2026-10-01",
-    "method": "Rechecked every registered substitution after the workspace brace-expansion floor moved from 5.0.9 to 5.0.11 and engine.io 6.6.10 was added. Jest and Stryker minimatch still admit brace-expansion below 5.0.11, and socket.io in authsocket still admits engine.io below 6.6.10. Both substitutions stay on the first release that clears the current high advisories. The other 23 selectors, including the Metro-scoped image-size 2.0.4 substitution, remain necessary against the frozen graph.",
-    "retainedCount": 25,
-    "result": "All 25 retained overrides prevent a reproduced vulnerable transitive version or preserve an isolated reproducible toolchain closure. The workspace brace-expansion selector is now 5.0.11, covering GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7. The engine.io 6.6.10 selector closes GHSA-2gc4-cqfq-p2gv on the authsocket socket.io path without an advisory exclusion.",
-    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch/brace-expansion/js-yaml, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO/engine.io, Vite/PostCSS, remark-mdx-frontmatter/TOML, Metro, or image-size dependency changes."
+    "method": "Rechecked every registered substitution after the workspace brace-expansion floor moved from 5.0.9 to 5.0.11 and engine.io 6.6.10 was added. Jest and Stryker minimatch still admit brace-expansion below 5.0.11, and socket.io in authsocket still admits engine.io below 6.6.10. Both substitutions stay on the first release that clears the current high advisories. The other 23 selectors, including the Metro-scoped image-size 2.0.4 substitution, remain necessary against the frozen graph. On 2026-10-02 the lodash-es 4.18.1 selector was added because Mermaid 12 brings chevrotain 11.1.2, which pins vulnerable lodash-es 4.17.23. The yamux-scoped @libp2p/utils 7.4.1 selector was added so YamuxStream satisfies @libp2p/interface 3.3 readableEnded. Metro 0.87.1 replaced its image-size dependency with an in-tree parser, so the Metro-scoped image-size substitution was retired on 2026-10-02.",
+    "retainedCount": 26,
+    "result": "All 26 retained overrides prevent a reproduced vulnerable transitive version, keep a stream type assignable, or preserve an isolated reproducible toolchain closure. The workspace brace-expansion selector is now 5.0.11, covering GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7. The engine.io 6.6.10 selector closes GHSA-2gc4-cqfq-p2gv on the authsocket socket.io path without an advisory exclusion. The lodash-es 4.18.1 selector closes GHSA-r5fr-rjxr-66jc on the Mermaid/chevrotain path. The yamux-scoped @libp2p/utils 7.4.1 selector supplies readableEnded for interface 3.3.",
+    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch/brace-expansion/js-yaml, typed-rest-client, Redocly, AJV, express-rate-limit, Socket.IO/engine.io, Vite/PostCSS, remark-mdx-frontmatter/TOML, Metro, image-size, or Mermaid/chevrotain/lodash-es dependency changes."
   },
   "overrideRegistry": [
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "@chainsafe/libp2p-yamux>@libp2p/utils",
+      "value": "7.4.1",
+      "exceptionId": "libp2p-yamux-utils-interface-override"
+    },
     {
       "source": "pnpm-workspace.yaml",
       "selector": "brace-expansion@<5.0.11",
@@ -189,9 +195,9 @@
     },
     {
       "source": "pnpm-workspace.yaml",
-      "selector": "metro@0.87.0>image-size",
-      "value": "2.0.4",
-      "exceptionId": "metro-image-size-security-override"
+      "selector": "lodash-es@<4.18.0",
+      "value": "4.18.1",
+      "exceptionId": "lodash-es-chevrotain-advisory-override"
     },
     {
       "source": "tools/codegen/node/package.json",
@@ -206,7 +212,7 @@
       "source": "tools/codegen/node/package.json",
       "selector": "minimatch@10.2.5",
       "value": {
-        "brace-expansion": "5.0.9"
+        "brace-expansion": "5.0.12"
       },
       "exceptionId": "openapi-typescript-redocly-overrides"
     },
@@ -219,7 +225,7 @@
     {
       "source": "infra/message-box-server/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -243,7 +249,7 @@
     {
       "source": "infra/uhrp-server-basic/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -255,7 +261,7 @@
     {
       "source": "infra/uhrp-server-cloud-bucket/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -285,7 +291,7 @@
     {
       "source": "infra/wab/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.9",
+      "value": "5.0.12",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
