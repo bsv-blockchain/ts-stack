@@ -3,7 +3,7 @@ import type LockingScript from '@bsv/sdk/script/LockingScript'
 
 /**
  * StasToken — decoder for **classic STAS** (legacy P2STAS / STAS 1.0) locking
- * scripts. Unlike {@link MandalaToken}, classic STAS is satoshi-denominated:
+ * scripts. Unlike {@link Bsv21Binary}, classic STAS is satoshi-denominated:
  * the token amount IS the output's satoshi value, so this template only
  * recovers the on-chain *identity* fields (owner PKH + symbol). The amount is
  * read from the containing output by the caller.

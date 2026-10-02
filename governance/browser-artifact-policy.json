@@ -38,7 +38,7 @@
       "path": "packages/helpers/ts-templates",
       "budget": "packages/helpers/ts-templates/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The browser entry contains no optional server adapter. The reviewed security candidate remains one chunk: Vite 205167/64803/54904 raw/gzip/Brotli bytes across 38 modules and two packages, and esbuild 158680/60676/51624 across 40 modules."
+      "splittingDisposition": "The browser entry contains no optional server adapter. The reviewed security candidate remains one chunk: Vite 216963/67471/57550 raw/gzip/Brotli bytes across 40 modules and two packages, and esbuild 167893/63111/54208 across 59 modules."
     },
     {
       "name": "@bsv/authsocket-client",

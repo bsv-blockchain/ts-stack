@@ -62,7 +62,7 @@
       "manifest": "packages/overlays/topics/package.json",
       "propertyTest": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
       "risk": "critical",
-      "boundary": "Overlay Mandala linkage payloads and issuer authorization",
+      "boundary": "Overlay Mandala BRC-162 envelope, admin-details schema and issuer authorization",
       "minimumScore": 82,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
@@ -82,7 +82,7 @@
       "manifest": "packages/helpers/ts-templates/package.json",
       "propertyTest": "packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts",
       "risk": "critical",
-      "boundary": "Bitcoin script-number and on-chain asset outpoint encodings",
+      "boundary": "Bitcoin script numbers, BRC-162 push canonicality and the strict CBOR subset",
       "minimumScore": 92,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

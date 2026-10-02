@@ -1,116 +1,64 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import {
-  classifyMutationScope,
-  dependencyEvidence,
-  mutationScope,
-  readSnapshot,
-  reviewedRuntimeInputs
-} from './ci-mutation-scope.mjs'
+import { classifyMutationScope, parseArguments } from './ci-mutation-scope.mjs'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { validateMutationClassification } from './ci-result-gate.mjs'
 
-import { targets, policy, snapshot } from './ci-integration/fixtures/dependency-snapshots.mjs'
+const targets = Object.fromEntries(
+  ['producer', 'consumer', 'isolated', 'novel'].map(name => [
+    name,
+    { packageDirectory: `packages/${name}`, manifest: `packages/${name}/package.json` }
+  ])
+)
+const policy = {
+  targets: [
+    { id: 'producer', risk: 'critical' },
+    { id: 'consumer', risk: 'critical' },
+    { id: 'isolated', risk: 'high' },
+    { id: 'novel', risk: 'unknown' }
+  ]
+}
 
-const classify = (files, dependency, legacyRequired = []) =>
-  classifyMutationScope({ targets, policy, changedFiles: files, dependency, legacyRequired })
-
-test('docs-only PRs retain empty critical scope and honestly defer unaffected noncritical work', () => {
-  const result = classify(['docs/reference/guide.md'], dependencyEvidence([snapshot()]))
-  assert.deepEqual(result.required, [])
+test('ordinary changes select no governed mutation target and keep a complete partition', () => {
+  const result = classifyMutationScope({ targets, policy })
+  assert.deepEqual(result.required, ['novel'])
   assert.deepEqual(result.deferred, ['isolated'])
+  assert.deepEqual(result.outside, ['producer', 'consumer'])
   assert.deepEqual(result.newlyDeferred, [])
-  assert.deepEqual(result.outside, ['producer', 'consumer', 'optional'])
+  assert.deepEqual(validateMutationClassification(result, result.required, targets, policy), [])
 })
 
-test('package helpers, fixtures and manifests select all affected target owners', () => {
-  const dependency = dependencyEvidence([snapshot()])
-  for (const file of [
-    'packages/producer/src/helper.ts',
-    'packages/producer/tests/fixture.json',
-    'packages/producer/package.json'
-  ]) {
-    assert.deepEqual(classify([file], dependency).required, ['producer'])
-  }
-  assert.deepEqual(classify(['packages/isolated/src/input.ts'], dependency).required, ['isolated'])
+test('a full campaign requires every target in canonical registry order', () => {
+  const result = classifyMutationScope({ targets, policy, all: true })
+  assert.deepEqual(result.required, Object.keys(targets))
+  assert.deepEqual(result.deferred, [])
+  assert.deepEqual(result.outside, [])
+  assert.deepEqual(validateMutationClassification(result, result.required, targets, policy), [])
 })
 
-test('base/head reverse closure retains removed dev, peer and optional dependencies', () => {
-  for (const field of [
-    'dependencies',
-    'devDependencies',
-    'peerDependencies',
-    'optionalDependencies'
-  ]) {
-    const before = snapshot({
-      manifests: {
-        consumer: { name: 'consumer', [field]: { producer: 'workspace:^' } },
-        optional: { name: 'optional', dependencies: { consumer: 'workspace:^' } }
-      }
-    })
-    const dependency = dependencyEvidence([before, snapshot()])
-    assert.deepEqual(classify(['packages/producer/src/helper.ts'], dependency).required, [
-      'producer',
-      'consumer',
-      'optional'
-    ])
-  }
+test('compared revisions stay accepted and still select nothing; other flags fail', () => {
+  assert.deepEqual(parseArguments([]), { all: false })
+  assert.deepEqual(parseArguments(['--base', 'abc', '--head', 'def']), { all: false })
+  assert.deepEqual(parseArguments(['--all']), { all: true })
+  assert.throws(() => parseArguments(['--affected']), /Use --all/)
+  assert.throws(() => parseArguments(['--base']), /Use --all/)
 })
 
-test('unknown lock resolution, shared controls, unowned paths and absent base retain every target', () => {
-  const dependency = dependencyEvidence([snapshot()])
-  for (const file of [
-    'pnpm-lock.yaml',
-    '.github/workflows/ci.yml',
-    'scripts/mutation-testing.mjs',
-    'shared/runtime.ts'
-  ])
-    assert.deepEqual(classify([file], dependency).required, Object.keys(targets))
-  const unresolved = mutationScope('/tmp', { base: 'missing', targets, policy })
-  assert.deepEqual(unresolved.required, Object.keys(targets))
-  assert.equal(unresolved.deferred.length, 0)
-  assert.match(unresolved.unknownReasons[0], /Unresolved classification/)
-})
-
-test('prior critical obligations stay required while only proven-unaffected noncritical ones newly defer', () => {
-  const result = classify(['packages/producer/src/input.ts'], dependencyEvidence([snapshot()]), [
-    'consumer',
-    'isolated'
-  ])
-  assert.deepEqual(result.required, ['producer', 'consumer'])
-  assert.deepEqual(result.newlyDeferred, ['isolated'])
-  const unknown = structuredClone(policy)
-  unknown.targets.find(target => target.id === 'isolated').risk = 'unknown'
-  const failClosed = classifyMutationScope({
-    targets,
-    policy: unknown,
-    changedFiles: [],
-    dependency: dependencyEvidence([snapshot()])
-  })
-  assert.deepEqual(failClosed.required, ['isolated'])
-})
-
-test('the reviewed air-gap parent-walking loader binds the exact source and shared corpus', () => {
-  const snapshot = readSnapshot(new URL('..', import.meta.url).pathname, 'HEAD')
-  const file = 'packages/helpers/air-gap/tests/helpers.ts'
-  const paths = new Set(snapshot.records.map(record => record.file))
-  const source = snapshot.files.get(file)
-  assert.deepEqual(reviewedRuntimeInputs(file, source, paths), [
-    'conformance/vectors/transport/air-gap-optical.json'
-  ])
-  assert.equal(reviewedRuntimeInputs(file, source + '\\nchanged', paths), undefined)
-  paths.add('packages/helpers/air-gap/conformance/vectors/transport/air-gap-optical.json')
-  assert.equal(reviewedRuntimeInputs(file, source, paths), undefined)
-  paths.delete('packages/helpers/air-gap/conformance/vectors/transport/air-gap-optical.json')
-  paths.delete('conformance/vectors/transport/air-gap-optical.json')
-  assert.equal(reviewedRuntimeInputs(file, source, paths), undefined)
-})
-
-test('standalone-only scheduler changes preserve critical obligations and defer proven-unaffected high targets', () => {
-  const result = classify(
-    ['.github/workflows/mutation-tests.yml'],
-    dependencyEvidence([snapshot()]),
-    Object.keys(targets)
-  )
-  assert.deepEqual(result.required, ['producer', 'consumer', 'optional'])
-  assert.deepEqual(result.newlyDeferred, ['isolated'])
-  assert.deepEqual(result.unknownReasons, [])
+test('the repository registry partitions without any workspace install', () => {
+  const root = fileURLToPath(new URL('..', import.meta.url))
+  const run = flags =>
+    JSON.parse(
+      execFileSync(process.execPath, ['scripts/ci-mutation-scope.mjs', ...flags], {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, NODE_PATH: '' }
+      })
+    )
+  const registry = Object.keys(buildMutationTargets(root))
+  const ordinary = run(['--base', 'HEAD', '--head', 'HEAD'])
+  assert.deepEqual(ordinary.required, [])
+  assert.deepEqual([...ordinary.deferred, ...ordinary.outside].sort(), [...registry].sort())
+  assert.deepEqual(run(['--all']).required, registry)
 })
