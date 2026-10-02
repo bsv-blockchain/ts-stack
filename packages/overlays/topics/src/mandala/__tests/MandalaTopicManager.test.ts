@@ -336,12 +336,12 @@ beforeAll(async () => {
   client = new MongoClient(mongo.getUri())
   await client.connect()
   db = client.db('mandala_topic_manager_test')
-})
+}, 60_000)
 
 afterAll(async () => {
   await client.close()
   await mongo.stop()
-})
+}, 60_000)
 
 beforeEach(async () => {
   await db.dropDatabase()
