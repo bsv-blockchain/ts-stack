@@ -39,6 +39,27 @@ All notable changes to this project will be documented in this file. The format 
   `disconnectWebSocket` clears rooms and handlers, as deliberate teardown.
 - `getJoinedRooms()` reports the rooms joined on the current socket. Mutating
   the returned set no longer cancels a rejoin; use `leaveRoom`.
+- Read the server's answer to a join. `joinedRoom` and `joinFailed` have always
+  been emitted and were never listened for, so a refused join left the client
+  certain it was subscribed to a room it had never been given. The record is
+  still made optimistically on emit, so a server that answers nothing behaves
+  as before; an answer only corrects it. A refusal that re-emitting can never
+  clear also stops being asked for on every reconnect.
+- One live-message listener per room per socket, reading its subscribers at
+  delivery time. `leaveRoom` followed by another `listenForLiveMessages` used
+  to attach a second listener — there is no `off` — and every message after
+  that arrived twice for the life of the socket. A message is also decrypted
+  once now, however many subscribers a room has.
+- **A live message is delivered a tick after it arrives.** It already was for
+  an encrypted message; now it always is, because the body is read before any
+  subscriber is called. A consumer asserting synchronous delivery in a test
+  needs to let the microtask run.
+- Back off the rebuild after `io server disconnect`. The first is still
+  immediate; the rest double from one second to a thirty-second cap, and the
+  count resets once a socket has held its authentication that long. A relay
+  that authenticated and dropped in a loop previously got one rebuild per
+  authentication with nothing in between. `disconnectWebSocket` cancels a
+  rebuild in flight.
 
 ### 2.5.4 candidate — require the BRC-29 acceptance fix
 

@@ -89,6 +89,11 @@ const MAX_ACKNOWLEDGMENT_IDS = 1_000
 const MAX_MESSAGE_FEE = 2_147_483_647
 const MAX_PAYMENT_BEEF_BYTES = 32 * 1024 * 1024
 const MAX_PAYMENT_OUTPUTS = MAX_MESSAGE_RECIPIENTS + 1
+/** Backoff for the rebuild a server-forced disconnect triggers. The first is
+ * immediate; a relay that authenticates and drops in a loop gets the rest. */
+const REBUILD_BASE_DELAY_MS = 1_000
+const REBUILD_MAX_DELAY_MS = 30_000
+
 /** Join refusals that re-emitting the same room can never clear. */
 const PERMANENT_JOIN_REFUSALS = new Set([
   'ERR_WEBSOCKET_ROOM_NOT_OWNED',
@@ -944,19 +949,28 @@ export class MessageBoxClient {
    * Only `leaveRoom` and `disconnectWebSocket` remove from it.
    */
   private readonly requestedRooms: Set<string> = new Set()
-  /** Live-message handlers by room. A rebuilt socket has none of its own, so they are re-attached. */
+  /** Live-message subscriptions by room. A rebuilt socket has no listeners of its own. */
   private roomHandlers: Array<{
     roomId: string
     event: string
     onMessage: (message: PeerMessage) => void
-    handler: (message: PeerMessage) => void
   }> = []
+  /**
+   * Events already dispatched on the current socket. One listener per event per
+   * socket, because the socket wrapper has no `off`: a second listener for a
+   * room could never be taken off again, and would deliver every message twice.
+   */
+  private readonly dispatchedEvents: Set<string> = new Set()
   /**
    * A wait timed out with the socket still down. Covers bounded
    * `reconnectionAttempts` running out, which the wrapper gives no way to
    * observe; `reconnection: false` is read up front instead.
    */
   private socketStale = false
+  /** Consecutive proactive rebuilds, reset once a socket holds its authentication. */
+  private rebuildAttempts = 0
+  private rebuildTimer?: ReturnType<typeof setTimeout>
+  private rebuildHoldTimer?: ReturnType<typeof setTimeout>
   protected originator?: OriginatorDomainNameStringUnder250Bytes
   private readonly socketOptions: MessageBoxClientOptions['socketOptions']
   /** False only when the host set `managerOptions.reconnection` to false. */
@@ -1284,7 +1298,8 @@ export class MessageBoxClient {
         ...(expectedServerIdentityKey === undefined ? {} : { expectedServerIdentityKey })
       })
       this.socket = socket
-      for (const { event, handler } of this.roomHandlers) socket.on(event, handler)
+      this.dispatchedEvents.clear()
+      for (const { event } of this.roomHandlers) this.dispatchLive(socket, event)
 
       // Fires on the first connection and on every Socket.IO reconnection.
       socket.on('connect', () => {
@@ -1314,6 +1329,14 @@ export class MessageBoxClient {
         )
         this.pinAuthenticatedServerIdentity(targetOrigin, serverIdentityKey)
         Logger.log('[MB CLIENT] WebSocket authentication successful')
+        // Holding the connection past the delay the next rebuild would use
+        // means the trouble passed, so the next one starts from scratch.
+        if (this.rebuildAttempts > 0) {
+          clearTimeout(this.rebuildHoldTimer)
+          this.rebuildHoldTimer = setTimeout(() => {
+            this.rebuildAttempts = 0
+          }, this.rebuildDelay())
+        }
         this.socketAuthenticated = true
         // The server refuses joins before this point, and a reconnect is a new
         // server-side socket in no rooms.
@@ -1350,7 +1373,13 @@ export class MessageBoxClient {
           // and a failed rebuild is left to the next caller. `reconnection: false`
           // stays the host's choice.
           if (reason === 'io server disconnect' && this.socketReconnects && wasAuthenticated) {
-            this.initializeConnection(targetHost).catch(() => {})
+            clearTimeout(this.rebuildHoldTimer)
+            const delay = this.rebuildDelay()
+            this.rebuildAttempts += 1
+            clearTimeout(this.rebuildTimer)
+            this.rebuildTimer = setTimeout(() => {
+              this.initializeConnection(targetHost).catch(() => {})
+            }, delay)
           }
           return
         }
@@ -1406,6 +1435,12 @@ export class MessageBoxClient {
    * The socket's long-lived handlers settle it, so no per-attempt listeners
    * accumulate across reconnects.
    */
+  /** Zero for the first rebuild, then doubling to the cap. */
+  private rebuildDelay(): number {
+    if (this.rebuildAttempts === 0) return 0
+    return Math.min(REBUILD_BASE_DELAY_MS * 2 ** (this.rebuildAttempts - 1), REBUILD_MAX_DELAY_MS)
+  }
+
   private beginAuthWait(): Promise<void> {
     const promise = new Promise<void>((resolve, reject) => {
       const settle = (error?: Error): void => {
@@ -1693,72 +1728,91 @@ export class MessageBoxClient {
     Logger.log('[MB CLIENT] Listening for WebSocket room messages')
 
     const event = `sendMessage-${roomId}`
-    // A rebuild already re-attached this callback; attaching again would deliver twice.
+    // The same callback twice would be delivered to twice.
     if (this.roomHandlers.some(entry => entry.event === event && entry.onMessage === onMessage)) {
       return
     }
-    const handler = (message: PeerMessage): void => {
+    this.roomHandlers.push({ roomId, event, onMessage })
+    if (this.socket != null) this.dispatchLive(this.socket, event)
+  }
+
+  /**
+   * Attaches this socket's only listener for `event`, which reads the
+   * subscriptions at delivery time. Subscribing and unsubscribing are then
+   * list operations, which is what makes `leaveRoom` followed by another
+   * `listenForLiveMessages` safe on a socket that cannot detach a listener.
+   */
+  private dispatchLive(socket: ReturnType<typeof AuthSocketClient>, event: string): void {
+    if (this.dispatchedEvents.has(event)) return
+    this.dispatchedEvents.add(event)
+    socket.on(event, (message: PeerMessage) => {
       void (async () => {
+        if (this.socket !== socket) return
         Logger.log('[MB CLIENT] Received a WebSocket room message')
-
-        try {
-          let parsedBody: unknown = message.body
-
-          if (typeof parsedBody === 'string') {
-            try {
-              parsedBody = JSON.parse(parsedBody)
-            } catch {
-              // Leave it as-is (plain text)
-            }
-          }
-
-          if (
-            parsedBody != null &&
-            typeof parsedBody === 'object' &&
-            !Array.isArray(parsedBody) &&
-            Object.hasOwn(parsedBody, 'encryptedMessage')
-          ) {
-            const body = ownDataRecord(parsedBody, 'Live Message Box message body')
-            if (typeof body.encryptedMessage !== 'string') {
-              throw new TypeError('Live Message Box ciphertext must be a string')
-            }
-            Logger.log('[MB CLIENT] Decrypting a WebSocket message')
-            const request: Parameters<WalletInterface['decrypt']>[0] = {
-              protocolID: [1, 'messagebox'],
-              keyID: '1',
-              counterparty: message.sender,
-              ciphertext: toArray(body.encryptedMessage, 'base64')
-            }
-            const decrypted = validateWalletResult(
-              'decrypt',
-              await this.walletClient.decrypt(request, this.originator),
-              request
-            )
-
-            message.body = toUTF8(decrypted.plaintext)
-          } else {
-            Logger.log('[MB CLIENT] Message is not encrypted.')
-            message.body =
-              typeof parsedBody === 'string'
-                ? parsedBody
-                : (() => {
-                    try {
-                      return stringifyBRC100(parsedBody)
-                    } catch {
-                      return '[Error: Unstringifiable message]'
-                    }
-                  })()
-          }
-        } catch {
-          Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt live message')
-          message.body = '[Error: Failed to decrypt or parse message]'
+        // Read after the decrypt so a subscription that went away while it ran
+        // is not delivered to.
+        await this.readLiveBody(message)
+        for (const entry of this.roomHandlers) {
+          if (entry.event === event) entry.onMessage(message)
         }
-
-        onMessage(message)
       })()
+    })
+  }
+
+  /** Decrypts or parses a live message in place, exactly once per arrival. */
+  private async readLiveBody(message: PeerMessage): Promise<void> {
+    try {
+      let parsedBody: unknown = message.body
+
+      if (typeof parsedBody === 'string') {
+        try {
+          parsedBody = JSON.parse(parsedBody)
+        } catch {
+          // Leave it as-is (plain text)
+        }
+      }
+
+      if (
+        parsedBody != null &&
+        typeof parsedBody === 'object' &&
+        !Array.isArray(parsedBody) &&
+        Object.hasOwn(parsedBody, 'encryptedMessage')
+      ) {
+        const body = ownDataRecord(parsedBody, 'Live Message Box message body')
+        if (typeof body.encryptedMessage !== 'string') {
+          throw new TypeError('Live Message Box ciphertext must be a string')
+        }
+        Logger.log('[MB CLIENT] Decrypting a WebSocket message')
+        const request: Parameters<WalletInterface['decrypt']>[0] = {
+          protocolID: [1, 'messagebox'],
+          keyID: '1',
+          counterparty: message.sender,
+          ciphertext: toArray(body.encryptedMessage, 'base64')
+        }
+        const decrypted = validateWalletResult(
+          'decrypt',
+          await this.walletClient.decrypt(request, this.originator),
+          request
+        )
+
+        message.body = toUTF8(decrypted.plaintext)
+      } else {
+        Logger.log('[MB CLIENT] Message is not encrypted.')
+        message.body =
+          typeof parsedBody === 'string'
+            ? parsedBody
+            : (() => {
+                try {
+                  return stringifyBRC100(parsedBody)
+                } catch {
+                  return '[Error: Unstringifiable message]'
+                }
+              })()
+      }
+    } catch {
+      Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt live message')
+      message.body = '[Error: Failed to decrypt or parse message]'
     }
-    this.roomHandlers.push({ roomId, event, onMessage, handler })
-    this.socket?.on(event, handler)
   }
 
   /**
@@ -1963,6 +2017,13 @@ export class MessageBoxClient {
     this.joinedRooms.clear()
     this.requestedRooms.clear()
     this.roomHandlers = []
+    this.dispatchedEvents.clear()
+    // A rebuild in flight would undo the close.
+    clearTimeout(this.rebuildTimer)
+    clearTimeout(this.rebuildHoldTimer)
+    this.rebuildTimer = undefined
+    this.rebuildHoldTimer = undefined
+    this.rebuildAttempts = 0
   }
 
   /**

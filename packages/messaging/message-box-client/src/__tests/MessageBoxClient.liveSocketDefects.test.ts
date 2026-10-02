@@ -245,6 +245,8 @@ describe('live-socket reconnection', () => {
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
 
     drop(latest(), 'io server disconnect')
+    // The first rebuild is scheduled rather than immediate, with no delay.
+    await new Promise(resolve => setTimeout(resolve, 20))
     expect(sockets).toHaveLength(2)
     drop(latest(), 'io server disconnect')
     await new Promise(resolve => setTimeout(resolve, 20))
@@ -439,6 +441,100 @@ describe('live-socket reconnection', () => {
       fire('joinedRoom', { roomId: `${IDENTITY}-somewhere_else` })
       expect(client.getJoinedRooms().has(`${IDENTITY}-somewhere_else`)).toBe(false)
     })
+  })
+
+  /**
+   * There is no `off`, so a listener attached for a room can never be taken
+   * away. Leaving and listening again on one socket used to attach a second,
+   * and every message afterwards arrived twice, for the life of the socket.
+   */
+  it('delivers once after leaving a room and listening again', async () => {
+    const client = await connected()
+    const onMessage = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+    const socket = latest()
+
+    await client.leaveRoom(BOX)
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+
+    const handlers = socket.handlers[`sendMessage-${ROOM}`] ?? []
+    for (const handler of handlers) handler({ sender: IDENTITY, messageId: 'm1', body: 'hello' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(onMessage).toHaveBeenCalledTimes(1)
+  })
+
+  /** A room left is a room no longer delivered to, on the socket that stays. */
+  it('stops delivering to a room it has left', async () => {
+    const client = await connected()
+    const onMessage = jest.fn()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage })
+    const socket = latest()
+
+    await client.leaveRoom(BOX)
+    const handlers = socket.handlers[`sendMessage-${ROOM}`] ?? []
+    for (const handler of handlers) handler({ sender: IDENTITY, messageId: 'm1', body: 'hello' })
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(onMessage).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A relay that authenticates a socket and then drops it used to get one
+   * rebuild per authentication with nothing between them, which is a hot loop
+   * for as long as it keeps doing that.
+   */
+  describe('a relay that authenticates and drops in a loop', () => {
+    /** Drops the live socket as the server, and settles the rebuild it schedules. */
+    const cycle = async (waitMs: number): Promise<void> => {
+      const socket = latest()
+      authenticateSoon()
+      drop(socket, 'io server disconnect')
+      await new Promise(resolve => setTimeout(resolve, waitMs))
+    }
+
+    it('recovers at once the first time and backs off after that', async () => {
+      const client = await connected()
+      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+
+      await cycle(50)
+      expect(sockets).toHaveLength(2)
+
+      // Dropped again before the new socket has held its authentication.
+      await cycle(100)
+      expect(sockets).toHaveLength(2)
+
+      await new Promise(resolve => setTimeout(resolve, 1_200))
+      expect(sockets).toHaveLength(3)
+    }, 15000)
+
+    it('starts over once a socket has held its authentication', async () => {
+      const client = await connected()
+      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+
+      await cycle(50)
+      expect(sockets).toHaveLength(2)
+
+      // Long enough for the replacement to outlive the next delay.
+      await new Promise(resolve => setTimeout(resolve, 1_200))
+      await cycle(50)
+      expect(sockets).toHaveLength(3)
+    }, 15000)
+
+    it('abandons a scheduled rebuild when the connection is closed', async () => {
+      const client = await connected()
+      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+
+      await cycle(50)
+      await cycle(50)
+      expect(sockets).toHaveLength(2)
+
+      await client.disconnectWebSocket()
+      await new Promise(resolve => setTimeout(resolve, 1_200))
+
+      expect(sockets).toHaveLength(2)
+      expect(client.testSocket).toBeUndefined()
+    }, 15000)
   })
 
   /** Socket.IO got it back on its own; nothing needs rebuilding. */
