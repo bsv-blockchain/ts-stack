@@ -1,11 +1,14 @@
-import { BigNumber, Script, Spend, Utils, type OutputOutpoint, type Transaction } from '@bsv/sdk'
+import { Spend, Utils, type OutputOutpoint } from '@bsv/sdk'
 import { RevenueListing, type RevenueListingState } from '@bsv/sdk/script/templates/RevenueListing'
 import { requireLineage, type LineageAssembly } from './LineagePackage.js'
+import {
+  transitionFor,
+  successorState,
+  type InspectedTransition,
+  type ListingTransition
+} from './LineageTransition.js'
+export type { ListingTransition } from './LineageTransition.js'
 
-export interface ListingTransition {
-  transaction: Transaction
-  inputs: number[]
-}
 export type ListingGraph =
   | { complete: false; missing: OutputOutpoint[] }
   | {
@@ -18,165 +21,6 @@ export type ListingGraph =
 
 function pointKey(point: OutputOutpoint): string {
   return `${point.txid}.${point.outputIndex}`
-}
-
-function layout(tx: Transaction, genesis: boolean): void {
-  requireLineage(
-    (tx.version === 1 || tx.version === 2) && tx.lockTime === 0,
-    'Invalid listing header'
-  )
-  requireLineage(
-    tx.inputs.length >= (genesis ? 1 : 2) &&
-      tx.inputs.length <= 8 &&
-      tx.outputs.length >= 1 &&
-      tx.outputs.length <= 11,
-    'Listing dimensions exceed profile'
-  )
-  for (const input of tx.inputs)
-    requireLineage(input.sequence === 0xffffffff, 'Non-final listing input')
-  for (const output of tx.outputs)
-    requireLineage(
-      Number.isSafeInteger(output.satoshis) &&
-        output.satoshis! >= 0 &&
-        output.satoshis! <= 2100000000000000,
-      'Invalid listing output value'
-    )
-}
-
-/** Enforce the complete minimal-push ABI before running the authenticated program. */
-function operation(tx: Transaction, inputIndex: number): number {
-  const script = tx.inputs[inputIndex].unlockingScript
-  requireLineage(
-    script !== undefined && script.chunks.length === 14,
-    'Invalid listing unlocking ABI'
-  )
-  const values = script.chunks.map(chunk => {
-    if (chunk.data !== undefined) return chunk.data
-    if (chunk.op === 0) return []
-    requireLineage(chunk.op >= 0x51 && chunk.op <= 0x60, 'Non-push listing argument')
-    return [chunk.op - 0x50]
-  })
-  const canonical = new Script()
-  for (const value of values) {
-    if (value.length === 1 && value[0] >= 1 && value[0] <= 16) canonical.writeNumber(value[0])
-    else canonical.writeBin(value)
-  }
-  requireLineage(canonical.toHex() === script.toHex(), 'Nonminimal listing argument')
-  for (const index of [2, 5, 6, 13]) {
-    const number = BigNumber.fromSm(values[index], 'little')
-    requireLineage(
-      !number.isNeg() && Utils.toHex(number.toSm('little')) === Utils.toHex(values[index]),
-      'Noncanonical listing integer'
-    )
-  }
-  requireLineage(
-    values[2].length === 1 && values[2][0] >= 1 && values[2][0] <= 6,
-    'Unknown listing route'
-  )
-  requireLineage(values[0].length === 40167, 'Invalid listing preimage size')
-  return values[2][0]
-}
-
-function isListing(
-  family: RevenueListing,
-  script: number[],
-  descriptor: LineageAssembly['package']['descriptor']
-): boolean {
-  try {
-    family.decode(script, descriptor)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function genesis(tx: Transaction, assembly: LineageAssembly, family: RevenueListing): void {
-  const descriptor = assembly.package.descriptor
-  layout(tx, true)
-  requireLineage(
-    tx.inputs[0].sourceTXID === descriptor.lineageAnchor.txid &&
-      tx.inputs[0].sourceOutputIndex === descriptor.lineageAnchor.outputIndex,
-    'Genesis anchor mismatch'
-  )
-  requireLineage(
-    tx.outputs[0].satoshis?.toString() === descriptor.reserve &&
-      tx.outputs[0].lockingScript.toHex() ===
-        family.lock(descriptor, descriptor.initialRevenue).toHex(),
-    'Genesis issuance mismatch'
-  )
-  tx.outputs.forEach((output, index) => {
-    if (index > 0)
-      requireLineage(
-        !isListing(family, output.lockingScript.toBinary(), descriptor),
-        'Additional genesis listing'
-      )
-    const bytes = output.lockingScript.toBinary()
-    const receipt = bytes.length === 90 || bytes.length === 171
-    requireLineage(
-      !(
-        receipt &&
-        bytes[0] === 0 &&
-        bytes[1] === 0x6a &&
-        bytes[2] === 0x4c &&
-        Utils.toHex(bytes.slice(4, 9)) === '524f534c01' &&
-        bytes[9] >= 1 &&
-        bytes[9] <= 6
-      ),
-      'Genesis operation receipt forbidden'
-    )
-  })
-}
-
-interface InspectedTransition extends ListingTransition {
-  code: number
-  parents: OutputOutpoint[]
-}
-
-function transitionFor(
-  point: OutputOutpoint,
-  tx: Transaction,
-  assembly: LineageAssembly,
-  family: RevenueListing
-): InspectedTransition {
-  const packet = assembly.package
-  if (point.txid === packet.genesis.body.genesis.txid) {
-    genesis(tx, assembly, family)
-    return { transaction: tx, inputs: [], code: 0, parents: [] }
-  }
-  layout(tx, false)
-  const code = operation(tx, 0),
-    count = code === 3 ? 2 : 1
-  requireLineage(tx.inputs.length > count, 'Missing external funding')
-  const inputs = Array.from({ length: count }, (_, index) => index)
-  const parents = inputs.map(index => {
-    requireLineage(operation(tx, index) === code, 'Mixed listing operations')
-    const input = tx.inputs[index]
-    return {
-      chain: packet.descriptor.chain,
-      txid: input.sourceTXID!,
-      outputIndex: input.sourceOutputIndex
-    }
-  })
-  return { transaction: tx, inputs, code, parents }
-}
-
-function successorState(
-  point: OutputOutpoint,
-  transition: InspectedTransition,
-  assembly: LineageAssembly,
-  family: RevenueListing
-): RevenueListingState {
-  const { code, transaction: tx } = transition
-  requireLineage(code !== 5 && point.outputIndex < (code === 2 ? 2 : 1), 'Not a listing successor')
-  const output = tx.outputs[point.outputIndex]
-  requireLineage(output !== undefined, 'Missing listing output')
-  const state = family.decode(output.lockingScript.toBinary(), assembly.package.descriptor)
-  requireLineage(
-    Number.isSafeInteger(output.satoshis) &&
-      BigInt(output.satoshis!) >= BigInt(assembly.package.descriptor.reserve),
-    'Listing below reserve'
-  )
-  return state
 }
 
 interface Traversal {

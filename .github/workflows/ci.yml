@@ -641,6 +641,11 @@ jobs:
         with:
           pattern: mutation-private-publication-state-*
           path: .mutation-parts/private-publication-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'revenue-lineage-graph')
+        with:
+          pattern: mutation-revenue-lineage-graph-*
+          path: .mutation-parts/revenue-lineage-graph
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:

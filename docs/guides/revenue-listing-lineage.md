@@ -141,3 +141,17 @@ explicit supported seller/recipient signing authorities, durable wallet recovery
 private fulfillment and application demonstrations remain separate work. A wallet
 identity key is not automatically available for raw transaction signatures through
 its derived-key signing API.
+
+## Internal validation boundaries
+
+The reference verifier keeps complete script-layout and minimal-push ABI checks in
+`LineageLayout`, genesis and successor/transition inspection in `LineageTransition`,
+and DAG traversal plus actual covenant execution in `LineageGraph`. Existing public
+imports, accepted packages and validation decisions are unchanged. The extraction
+retains every original function body; it does not replace Script execution with
+shape checks or weaken the requirement to inspect both merge parents.
+
+The graph mutation gate aggregates both complete helper files, with the same full
+canonical unit/property tests in each execution part. Traversal retains its own
+complete source and critical gate. Both remain required before qualification; no
+partial report or earlier cancelled run establishes acceptance.

@@ -301,3 +301,27 @@ test('private publication parts preserve every complete file and all canonical c
       .target.mutate.includes('src/private/FutureCompanion.ts')
   )
 })
+
+test('lineage graph parts retain complete layout and transition code and all canonical work', () => {
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)['revenue-lineage-graph']
+  const parts = partitionMutationTarget('revenue-lineage-graph', canonical)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['layout', 'transition']
+  )
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+  for (const part of parts) {
+    const { mutate: _partial, ...actual } = part.target
+    const { mutate: _whole, ...original } = canonical
+    assert.deepEqual(actual, original)
+  }
+  const future = {
+    ...canonical,
+    mutate: [...canonical.mutate, 'src/revenue-listing/FutureCompanion.ts']
+  }
+  assert.ok(
+    partitionMutationTarget('revenue-lineage-graph', future)
+      .find(part => part.id === 'layout')
+      .target.mutate.includes('src/revenue-listing/FutureCompanion.ts')
+  )
+})

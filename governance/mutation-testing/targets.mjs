@@ -141,26 +141,18 @@ function lineageTarget(source, property, { maxTestRunnerReuse } = {}) {
   }
 }
 
-function lineageGraphTargets(repositoryRoot) {
-  const file = 'src/revenue-listing/LineageGraph.ts'
-  const lines = readFileSync(
-    resolve(repositoryRoot, 'packages/application/output-knowledge', file),
-    'utf8'
-  ).split('\n')
-  const traversalStart = lines.indexOf('interface Traversal {') + 1
-  if (traversalStart < 2 || traversalStart >= lines.length)
-    throw new Error('Unable to partition lineage layout and traversal responsibilities')
+function lineageGraphTargets() {
   return {
     'revenue-lineage-graph': {
-      ...lineageTarget('LineageGraph', 'revenue-lineage-graph.property.test.ts', {
+      ...lineageTarget('LineageLayout', 'revenue-lineage-graph.property.test.ts', {
         maxTestRunnerReuse: 8
       }),
-      mutate: [`${file}:1-${traversalStart - 1}`]
+      mutate: ['src/revenue-listing/LineageLayout.ts', 'src/revenue-listing/LineageTransition.ts']
     },
-    'revenue-lineage-traversal': {
-      ...lineageTarget('LineageGraph', 'revenue-lineage-traversal.property.test.ts'),
-      mutate: [`${file}:${traversalStart}-${lines.length}`]
-    }
+    'revenue-lineage-traversal': lineageTarget(
+      'LineageGraph',
+      'revenue-lineage-traversal.property.test.ts'
+    )
   }
 }
 
@@ -437,7 +429,7 @@ export function buildMutationTargets(repositoryRoot) {
       'LineagePackage',
       'revenue-lineage-package.property.test.ts'
     ),
-    ...lineageGraphTargets(repositoryRoot),
+    ...lineageGraphTargets(),
     'revenue-lineage-verifier': lineageTarget(
       'RevenueListingLineageVerifier',
       'revenue-lineage.property.test.ts'

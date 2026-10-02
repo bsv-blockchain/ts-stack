@@ -2206,3 +2206,29 @@ SIGKILL phases,10014 unchanged checkout inputs and86 unchanged outside source/bu
 inputs. This is draft evidence, not adoption or qualification of a complete private
 service. Actual domain validation, authenticated HTTP, bounded reconciliation,
 paid lookup/purchase/wallet composition and final hosted CI remain outstanding.
+
+The same hosted336bf9fd1 also reached the revenue-lineage-graph90-minute bound
+with the prior worker-reuse8 change, all99 initial tests passing and246 generated
+mutants; no new workerOOM appears in that log. The complete local246-mutant
+241-killed/five-survivor report is historical evidence, not acceptance of this
+cancelled run. The next behavior-preserving extraction retains every original
+layout/ABI, genesis/successor and traversal function body in three private modules,
+with the existing public type and verifier entry forwarded unchanged. Its isolated
+strictly compiled complete99-test/eight-suite selection passes in57.882 seconds
+with canonical300-case properties and seed3242026. The coordinated registry now
+covers every complete module and divides graph execution into two disjoint whole-file
+parts with exact canonical aggregation. Target counts, other source/test entries,
+critical gates, workers, seeds and deadlines are unchanged. Full adopted build,
+packed-consumer, complete mutation and exact-head hosted qualification remain
+required before this execution repair is accepted.
+
+The adopted extraction passes all99 canonical tests in eight suites in57.108
+seconds, including the unchanged300-case properties and seed3242026. A TypeScript
+scanner comparison confirms unchanged signatures and bodies for all ten original
+functions, ignoring only whitespace/comments; no source function was dropped.
+All88 targeted governance/orchestration/partition tests pass. Package build and
+packed-consumer checks pass, including ESM, conditional/wildcard exports, declaration
+resolution and source maps. Root health, lint, format and type checks pass. The
+release-document generator changes only the output-knowledge summary/migration
+content; the wider table diff is formatting. Complete frozen mutation campaigns
+for both graph parts, traversal and root coordination remain the next boundary.

@@ -297,3 +297,13 @@ source files, every canonical test/property case, four workers and all existing
 score, uncovered, invalid and deadline gates. Other root targets keep their
 previous runner settings. Fresh complete qualification is required; the cancelled
 run remains failed evidence and is not accepted by this configuration change.
+
+The bounded-worker lineage graph follow-up still reached its hosted 90-minute
+limit without a report. The behavior-preserving private extraction separates the
+complete layout/ABI and genesis/transition modules from the remaining graph
+traversal module. Graph execution now has two whole-file parts, each retaining all
+99 canonical tests and the original property budgets, workers, seeds and deadline;
+the complete graph aggregate and independent traversal gate remain required.
+Source-union and selected-artifact assertions prevent either helper from being
+omitted. No public API or verification rule changes, and the cancelled hosted
+attempt remains failed evidence.

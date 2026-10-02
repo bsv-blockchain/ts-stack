@@ -68,6 +68,13 @@ const plans = new Map([
     }
   ],
   [
+    'revenue-lineage-graph',
+    {
+      fallback: 'layout',
+      files: new Map([['src/revenue-listing/LineageTransition.ts', 'transition']])
+    }
+  ],
+  [
     'protected-ledger',
     {
       fallback: 'store',

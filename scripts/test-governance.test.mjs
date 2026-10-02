@@ -490,7 +490,7 @@ test('lookup work extraction retains the full legacy service selection and the c
   assert.ok(target.additionalInputs.includes('src/internal/BoundedOutputWork.ts'))
 })
 
-test('lineage layout and traversal partitions cover every original line with identical complete tests and gates', () => {
+test('lineage layout and traversal targets cover every complete implementation with identical complete tests and gates', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const policy = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
@@ -498,17 +498,22 @@ test('lineage layout and traversal partitions cover every original line with ide
   const names = ['revenue-lineage-graph', 'revenue-lineage-traversal']
   const { maxTestRunnerReuse, ...canonicalRunner } = targets[names[0]].runnerOptions
   assert.equal(maxTestRunnerReuse, 8)
-  const source = 'src/revenue-listing/LineageGraph.ts'
-  let nextLine = 1
+  const sources = names.flatMap(name => targets[name].mutate)
+  assert.equal(new Set(sources).size, sources.length)
+  assert.deepEqual(sources.toSorted(), [
+    'src/revenue-listing/LineageGraph.ts',
+    'src/revenue-listing/LineageLayout.ts',
+    'src/revenue-listing/LineageTransition.ts'
+  ])
+  assert.deepEqual(targets['revenue-lineage-graph'].mutate, [
+    'src/revenue-listing/LineageLayout.ts',
+    'src/revenue-listing/LineageTransition.ts'
+  ])
+  assert.deepEqual(targets['revenue-lineage-traversal'].mutate, [
+    'src/revenue-listing/LineageGraph.ts'
+  ])
   for (const name of names) {
     const target = targets[name]
-    assert.equal(target.mutate.length, 1)
-    const [file, range] = target.mutate[0].split(':')
-    const [start, end] = range.split('-').map(Number)
-    assert.equal(file, source)
-    assert.equal(start, nextLine)
-    assert.ok(end >= start)
-    nextLine = end + 1
     assert.deepEqual(target.runnerOptions, {
       ...canonicalRunner,
       ...(name === 'revenue-lineage-graph' ? { maxTestRunnerReuse: 8 } : {})
@@ -519,15 +524,6 @@ test('lineage layout and traversal partitions cover every original line with ide
     assert.equal(gate.maximumNoCoverage, 0)
     assert.equal(gate.maximumInvalid, 0)
   }
-  assert.equal(
-    nextLine - 1,
-    fs
-      .readFileSync(
-        path.join(REPOSITORY_ROOT, 'packages/application/output-knowledge', source),
-        'utf8'
-      )
-      .split('\n').length
-  )
   assert.deepEqual(targets[names[0]].runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/revenue-lineage.test.ts',
     '<rootDir>/test/revenue-lineage-work.test.ts',
