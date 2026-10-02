@@ -22,7 +22,11 @@ describe('the package entry point', () => {
     expect(topics.UORA_ANCHOR_PROTOCOL).toEqual([1, 'uora anchor v3'])
     expect(typeof topics.foldAction).toBe('function')
     expect(typeof topics.defaultAssetState).toBe('function')
-    expect(topics.defaultAssetState('asset-1')).toMatchObject({ assetId: 'asset-1', issuerIdentityKey: '', isPaused: false })
+    expect(topics.defaultAssetState('t_0')).toMatchObject({
+      tokenId: 't_0',
+      isPaused: false,
+      feeRatePerKb: null
+    })
   })
 
   it('serves documentation for both halves of the topic', async () => {
