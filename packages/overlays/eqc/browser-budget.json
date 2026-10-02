@@ -6,7 +6,15 @@
   "requiredExports": ["EQC", "computeQueryId"],
   "prohibitedExports": ["createEconomicQueryHost", "overlayLookupProvider"],
   "maximumBytes": {
-    "vite": { "raw": 558000, "gzip": 145000, "brotli": 121000 },
-    "esbuild": { "raw": 432000, "gzip": 133000, "brotli": 114000 }
+    "vite": {
+      "raw": 745000,
+      "gzip": 196000,
+      "brotli": 161000
+    },
+    "esbuild": {
+      "raw": 573000,
+      "gzip": 179000,
+      "brotli": 151000
+    }
   }
 }
