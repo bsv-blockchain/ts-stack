@@ -87,7 +87,7 @@
       "path": "packages/overlays/eqc",
       "budget": "packages/overlays/eqc/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The root entry holds the client and protocol core; host handlers ship only from the ./host subpath. Measured against the workspace @bsv/sdk 3.0.0 candidate the root remains one chunk: Vite 646930/170070/139869 raw/gzip/Brotli bytes across 96 modules and two packages, and esbuild 498201/155452/130852 across 192 modules. About 32 KB is @bsv/eqc itself; the rest is the SDK AuthFetch, LookupResolver, SLAP template, and wallet-result validation graph the client calls synchronously. The rounded limits retain roughly 15% headroom."
+      "splittingDisposition": "The root entry holds the client and protocol core; host handlers ship only from the ./host subpath. Measured against the workspace @bsv/sdk 3.0.0 candidate the root remains one chunk: Vite 646939/170075/139855 raw/gzip/Brotli bytes across 96 modules and two packages, and esbuild 498260/155467/131048 across 192 modules. About 32 KB is @bsv/eqc itself; the rest is the SDK AuthFetch, LookupResolver, SLAP template, and wallet-result validation graph the client calls synchronously. The rounded limits retain roughly 15% headroom."
     },
     {
       "name": "@bsv/lch",
