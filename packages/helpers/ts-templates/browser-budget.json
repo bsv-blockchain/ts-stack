@@ -4,16 +4,16 @@
   "package": "@bsv/templates",
   "entry": ".",
   "requiredExports": [
-    "ADMIN_PROTOCOL",
+    "Bsv21Binary",
     "Bsv21Token",
     "DstasToken",
-    "MandalaAdmin",
-    "MandalaToken",
     "MultiPushDrop",
     "OpReturn",
     "P2MSKH",
     "R1K1Wallet",
-    "StasToken"
+    "StasToken",
+    "decodeStrictCbor",
+    "encodeStrictCbor"
   ],
   "prohibitedExports": [],
   "maximumBytes": {

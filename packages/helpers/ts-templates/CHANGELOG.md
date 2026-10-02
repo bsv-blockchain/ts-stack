@@ -10,6 +10,47 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.0.0 candidate — BRC-162 (breaking)
+
+### Removed
+
+- `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL`, with their types
+  (`MandalaTokenDecoded`, `MandalaAdminDecoded`, `MandalaActionDetails`,
+  `MandalaActionKind`, `MandalaAdminLockParams`, `MandalaAdminUnlockParams` and
+  `AssetMetadata`). Mandala tokens now use the BRC-162 binary layout, which is
+  not wire-compatible with the removed BRC-92 scripts.
+- The `mandala-signing.ts` subpath.
+- `encodeScriptNum`, `encodeAssetId` and `decodeAssetId` from the
+  `mandala-encoding.ts` subpath, which keeps `createMinimallyEncodedScriptChunk`,
+  `decodeScriptNum` and `decodeScriptNumChunk`.
+
+### Added
+
+- `Bsv21Binary`, a [BRC-162](https://brc.dev/162) (BSV-21 binary) token-output
+  template with canonical pushes: `lock`, `lockBRC29`, `unlock` and `decode`.
+  Amounts are `bigint` (0 to 2^64 - 1) and every value has exactly one accepted
+  encoding; a token-shaped script that is not canonical throws
+  `Bsv21BinaryError`. Companion exports: `Bsv21BinaryDecoded`, `Bsv21Role`,
+  `BSV21_MAX_AMOUNT`, `encodeAmountChunk`, `decodeAmountChunk`,
+  `tokenIdToString`, `tokenIdFromString` and `isTokenShaped`.
+- A strict, dependency-free DAG-CBOR subset for token payloads:
+  `encodeStrictCbor`, `decodeStrictCbor`, `tryDecodeStrictCbor`,
+  `StrictCborError`, `StrictCborValue`, `StrictCborMap`,
+  `STRICT_CBOR_MAX_BYTES` and `STRICT_CBOR_MAX_DEPTH`. Floats, tags, negative
+  integers, arrays, unsorted keys, non-minimal headers, trailing bytes and
+  nesting deeper than 4 are refused, and so is a `number[]` input with an entry
+  outside 0..255 (never wrapped to a byte). Each refusal throws a fixed
+  message; the package-local `test/vectors/brc162.json` pins every message and
+  the order the checks run in, for ports such as the Go overlay.
+
+### Changed
+
+- Accept `@bsv/sdk` `^3.0.0` as well as `^2.1.6`. The source already declares
+  this range, but published 1.10.3 only accepts `^2.1.6`, so a release that
+  stages SDK 3 cannot install `@bsv/overlay-topics`, which depends on
+  templates. 2.0.0 is the first release to publish the wider range; the other
+  script templates are unchanged.
+
 ### 1.10.3 candidate — CommonJS SDK interop
 
 ### Fixed

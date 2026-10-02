@@ -306,7 +306,7 @@
     "@bsv/did": "0.3.0",
     "@bsv/fund-wallet": "1.5.3",
     "@bsv/simple": "0.7.0",
-    "@bsv/templates": "1.10.3",
+    "@bsv/templates": "2.0.0",
     "@bsv/authsocket": "2.1.9",
     "@bsv/authsocket-client": "2.1.8",
     "@bsv/message-box-client": "2.5.5",
