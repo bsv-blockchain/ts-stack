@@ -10,6 +10,18 @@
 // Every key in the file is derived from a fixed scalar, so each one is a real
 // compressed secp256k1 point (a Go port that validates points must accept all of
 // them), and the deploySig signatures are deterministic (RFC 6979).
+//
+// Every strictCbor reject row carries the decoder's `error`. The Mandala overlay
+// copies that message into its deployPayload / detailsSchema reasons, so the
+// message and the order the checks run in are both part of the contract. For
+// each header the decoder checks: additional info (indefinite, reserved), then
+// minimality (a float or simple value with a too-small argument is
+// 'non-minimal header'), then the major type; a length or count is compared with
+// the TOTAL input length ('length exceeds input') before any byte is read
+// ('truncated input'); a map's count is checked before its depth; and for each
+// key: its header, that it is text, its UTF-8, then its order. Key rules apply to
+// nested maps exactly as to the top level, and a 64-bit length is bounded before
+// it is ever converted to a machine integer.
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -24,6 +36,7 @@ import {
   encodeAmountChunk,
   encodeStrictCbor,
   isTokenShaped,
+  StrictCborError,
   tokenIdToString,
   tryDecodeStrictCbor
 } from '../../mod.js'
@@ -82,6 +95,8 @@ interface StrictCborVector {
   id: string
   hex: string
   valid: boolean
+  /** The decoder's message; present exactly on reject rows. */
+  error?: string
 }
 interface CommitmentVector {
   id: string
@@ -114,6 +129,8 @@ interface Brc162Vectors {
 
 interface ScriptCase {
   id: string
+  /** Stated here, not read back from the decoder: the role is part of the contract. */
+  role: Bsv21Role
   tokenId: string | null
   amount: bigint
   payload?: Uint8Array | number[]
@@ -141,6 +158,7 @@ const payloadPushCases = (): ScriptCase[] => {
   ]
   return raw.map(([name, payload]) => ({
     id: `value-payload-${name}`,
+    role: 'value' as const,
     tokenId: TOKEN_ID,
     amount: 7n,
     payload
@@ -148,42 +166,54 @@ const payloadPushCases = (): ScriptCase[] => {
 }
 
 const scriptCases = (): ScriptCase[] => [
-  { id: 'deploy-authority-empty-payload', tokenId: null, amount: 0n, payload: [0xa0] },
+  {
+    id: 'deploy-authority-empty-payload',
+    role: 'deploy',
+    tokenId: null,
+    amount: 0n,
+    payload: [0xa0]
+  },
   {
     id: 'deploy-authority-metadata',
+    role: 'deploy',
     tokenId: null,
     amount: 0n,
     payload: encodeStrictCbor({ sym: 'USD', dec: 2n, label: 'US Dollar', feeRatePerKb: 1000n })
   },
   {
     id: 'deploy-authority-fee-disabled',
+    role: 'deploy',
     tokenId: null,
     amount: 0n,
     payload: encodeStrictCbor({ sym: 'USD', dec: 2n, label: 'US Dollar', feeRatePerKb: null })
   },
-  { id: 'deploy-authority-no-payload', tokenId: null, amount: 0n },
-  { id: 'deploy-fixed-supply-codec-only', tokenId: null, amount: 5n },
-  { id: 'authority-no-payload', tokenId: TOKEN_ID, amount: 0n },
+  { id: 'deploy-authority-no-payload', role: 'deploy', tokenId: null, amount: 0n },
+  { id: 'deploy-fixed-supply-codec-only', role: 'deploy', tokenId: null, amount: 5n },
+  { id: 'authority-no-payload', role: 'authority', tokenId: TOKEN_ID, amount: 0n },
   {
     id: 'authority-adm-commitment',
+    role: 'authority',
     tokenId: TOKEN_ID,
     amount: 0n,
     payload: encodeStrictCbor({ adm: Uint8Array.from(commitmentOf(issueDetails)) })
   },
-  { id: 'authority-ascending-id', tokenId: TOKEN_ID_ASCENDING, amount: 0n },
+  { id: 'authority-ascending-id', role: 'authority', tokenId: TOKEN_ID_ASCENDING, amount: 0n },
   ...[1n, 5n, 16n, 17n, 127n, 128n, 255n, 256n, 5000n].map(amount => ({
     id: `value-amount-${amount}`,
+    role: 'value' as const,
     tokenId: TOKEN_ID,
     amount
   })),
   ...[2n ** 53n - 1n, 2n ** 53n, BSV21_MAX_AMOUNT].map(amount => ({
     id: `value-amount-${amount}`,
+    role: 'value' as const,
     tokenId: TOKEN_ID,
     amount
   })),
-  { id: 'value-ascending-id', tokenId: TOKEN_ID_ASCENDING, amount: 1n },
+  { id: 'value-ascending-id', role: 'value', tokenId: TOKEN_ID_ASCENDING, amount: 1n },
   {
     id: 'value-payload-strict-cbor-map',
+    role: 'value',
     tokenId: TOKEN_ID,
     amount: 7n,
     payload: encodeStrictCbor({ a: 1n })
@@ -193,17 +223,17 @@ const scriptCases = (): ScriptCase[] => [
 
 const LOCKER = new Bsv21Binary()
 
-const buildScript = ({ id, tokenId, amount, payload }: ScriptCase): ScriptVector => {
+// The declared role goes into the file; the round-trip test checks the decoder agrees.
+const buildScript = ({ id, role, tokenId, amount, payload }: ScriptCase): ScriptVector => {
   const payloadBytes = payload === undefined ? undefined : [...payload]
-  const scriptHex = LOCKER.lock(tokenId, amount, PKH, payloadBytes).toHex()
   return {
     id,
     tokenId,
     amount: amount.toString(),
     pubKeyHash: PKH_HEX,
     payload: payloadBytes === undefined ? null : hexOf(payloadBytes),
-    scriptHex,
-    role: Bsv21Binary.decode(LockingScript.fromHex(scriptHex)).role
+    scriptHex: LOCKER.lock(tokenId, amount, PKH, payloadBytes).toHex(),
+    role
   }
 }
 
@@ -347,76 +377,185 @@ const buildReject = ([id, scriptHex]: RejectCase): RejectScriptVector => {
 const mapWithBytes = (dataLength: number): string =>
   `a1616159${dataLength.toString(16).padStart(4, '0')}${'00'.repeat(dataLength)}`
 
-// [id, hex, valid]. Hex is written out, never derived from the encoder, so the
-// verdicts stay an independent statement of spec §3.5.
-const CBOR_CASES: Array<[string, string, boolean]> = [
-  ['spec-sym-dec', 'a263646563026373796d63555344', true],
-  ['empty-map', 'a0', true],
-  ['uint-max-2-64-1', 'a161611bffffffffffffffff', true],
-  ['uint-0', 'a1616100', true],
-  ['uint-23', 'a1616117', true],
-  ['uint-24', 'a16161 1818', true],
-  ['uint-255', 'a16161 18ff', true],
-  ['uint-256', 'a16161 190100', true],
-  ['uint-65535', 'a16161 19ffff', true],
-  ['uint-65536', 'a16161 1a00010000', true],
-  ['uint-4294967295', 'a16161 1affffffff', true],
-  ['uint-4294967296', 'a16161 1b0000000100000000', true],
-  ['all-value-kinds', 'a5 6162 420102 6166 f4 616d a1 6178 01 616e f6 6174 f5', true],
-  ['depth-4', 'a1 6161 a1 6162 a1 6163 a1 6164 01', true],
-  ['keys-length-first', 'a2 6162 01 626161 02', true],
-  ['keys-same-length-sorted', 'a2 6161 01 6162 02', true],
-  ['key-with-24-bytes', `a1 7818 ${'61'.repeat(24)} 01`, true],
-  ['bytes-with-24-bytes', `a1 6161 5818 ${'00'.repeat(24)}`, true],
-  ['text-utf8-3-byte', 'a1 6161 63 e282ac', true],
-  ['text-utf8-4-byte', 'a1 6161 64 f09f9880', true],
-  ['text-utf8-2-byte', 'a1 6161 62 c2a2', true],
-  ['text-leading-bom', 'a1 6161 64 efbbbf78', true],
-  ['key-utf8', 'a1 63e282ac 63e282ac', true],
-  ['key-proto', 'a1 695f5f70726f746f5f5f a1 6161 01', true],
-  ['size-limit-4096', mapWithBytes(4090), true],
-  ['float-1', 'a16161fb3ff0000000000000', false],
-  ['float16', 'a1 6161 f93c00', false],
-  ['tag-42', 'a1 6161 d82a 4100', false],
-  ['negative-int', 'a1 6161 20', false],
-  ['array', 'a1 6161 8101', false],
-  ['undefined', 'a1 6161 f7', false],
-  ['simple-20-two-byte-form', 'a1 6161 f814', false],
-  ['non-minimal-uint', 'a1 6161 1805', false],
-  ['non-minimal-uint-16-bit', 'a1 6161 190005', false],
-  ['non-minimal-length', 'b801 6161 01', false],
-  ['indefinite-map', 'bf 6161 01 ff', false],
-  ['indefinite-text', 'a1 6161 7f6161ff', false],
-  ['break-byte-as-value', 'a1 6161 ff', false],
-  ['unsorted-keys', 'a2 6162 01 6161 01', false],
-  ['keys-wrong-length-first-order', 'a2 626161 01 6162 01', false],
-  ['duplicate-keys', 'a2 6161 01 6161 02', false],
-  ['integer-key', 'a1 01 01', false],
-  ['bytes-key', 'a1 4161 01', false],
-  ['top-level-text', '6161', false],
-  ['empty-input', '', false],
-  ['trailing-byte', 'a1 6161 01 00', false],
-  ['invalid-utf8', 'a1 6161 61ff', false],
-  ['depth-5', 'a1 6161 a1 6161 a1 6161 a1 6161 a1 6161 01', false],
-  ['truncated-value', 'a1 6161', false],
-  ['truncated-key', 'a1 61', false],
-  ['truncated-header', 'a1 6161 19 01', false],
-  ['byte-string-longer-than-input', 'a1 6161 4a 01', false],
-  ['reserved-additional-info', 'a1 6161 1c', false],
-  ['utf8-overlong-c080', 'a1 6161 62 c080', false],
-  ['utf8-surrogate-eda080', 'a1 6161 63 eda080', false],
-  ['utf8-above-10ffff', 'a1 6161 64 f4908080', false],
-  ['utf8-truncated-sequence', 'a1 6161 62 e282', false],
-  ['utf8-lone-continuation', 'a1 6161 61 80', false],
-  ['utf8-bad-continuation', 'a1 6161 62 c241', false],
-  ['utf8-five-byte-lead', 'a1 6161 65 f888808080', false],
-  ['utf8-invalid-in-key', 'a1 61ff 01', false],
-  ['size-over-4096', mapWithBytes(4091), false]
+// The decoder's messages. Each reject case declares its own, so a payload refused
+// for the wrong reason (a check run out of order) fails the generator.
+const NON_MINIMAL = 'non-minimal header'
+const INDEFINITE = 'indefinite length'
+const RESERVED = 'reserved additional info'
+const SIMPLE = 'simple value or float not allowed'
+const majorType = (major: number): string => `major type ${major} not allowed`
+const TRUNCATED_INPUT = 'truncated input'
+const LENGTH_EXCEEDS = 'length exceeds input'
+const TOO_DEEP = 'map nesting deeper than 4'
+const KEY_NOT_TEXT = 'map key must be text'
+const UNSORTED = 'map keys unsorted or duplicated'
+const BAD_UTF8 = 'invalid UTF-8'
+const NOT_A_MAP = 'top level must be a map'
+const TRAILING = 'trailing bytes'
+const INPUT_TOO_LARGE = 'input exceeds 4096 bytes'
+
+// [id, hex, error]: error null is an accepted map. Hex is written out, never
+// derived from the encoder, so the verdicts stay an independent statement of
+// spec §3.5.
+type CborCase = [id: string, hex: string, error: string | null]
+
+const CBOR_ACCEPTS: CborCase[] = [
+  ['spec-sym-dec', 'a263646563026373796d63555344', null],
+  ['empty-map', 'a0', null],
+  ['uint-max-2-64-1', 'a161611bffffffffffffffff', null],
+  ['uint-0', 'a1616100', null],
+  ['uint-23', 'a1616117', null],
+  ['uint-24', 'a16161 1818', null],
+  ['uint-255', 'a16161 18ff', null],
+  ['uint-256', 'a16161 190100', null],
+  ['uint-65535', 'a16161 19ffff', null],
+  ['uint-65536', 'a16161 1a00010000', null],
+  ['uint-4294967295', 'a16161 1affffffff', null],
+  ['uint-4294967296', 'a16161 1b0000000100000000', null],
+  ['all-value-kinds', 'a5 6162 420102 6166 f4 616d a1 6178 01 616e f6 6174 f5', null],
+  ['depth-4', 'a1 6161 a1 6162 a1 6163 a1 6164 01', null],
+  ['keys-length-first', 'a2 6162 01 626161 02', null],
+  ['keys-same-length-sorted', 'a2 6161 01 6162 02', null],
+  ['key-with-24-bytes', `a1 7818 ${'61'.repeat(24)} 01`, null],
+  ['bytes-with-24-bytes', `a1 6161 5818 ${'00'.repeat(24)}`, null],
+  ['text-utf8-3-byte', 'a1 6161 63 e282ac', null],
+  ['text-utf8-4-byte', 'a1 6161 64 f09f9880', null],
+  ['text-utf8-2-byte', 'a1 6161 62 c2a2', null],
+  ['text-leading-bom', 'a1 6161 64 efbbbf78', null],
+  ['text-utf8-smallest-2-byte', 'a1 6161 62 c280', null],
+  ['text-utf8-smallest-3-byte', 'a1 6161 63 e0a080', null],
+  ['text-utf8-smallest-4-byte', 'a1 6161 64 f0908080', null],
+  ['text-utf8-below-surrogates', 'a1 6161 63 ed9fbf', null],
+  ['text-utf8-above-surrogates', 'a1 6161 63 ee8080', null],
+  ['text-utf8-max-code-point', 'a1 6161 64 f48fbfbf', null],
+  ['key-utf8', 'a1 63e282ac 63e282ac', null],
+  ['key-proto', 'a1 695f5f70726f746f5f5f a1 6161 01', null],
+  ['nested-keys-length-first', 'a1 6161 a2 6162 01 626161 02', null],
+  ['size-limit-4096', mapWithBytes(4090), null]
 ]
 
-const buildStrictCbor = ([id, hex]: [string, string, boolean]): StrictCborVector => {
+// Values and headers outside the subset.
+const CBOR_VALUE_REJECTS: CborCase[] = [
+  ['float-1', 'a16161fb3ff0000000000000', SIMPLE],
+  ['float16', 'a1 6161 f93c00', SIMPLE],
+  ['float32', 'a1 6161 fa3f800000', SIMPLE],
+  ['tag-42', 'a1 6161 d82a 4100', majorType(6)],
+  ['negative-int', 'a1 6161 20', majorType(1)],
+  ['array', 'a1 6161 8101', majorType(4)],
+  ['undefined', 'a1 6161 f7', SIMPLE],
+  ['simple-32', 'a1 6161 f820', SIMPLE],
+  ['simple-20-two-byte-form', 'a1 6161 f814', NON_MINIMAL],
+  ['non-minimal-uint', 'a1 6161 1805', NON_MINIMAL],
+  ['non-minimal-uint-16-bit', 'a1 6161 190005', NON_MINIMAL],
+  ['non-minimal-uint-32-bit', 'a1 6161 1a0000ffff', NON_MINIMAL],
+  ['non-minimal-uint-64-bit', 'a1 6161 1b00000000ffffffff', NON_MINIMAL],
+  ['non-minimal-length', 'b801 6161 01', NON_MINIMAL],
+  ['non-minimal-key-header', 'a1 7801 61 01', NON_MINIMAL],
+  ['indefinite-map', 'bf 6161 01 ff', INDEFINITE],
+  ['indefinite-text', 'a1 6161 7f6161ff', INDEFINITE],
+  ['indefinite-bytes', 'a1 6161 5f4100ff', INDEFINITE],
+  ['break-byte-as-value', 'a1 6161 ff', INDEFINITE],
+  ['reserved-additional-info', 'a1 6161 1c', RESERVED],
+  ['reserved-additional-info-30', 'a1 6161 1e', RESERVED],
+  ['top-level-text', '6161', NOT_A_MAP],
+  ['top-level-array', '8101', NOT_A_MAP],
+  ['empty-input', '', TRUNCATED_INPUT],
+  ['trailing-byte', 'a1 6161 01 00', TRAILING],
+  ['depth-5', 'a1 6161 a1 6161 a1 6161 a1 6161 a1 6161 01', TOO_DEEP],
+  ['truncated-value', 'a1 6161', TRUNCATED_INPUT],
+  ['truncated-key', 'a1 61', TRUNCATED_INPUT],
+  ['truncated-header', 'a1 6161 19 01', TRUNCATED_INPUT],
+  ['size-over-4096', mapWithBytes(4091), INPUT_TOO_LARGE]
+]
+
+// Key rules, at the top level and inside a nested map.
+const CBOR_KEY_REJECTS: CborCase[] = [
+  ['unsorted-keys', 'a2 6162 01 6161 01', UNSORTED],
+  ['keys-wrong-length-first-order', 'a2 626161 01 6162 01', UNSORTED],
+  ['duplicate-keys', 'a2 6161 01 6161 02', UNSORTED],
+  ['integer-key', 'a1 01 01', KEY_NOT_TEXT],
+  ['bytes-key', 'a1 4161 01', KEY_NOT_TEXT],
+  ['nested-unsorted-keys', 'a1 6161 a2 6162 01 6161 01', UNSORTED],
+  ['nested-keys-wrong-length-first-order', 'a1 6161 a2 626161 01 6162 01', UNSORTED],
+  ['nested-duplicate-keys', 'a1 6161 a2 6161 01 6161 02', UNSORTED],
+  ['nested-integer-key', 'a1 6161 a1 01 01', KEY_NOT_TEXT],
+  ['nested-bytes-key', 'a1 6161 a1 4161 01', KEY_NOT_TEXT],
+  ['nested-invalid-utf8-key', 'a1 6161 a1 61ff 01', BAD_UTF8]
+]
+
+// Lengths and counts: bounded by the whole input before any byte is read, and
+// before a 64-bit value is ever narrowed.
+const CBOR_LENGTH_REJECTS: CborCase[] = [
+  ['byte-string-longer-than-input', 'a1 6161 4a 01', LENGTH_EXCEEDS],
+  ['byte-string-longer-than-the-rest', 'a1 6161 44 010203', TRUNCATED_INPUT],
+  ['bytes-length-2-64-1', 'a1 6161 5b ffffffffffffffff', LENGTH_EXCEEDS],
+  ['text-length-2-64-1', 'a1 6161 7b ffffffffffffffff', LENGTH_EXCEEDS],
+  ['key-length-2-64-1', 'a1 7b ffffffffffffffff', LENGTH_EXCEEDS],
+  ['map-count-2-64-1', 'bb ffffffffffffffff', LENGTH_EXCEEDS],
+  ['nested-map-count-longer-than-input', 'a1 6161 b8ff', LENGTH_EXCEEDS]
+]
+
+// UTF-8 (RFC 3629), in values and keys.
+const CBOR_UTF8_REJECTS: CborCase[] = [
+  ['invalid-utf8', 'a1 6161 61ff', BAD_UTF8],
+  ['utf8-overlong-c080', 'a1 6161 62 c080', BAD_UTF8],
+  ['utf8-overlong-c1bf', 'a1 6161 62 c1bf', BAD_UTF8],
+  ['utf8-overlong-3-byte', 'a1 6161 63 e09fbf', BAD_UTF8],
+  ['utf8-overlong-4-byte', 'a1 6161 64 f08fbfbf', BAD_UTF8],
+  ['utf8-last-surrogate-edbfbf', 'a1 6161 63 edbfbf', BAD_UTF8],
+  ['utf8-lead-f5', 'a1 6161 64 f5808080', BAD_UTF8],
+  ['utf8-surrogate-eda080', 'a1 6161 63 eda080', BAD_UTF8],
+  ['utf8-above-10ffff', 'a1 6161 64 f4908080', BAD_UTF8],
+  ['utf8-truncated-sequence', 'a1 6161 62 e282', BAD_UTF8],
+  ['utf8-lone-continuation', 'a1 6161 61 80', BAD_UTF8],
+  ['utf8-bad-continuation', 'a1 6161 62 c241', BAD_UTF8],
+  ['utf8-five-byte-lead', 'a1 6161 65 f888808080', BAD_UTF8],
+  ['utf8-invalid-in-key', 'a1 61ff 01', BAD_UTF8]
+]
+
+// Which check wins when one input breaks two rules.
+const CBOR_ORDER_REJECTS: CborCase[] = [
+  // minimality is checked before the major type
+  ['order-minimal-before-float64', 'a16161fb0000000000000000', NON_MINIMAL],
+  ['order-minimal-before-float32', 'a16161fa00000000', NON_MINIMAL],
+  ['order-minimal-before-float16', 'a16161f90000', NON_MINIMAL],
+  ['order-minimal-before-negative-int', 'a161613800', NON_MINIMAL],
+  ['order-negative-int-minimal-header', 'a1616138ff', majorType(1)],
+  // the map count, then the depth, then the key
+  ['order-count-before-depth', 'a1 6161 a1 6162 a1 6163 a1 6164 b8ff', LENGTH_EXCEEDS],
+  ['order-depth-before-key', 'a1 6161 a1 6162 a1 6163 a1 6164 a1 4161', TOO_DEEP],
+  // a key must be text, and valid UTF-8, before its order is judged
+  ['order-key-text-before-key-order', 'a2 6162 01 4161 01', KEY_NOT_TEXT],
+  ['order-key-utf8-before-key-order', 'a2 6162 01 61ff 01', BAD_UTF8],
+  // the top level is checked to be a map before its trailing bytes
+  ['order-top-level-before-trailing', '01 00', NOT_A_MAP]
+]
+
+const CBOR_CASES: CborCase[] = [
+  ...CBOR_ACCEPTS,
+  ...CBOR_VALUE_REJECTS,
+  ...CBOR_KEY_REJECTS,
+  ...CBOR_LENGTH_REJECTS,
+  ...CBOR_UTF8_REJECTS,
+  ...CBOR_ORDER_REJECTS
+]
+
+// The message is whatever the decoder says; the test compares it with the declared one.
+const cborError = (bytes: number[]): string | undefined => {
+  try {
+    decodeStrictCbor(bytes)
+    return undefined
+  } catch (e) {
+    return (e as Error).message
+  }
+}
+
+const buildStrictCbor = ([id, hex]: CborCase): StrictCborVector => {
   const compact = hex.replace(/\s/g, '')
-  return { id, hex: compact, valid: tryDecodeStrictCbor(bytesOf(compact)) !== undefined }
+  const bytes = bytesOf(compact)
+  const valid = tryDecodeStrictCbor(bytes) !== undefined
+  const error = cborError(bytes)
+  return error === undefined ? { id, hex: compact, valid } : { id, hex: compact, valid, error }
 }
 
 // ---- commitments: one details map per §3.3 kind ----------------------------
@@ -615,13 +754,48 @@ describe('BRC-162 templates vectors', () => {
   })
 
   it('the strict CBOR verdicts match the declared accept/reject set', () => {
-    expect(vectors.strictCbor.map(v => v.valid)).toEqual(CBOR_CASES.map(([, , valid]) => valid))
+    expect(vectors.strictCbor.map(v => v.valid)).toEqual(CBOR_CASES.map(([, , e]) => e === null))
     expect(vectors.strictCbor.find(v => v.id === 'spec-sym-dec')).toEqual({
       id: 'spec-sym-dec',
       hex: 'a263646563026373796d63555344',
       valid: true
     })
     expect(vectors.strictCbor.filter(v => !v.valid).length).toBeGreaterThanOrEqual(25)
+  })
+
+  it('every strict CBOR reject carries the message its case declares, and only rejects do', () => {
+    expect(vectors.strictCbor.map(v => [v.id, v.error ?? null])).toEqual(
+      CBOR_CASES.map(([id, , error]) => [id, error])
+    )
+    for (const v of vectors.strictCbor) {
+      expect('error' in v).toBe(!v.valid)
+      if (v.error === undefined) continue
+      expect(() => decodeStrictCbor(bytesOf(v.hex))).toThrow(StrictCborError)
+      expect(() => decodeStrictCbor(bytesOf(v.hex))).toThrow(v.error)
+    }
+  })
+
+  it('the strict CBOR rejects exercise every decoder message', () => {
+    expect(new Set(vectors.strictCbor.flatMap(v => v.error ?? []))).toEqual(
+      new Set([
+        NON_MINIMAL,
+        INDEFINITE,
+        RESERVED,
+        SIMPLE,
+        majorType(1),
+        majorType(4),
+        majorType(6),
+        TRUNCATED_INPUT,
+        LENGTH_EXCEEDS,
+        TOO_DEEP,
+        KEY_NOT_TEXT,
+        UNSORTED,
+        BAD_UTF8,
+        NOT_A_MAP,
+        TRAILING,
+        INPUT_TOO_LARGE
+      ])
+    )
   })
 
   it('valid strict CBOR re-encodes to identical bytes', () => {
