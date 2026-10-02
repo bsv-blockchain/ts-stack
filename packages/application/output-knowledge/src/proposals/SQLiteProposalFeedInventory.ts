@@ -182,14 +182,15 @@ export class SQLiteProposalFeedInventory {
         'SELECT index_key,proposal_id,status,expires_at FROM proposal_feed_channels WHERE namespace=? AND channel_key=?'
       )
       .get(this.namespace, key)
+    const expiresAt =
+      record?.state.status === 'active' ? position(record.proposal.body.expiresAt) : null
     if (
       record === undefined
         ? row !== undefined
         : row?.index_key !== proposalChannelIndexKey(record.proposal) ||
           row.proposal_id !== record.proposalId ||
           row.status !== record.state.status ||
-          row.expires_at !==
-            (record.state.status === 'active' ? position(record.proposal.body.expiresAt) : null)
+          row.expires_at !== expiresAt
     )
       throw new OutputProtocolError(
         'unavailable',

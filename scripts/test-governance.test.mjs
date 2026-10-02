@@ -466,6 +466,8 @@ test('lineage layout and traversal partitions cover every original line with ide
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   const names = ['revenue-lineage-graph', 'revenue-lineage-traversal']
+  const { maxTestRunnerReuse, ...canonicalRunner } = targets[names[0]].runnerOptions
+  assert.equal(maxTestRunnerReuse, 8)
   const source = 'src/revenue-listing/LineageGraph.ts'
   let nextLine = 1
   for (const name of names) {
@@ -477,7 +479,10 @@ test('lineage layout and traversal partitions cover every original line with ide
     assert.equal(start, nextLine)
     assert.ok(end >= start)
     nextLine = end + 1
-    assert.deepEqual(target.runnerOptions, targets[names[0]].runnerOptions)
+    assert.deepEqual(target.runnerOptions, {
+      ...canonicalRunner,
+      ...(name === 'revenue-lineage-graph' ? { maxTestRunnerReuse: 8 } : {})
+    })
     assert.deepEqual(target.additionalInputs, targets[names[0]].additionalInputs)
     const gate = policy.targets.find(candidate => candidate.id === name)
     assert.equal(gate.minimumScore, 90)

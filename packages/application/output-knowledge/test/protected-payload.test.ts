@@ -1,7 +1,7 @@
 import { expect, it } from '@jest/globals'
-import { createSecretKey, generateKeyPairSync } from 'node:crypto'
+import { createSecretKey, generateKeyPairSync, createDecipheriv, hkdfSync } from 'node:crypto'
 import { NodeProtectedPayloadCodec } from '../src/private/NodeProtectedPayloadCodec.js'
-import type { OutputJSONObject } from '@bsv/sdk'
+import { canonicalOutputJSON, type OutputJSONObject } from '@bsv/sdk'
 
 // Public synthetic test keys only.
 const keys = new Map([
@@ -177,4 +177,102 @@ it('rejects malformed versions, labels, byte encodings and nonbyte input', () =>
   ])
     expect(() => codec().open(binding, { ...envelope, ...patch })).toThrow()
   expect(() => codec().seal(binding, [1] as unknown as Uint8Array)).toThrow()
+})
+
+it('can be decrypted independently using the documented local framing and associated data', () => {
+  const local = codec(),
+    value = Uint8Array.of(0, 7, 128, 255)
+  const envelope = local.seal(binding, value)
+  expect(envelope.format).toBe('output-protected-payload/1')
+  expect(envelope.keyId).toBe('key-a')
+  const salt = Buffer.from(envelope.salt, 'base64'),
+    nonce = Buffer.from(envelope.nonce, 'base64'),
+    tag = Buffer.from(envelope.tag, 'base64')
+  expect(salt).toHaveLength(32)
+  expect(nonce).toHaveLength(12)
+  expect(tag).toHaveLength(16)
+  const key = hkdfSync('sha256', keys.get('key-a')!, salt, 'output-protected-payload/1', 32)
+  const decrypt = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 })
+  decrypt.setAAD(
+    Buffer.from(
+      canonicalOutputJSON({ format: 'output-protected-payload/1', keyId: 'key-a', binding })
+    )
+  )
+  decrypt.setAuthTag(tag)
+  expect(
+    Buffer.concat([decrypt.update(Buffer.from(envelope.ciphertext, 'base64')), decrypt.final()])
+  ).toEqual(Buffer.from(value))
+})
+
+it('accepts the minimum installed capacity and preserves clear failure classification', () => {
+  const local = new NodeProtectedPayloadCodec(custody, 'key-a', 1)
+  expect(local.open(binding, local.seal(binding, Uint8Array.of(1)))).toEqual(Uint8Array.of(1))
+  expect(() => local.seal(binding, new Uint8Array(2))).toThrow(
+    expect.objectContaining({
+      code: 'limited',
+      message: 'Protected payload exceeds its reserved capacity'
+    })
+  )
+  expect(() => local.seal(binding, [1] as unknown as Uint8Array)).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Protected payload must contain bytes' })
+  )
+  expect(() => new NodeProtectedPayloadCodec(custody, 'key-a', 0)).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Invalid protected payload capacity' })
+  )
+})
+
+it.each(['$key', 'key$', ' key', 'key ', 'a'.repeat(129)])(
+  'validates custody labels independently of key availability: %s',
+  keyId => {
+    expect(
+      () => new NodeProtectedPayloadCodec({ resolve: () => keys.get('key-a')! }, keyId)
+    ).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Invalid protected payload key label' })
+    )
+  }
+)
+
+it('rejects a shaped object masquerading as a custody key before cryptographic work', () => {
+  const fake = { type: 'secret', symmetricKeySize: 32 }
+  expect(
+    () =>
+      new NodeProtectedPayloadCodec(
+        { resolve: () => fake as unknown as ReturnType<typeof createSecretKey> },
+        'key-a'
+      )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Protected payload custody is unavailable'
+    })
+  )
+})
+
+it('distinguishes malformed framing from a well-shaped envelope that fails authentication', () => {
+  const envelope = codec().seal(binding, Uint8Array.of(7))
+  expect(() =>
+    codec().open(binding, { ...envelope, nonce: Buffer.alloc(11).toString('base64') })
+  ).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Invalid protected payload framing' })
+  )
+  expect(() => codec().open(binding, { ...envelope, format: 'future' })).toThrow(
+    expect.objectContaining({
+      code: 'unsupported',
+      message: 'Unsupported protected payload format'
+    })
+  )
+  expect(() =>
+    codec().open(binding, { ...envelope, tag: Buffer.alloc(16).toString('base64') })
+  ).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Protected payload authentication failed'
+    })
+  )
+  expect(() => codec().seal([] as unknown as OutputJSONObject, Uint8Array.of(1))).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Protected payload binding must be an object'
+    })
+  )
 })

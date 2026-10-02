@@ -76,7 +76,7 @@ export class ProposalFeedPrivacy {
         'Proposal lookup contract cannot carry its sealed complete groups'
       )
     const required = value.guards.find(item => item.id === guard)
-    if (!required || required.failure !== 'reset-required')
+    if (required?.failure !== 'reset-required')
       throw new OutputProtocolError(
         'invalid',
         'Proposal lookup opening omitted its durable visibility guard'

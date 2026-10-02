@@ -1937,3 +1937,42 @@ tarballs also passed. Existing repository maintenance advisories remain visible
 in the successful health report; this batch does not waive or extend them.
 Full native coverage, mutation aggregates and exact-head hosted qualification
 remain required for this batch.
+
+### Native completion and protected-codec follow-up
+
+The pushed c344d22b3 passes complete output-knowledge native coverage: 1,941 tests
+across 144 suites in 595.487 seconds, with all 9,979 captured inputs and HEAD
+unchanged. Root health/lint/format/types, public packed consumers and all 42
+compiled examples against 22 exact tarballs passed before that push.
+
+The first complete protected-ledger codec execution part finished in 5 minutes
+23 seconds: 274 mutants, 188 killed, 86 surviving, no uncovered or invalid
+mutants. Its 68.61% score is not a complete target acceptance result: the store
+part and canonical aggregate remain required. Every captured input and HEAD
+stayed unchanged. New direct codec regressions cover inclusive reservation
+limits, invalid numeric representations, independent inventory framing,
+configuration/plaintext bounds and failure classifications. Independent native
+AES-GCM opening checks the documented HKDF/AAD/envelope format; separate label
+and custody tests avoid relying on a missing-key error to detect a malformed
+label. The expanded canonical private selection passes 120 tests across four
+suites. No source/test union or threshold was reduced.
+
+Hosted c344d22b3 reported three Sonar maintainability findings in the compound
+privacy/inventory implementations and protected-ledger test fixture. The local
+follow-up simplifies the optional guard comparison, names the expected expiry
+before comparison, and creates the fixture default inside its body. These
+changes preserve runtime behavior. All 270 canonical compound-provider tests
+across 14 suites pass, with no runtime-error suites. Root health, lint, formatting
+and workspace types also pass after the expanded test registration and explicit
+lineage execution-setting assertion. A first direct Jest invocation from the
+repository root failed to resolve the package's TypeScript configuration before
+running any tests; the corrected package-directory invocation is the 120-case
+result above, not a waiver of that setup failure.
+
+The previous hosted 4ec3 lineage graph job lost a worker to memory exhaustion
+after about 79 minutes and reached its 90-minute job bound without a report.
+The coordinated graph-only worker-reuse setting now recycles after eight mutant
+executions. All original source ranges, 99 canonical tests, property budgets,
+workers, deadlines and score/coverage/invalid gates remain; the union regression
+permits exactly this one explicit execution-setting difference from traversal.
+Fresh complete execution and final exact-head CI are still required.

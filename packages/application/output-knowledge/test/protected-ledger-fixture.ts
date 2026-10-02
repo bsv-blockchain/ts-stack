@@ -27,14 +27,14 @@ export const address = (index = 1): ProtectedLedgerAddress => ({
 })
 export const change = (
   index = 1,
-  value = { secret: 'synthetic-material' },
+  value?: { secret: string },
   reservedBytes = 128
 ): ProtectedLedgerChange => ({
   ...address(index),
   expectedRevision: null,
   reservedBytes,
   reservedUpdates: 4,
-  value
+  value: value ?? { secret: 'synthetic-material' }
 })
 export const authorize = () => {}
 export const clock = () => '100'

@@ -264,3 +264,10 @@ into capacity, records, privacy and policy parts after the measured execution
 approached its 45-minute bound. Factory, writer and inventory remain unchanged.
 Every part retains the entire canonical test selection; no source, mutant,
 property case or final gate is removed. Canonical aggregation remains required.
+
+The application `revenue-lineage-graph` target also recycles a Jest worker after
+eight mutant executions. A hosted 246-mutant run lost a worker to memory
+exhaustion and reached its existing job bound without a report. Recycling does
+not change the complete canonical source range, 99-test selection, property
+budget, concurrency, deadlines or aggregate acceptance; fresh complete results
+are required. Other lineage targets keep the previous default.

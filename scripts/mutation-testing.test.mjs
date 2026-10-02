@@ -451,9 +451,18 @@ test('protected ledger retains complete storage and custody source with native c
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/protected-payload.test.ts',
+    '<rootDir>/test/protected-ledger-codec.test.ts',
     '<rootDir>/test/protected-ledger.test.ts',
     '<rootDir>/test/protected-ledger.property.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('src/storage/**'))
+})
+
+test('lineage graph execution recycles workers without changing other application or wallet targets', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  assert.equal(targets['revenue-lineage-graph'].runnerOptions.maxTestRunnerReuse, 8)
+  assert.equal(targets['revenue-lineage-traversal'].runnerOptions.maxTestRunnerReuse, undefined)
+  assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
+  assert.equal(targets['proposal-channel-storage'].runnerOptions.maxTestRunnerReuse, 8)
 })

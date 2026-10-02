@@ -110,7 +110,7 @@ function rootEvictionTarget(property, files) {
   }
 }
 
-function lineageTarget(source, property) {
+function lineageTarget(source, property, { maxTestRunnerReuse } = {}) {
   return {
     packageDirectory: 'packages/application/output-knowledge',
     manifest: 'packages/application/output-knowledge/package.json',
@@ -135,7 +135,7 @@ function lineageTarget(source, property) {
         '<rootDir>/test/revenue-lineage-graph.property.test.ts',
         '<rootDir>/test/revenue-lineage-traversal.property.test.ts'
       ],
-      { esm: true, buildCommand: 'pnpm build' }
+      { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse }
     )
   }
 }
@@ -151,7 +151,9 @@ function lineageGraphTargets(repositoryRoot) {
     throw new Error('Unable to partition lineage layout and traversal responsibilities')
   return {
     'revenue-lineage-graph': {
-      ...lineageTarget('LineageGraph', 'revenue-lineage-graph.property.test.ts'),
+      ...lineageTarget('LineageGraph', 'revenue-lineage-graph.property.test.ts', {
+        maxTestRunnerReuse: 8
+      }),
       mutate: [`${file}:1-${traversalStart - 1}`]
     },
     'revenue-lineage-traversal': {
@@ -1029,6 +1031,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-ledger-codec.test.ts',
           '<rootDir>/test/protected-ledger.test.ts',
           '<rootDir>/test/protected-ledger.property.test.ts'
         ],
