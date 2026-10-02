@@ -2335,10 +2335,13 @@ canonical native/property/cross-package tests in disjoint whole-file execution
 parts. State/service targets additionally retain material-loss cases. No score,
 coverage, invalid-mutant, seed/budget, worker or deadline gate is relaxed.
 
-The earlier895dfa service parts failed: evidence28/36killed(77.78%),
+The earlier895dfa service parts measured evidence28/36killed(77.78%),
 contracts57/76killed(75%), original70/97killed(72.16%), all zero uncovered/invalid.
-Every input stayed unchanged. Report generation's zero exit status is not a
-passing critical gate. The queued campaign was stopped only after its original
+Every input stayed unchanged. These partial scores prompted additional boundary
+tests; the full canonical target was incomplete. The repository intentionally
+applies its90% score gate to the complete combined target, while each execution
+part must have zero uncovered/invalid mutants. A successful partial invocation is
+not whole-target qualification. The queued campaign was stopped only after its original
 part completed; unrun service/state/root jobs remain unqualified. Additional
 contract boundary tests and fresh complete-source campaigns are required.
 
