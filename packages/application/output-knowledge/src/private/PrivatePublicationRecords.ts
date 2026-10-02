@@ -12,6 +12,7 @@ import {
   parseOutputPrivatePublish,
   decodeOutputBytes,
   type OutputChain,
+  type OutputJSONObject,
   type OutputPrivatePublish
 } from '@bsv/sdk'
 import { PrivateServiceIdentity } from './PrivateServiceIdentity.js'
@@ -34,11 +35,13 @@ export interface PrivatePublicationBlob {
   }
   privateValues: string
 }
-export interface PrivatePublicationFence {
-  format: 'private-publication-fence/1'
+export type PrivatePublicationFence = {
   reference: Reference
   state: PrivatePublicationProgress
-}
+} & (
+  | { format: 'private-publication-fence/1'; original?: never }
+  | { format: 'private-publication-fence/2'; original: OutputJSONObject }
+)
 function blobBinding(
   request: OutputPrivatePublish,
   chain: OutputChain
@@ -115,7 +118,10 @@ export function createPrivatePublicationRecords(
     stagedUntil,
     supportedExtensions
   )
-  return { blob, fence: { format: 'private-publication-fence/1', reference, state } }
+  return {
+    blob,
+    fence: { format: 'private-publication-fence/1', reference, state }
+  }
 }
 
 export function parsePrivatePublicationBlob(input: unknown): PrivatePublicationBlob {
@@ -149,14 +155,34 @@ export function parsePrivatePublicationRecords(
   blobInput: unknown,
   identity: PrivateServiceIdentity,
   supportedExtensions: readonly string[] = []
-): { blob: PrivatePublicationBlob; fence: PrivatePublicationFence; request: OutputPrivatePublish } {
+): {
+  blob: PrivatePublicationBlob
+  fence: PrivatePublicationFence
+  request: OutputPrivatePublish
+} {
   const value = parseOutputJSON(canonicalOutputJSON(fenceInput, { bytes: 2 * 1024 * 1024 }))
-  closedOutputObject(value, ['format', 'reference', 'state'])
+  closedOutputObject(value, ['format', 'reference', 'state'], ['original'])
   outputAssert(
-    value.format === 'private-publication-fence/1',
+    value.format === 'private-publication-fence/1' ||
+      value.format === 'private-publication-fence/2',
     'Unsupported private publication fence',
     'unsupported'
   )
+  if (value.format === 'private-publication-fence/1') {
+    outputAssert(
+      value.original === undefined,
+      'Legacy private publication cannot contain original service context'
+    )
+  } else {
+    outputAssert(
+      value.original !== null &&
+        typeof value.original === 'object' &&
+        !Array.isArray(value.original),
+      'Private publication original service context is missing',
+      'unavailable'
+    )
+    canonicalOutputJSON(value.original, { bytes: 1048576 })
+  }
   closedOutputObject(
     value.reference,
     ['version', 'requestId', 'topic', 'evidence', 'assetId', 'schema'],
@@ -188,7 +214,19 @@ export function parsePrivatePublicationRecords(
   // The complete reference was checked above by the public request parser.
   return {
     blob,
-    fence: { format: value.format, reference: value.reference as unknown as Reference, state },
+    fence:
+      value.format === 'private-publication-fence/1'
+        ? {
+            format: value.format,
+            reference: value.reference as unknown as Reference,
+            state
+          }
+        : {
+            format: value.format,
+            reference: value.reference as unknown as Reference,
+            state,
+            original: value.original as OutputJSONObject
+          },
     request
   }
 }

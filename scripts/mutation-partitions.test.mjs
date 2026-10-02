@@ -325,3 +325,24 @@ test('lineage graph parts retain complete layout and transition code and all can
       .target.mutate.includes('src/revenue-listing/FutureCompanion.ts')
   )
 })
+
+test('verified publication service parts preserve every full module and canonical setting', () => {
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)['private-publication-service']
+  const parts = partitionMutationTarget('private-publication-service', canonical)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['evidence', 'contracts', 'original', 'binding', 'records']
+  )
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+  for (const part of parts) {
+    const { mutate: _part, ...actual } = part.target
+    const { mutate: _whole, ...expected } = canonical
+    assert.deepEqual(actual, expected)
+  }
+  const extended = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
+  assert.ok(
+    partitionMutationTarget('private-publication-service', extended)
+      .find(part => part.id === 'evidence')
+      .target.mutate.includes('src/private/FutureCompanion.ts')
+  )
+})

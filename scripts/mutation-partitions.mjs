@@ -56,6 +56,18 @@ const plans = new Map([
     }
   ],
   [
+    'private-publication-service',
+    {
+      fallback: 'evidence',
+      files: new Map([
+        ['src/private/PrivatePublicationContracts.ts', 'contracts'],
+        ['src/private/PrivatePublicationContractRecord.ts', 'original'],
+        ['src/private/PrivateLookupBinding.ts', 'binding'],
+        ['src/private/PrivatePublicationServiceRecords.ts', 'records']
+      ])
+    }
+  ],
+  [
     'private-publication-state',
     {
       fallback: 'store',

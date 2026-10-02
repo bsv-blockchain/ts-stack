@@ -2272,3 +2272,28 @@ capture verifies the server's no-store/CORS behavior. Both earlier failures rema
 recorded. A300-schedule native coordination property passes in120.045 seconds.
 These drafts are not yet adopted or fully qualified, and they do not complete
 private acquisition/purchase/wallet composition or the remaining demonstrations.
+
+### Adopted verified private-publication foundation
+
+The five complete verified-publication modules and the additive version-2 native
+store path are now adopted. The original two-argument store construction and
+version-1 operations remain covered. The canonical thirteen-suite selection
+passes all207 tests in150.743 seconds, including both300-case properties with
+seed3242026 and five actual SIGKILL recovery phases. The bounded execution took
+152.494 seconds and retained10045 unchanged captured inputs and HEAD c1405d317.
+An initial invocation from the repository root failed before executing tests
+because ts-jest resolves its configuration relative to the package directory;
+that invocation is retained as a harness failure, not test evidence. The corrected
+run uses the application package working directory and the same canonical suites.
+
+All91 governance, partition and orchestration tests pass. Package build and
+packed-consumer checks pass, and root health, lint, format and type checks pass.
+Health reports zero contract findings/control errors and separately retains the
+existing expired-exception maintenance notices. Generated API documentation changes
+only this package's release content plus deterministic table alignment. Registration
+now contains111 targets/properties. The new service target covers every complete
+new module in five disjoint whole-file execution parts; the existing state target
+retains all five original source files and adds the verified native tests. Complete
+fresh state/service mutation qualification and exact-head hosted CI are pending.
+The authenticated coordinator, reconciler and HTTP drafts remain outside checkout;
+this foundation does not claim a finished private service or the second checkpoint.

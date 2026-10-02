@@ -52,8 +52,14 @@ type Progress =
   | { phase: 'staged' }
   | { phase: 'admitting'; operationId: string }
   | { phase: 'binding'; admission: Admission }
+  | { phase: 'excluded'; admission: Admission; reason: string }
   | { phase: 'ready'; admission: Admission; binding: LookupBinding }
-  | { phase: 'unavailable'; admission: Admission; binding: LookupBinding; reason: string }
+  | {
+      phase: 'unavailable'
+      admission: Admission
+      binding: LookupBinding
+      reason: string
+    }
   | { phase: 'rejected' | 'expired'; reason: string }
 export type PrivatePublicationProgress = Base & { progress: Progress }
 const BASE_FIELDS = [
@@ -75,7 +81,12 @@ const BASE_FIELDS = [
 /** Pure internal transition contract; it does not prove authorization, Bitcoin validity or durable effects. */
 export function createPrivatePublicationProgress(
   request: unknown,
-  selected: { publisher: string; chain: OutputChain; blobKey: string; lookup: Base['lookup'] },
+  selected: {
+    publisher: string
+    chain: OutputChain
+    blobKey: string
+    lookup: Base['lookup']
+  },
   now: string,
   stagedUntil: string,
   supportedExtensions: readonly string[] = []
@@ -124,7 +135,7 @@ export function privatePublicationOperation(state: PrivatePublicationProgress): 
     })
   )
 }
-function admission(value: unknown, state: Base): Admission {
+function admission(value: unknown, state: Base, included = true): Admission {
   closedOutputObject(value, ['operationId', 'txid', 'assessmentContextId', 'steak'])
   const result = {
     operationId: outputHex32(value.operationId),
@@ -134,10 +145,13 @@ function admission(value: unknown, state: Base): Admission {
   }
   outputAssert(
     result.operationId ===
-      privatePublicationOperation({ ...state, progress: { phase: 'staged' } }) &&
+      privatePublicationOperation({
+        ...state,
+        progress: { phase: 'staged' }
+      }) &&
       result.txid === state.txid &&
       Object.hasOwn(result.steak, state.topic) &&
-      result.steak[state.topic].outputsToAdmit.includes(state.outputIndex),
+      result.steak[state.topic].outputsToAdmit.includes(state.outputIndex) === included,
     'Publication admission does not bind the original output',
     'conflict'
   )
@@ -185,7 +199,10 @@ function progress(value: unknown, state: Base): Progress {
     closedOutputObject(value, ['phase', 'operationId'])
     outputAssert(
       value.operationId ===
-        privatePublicationOperation({ ...state, progress: { phase: 'staged' } }),
+        privatePublicationOperation({
+          ...state,
+          progress: { phase: 'staged' }
+        }),
       'Publication operation differs',
       'conflict'
     )
@@ -198,6 +215,14 @@ function progress(value: unknown, state: Base): Progress {
   if (phase === 'binding') {
     closedOutputObject(value, ['phase', 'admission'])
     return { phase, admission: admission(value.admission, state) }
+  }
+  if (phase === 'excluded') {
+    closedOutputObject(value, ['phase', 'admission', 'reason'])
+    return {
+      phase,
+      admission: admission(value.admission, state, false),
+      reason: outputString(value.reason)
+    }
   }
   outputAssert(phase === 'ready' || phase === 'unavailable', 'Unknown publication progress')
   closedOutputObject(value, [
@@ -245,6 +270,7 @@ export function parsePrivatePublicationProgress(input: unknown): PrivatePublicat
 export type PrivatePublicationEvent =
   | { kind: 'reserve-admission' }
   | { kind: 'admitted'; admission: Admission }
+  | { kind: 'excluded'; admission: Admission; reason: string }
   | { kind: 'bound'; binding: LookupBinding }
   | { kind: 'rejected'; reason: string; noEffect: true }
   | { kind: 'expired'; reason: string }
@@ -265,7 +291,10 @@ const transitions: Readonly<Record<string, Transition>> = {
       'Publication staging deadline has elapsed',
       'expired'
     )
-    return { phase: 'admitting', operationId: privatePublicationOperation(state) }
+    return {
+      phase: 'admitting',
+      operationId: privatePublicationOperation(state)
+    }
   },
   admitted: (state, owned) => {
     closedOutputObject(owned, ['kind', 'admission'])
@@ -275,6 +304,21 @@ const transitions: Readonly<Record<string, Transition>> = {
       'conflict'
     )
     return { phase: 'binding', admission: admission(owned.admission, state) }
+  },
+  excluded: (state, owned) => {
+    closedOutputObject(owned, ['kind', 'admission', 'reason'])
+    outputAssert(
+      state.progress.phase === 'admitting',
+      'Publication has no reserved admission',
+      'conflict'
+    )
+    // Definitive selected-output exclusion retains the original public effect.
+    // It never claims transaction-wide rollback or sets the noEffect flag.
+    return {
+      phase: 'excluded',
+      admission: admission(owned.admission, state, false),
+      reason: outputString(owned.reason)
+    }
   },
   bound: (state, owned) => {
     closedOutputObject(owned, ['kind', 'binding'])
@@ -311,7 +355,11 @@ const transitions: Readonly<Record<string, Transition>> = {
   unavailable: (state, owned) => {
     closedOutputObject(owned, ['kind', 'reason'])
     outputAssert(state.progress.phase === 'ready', 'Publication is not ready', 'conflict')
-    return { ...state.progress, phase: 'unavailable', reason: outputString(owned.reason) }
+    return {
+      ...state.progress,
+      phase: 'unavailable',
+      reason: outputString(owned.reason)
+    }
   },
   restored: (state, owned) => {
     closedOutputObject(owned, ['kind', 'binding'])
@@ -359,7 +407,12 @@ export function privatePublicationResult(input: unknown): OutputPrivatePublicati
     publicationId: state.publicationId,
     txid: state.txid,
     updatedAt: state.updatedAt,
-    status: phase === 'staged' || phase === 'admitting' || phase === 'binding' ? 'pending' : phase,
+    status:
+      phase === 'staged' || phase === 'admitting' || phase === 'binding'
+        ? 'pending'
+        : phase === 'excluded'
+          ? 'rejected'
+          : phase,
     ...('reason' in state.progress ? { reason: state.progress.reason } : {})
   })
 }

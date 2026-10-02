@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 110)
+  assert.equal(Object.keys(configured).length, 111)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -485,7 +485,10 @@ test('private publication retains every complete implementation and native resta
     '<rootDir>/test/private-publication-records.test.ts',
     '<rootDir>/test/private-publication-progress.test.ts',
     '<rootDir>/test/private-publication-store.test.ts',
-    '<rootDir>/test/private-publication.property.test.ts'
+    '<rootDir>/test/private-publication.property.test.ts',
+    '<rootDir>/test/private-publication-exclusion.test.ts',
+    '<rootDir>/test/private-verified-publication-store.test.ts',
+    '<rootDir>/test/private-verified-publication.property.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('test/private-publication-fixture.ts'))
@@ -509,4 +512,32 @@ test('root coordination alone recycles workers while retaining complete canonica
     }
   }
   assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
+})
+
+test('verified private service retains every complete source and all canonical native evidence', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['private-publication-service']
+  assert.deepEqual(target.mutate, [
+    'src/private/SDKPrivatePublicationEvidence.ts',
+    'src/private/PrivatePublicationContracts.ts',
+    'src/private/PrivatePublicationContractRecord.ts',
+    'src/private/PrivateLookupBinding.ts',
+    'src/private/PrivatePublicationServiceRecords.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-identity.test.ts',
+    '<rootDir>/test/private-domain.test.ts',
+    '<rootDir>/test/private-publication-records.test.ts',
+    '<rootDir>/test/private-publication-progress.test.ts',
+    '<rootDir>/test/private-publication-store.test.ts',
+    '<rootDir>/test/private-publication.property.test.ts',
+    '<rootDir>/test/private-publication-exclusion.test.ts',
+    '<rootDir>/test/private-verified-publication-store.test.ts',
+    '<rootDir>/test/private-verified-publication.property.test.ts',
+    '<rootDir>/test/private-publication-evidence.test.ts',
+    '<rootDir>/test/private-publication-contract.test.ts',
+    '<rootDir>/test/private-lookup-binding.test.ts',
+    '<rootDir>/test/private-publication-service-records.test.ts'
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  assert.ok(target.additionalInputs.includes('test/fixtures/**'))
 })

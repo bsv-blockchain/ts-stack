@@ -85,7 +85,7 @@ it('reports unsupported blob and fence versions without relabeling them as inval
     })
   )
   expect(() =>
-    parse({ ...first.fence, format: 'private-publication-fence/2' }, first.blob, identity())
+    parse({ ...first.fence, format: 'private-publication-fence/3' }, first.blob, identity())
   ).toThrow(
     expect.objectContaining({
       code: 'unsupported',

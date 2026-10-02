@@ -1116,6 +1116,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-publication-service",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-verified-publication.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact Bitcoin private publication evidence, original signed contracts, owned service policy and atomic native lookup binding",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

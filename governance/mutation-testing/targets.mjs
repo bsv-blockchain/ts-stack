@@ -1040,7 +1040,15 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/application/output-knowledge/package.json',
       propertyTest:
         'packages/application/output-knowledge/test/private-publication.property.test.ts',
-      additionalInputs: ['src/private/**', 'src/storage/**', 'test/private-publication-fixture.ts'],
+      additionalInputs: [
+        'src/private/**',
+        'src/storage/**',
+        'test/private-publication-fixture.ts',
+        'test/private-publication-service-fixture.ts',
+        'test/private-verified-publication-fixture.ts',
+        'test/evidence-fixture.ts',
+        'test/fixtures/reconciliation-vectors.json'
+      ],
       mutate: [
         'src/private/SQLitePrivatePublicationStore.ts',
         'src/private/PrivateServiceIdentity.ts',
@@ -1056,7 +1064,43 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-publication-records.test.ts',
           '<rootDir>/test/private-publication-progress.test.ts',
           '<rootDir>/test/private-publication-store.test.ts',
-          '<rootDir>/test/private-publication.property.test.ts'
+          '<rootDir>/test/private-publication.property.test.ts',
+          '<rootDir>/test/private-publication-exclusion.test.ts',
+          '<rootDir>/test/private-verified-publication-store.test.ts',
+          '<rootDir>/test/private-verified-publication.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
+    'private-publication-service': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-verified-publication.property.test.ts',
+      additionalInputs: ['src/**', 'test/*fixture.ts', 'test/fixtures/**'],
+      mutate: [
+        'src/private/SDKPrivatePublicationEvidence.ts',
+        'src/private/PrivatePublicationContracts.ts',
+        'src/private/PrivatePublicationContractRecord.ts',
+        'src/private/PrivateLookupBinding.ts',
+        'src/private/PrivatePublicationServiceRecords.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-identity.test.ts',
+          '<rootDir>/test/private-domain.test.ts',
+          '<rootDir>/test/private-publication-records.test.ts',
+          '<rootDir>/test/private-publication-progress.test.ts',
+          '<rootDir>/test/private-publication-store.test.ts',
+          '<rootDir>/test/private-publication.property.test.ts',
+          '<rootDir>/test/private-publication-exclusion.test.ts',
+          '<rootDir>/test/private-verified-publication-store.test.ts',
+          '<rootDir>/test/private-verified-publication.property.test.ts',
+          '<rootDir>/test/private-publication-evidence.test.ts',
+          '<rootDir>/test/private-publication-contract.test.ts',
+          '<rootDir>/test/private-lookup-binding.test.ts',
+          '<rootDir>/test/private-publication-service-records.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )

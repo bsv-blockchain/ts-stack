@@ -1365,6 +1365,17 @@
           "Each semantic request retains its original protected blob and operation fence; shared blobs never permit another request to replace private values.",
           "Only an ordered durable admission and binding advances readiness; stale or denied operations cannot partially advance state or create another external-effect reservation."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-verified-publication.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact Bitcoin private publication evidence, original signed contracts, owned service policy and atomic native lookup binding",
+        "target": "At least 300 native verified-publication, protected-material, original-contract, authorization, binding and restart schedules",
+        "invariants": [
+          "A repeated publication preserves its original signed capability, verified transaction, policy and protected bytes; a legacy fence cannot manufacture missing original history.",
+          "Only the exact native admission and lookup-binding transaction can make a verified publication ready; revocation, stale revisions and crashes cannot partially activate it."
+        ]
       }
     ],
     "exclusions": [
