@@ -121,11 +121,11 @@ module.exports = async function main(isolation) {
     const pinned = (await first.readPage('certificateFields')).rows
     await k('certificate_fields').where({ certificateId: 1, fieldName: 'é' }).delete()
     assert.deepEqual((await first.readPage('certificateFields')).rows, pinned)
-    for (const stream of ['scope', 'physical']) {
+    await runInSeries(['scope', 'physical'], async stream => {
       const before = await collect(k, first.receiptBinding.epoch, first.receipt.highWater, stream)
       assert.equal(before.removed, 0, 'newer tombstones must survive an older floor')
       assert(before.examined >= 600)
-    }
+    })
     await first.close()
     first = undefined
     const now = await snapshotArchiveDatabaseNow(k)
