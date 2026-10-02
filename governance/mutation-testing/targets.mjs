@@ -2626,7 +2626,9 @@ export function buildMutationTargets(repositoryRoot) {
         'src/overlayAcquisitionSettlement.ts',
         'src/overlayAcquisitionCustody.ts',
         'src/overlayAcquisitionEntitlement.ts',
-        'src/overlayAcquisitionPaid.ts'
+        'src/overlayAcquisitionPaid.ts',
+        'src/overlayAcquisitionSeller.ts',
+        'src/overlayAcquisitionVerification.ts'
       ],
       ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
         esm: true,

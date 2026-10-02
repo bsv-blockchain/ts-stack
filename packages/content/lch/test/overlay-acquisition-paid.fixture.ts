@@ -22,7 +22,7 @@ import { SDKPrivateAcquisitionFunding } from '../../../application/output-knowle
 import { SDKPrivateReleaseEvidence } from '../../../application/output-knowledge/src/private/SDKPrivateReleaseEvidence.js'
 import {
   candidate,
-  chain,
+  chain as fixtureChain,
   context,
   resolver,
   transactions
@@ -44,8 +44,12 @@ afterEach(async () => {
   cleanup.clear()
 })
 
-export async function lchPaidFixture() {
-  const f = await lchOverlayFixture(chain),
+export async function lchPaidFixture(
+  chain = fixtureChain,
+  installation?: Parameters<typeof lchOverlayFixture>[1]
+) {
+  const snapshot = () => ({ ...context(), view: { ...context().view, chain } })
+  const f = await lchOverlayFixture(chain, installation),
     acquire = {
       ...f.acquire,
       listing: { chain, txid: transactions.get('P')!.id('hex'), outputIndex: 0 }
@@ -201,7 +205,7 @@ export async function lchPaidFixture() {
         context: Utils.toBase64(await encodeLCHOverlayContext(wrapper, 'paid-lookup'))
       }
     },
-    fundVerifier = new SDKPrivateAcquisitionFunding(resolver, f.buyerWallet, () => context()),
+    fundVerifier = new SDKPrivateAcquisitionFunding(resolver, f.buyerWallet, snapshot),
     evidenceVerifier = new SDKEvidenceVerifier(resolver),
     releaseVerifier = new SDKPrivateReleaseEvidence(resolver)
   let now = '20',
@@ -237,7 +241,7 @@ export async function lchPaidFixture() {
               evidence,
               variantId: Utils.toHex(Hash.sha256(Utils.toArray(evidence.beef, 'base64')))
             },
-            context(),
+            snapshot(),
             signal
           )
           if (result.status !== 'verified') throw new Error('Listing not independently verified')

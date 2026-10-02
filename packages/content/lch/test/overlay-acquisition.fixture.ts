@@ -29,7 +29,14 @@ import { LCH_OVERLAY_PROFILES } from '../src/overlayAcquisitionCodec.js'
 import { LCH_OVERLAY_PAID_MECHANISMS } from '../src/overlayAcquisitionTerms.js'
 
 export async function lchOverlayFixture(
-  chain = { network: 'fixture', genesisHash: '09'.repeat(32) }
+  chain = { network: 'fixture', genesisHash: '09'.repeat(32) },
+  installation = {
+    baseURL: 'https://seller.example/api',
+    service: 'catalogue',
+    rules: { id: 'urn:reference:lch-paid-rules', parameters: { version: 1 } },
+    maximumRequestBytes: 1048576,
+    maximumResponseBytes: 4194304
+  }
 ) {
   const sellerKey = new PrivateKey(83),
     buyerKey = new PrivateKey(84),
@@ -54,8 +61,7 @@ export async function lchOverlayFixture(
       segmentSize: 8,
       keyPeriodSegments: 2
     }),
-    baseURL = 'https://seller.example/api',
-    service = 'catalogue',
+    { baseURL, service } = installation,
     policy = {
       '@context': 'http://www.w3.org/ns/odrl.jsonld',
       '@type': 'Offer',
@@ -157,7 +163,7 @@ export async function lchOverlayFixture(
     published = await publisher.publish(asset, [
       { mode: 'inline', offer: offer as unknown as LCHValue }
     ]),
-    rules = { id: 'urn:reference:lch-paid-rules', parameters: { version: 1 } },
+    rules = installation.rules,
     body: OutputCapabilities = {
       version: 1,
       identity: toHex(seller.identityKey),
@@ -176,8 +182,8 @@ export async function lchOverlayFixture(
               id: OUTPUT_PROFILES.acquisition,
               authentication: 'brc103',
               payment: 'brc105',
-              maxRequestBytes: 1048576,
-              maxResponseBytes: 4194304,
+              maxRequestBytes: installation.maximumRequestBytes,
+              maxResponseBytes: installation.maximumResponseBytes,
               parameters: {
                 recoverySeconds: '86400',
                 acceptancePolicy: { kind: 'local-admission' }

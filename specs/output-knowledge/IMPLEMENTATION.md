@@ -2667,3 +2667,42 @@ interruption histories. The actual authenticated HTTP test now independently
 derives and verifies the funding output with the buyer wallet, without seller
 private-key access. These local checks do not complete full mutation or exact-head
 hosted qualification.
+
+### October 2 concrete LCH seller and authenticated native recovery
+
+The optional LCH seller implements the protected acquisition coordinator's domain
+port with complete original consent, finite authority and CEK validation before
+money. Its bounded private material is retained with the quote. Issuance checks
+actual accepted funding, independently reconciled original native credit and live
+release assessment, then signs the settlement, derived Agreement and persistent
+recipient-bound License. Public output context contains encrypted BRC-78 grants,
+never raw CEKs. Original funded rights survive catalogue withdrawal and Offer
+expiry; unresolved credit or reversed issuance chronology refuses delivery.
+
+The full disposable HTTP integration passes with mutual BRC-103 authentication,
+actual native buyer allocation/signing and seller credit, buyer-side Script/SPV
+verification and AES-GCM playback. It loses the paid reply after seller commit,
+reopens native buyer action recovery plus protected control/object/LCH custody,
+then recovers unpaid after expiry and catalogue withdrawal. Exactly one payment
+header and one native seller credit remain. The fixture never broadcasts and does
+not qualify TLS or production funding. A shared 256-actual-signature assessment
+budget now covers original terms, delegation and License, with separate preimage
+and signature commitments so ambiguous concatenation cannot share a cache entry.
+
+The prior published head fa0eb52db has no pull-request Actions run because GitHub
+reports a conflict with the subsequently updated main. Exact-head qualification
+and the remaining checkpoint inventory remain open; older successes and deferred
+mutation checks are not completion evidence.
+
+The completed local seller batch passes 26 LCH suites/195 tests and the unchanged
+coverage gate, four seller issuance/recovery regressions, both actual authenticated
+native HTTP flows, strict LCH/host types, clean packed ESM/CLI consumers and both
+exact-tarball browser entries. Seller funding verification uses the seller wallet;
+the buyer independently verifies with its own wallet. The optional graph now
+exercises both domain exports within its original limits (Vite 291340/85112/72576;
+esbuild 244336/81043/70961 raw/gzip/Brotli). The ordinary entry limits are unchanged.
+All eleven optional source modules and their complete test union remain in one
+whole-source mutation region; the current branch registry remains 122. Main
+2d64fcd3d is reconciled locally, retaining the branch's actually generated bundle
+evidence hash. Full mutation, zero-new source findings and exact-head hosted
+qualification remain pending.

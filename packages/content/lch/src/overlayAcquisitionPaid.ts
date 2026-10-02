@@ -26,7 +26,7 @@ import { objectId, toHex } from './hash.js'
 import { WalletBRC78KeyDelivery } from './keyDelivery.js'
 import { verifySignedObject } from './objects.js'
 import { validatePolicyReference } from './policy.js'
-import { PublicBRC77Verifier } from './signatures.js'
+import { lchOverlaySignatureBudget } from './overlayAcquisitionVerification.js'
 import {
   validateLCHOverlayAuthority,
   validateLCHOverlayPaidRoles,
@@ -300,25 +300,7 @@ export class LCHOverlayPaidDomain {
     const original = decodeDeterministicCbor(this.originalBytes) as unknown as Original,
       parse = <T>(value: Uint8Array): T =>
         JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(value)) as T,
-      publicVerifier = new PublicBRC77Verifier(),
-      cache = new Map<string, boolean>()
-    let checks = 0
-    const verifier: LCHSignatureVerifier = {
-        verify: async (preimage, signature) => {
-          this.current(signal)
-          const key = Utils.toHex(Hash.sha256([...preimage, ...signature]))
-          if (cache.has(key)) return cache.get(key)!
-          lchAssert(
-            ++checks <= 256,
-            'ERR_LCH_SIGNATURE',
-            'Actual LCH signature-check budget exceeded'
-          )
-          const valid = await publicVerifier.verify(preimage, signature)
-          this.current(signal)
-          cache.set(key, valid)
-          return valid
-        }
-      },
+      verifier = lchOverlaySignatureBudget(() => this.current(signal)),
       source: ContentSource = {
         read: async (...args) => {
           this.current(signal)

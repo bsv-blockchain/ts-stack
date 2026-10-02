@@ -29,6 +29,7 @@
       "entry": "./overlay-acquisition",
       "requiredExports": [
         "LCHOverlayPaidDomain",
+        "LCHOverlayPaidSeller",
         "LCHOverlayPaidCustody",
         "validateLCHOverlayPaidTerms",
         "decodeUnverifiedLCHOverlayContext"

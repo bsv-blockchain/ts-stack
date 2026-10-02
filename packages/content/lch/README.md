@@ -260,7 +260,12 @@ alone never authenticates it. Ciphertext must remain available in an installed
 bounded source, such as a local cache.
 
 See the [overlay acquisition guide](../../../docs/guides/lch-overlay-acquisition.md)
-for the installed proof/custody boundaries and executable tests. Full seller
-HTTP composition, covenant purchase and complete reference demonstrations
-remain checkpoint-two work. Ordinary BRC-170 imports and `CORE_CAPABILITIES`
+for the installed proof/custody boundaries and executable tests.
+`LCHOverlayPaidSeller` composes with the protected acquisition coordinator: it
+retains original CEKs privately, independently reconciles original native credit
+and issues the exact signed settlement and recipient-bound License. The real
+authenticated native buyer/seller recovery test loses the paid reply, reopens
+buyer custody and plays actual encrypted content after expiry/catalogue withdrawal
+with one payment and one credit. Covenant purchase and the complete operator
+workbench demonstrations remain checkpoint-two work. Ordinary BRC-170 imports and `CORE_CAPABILITIES`
 do not advertise these optional profiles.

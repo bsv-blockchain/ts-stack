@@ -890,7 +890,9 @@ test('optional LCH acquisition qualifies every whole module and its complete cry
     'src/overlayAcquisitionSettlement.ts',
     'src/overlayAcquisitionCustody.ts',
     'src/overlayAcquisitionEntitlement.ts',
-    'src/overlayAcquisitionPaid.ts'
+    'src/overlayAcquisitionPaid.ts',
+    'src/overlayAcquisitionSeller.ts',
+    'src/overlayAcquisitionVerification.ts'
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/overlay-acquisition*.test.ts'

@@ -19,8 +19,9 @@ context. Its concrete buyer domain currently implements fixed-render,
 whole-Asset, direct authorized seller collection through paid lookup. It is a
 minor API addition requiring the coordinated SDK3 output/revenue companions;
 ordinary imports, SDK2 peers and `CORE_CAPABILITIES` stay unchanged. The full
-seller HTTP, covenant and reference-application demonstrations remain unfinished
-checkpoint-two work.
+covenant and reference-application demonstrations remain unfinished checkpoint-two
+work. The concrete paid-lookup seller and authenticated native-wallet recovery
+flow are implemented and locally tested.
 
 ## Original consent before financial work
 
@@ -127,6 +128,51 @@ altered encrypted grant remains invalid even when its unverified fingerprint
 matches. The generic durable buyer continues retaining its first delivered bytes
 immutably.
 
+## Concrete paid-lookup seller
+
+`LCHOverlayPaidSeller<C>` implements the structural domain port of
+`PrivateAcquisitionCoordinator` without importing an application or native store.
+Install it alongside that coordinator, its protected store and its actual native
+wallet credit adapter. The catalogue supplies complete original Header/Offer,
+selected listing BEEF, immutable verification context, finite authority paths and
+the actual CEKs. Catalogue rules must establish the application's relationship
+between that outpoint and the Asset; transaction validity alone does not establish
+that relationship. These rules and their digest belong in the selected service
+contract.
+
+Preparation authenticates original consent, all required roles, ciphertext and
+every key commitment before quoting. It snapshots complete originals and CEKs into
+bounded off-chain material for the coordinator's encrypted custody, and reserves
+the conservative complete context allowance before money. CEKs never appear in
+public context or the issued License. New work requires an eligible Offer; a
+retained funded obligation remains recoverable after Offer expiry or catalogue
+withdrawal. The stable installation and current-access guard are independent of
+catalogue availability.
+
+Issuance requires the exact retained accepted payment and native credit operation.
+The mandatory `credited(operation, operationId, signal)` port must independently
+read and authenticate the original native wallet's durable credit record, including
+its funding, amount, wallet/storage ownership and operation ID. A serialized saved
+receipt, a remote seller assertion or ordinary non-idempotent internalization does
+not implement this port. This port is read-only: credit and financial recovery stay
+in the coordinator and native wallet adapter.
+
+After independent funding, listing, credit and release assessment, the seller
+checks authority at the original selection, actual acceptance and actual issuance
+times. It signs the exact lookup settlement, derives the Agreement retaining every
+accepted Prohibition, encrypts all period CEKs to the original buyer through BRC-78
+and issues the critical acquisition/settlement-bound persistent License. The
+coordinator durably retains its first returned bytes before disclosing them. Lost
+replies recover that original result; they do not allocate or charge again.
+Unresolved credit, revocation evidence, access, ciphertext, key recovery or
+chronology keeps delivery unresolved and requires restoration of the original
+capability. It never selects replacement terms or a different financial operation.
+
+Header, Offer, Request, delegation and License checks share a 256-actual-signature
+budget per assessment. Identical cryptographic checks may reuse a result, with
+preimage and signature separately bound in the cache key. Role, policy, current
+access and historical revocation checks remain separate from that cache.
+
 ## Executable evidence
 
 Run `pnpm --dir packages/content/lch test` for ordinary BRC-170 and the optional
@@ -137,6 +183,17 @@ do not increase on later use. Authority tests cover actual delegated signatures,
 retained revocation, missing/ambiguous paths and referenced evidence. Custody tests
 cover lost originals, smaller reservations and changed entitlements. Codec tests
 cover exact CBOR/JCS, evidence ordering, duplicates, unknown fields and resource
-ceilings, including 300 seeded generated histories. These are component evidence;
-they do not imply a finished seller service, full HTTP workflow or production
-publication.
+ceilings, including 300 seeded generated histories. Seller component tests exercise
+real settlement/License/key issuance, withdrawal/expiry recovery, exact native
+credit refusal and invalid chronology.
+
+Run `pnpm --dir packages/overlays/overlay-express test --runTestsByPath
+src/__tests__/PrivateBuyerLCH.integration.test.ts` for the complete disposable
+native-wallet HTTP flow. It uses mutual BRC-103 authentication, actual native buyer
+allocation/signing and seller credit, actual independent buyer Script/SPV checks,
+signed settlement/License, BRC-78 grants and AES-GCM plaintext authentication. The
+paid reply is lost after seller commit; buyer control, object, LCH and native action
+custody reopen before unpaid recovery after Offer expiry and catalogue withdrawal.
+Exactly one payment header and one seller credit remain. The fixture uses signed
+synthetic funding and isolated loopback HTTP, never broadcasts, and does not qualify
+TLS, production publication or the unfinished operator/workbench demonstrations.
