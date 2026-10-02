@@ -248,6 +248,9 @@ export class MandalaLookupService implements LookupService {
       createdAt: new Date()
     }
     if (!(await storage.appendAdminHistory(entry))) return
+    // A crash or a store fault from here on leaves the action in the history but not in the
+    // state, and no replay folds it (the append above returns false). The overlay recovers by
+    // calling rebuildState at boot for every token with history (a P2 duty).
     const state = await storage.getAssetState(output.tokenId)
     await storage.putAssetState(await this.folded(state, action.details, entry))
   }
@@ -322,7 +325,9 @@ export class MandalaLookupService implements LookupService {
 
   /**
    * Refolds the token's state from its history in `(height, offset, admitSeq)` order, leaving out
-   * `excludeTxid`, starting from the deploy's fee rate (fees off once the deploy is gone).
+   * `excludeTxid`, starting from the deploy's fee rate (fees off once the deploy is gone). Run at
+   * boot for every token with history, before admissions start, it also restores an action whose
+   * fold was lost after its history row was written.
    */
   async rebuildState(tokenId: string, excludeTxid?: string): Promise<void> {
     const { storage } = this.deps

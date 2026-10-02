@@ -114,6 +114,11 @@ export interface MembershipProvider {
 
 /** Read access to the engine's own admitted-output store (owner-index repair, reconciler). */
 export interface EngineOutputReader {
+  /**
+   * The output as the engine admitted it on `topic`, or null when the engine holds no such
+   * unspent output. A spent output must read as null: the reconciler relies on it to take back a
+   * row it repaired for a coin spent meanwhile.
+   */
   findAdmittedOutput: (
     txid: string,
     outputIndex: number,

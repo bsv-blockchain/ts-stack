@@ -1,8 +1,10 @@
 import { jest } from '@jest/globals'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
-import { Hash, P2PKH, PrivateKey } from '@bsv/sdk'
+import { Hash, P2PKH, PrivateKey, ProtoWallet } from '@bsv/sdk'
+import type { WalletInterface } from '@bsv/sdk'
 import { Bsv21Binary, encodeStrictCbor } from '@bsv/templates'
+import { MandalaLookupService } from '../MandalaLookupService.js'
 import { MandalaStorageManager } from '../MandalaStorageManager.js'
 import { reconcileOwnerIndex } from '../reconcile.js'
 import type { EngineOutputReader, MandalaOwnerRecord } from '../types.js'
@@ -281,5 +283,164 @@ describe('reconcileOwnerIndex', () => {
     await expect(reconcile(batchSize)).rejects.toThrow(
       'reconcileOwnerIndex: batchSize must be a positive integer'
     )
+  })
+})
+
+// The engine spends an output in two steps (Engine markPreviousOutputSpent):
+// it marks the output spent, then tells the lookup, which takes the row and
+// debits its owner. Each step is run just before one of the reconciler's reads,
+// so every order of the reconciler's insert and recheck against those two steps
+// is played out. Whatever the order, a spent coin must end with no row and no
+// balance.
+describe('reconcileOwnerIndex against a concurrent spend', () => {
+  type Step = () => Promise<void>
+
+  let lookup: MandalaLookupService
+  beforeEach(() => {
+    // The spend path never reads the verifier.
+    const verifierWallet = new ProtoWallet('anyone') as unknown as WalletInterface
+    lookup = new MandalaLookupService({ storage, verifierWallet })
+  })
+
+  const markSpent =
+    (o: Outpoint): Step =>
+    async () => {
+      admitted.delete(label(o))
+    }
+  const notifySpent =
+    (o: Outpoint): Step =>
+    async () => {
+      await lookup.outputSpent({
+        mode: 'none',
+        txid: o.txid,
+        outputIndex: o.outputIndex,
+        topic: TOPIC
+      })
+    }
+  const run = async (steps: readonly Step[]): Promise<void> => {
+    for (const step of steps) await step()
+  }
+
+  const beforeTokenRowRead = (steps: readonly Step[]): void => {
+    const read = storage.getTokenRow.bind(storage)
+    jest.spyOn(storage, 'getTokenRow').mockImplementationOnce(async (...args) => {
+      await run(steps)
+      return await read(...args)
+    })
+  }
+  const beforeAuthorityRowRead = (steps: readonly Step[]): void => {
+    const read = storage.getAuthorityRow.bind(storage)
+    jest.spyOn(storage, 'getAuthorityRow').mockImplementationOnce(async (...args) => {
+      await run(steps)
+      return await read(...args)
+    })
+  }
+  const beforeJournalRead = (steps: readonly Step[]): void => {
+    const read = storage.getOwnerJournal.bind(storage)
+    jest.spyOn(storage, 'getOwnerJournal').mockImplementationOnce(async (...args) => {
+      await run(steps)
+      return await read(...args)
+    })
+  }
+  // The engine read after the repair: the first read passes straight through.
+  const beforeRecheck = (steps: readonly Step[]): void => {
+    const find = engine.findAdmittedOutput
+    jest
+      .spyOn(engine, 'findAdmittedOutput')
+      .mockImplementationOnce(find)
+      .mockImplementationOnce(async (...args) => {
+        await run(steps)
+        return await find(...args)
+      })
+  }
+
+  const o = at(1)
+  const mark = markSpent(o)
+  const notify = notifySpent(o)
+
+  it.each<[string, Step[], Step[], Step[], number]>([
+    ['spent and its row taken before the insert', [mark, notify], [], [], 0],
+    ['marked spent before the insert, its row taken before the recheck', [mark], [notify], [], 0],
+    ['spent and its row taken between the insert and the recheck', [], [mark, notify], [], 0],
+    ['marked spent before the recheck, its row taken after it', [], [mark], [notify], 0],
+    ['spent after the recheck', [], [], [mark, notify], 1]
+  ])(
+    'a missing row %s: no row, no balance',
+    async (_name, beforeJournal, beforeSecondRead, afterRun, repaired) => {
+      admit(o, valueScript())
+      await storage.recordOwners([journal(o)])
+      beforeJournalRead(beforeJournal)
+      beforeRecheck(beforeSecondRead)
+
+      expect(await reconcile()).toEqual({ scanned: 1, repaired, unrepairable: [] })
+      await run(afterRun)
+
+      expect(await storage.getTokenRow(o.txid, o.outputIndex)).toBeNull()
+      expect(await storage.getBalance(HOLDER)).toBe(0)
+      expect(onRepair.mock.calls).toEqual(repaired === 1 ? [[label(o), true]] : [])
+    }
+  )
+
+  it('a healthy coin spent between the engine read and the row read gets no phantom row', async () => {
+    admit(o, valueScript())
+    await storage.recordOwners([journal(o)])
+    await storage.repairOwnerRow(journal(o))
+    expect(await storage.getBalance(HOLDER)).toBe(10)
+    beforeTokenRowRead([mark, notify])
+
+    expect(await reconcile()).toEqual({ scanned: 1, repaired: 0, unrepairable: [] })
+
+    expect(await storage.getTokenRow(o.txid, o.outputIndex)).toBeNull()
+    expect(await storage.getBalance(HOLDER)).toBe(0)
+    expect(await storage.circulatingSupply(TOKEN)).toBe(0n)
+    expect(onRepair).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['an authority', at(1), authorityScript, { role: 'authority' as const }],
+    ['a deploy', at(2, 0), deployScript, { role: 'deploy' as const, tokenId: `${txidOf(2)}_0` }]
+  ])(
+    'a healthy row of %s spent while it is visited is taken back',
+    async (_name, op, script, over) => {
+      admit(op, script())
+      const row = journal(op, { amount: 0, identityKey: ISSUER, ...over })
+      await storage.recordOwners([row])
+      await storage.repairOwnerRow(row)
+      beforeAuthorityRowRead([markSpent(op), notifySpent(op)])
+
+      expect(await reconcile()).toEqual({ scanned: 1, repaired: 0, unrepairable: [] })
+
+      expect(await storage.getAuthorityRow(op.txid, op.outputIndex)).toBeNull()
+      expect(await storage.getBalance(ISSUER)).toBe(0)
+      expect(onRepair).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a repaired row the engine still holds after the recheck', async () => {
+    admit(o, valueScript())
+    await storage.recordOwners([journal(o)])
+    const find = jest.spyOn(engine, 'findAdmittedOutput')
+
+    expect(await reconcile()).toEqual({ scanned: 1, repaired: 1, unrepairable: [] })
+
+    expect(find.mock.calls).toEqual([
+      [o.txid, o.outputIndex, TOPIC],
+      [o.txid, o.outputIndex, TOPIC]
+    ])
+    expect(await storage.getTokenRow(o.txid, o.outputIndex)).toMatchObject({ amount: 10 })
+    expect(await storage.getBalance(HOLDER)).toBe(10)
+  })
+
+  it('reads the engine once for a corrected row, which a later spend takes as usual', async () => {
+    admit(o, valueScript(10n))
+    await storage.recordOwners([journal(o)])
+    await storage.storeTokenIfAbsent({ ...journal(o), amount: 7 })
+    const find = jest.spyOn(engine, 'findAdmittedOutput')
+
+    expect(await reconcile()).toEqual({ scanned: 1, repaired: 1, unrepairable: [] })
+
+    expect(find).toHaveBeenCalledTimes(1)
+    await run([mark, notify])
+    expect(await storage.getTokenRow(o.txid, o.outputIndex)).toBeNull()
   })
 })
