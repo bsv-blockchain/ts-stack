@@ -2118,7 +2118,6 @@ and legacy TypeScript resolution; root exports and existing public submission
 behavior stay compatible. Full service/lookup/HTTP composition, complete new
 source qualification and terminal exact-head CI remain outstanding.
 
-
 The adopted selection passes all138 publication tests with the canonical300-case
 property budget, all107 private/proposal Engine tests including actual Mongo,
 strict builds and declarations, ESM/CJS packed consumers, and root health/lint/
@@ -2136,7 +2135,6 @@ generated children, a similarly named real directory and node_modules. No live
 suite or mutant is excluded. The complete overlay suite must be rerun after this
 source-owned discovery correction.
 
-
 After the discovery fix, the complete overlay suite passes950 tests in46 suites
 in202.723 seconds. The existing opt-in Go localhost interop case remains skipped
 unless its separately governed external checkout is configured; no new skip was
@@ -2144,7 +2142,6 @@ introduced. Root health/lint/format rerun successfully after the correction, and
 the previously completed root typecheck remains applicable (the correction only
 changes Jest discovery and its governance test). Complete mutation reports and
 hosted validation are the next acceptance boundary, not implied by these passes.
-
 
 The initial private-admission mutation attempt on e5624c0fc began with all104
 canonical tests passing and362 generated mutants. Repeated injected early failures
@@ -2156,7 +2153,6 @@ settlement handlers immediately and releases the stalled read in a finally block
 A deliberately inverted contract-identity check reaches one ordinary failed Jest
 assertion with a complete report. Production code and all canonical tests/gates
 are unchanged; a fresh complete campaign is required.
-
 
 The corrected complete private-admission campaign on8317369c9 finished all362
 mutants in315.137 seconds, with10014 unchanged captured inputs and HEAD:
@@ -2179,3 +2175,34 @@ Eight exact former survivors then reach ordinary failed assertions in an isolate
 harness, including installed rules, scope, history ownership, capability headers,
 original chain, result framing, critical extensions and assessment digest. Fresh
 complete qualification, rather than these controls, determines acceptance.
+
+### Complete private foundation qualification and root-worker follow-up
+
+On local0b4f983bc the private-admission target completes all362 mutants:
+354 killed, eight survived,97.79%,zero uncovered and invalid. Its145 canonical
+tests include both300-case properties with seed3242026. All10014 captured inputs
+and HEAD stayed unchanged. One V8 GC worker SIGSEGV was recorded; Stryker recovered,
+and its complete final report accounts for all362 valid outcomes. No invalid-result
+waiver was used. Earlier failed and interrupted runs remain preserved above.
+
+The same head completes all four private-publication-state execution parts with
+identical10014 captured inputs and HEAD. The complete five-file aggregate has
+691 valid mutants, 672 killed, 19 survived and 97.25% detected, with zero uncovered and invalid.
+The complete source union and identical canonical test/configuration inputs were
+checked before applying the unchanged critical90%/zero-uncovered/zero-invalid
+policy. These local results are not final exact-head hosted acceptance.
+
+Hosted336bf9fd1 remains incomplete. Its root-eviction-coordination job passed all296
+canonical tests but reported worker memory exhaustion, then reached the existing
+45-minute bound without a complete97-mutant result. It remains cancelled/failed
+evidence. The narrow follow-up recycles only that target's workers after eight
+executions, preserving all three complete source files, all canonical tests,
+property budgets, four workers and every deadline/gate. Exact assertions preserve
+all other root and wallet defaults. Complete replacement qualification is pending.
+
+The next verified native publication layer remains outside this branch: its combined
+207tests/13suites pass in174.142 seconds with both300-case properties, five actual
+SIGKILL phases,10014 unchanged checkout inputs and86 unchanged outside source/build
+inputs. This is draft evidence, not adoption or qualification of a complete private
+service. Actual domain validation, authenticated HTTP, bounded reconciliation,
+paid lookup/purchase/wallet composition and final hosted CI remain outstanding.

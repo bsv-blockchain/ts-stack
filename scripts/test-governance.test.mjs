@@ -430,7 +430,10 @@ test('root eviction partitions retain the complete source set, tests and indepen
   assert.equal(new Set(names.map(name => targets[name].propertyTest)).size, names.length)
   for (const name of names) {
     const definition = targets[name]
-    assert.deepEqual(definition.runnerOptions, targets[names[0]].runnerOptions)
+    assert.deepEqual(definition.runnerOptions, {
+      ...targets[names[0]].runnerOptions,
+      ...(name === 'root-eviction-coordination' ? { maxTestRunnerReuse: 8 } : {})
+    })
     assert.deepEqual(definition.additionalInputs, targets[names[0]].additionalInputs)
     assert.deepEqual(definition.runnerOptions.jest.config.testMatch, [
       '<rootDir>/test/root-eviction*.test.ts'

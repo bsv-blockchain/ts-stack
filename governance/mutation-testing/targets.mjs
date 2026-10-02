@@ -79,7 +79,7 @@ function lookupProviderTarget(property, files, tests, additionalInputs = []) {
   }
 }
 
-function rootEvictionTarget(property, files) {
+function rootEvictionTarget(property, files, { maxTestRunnerReuse } = {}) {
   return {
     packageDirectory: 'packages/application/output-knowledge',
     manifest: 'packages/application/output-knowledge/package.json',
@@ -105,7 +105,8 @@ function rootEvictionTarget(property, files) {
     mutate: files.map(name => `src/root-eviction/${name}.ts`),
     ...jestTarget('jest.config.js', ['<rootDir>/test/root-eviction*.test.ts'], {
       esm: true,
-      buildCommand: 'pnpm build'
+      buildCommand: 'pnpm build',
+      maxTestRunnerReuse
     })
   }
 }
@@ -508,7 +509,8 @@ export function buildMutationTargets(repositoryRoot) {
         'RootEvictionContractRecords',
         'RootEvictionCoordinatedStorage',
         'RootEvictionRecoveryStorage'
-      ]
+      ],
+      { maxTestRunnerReuse: 8 }
     ),
     'root-eviction-commit': rootEvictionTarget('root-eviction-commit.property.test.ts', [
       'RootEvictionCommitContext'

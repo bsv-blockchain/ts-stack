@@ -490,3 +490,23 @@ test('private publication retains every complete implementation and native resta
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('test/private-publication-fixture.ts'))
 })
+
+test('root coordination alone recycles workers while retaining complete canonical source and tests', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const selected = targets['root-eviction-coordination']
+  assert.equal(selected.runnerOptions.maxTestRunnerReuse, 8)
+  assert.deepEqual(selected.mutate, [
+    'src/root-eviction/RootEvictionContractRecords.ts',
+    'src/root-eviction/RootEvictionCoordinatedStorage.ts',
+    'src/root-eviction/RootEvictionRecoveryStorage.ts'
+  ])
+  assert.deepEqual(selected.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/root-eviction*.test.ts'
+  ])
+  for (const [id, target] of Object.entries(targets)) {
+    if (id.startsWith('root-eviction-') && id !== 'root-eviction-coordination') {
+      assert.equal(target.runnerOptions.maxTestRunnerReuse, undefined, id)
+    }
+  }
+  assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
+})

@@ -280,7 +280,6 @@ the normal job deadlines, eight-execution worker recycling and the critical
 90%/zero-uncovered/zero-invalid aggregate remain required. No pure transition
 result or local part substitutes for actual admission/HTTP composition or final CI.
 
-
 The overlay-private-publication-admission target retains both complete admission
 and shared original-receipt validator modules, with private and existing proposal
 unit/property tests. The proposal target also retains the extracted validator and
@@ -289,3 +288,12 @@ zero-invalid acceptance and existing deadlines remain unchanged; workers for the
 new target recycle after eight executions. Native Engine/Mongo recovery tests run
 separately from this generated unit campaign. Neither replaces full package and
 exact-head hosted qualification.
+
+The `root-eviction-coordination` target recycles each Jest worker after eight
+executions. Its earlier hosted 97-mutant campaign passed all 296 canonical tests,
+then lost a worker to memory exhaustion and reached the existing 45-minute job
+bound without a complete report. The replacement preserves all three complete
+source files, every canonical test/property case, four workers and all existing
+score, uncovered, invalid and deadline gates. Other root targets keep their
+previous runner settings. Fresh complete qualification is required; the cancelled
+run remains failed evidence and is not accepted by this configuration change.
