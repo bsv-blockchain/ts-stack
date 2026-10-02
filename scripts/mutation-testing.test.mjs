@@ -886,6 +886,7 @@ test('host qualification preserves complete selected unions in disjoint legacy a
       ordinary = projects.find(project => project.displayName === 'legacy-commonjs'),
       privateProject = projects.find(project => project.displayName === 'private-esm')
     assert.equal(projects.length, 2)
+    assert.notEqual(ordinary.cacheDirectory, privateProject.cacheDirectory)
     assert.deepEqual(ordinary.testMatch, options.testMatch)
     assert.deepEqual(privateProject.testMatch, options.testMatch)
     assert.deepEqual(ordinary.extensionsToTreatAsEsm, [])

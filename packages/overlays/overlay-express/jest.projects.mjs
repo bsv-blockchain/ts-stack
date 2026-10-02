@@ -23,6 +23,7 @@ export function createOverlayTestProjects(
     {
       ...shared,
       displayName: 'legacy-commonjs',
+      cacheDirectory: '<rootDir>/node_modules/.cache/jest-legacy-commonjs',
       testMatch,
       testPathIgnorePatterns: [...overlayTestIgnorePatterns, privateTests],
       extensionsToTreatAsEsm: [],
@@ -39,6 +40,7 @@ export function createOverlayTestProjects(
     {
       ...shared,
       displayName: 'private-esm',
+      cacheDirectory: '<rootDir>/node_modules/.cache/jest-private-esm',
       testMatch,
       testPathIgnorePatterns: [...overlayTestIgnorePatterns, String.raw`^(?!.*${privateTests}).*$`],
       extensionsToTreatAsEsm: ['.ts', '.tsx'],

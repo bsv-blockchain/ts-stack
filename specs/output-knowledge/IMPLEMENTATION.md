@@ -2593,3 +2593,10 @@ exactly once. A no-cache smoke run passed 163 tests across legacy Overlay Expres
 lookup properties and the complete native private buyer HTTP flow. The expanded
 root inventory checks passed 83 tests. Full host coverage remains in progress;
 the earlier failed runs remain diagnostic evidence and are not qualification.
+
+The first full mixed-project run also exposed transform-cache collisions between
+ESM and CommonJS source executions. Independent project cache directories now
+keep their emitted module formats separate. The six affected ordinary/private
+suites passed 214 tests with coverage using independent caches. A repeated warm
+cache run checks that cached compilation preserves the same actual constructors,
+SDK mocks and private HTTP behavior. Full campaign evidence remains pending.
