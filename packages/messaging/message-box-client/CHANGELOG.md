@@ -13,6 +13,33 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.5.5 candidate — live socket reconnection and room restoration
+
+- Keep a socket Socket.IO is still reconnecting. A transient `disconnect` used
+  to drop the client's reference without closing the socket, leaving an orphan
+  that kept reconnecting, re-sent `authenticated` down whichever socket had
+  replaced it, and cleared that healthy socket on its own next drop. Every
+  handler is now bound to the socket it belongs to.
+- Track rooms the consumer asked for separately from rooms joined on the
+  current socket, and re-emit them after each `authenticationSuccess` — not on
+  `connect`, because the server refuses joins from an unauthenticated socket.
+  Membership is cleared on a drop, since it belongs to the server-side socket
+  that joined.
+- Re-attach live-message handlers to a rebuilt socket exactly once. There is no
+  `off` on the socket wrapper, so a second attach would double delivery
+  permanently.
+- Rebuild once after `io server disconnect`, which Socket.IO never retries, so a
+  subscriber that makes no calls of its own recovers. Bounded to one attempt per
+  successful authentication; a failure falls back to the next caller.
+- Read `socketOptions.managerOptions.reconnection` and honour `false` by
+  disposing on a drop. Nothing rebuilds on its own under that setting, which is
+  the host's choice and is documented on the option.
+- `leaveRoom` releases its room before the connected guard, so leaving while
+  disconnected no longer leaves a claim that the next connection rejoins.
+  `disconnectWebSocket` clears rooms and handlers, as deliberate teardown.
+- `getJoinedRooms()` reports the rooms joined on the current socket. Mutating
+  the returned set no longer cancels a rejoin; use `leaveRoom`.
+
 ### 2.5.4 candidate — require the BRC-29 acceptance fix
 
 - Raise the `@bsv/sdk` peer floor from `^2.8.0` to `^2.8.6`. SDK 2.8.0 through
