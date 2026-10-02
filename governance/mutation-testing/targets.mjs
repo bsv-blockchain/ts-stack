@@ -1329,6 +1329,81 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
+    'private-acquisition-coordination': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-acquisition-coordination.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/private-acquisition.fixture.ts',
+        'test/private-acquisition-records.fixture.ts',
+        'test/private-acquisition-store.fixture.ts',
+        'test/private-acquisition-coordinator.fixture.ts',
+        'test/private-acquisition-wallet.fixture.ts',
+        '../../wallet/wallet-toolbox/src/**',
+        '../../wallet/wallet-toolbox/package.json',
+        '../../wallet/wallet-toolbox/tsconfig*.json',
+        '../../sdk/src/**',
+        'test/private-publication-fixture.ts',
+        'test/protected-ledger-fixture.ts',
+        'test/protected-ledger-restoration-fixture.ts',
+        'test/evidence-fixture.ts',
+        'test/fixtures/**'
+      ],
+      mutate: [
+        'src/private/PrivateAcquisitionAccess.ts',
+        'src/private/PrivateAcquisitionPorts.ts',
+        'src/private/PrivateAcquisitionWallet.ts',
+        'src/private/WalletToolboxAcquisitionFunding.ts',
+        'src/private/SDKPrivateReleaseEvidence.ts',
+        'src/private/PrivateAcquisitionCoordinator.ts',
+        'src/private/PrivateAcquisitionDisclosure.ts',
+        'src/private/PrivateAcquisitionWork.ts',
+        'src/private/PrivateAcquisitionReconciler.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-acquisition-access.test.ts',
+          '<rootDir>/test/private-acquisition-preparation.test.ts',
+          '<rootDir>/test/private-acquisition-wallet.test.ts',
+          '<rootDir>/test/private-acquisition-wallet-native.test.ts',
+          '<rootDir>/test/private-release-evidence.test.ts',
+          '<rootDir>/test/private-acquisition-coordinator.test.ts',
+          '<rootDir>/test/private-acquisition-disclosure.test.ts',
+          '<rootDir>/test/private-acquisition-recovery.test.ts',
+          '<rootDir>/test/private-acquisition-coordination.property.test.ts',
+          '<rootDir>/test/private-acquisition-payloads.test.ts',
+          '<rootDir>/test/private-acquisition-records.test.ts',
+          '<rootDir>/test/private-acquisition-state.test.ts',
+          '<rootDir>/test/private-acquisition-store.test.ts',
+          '<rootDir>/test/private-acquisition-process.test.ts',
+          '<rootDir>/test/private-acquisition-state.property.test.ts',
+          '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/private-acquisition-progress.test.ts',
+          '<rootDir>/test/private-acquisition-result.test.ts',
+          '<rootDir>/test/private-acquisition-funding-index.test.ts',
+          '<rootDir>/test/private-acquisition-contracts.test.ts',
+          '<rootDir>/test/private-acquisition-funding-evidence.test.ts',
+          '<rootDir>/test/private-acquisition.property.test.ts',
+          '<rootDir>/test/private-domain.test.ts',
+          '<rootDir>/test/private-identity.test.ts',
+          '<rootDir>/test/protected-ledger-codec.test.ts',
+          '<rootDir>/test/protected-ledger-integrity.test.ts',
+          '<rootDir>/test/protected-ledger-boundaries.test.ts',
+          '<rootDir>/test/protected-ledger-enumeration.test.ts',
+          '<rootDir>/test/protected-ledger.test.ts',
+          '<rootDir>/test/protected-ledger-batch.test.ts',
+          '<rootDir>/test/protected-ledger.property.test.ts'
+        ],
+        {
+          esm: true,
+          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          maxTestRunnerReuse: 8
+        }
+      )
+    },
     'protected-ledger': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',

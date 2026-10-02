@@ -366,3 +366,13 @@ local batch tests also remain in the protected-ledger target. Execution uses
 four workers, optional runner reuse of eight and the existing 45-minute part
 bound. Complete aggregate score 90, zero uncovered and zero invalid remain
 required; no individual part is substituted for the complete target.
+
+`private-acquisition-coordination` retains nine complete modules across eight
+whole-file parts. Each part includes all canonical acquisition state/foundation
+and protected-ledger tests, the 300 service-interruption histories, worker tests,
+release evidence and real Wallet Toolbox/SQLite receipt tests. The latter use the
+public CJS development dependency, a same-head wallet build, fresh synthetic
+storage and a trapped broadcast port. Wallet source, manifest, TypeScript build
+configuration and fixtures are affected inputs. Existing four-worker/reuse-eight,
+45-minute-part and complete aggregate 90/zero-uncovered/invalid requirements stay
+unchanged. Cross-package HTTP qualification is a separate subsequent registration.

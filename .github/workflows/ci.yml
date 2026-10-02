@@ -672,6 +672,11 @@ jobs:
           pattern: mutation-private-acquisition-state-*
           path: .mutation-parts/private-acquisition-state
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-coordination')
+        with:
+          pattern: mutation-private-acquisition-coordination-*
+          path: .mutation-parts/private-acquisition-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-proposal-http')
         with:
           pattern: mutation-overlay-proposal-http-*

@@ -1420,6 +1420,17 @@
           "Original quote, material and future response capacity commit together; failed capacity or authority checks leave no partial obligation.",
           "A retained payment and its funding fence advance atomically, and delivery bytes commit with their state without changing original rights or charging again."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-acquisition-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Private paid acquisition coordination, current authorization, retained funding operations, actual native wallet receipt ownership, release evidence, final disclosure and local recovery workers",
+        "target": "At least 300 retained-quote, permission, cancellation, uncertain wallet, expiry and delivery histories",
+        "invariants": [
+          "The original acquisition and received payment survive interruption, catalogue withdrawal and recovery expiry without another quote or charge.",
+          "Only verified release evidence and the exact native wallet receipt permit delivery; current caller/domain authority and final native enqueue remain independently required."
+        ]
       }
     ],
     "exclusions": [

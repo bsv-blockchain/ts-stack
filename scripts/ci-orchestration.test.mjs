@@ -659,6 +659,7 @@ test('acquisition and proposal HTTP aggregation require every selected part arti
   for (const id of [
     'private-acquisition-foundation',
     'private-acquisition-state',
+    'private-acquisition-coordination',
     'overlay-proposal-http'
   ]) {
     assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])

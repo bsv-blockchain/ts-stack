@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 115)
+  assert.equal(Object.keys(configured).length, 116)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -691,4 +691,44 @@ test('acquisition state owns all four whole modules and preserves complete nativ
       '<rootDir>/test/protected-ledger-batch.test.ts'
     )
   )
+})
+
+test('acquisition coordination preserves every source, canonical state test and native wallet build input', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT),
+    target = targets['private-acquisition-coordination']
+  assert.deepEqual(target.mutate, [
+    'src/private/PrivateAcquisitionAccess.ts',
+    'src/private/PrivateAcquisitionPorts.ts',
+    'src/private/PrivateAcquisitionWallet.ts',
+    'src/private/WalletToolboxAcquisitionFunding.ts',
+    'src/private/SDKPrivateReleaseEvidence.ts',
+    'src/private/PrivateAcquisitionCoordinator.ts',
+    'src/private/PrivateAcquisitionDisclosure.ts',
+    'src/private/PrivateAcquisitionWork.ts',
+    'src/private/PrivateAcquisitionReconciler.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-acquisition-access.test.ts',
+    '<rootDir>/test/private-acquisition-preparation.test.ts',
+    '<rootDir>/test/private-acquisition-wallet.test.ts',
+    '<rootDir>/test/private-acquisition-wallet-native.test.ts',
+    '<rootDir>/test/private-release-evidence.test.ts',
+    '<rootDir>/test/private-acquisition-coordinator.test.ts',
+    '<rootDir>/test/private-acquisition-disclosure.test.ts',
+    '<rootDir>/test/private-acquisition-recovery.test.ts',
+    '<rootDir>/test/private-acquisition-coordination.property.test.ts',
+    ...targets['private-acquisition-state'].runnerOptions.jest.config.testMatch
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  assert.equal(
+    target.runnerOptions.buildCommand,
+    'pnpm --filter @bsv/wallet-toolbox build && pnpm build'
+  )
+  for (const input of [
+    '../../wallet/wallet-toolbox/src/**',
+    '../../wallet/wallet-toolbox/package.json',
+    '../../wallet/wallet-toolbox/tsconfig*.json',
+    'test/private-acquisition-wallet.fixture.ts'
+  ])
+    assert.ok(target.additionalInputs.includes(input))
 })

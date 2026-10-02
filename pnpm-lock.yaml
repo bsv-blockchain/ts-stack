@@ -270,6 +270,9 @@ importers:
       '@bsv/sdk':
         specifier: workspace:^
         version: link:../../sdk
+      '@bsv/wallet-toolbox':
+        specifier: workspace:^
+        version: link:../../wallet/wallet-toolbox
       '@jest/globals':
         specifier: ^30.4.1
         version: 30.4.1

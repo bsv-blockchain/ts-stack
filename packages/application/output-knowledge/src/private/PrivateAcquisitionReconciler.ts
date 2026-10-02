@@ -1,0 +1,132 @@
+import { outputAssert, OutputProtocolError } from '@bsv/sdk'
+import { PrivateAcquisitionCoordinator } from './PrivateAcquisitionCoordinator.js'
+
+export interface PrivateAcquisitionReconciliationReport {
+  outcomes: { acquisitionId: string; status: string }[]
+  blocked: { key: string; status: string }[]
+  wrapped: boolean
+}
+
+/** One bounded current page per pass; a wrap discovers inserts behind the cursor. */
+export class PrivateAcquisitionReconciler {
+  private next: string | null = null
+  private active = false
+  private started = false
+  private readonly stopSignal = new AbortController()
+  private readonly unchanged: readonly (() => boolean)[]
+  constructor(
+    private readonly coordinator: PrivateAcquisitionCoordinator,
+    readonly maximum = 16
+  ) {
+    outputAssert(
+      Number.isSafeInteger(maximum) && maximum > 0 && maximum <= 64,
+      'Invalid acquisition reconciliation page capacity'
+    )
+    this.unchanged = [
+      pin(coordinator, 'scanWork'),
+      pin(coordinator, 'reconcile'),
+      pin(coordinator, 'drainReconciliation')
+    ]
+  }
+
+  async runOnce(signal?: AbortSignal) {
+    outputAssert(!this.active, 'Private acquisition reconciliation is already active', 'limited')
+    const current = signal
+      ? AbortSignal.any([signal, this.stopSignal.signal])
+      : this.stopSignal.signal
+    outputAssert(
+      !current.aborted && this.unchanged.every(check => check()),
+      'Private acquisition reconciler stopped or changed',
+      'context-changed'
+    )
+    this.active = true
+    try {
+      const page = this.coordinator.scanWork(this.next, this.maximum, current)
+      const outcomes: { acquisitionId: string; status: string }[] = []
+      for (const candidate of page.entries) {
+        outputAssert(!current.aborted, 'Private acquisition reconciliation cancelled', 'cancelled')
+        try {
+          const result = await this.coordinator.reconcile(candidate.acquisitionId, current)
+          outcomes.push({
+            acquisitionId: candidate.acquisitionId,
+            status: result?.status ?? 'no-pending-work'
+          })
+        } catch (error) {
+          if (current.aborted) throw error
+          // No private reason or payload is emitted to scheduler diagnostics.
+          outcomes.push({
+            acquisitionId: candidate.acquisitionId,
+            status: error instanceof OutputProtocolError ? error.code : 'unavailable'
+          })
+        }
+      }
+      this.next = page.next
+      return { outcomes, blocked: page.blocked, wrapped: this.next === null }
+    } finally {
+      // Caller timeouts do not permit overlapping a still-running physical pass.
+      await this.coordinator.drainReconciliation()
+      this.active = false
+    }
+  }
+
+  /** Explicit opt-in loop. Observe done; stop waits for physical work before custody may close. */
+  start(intervalMs: number, report: (result: PrivateAcquisitionReconciliationReport) => void) {
+    outputAssert(
+      !this.started && !this.stopSignal.signal.aborted,
+      'Private acquisition reconciler already started or stopped',
+      'conflict'
+    )
+    outputAssert(
+      Number.isSafeInteger(intervalMs) && intervalMs >= 100 && intervalMs <= 60000,
+      'Invalid acquisition reconciliation interval'
+    )
+    outputAssert(
+      typeof report === 'function' && report.constructor.name !== 'AsyncFunction',
+      'Acquisition reconciler requires a synchronous report observer'
+    )
+    this.started = true
+    const done = (async () => {
+      try {
+        while (!this.stopSignal.signal.aborted) {
+          const result: unknown = report(await this.runOnce())
+          if (result instanceof Promise) void result.catch(() => undefined)
+          outputAssert(
+            result === undefined,
+            'Acquisition reconciliation observer must finish synchronously'
+          )
+          if (!this.stopSignal.signal.aborted) await delay(intervalMs, this.stopSignal.signal)
+        }
+      } catch (error) {
+        if (!this.stopSignal.signal.aborted) throw error
+      } finally {
+        await this.coordinator.drainReconciliation()
+      }
+    })()
+    // The returned promise remains observable; this handler prevents an unattended
+    // failure from becoming an unhandled rejection while the owner closes down.
+    void done.catch(() => undefined)
+    return {
+      done,
+      stop: async () => {
+        this.stopSignal.abort()
+        await done
+      }
+    }
+  }
+}
+function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise(resolve => {
+    const finish = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }
+    const timer = setTimeout(finish, milliseconds)
+    signal.addEventListener('abort', finish, { once: true })
+    if (signal.aborted) finish()
+  })
+}
+function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {
+  const original = owner[key]
+  return () => owner[key] === original
+}

@@ -1211,8 +1211,12 @@ before a quote becomes visible. Payment association and progress commit together
 result bytes and delivered state also commit together. Reopening preserves the
 original obligation, including processing after a pinned candidate's deadline.
 
-These internal helpers are not yet exposed as a complete paid lookup service.
-Current buyer authorization, native wallet recovery, domain/release policy and
-final guarded HTTP disclosure remain integration obligations.
+The internal coordinator now composes current buyer/domain authority, verified
+release evidence, exact durable wallet receipts and final native disclosure.
+Optional local workers recover retained obligations without initiating another
+payment and drain physical work before custody closes. The application supplies
+its domain semantics, immutable chain policy and actual wallet controller.
+Public acquisition entries and authenticated HTTP integration remain under
+qualification; these internal helpers are not yet a completed paid lookup API.
 The [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md) tracks
 that work and the distinction between native checks and complete qualification.

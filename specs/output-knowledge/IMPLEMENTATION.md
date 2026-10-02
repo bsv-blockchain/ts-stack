@@ -2423,3 +2423,15 @@ SIGKILL/reopen boundaries. Full canonical mutation/hosted qualification and paid
 service composition remain required; these checks are not a completed acquisition,
 POTATOES or application-integration claim. The current-buyer, native wallet,
 release/coordinator and HTTP integrations are tracked as subsequent layers.
+
+### Internal acquisition coordination and recovery
+
+Nine complete internal modules now compose buyer authorization, owned domain
+preparation, SDK release evidence, exact native wallet receipts, acquisition
+progress, guarded disclosure and bounded local workers. The portable native
+wallet tests use public CJS exports with disposable synthetic SQLite storage and
+no broadcast. Generated interruption histories preserve the original quote and
+single funding operation through recovery. Worker authority is distinct from
+current buyer/domain permission; final HTTP authentication remains a separate
+boundary. Public entries, HTTP qualification, concrete application/LCH domain
+adapters and complete mutation/hosted qualification remain open.

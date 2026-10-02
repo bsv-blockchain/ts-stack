@@ -1166,6 +1166,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-acquisition-coordination",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-acquisition-coordination.property.test.ts",
+      "boundary": "Private paid acquisition coordination, current authorization, retained funding operations, actual native wallet receipt ownership, release evidence, final disclosure and local recovery workers",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

@@ -93,6 +93,22 @@ const plans = new Map([
     }
   ],
   [
+    'private-acquisition-coordination',
+    {
+      fallback: 'access',
+      files: new Map([
+        ['src/private/PrivateAcquisitionPorts.ts', 'ports'],
+        ['src/private/PrivateAcquisitionWallet.ts', 'ports'],
+        ['src/private/WalletToolboxAcquisitionFunding.ts', 'wallet'],
+        ['src/private/SDKPrivateReleaseEvidence.ts', 'evidence'],
+        ['src/private/PrivateAcquisitionCoordinator.ts', 'coordinator'],
+        ['src/private/PrivateAcquisitionDisclosure.ts', 'disclosure'],
+        ['src/private/PrivateAcquisitionWork.ts', 'work'],
+        ['src/private/PrivateAcquisitionReconciler.ts', 'reconciler']
+      ])
+    }
+  ],
+  [
     'private-acquisition-state',
     {
       fallback: 'payloads',

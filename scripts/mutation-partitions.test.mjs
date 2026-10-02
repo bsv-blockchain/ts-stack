@@ -373,6 +373,10 @@ test('paid acquisition and proposal HTTP parts preserve exact whole-source/test 
   for (const [id, expected] of [
     ['private-acquisition-foundation', ['progress', 'result', 'index', 'contracts', 'evidence']],
     ['private-acquisition-state', ['payloads', 'original', 'state', 'store']],
+    [
+      'private-acquisition-coordination',
+      ['access', 'ports', 'wallet', 'evidence', 'coordinator', 'disclosure', 'work', 'reconciler']
+    ],
     ['overlay-proposal-http', ['routes', 'guard', 'policy']]
   ]) {
     const canonical = buildMutationTargets(REPOSITORY_ROOT)[id]

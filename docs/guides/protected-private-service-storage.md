@@ -137,3 +137,48 @@ An exact retry retains the first quote/material even after catalogue turnover.
 Never recreate a missing store, reuse a prefix for a new acquisition, or bypass
 current authorization to recover an old one. No public route or stored-format
 migration is introduced by these internal modules.
+
+## Coordinating retained acquisitions
+
+The internal `PrivateAcquisitionCoordinator` composes the native owner with an
+installed listing verifier, application-domain preparation/validation/issuance,
+release evidence, current buyer access and a durable wallet bridge. Every newly
+quoted request retains its first capability, price, private material and bounds.
+A catalogue can stop offering new quotes while an existing retained obligation
+continues through recovery. Domain `isCurrent` describes authority to fulfill
+that original obligation, independently of new catalogue availability.
+
+A received payment is pinned before verification. Funding-output reservation and
+its exact wallet operation commit before wallet work. The bridge asks the actual
+`RecoverableFundingController` for status first: unknown status remains pending;
+only definite absence starts the same retained operation. Lost replies and
+cancellation never become proof that a payment was absent. An accepted receipt
+must name the installed wallet/storage identities and the exact operation,
+output and value. The wallet dependency is structural at runtime and development
+only in this package; applications explicitly install their wallet controller.
+
+`SDKPrivateReleaseEvidence` checks the selected local, processor-attestation or
+mined-evidence policy. A mined decision requires an independently installed
+immutable chain view and actual Script/Merkle verification. It cannot promote a
+claimed height or a processor name into verified acceptance. Local acceptance
+time must come from a durable owner or be committed with the corresponding
+acceptance transition. Domain issuance is pure or idempotent against the retained
+acquisition; it must never create another financial effect. Funded work cannot
+expire merely because delivery is delayed.
+
+`PrivateAcquisitionWork` and `PrivateAcquisitionReconciler` are explicitly
+installed local companions. They enumerate bounded pages of native metadata,
+recheck their own worker authority and still require current buyer and domain
+permissions. They expose neither private material nor payment bytes to remote
+routes or scheduler diagnostics. A cursor wraps to discover earlier insertions.
+Observe the returned loop promise; stop and drain actual physical coordinator
+work before closing custody. These workers advance received obligations and
+expire eligible unpaid quotes; they never initiate another payment.
+
+`PrivateAcquisitionDisclosure` prepares an immutable original response and checks
+current native authority/revision again during one synchronous enqueue. Only an
+unpinned quote before its construction deadline can become a 402 challenge.
+Recovery never requests another payment. The HTTP transport owns authentication
+headers and must compare the final signed seller with the original challenge;
+applications must not set transport identity headers themselves. The HTTP adapter
+and public entry are still under separate integration and qualification.
