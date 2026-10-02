@@ -62,7 +62,7 @@ async function plan(k: Knex, config?: Knex.MigratorConfig): Promise<Plan> {
     ...(await snapshotJournalSqliteObserverSql(k))
   ]
   const objects = ddl.map(sql => {
-    const match = /^CREATE (TABLE|INDEX|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(sql)
+    const match = /^CREATE (TABLE|INDEX|TRIGGER) (snapshot_journal_\w+)/.exec(sql)
     if (!match) return invalid()
     return { type: match[1].toLowerCase(), name: match[2], sql }
   })
@@ -98,6 +98,47 @@ async function reserved(k: Knex): Promise<SchemaObject[]> {
     .select('type', 'name', 'tbl_name', k.raw('substr(sql,1,65537) AS sql'))
     .orderBy(['type', 'name'])
     .limit(513)
+}
+async function validateBootstrap(k: Knex, complete: number): Promise<void> {
+  const positions = await k('snapshot_journal_bootstrap').select('*').limit(2)
+  if (positions.length !== 1) return invalid()
+  const position = positions[0]
+  if (
+    position.id !== 1 ||
+    !Number.isInteger(position.stream) ||
+    position.stream < 0 ||
+    position.stream > 17 ||
+    !(
+      position.cursor === null ||
+      (typeof position.cursor === 'string' && Buffer.byteLength(position.cursor, 'utf8') <= 2048)
+    ) ||
+    (position.stream === 17 && position.cursor !== null) ||
+    (complete === 1 && position.stream !== 17) ||
+    !validSnapshotJournalBootstrapBudget(position) ||
+    (position.rowLimit === null && (position.stream !== 0 || position.cursor !== null))
+  )
+    return invalid()
+}
+async function validateRetention(
+  k: Knex,
+  policy: SnapshotJournalReceiptPolicy,
+  ceiling: SnapshotJournalRevision
+): Promise<void> {
+  const retention = await k('snapshot_journal_retention')
+    .select('id', 'receiptLimit', 'receiptLifetimeMs', k.raw('substr(??,1,20) AS ??', ['floor', 'floor']))
+    .limit(2)
+  if (
+    retention.length !== 1 ||
+    retention[0].id !== 1 ||
+    retention[0].receiptLimit !== policy.receiptLimit ||
+    retention[0].receiptLifetimeMs !== policy.receiptLifetimeMs ||
+    compareSnapshotJournalRevisions(snapshotJournalRevision(retention[0].floor), ceiling) > 0
+  )
+    return invalid()
+  const receipts = await k('snapshot_journal_receipts')
+    .select(k.raw('1 AS occupied'))
+    .limit(policy.receiptLimit + 1)
+  if (receipts.length > policy.receiptLimit) return invalid()
 }
 async function validate(
   k: Knex,
@@ -141,39 +182,8 @@ async function validate(
       : clock.enabled !== 0 || !['capacity-exhausted', 'revision-exhausted', 'key-out-of-range'].includes(clock.reason)
   )
     return invalid()
-  const positions = await k('snapshot_journal_bootstrap').select('*').limit(2)
-  if (positions.length !== 1) return invalid()
-  const position = positions[0]
-  if (
-    position.id !== 1 ||
-    !Number.isInteger(position.stream) ||
-    position.stream < 0 ||
-    position.stream > 17 ||
-    !(
-      position.cursor === null ||
-      (typeof position.cursor === 'string' && Buffer.byteLength(position.cursor, 'utf8') <= 2048)
-    ) ||
-    (position.stream === 17 && position.cursor !== null) ||
-    (row.complete === 1 && position.stream !== 17) ||
-    !validSnapshotJournalBootstrapBudget(position) ||
-    (position.rowLimit === null && (position.stream !== 0 || position.cursor !== null))
-  )
-    return invalid()
-  const retention = await k('snapshot_journal_retention')
-    .select('id', 'receiptLimit', 'receiptLifetimeMs', k.raw('substr(??,1,20) AS ??', ['floor', 'floor']))
-    .limit(2)
-  if (
-    retention.length !== 1 ||
-    retention[0].id !== 1 ||
-    retention[0].receiptLimit !== policy.receiptLimit ||
-    retention[0].receiptLifetimeMs !== policy.receiptLifetimeMs ||
-    compareSnapshotJournalRevisions(snapshotJournalRevision(retention[0].floor), ceiling) > 0
-  )
-    return invalid()
-  const receipts = await k('snapshot_journal_receipts')
-    .select(k.raw('1 AS occupied'))
-    .limit(policy.receiptLimit + 1)
-  if (receipts.length > policy.receiptLimit) return invalid()
+  await validateBootstrap(k, row.complete)
+  await validateRetention(k, policy, ceiling)
   return {
     epoch: row.epoch,
     source: p.source,

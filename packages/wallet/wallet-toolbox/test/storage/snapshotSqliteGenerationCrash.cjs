@@ -243,7 +243,9 @@ async function qualifySQLiteGenerationProcessLoss() {
         actual.map(({ snapshotRowId, snapshotUserId }) => ({ snapshotRowId, snapshotUserId })),
         expected
       )
-      for (const table of retiredTables) assert.equal(await k.schema.hasTable(table), false)
+      await runInSeries(retiredTables, async table => {
+        assert.equal(await k.schema.hasTable(table), false)
+      })
       assert.equal((await k('knex_migrations').where('name', migration)).length, 1)
       assert.equal((await k.raw('PRAGMA foreign_keys'))[0].foreign_keys, 1)
       results.push({

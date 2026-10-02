@@ -59,6 +59,42 @@ function keyGuard(key: string[], owner?: string): string {
   return `UPDATE snapshot_journal_clock SET enabled=0,reason='key-out-of-range' WHERE id=1 AND enabled=1 AND NOT (${valid}); `
 }
 
+function sourceScope(tableId: number, table: string, prefix: string, current: string[]): string {
+  if (tableId < 8) {
+    return scopeUpsert(
+      `SELECT ${tableId},s.userId,s.${q(numeric[tableId].key)},0,'',${revision},1 FROM ${q(table)} s WHERE ${sourceWhere(table, prefix, 's')} AND ${writable}`
+    )
+  } else if (tableId === 10 || tableId === 11) {
+    return scopeUpsert(
+      `SELECT ${tableId},snapshotUserId,snapshotLeftId,snapshotRightId,'',${revision},1 FROM ${names.relation} WHERE snapshotTableId=${tableId - 10} AND snapshotLeftId=${current[0]} AND snapshotRightId=${current[1]} AND ${writable}`
+    )
+  } else if (tableId === 12) {
+    return scopeUpsert(
+      `SELECT 12,snapshotUserId,snapshotCertificateId,0,snapshotFieldName,${revision},1 FROM ${names.certificate} WHERE snapshotCertificateId=${current[0]} AND snapshotFieldName=${current[2]} AND ${writable}`
+    )
+  }
+  return ''
+}
+function freshGeneration(event: string, table: string): string {
+  if (event === 'INSERT') return '1'
+  if (event === 'UPDATE') return `NOT (${exactWhere(table, 'OLD', 'NEW')})`
+  return '0'
+}
+function physicalTrigger(tableId: number, table: string, event: string, changed: string): string {
+  const prefix = event === 'DELETE' ? 'OLD' : 'NEW',
+    current = tuple(table, prefix)
+  const regenerate = freshGeneration(event, table)
+  const writePhysical = (p: string, fresh: string) =>
+    `INSERT INTO snapshot_journal_physical(${physicalKey},revision,generation,present) SELECT ${tableId},${tuple(table, p).join(',')},${revision},${revision},EXISTS(SELECT 1 FROM ${q(table)} s WHERE ${sourceWhere(table, p, 's')}) WHERE ${writable} ON CONFLICT(${physicalKey}) DO UPDATE SET revision=excluded.revision,generation=CASE WHEN ${fresh} THEN excluded.generation ELSE snapshot_journal_physical.generation END,present=excluded.present; `
+  let body = keyGuard(current, tableId < 8 ? prefix + '.userId' : undefined)
+  if (event === 'UPDATE') body += keyGuard(tuple(table, 'OLD'), tableId < 8 ? 'OLD.userId' : undefined)
+  body += tick
+  if (event === 'UPDATE') body += writePhysical('OLD', '0')
+  body += writePhysical(prefix, regenerate)
+  body += sourceScope(tableId, table, prefix, current)
+  return `CREATE TRIGGER snapshot_journal_physical_${tableId}_${event} AFTER ${event} ON ${q(table)} ${event === 'UPDATE' ? 'WHEN ' + changed : ''} BEGIN ${body} END`
+}
+
 /** Prepare observers only after the caller validates the completed v2 source generation. */
 export async function snapshotJournalSqliteObserverSql(k: Knex): Promise<string[]> {
   if (!['sqlite3', 'better-sqlite3'].includes(k.client.config.client))
@@ -111,35 +147,8 @@ export async function snapshotJournalSqliteObserverSql(k: Knex): Promise<string[
     const changed = columns
       .map(({ name }) => `CAST(OLD.${q(name)} AS BLOB) IS NOT CAST(NEW.${q(name)} AS BLOB)`)
       .join(' OR ')
-    for (const event of ['INSERT', 'UPDATE', 'DELETE']) {
-      const prefix = event === 'DELETE' ? 'OLD' : 'NEW',
-        current = tuple(table, prefix)
-      const regenerate =
-        event === 'INSERT' ? '1' : event === 'UPDATE' ? `NOT (${exactWhere(table, 'OLD', 'NEW')})` : '0'
-      const writePhysical = (p: string, fresh: string) =>
-        `INSERT INTO snapshot_journal_physical(${physicalKey},revision,generation,present) SELECT ${tableId},${tuple(table, p).join(',')},${revision},${revision},EXISTS(SELECT 1 FROM ${q(table)} s WHERE ${sourceWhere(table, p, 's')}) WHERE ${writable} ON CONFLICT(${physicalKey}) DO UPDATE SET revision=excluded.revision,generation=CASE WHEN ${fresh} THEN excluded.generation ELSE snapshot_journal_physical.generation END,present=excluded.present; `
-      let body = keyGuard(current, tableId < 8 ? prefix + '.userId' : undefined)
-      if (event === 'UPDATE') body += keyGuard(tuple(table, 'OLD'), tableId < 8 ? 'OLD.userId' : undefined)
-      body += tick
-      if (event === 'UPDATE') body += writePhysical('OLD', '0')
-      body += writePhysical(prefix, regenerate)
-      if (tableId < 8) {
-        body += scopeUpsert(
-          `SELECT ${tableId},s.userId,s.${q(numeric[tableId].key)},0,'',${revision},1 FROM ${q(table)} s WHERE ${sourceWhere(table, prefix, 's')} AND ${writable}`
-        )
-      } else if (tableId === 10 || tableId === 11) {
-        body += scopeUpsert(
-          `SELECT ${tableId},snapshotUserId,snapshotLeftId,snapshotRightId,'',${revision},1 FROM ${names.relation} WHERE snapshotTableId=${tableId - 10} AND snapshotLeftId=${current[0]} AND snapshotRightId=${current[1]} AND ${writable}`
-        )
-      } else if (tableId === 12) {
-        body += scopeUpsert(
-          `SELECT 12,snapshotUserId,snapshotCertificateId,0,snapshotFieldName,${revision},1 FROM ${names.certificate} WHERE snapshotCertificateId=${current[0]} AND snapshotFieldName=${current[2]} AND ${writable}`
-        )
-      }
-      definitions.push(
-        `CREATE TRIGGER snapshot_journal_physical_${tableId}_${event} AFTER ${event} ON ${q(table)} ${event === 'UPDATE' ? 'WHEN ' + changed : ''} BEGIN ${body} END`
-      )
-    }
+    for (const event of ['INSERT', 'UPDATE', 'DELETE'])
+      definitions.push(physicalTrigger(tableId, table, event, changed))
   })
   return definitions
 }

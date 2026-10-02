@@ -1,3 +1,4 @@
+import { runInSeries } from '../../src/utility/runInSeries'
 import type { Knex } from 'knex'
 import type { IdentityDefinition } from '../../src/storage/schema/snapshotSqliteIdentity'
 import { WERR_INVALID_OPERATION } from '../../src/sdk/WERR_errors'
@@ -18,9 +19,9 @@ export async function copyIdentityPage(
     .where(identity.source.key, '>', after)
     .orderBy(identity.source.key)
     .limit(count)
-  for (const row of rows) {
+  await runInSeries(rows, async row => {
     const primary = [identity.source.key, ...(identity.source.owner ? [identity.source.owner] : [])]
     await k(identity.table).insert(row).onConflict(primary).merge()
-  }
+  })
   return rows.length === count ? Number(rows.at(-1)[identity.source.key]) : undefined
 }

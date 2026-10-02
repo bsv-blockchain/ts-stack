@@ -21,6 +21,27 @@ import {
 function invalid(): never {
   throw new WERR_INVALID_OPERATION('Unsupported or incomplete MySQL snapshot journal source')
 }
+interface SourceColumn {
+  tableName: string
+  name: string
+  type: string
+  nullable: string
+  extra: string
+}
+function validateNumericColumns(columns: SourceColumn[]): void {
+  for (const source of numeric) {
+    for (const name of [source.key, ...(source.owner ? [source.owner] : [])]) {
+      const found = columns.filter(column => column.tableName === source.table && column.name === name)
+      if (
+        found.length !== 1 ||
+        found[0].type.replaceAll(/\(\d+\)/g, '') !== 'int unsigned' ||
+        found[0].nullable !== 'NO' ||
+        !(found[0].extra === '' || (name === source.key && found[0].extra === 'auto_increment'))
+      )
+        return invalid()
+    }
+  }
+}
 /** Read-only prerequisite guard; ownership/install intents and epoch/receipt provenance remain the migrator's responsibility. */
 export async function validateSnapshotJournalMysqlSource(k: Knex, config?: Knex.MigratorConfig): Promise<void> {
   if (!['mysql', 'mysql2'].includes(k.client.config.client)) return invalid()
@@ -52,13 +73,12 @@ export async function validateSnapshotJournalMysqlSource(k: Knex, config?: Knex.
     tables.some(table => table.engine !== 'InnoDB' || table.type !== 'BASE TABLE')
   )
     return invalid()
-  const [columns]: Array<Array<{ tableName: string; name: string; type: string; nullable: string; extra: string }>> =
-    await k.raw(
-      'SELECT TABLE_NAME tableName,COLUMN_NAME name,COLUMN_TYPE type,IS_NULLABLE nullable,EXTRA extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (' +
-        sourceTables.map(() => '?').join(',') +
-        ') ORDER BY TABLE_NAME,ORDINAL_POSITION LIMIT 513',
-      sourceTables
-    )
+  const [columns]: Array<SourceColumn[]> = await k.raw(
+    'SELECT TABLE_NAME tableName,COLUMN_NAME name,COLUMN_TYPE type,IS_NULLABLE nullable,EXTRA extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (' +
+      sourceTables.map(() => '?').join(',') +
+      ') ORDER BY TABLE_NAME,ORDINAL_POSITION LIMIT 513',
+    sourceTables
+  )
   const [parts]: Array<
     Array<{
       tableName: string
@@ -76,18 +96,7 @@ export async function validateSnapshotJournalMysqlSource(k: Knex, config?: Knex.
     sourceTables
   )
   if (columns.length > 512 || parts.length > 512) return invalid()
-  for (const source of numeric) {
-    for (const name of [source.key, ...(source.owner ? [source.owner] : [])]) {
-      const found = columns.filter(column => column.tableName === source.table && column.name === name)
-      if (
-        found.length !== 1 ||
-        found[0].type.replaceAll(/\(\d+\)/g, '') !== 'int unsigned' ||
-        found[0].nullable !== 'NO' ||
-        !(found[0].extra === '' || (name === source.key && found[0].extra === 'auto_increment'))
-      )
-        return invalid()
-    }
-  }
+  validateNumericColumns(columns)
   const identities = [
     ...numeric.map(source => ({ table: source.table, keys: [source.key], primary: true })),
     { table: 'tx_labels_map', keys: ['txLabelId', 'transactionId'], primary: false },

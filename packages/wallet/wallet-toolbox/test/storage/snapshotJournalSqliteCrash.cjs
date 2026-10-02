@@ -1,3 +1,4 @@
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 const receiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
 const assert = require('node:assert/strict'),
   { fork } = require('node:child_process'),
@@ -23,9 +24,16 @@ const open = filename =>
     pool: { min: 1, max: 1 }
   })
 const finish = async k => {
-  for (let page = 0; page < 100; page++) if ((await copy(k, 1000000)).complete) return
-  throw new Error('Bootstrap incomplete')
+  let complete = false
+  function* pages() {
+    for (let page = 0; page < 100 && !complete; page++) yield page
+  }
+  await runInSeries(pages(), async () => {
+    complete = (await copy(k, 1000000)).complete
+  })
+  if (!complete) throw new Error('Bootstrap incomplete')
 }
+
 async function child() {
   process.once('disconnect', () => process.exit(1))
   const childDeadline = setTimeout(() => process.exit(1), 20000)
@@ -92,85 +100,96 @@ async function main() {
   const directory = await mkdtemp(join(tmpdir(), 'ts569-journal-generation-kill-')),
     results = []
   try {
-    for (const boundary of [
-      'install-after-ddl',
-      'install-after-generation',
-      'install-after-bootstrap',
-      'install-after-retention',
-      'install-after-commit',
-      'bootstrap-after-budget-bind',
-      'bootstrap-after-metadata',
-      'bootstrap-after-progress',
-      'bootstrap-after-commit',
-      'complete-before-state',
-      'complete-after-state',
-      'complete-after-commit'
-    ]) {
-      const filename = join(directory, boundary + '.sqlite'),
-        k = open(filename),
-        source = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: k })
-      try {
-        await k.raw('PRAGMA journal_mode=WAL')
-        await source.migrate('journal generation process-loss fixture', 'synthetic-source')
-        await source.makeAvailable()
-        const { user } = await source.findOrInsertUser('02' + '11'.repeat(32)),
-          { user: other } = await source.findOrInsertUser('03' + '22'.repeat(32))
-        await seedArchiveClosure(source, user.userId, other.userId)
-        const original = {}
-        for (const table of tables) original[table] = await k(table)
-        if (boundary.startsWith('bootstrap-')) await install(k, '1000000', receiptPolicy)
-        if (boundary.startsWith('complete-')) {
+    await runInSeries(
+      [
+        'install-after-ddl',
+        'install-after-generation',
+        'install-after-bootstrap',
+        'install-after-retention',
+        'install-after-commit',
+        'bootstrap-after-budget-bind',
+        'bootstrap-after-metadata',
+        'bootstrap-after-progress',
+        'bootstrap-after-commit',
+        'complete-before-state',
+        'complete-after-state',
+        'complete-after-commit'
+      ],
+      async boundary => {
+        const filename = join(directory, boundary + '.sqlite'),
+          k = open(filename),
+          source = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: k })
+        try {
+          await k.raw('PRAGMA journal_mode=WAL')
+          await source.migrate('journal generation process-loss fixture', 'synthetic-source')
+          await source.makeAvailable()
+          const { user } = await source.findOrInsertUser('02' + '11'.repeat(32)),
+            { user: other } = await source.findOrInsertUser('03' + '22'.repeat(32))
+          await seedArchiveClosure(source, user.userId, other.userId)
+          const original = {}
+          await runInSeries(tables, async table => {
+            original[table] = await k(table)
+          })
+          if (boundary.startsWith('bootstrap-')) await install(k, '1000000', receiptPolicy)
+          if (boundary.startsWith('complete-')) {
+            await install(k, '1000000', receiptPolicy)
+            await finish(k)
+          }
+          const killed = await killAt(filename, boundary)
+          await k.transaction(async t => {
+            await t('snapshot_index_generation_v2')
+              .where('id', 0)
+              .update({ complete: t.ref('complete') })
+          })
+          const objects = await k('sqlite_master').whereRaw('lower(substr(name,1,17))=?', ['snapshot_journal_'])
+          const committed = boundary.endsWith('after-commit')
+          if (boundary.startsWith('install-')) assert.equal(objects.length, committed ? 61 : 0)
+          else if (boundary.startsWith('bootstrap-')) {
+            assert.equal((await read(k, receiptPolicy)).complete, false)
+            const progress = await k('snapshot_journal_bootstrap').first()
+            assert.equal(progress.rowsUsed, committed ? original.transactions.length : 0)
+            assert.equal(progress.rowLimit, committed ? 1000000 : null)
+            assert.equal(
+              progress.cursor,
+              committed ? JSON.stringify([Math.max(...original.transactions.map(row => row.transactionId))]) : null
+            )
+          } else assert.equal((await read(k, receiptPolicy)).complete, committed)
           await install(k, '1000000', receiptPolicy)
           await finish(k)
-        }
-        const killed = await killAt(filename, boundary)
-        await k.transaction(async t => {
-          await t('snapshot_index_generation_v2')
-            .where('id', 0)
-            .update({ complete: t.ref('complete') })
-        })
-        const objects = await k('sqlite_master').whereRaw('lower(substr(name,1,17))=?', ['snapshot_journal_'])
-        const committed = boundary.endsWith('after-commit')
-        if (boundary.startsWith('install-')) assert.equal(objects.length, committed ? 61 : 0)
-        else if (boundary.startsWith('bootstrap-')) {
-          assert.equal((await read(k, receiptPolicy)).complete, false)
-          const progress = await k('snapshot_journal_bootstrap').first()
-          assert.equal(progress.rowsUsed, committed ? original.transactions.length : 0)
-          assert.equal(progress.rowLimit, committed ? 1000000 : null)
-          assert.equal(
-            progress.cursor,
-            committed ? JSON.stringify([Math.max(...original.transactions.map(row => row.transactionId))]) : null
+          await complete(k, receiptPolicy)
+          assert.equal((await read(k, receiptPolicy)).complete, true)
+          await exact(k)
+          let charged = 0
+          await runInSeries(
+            [
+              ...tables,
+              'snapshot_profile_keys_v2',
+              'snapshot_relation_keys_v2',
+              'snapshot_certificate_field_keys_v2',
+              'snapshot_global_keys_v2'
+            ],
+            async table => {
+              charged += Number((await k(table).count('* AS n').first()).n)
+            }
           )
-        } else assert.equal((await read(k, receiptPolicy)).complete, committed)
-        await install(k, '1000000', receiptPolicy)
-        await finish(k)
-        await complete(k, receiptPolicy)
-        assert.equal((await read(k, receiptPolicy)).complete, true)
-        await exact(k)
-        let charged = 0
-        for (const table of [
-          ...tables,
-          'snapshot_profile_keys_v2',
-          'snapshot_relation_keys_v2',
-          'snapshot_certificate_field_keys_v2',
-          'snapshot_global_keys_v2'
-        ])
-          charged += Number((await k(table).count('* AS n').first()).n)
-        assert.equal((await k('snapshot_journal_bootstrap').first()).rowsUsed, charged)
-        for (const table of tables) assert.deepEqual(await k(table), original[table])
-        assert.deepEqual(await k.raw('PRAGMA foreign_key_check'), [])
-        results.push({
-          boundary,
-          signal: killed.signal,
-          atomicity: committed ? 'committed' : 'rolled back',
-          writerLockReleased: true,
-          sourcePreserved: true,
-          resumedComplete: true
-        })
-      } finally {
-        await source.destroy()
+          assert.equal((await k('snapshot_journal_bootstrap').first()).rowsUsed, charged)
+          await runInSeries(tables, async table => {
+            assert.deepEqual(await k(table), original[table])
+          })
+          assert.deepEqual(await k.raw('PRAGMA foreign_key_check'), [])
+          results.push({
+            boundary,
+            signal: killed.signal,
+            atomicity: committed ? 'committed' : 'rolled back',
+            writerLockReleased: true,
+            sourcePreserved: true,
+            resumedComplete: true
+          })
+        } finally {
+          await source.destroy()
+        }
       }
-    }
+    )
     console.log(
       JSON.stringify({
         status: 'SQLite journal generation native WAL process-loss checks',

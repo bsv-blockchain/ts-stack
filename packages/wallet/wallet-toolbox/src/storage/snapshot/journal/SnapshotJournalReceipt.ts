@@ -169,7 +169,7 @@ async function now(k: Knex): Promise<number> {
   return value
 }
 function storedInteger(value: unknown): number {
-  if (typeof value === 'string' && /^(?:0|[1-9][0-9]{0,15})$/.test(value)) value = Number(value)
+  if (typeof value === 'string' && /^(?:0|[1-9]\d{0,15})$/.test(value)) value = Number(value)
   if (!boundedInteger(value, Number.MAX_SAFE_INTEGER)) return invalid()
   return value
 }

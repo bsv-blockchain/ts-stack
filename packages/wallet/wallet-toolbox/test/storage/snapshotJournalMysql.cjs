@@ -1,3 +1,4 @@
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 const receiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
 const assert = require('node:assert/strict'),
   { fork } = require('node:child_process'),
@@ -30,27 +31,42 @@ async function isolate(k, isolation) {
   assert.equal(level.isolation.replaceAll('-', ' '), isolation)
   await k.raw('SET SESSION innodb_lock_wait_timeout=5')
 }
-async function finish(k) {
-  for (let i = 0; i < 100; i++) {
+async function bootstrap(k) {
+  let complete = false
+  function* pages() {
+    for (let i = 0; i < 100 && !complete; i++) yield i
+  }
+  await runInSeries(pages(), async () => {
     const page = await copy(k, 1000000)
     assert(!page.invalidated)
-    if (page.complete) return await complete(k, ceiling, receiptPolicy)
-    assert(i < 99)
-  }
+    complete = page.complete
+  })
+  assert(complete, 'Bootstrap did not complete within its bounded fixture pages')
 }
+async function finish(k) {
+  await bootstrap(k)
+  return await complete(k, ceiling, receiptPolicy)
+}
+
 async function clear(k) {
   const [triggers] = await k.raw(
     "SELECT TRIGGER_NAME name FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND LEFT(TRIGGER_NAME,17)='snapshot_journal_'"
   )
-  for (const row of triggers) await k.raw('DROP TRIGGER ??', [row.name])
+  await runInSeries(triggers, async row => {
+    await k.raw('DROP TRIGGER ??', [row.name])
+  })
   const [names] = await k.raw(
     "SELECT TABLE_NAME name FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND LEFT(TABLE_NAME,17)='snapshot_journal_'"
   )
-  for (const row of names) await k.schema.dropTable(row.name)
+  await runInSeries(names, async row => {
+    await k.schema.dropTable(row.name)
+  })
 }
 async function rows(k) {
   const result = {}
-  for (const name of tables) result[name] = (await k(name).select('*')).map(row => JSON.stringify(row)).sort()
+  await runInSeries(tables, async name => {
+    result[name] = (await k(name).select('*')).map(row => JSON.stringify(row)).sort()
+  })
   return result
 }
 async function child() {
@@ -68,7 +84,7 @@ async function child() {
       process.kill(process.pid, 'SIGKILL')
     }
   }
-  const object = sql => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(sql)?.[1]
+  const object = sql => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_\w+)/.exec(sql)?.[1]
   k.on('query', q => {
     const name = object(q.sql)
     if (name) park('before-' + name)
@@ -91,11 +107,7 @@ async function child() {
       park('bootstrap-after-commit')
     }
     if (boundary.startsWith('complete-')) {
-      for (let i = 0; i < 100; i++) {
-        const page = await copy(k, 1000000)
-        if (page.complete) break
-        assert(i < 99)
-      }
+      await bootstrap(k)
       completing = true
       await complete(k, ceiling, receiptPolicy)
       park('complete-after-commit')
@@ -134,7 +146,7 @@ async function main() {
       { user: foreign } = await source.findOrInsertUser('03' + '22'.repeat(32))
     await seedArchiveClosure(source, user.userId, foreign.userId)
     const baseline = await rows(k)
-    for (const isolation of ['READ COMMITTED', 'REPEATABLE READ']) {
+    await runInSeries(['READ COMMITTED', 'REPEATABLE READ'], async isolation => {
       await isolate(k, isolation)
       await clear(k)
       const created = await install(k, ceiling, receiptPolicy)
@@ -164,39 +176,42 @@ async function main() {
       assert.deepEqual(await read(k, ceiling, receiptPolicy), completed)
       assert.deepEqual(await complete(k, ceiling, receiptPolicy), completed)
       await k.transaction(async t => assert.deepEqual(await read(t, ceiling, receiptPolicy), completed))
-      for (const [_name, up, down] of [
+      await runInSeries(
         [
-          'owner-comment',
-          "ALTER TABLE snapshot_journal_clock COMMENT='foreign'",
-          "ALTER TABLE snapshot_journal_clock COMMENT='snapshot-journal-owner:" + created.epoch + "'"
+          [
+            'owner-comment',
+            "ALTER TABLE snapshot_journal_clock COMMENT='foreign'",
+            "ALTER TABLE snapshot_journal_clock COMMENT='snapshot-journal-owner:" + created.epoch + "'"
+          ],
+          [
+            'index',
+            'CREATE INDEX foreign_generation_index ON snapshot_journal_physical(present)',
+            'DROP INDEX foreign_generation_index ON snapshot_journal_physical'
+          ],
+          [
+            'check',
+            'ALTER TABLE snapshot_journal_clock ALTER CHECK snapshot_journal_clock_chk_1 NOT ENFORCED',
+            'ALTER TABLE snapshot_journal_clock ALTER CHECK snapshot_journal_clock_chk_1 ENFORCED'
+          ],
+          [
+            'foreign-observer',
+            'CREATE TRIGGER foreign_generation_observer AFTER UPDATE ON snapshot_journal_clock FOR EACH ROW BEGIN DO 0; END',
+            'DROP TRIGGER foreign_generation_observer'
+          ],
+          [
+            'source-binding',
+            "ALTER TABLE tx_labels ALTER label SET DEFAULT 'changed'",
+            'ALTER TABLE tx_labels ALTER label DROP DEFAULT'
+          ]
         ],
-        [
-          'index',
-          'CREATE INDEX foreign_generation_index ON snapshot_journal_physical(present)',
-          'DROP INDEX foreign_generation_index ON snapshot_journal_physical'
-        ],
-        [
-          'check',
-          'ALTER TABLE snapshot_journal_clock ALTER CHECK snapshot_journal_clock_chk_1 NOT ENFORCED',
-          'ALTER TABLE snapshot_journal_clock ALTER CHECK snapshot_journal_clock_chk_1 ENFORCED'
-        ],
-        [
-          'foreign-observer',
-          'CREATE TRIGGER foreign_generation_observer AFTER UPDATE ON snapshot_journal_clock FOR EACH ROW BEGIN DO 0; END',
-          'DROP TRIGGER foreign_generation_observer'
-        ],
-        [
-          'source-binding',
-          "ALTER TABLE tx_labels ALTER label SET DEFAULT 'changed'",
-          'ALTER TABLE tx_labels ALTER label DROP DEFAULT'
-        ]
-      ]) {
-        await k.raw(up)
-        await assert.rejects(read(k, ceiling, receiptPolicy), /Invalid or unowned/)
-        await assert.rejects(install(k, ceiling, receiptPolicy), /Invalid or unowned/)
-        await k.raw(down)
-        assert.deepEqual(await read(k, ceiling, receiptPolicy), completed)
-      }
+        async ([, up, down]) => {
+          await k.raw(up)
+          await assert.rejects(read(k, ceiling, receiptPolicy), /Invalid or unowned/)
+          await assert.rejects(install(k, ceiling, receiptPolicy), /Invalid or unowned/)
+          await k.raw(down)
+          assert.deepEqual(await read(k, ceiling, receiptPolicy), completed)
+        }
+      )
       await k(intent).update({ nextObject: 58, complete: 0 })
       await k.raw('CREATE TABLE snapshot_journal_foreign(id INT)')
       await assert.rejects(install(k, ceiling, receiptPolicy), /Invalid or unowned/)
@@ -233,7 +248,7 @@ async function main() {
         'complete-before-commit',
         'complete-after-commit'
       ]
-      for (const boundary of boundaries) {
+      await runInSeries(boundaries, async boundary => {
         await killAt(boundary, join(directory, isolation.replaceAll(' ', '-') + '-' + boundary), isolation)
         const saved = (await k.schema.hasTable(intent)) ? await k(intent).first() : undefined
         if (boundary.startsWith('complete-')) assert.equal(saved.complete, boundary === 'complete-after-commit' ? 1 : 0)
@@ -253,14 +268,18 @@ async function main() {
         if (saved) assert.equal(resumed.epoch, saved.epoch)
         await finish(k)
         let charged = 0
-        for (const table of [
-          ...tables,
-          'snapshot_profile_keys',
-          'snapshot_relation_keys',
-          'snapshot_certificate_field_keys',
-          'snapshot_global_keys'
-        ])
-          charged += Number((await k(table).count('* AS n').first()).n)
+        await runInSeries(
+          [
+            ...tables,
+            'snapshot_profile_keys',
+            'snapshot_relation_keys',
+            'snapshot_certificate_field_keys',
+            'snapshot_global_keys'
+          ],
+          async table => {
+            charged += Number((await k(table).count('* AS n').first()).n)
+          }
+        )
         assert.equal((await k('snapshot_journal_bootstrap').first()).rowsUsed, charged)
         await exact(k)
         assert.deepEqual(await rows(k), baseline)
@@ -274,7 +293,7 @@ async function main() {
         assert.deepEqual(await rows(k), baseline)
         await clear(k)
         console.log(JSON.stringify({ isolation, boundary, status: 'passed' }))
-      }
+      })
       results.push({
         isolation,
         installedObjects: 60,
@@ -285,7 +304,7 @@ async function main() {
         completionAtomic: true,
         writerBarrierReleased: true
       })
-    }
+    })
     console.log(
       JSON.stringify({
         status: 'MySQL journal generation',

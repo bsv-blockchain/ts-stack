@@ -98,12 +98,12 @@ async function fixture() {
     )
       return database.raw(sql)
     if (sql === 'SELECT VERSION() version') return Promise.resolve([[{ version: '8.4.0' }]])
-    const name = /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(sql)?.[1]
+    const name = /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_\w+)/.exec(sql)?.[1]
     if (name)
       return (async () => {
         fail('before:' + name)
         const reference = nativeDdl.ddl.find(
-          entry => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(entry.sql)?.[1] === name
+          entry => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_\w+)/.exec(entry.sql)?.[1] === name
         )
         if (!reference || !available || available.has(name)) throw new Error('Unowned fixture DDL')
         if (name === 'snapshot_journal_generation') activeEpoch = String(values?.[0])
@@ -506,9 +506,7 @@ test.each([
   }
 })
 
-const objectNames = nativeDdl.ddl.map(
-  entry => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(entry.sql)![1]
-)
+const objectNames = nativeDdl.ddl.map(entry => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_\w+)/.exec(entry.sql)![1])
 test('fresh installation uses the independently captured native DDL and atomically seeded controls', async () => {
   const f = await fixture()
   try {
@@ -543,9 +541,7 @@ test.each(objectNames)('every DDL acknowledgement loss resumes without adopting/
       enabled: true
     })
     expect(
-      f.raw.mock.calls.filter(
-        ([sql]) => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(sql)?.[1] === name
-      )
+      f.raw.mock.calls.filter(([sql]) => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_\w+)/.exec(sql)?.[1] === name)
     ).toHaveLength(1)
   } finally {
     await f.database.destroy()

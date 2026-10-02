@@ -164,11 +164,10 @@ function relationSourceQuery(
   // The maintenance index begins with the same profile prefix. MySQL can
   // choose it and sort the complete profile before LIMIT; bind paging to the
   // auxiliary primary key whose suffix is the unchanged cursor order.
+  const sqliteKeys = state === 'v2' ? 'snapshot_relation_keys_v2' : 'snapshot_relation_keys'
   const relationKeys = String(k.client.config.client).includes('mysql')
     ? k.raw('?? FORCE INDEX (??)', ['snapshot_relation_keys', 'PRIMARY'])
-    : state === 'v2'
-      ? 'snapshot_relation_keys_v2'
-      : 'snapshot_relation_keys'
+    : sqliteKeys
   const query = k(relationKeys)
     .crossJoin(name, function () {
       void this.on('snapshotLeftId', '=', `${name}.${left}`).andOn('snapshotRightId', '=', `${name}.${right}`)
@@ -184,11 +183,8 @@ function certificateSourceQuery(k: Knex, userId: number, state: SnapshotIndexSta
   const name = 'certificate_fields'
 
   const mysql = String(k.client.config.client).includes('mysql')
-  const keys = mysql
-    ? k.raw('?? FORCE INDEX (??)', ['snapshot_certificate_field_keys', 'PRIMARY'])
-    : state === 'v2'
-      ? 'snapshot_certificate_field_keys_v2'
-      : 'snapshot_certificate_field_keys'
+  const sqliteKeys = state === 'v2' ? 'snapshot_certificate_field_keys_v2' : 'snapshot_certificate_field_keys'
+  const keys = mysql ? k.raw('?? FORCE INDEX (??)', ['snapshot_certificate_field_keys', 'PRIMARY']) : sqliteKeys
   const query = k(keys)
     .crossJoin(name, function () {
       void this.on('snapshotFieldName', '=', `${name}.fieldName`).andOn(
@@ -214,11 +210,8 @@ function globalSourceQuery(
   const { name } = definitions[table]
 
   const mysql = String(k.client.config.client).includes('mysql')
-  const keys = mysql
-    ? k.raw('?? FORCE INDEX (??)', ['snapshot_global_keys', 'snapshot_global_page'])
-    : state === 'v2'
-      ? 'snapshot_global_keys_v2'
-      : 'snapshot_global_keys'
+  const sqliteKeys = state === 'v2' ? 'snapshot_global_keys_v2' : 'snapshot_global_keys'
+  const keys = mysql ? k.raw('?? FORCE INDEX (??)', ['snapshot_global_keys', 'snapshot_global_page']) : sqliteKeys
   const query = k(keys)
     .crossJoin(name, 'rowId', `${name}.${definitions[table].keys[0]}`)
     .where({ tableId: globalId, userId, present: 1 })

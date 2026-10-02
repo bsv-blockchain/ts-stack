@@ -48,6 +48,11 @@ const propertyParameters = {
 }
 fc.configureGlobal(propertyParameters)
 
+function compareBigints(a: bigint, b: bigint): number {
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
+
 describe('SnapshotJournalRevision', () => {
   const boundaries = [
     '0',
@@ -104,7 +109,7 @@ describe('SnapshotJournalRevision', () => {
         (a, b) => {
           const left = snapshotJournalRevision(a.toString()),
             right = snapshotJournalRevision(b.toString())
-          expect(compareSnapshotJournalRevisions(left, right)).toBe(a === b ? 0 : a < b ? -1 : 1)
+          expect(compareSnapshotJournalRevisions(left, right)).toBe(compareBigints(a, b))
           expect(compareSnapshotJournalRevisions(left, left)).toBe(0)
           expect(snapshotJournalRevision(JSON.parse(JSON.stringify(left)))).toBe(left)
         }
@@ -205,7 +210,7 @@ describe('SnapshotJournalPage', () => {
   }
 
   const compare = (a: SnapshotJournalPosition, b: SnapshotJournalPosition) =>
-    (BigInt(a.revision) < BigInt(b.revision) ? -1 : BigInt(a.revision) > BigInt(b.revision) ? 1 : 0) ||
+    compareBigints(BigInt(a.revision), BigInt(b.revision)) ||
     a.id1 - b.id1 ||
     a.id2 - b.id2 ||
     Buffer.compare(Buffer.from(a.exactText), Buffer.from(b.exactText))
@@ -534,6 +539,20 @@ describe('SnapshotJournalSqliteObservers', () => {
     if (table === 'output_tags_map') return [prefix + '.outputTagId', prefix + '.outputId', "''"]
     return [prefix + '.certificateId', '0', prefix + '.fieldName']
   }
+  function physicalIdentity(tableId: number, table: string, row: Record<string, unknown>) {
+    const key = numeric[tableId]?.[1]
+    let id1 = row.certificateId,
+      id2: unknown = 0
+    if (key) id1 = row[key]
+    else if (table === 'tx_labels_map') {
+      id1 = row.txLabelId
+      id2 = row.transactionId
+    } else if (table === 'output_tags_map') {
+      id1 = row.outputTagId
+      id2 = row.outputId
+    }
+    return { tableId, id1, id2, exactText: table === 'certificate_fields' ? row.fieldName : '' }
+  }
   async function installCandidate(k: Knex, reverse: boolean) {
     const definitions = await snapshotJournalSqliteObserverSql(k)
     await installSnapshotJournalSqliteClock(k, snapshotJournalRevision('1000000000'))
@@ -808,20 +827,7 @@ describe('SnapshotJournalSqliteObservers', () => {
         expect((await k('snapshot_journal_clock').first()).revision).toBe(rollbackHigh)
         for (const [tableId, table] of tables.entries()) {
           const original = await k(table).first()
-          const key = numeric[tableId]?.[1]
-          const identity = {
-            tableId,
-            id1: key
-              ? original[key]
-              : table === 'certificate_fields'
-                ? original.certificateId
-                : table === 'tx_labels_map'
-                  ? original.txLabelId
-                  : original.outputTagId,
-            id2:
-              table === 'tx_labels_map' ? original.transactionId : table === 'output_tags_map' ? original.outputId : 0,
-            exactText: table === 'certificate_fields' ? original.fieldName : ''
-          }
+          const identity = physicalIdentity(tableId, table, original)
           const before = await k('snapshot_journal_physical').where(identity).first()
           await replace(k, table, original)
           await exact(k)
@@ -1065,7 +1071,7 @@ test('bounded receipt schedules preserve exact committed identity, expiry, floor
             const owner = { ...binding, userId: command.other ? 2 : 1 }
             const digest = Receipt.snapshotJournalReceiptBinding(owner)
             const prior = model.get(request.requestId)
-            if (command.kind === 0) {
+            async function recordCommand() {
               const valid =
                 request.expiresAt > clock &&
                 high >= floor &&
@@ -1081,13 +1087,15 @@ test('bounded receipt schedules preserve exact committed identity, expiry, floor
                 await expect(operation).resolves.toEqual(prior ?? result)
                 if (prior === undefined) model.set(request.requestId, result)
               }
-            } else if (command.kind === 1) {
+            }
+            async function readCommand() {
               const valid =
                 prior !== undefined && prior.binding === digest && request.expiresAt > clock && high >= floor
               const operation = k.transaction(t => Receipt.readSnapshotJournalReceipt(t, owner, request))
               if (valid) await expect(operation).resolves.toEqual(prior)
               else await expect(operation).rejects.toThrow()
-            } else if (command.kind === 2) {
+            }
+            async function collectCommand() {
               const removed = [...model.values()].filter(row => row.expiresAt <= clock)
               const operation = k.transaction(async t => {
                 expect(await Receipt.collectSnapshotJournalReceipts(t)).toBe(removed.length)
@@ -1098,9 +1106,11 @@ test('bounded receipt schedules preserve exact committed identity, expiry, floor
                 await operation
                 for (const row of removed) model.delete(row.requestId)
               }
-            } else if (command.kind === 3) {
+            }
+            async function advanceTime() {
               clock += command.step
-            } else {
+            }
+            async function advanceFloor() {
               const next = high > floor ? high : floor
               await k.transaction(async t => {
                 await t('snapshot_journal_retention').update({ floor: next.toString() })
@@ -1108,6 +1118,11 @@ test('bounded receipt schedules preserve exact committed identity, expiry, floor
               })
               if (!command.rollback) floor = next
             }
+            if (command.kind === 0) await recordCommand()
+            else if (command.kind === 1) await readCommand()
+            else if (command.kind === 2) await collectCommand()
+            else if (command.kind === 3) await advanceTime()
+            else await advanceFloor()
             const rows = await k('snapshot_journal_receipts').select('*').orderBy('requestId')
             expect(rows).toEqual([...model.values()].sort((a, b) => a.requestId.localeCompare(b.requestId)))
             expect(rows.length).toBeLessThanOrEqual(3)

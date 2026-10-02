@@ -1,3 +1,4 @@
+import { runInSeries } from '../../src/utility/runInSeries'
 import { knex, type Knex } from 'knex'
 import { installMembershipDraft } from './snapshotSqliteMaintenanceFixture'
 import { addSnapshotProfileIndexes } from '../../src/storage/schema/snapshotProfileIndexMigration'
@@ -46,8 +47,9 @@ export async function fixture(collation: string, recursive: boolean, corrected =
   try {
     await k.raw('PRAGMA recursive_triggers=' + Number(recursive))
     if (filename !== ':memory:') await k.raw('PRAGMA journal_mode=WAL')
-    for (const sql of schema)
+    await runInSeries(schema, async sql => {
       await k.raw('CREATE TABLE ' + sql.replaceAll(/VARCHAR\(\d+\)/g, type => type + ' COLLATE ' + collation))
+    })
     await k.schema.alterTable('transactions', table => {
       void table.index('txid')
     })
@@ -89,9 +91,10 @@ export async function exact(k: Knex) {
     snapshotUserId: number
     snapshotRowId: number
   }> = []
-  for (const [id, [table, key]] of profiles.entries())
-    for (const row of await k(table))
-      expected.push({ snapshotTableId: id, snapshotUserId: row.userId, snapshotRowId: row[key] })
+  await runInSeries(profiles.entries(), async ([id, [table, key]]) => {
+    const rows = await k(table)
+    for (const row of rows) expected.push({ snapshotTableId: id, snapshotUserId: row.userId, snapshotRowId: row[key] })
+  })
   expected.sort(
     (a, b) =>
       a.snapshotTableId - b.snapshotTableId || a.snapshotUserId - b.snapshotUserId || a.snapshotRowId - b.snapshotRowId

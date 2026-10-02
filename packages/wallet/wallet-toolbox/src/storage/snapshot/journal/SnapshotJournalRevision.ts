@@ -10,7 +10,7 @@ export type SnapshotJournalRevision = string & { readonly [journalRevision]: tru
 export function snapshotJournalRevision(value: unknown): SnapshotJournalRevision {
   if (
     typeof value !== 'string' ||
-    !/^(?:0|[1-9][0-9]{0,18})$/.test(value) ||
+    !/^(?:0|[1-9]\d{0,18})$/.test(value) ||
     (value.length === 19 && value > MAX_SNAPSHOT_JOURNAL_REVISION)
   ) {
     throw new WERR_INVALID_OPERATION('Invalid snapshot journal revision')

@@ -71,7 +71,7 @@ export async function validateLegacy(k: Knex, config?: Knex.MigratorConfig): Pro
     if (
       !(object.type === 'trigger' && names.has(object.name)) &&
       (retiredTables.includes(object.tbl_name) ||
-        retiredTables.some(table => new RegExp('\\b' + table + '\\b', 'i').test(object.sql)))
+        retiredTables.some(table => new RegExp(String.raw`\b${table}\b`, 'i').test(object.sql)))
     )
       throw new WERR_INVALID_OPERATION('Unowned object references legacy auxiliary data')
   return names

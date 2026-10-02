@@ -347,12 +347,12 @@ test.each(['install', 'read', 'complete'])(
     const transaction = jest.fn(),
       raw = jest.fn()
     const k = { client: { config: { client: 'mysql2' } }, transaction, raw } as unknown as Knex
-    const result =
-      operation === 'install'
-        ? installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy)
-        : operation === 'read'
-          ? readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)
-          : completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)
+    const operations = {
+      install: () => installSnapshotJournalSqliteGeneration(k, ceiling, journalReceiptPolicy),
+      read: () => readSnapshotJournalSqliteGeneration(k, journalReceiptPolicy),
+      complete: () => completeSnapshotJournalSqliteGeneration(k, journalReceiptPolicy)
+    }
+    const result = operations[operation as keyof typeof operations]()
     await expect(result).rejects.toThrow('Invalid or unowned SQLite snapshot journal generation')
     expect(transaction).not.toHaveBeenCalled()
     expect(raw).not.toHaveBeenCalled()

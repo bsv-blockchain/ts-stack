@@ -110,9 +110,9 @@ test.each(['complete', 'unpublished'] as const)(
 
 test('MySQL retains its existing migration and deletion behavior without SQLite operations', async () => {
   const database = { client: { config: { client: 'mysql2' } } } as Knex
-  await migrateGeneration(database)
-  await refuseGenerationDowngrade(database)
-  await dropGenerationForDataDeletion(database)
+  await expect(migrateGeneration(database)).resolves.toBeUndefined()
+  await expect(refuseGenerationDowngrade(database)).resolves.toBeUndefined()
+  await expect(dropGenerationForDataDeletion(database)).resolves.toBeUndefined()
 })
 
 test('empty migration adapters without a dialect label do not issue SQLite cleanup commands', async () => {

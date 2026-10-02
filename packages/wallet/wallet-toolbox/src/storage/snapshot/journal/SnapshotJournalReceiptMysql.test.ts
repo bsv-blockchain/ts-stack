@@ -32,6 +32,12 @@ interface Query {
   response?: unknown
 }
 
+function stringifyBigints(rows: Array<Record<string, unknown>>): void {
+  for (const row of rows)
+    for (const field of ['expiresAt', 'receiptLifetimeMs'])
+      if (row[field] !== undefined) row[field] = String(row[field])
+}
+
 // Real MySQL query compilation/response processing, backed by SQLite for DML
 // and rollback. The independent native fixture proves MySQL isolation/locks.
 async function fixture(strings: boolean) {
@@ -69,10 +75,7 @@ async function fixture(strings: boolean) {
     const sql = q.sql.replace(/ (?:for (?:share|update)(?: nowait)?|lock in share mode)$/i, '')
     const result = await db.raw(sql, q.bindings)
     if (Array.isArray(result)) {
-      if (strings)
-        for (const row of result)
-          for (const field of ['expiresAt', 'receiptLifetimeMs'])
-            if (row[field] !== undefined) row[field] = String(row[field])
+      if (strings) stringifyBigints(result)
       return respond(result)
     }
     return respond({ affectedRows: result?.changes ?? 0, insertId: result?.lastInsertRowid ?? 0 })

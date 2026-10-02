@@ -20,6 +20,17 @@ const execute = (file, args, options) =>
     )
   })
 
+function fixtureScript(group) {
+  if (group === 'generation') return 'snapshotJournalMysql.cjs'
+  if (group === 'server-crash') return 'snapshotJournalMysqlServerCrash.cjs'
+  return 'snapshotJournalReceiptMysql.cjs'
+}
+function fixtureTimeout(group) {
+  if (group === 'generation') return 180000
+  if (group === 'server-crash') return 240000
+  return 60000
+}
+
 async function runFixture(group) {
   assert(journalFixtureGroups.includes(group))
   const secret = randomBytes(32).toString('hex')
@@ -106,31 +117,17 @@ async function runFixture(group) {
     {
       const started = Date.now()
       process.stdout.write(JSON.stringify({ group, status: 'started' }) + '\n')
-      const result = await execute(
-        process.execPath,
-        [
-          join(
-            __dirname,
-            group === 'generation'
-              ? 'snapshotJournalMysql.cjs'
-              : group === 'server-crash'
-                ? 'snapshotJournalMysqlServerCrash.cjs'
-                : 'snapshotJournalReceiptMysql.cjs'
-          ),
-          group
-        ],
-        {
-          env: {
-            ...process.env,
-            TS_STACK_SNAPSHOT_CONTAINER: name,
-            TS_STACK_SNAPSHOT_CONTAINER_ID: id,
-            TS_STACK_SNAPSHOT_CONTAINER_OWNER: owner,
-            TS_STACK_SNAPSHOT_MYSQL_SECRET: secret
-          },
-          signal: cancellation.signal,
-          timeout: group === 'generation' ? 180000 : group === 'server-crash' ? 240000 : 60000
-        }
-      )
+      const result = await execute(process.execPath, [join(__dirname, fixtureScript(group)), group], {
+        env: {
+          ...process.env,
+          TS_STACK_SNAPSHOT_CONTAINER: name,
+          TS_STACK_SNAPSHOT_CONTAINER_ID: id,
+          TS_STACK_SNAPSHOT_CONTAINER_OWNER: owner,
+          TS_STACK_SNAPSHOT_MYSQL_SECRET: secret
+        },
+        signal: cancellation.signal,
+        timeout: fixtureTimeout(group)
+      })
       process.stdout.write(result)
       process.stdout.write(JSON.stringify({ group, status: 'passed', milliseconds: Date.now() - started }) + '\n')
     }

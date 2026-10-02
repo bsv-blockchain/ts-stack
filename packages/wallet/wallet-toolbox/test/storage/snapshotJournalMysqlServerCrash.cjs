@@ -1,3 +1,4 @@
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 const receiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 2592000000 }
 const assert = require('node:assert/strict'),
   { fork } = require('node:child_process'),
@@ -45,7 +46,7 @@ function ownedServer() {
   assert.equal(actual.HostConfig.Binds, null)
   assert.equal(actual.HostConfig.Tmpfs['/var/lib/mysql'], 'rw,nosuid,nodev,size=512m')
   const pid = docker('exec', containerId, 'cat', '/var/lib/mysql/fixture.pid')
-  assert(/^[0-9]+$/.test(pid) && Number(pid) > 1)
+  assert(/^\d+$/.test(pid) && Number(pid) > 1)
   assert.equal(docker('exec', containerId, 'cat', '/proc/' + pid + '/comm'), 'mysqld')
   return pid
 }
@@ -56,8 +57,11 @@ function crashServer() {
 }
 async function ready(previous) {
   const deadline = Date.now() + 20000
-  let last
-  while (Date.now() < deadline) {
+  let last, recovered
+  function* attempts() {
+    while (Date.now() < deadline && recovered === undefined) yield undefined
+  }
+  await runInSeries(attempts(), async () => {
     try {
       docker(
         'exec',
@@ -72,13 +76,14 @@ async function ready(previous) {
       )
       const pid = ownedServer()
       assert.notEqual(pid, previous)
-      return pid
+      recovered = pid
     } catch (error) {
       last = error
       await new Promise(resolve => setTimeout(resolve, 300))
     }
-  }
-  throw last
+  })
+  if (recovered === undefined) throw last
+  return recovered
 }
 
 async function isolate(k, isolation) {
@@ -88,27 +93,42 @@ async function isolate(k, isolation) {
   assert.equal(level.isolation.replaceAll('-', ' '), isolation)
   await k.raw('SET SESSION innodb_lock_wait_timeout=5')
 }
-async function finish(k) {
-  for (let i = 0; i < 100; i++) {
+async function bootstrap(k) {
+  let complete = false
+  function* pages() {
+    for (let i = 0; i < 100 && !complete; i++) yield i
+  }
+  await runInSeries(pages(), async () => {
     const page = await copy(k, 1000000)
     assert(!page.invalidated)
-    if (page.complete) return await complete(k, ceiling, receiptPolicy)
-    assert(i < 99)
-  }
+    complete = page.complete
+  })
+  assert(complete, 'Bootstrap did not complete within its bounded fixture pages')
 }
+async function finish(k) {
+  await bootstrap(k)
+  return await complete(k, ceiling, receiptPolicy)
+}
+
 async function clear(k) {
   const [triggers] = await k.raw(
     "SELECT TRIGGER_NAME name FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND LEFT(TRIGGER_NAME,17)='snapshot_journal_'"
   )
-  for (const row of triggers) await k.raw('DROP TRIGGER ??', [row.name])
+  await runInSeries(triggers, async row => {
+    await k.raw('DROP TRIGGER ??', [row.name])
+  })
   const [names] = await k.raw(
     "SELECT TABLE_NAME name FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND LEFT(TABLE_NAME,17)='snapshot_journal_'"
   )
-  for (const row of names) await k.schema.dropTable(row.name)
+  await runInSeries(names, async row => {
+    await k.schema.dropTable(row.name)
+  })
 }
 async function rows(k) {
   const result = {}
-  for (const name of tables) result[name] = (await k(name).select('*')).map(row => JSON.stringify(row)).sort()
+  await runInSeries(tables, async name => {
+    result[name] = (await k(name).select('*')).map(row => JSON.stringify(row)).sort()
+  })
   return result
 }
 async function child() {
@@ -127,7 +147,7 @@ async function child() {
       process.kill(process.pid, 'SIGKILL')
     }
   }
-  const object = sql => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_[A-Za-z0-9_]+)/.exec(sql)?.[1]
+  const object = sql => /^CREATE (?:TABLE|TRIGGER) (snapshot_journal_\w+)/.exec(sql)?.[1]
   k.on('query', q => {
     const name = object(q.sql)
     if (name) park('before-' + name)
@@ -150,11 +170,7 @@ async function child() {
       park('bootstrap-after-commit')
     }
     if (boundary.startsWith('complete-')) {
-      for (let i = 0; i < 100; i++) {
-        const page = await copy(k, 1000000)
-        if (page.complete) break
-        assert(i < 99)
-      }
+      await bootstrap(k)
       completing = true
       await complete(k, ceiling, receiptPolicy)
       park('complete-after-commit')
@@ -213,8 +229,8 @@ async function main() {
       'complete-before-commit',
       'complete-after-commit'
     ]
-    for (const isolation of ['READ COMMITTED', 'REPEATABLE READ']) {
-      for (const boundary of boundaries) {
+    await runInSeries(['READ COMMITTED', 'REPEATABLE READ'], async isolation => {
+      await runInSeries(boundaries, async boundary => {
         const restarted = await killAt(
           boundary,
           join(directory, isolation.replaceAll(' ', '-') + '-' + boundary),
@@ -241,14 +257,18 @@ async function main() {
         assert.equal(resumed.epoch, saved.epoch)
         await finish(k)
         let charged = 0
-        for (const table of [
-          ...tables,
-          'snapshot_profile_keys',
-          'snapshot_relation_keys',
-          'snapshot_certificate_field_keys',
-          'snapshot_global_keys'
-        ])
-          charged += Number((await k(table).count('* AS n').first()).n)
+        await runInSeries(
+          [
+            ...tables,
+            'snapshot_profile_keys',
+            'snapshot_relation_keys',
+            'snapshot_certificate_field_keys',
+            'snapshot_global_keys'
+          ],
+          async table => {
+            charged += Number((await k(table).count('* AS n').first()).n)
+          }
+        )
         assert.equal((await k('snapshot_journal_bootstrap').first()).rowsUsed, charged)
         await exact(k)
         assert.deepEqual(await rows(k), baseline)
@@ -274,8 +294,8 @@ async function main() {
           writerRecovered: true
         })
         console.log(JSON.stringify(results.at(-1)))
-      }
-    }
+      })
+    })
     console.log(
       JSON.stringify({
         status: 'isolated MySQL server-process crash recovery',

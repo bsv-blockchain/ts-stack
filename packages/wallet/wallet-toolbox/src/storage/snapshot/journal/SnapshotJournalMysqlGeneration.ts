@@ -222,7 +222,7 @@ async function plan(
     return invalid()
   const triggers = (await snapshotJournalMysqlObserverSql(k)).map(sql => {
     const match =
-      /^CREATE TRIGGER (snapshot_journal_[A-Za-z0-9_]+) AFTER (INSERT|UPDATE|DELETE) ON `([a-z_]+)` FOR EACH ROW (BEGIN .*)$/s.exec(
+      /^CREATE TRIGGER (snapshot_journal_\w+) AFTER (INSERT|UPDATE|DELETE) ON `([a-z_]+)` FOR EACH ROW (BEGIN .*)$/s.exec(
         sql
       )
     if (!match) return invalid()
@@ -343,7 +343,7 @@ async function validateTable(k: Knex, table: Table, epoch: string): Promise<void
       name: table.name + '_chk_' + (i + 1),
       type: 'CHECK',
       enforced: 'YES',
-      clause: clause.replaceAll("'", "\\'")
+      clause: clause.replaceAll("'", String.raw`\'`)
     }))
   ]
   if (JSON.stringify(constraints) !== JSON.stringify(expectedConstraints)) return invalid()
@@ -360,6 +360,31 @@ async function validateTable(k: Knex, table: Table, epoch: string): Promise<void
     [table.name]
   )
   if (triggers.length || partitions.length || foreign.length) return invalid()
+}
+
+async function validateRetention(
+  k: Knex,
+  state: SnapshotJournalMysqlIntent,
+  policy: SnapshotJournalReceiptPolicy
+): Promise<void> {
+  const rows = await k('snapshot_journal_retention')
+    .select(
+      'id',
+      'receiptLimit',
+      k.raw('CAST(receiptLifetimeMs AS CHAR) receiptLifetimeMs'),
+      k.raw('SUBSTRING(floor,1,20) floor')
+    )
+    .limit(2)
+  if (
+    rows.length !== 1 ||
+    rows[0].id !== 1 ||
+    rows[0].receiptLimit !== policy.receiptLimit ||
+    rows[0].receiptLifetimeMs !== String(policy.receiptLifetimeMs)
+  )
+    return invalid()
+  const floor = snapshotJournalRevision(rows[0].floor)
+  if (compareSnapshotJournalRevisions(floor, state.ceiling) > 0 || (state.nextObject < objectCount && floor !== '0'))
+    return invalid()
 }
 
 async function validateObject(
@@ -387,29 +412,7 @@ async function validateObject(
       )
         return invalid()
     }
-    if (object.definition.seed === 'retention') {
-      const rows = await k('snapshot_journal_retention')
-        .select(
-          'id',
-          'receiptLimit',
-          k.raw('CAST(receiptLifetimeMs AS CHAR) receiptLifetimeMs'),
-          k.raw('SUBSTRING(floor,1,20) floor')
-        )
-        .limit(2)
-      if (
-        rows.length !== 1 ||
-        rows[0].id !== 1 ||
-        rows[0].receiptLimit !== policy.receiptLimit ||
-        rows[0].receiptLifetimeMs !== String(policy.receiptLifetimeMs)
-      )
-        return invalid()
-      const floor = snapshotJournalRevision(rows[0].floor)
-      if (
-        compareSnapshotJournalRevisions(floor, state.ceiling) > 0 ||
-        (state.nextObject < objectCount && floor !== '0')
-      )
-        return invalid()
-    }
+    if (object.definition.seed === 'retention') await validateRetention(k, state, policy)
     return
   }
   const definition = object.definition,
@@ -588,8 +591,7 @@ export async function completeSnapshotJournalMysqlGeneration(
     if (state.epoch !== validated.epoch || state.nextObject !== objectCount) return invalid()
     const progress = await t('snapshot_journal_bootstrap').where('id', 1).first('stream', 'cursor')
     if (
-      !progress ||
-      progress.stream !== 17 ||
+      progress?.stream !== 17 ||
       progress.cursor !== null ||
       (await t('snapshot_journal_invalid').where('id', 1).first('id'))
     )

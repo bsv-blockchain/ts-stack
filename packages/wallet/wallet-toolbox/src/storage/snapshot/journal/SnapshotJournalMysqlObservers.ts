@@ -17,13 +17,10 @@ export const SNAPSHOT_JOURNAL_MYSQL_METADATA_DDL = [
 ]
 const tuple = (table: string, p: string): string[] => {
   const key = numeric.find(source => source.table === table)?.key
-  return key
-    ? [p + '.' + q(key), '0', "CAST('' AS BINARY)"]
-    : table === 'tx_labels_map'
-      ? [p + '.txLabelId', p + '.transactionId', "CAST('' AS BINARY)"]
-      : table === 'output_tags_map'
-        ? [p + '.outputTagId', p + '.outputId', "CAST('' AS BINARY)"]
-        : [p + '.certificateId', '0', 'CAST(' + p + '.fieldName AS BINARY)']
+  if (key) return [p + '.' + q(key), '0', "CAST('' AS BINARY)"]
+  if (table === 'tx_labels_map') return [p + '.txLabelId', p + '.transactionId', "CAST('' AS BINARY)"]
+  if (table === 'output_tags_map') return [p + '.outputTagId', p + '.outputId', "CAST('' AS BINARY)"]
+  return [p + '.certificateId', '0', 'CAST(' + p + '.fieldName AS BINARY)']
 }
 const scopeUpsert = (selection: string) =>
   `INSERT INTO snapshot_journal_scope(${scopeKey},revision,present) ${selection} ON DUPLICATE KEY UPDATE revision=VALUES(revision),present=VALUES(present); `
@@ -36,6 +33,44 @@ function keyGuard(key: string[], owner?: string): string {
     ...(owner ? [`(${owner} BETWEEN 1 AND 9007199254740991)`] : [])
   ].join(' AND ')
   return `IF NOT COALESCE((${valid}),FALSE) THEN INSERT IGNORE INTO snapshot_journal_invalid(id,reason) VALUES(1,'key-out-of-range'); SET journalEnabled=FALSE; END IF; `
+}
+
+function sourceScope(tableId: number, keys: string[]): string {
+  if (tableId < 8)
+    return scopeUpsert(
+      `SELECT ${tableId},NEW.userId,NEW.${q(numeric[tableId].key)},0,CAST('' AS BINARY),journalRevision,1`
+    )
+  else if (tableId === 10 || tableId === 11)
+    return scopeUpsert(
+      `SELECT ${tableId},snapshotUserId,snapshotLeftId,snapshotRightId,CAST('' AS BINARY),journalRevision,1 FROM snapshot_relation_keys WHERE snapshotTableId=${tableId - 10} AND snapshotLeftId=${keys[0]} AND snapshotRightId=${keys[1]} AND snapshotMembership<>0 FOR SHARE`
+    )
+  else if (tableId === 12)
+    return scopeUpsert(
+      `SELECT 12,snapshotUserId,snapshotCertificateId,0,CAST(snapshotFieldName AS BINARY),journalRevision,1 FROM snapshot_certificate_field_keys WHERE snapshotCertificateId=NEW.certificateId AND snapshotFieldName=NEW.fieldName AND snapshotMembership<>0 FOR SHARE`
+    )
+  return ''
+}
+function freshGeneration(event: string, same: string): string {
+  if (event === 'INSERT') return 'TRUE'
+  if (event === 'UPDATE') return `NOT (${same})`
+  return 'FALSE'
+}
+function physicalTrigger(tableId: number, table: string, event: string, changed: string): string {
+  const same = tuple(table, 'OLD')
+    .map((x, i) => `(${x} <=> ${tuple(table, 'NEW')[i]})`)
+    .join(' AND ')
+  const write = (p: string, present: number, fresh: string) =>
+    `INSERT INTO snapshot_journal_physical(${physicalKey},revision,generation,present) VALUES(${tableId},${tuple(table, p).join(',')},journalRevision,journalRevision,${present}) ON DUPLICATE KEY UPDATE revision=VALUES(revision),generation=CASE WHEN ${fresh} THEN VALUES(generation) ELSE generation END,present=VALUES(present); `
+  const p = event === 'DELETE' ? 'OLD' : 'NEW',
+    keys = tuple(table, p)
+  let body = advance + keyGuard(keys, tableId < 8 ? p + '.userId' : undefined)
+  if (event === 'UPDATE') body += keyGuard(tuple(table, 'OLD'), tableId < 8 ? 'OLD.userId' : undefined)
+  body += 'IF journalEnabled THEN '
+  if (event === 'UPDATE') body += `IF NOT (${same}) THEN ${write('OLD', 0, 'FALSE')} END IF; `
+  body += write(p, event === 'DELETE' ? 0 : 1, freshGeneration(event, same))
+  if (event !== 'DELETE') body += sourceScope(tableId, keys)
+  body += 'END IF; '
+  return `CREATE TRIGGER snapshot_journal_physical_${tableId}_${event} AFTER ${event} ON ${q(table)} FOR EACH ROW BEGIN ${variables}IF ${event === 'UPDATE' ? changed : 'TRUE'} THEN ${body} END IF; END`
 }
 
 /** Caller validates the completed MySQL membership/source schema before installing these observers. */
@@ -117,42 +152,8 @@ export async function snapshotJournalMysqlObserverSql(k: Knex): Promise<string[]
     const changed = columns
       .map(({ name }) => `NOT (CAST(OLD.${q(name)} AS BINARY) <=> CAST(NEW.${q(name)} AS BINARY))`)
       .join(' OR ')
-    const same = tuple(table, 'OLD')
-      .map((x, i) => `(${x} <=> ${tuple(table, 'NEW')[i]})`)
-      .join(' AND ')
-    const write = (p: string, present: number, fresh: string) =>
-      `INSERT INTO snapshot_journal_physical(${physicalKey},revision,generation,present) VALUES(${tableId},${tuple(table, p).join(',')},journalRevision,journalRevision,${present}) ON DUPLICATE KEY UPDATE revision=VALUES(revision),generation=CASE WHEN ${fresh} THEN VALUES(generation) ELSE generation END,present=VALUES(present); `
-    for (const event of ['INSERT', 'UPDATE', 'DELETE']) {
-      const p = event === 'DELETE' ? 'OLD' : 'NEW',
-        keys = tuple(table, p)
-      let body = advance + keyGuard(keys, tableId < 8 ? p + '.userId' : undefined)
-      if (event === 'UPDATE') body += keyGuard(tuple(table, 'OLD'), tableId < 8 ? 'OLD.userId' : undefined)
-      body += 'IF journalEnabled THEN '
-      if (event === 'UPDATE') body += `IF NOT (${same}) THEN ${write('OLD', 0, 'FALSE')} END IF; `
-      body += write(
-        p,
-        event === 'DELETE' ? 0 : 1,
-        event === 'INSERT' ? 'TRUE' : event === 'UPDATE' ? `NOT (${same})` : 'FALSE'
-      )
-      if (event !== 'DELETE') {
-        if (tableId < 8)
-          body += scopeUpsert(
-            `SELECT ${tableId},NEW.userId,NEW.${q(numeric[tableId].key)},0,CAST('' AS BINARY),journalRevision,1`
-          )
-        else if (tableId === 10 || tableId === 11)
-          body += scopeUpsert(
-            `SELECT ${tableId},snapshotUserId,snapshotLeftId,snapshotRightId,CAST('' AS BINARY),journalRevision,1 FROM snapshot_relation_keys WHERE snapshotTableId=${tableId - 10} AND snapshotLeftId=${keys[0]} AND snapshotRightId=${keys[1]} AND snapshotMembership<>0 FOR SHARE`
-          )
-        else if (tableId === 12)
-          body += scopeUpsert(
-            `SELECT 12,snapshotUserId,snapshotCertificateId,0,CAST(snapshotFieldName AS BINARY),journalRevision,1 FROM snapshot_certificate_field_keys WHERE snapshotCertificateId=NEW.certificateId AND snapshotFieldName=NEW.fieldName AND snapshotMembership<>0 FOR SHARE`
-          )
-      }
-      body += 'END IF; '
-      definitions.push(
-        `CREATE TRIGGER snapshot_journal_physical_${tableId}_${event} AFTER ${event} ON ${q(table)} FOR EACH ROW BEGIN ${variables}IF ${event === 'UPDATE' ? changed : 'TRUE'} THEN ${body} END IF; END`
-      )
-    }
+    for (const event of ['INSERT', 'UPDATE', 'DELETE'])
+      definitions.push(physicalTrigger(tableId, table, event, changed))
   })
   return definitions
 }

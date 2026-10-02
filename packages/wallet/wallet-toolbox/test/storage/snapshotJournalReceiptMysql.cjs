@@ -1,3 +1,4 @@
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
 const assert = require('node:assert/strict')
 const { open } = require('./snapshotJournalMysqlConnection.cjs')
 const {
@@ -21,10 +22,18 @@ async function qualify(isolation, bigNumberStrings) {
   const k = open(bigNumberStrings),
     peer = open(bigNumberStrings)
   try {
-    for (const db of [k, peer]) await db.raw('SET SESSION TRANSACTION ISOLATION LEVEL ' + isolation)
-    for (const table of ['snapshot_journal_receipts', 'snapshot_journal_retention', 'receipt_fixture_source'])
-      await k.schema.dropTableIfExists(table)
-    for (const sql of snapshotJournalReceiptDdl(k)) await k.raw(sql)
+    await runInSeries([k, peer], async db => {
+      await db.raw('SET SESSION TRANSACTION ISOLATION LEVEL ' + isolation)
+    })
+    await runInSeries(
+      ['snapshot_journal_receipts', 'snapshot_journal_retention', 'receipt_fixture_source'],
+      async table => {
+        await k.schema.dropTableIfExists(table)
+      }
+    )
+    await runInSeries(snapshotJournalReceiptDdl(k), async sql => {
+      await k.raw(sql)
+    })
     await k('snapshot_journal_retention').insert({ id: 1, floor: '0', receiptLimit: 2, receiptLifetimeMs: 2592000000 })
     await k.raw('CREATE TABLE receipt_fixture_source(id INTEGER PRIMARY KEY,value INTEGER NOT NULL) ENGINE=InnoDB')
     await k('receipt_fixture_source').insert({ id: 1, value: 0 })
@@ -160,63 +169,62 @@ async function processLoss() {
     directory = await mkdtemp(join(tmpdir(), 'ts569-receipt-loss-')),
     results = []
   try {
-    for (const isolation of ['READ COMMITTED', 'REPEATABLE READ'])
-      for (const phase of [
-        'record-before-commit',
-        'record-after-commit',
-        'collect-before-commit',
-        'collect-after-commit'
-      ]) {
-        await k('snapshot_journal_receipts').delete()
-        await k('snapshot_journal_retention').update({ floor: '0', receiptLimit: 128, receiptLifetimeMs: 2592000000 })
-        const request = { ...processRequest, expiresAt: Date.now() + 60000 },
-          marker = join(directory, results.length + '.txt')
-        if (phase.startsWith('collect'))
-          await k('snapshot_journal_receipts').insert({
-            ...request,
-            binding: snapshotJournalReceiptBinding(binding),
-            floor: '0',
-            expiresAt: 1
+    await runInSeries(['READ COMMITTED', 'REPEATABLE READ'], async isolation => {
+      await runInSeries(
+        ['record-before-commit', 'record-after-commit', 'collect-before-commit', 'collect-after-commit'],
+        async phase => {
+          await k('snapshot_journal_receipts').delete()
+          await k('snapshot_journal_retention').update({ floor: '0', receiptLimit: 128, receiptLifetimeMs: 2592000000 })
+          const request = { ...processRequest, expiresAt: Date.now() + 60000 },
+            marker = join(directory, results.length + '.txt')
+          if (phase.startsWith('collect'))
+            await k('snapshot_journal_receipts').insert({
+              ...request,
+              binding: snapshotJournalReceiptBinding(binding),
+              floor: '0',
+              expiresAt: 1
+            })
+          const child = fork(__filename, ['child', phase, marker, isolation, String(request.expiresAt)], {
+            stdio: ['ignore', 'ignore', 'pipe', 'ipc']
           })
-        const child = fork(__filename, ['child', phase, marker, isolation, String(request.expiresAt)], {
-          stdio: ['ignore', 'ignore', 'pipe', 'ipc']
-        })
-        let stderr = ''
-        child.stderr.on('data', chunk => {
-          stderr = (stderr + chunk.toString()).slice(-6000)
-        })
-        const timer = setTimeout(() => child.kill('SIGKILL'), 15000)
-        let terminal
-        try {
-          terminal = await new Promise((resolve, reject) => {
-            child.once('error', reject)
-            child.once('exit', (code, signal) => resolve({ code, signal }))
+          let stderr = ''
+          child.stderr.on('data', chunk => {
+            stderr = (stderr + chunk.toString()).slice(-6000)
           })
-        } finally {
-          clearTimeout(timer)
+          const timer = setTimeout(() => child.kill('SIGKILL'), 15000)
+          let terminal
+          try {
+            terminal = await new Promise((resolve, reject) => {
+              child.once('error', reject)
+              child.once('exit', (code, signal) => resolve({ code, signal }))
+            })
+          } finally {
+            clearTimeout(timer)
+          }
+          assert.equal(terminal.signal, 'SIGKILL', stderr)
+          assert.equal(readFileSync(marker, 'utf8'), phase)
+          const exists = phase === 'record-after-commit' || phase === 'collect-before-commit'
+          assert.equal((await k('snapshot_journal_receipts')).length, exists ? 1 : 0)
+          if (phase === 'record-after-commit')
+            assert.equal(
+              (await k.transaction(t => readSnapshotJournalReceipt(t, binding, request))).highWater,
+              request.highWater
+            )
+          if (phase === 'record-before-commit')
+            await assert.rejects(k.transaction(t => readSnapshotJournalReceipt(t, binding, request)))
+          await k('receipt_fixture_source')
+            .where('id', 1)
+            .update({ value: results.length + 2 })
+          results.push({
+            isolation,
+            phase,
+            signal: terminal.signal,
+            receiptPersisted: exists,
+            sourceWriteAfterLoss: true
+          })
         }
-        assert.equal(terminal.signal, 'SIGKILL', stderr)
-        assert.equal(readFileSync(marker, 'utf8'), phase)
-        const exists = phase === 'record-after-commit' || phase === 'collect-before-commit'
-        assert.equal((await k('snapshot_journal_receipts')).length, exists ? 1 : 0)
-        if (phase === 'record-after-commit')
-          assert.equal(
-            (await k.transaction(t => readSnapshotJournalReceipt(t, binding, request))).highWater,
-            request.highWater
-          )
-        if (phase === 'record-before-commit')
-          await assert.rejects(k.transaction(t => readSnapshotJournalReceipt(t, binding, request)))
-        await k('receipt_fixture_source')
-          .where('id', 1)
-          .update({ value: results.length + 2 })
-        results.push({
-          isolation,
-          phase,
-          signal: terminal.signal,
-          receiptPersisted: exists,
-          sourceWriteAfterLoss: true
-        })
-      }
+      )
+    })
     return results
   } finally {
     await k.destroy()
@@ -225,8 +233,11 @@ async function processLoss() {
 }
 async function main() {
   const results = []
-  for (const isolation of ['READ COMMITTED', 'REPEATABLE READ'])
-    for (const bigNumberStrings of [false, true]) results.push(await qualify(isolation, bigNumberStrings))
+  await runInSeries(['READ COMMITTED', 'REPEATABLE READ'], async isolation => {
+    await runInSeries([false, true], async bigNumberStrings => {
+      results.push(await qualify(isolation, bigNumberStrings))
+    })
+  })
   const crashes = await processLoss()
   console.log(
     JSON.stringify({

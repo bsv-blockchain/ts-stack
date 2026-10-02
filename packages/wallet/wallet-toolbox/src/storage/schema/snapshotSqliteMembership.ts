@@ -153,10 +153,9 @@ export function membershipBodies(names: MembershipNames = legacyNames) {
   function numericMembership(d: IdentityDefinition, event: Event): string {
     const { table, key, owner } = d.source
     const context = event === 'DELETE' ? 'OLD' : 'NEW'
+    const ownerColumn = owner ? ',OLD.' + q(owner) + ' AS ' + q(owner) : ''
     const retired =
-      event === 'DELETE'
-        ? `SELECT OLD.${q(key)} AS ${q(key)}${owner ? ',OLD.' + q(owner) + ' AS ' + q(owner) : ''}`
-        : displacedIdentity(d, event === 'UPDATE')
+      event === 'DELETE' ? `SELECT OLD.${q(key)} AS ${q(key)}${ownerColumn}` : displacedIdentity(d, event === 'UPDATE')
     const ids = `SELECT ${q(key)} FROM (${retired})`
     const owners = owner ? `SELECT ${q(owner)},${q(key)} FROM (${retired})` : ''
     const sql =
@@ -214,24 +213,28 @@ function changed(columns: string[]): string {
     .join(' OR ')
 }
 
+function numericTriggers(d: IdentityDefinition, bodies: ReturnType<typeof membershipBodies>): string[] {
+  const sql: string[] = []
+  const fields = d.columns.map(column => column.name)
+  if (d.source.table === 'transactions') fields.push('txid', 'provenTxId')
+  if (d.source.table === 'proven_tx_reqs') fields.push('provenTxId')
+  for (const event of ['INSERT', 'UPDATE', 'DELETE'] as const) {
+    const when = event === 'UPDATE' ? ' WHEN ' + changed(fields) : ''
+    if (event !== 'DELETE')
+      sql.push(
+        `CREATE TRIGGER ${q('snapshot_identity_before_' + d.source.table + '_' + event)} BEFORE ${event} ON ${q(d.source.table)}${when} BEGIN ${observeIdentity(d, event === 'UPDATE')} END`
+      )
+    sql.push(
+      `CREATE TRIGGER ${q('snapshot_identity_after_' + d.source.table + '_' + event)} AFTER ${event} ON ${q(d.source.table)}${when} BEGIN ${bodies.numeric(d, event)} END`
+    )
+  }
+  return sql
+}
+
 export function membershipTriggers(definitions: IdentityDefinition[], names: MembershipNames = legacyNames): string[] {
   const sql: string[] = []
   const bodies = membershipBodies(names)
-  for (const d of definitions) {
-    const fields = d.columns.map(column => column.name)
-    if (d.source.table === 'transactions') fields.push('txid', 'provenTxId')
-    if (d.source.table === 'proven_tx_reqs') fields.push('provenTxId')
-    for (const event of ['INSERT', 'UPDATE', 'DELETE'] as const) {
-      const when = event === 'UPDATE' ? ' WHEN ' + changed(fields) : ''
-      if (event !== 'DELETE')
-        sql.push(
-          `CREATE TRIGGER ${q('snapshot_identity_before_' + d.source.table + '_' + event)} BEFORE ${event} ON ${q(d.source.table)}${when} BEGIN ${observeIdentity(d, event === 'UPDATE')} END`
-        )
-      sql.push(
-        `CREATE TRIGGER ${q('snapshot_identity_after_' + d.source.table + '_' + event)} AFTER ${event} ON ${q(d.source.table)}${when} BEGIN ${bodies.numeric(d, event)} END`
-      )
-    }
-  }
+  for (const d of definitions) sql.push(...numericTriggers(d, bodies))
   for (const table of [...relations.map(relation => relation.table), 'certificate_fields']) {
     const relation = relations.find(relation => relation.table === table)
     const fields = relation ? [relation.leftKey, relation.rightKey] : ['fieldName', 'certificateId', 'userId']
