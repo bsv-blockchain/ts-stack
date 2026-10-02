@@ -2475,3 +2475,26 @@ These additions do not complete the durable buyer: full delivered-result custody
 its orchestration, application material validation and end-to-end reference flows
 remain required. They neither widen the four-MiB wire bounds nor alter existing
 AuthFetch payment defaults, operation-store schemas or unguarded wallet callers.
+
+### Immutable original-operation object custody
+
+The protected control-state target is locally qualified at `012def997`: 410 of
+430 mutants detected (95.35%), zero uncovered/invalid and all 10,213 frozen inputs
+unchanged. The preceding failures remain retained. The 166 canonical tests also
+verify cleanup on rejected decrypted buffers; the two regressions fail before
+that fix. This local result does not replace final hosted qualification.
+
+The new operation-object owner retains large original requests, selected
+contracts and delivered results with distinct role bindings, complete logical
+reservation and immutable first bytes. Native storage composes the existing
+protected ledger; browser storage uses a dedicated encrypted inventory and atomic
+chunk commits. Canonical integration passes all 402 selected tests across 16
+suites, including 300 generated histories for each backend and four native
+process kills. The exact packed browser fixture passes four-MiB wallet
+encryption, whole-browser restart and cross-tab arbitration. Packed exports and
+types, all 49 compiled examples from 22 exact tarballs, all existing and new
+browser-entry budgets, and root health/lint/format/type checks pass. Complete
+mutation and exact-head hosted qualification remain unfinished.
+Existing operation and protected-control exports, budgets and formats are
+unchanged. The durable buyer, material adapters and full acquisition demonstration
+remain separate unfinished work.

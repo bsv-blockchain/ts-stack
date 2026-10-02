@@ -65,7 +65,7 @@ async function createConsumer(root) {
   )
   await mkdir(path.join(directory, 'browser'))
   await Promise.all(
-    ['index.html', 'main.ts', 'proposals.ts', 'protected.ts'].map(file =>
+    ['index.html', 'main.ts', 'proposals.ts', 'protected.ts', 'objects.ts'].map(file =>
       cp(path.join(packageDirectory, 'test/browser', file), path.join(directory, 'browser', file))
     )
   )
@@ -252,9 +252,44 @@ try {
     await page.evaluate(() => window.outputKnowledgeBrowser.protected.wrongWallet()),
     'context-changed'
   )
+  assert.deepEqual(await page.evaluate(() => window.outputKnowledgeBrowser.objects.init(true)), {
+    state: 'absent'
+  })
+  const objectReceipt = await page.evaluate(() => window.outputKnowledgeBrowser.objects.save())
+  assert.equal(objectReceipt.bytes, 4194304)
+  const objectRaw = await page.evaluate(() => window.outputKnowledgeBrowser.objects.raw())
+  assert.ok(!objectRaw.includes('synthetic-private-context'))
+  assert.ok(!objectRaw.includes('original-delivery'))
+  await browser.close()
+  browser = await puppeteer.launch(launch)
+  page = await openPage(browser, baseURL, errors)
+  const objectRestored = await page.evaluate(() =>
+    window.outputKnowledgeBrowser.objects.init(false)
+  )
+  assert.equal(objectRestored.length, 4194304)
+  assert.deepEqual(objectRestored.receipt, objectReceipt)
+  assert.equal(objectRestored.digest, objectReceipt.digest)
+  assert.equal(objectRestored.first, 65)
+  assert.equal(objectRestored.last, 65)
+  await page.evaluate(() => window.outputKnowledgeBrowser.objects.reserveSecond())
+  const objectPeer = await openPage(browser, baseURL, errors)
+  await objectPeer.evaluate(() => window.outputKnowledgeBrowser.objects.init(false))
+  const objectWriters = await Promise.all([
+    page.evaluate(() => window.outputKnowledgeBrowser.objects.compete(7)),
+    objectPeer.evaluate(() => window.outputKnowledgeBrowser.objects.compete(8))
+  ])
+  assert.deepEqual(objectWriters.map(value => value.status).sort(), ['conflict', 'stored'])
+  assert.deepEqual(
+    (await objectPeer.evaluate(() => window.outputKnowledgeBrowser.objects.second())).bytes,
+    [objectWriters[0].status === 'stored' ? 7 : 8]
+  )
+  assert.equal(
+    await page.evaluate(() => window.outputKnowledgeBrowser.objects.wrongWallet()),
+    'context-changed'
+  )
   assert.deepEqual(errors, [])
   console.log(
-    'ok - exact packed browser imports, strict CSP, native IndexedDB, browser/page restart, receipt-before-cursor, cross-tab CAS, missing-store recovery, lost-core fence, proposal receipt/replay, durable exclusive expiry and protected recipient custody/restart/concurrent CAS'
+    'ok - exact packed browser imports, strict CSP, native IndexedDB, browser/page restart, receipt-before-cursor, cross-tab CAS, missing-store recovery, lost-core fence, proposal receipt/replay, durable exclusive expiry protected recipient custody/restart/concurrent CAS and immutable four-MiB object custody/restart/cross-tab retention'
   )
 } finally {
   await browser?.close()

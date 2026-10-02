@@ -1464,6 +1464,18 @@
           "Only the original custody and complete namespace/configuration/revision binding recover retained private state.",
           "A lost CAS acknowledgement can replay only the immediately following exact plaintext; competing later state remains a conflict."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/protected-operation-object.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Immutable protected original-operation requests, contracts and results with complete native/browser reservation and exact-first-object recovery",
+        "target": "At least 300 native and 300 browser original-object reservation, completion, retry and recovery histories",
+        "invariants": [
+          "Only original custody and exact role binding can recover retained immutable bytes.",
+          "All completion slots are reserved before financial effects; conflicts and lost acknowledgements never replace the first object.",
+          "Concurrent browser writers commit one authenticated inventory and complete chunk set atomically."
+        ]
       }
     ],
     "exclusions": [

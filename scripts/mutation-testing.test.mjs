@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 119)
+  assert.equal(Object.keys(configured).length, 120)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -818,4 +818,31 @@ test('paid lookup and protected state retain whole-source and complete compatibi
       '<rootDir>/src/utility/__tests__/ScriptTemplateBRC29.test.ts'
     )
   )
+})
+
+test('immutable operation objects qualify all native/browser modules and complete retained compatibility', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    objects = configured['protected-operation-objects']
+  assert.deepEqual(objects.mutate, [
+    'src/operations/ProtectedOperationObjectStore.ts',
+    'src/operations/ProtectedOperationObjectPlan.ts',
+    'src/operations/SQLiteProtectedOperationObjectStore.ts',
+    'src/operations/ProtectedOperationObjectCipher.ts',
+    'src/operations/IndexedDBProtectedOperationObjectStore.ts'
+  ])
+  assert.deepEqual(objects.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/protected-operation*.test.ts',
+    '<rootDir>/test/operation-state*.test.ts',
+    '<rootDir>/test/protected-ledger*.test.ts',
+    '<rootDir>/test/protected-payload.test.ts'
+  ])
+  assert.equal(objects.runnerOptions.buildCommand, 'pnpm build')
+  assert.equal(objects.runnerOptions.maxTestRunnerReuse, 8)
+  for (const id of ['protected-operation-objects', 'protected-operation-state'])
+    for (const input of [
+      'test/fixtures/protected-operation-object-worker.mjs',
+      'test/protected-operation-object.fixture.ts',
+      'src/private/**'
+    ])
+      assert.ok(configured[id].additionalInputs.includes(input))
 })

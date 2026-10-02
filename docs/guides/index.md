@@ -122,3 +122,9 @@ disclosure layers behind explicitly selected BRC-194 endpoints.
 - [Explicit paid lookup clients and protected workflow state](./paid-lookup-client.md):
   retain original requests, use finite selected-host payment/recovery calls,
   encrypt durable control state and guard new wallet signing after delays.
+
+### Immutable protected operation objects
+
+[Retain original requests, contracts and results](./protected-operation-objects.md)
+with explicit native/browser custody, complete logical capacity reservations,
+immutable first bytes and recovery through the original operation.

@@ -137,6 +137,13 @@
       "budget": "packages/application/output-knowledge/browser-protected-budget.json",
       "entry": "./operations/protected",
       "splittingDisposition": "Optional wallet-encrypted workflow custody is isolated in ./operations/protected from the original operations entry and every existing browser budget. Its complete exact-tarball export graph measures Vite 146597/48612/41007 and esbuild 130036/48181/42143 raw/gzip/Brotli bytes: one chunk and two first-party packages. The graph retains SDK hashing, identity validation and wallet-bound payload checks. Separate rounded limits retain at least 10% headroom in each dimension; native SQLite and private Node custody remain excluded. The original eight additional entries and all their limits are unchanged."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-objects-budget.json",
+      "entry": "./operations/objects",
+      "splittingDisposition": "The optional immutable operation-object entry isolates browser IndexedDB and complete object framing from Node SQLite and supplied custody. The complete exact-tarball export graph measures Vite 154945/50701/42963 and esbuild 136150/50027/44029 raw/gzip/Brotli bytes, each in one chunk and only the output-knowledge and SDK packages. Independent rounded limits retain at least 10% headroom; existing root, operations and protected entry limits remain unchanged."
     }
   ]
 }

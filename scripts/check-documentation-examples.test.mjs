@@ -38,3 +38,8 @@ test('an SDK change retains every compiled consumer example', async () => {
 
   assert.deepEqual(selected, examples)
 })
+
+test('immutable original-object examples remain selected for their application package', async () => {
+  const selected = await selectExamples(examples, new Set(['@bsv/output-knowledge']))
+  assert.ok(selected.some(example => example.id === 'immutable-operation-objects'))
+})

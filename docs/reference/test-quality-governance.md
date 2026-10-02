@@ -403,3 +403,14 @@ the complete managed signer, every original recovery test, added deadline
 histories and shared signing/template compatibility tests. Its existing deadline
 and target/property count remain unchanged. These inventories describe required
 qualification, not an assertion that a particular head has passed it.
+
+`protected-operation-objects` qualifies five complete native/browser operation
+object modules in four disjoint whole-file parts. Every part retains all new
+object/control/state tests and protected-ledger/payload compatibility suites,
+both native child workers, backing storage/custody and SDK inputs, and the
+same-head build. The protected-control target also retains the new dependencies
+selected by its existing broad test union. Both generated backend histories run
+at least 300 cases with the governed seed/replay. Four workers, the new target's
+runner reuse of eight, 45-minute parts, complete aggregate 90% and zero uncovered
+or invalid mutants remain mandatory. No prior source/test selection, threshold,
+budget or deadline is narrowed.

@@ -1239,3 +1239,15 @@ revision bindings, and recover lost acknowledgements without treating later
 state as rollback. Reserve ciphertext capacity before financial effects; this
 small control cell does not store an arbitrary four-MiB delivered response.
 See [paid lookup clients and protected state](../../../docs/guides/paid-lookup-client.md).
+
+### Immutable protected operation objects
+
+The optional `operations/objects` and `operations/objects/sqlite` entries retain
+original requests, selected contracts and delivered payloads independently of the
+small workflow cell. Reserve complete bounded slots before financial effects;
+first bytes and original role bindings are immutable. Browser IndexedDB commits
+an authenticated inventory and all affected chunks atomically. Native SQLite
+reuses the existing protected ledger. Missing original storage or custody never
+creates a replacement. Logical reservations do not prevent quota exhaustion,
+browser eviction or rollback of a complete valid database. See the
+[operation-object guide](../../../docs/guides/protected-operation-objects.md).

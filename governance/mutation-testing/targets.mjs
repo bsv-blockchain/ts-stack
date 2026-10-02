@@ -1711,6 +1711,42 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'protected-operation-objects': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/protected-operation-object.property.test.ts',
+      mutate: [
+        'src/operations/ProtectedOperationObjectStore.ts',
+        'src/operations/ProtectedOperationObjectPlan.ts',
+        'src/operations/SQLiteProtectedOperationObjectStore.ts',
+        'src/operations/ProtectedOperationObjectCipher.ts',
+        'src/operations/IndexedDBProtectedOperationObjectStore.ts'
+      ],
+      additionalInputs: [
+        'src/operations/**',
+        'src/private/**',
+        'src/storage/SQLiteTransactionDomain.ts',
+        'src/internal/synchronousPromise.ts',
+        'test/fixtures/protected-operation-worker.mjs',
+        'test/fixtures/protected-operation-object-worker.mjs',
+        'test/protected-operation-object.fixture.ts',
+        'test/protected-ledger*fixture.ts',
+        '../../sdk/src/primitives/**',
+        '../../sdk/src/wallet/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/protected-operation*.test.ts',
+          '<rootDir>/test/operation-state*.test.ts',
+          '<rootDir>/test/protected-ledger*.test.ts',
+          '<rootDir>/test/protected-payload.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
     'protected-operation-state': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -1721,6 +1757,9 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/SQLiteTransactionDomain.ts',
         'src/internal/synchronousPromise.ts',
         'test/fixtures/protected-operation-worker.mjs',
+        'test/fixtures/protected-operation-object-worker.mjs',
+        'test/protected-operation-object.fixture.ts',
+        'src/private/**',
         '../../sdk/src/primitives/**',
         '../../sdk/src/wallet/**',
         '../../sdk/src/overlay-tools/**'

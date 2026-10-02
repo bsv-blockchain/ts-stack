@@ -1,3 +1,4 @@
+import { protectedObjectsBrowser } from './objects.js'
 import { protectedBrowser } from './protected.js'
 import {
   PrivateKey,
@@ -254,7 +255,8 @@ const api = {
   missing,
   loseCore,
   proposals: proposalBrowser,
-  protected: protectedBrowser
+  protected: protectedBrowser,
+  objects: protectedObjectsBrowser
 }
 declare global {
   interface Window {

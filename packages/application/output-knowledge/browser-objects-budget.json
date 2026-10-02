@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/output-knowledge",
+  "entry": "./operations/objects",
+  "requiredExports": ["IndexedDBProtectedOperationObjectStore"],
+  "prohibitedExports": [
+    "SQLiteProtectedOperationObjectStore",
+    "NodeProtectedPayloadCodec",
+    "SQLiteOperationStateStore",
+    "OutputKnowledge",
+    "WalletProtectedOperationPayload"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 175000,
+      "gzip": 56000,
+      "brotli": 48000
+    },
+    "esbuild": {
+      "raw": 150000,
+      "gzip": 56000,
+      "brotli": 49000
+    }
+  }
+}

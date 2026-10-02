@@ -1751,3 +1751,48 @@ async function finalizeOriginal(
 }
 void finalizeOriginal
 ```
+
+## Immutable original-operation objects
+
+Install the original backend and custody explicitly. Retain separate identities
+and role bindings for original requests, selected contracts and results. Reserve
+all promised objects before allowing a financial effect. This example establishes
+local retention only; validation, usability and payment remain separate.
+
+```ts compile
+// example-id: immutable-operation-objects
+import type { WalletInterface as ObjectCustodyWallet } from '@bsv/sdk'
+import { WalletProtectedOperationPayload as ObjectWalletPayload } from '@bsv/output-knowledge/operations/protected'
+import {
+  IndexedDBProtectedOperationObjectStore,
+  type ProtectedOperationObjectConfiguration as ObjectStoreConfiguration
+} from '@bsv/output-knowledge/operations/objects'
+import {
+  SQLiteProtectedOperationObjectStore,
+  NodeProtectedPayloadCodec as ObjectNodePayload
+} from '@bsv/output-knowledge/operations/objects/sqlite'
+
+async function openBrowserOriginalObjects(
+  name: string,
+  original: ObjectStoreConfiguration,
+  wallet: ObjectCustodyWallet,
+  create: boolean
+) {
+  const custody = new ObjectWalletPayload(wallet, original.recipient)
+  return create
+    ? await IndexedDBProtectedOperationObjectStore.create(name, original, custody)
+    : await IndexedDBProtectedOperationObjectStore.open(name, original, custody)
+}
+function openNativeOriginalObjects(
+  path: string,
+  original: ObjectStoreConfiguration,
+  custody: ObjectNodePayload,
+  create: boolean
+) {
+  return create
+    ? SQLiteProtectedOperationObjectStore.create(path, original, custody)
+    : SQLiteProtectedOperationObjectStore.open(path, original, custody)
+}
+void openBrowserOriginalObjects
+void openNativeOriginalObjects
+```

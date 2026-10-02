@@ -376,6 +376,7 @@ test('paid acquisition and proposal HTTP parts preserve exact whole-source/test 
     ['private-acquisition-http', ['routes', 'policy', 'guard', 'host']],
     ['sdk-paid-lookup-http', ['transport', 'http']],
     ['protected-operation-state', ['wallet', 'state']],
+    ['protected-operation-objects', ['plan', 'native', 'cipher', 'browser']],
     [
       'private-acquisition-coordination',
       ['access', 'ports', 'wallet', 'evidence', 'coordinator', 'disclosure', 'work', 'reconciler']

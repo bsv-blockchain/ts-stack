@@ -3,6 +3,17 @@ import path from 'node:path'
 const partitionFile = specification => specification.replace(/:\d+(?:-\d+)?$/, '')
 const plans = new Map([
   [
+    'protected-operation-objects',
+    {
+      fallback: 'plan',
+      files: new Map([
+        ['src/operations/SQLiteProtectedOperationObjectStore.ts', 'native'],
+        ['src/operations/ProtectedOperationObjectCipher.ts', 'cipher'],
+        ['src/operations/IndexedDBProtectedOperationObjectStore.ts', 'browser']
+      ])
+    }
+  ],
+  [
     'sdk-paid-lookup-http',
     {
       fallback: 'transport',
