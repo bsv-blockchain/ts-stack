@@ -2792,3 +2792,11 @@ campaign passes 46 suites/863 tests in 139.252 seconds, preserving the original
 90-second publication property deadline. Exact-head hosted qualification must
 still verify this batch. No deadline, source union, case floor, coverage threshold
 or mutation requirement is changed.
+
+
+Main 729ad70e0 (#764) is reconciled before the next reference integration. Its
+full-campaign parallelism, zero-test survivor rejection, scoped Vitest 4.1.11
+holds and protected same-run release orchestration remain intact. The only merge
+conflict is this branch's older container-guide metadata; the current main
+version/date is retained with both branches' substantive guide content. This
+reconciliation does not authorize a release or claim full mutation qualification.
