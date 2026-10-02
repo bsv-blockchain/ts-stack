@@ -410,7 +410,11 @@ export class MandalaStorageManager implements MandalaStateStore {
   }
 }
 
-/** The read and repair surface the validation layers need (ownership, authority, controls). */
+/**
+ * The read and repair surface the validation layers need (ownership, authority, controls),
+ * including the undo of a repair that raced a spend (`takeToken`, `takeAuthority`,
+ * `adjustBalance`).
+ */
 export type MandalaStateStore = Pick<
   MandalaStorageManager,
   | 'getAssetState'
@@ -419,5 +423,8 @@ export type MandalaStateStore = Pick<
   | 'getOwnerJournal'
   | 'recordOwners'
   | 'repairOwnerRow'
+  | 'takeToken'
+  | 'takeAuthority'
+  | 'adjustBalance'
   | 'circulatingSupply'
 >

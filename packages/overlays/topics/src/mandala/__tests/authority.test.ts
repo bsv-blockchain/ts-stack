@@ -132,6 +132,9 @@ function storeFor(c: Case) {
     getOwnerJournal: unexpected,
     recordOwners: unexpected,
     repairOwnerRow: unexpected,
+    takeToken: unexpected,
+    takeAuthority: unexpected,
+    adjustBalance: unexpected,
     circulatingSupply
   }
   return { store, circulatingSupply, getAssetState }

@@ -194,6 +194,12 @@ function upsert<R extends Located>(rows: R[], row: R): boolean {
   return true
 }
 
+/** Removes and returns the row at the outpoint. */
+function takeRow<R extends Located>(rows: R[], txid: string, outputIndex: number): R | undefined {
+  const index = rows.findIndex(at(txid, outputIndex))
+  return index === -1 ? undefined : rows.splice(index, 1)[0]
+}
+
 /** §4.2a repair: upsert the index row of a journalled output; true when it was inserted. */
 function repairRow(state: VectorState, journal: MandalaOwnerRecord): boolean {
   const { txid, outputIndex, tokenId, identityKey } = journal
@@ -229,6 +235,12 @@ function storeOver(state: VectorState): MandalaStateStore {
       for (const row of rows) recordOwner(state, row)
     },
     repairOwnerRow: async journal => ({ inserted: repairRow(state, journal) }),
+    // The undo of a repair that raced a spend. The engine below never spends a coin between two
+    // reads, so no case reaches these; balances are not part of the vector state.
+    takeToken: async (txid, outputIndex) => dated(takeRow(state.tokens, txid, outputIndex)),
+    takeAuthority: async (txid, outputIndex) =>
+      dated(takeRow(state.authorities, txid, outputIndex)),
+    adjustBalance: async () => {},
     circulatingSupply: async tokenId => circulatingSupply(state, tokenId)
   }
 }

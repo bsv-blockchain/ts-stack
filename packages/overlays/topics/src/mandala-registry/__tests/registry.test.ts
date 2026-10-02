@@ -315,6 +315,9 @@ const failingJournal = (fault = new Error('write concern timeout')): MandalaStat
   getAuthorityRow: async (...a) => await storage.getAuthorityRow(...a),
   getOwnerJournal: async (...a) => await storage.getOwnerJournal(...a),
   repairOwnerRow: async (...a) => await storage.repairOwnerRow(...a),
+  takeToken: async (...a) => await storage.takeToken(...a),
+  takeAuthority: async (...a) => await storage.takeAuthority(...a),
+  adjustBalance: async (...a) => await storage.adjustBalance(...a),
   circulatingSupply: async (...a) => await storage.circulatingSupply(...a),
   recordOwners: async () => {
     throw fault

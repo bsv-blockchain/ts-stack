@@ -486,6 +486,21 @@ describe('resolveInputOwners', () => {
         return lockingScript === undefined ? null : { lockingScript, satoshis: 1 }
       }
     )
+    const takeToken = jest.fn(async (txid: string, outputIndex: number) => {
+      fail('takeToken')
+      const row = world.tokens.get(key(txid, outputIndex)) ?? null
+      world.tokens.delete(key(txid, outputIndex))
+      return row
+    })
+    const takeAuthority = jest.fn(async (txid: string, outputIndex: number) => {
+      fail('takeAuthority')
+      const row = world.authorities.get(key(txid, outputIndex)) ?? null
+      world.authorities.delete(key(txid, outputIndex))
+      return row
+    })
+    const adjustBalance = jest.fn(async (_identityKey: string, _delta: number) => {
+      fail('adjustBalance')
+    })
     const store: MandalaStateStore = {
       getAssetState: async tokenId => defaultAssetState(tokenId),
       getTokenRow: async (txid, outputIndex) => {
@@ -499,6 +514,9 @@ describe('resolveInputOwners', () => {
       getOwnerJournal,
       recordOwners: unexpected,
       repairOwnerRow,
+      takeToken,
+      takeAuthority,
+      adjustBalance,
       circulatingSupply: unexpected
     }
     const engine: EngineOutputReader = {
@@ -513,7 +531,16 @@ describe('resolveInputOwners', () => {
       topic: TOPIC,
       onRepair
     }
-    return { deps, repairOwnerRow, getOwnerJournal, findAdmittedOutput, onRepair }
+    return {
+      deps,
+      repairOwnerRow,
+      getOwnerJournal,
+      findAdmittedOutput,
+      onRepair,
+      takeToken,
+      takeAuthority,
+      adjustBalance
+    }
   }
 
   const noLinkage: MandalaEnvelope = { inputs: [], outputs: [], admin: [] }
@@ -657,22 +684,144 @@ describe('resolveInputOwners', () => {
   })
 
   test.each([
-    ['getTokenRow', false],
-    ['getAuthorityRow', false],
-    ['getOwnerJournal', true],
-    ['findAdmittedOutput', true],
-    ['repairOwnerRow', true]
-  ])('answers ERR_UNAVAILABLE when %s throws', async (method, rowMissing) => {
+    ['getTokenRow', false, 'read'],
+    ['getAuthorityRow', false, 'read'],
+    ['getOwnerJournal', true, 'read'],
+    ['findAdmittedOutput', true, 'read'],
+    ['repairOwnerRow', true, 'written']
+  ])(
+    'answers ERR_UNAVAILABLE when %s throws, keeping the fault',
+    async (method, rowMissing, verb) => {
+      const world = healthyWorld()
+      if (rowMissing) world.tokens.delete(key(sourceTxid, 0))
+      const fault = new Error('mongo is down')
+      const { deps, onRepair } = depsFor(world, { [method]: fault })
+      const refusal = await rejection(resolveInputOwners(inputs, tx, noLinkage, deps))
+      expect(refusal).toMatchObject({
+        code: 'ERR_UNAVAILABLE',
+        reason: `the owner index could not be ${verb}; retry`
+      })
+      expect(refusal.cause).toBe(fault)
+      // a repair that did not happen is not logged as one
+      expect(onRepair).not.toHaveBeenCalled()
+    }
+  )
+
+  // A concurrent double spend in another engine process: the engine spends the coin after this
+  // validation read it, and the lookup takes that spend's row. The row this repair then inserts
+  // would be a phantom (and its credit a phantom balance), so it is taken back.
+  test.each([
+    ['value', 0],
+    ['authority', 1],
+    ['genesis authority', 2]
+  ])(
+    'takes back a %s row it inserted for a coin the engine spent meanwhile',
+    async (_role, index) => {
+      const world = healthyWorld()
+      const { outpoint } = inputs[index]
+      const [txid, vout] = outpoint.split('.')
+      world.tokens.delete(outpoint)
+      world.authorities.delete(outpoint)
+      const deps = depsFor(world)
+      deps.repairOwnerRow.mockImplementationOnce(async journal => {
+        if (journal.role === 'value') {
+          world.tokens.set(outpoint, { ...journal })
+        } else {
+          world.authorities.set(outpoint, { ...journal })
+        }
+        world.engine.delete(outpoint) // spent while the repair ran
+        return { inserted: true }
+      })
+      expect(await rejection(resolveInputOwners(inputs, tx, noLinkage, deps.deps))).toMatchObject({
+        code: 'ERR_UNAVAILABLE',
+        reason: `owner index unavailable for ${outpoint}`
+      })
+      expect(deps.findAdmittedOutput).toHaveBeenCalledTimes(2)
+      expect(world.tokens.has(outpoint) || world.authorities.has(outpoint)).toBe(false)
+      if (index === 0) {
+        expect(deps.takeToken).toHaveBeenCalledWith(txid, Number(vout))
+        // the undo debits exactly what the insert credited
+        expect(deps.adjustBalance.mock.calls).toEqual([[holderKey, -100]])
+        expect(deps.takeAuthority).not.toHaveBeenCalled()
+      } else {
+        expect(deps.takeAuthority).toHaveBeenCalledWith(txid, Number(vout))
+        expect(deps.takeToken).not.toHaveBeenCalled()
+        expect(deps.adjustBalance).not.toHaveBeenCalled()
+      }
+      expect(deps.onRepair).not.toHaveBeenCalled()
+    }
+  )
+
+  test('debits nothing when the spend already took the row the repair inserted', async () => {
     const world = healthyWorld()
-    if (rowMissing) world.tokens.delete(key(sourceTxid, 0))
-    const { deps, onRepair } = depsFor(world, { [method]: new Error('mongo is down') })
-    expect(await rejection(resolveInputOwners(inputs, tx, noLinkage, deps))).toMatchObject({
-      code: 'ERR_UNAVAILABLE',
-      reason: 'the owner index could not be read; retry'
+    world.tokens.delete(`${sourceTxid}.0`)
+    const deps = depsFor(world)
+    deps.repairOwnerRow.mockImplementationOnce(async () => {
+      // inserted, then spent and taken (and debited) by the lookup before the recheck
+      world.engine.delete(`${sourceTxid}.0`)
+      return { inserted: true }
     })
-    // a repair that did not happen is not logged as one
-    expect(onRepair).not.toHaveBeenCalled()
+    expect((await rejection(resolveInputOwners(inputs, tx, noLinkage, deps.deps))).code).toBe(
+      'ERR_UNAVAILABLE'
+    )
+    expect(deps.takeToken).toHaveBeenCalledTimes(1)
+    expect(deps.adjustBalance).not.toHaveBeenCalled()
   })
+
+  test('re-reads the engine only after an insert, never after a correction', async () => {
+    const world = healthyWorld()
+    world.tokens.set(`${sourceTxid}.0`, { ...world.tokens.get(`${sourceTxid}.0`)!, amount: 99 })
+    const corrected = depsFor(world)
+    corrected.repairOwnerRow.mockResolvedValueOnce({ inserted: false })
+    await resolveInputOwners(inputs, tx, noLinkage, corrected.deps)
+    expect(corrected.findAdmittedOutput).toHaveBeenCalledTimes(1)
+    const missing = healthyWorld()
+    missing.tokens.delete(`${sourceTxid}.0`)
+    const inserted = depsFor(missing)
+    await resolveInputOwners(inputs, tx, noLinkage, inserted.deps)
+    expect(inserted.findAdmittedOutput).toHaveBeenCalledTimes(2)
+    expect(inserted.takeToken).not.toHaveBeenCalled()
+    expect(inserted.onRepair.mock.calls).toEqual([[`${sourceTxid}.0`, true]])
+  })
+
+  test.each([
+    ['the engine re-read', 'findAdmittedOutput', 'read'],
+    ['the take-back', 'takeToken', 'written'],
+    ['the debit', 'adjustBalance', 'written']
+  ])(
+    'answers ERR_UNAVAILABLE when %s after a raced insert throws',
+    async (_label, method, verb) => {
+      const world = healthyWorld()
+      world.tokens.delete(`${sourceTxid}.0`)
+      const fault = new Error('mongo is down')
+      const deps = depsFor(world)
+      deps.repairOwnerRow.mockImplementationOnce(async journal => {
+        world.tokens.set(`${sourceTxid}.0`, { ...journal })
+        world.engine.delete(`${sourceTxid}.0`)
+        return { inserted: true }
+      })
+      const failing =
+        method === 'findAdmittedOutput'
+          ? deps.findAdmittedOutput
+          : deps[method as 'takeToken' | 'adjustBalance']
+      if (method === 'findAdmittedOutput') {
+        deps.findAdmittedOutput.mockImplementationOnce(async () => ({
+          lockingScript: scripts.value,
+          satoshis: 1
+        }))
+      }
+      failing.mockImplementationOnce(async () => {
+        throw fault
+      })
+      const refusal = await rejection(resolveInputOwners(inputs, tx, noLinkage, deps.deps))
+      expect(refusal).toMatchObject({
+        code: 'ERR_UNAVAILABLE',
+        reason: `the owner index could not be ${verb}; retry`
+      })
+      expect(refusal.cause).toBe(fault)
+      expect(deps.onRepair).not.toHaveBeenCalled()
+    }
+  )
 
   // An index fault is never the holder's fault: it is decided before the
   // linkage, so a defective linkage cannot turn it into a final refusal.

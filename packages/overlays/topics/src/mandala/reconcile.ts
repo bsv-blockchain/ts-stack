@@ -14,6 +14,7 @@ import { Bsv21Binary, tokenIdToString } from '@bsv/templates'
 import type { Bsv21Role } from '@bsv/templates'
 import type { MandalaStorageManager } from './MandalaStorageManager.js'
 import { eachInOrder } from './inOrder.js'
+import { takeBackRepair } from './ownership.js'
 import type { EngineOutputReader, MandalaOwnerRecord } from './types.js'
 
 export interface ReconcileResult {
@@ -115,19 +116,6 @@ const journalAgrees = (journal: MandalaOwnerRecord, token: ScriptToken): boolean
   sameAmount(journal.amount, token.amount) &&
   COMPRESSED_KEY.test(journal.identityKey)
 
-// Takes back a row the reconciler inserted for a coin the engine has since
-// spent, as the lookup's spend does: the value row debits its owner only when
-// this call is the one that removed it, so the lookup's own spend and this undo
-// debit exactly once between them, in whichever order they run.
-async function takeBack(storage: ReconcileStore, op: Outpoint, role: Bsv21Role): Promise<void> {
-  if (role !== 'value') {
-    await storage.takeAuthority(op.txid, op.outputIndex)
-    return
-  }
-  const row = await storage.takeToken(op.txid, op.outputIndex)
-  if (row !== null) await storage.adjustBalance(row.identityKey, -row.amount)
-}
-
 /**
  * `ok`: the row agrees, or the engine no longer holds the output (also when it spent the output
  * after the repair inserted the row, which is then taken back).
@@ -148,7 +136,7 @@ async function reconcileOne(op: Outpoint, deps: ReconcileDeps): Promise<Outcome>
   // A spend the engine made after the first read may already have taken the row this insert put
   // back. A correction needs no check: the row it corrected is still there for that spend to take.
   if (inserted && (await engine.findAdmittedOutput(op.txid, op.outputIndex, topic)) === null) {
-    await takeBack(storage, op, token.role)
+    await takeBackRepair(storage, op.txid, op.outputIndex, token.role)
     return 'ok'
   }
   const onRepair = deps.onRepair ?? logRepair

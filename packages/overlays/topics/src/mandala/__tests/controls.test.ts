@@ -97,6 +97,9 @@ function depsFor(c: Case): ControlDeps {
     getOwnerJournal: unexpected,
     recordOwners: unexpected,
     repairOwnerRow: unexpected,
+    takeToken: unexpected,
+    takeAuthority: unexpected,
+    adjustBalance: unexpected,
     circulatingSupply: unexpected
   }
   return {

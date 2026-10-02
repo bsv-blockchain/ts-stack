@@ -187,13 +187,47 @@ function sourceOf(tx: Transaction, input: Brc162Input): SourceOutput {
 }
 
 // Every read and write of the owner index is an infra dependency: a throw is a
-// retryable ERR_UNAVAILABLE, never persisted.
+// retryable ERR_UNAVAILABLE, never persisted, with the store's error as cause.
 async function fromIndex<T>(read: () => Promise<T>): Promise<T> {
   try {
     return await read()
-  } catch {
-    throw Reasons.storeUnavailable('the owner index')
+  } catch (cause) {
+    throw Reasons.storeUnavailable('the owner index', cause)
   }
+}
+
+async function toIndex<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write()
+  } catch (cause) {
+    throw Reasons.storeWriteUnavailable('the owner index', cause)
+  }
+}
+
+/** The store calls that undo a repair: take the row back, and debit what its insert credited. */
+export type RepairUndoStore = Pick<
+  MandalaStateStore,
+  'takeToken' | 'takeAuthority' | 'adjustBalance'
+>
+
+/**
+ * Takes back a row a repair inserted for a coin the engine has since spent, exactly as the
+ * lookup's spend does: a value row debits its owner only when this call is the one that removed
+ * it, so the lookup's own spend and this undo debit once between them, in whichever order they
+ * run. Shared by the inline repair and the reconciler (spec §4.2a rules 3 and 5).
+ */
+export async function takeBackRepair(
+  store: RepairUndoStore,
+  txid: string,
+  outputIndex: number,
+  role: Bsv21Role
+): Promise<void> {
+  if (role !== 'value') {
+    await store.takeAuthority(txid, outputIndex)
+    return
+  }
+  const row = await store.takeToken(txid, outputIndex)
+  if (row !== null) await store.adjustBalance(row.identityKey, -row.amount)
 }
 
 interface IndexRow {
@@ -234,12 +268,26 @@ const journalAgrees = (
   sameAmount(journal.amount, input.amount) &&
   isIdentity(journal.identityKey)
 
+// The engine's own copy of the source output, read once more after a repair insert.
+const stillAdmitted = async (
+  source: SourceOutput,
+  { engine, topic }: InputOwnerDeps
+): Promise<{ lockingScript: number[] } | null> =>
+  await fromIndex(async () => await engine.findAdmittedOutput(source.txid, source.vout, topic))
+
 /**
  * §4.2a rule 3: rebuild a missing or wrong row from the journal, provided the
- * engine admitted this exact output on this topic. The engine names only
- * unspent admitted outputs as previous coins, so the coin is live; the repair
- * is an idempotent upsert that credits a balance only on insert, and it is
- * logged with its outpoint.
+ * engine admitted this exact output on this topic. The repair is an idempotent
+ * upsert that credits a balance only on insert, and it is logged with its
+ * outpoint.
+ *
+ * The engine can spend the coin between the read above and the insert (a
+ * concurrent double spend in another engine process: it marks the coin spent,
+ * and the lookup takes that spend's own repaired row). A row inserted after that
+ * would be a phantom no spend ever takes, so an insert is checked against the
+ * engine once more and taken back if the coin is gone, and this spend is
+ * answered as unrepairable. A correction needs no check: the row it corrected
+ * is still there for that spend to take.
  */
 async function repairedOwner(
   input: Brc162Input,
@@ -261,7 +309,13 @@ async function repairedOwner(
   ) {
     throw Reasons.ownerIndexUnavailable(input.outpoint)
   }
-  const { inserted } = await fromIndex(async () => await store.repairOwnerRow(journal))
+  const { inserted } = await toIndex(async () => await store.repairOwnerRow(journal))
+  if (inserted && (await stillAdmitted(source, deps)) === null) {
+    await toIndex(async () => {
+      await takeBackRepair(store, source.txid, source.vout, journal.role)
+    })
+    throw Reasons.ownerIndexUnavailable(input.outpoint)
+  }
   deps.onRepair(input.outpoint, inserted)
   return journal.identityKey
 }
