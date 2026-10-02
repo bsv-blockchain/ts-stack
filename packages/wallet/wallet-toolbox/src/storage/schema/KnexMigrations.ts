@@ -118,13 +118,13 @@ export class KnexMigrations implements MigrationSource<string> {
           .insert(Array.from({ length: 9 }, (_, slot) => ({ slot })))
           .onConflict('slot')
           .ignore()
+        const bytesTypes: Partial<Record<DBType, string>> = { MySQL: 'mediumblob', Postgres: 'bytea' }
+        const bytesType = bytesTypes[dbtype] ?? 'blob'
         if (!(await knex.schema.hasTable('sync_transfer_parts')))
           await knex.schema.createTable('sync_transfer_parts', table => {
             table.integer('slot').notNullable().references('slot').inTable('sync_transfers')
             table.integer('offset').notNullable()
-            table
-              .specificType('bytes', dbtype === 'MySQL' ? 'mediumblob' : dbtype === 'Postgres' ? 'bytea' : 'blob')
-              .notNullable()
+            table.specificType('bytes', bytesType).notNullable()
             table.primary(['slot', 'offset'])
           })
       },

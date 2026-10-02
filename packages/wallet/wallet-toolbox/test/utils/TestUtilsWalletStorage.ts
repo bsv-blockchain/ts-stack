@@ -711,7 +711,7 @@ export abstract class TestUtilsWalletStorage {
     try {
       const existing = await admin('pg_database').where({ datname: database }).first('datname')
       // Not `??`: knex would split a database name containing dots.
-      if (existing == null) await admin.raw(`create database "${database.replace(/"/g, '""')}"`)
+      if (existing == null) await admin.raw(`create database "${database.replaceAll('"', '""')}"`)
     } finally {
       await admin.destroy()
     }
@@ -740,14 +740,17 @@ export abstract class TestUtilsWalletStorage {
       join pg_attribute a on a.attrelid = c.oid
       where c.relkind = 'r' and n.nspname = current_schema() and a.attnum > 0 and not a.attisdropped
         and pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) is not null`)
-    for (const { table, column, sequence } of columns.rows) {
-      // `sequence` is a catalog-quoted name from pg_get_serial_sequence.
-      await knex.raw(
-        `select setval(?, m) from (select max(??) as m from ??) x
-         where m > (select case when is_called then last_value else last_value - 1 end from ${sequence})`,
-        [sequence, column, table]
+    await Promise.all(
+      columns.rows.map(
+        // `sequence` is a catalog-quoted name from pg_get_serial_sequence.
+        async ({ table, column, sequence }) =>
+          await knex.raw(
+            `select setval(?, m) from (select max(??) as m from ??) x
+             where m > (select case when is_called then last_value else last_value - 1 end from ${sequence})`,
+            [sequence, column, table]
+          )
       )
-    }
+    )
   }
 
   static async createMySQLTestWallet(args: {
