@@ -15,7 +15,7 @@ import { checkAuthority } from './authority.js'
 import { checkControls } from './controls.js'
 import { requireValidTokenOutputs, resolveInputOwners, verifyOutputOwners } from './ownership.js'
 import type { VerifiedOwner } from './ownership.js'
-import { Reasons } from './reject.js'
+import { MandalaReject, Reasons } from './reject.js'
 import { decodeEnvelope } from './types.js'
 import type {
   EngineOutputReader,
@@ -36,6 +36,11 @@ export interface MandalaTopicManagerDeps {
   membership?: MembershipProvider
   /** Exempt from access mode and membership, e.g. the overlay identity key. Trusted issuers always are. */
   membershipExempt?: readonly string[]
+  /**
+   * The §4.2a rule 3 repair log: called with the outpoint of every owner-index row repaired inline
+   * (`inserted` false: an existing row was corrected). Defaults to `console.warn`.
+   */
+  onOwnerRepair?: (outpoint: string, inserted: boolean) => void
 }
 
 const COMPRESSED_KEY = /^0[23][0-9a-f]{64}$/
@@ -91,6 +96,13 @@ const journalRows = (
 const ascendingIndices = (outputs: readonly Brc162Output[]): number[] =>
   outputs.map(o => o.index).sort((a, b) => a - b)
 
+const logOwnerRepair = (outpoint: string, inserted: boolean): void => {
+  const what = inserted ? 'row inserted' : 'row corrected'
+  console.warn(
+    `[MandalaTopicManager] owner index repaired for ${outpoint} from the owner journal (${what})`
+  )
+}
+
 export class MandalaTopicManager implements TopicManager {
   private readonly deps: MandalaTopicManagerDeps
   private readonly trusted: ReadonlySet<string>
@@ -126,7 +138,8 @@ export class MandalaTopicManager implements TopicManager {
       store,
       engine,
       verifierWallet,
-      topic: MANDALA_TOPIC
+      topic: MANDALA_TOPIC,
+      onRepair: this.deps.onOwnerRepair ?? logOwnerRepair
     })
 
     // layers C and D
@@ -146,12 +159,16 @@ export class MandalaTopicManager implements TopicManager {
     return { outputsToAdmit: ascendingIndices(outputs), coinsToRetain: previousCoins }
   }
 
-  /** §4.2a rule 1: the append-only owner journal, the source every owner-row repair reads. */
+  /**
+   * §4.2a rule 1: the append-only owner journal, the source every owner-row repair reads. A failed
+   * write keeps the store's error as `cause`, since the engine logs only what is thrown.
+   */
   private async journal(txid: string, owners: readonly VerifiedOwner[]): Promise<void> {
     try {
       await this.deps.stateStore.recordOwners(journalRows(txid, owners, new Date()))
-    } catch {
-      throw Reasons.storeUnavailable('the owner journal')
+    } catch (cause) {
+      const { code, reason } = Reasons.storeUnavailable('the owner journal')
+      throw new MandalaReject(code, reason, { cause })
     }
   }
 

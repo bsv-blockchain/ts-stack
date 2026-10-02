@@ -309,8 +309,8 @@ async function rejection(work: Promise<unknown>): Promise<MandalaReject> {
   throw new Error('expected a MandalaReject')
 }
 
-/** The real store, except that every journal write fails. */
-const failingJournal = (): MandalaStateStore => ({
+/** The real store, except that every journal write fails with `fault`. */
+const failingJournal = (fault = new Error('write concern timeout')): MandalaStateStore => ({
   getAssetState: async (...a) => await storage.getAssetState(...a),
   getTokenRow: async (...a) => await storage.getTokenRow(...a),
   getAuthorityRow: async (...a) => await storage.getAuthorityRow(...a),
@@ -318,9 +318,12 @@ const failingJournal = (): MandalaStateStore => ({
   repairOwnerRow: async (...a) => await storage.repairOwnerRow(...a),
   circulatingSupply: async (...a) => await storage.circulatingSupply(...a),
   recordOwners: async () => {
-    throw new Error('write concern timeout')
+    throw fault
   }
 })
+
+const repairLog = (outpoint: string, what: 'row inserted' | 'row corrected'): string =>
+  `[MandalaTopicManager] owner index repaired for ${outpoint} from the owner journal (${what})`
 
 const journalCount = async (): Promise<number> =>
   await db.collection('mandalaOwners').countDocuments()
@@ -344,6 +347,10 @@ beforeEach(async () => {
   await db.dropDatabase()
   storage = new MandalaStorageManager(db)
   admitted = new Map()
+})
+
+afterEach(() => {
+  jest.restoreAllMocks()
 })
 
 describe('MandalaTopicManager — admission and the owner journal', () => {
@@ -422,12 +429,17 @@ describe('MandalaTopicManager — admission and the owner journal', () => {
     expect(await journalOf(d, 0)).toMatchObject({ role: 'deploy', identityKey: ISSUER })
   })
 
-  test('answers ERR_UNAVAILABLE when the journal write fails', async () => {
-    const manager = managerWith({ stateStore: failingJournal() })
-    expect(await rejection(submit(await deploy(), manager))).toMatchObject({
+  test('answers ERR_UNAVAILABLE when the journal write fails, with the store error as its cause', async () => {
+    const fault = new Error('document failed validation')
+    const manager = managerWith({ stateStore: failingJournal(fault) })
+    const refused = await rejection(submit(await deploy(), manager))
+    expect(refused).toMatchObject({
       code: 'ERR_UNAVAILABLE',
-      reason: 'the owner journal could not be read; retry'
+      reason: 'the owner journal could not be read; retry',
+      message: 'the owner journal could not be read; retry'
     })
+    // the engine logs only what is thrown, so the store's own error rides along
+    expect(refused.cause).toBe(fault)
     expect(await journalCount()).toBe(0)
   })
 })
@@ -529,6 +541,7 @@ describe('MandalaTopicManager — Review Focus pins', () => {
     expect(await storage.getBalance(RECEIVER)).toBe(0)
 
     const repair = jest.spyOn(storage, 'repairOwnerRow')
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     const spend = await transfer(tokenId, { tx: transferTx.tx, vout: 0 }, receiver, [[HOLDER, 60n]])
     expect(await submit(spend)).toEqual({ outputsToAdmit: [0], coinsToRetain: [0] })
     expect(repair).toHaveBeenCalledTimes(1)
@@ -538,10 +551,41 @@ describe('MandalaTopicManager — Review Focus pins', () => {
       identityKey: RECEIVER
     })
     expect(await storage.getBalance(RECEIVER)).toBe(60)
+    // §4.2a rule 3: the repair is logged with its outpoint (default sink)
+    expect(warn.mock.calls).toEqual([[repairLog(`${transferTx.txid}.0`, 'row inserted')]])
 
     expect(await submit(spend)).toEqual({ outputsToAdmit: [0], coinsToRetain: [0] })
     expect(repair).toHaveBeenCalledTimes(1)
     expect(await storage.getBalance(RECEIVER)).toBe(60)
+    // the retry reads the repaired row, so there is no second repair to log
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  test('RF3: repairs a row that disagrees with its script, logs it as corrected, credits nothing', async () => {
+    const { tokenId, transferTx } = await transferred()
+    await db
+      .collection('mandalaTokens')
+      .updateOne({ txid: transferTx.txid, outputIndex: 0 }, { $set: { amount: 59 } })
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const spend = await transfer(tokenId, { tx: transferTx.tx, vout: 0 }, receiver, [[HOLDER, 60n]])
+    expect(await submit(spend)).toEqual({ outputsToAdmit: [0], coinsToRetain: [0] })
+    expect((await storage.getTokenRow(transferTx.txid, 0))?.amount).toBe(60)
+    expect(await storage.getBalance(RECEIVER)).toBe(60)
+    expect(warn.mock.calls).toEqual([[repairLog(`${transferTx.txid}.0`, 'row corrected')]])
+  })
+
+  test('RF3: sends the repair log to onOwnerRepair when one is given', async () => {
+    const { tokenId, transferTx } = await transferred()
+    await storage.takeToken(transferTx.txid, 0)
+    const onOwnerRepair = jest.fn((_outpoint: string, _inserted: boolean) => {})
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const spend = await transfer(tokenId, { tx: transferTx.tx, vout: 0 }, receiver, [[HOLDER, 60n]])
+    expect(await submit(spend, managerWith({ onOwnerRepair }))).toEqual({
+      outputsToAdmit: [0],
+      coinsToRetain: [0]
+    })
+    expect(onOwnerRepair.mock.calls).toEqual([[`${transferTx.txid}.0`, true]])
+    expect(warn).not.toHaveBeenCalled()
   })
 
   test('RF3: answers ERR_UNAVAILABLE when the row and its journal entry are both gone, on every retry', async () => {

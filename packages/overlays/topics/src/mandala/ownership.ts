@@ -40,6 +40,12 @@ export interface InputOwnerDeps {
   engine: EngineOutputReader
   verifierWallet: WalletInterface
   topic: string
+  /**
+   * §4.2a rule 3: told the outpoint of every inline repair after its upsert
+   * succeeds; `inserted` is false when an existing row was corrected (no
+   * balance credit). Required, so no caller can skip the repair log.
+   */
+  onRepair: (outpoint: string, inserted: boolean) => void
 }
 
 const COMPRESSED_KEY = /^0[23][0-9a-f]{64}$/
@@ -231,7 +237,8 @@ const journalAgrees = (
  * §4.2a rule 3: rebuild a missing or wrong row from the journal, provided the
  * engine admitted this exact output on this topic. The engine names only
  * unspent admitted outputs as previous coins, so the coin is live; the repair
- * is an idempotent upsert that credits a balance only on insert.
+ * is an idempotent upsert that credits a balance only on insert, and it is
+ * logged with its outpoint.
  */
 async function repairedOwner(
   input: Brc162Input,
@@ -253,7 +260,8 @@ async function repairedOwner(
   ) {
     throw Reasons.ownerIndexUnavailable(input.outpoint)
   }
-  await fromIndex(async () => await store.repairOwnerRow(journal))
+  const { inserted } = await fromIndex(async () => await store.repairOwnerRow(journal))
+  deps.onRepair(input.outpoint, inserted)
   return journal.identityKey
 }
 

@@ -505,8 +505,15 @@ describe('resolveInputOwners', () => {
       findAdmittedOutput,
       listUnspentAdmittedOutputs: unexpected
     }
-    const deps: InputOwnerDeps = { store, engine, verifierWallet: verifier, topic: TOPIC }
-    return { deps, repairOwnerRow, getOwnerJournal, findAdmittedOutput }
+    const onRepair = jest.fn((_outpoint: string, _inserted: boolean) => {})
+    const deps: InputOwnerDeps = {
+      store,
+      engine,
+      verifierWallet: verifier,
+      topic: TOPIC,
+      onRepair
+    }
+    return { deps, repairOwnerRow, getOwnerJournal, findAdmittedOutput, onRepair }
   }
 
   const noLinkage: MandalaEnvelope = { inputs: [], outputs: [], admin: [] }
@@ -517,7 +524,7 @@ describe('resolveInputOwners', () => {
   })
 
   test('returns the stored owner of every token input without touching the journal', async () => {
-    const { deps, repairOwnerRow, getOwnerJournal } = depsFor(healthyWorld())
+    const { deps, repairOwnerRow, getOwnerJournal, onRepair } = depsFor(healthyWorld())
     const owners = await resolveInputOwners(inputs, tx, noLinkage, deps)
     expect([...owners]).toEqual([
       [0, holderKey],
@@ -526,6 +533,7 @@ describe('resolveInputOwners', () => {
     ])
     expect(getOwnerJournal).not.toHaveBeenCalled()
     expect(repairOwnerRow).not.toHaveBeenCalled()
+    expect(onRepair).not.toHaveBeenCalled()
   })
 
   // Review Focus 3: a missing or wrong row is an index fault, repaired inline.
@@ -571,7 +579,7 @@ describe('resolveInputOwners', () => {
   ])('repairs %s from the journal and the engine output', async (_label, damage, index) => {
     const world = healthyWorld()
     damage(world)
-    const { deps, repairOwnerRow, getOwnerJournal, findAdmittedOutput } = depsFor(world)
+    const { deps, repairOwnerRow, getOwnerJournal, findAdmittedOutput, onRepair } = depsFor(world)
     const owners = await resolveInputOwners(inputs, tx, noLinkage, deps)
     expect(owners.get(index)).toBe(index === 0 ? holderKey : issuerKey)
     const [txid, vout] = inputs[index].outpoint.split('.')
@@ -579,6 +587,17 @@ describe('resolveInputOwners', () => {
     expect(findAdmittedOutput).toHaveBeenCalledWith(txid, Number(vout), TOPIC)
     expect(repairOwnerRow).toHaveBeenCalledTimes(1)
     expect(repairOwnerRow).toHaveBeenCalledWith(world.journal.get(key(txid, Number(vout))))
+    // §4.2a rule 3: the repair is logged with its outpoint
+    expect(onRepair.mock.calls).toEqual([[inputs[index].outpoint, true]])
+  })
+
+  test('reports a repair that corrected an existing row as not inserted', async () => {
+    const world = healthyWorld()
+    world.tokens.set(key(sourceTxid, 0), { ...world.tokens.get(key(sourceTxid, 0))!, amount: 99 })
+    const { deps, repairOwnerRow, onRepair } = depsFor(world)
+    repairOwnerRow.mockResolvedValueOnce({ inserted: false })
+    await resolveInputOwners(inputs, tx, noLinkage, deps)
+    expect(onRepair.mock.calls).toEqual([[`${sourceTxid}.0`, false]])
   })
 
   test.each([
@@ -618,12 +637,13 @@ describe('resolveInputOwners', () => {
     const world = healthyWorld()
     world.tokens.delete(key(sourceTxid, 0))
     damage(world)
-    const { deps, repairOwnerRow } = depsFor(world)
+    const { deps, repairOwnerRow, onRepair } = depsFor(world)
     expect(await rejection(resolveInputOwners(inputs, tx, noLinkage, deps))).toMatchObject({
       code: 'ERR_UNAVAILABLE',
       reason: `owner index unavailable for ${sourceTxid}.0`
     })
     expect(repairOwnerRow).not.toHaveBeenCalled()
+    expect(onRepair).not.toHaveBeenCalled()
   })
 
   test('answers ERR_UNAVAILABLE for a missing genesis row when nothing can repair it', async () => {
@@ -645,11 +665,13 @@ describe('resolveInputOwners', () => {
   ])('answers ERR_UNAVAILABLE when %s throws', async (method, rowMissing) => {
     const world = healthyWorld()
     if (rowMissing) world.tokens.delete(key(sourceTxid, 0))
-    const { deps } = depsFor(world, { [method]: new Error('mongo is down') })
+    const { deps, onRepair } = depsFor(world, { [method]: new Error('mongo is down') })
     expect(await rejection(resolveInputOwners(inputs, tx, noLinkage, deps))).toMatchObject({
       code: 'ERR_UNAVAILABLE',
       reason: 'the owner index could not be read; retry'
     })
+    // a repair that did not happen is not logged as one
+    expect(onRepair).not.toHaveBeenCalled()
   })
 
   // An index fault is never the holder's fault: it is decided before the

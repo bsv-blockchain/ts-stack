@@ -90,14 +90,15 @@ asset state.
   \`mandalaOwners\` journal. The row is
   \`{txid, outputIndex, topic, tokenId, role, amount, identityKey, createdAt}\`.
   - If the write fails, the answer is \`ERR_UNAVAILABLE\` and nothing is
-    broadcast.
+    broadcast. The store's error is kept as the reject's \`cause\`.
   - \`context.dryRun\` (GASP) skips the write.
 - **Index.** The owner of a spent coin is its \`mandalaTokens\` or
   \`mandalaAuthorities\` row, which is an index, not the source of truth.
 - **Repair.** A missing row, or one that disagrees with the source script,
   is repaired inline. The repair needs the journal entry, the engine's
   admitted output with the same locking script, and agreement between them.
-  It credits the balance once, on insert only.
+  It credits the balance once, on insert only. Every repair is logged with
+  its outpoint, and whether the row was inserted or corrected.
 - **Unrepairable.** If the row cannot be repaired, the answer is
   \`ERR_UNAVAILABLE\` (\`owner index unavailable for <txid>.<vout>\`). A
   linkage is never a fallback owner source.
@@ -122,6 +123,8 @@ asset state.
 - \`engineOutputs\` reads the engine's admitted outputs for repair.
 - \`screeningProvider\` answers sanctions with exact booleans.
 - \`membership\` is optional.
+- \`onOwnerRepair\` receives the repair log (outpoint, inserted). It
+  defaults to \`console.warn\`.
 - \`trustedIssuers\` must be a non-empty list of unique, compressed,
   lowercase public keys. Otherwise construction throws.
 `
