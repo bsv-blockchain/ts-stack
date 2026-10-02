@@ -1342,6 +1342,17 @@
           "A rejected or stale operation cannot partially update a protected record group or discard a reserved completion.",
           "Restart preserves exact private values, record versions, monotonic receipt time and every outstanding reservation."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-publication.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bound native private-service identity, protected publication bindings, permanent request fences and durable admission/readiness transitions",
+        "target": "At least 300 native shared-blob, independent-request, readiness, authorization-denial and restart schedules",
+        "invariants": [
+          "Each semantic request retains its original protected blob and operation fence; shared blobs never permit another request to replace private values.",
+          "Only an ordered durable admission and binding advances readiness; stale or denied operations cannot partially advance state or create another external-effect reservation."
+        ]
       }
     ],
     "exclusions": [

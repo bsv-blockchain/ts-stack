@@ -1096,6 +1096,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-publication-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-publication.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bound native private-service identity, protected publication bindings, permanent request fences and durable admission/readiness transitions",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

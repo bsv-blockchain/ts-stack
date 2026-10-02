@@ -56,6 +56,18 @@ const plans = new Map([
     }
   ],
   [
+    'private-publication-state',
+    {
+      fallback: 'store',
+      files: new Map([
+        ['src/private/PrivateServiceIdentity.ts', 'identity'],
+        ['src/private/PrivateServiceDomain.ts', 'identity'],
+        ['src/private/PrivatePublicationRecords.ts', 'records'],
+        ['src/private/PrivatePublicationProgress.ts', 'progress']
+      ])
+    }
+  ],
+  [
     'protected-ledger',
     {
       fallback: 'store',

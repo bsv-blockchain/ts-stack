@@ -524,3 +524,29 @@ test('protected ledger aggregation requires selected complete execution artifact
       aggregate.indexOf('name: Require every selected canonical partition target gate')
   )
 })
+
+test('private publication aggregation requires selected complete execution artifacts', () => {
+  const id = 'private-publication-state'
+  assert.deepEqual(partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT)), [id])
+  const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    job => job.name === 'mutation-quality'
+  ).source
+  const downloads = aggregate
+    .split(/\n      - /)
+    .filter(
+      step =>
+        step.startsWith('uses: actions/download-artifact@') &&
+        step.includes(`pattern: mutation-${id}-*\n`)
+    )
+  assert.equal(downloads.length, 1)
+  assert.ok(
+    downloads[0].includes(
+      `contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), '${id}')`
+    )
+  )
+  assert.ok(downloads[0].includes(`path: .mutation-parts/${id}`))
+  assert.ok(
+    aggregate.indexOf(downloads[0]) <
+      aggregate.indexOf('name: Require every selected canonical partition target gate')
+  )
+})

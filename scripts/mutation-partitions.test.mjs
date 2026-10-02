@@ -280,3 +280,24 @@ test('protected ledger parts preserve every complete file and all canonical conf
       .target.mutate.includes('src/private/FutureCompanion.ts')
   )
 })
+
+test('private publication parts preserve every complete file and all canonical configuration', () => {
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)['private-publication-state']
+  const parts = partitionMutationTarget('private-publication-state', canonical)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['store', 'identity', 'records', 'progress']
+  )
+  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+  for (const part of parts) {
+    const { mutate: _partial, ...actual } = part.target
+    const { mutate: _whole, ...original } = canonical
+    assert.deepEqual(actual, original)
+  }
+  const future = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
+  assert.ok(
+    partitionMutationTarget('private-publication-state', future)
+      .find(part => part.id === 'store')
+      .target.mutate.includes('src/private/FutureCompanion.ts')
+  )
+})

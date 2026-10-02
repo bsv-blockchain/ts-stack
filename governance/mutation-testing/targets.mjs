@@ -1017,6 +1017,32 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'private-publication-state': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-publication.property.test.ts',
+      additionalInputs: ['src/private/**', 'src/storage/**', 'test/private-publication-fixture.ts'],
+      mutate: [
+        'src/private/SQLitePrivatePublicationStore.ts',
+        'src/private/PrivateServiceIdentity.ts',
+        'src/private/PrivateServiceDomain.ts',
+        'src/private/PrivatePublicationRecords.ts',
+        'src/private/PrivatePublicationProgress.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-identity.test.ts',
+          '<rootDir>/test/private-domain.test.ts',
+          '<rootDir>/test/private-publication-records.test.ts',
+          '<rootDir>/test/private-publication-progress.test.ts',
+          '<rootDir>/test/private-publication-store.test.ts',
+          '<rootDir>/test/private-publication.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
     'protected-ledger': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -1039,6 +1065,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/protected-ledger-codec.test.ts',
           '<rootDir>/test/protected-ledger-integrity.test.ts',
           '<rootDir>/test/protected-ledger-boundaries.test.ts',
+          '<rootDir>/test/protected-ledger-enumeration.test.ts',
           '<rootDir>/test/protected-ledger.test.ts',
           '<rootDir>/test/protected-ledger.property.test.ts'
         ],

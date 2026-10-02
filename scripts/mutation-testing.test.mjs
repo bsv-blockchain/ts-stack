@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 108)
+  assert.equal(Object.keys(configured).length, 109)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -454,6 +454,7 @@ test('protected ledger retains complete storage and custody source with native c
     '<rootDir>/test/protected-ledger-codec.test.ts',
     '<rootDir>/test/protected-ledger-integrity.test.ts',
     '<rootDir>/test/protected-ledger-boundaries.test.ts',
+    '<rootDir>/test/protected-ledger-enumeration.test.ts',
     '<rootDir>/test/protected-ledger.test.ts',
     '<rootDir>/test/protected-ledger.property.test.ts'
   ])
@@ -467,4 +468,25 @@ test('lineage graph execution recycles workers without changing other applicatio
   assert.equal(targets['revenue-lineage-traversal'].runnerOptions.maxTestRunnerReuse, undefined)
   assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
   assert.equal(targets['proposal-channel-storage'].runnerOptions.maxTestRunnerReuse, 8)
+})
+
+test('private publication retains every complete implementation and native restart selection', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['private-publication-state']
+  assert.deepEqual(target.mutate, [
+    'src/private/SQLitePrivatePublicationStore.ts',
+    'src/private/PrivateServiceIdentity.ts',
+    'src/private/PrivateServiceDomain.ts',
+    'src/private/PrivatePublicationRecords.ts',
+    'src/private/PrivatePublicationProgress.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-identity.test.ts',
+    '<rootDir>/test/private-domain.test.ts',
+    '<rootDir>/test/private-publication-records.test.ts',
+    '<rootDir>/test/private-publication-progress.test.ts',
+    '<rootDir>/test/private-publication-store.test.ts',
+    '<rootDir>/test/private-publication.property.test.ts'
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  assert.ok(target.additionalInputs.includes('test/private-publication-fixture.ts'))
 })

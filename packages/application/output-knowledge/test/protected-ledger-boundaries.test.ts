@@ -69,6 +69,12 @@ it('commits and reads the inclusive 64-record boundary as one atomic revision', 
   expect(result.records).toHaveLength(64)
   expect(result.records.every(record => record?.revision === '1')).toBe(true)
   expect(result.records.map(record => record?.key)).toEqual(changes.map(record => record.key))
+  failure(
+    () => f.ledger.commit('1', [change(64)], clock, authorize),
+    'limited',
+    'Protected ledger capacity is full'
+  )
+  expect(f.reopen().read([address(64)], clock, authorize).records).toEqual([undefined])
 })
 
 it.each([

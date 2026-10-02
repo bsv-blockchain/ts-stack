@@ -271,3 +271,11 @@ exhaustion and reached its existing job bound without a report. Recycling does
 not change the complete canonical source range, 99-test selection, property
 budget, concurrency, deadlines or aggregate acceptance; fresh complete results
 are required. Other lineage targets keep the previous default.
+
+The private-publication-state target qualifies the entire native publication owner,
+identity/domain pair, retained-record codec and ordered progress contract in four
+disjoint whole-file execution parts. Every part retains all identity, restoration,
+process-loss, deadline/authorization and 300-case native restart tests. Four workers,
+the normal job deadlines, eight-execution worker recycling and the critical
+90%/zero-uncovered/zero-invalid aggregate remain required. No pure transition
+result or local part substitutes for actual admission/HTTP composition or final CI.

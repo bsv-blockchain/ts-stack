@@ -2018,3 +2018,60 @@ One remaining meaningful survivor suggests a further full-inventory boundary
 case: reject another insertion after a separately committed full store. That
 case belongs in the next native publication/work-discovery integration batch;
 no source condition was weakened or excluded to obtain this score.
+
+### Native publication owner and bound private identity
+
+This batch adopts five internal modules for retained private
+identity/domain configuration, shared blob/request binding, ordered publication
+progress and the native SQLite publication owner. They expose no public package
+entry or HTTP mutation route. Current Bitcoin/schema/publisher validation and
+actual admission/binding durability remain installed service duties. The domain
+factory binds the indexing-key commitment into protected storage; it does not
+initialize missing state during open or pretend separate databases share a
+funding uniqueness domain.
+
+Staging stores a shared protected blob and independent request fence atomically.
+It reserves the full future progress representation before accepting work.
+Explicit record/global revisions, current guards and commit-time deadlines
+protect phase changes. Reserved admission stays pending past staging expiry;
+original admission and exact lookup binding are retained before ready. Readiness
+loss/restoration preserves that original evidence. Generic bounded work discovery
+returns current metadata pages, never a snapshot/completeness claim. The additional
+full-inventory regression rejects an insertion after a separately committed full
+64-record store.
+
+The complete new/retained native selection passes 266 tests across 13 suites in
+45.267 seconds with both canonical 300-case property campaigns and seed3242026.
+Four separate child processes are killed at staged, admission-reserved,
+admission-retained and ready boundaries, then independently reopened. The native
+publication property varies bytes, shared-blob requests, restart positions and
+commit-guard denial while checking the independent expected phase/record history.
+All prior protected-storage tests remain. Full new-source mutation qualification
+and final exact-head CI are still outstanding. See the internal
+[storage guide](../../docs/guides/private-publication-storage.md) for the precise
+boundary and required next service composition.
+
+Hosted336bf9fd1 has an infrastructure failure in the unchanged authenticated CHIRP
+upload suite: its 4 MiB upload and following altered-byte rejection reached their
+30/15-second test deadlines. A missing local Jest installation initially ran no
+tests; after the pinned npm installation and the existing approved native rebuild,
+all112 tests/20 suites pass locally with two workers in20.983 seconds. This is
+local diagnosis, not a waiver or a successful hosted rerun. No assertion, payload
+size or deadline was changed. The eight current PR review threads are resolved;
+there is no additional review page.
+
+The adopted batch also passes root health/lint/format/types, its strict build and
+all output-knowledge packed consumers/exports/type resolution. Initial governance
+validation caught the missing package-level property-script selection; that command
+now retains every previous test and includes the new property suite. The new
+critical target109 covers all five complete modules with identical canonical tests
+in four disjoint execution parts. The existing protected-ledger target adds native
+enumeration and retains every original test. Complete full-native coverage and
+mutation aggregates remain pending.
+
+The unchanged UHRP service also passes its default-worker command locally: all112
+tests/20 suites in28.620 seconds. GitHub rejected the job-only rerun because its
+containing workflow is still running (HTTP403); no rerun occurred and the hosted
+failure remains unresolved. No workflow or service source was changed for this
+diagnosis. The permitted package installation used ignored scripts followed by the
+existing named better-sqlite3 rebuild.

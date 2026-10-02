@@ -357,6 +357,43 @@ export class SQLiteProtectedLedger {
       records: keys.map(address => this.record(address))
     }))
   }
+  /**
+   * Internal bounded work discovery. Each page is one authenticated current read;
+   * this is not a retained snapshot or a claim that all pending work is complete.
+   * A reconciler wraps to null after each pass to discover inserts behind its key,
+   * then rereads each candidate and uses its actual revision at effect reservation.
+   * Enumeration never decrypts record bodies or grants authority to disclose them.
+   */
+  enumerate(
+    kind: ProtectedLedgerAddress['kind'],
+    afterKey: string | null,
+    maximum: number,
+    clock: () => string,
+    guard: ProtectedLedgerGuard
+  ): {
+    revision: string
+    observedAt: string
+    entries: (ProtectedLedgerAddress & { revision: string })[]
+    next: string | null
+  } {
+    const selected = protectedAddress({ kind, key: afterKey ?? '00'.repeat(32) })
+    const limit = protectedInteger(maximum, 64)
+    return this.observed(clock, guard, head => {
+      const rows = this.database
+        .prepare(
+          `SELECT ${HEADER_COLUMNS} FROM protected_records WHERE kind=? AND key>? ORDER BY key LIMIT ?`
+        )
+        .all(selected.kind, afterKey === null ? '' : selected.key, limit + 1)
+        .map(row => protectedHeader(row, this.configuration.maximumRecordBytes))
+      const page = rows.slice(0, limit)
+      return {
+        revision: head.revision,
+        observedAt: head.observedAt,
+        entries: page.map(({ kind, key, revision }) => ({ kind, key, revision })),
+        next: rows.length > limit ? page.at(-1)!.key : null
+      }
+    })
+  }
   private addresses(input: readonly ProtectedLedgerAddress[]): ProtectedLedgerAddress[] {
     const owned = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
     outputAssert(

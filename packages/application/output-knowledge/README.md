@@ -18,6 +18,9 @@ proposal/current-feed/session owner is implemented with atomic visibility fences
 future-event reservations and bounded expiry. Complete publication/acquisition,
 serving-path integration, platform qualification and downstream application
 adoption remain incomplete.
+The internal [native private-publication foundation](../../../docs/guides/private-publication-storage.md)
+now binds protected material, permanent request fences and ordered durable phases.
+Its actual admission/lookup/HTTP composition is still incomplete.
 The package version does not indicate a published or production-qualified release.
 See the [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md)
 for exact component evidence and outstanding work.
