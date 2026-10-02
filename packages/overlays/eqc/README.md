@@ -1,7 +1,7 @@
 # @bsv/eqc
 
 Economic Query Client for [BRC-178](https://bsv.brc.dev/overlays/0178) race-settled collection
-markets. Independent overlay nodes and message box servers answer the same query. The client
+markets. Overlay nodes and message box servers answer the same query. The client
 ranks them by the time their answers actually arrive and pays the fastest hosts that agree on
 the answer, so propagating data to peers is how a host becomes eligible to be paid.
 
@@ -168,9 +168,12 @@ Providers: `overlayLookupProvider` (BRC-24 lookups, with BRC-136 topic anchors),
   `getPublicKey`, `createSignature`, `verifySignature`, `createHmac`, and `verifyHmac`. It lists
   no certificates and rejects every other call. Only the payout transaction spends.
 - `/economic/params` is read with a 64 KiB cap that stops the download. Authenticated responses
-  are different: `AuthFetch` buffers the whole response before this package sees it and offers no
-  way to cancel, so the 16 MiB response cap rejects an oversized answer only after it was read.
-  This is an `@bsv/sdk` limitation. `maxHosts` and `hostTimeoutMs` bound the exposure.
+  are capped at 16 MiB inside `AuthFetch`, which stops reading once the cap is crossed. The
+  deadline rejects a slow call but does not cancel its transfer; `maxHosts` and `hostTimeoutMs`
+  bound that exposure.
+- SLAP advertisements name canonical `https`, `wss`, or `js8c+bsvauth+smf` URIs from
+  `@bsv/sdk` 2.8.0. Plain `http` hosts, accepted only under the `local` preset, therefore come
+  from `hostOverrides`, `additionalHosts`, or `slapTrackers`, never from a SLAP token.
 - An overlay lookup's content hash covers the sorted outpoint list. BEEF travels beside it and
   must be verified by SPV like any other BEEF.
 

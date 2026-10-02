@@ -5,8 +5,8 @@ kind: package
 domain: overlays
 npm: '@bsv/eqc'
 version: '0.1.0'
-last_updated: '2026-09-19'
-last_verified: '2026-09-19'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/eqc'
 status: experimental
@@ -74,6 +74,7 @@ A host that withholds data from its peers ends up alone with its hash and earns 
 
 - The default minimum fee is 1000 satoshis and the default budget is 2000 satoshis per query.
 - The client pays when it dispatches collect requests; loss is bounded by `maxFeeSats` per query, and hosts that take payment without delivering are excluded for ten minutes.
+- Authenticated responses are capped inside `AuthFetch` (`maxResponseBytes`, default 16 MiB). SLAP advertisements name only canonical `https`, `wss`, or `js8c+bsvauth+smf` URIs, so plain `http` hosts under the `local` preset must be configured with `hostOverrides`, `additionalHosts`, or `slapTrackers`.
 - The threshold counts identity keys, not operators. Identity keys are free: a tracker, or anyone who publishes SLAP tokens, can mint `threshold` keys that agree on a fabricated answer. For reads that carry value, pin the hosts you trust with `hostOverrides`.
 - Every identity key a SLAP token advertises for a URL is kept, and the host's BRC-103 session key must be one of them. A third party's token cannot evict an honest host, and a mismatch skips the host for that query without a cooldown.
 - The transport never pays HTTP 402 challenges and never answers a host's certificate request: the wallet it authenticates with forwards only `getPublicKey`, `createSignature`, `verifySignature`, `createHmac`, and `verifyHmac`.

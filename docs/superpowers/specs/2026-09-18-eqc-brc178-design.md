@@ -40,11 +40,13 @@ merges.
 
 ## Goal
 
-Let a set of independent overlay nodes and message box servers compete to
+Let a set of overlay nodes and message box servers compete to
 answer the same query, and let the client pay the fastest hosts that agree on
 the answer. The client is the judge of arrival time. Hosts earn only when at
 least `t` distinct hosts attest the same content hash, so propagating data to
-peers is the path to being paid rather than an act of charity.
+peers is the path to being paid rather than an act of charity. Distinct hosts
+means distinct identity keys. Keys are free, so `t` keys can belong to one
+operator; the threshold is not evidence of independent operators.
 
 `new EQC(wallet)` is the client. A host adds three routes by mounting the
 handlers from `@bsv/eqc/host`.
@@ -237,7 +239,11 @@ Every query begins with discovery, and discovery is never paid for separately.
 3. `hostOverrides[key]` replaces discovery; `additionalHosts[key]` extends it.
    Classes without a standard discovery path (`relay-lookup`, `message-body`)
    require one of the two.
-4. Only `https` hosts are accepted unless `networkPreset` is `local`.
+4. Only `https` hosts are accepted unless `networkPreset` is `local`. From
+   `@bsv/sdk` 2.8.0 a SLAP advertisement can name only a canonical `https`,
+   `wss`, or `js8c+bsvauth+smf` URI and a canonical `ls_` service name, so a
+   plain `http` host reaches a `local` client only through `hostOverrides`,
+   `additionalHosts`, or `slapTrackers`.
 5. Results are cached for `hostsTtlMs`.
 6. The client then reads `GET /economic/params` from each host, under
    `paramsTimeoutMs`, and keeps those that implement the market, support the
@@ -632,13 +638,11 @@ treats another party's reputation data as authoritative.
 - The client applies a deadline to every host call (`paramsTimeoutMs` for
   params, `hostTimeoutMs` for authenticated calls) and never lets one host's
   failure fail the query. `/economic/params` is read as a stream under a
-  64 KiB cap that cancels the download. Authenticated responses cannot be
-  capped that way: `AuthFetch` buffers the whole BRC-104 response before the
-  caller sees it and exposes no `AbortSignal`, so the 16 MiB check rejects an
-  oversized answer only after it was read, and the deadline rejects the call
-  without cancelling the transfer. This is an `@bsv/sdk` limitation;
-  `maxHosts` and `hostTimeoutMs` bound the exposure until the SDK offers a
-  byte cap or a signal.
+  64 KiB cap that cancels the download. Authenticated responses are capped
+  at 16 MiB through `AuthFetch`'s `maxResponseBytes` transport option
+  (`@bsv/sdk` 2.8.0), which stops reading once the cap is crossed. The
+  deadline rejects a slow call without cancelling its transfer; `maxHosts` and
+  `hostTimeoutMs` bound that exposure.
 - A host never takes payment for a delivery its server cannot send:
   `maxPayloadBytes` bounds the encoded collect response, and defaults below the
   smallest `@bsv/overlay-express` response limit.
@@ -656,8 +660,9 @@ treats another party's reputation data as authoritative.
   both directions.
 - **Discovery:** a stub resolver returning real SLAP advertisement tokens;
   tokens for another service or protocol are ignored; `hostOverrides` replaces
-  and `additionalHosts` extends the result; non-`https` hosts are dropped
-  outside the `local` preset; hosts returning 404 for `/economic/params` are
+  and `additionalHosts` extends the result; advertisements with a
+  non-canonical URI or service name are ignored under every preset; configured
+  non-`https` hosts are dropped outside the `local` preset; hosts returning 404 for `/economic/params` are
   dropped; every key advertised for one URL is kept, in either tracker order;
   a host whose session key no SLAP token names is discarded without a
   cooldown; results are cached for `hostsTtlMs`; discovery makes no wallet
@@ -686,7 +691,11 @@ treats another party's reputation data as authoritative.
 - **End to end over HTTP:** real express servers on ephemeral ports with the
   real `createAuthMiddleware` and the real `AuthFetch`, discovered through an
   injected `resolver` under the `local` preset (the SDK's `local` preset pins
-  discovery to port 8080, which ephemeral ports cannot use). Scenarios: five
+  discovery to port 8080, which ephemeral ports cannot use). Hosts are
+  advertised as `https://127.0.0.1:<port>` and an injected `fetch` carries the
+  requests over plain HTTP; BRC-104 signs the path and query, not the scheme.
+  An authenticated response larger than `maxResponseBytes` is rejected by
+  `AuthFetch` itself. Scenarios: five
   honest hosts; a host answering with a complete HTTP 402 challenge receives
   nothing and the wallet is asked for exactly one action; a host whose live
   identity differs from its SLAP advertisement is discarded without a

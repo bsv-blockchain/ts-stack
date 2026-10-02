@@ -42,6 +42,31 @@ export async function slapTokenOutput(
   return { beef: wrap(script, 1).beef, outputIndex: 0 }
 }
 
+/**
+ * A SLAP-shaped PushDrop token built without the template's validation, so tests can present the
+ * malformed advertisements a hostile tracker could still return.
+ */
+export async function rawSlapTokenOutput(
+  wallet: WalletInterface,
+  domain: string,
+  service: string
+): Promise<{ beef: number[]; outputIndex: number }> {
+  const { publicKey } = await wallet.getPublicKey({ identityKey: true })
+  const script = await new PushDrop(wallet).lock(
+    [
+      Utils.toArray('SLAP', 'utf8'),
+      Utils.toArray(publicKey, 'hex'),
+      Utils.toArray(domain, 'utf8'),
+      Utils.toArray(service, 'utf8')
+    ],
+    [2, 'service lookup availability'],
+    '1',
+    'anyone',
+    true
+  )
+  return { beef: wrap(script, 1).beef, outputIndex: 0 }
+}
+
 /** A real `tm_messagebox` advertisement: PushDrop fields `[identityKey, host]`. */
 export async function messageBoxTokenOutput(
   wallet: WalletInterface,

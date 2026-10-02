@@ -1,7 +1,11 @@
 import { CompletedProtoWallet, PrivateKey, type LookupAnswer, type LookupQuestion } from '@bsv/sdk'
 import { describe, expect, it } from 'vitest'
 
-import { messageBoxTokenOutput, slapTokenOutput } from '../../test/support/transactions.js'
+import {
+  messageBoxTokenOutput,
+  rawSlapTokenOutput,
+  slapTokenOutput
+} from '../../test/support/transactions.js'
 import { HostDiscovery, discoveryTarget, type LookupResolverLike } from './discovery.js'
 
 const hostKey = PrivateKey.fromRandom()
@@ -49,7 +53,7 @@ describe('HostDiscovery', () => {
     const resolver = resolverFor([
       await slapTokenOutput(hostWallet, 'https://a.example', 'ls_x'),
       await slapTokenOutput(hostWallet, 'https://other.example', 'ls_other'),
-      await slapTokenOutput(hostWallet, 'https://ship.example', 'ls_x', 'SHIP'),
+      await slapTokenOutput(hostWallet, 'https://ship.example', 'tm_x', 'SHIP'),
       { beef: [1, 2, 3], outputIndex: 0 }
     ])
     const discovery = new HostDiscovery({ resolver })
@@ -121,17 +125,31 @@ describe('HostDiscovery', () => {
     ])
   })
 
-  it('accepts plain http only under the local preset', async () => {
+  it('ignores SLAP advertisements whose URI or service name is not canonical', async () => {
     const outputs = [
-      await slapTokenOutput(hostWallet, 'http://127.0.0.1:4001', 'ls_x'),
-      await slapTokenOutput(hostWallet, 'ftp://files.example', 'ls_x'),
-      await slapTokenOutput(hostWallet, 'not a url', 'ls_x')
+      await rawSlapTokenOutput(hostWallet, 'http://127.0.0.1:4001', 'ls_x'),
+      await rawSlapTokenOutput(hostWallet, 'ftp://files.example', 'ls_x'),
+      await rawSlapTokenOutput(hostWallet, 'not a url', 'ls_x'),
+      await rawSlapTokenOutput(hostWallet, 'https://digits.example', 'ls_x2')
     ]
-    const mainnet = new HostDiscovery({ resolver: resolverFor(outputs) })
+    for (const networkPreset of ['mainnet', 'local'] as const) {
+      const discovery = new HostDiscovery({ resolver: resolverFor(outputs), networkPreset })
+      expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([])
+      expect(await discovery.hostsFor({ kind: 'overlay-lookup', service: 'ls_x2' })).toEqual([])
+    }
+  })
+
+  it('accepts plain http hosts only from configuration and only under the local preset', async () => {
+    const hostOverrides = { ls_x: ['http://127.0.0.1:4001', 'ftp://files.example'] }
+    const mainnet = new HostDiscovery({ resolver: resolverFor([]), hostOverrides })
     expect(await mainnet.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([])
-    const local = new HostDiscovery({ resolver: resolverFor(outputs), networkPreset: 'local' })
+    const local = new HostDiscovery({
+      resolver: resolverFor([]),
+      hostOverrides,
+      networkPreset: 'local'
+    })
     expect(await local.hostsFor({ kind: 'overlay-lookup', service: 'ls_x' })).toEqual([
-      { url: 'http://127.0.0.1:4001', identityKeys: [hostIdentity] }
+      { url: 'http://127.0.0.1:4001' }
     ])
   })
 

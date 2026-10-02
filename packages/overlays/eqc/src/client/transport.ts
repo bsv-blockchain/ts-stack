@@ -135,14 +135,16 @@ export class AuthFetchTransport implements HostTransport {
     wallet: WalletInterface,
     options: { originator?: string; fetch?: typeof fetch; maxResponseBytes?: number } = {}
   ) {
+    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis)
+    this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
     this.authFetch = new AuthFetch(
       nonPayingWallet(wallet),
       undefined,
       undefined,
-      options.originator
+      options.originator,
+      { maxResponseBytes: this.maxResponseBytes },
+      this.fetchImpl
     )
-    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis)
-    this.maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
   }
 
   /** `/economic/params` is unauthenticated, so it is read with a plain, bounded fetch. */
@@ -190,9 +192,8 @@ export class AuthFetchTransport implements HostTransport {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body)
       })
-      // Residual limit: AuthFetch buffers the whole BRC-104 response itself and exposes no
-      // AbortSignal on this call, so the allocation below the SDK boundary cannot be bounded or
-      // cancelled from here. This only rejects the result after AuthFetch already read it fully.
+      // AuthFetch stops reading the BRC-104 response at maxResponseBytes; this rechecks the
+      // decoded body it hands back.
       const buffer = await response.arrayBuffer()
       if (buffer.byteLength > this.maxResponseBytes) throw new Error(`${url} response is too large`)
       const text = new TextDecoder().decode(buffer)

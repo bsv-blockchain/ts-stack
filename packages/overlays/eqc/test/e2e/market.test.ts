@@ -10,11 +10,12 @@ import { InMemoryReputationStore } from '../../src/client/reputation.js'
 import { AuthFetchTransport, TransportTimeoutError } from '../../src/client/transport.js'
 import { createEconomicQueryHost } from '../../src/host/handlers.js'
 import { overlayLookupProvider, type QueryProvider } from '../../src/host/providers.js'
+import { ECONOMIC_PATHS } from '../../src/protocol/query.js'
 import { sampleBeef } from '../support/transactions.js'
 import { HostWallet, PayerWallet } from '../support/wallets.js'
-import { slapResolver, startHost, type E2EHost } from './harness.js'
+import { loopbackFetch, slapResolver, startHost, type E2EHost } from './harness.js'
 
-const SERVICE = 'ls_e2e'
+const SERVICE = 'ls_market'
 const first = sampleBeef(1)
 const second = sampleBeef(2)
 const answer: LookupAnswer = {
@@ -32,7 +33,7 @@ function provider(reverse: boolean): QueryProvider {
       lookup: async () => ({ type: 'output-list', outputs }),
       provideTopicAnchorTip: async topic => ({ topic, blockHeight: 900, tac: 'cd'.repeat(32) })
     },
-    anchorTopics: { [SERVICE]: ['tm_e2e'] }
+    anchorTopics: { [SERVICE]: ['tm_market'] }
   })
 }
 
@@ -62,6 +63,7 @@ describe('economic query market over HTTP', () => {
     const payer = new PayerWallet()
     const eqc = new EQC(payer, {
       networkPreset: 'local',
+      transport: new AuthFetchTransport(payer, { fetch: loopbackFetch }),
       resolver: slapResolver(
         SERVICE,
         hosts.map(host => ({ url: host.url, advertiser: host.wallet }))
@@ -78,7 +80,7 @@ describe('economic query market over HTTP', () => {
     expect(result.ranking).toHaveLength(5)
     expect(result.ranking.map(entry => entry.payoutSats)).toEqual([418, 250, 166, 83, 83])
     expect(result.consistency).toEqual([
-      expect.objectContaining({ topic: 'tm_e2e', status: 'agreed' })
+      expect.objectContaining({ topic: 'tm_market', status: 'agreed' })
     ])
     expect(payer.actions).toHaveLength(1)
     for (const host of hosts) {
@@ -99,6 +101,7 @@ describe('economic query market over HTTP', () => {
     const payer = new PayerWallet()
     const eqc = new EQC(payer, {
       networkPreset: 'local',
+      transport: new AuthFetchTransport(payer, { fetch: loopbackFetch }),
       resolver: slapResolver(
         SERVICE,
         [...honest, greedy].map(host => ({ url: host.url, advertiser: host.wallet }))
@@ -130,6 +133,7 @@ describe('economic query market over HTTP', () => {
     const reputation = new InMemoryReputationStore()
     const eqc = new EQC(payer, {
       networkPreset: 'local',
+      transport: new AuthFetchTransport(payer, { fetch: loopbackFetch }),
       reputation,
       resolver: slapResolver(SERVICE, [
         ...honest.map(host => ({ url: host.url, advertiser: host.wallet })),
@@ -160,6 +164,7 @@ describe('economic query market over HTTP', () => {
     const payer = new PayerWallet()
     const eqc = new EQC(payer, {
       networkPreset: 'local',
+      transport: new AuthFetchTransport(payer, { fetch: loopbackFetch }),
       resolver: slapResolver(SERVICE, [
         { url: hosts[0].url, advertiser: new HostWallet() },
         ...hosts.map(host => ({ url: host.url, advertiser: host.wallet }))
@@ -174,6 +179,28 @@ describe('economic query market over HTTP', () => {
     expect(result.ranking.map(entry => entry.url).sort()).toEqual(
       hosts.map(host => host.url).sort()
     )
+  }, 30_000)
+
+  it('stops reading an authenticated response at the transport byte cap', async () => {
+    const host = await start({ providers: [provider(false)], oversizedBodyBytes: 64 * 1024 })
+    const transport = new AuthFetchTransport(new PayerWallet(), {
+      fetch: loopbackFetch,
+      maxResponseBytes: 1024
+    })
+    await expect(
+      transport.post(host.url, ECONOMIC_PATHS.query, { type: 'overlay-lookup' }, 10_000)
+    ).rejects.toThrow(
+      `Authenticated response from ${host.url}${ECONOMIC_PATHS.query} exceeds 1024 bytes`
+    )
+    const roomy = new AuthFetchTransport(new PayerWallet(), { fetch: loopbackFetch })
+    const response = await roomy.post(
+      host.url,
+      ECONOMIC_PATHS.query,
+      { type: 'overlay-lookup' },
+      10_000
+    )
+    expect(response.status).toBe(200)
+    expect(response.body).toHaveLength(64 * 1024)
   }, 30_000)
 
   it('bounds an authenticated call to a host that accepts the connection and never answers', async () => {

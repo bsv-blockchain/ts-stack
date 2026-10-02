@@ -12,7 +12,19 @@ import { ECONOMIC_PATHS } from '../../src/protocol/query.js'
 import { slapTokenOutput } from '../support/transactions.js'
 import { HostWallet } from '../support/wallets.js'
 
+/**
+ * SLAP advertisements are https-only from SDK 2.8.0, so hosts are advertised and addressed as
+ * `https://127.0.0.1:<port>` and this fetch carries each request over plain HTTP to the loopback
+ * server. BRC-104 signs the path and query, not the scheme, so authentication is unaffected.
+ */
+export const loopbackFetch: typeof fetch = async (input, init) => {
+  const url = input instanceof Request ? input.url : String(input)
+  if (!url.startsWith('https://127.0.0.1:')) throw new Error(`unexpected e2e URL ${url}`)
+  return await fetch(`http://${url.slice('https://'.length)}`, init)
+}
+
 export interface E2EHost {
+  /** The https URL the host is advertised and addressed by; see {@link loopbackFetch}. */
   url: string
   wallet: HostWallet
   close: () => Promise<void>
@@ -23,6 +35,8 @@ export async function startHost(options: {
   delayMs?: number
   /** Answer every query with a complete BRC-105 challenge for this many satoshis. */
   demand402Sats?: number
+  /** Answer every query with a JSON string body of this many bytes. */
+  oversizedBodyBytes?: number
 }): Promise<E2EHost> {
   const wallet = new HostWallet()
   const app = express()
@@ -47,6 +61,12 @@ export async function startHost(options: {
         .json({ status: 'error', code: 'ERR_PAYMENT_REQUIRED', satoshisRequired: satoshis })
     })
   }
+  if (options.oversizedBodyBytes !== undefined) {
+    const filler = 'x'.repeat(options.oversizedBodyBytes)
+    app.post(ECONOMIC_PATHS.query, (_req, res) => {
+      res.json(filler)
+    })
+  }
   // Compile-time proof that an express Application satisfies RouterLike.
   createEconomicQueryHost({
     wallet,
@@ -60,7 +80,7 @@ export async function startHost(options: {
   })
   const { port } = server.address() as AddressInfo
   return {
-    url: `http://127.0.0.1:${port}`,
+    url: `https://127.0.0.1:${port}`,
     wallet,
     close: async () =>
       await new Promise<void>(resolve => {
