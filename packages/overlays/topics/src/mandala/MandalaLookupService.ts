@@ -38,6 +38,7 @@ import { MandalaStorageManager } from './MandalaStorageManager.js'
 import { MANDALA_TOPIC } from './MandalaTopicManager.js'
 import { ADMIN_KINDS, commitmentOf, decodeAdminDetails, deployMetadata } from './details.js'
 import type { AdminDetails } from './details.js'
+import { eachInOrder } from './inOrder.js'
 import { txOrdering } from './ordering.js'
 import { verifyOutputOwners } from './ownership.js'
 import { decodeEnvelope } from './types.js'
@@ -308,15 +309,18 @@ export class MandalaLookupService implements LookupService {
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
     const query = requireLookupQuery(question, LOOKUP_SERVICE, QUERY_KEYS)
     // Every key is validated before any is answered.
-    const tokenIds = TOKEN_QUERIES.map(([field]) => optionalTokenId(query, field))
+    const asked = TOKEN_QUERIES.map(([field, answer]) => ({
+      tokenId: optionalTokenId(query, field),
+      answer
+    }))
     const outpoint = outpointOf(query)
     const page = {
       limit: readInteger(query, 'limit', 100, 1, 100),
       skip: readInteger(query, 'skip', 0, 0, 100000)
     }
-    for (const [i, [, answer]] of TOKEN_QUERIES.entries()) {
-      const tokenId = tokenIds[i]
-      if (tokenId !== undefined) return await answer(this.deps.storage, tokenId, page)
+    const first = asked.find(({ tokenId }) => tokenId !== undefined)
+    if (first?.tokenId !== undefined) {
+      return await first.answer(this.deps.storage, first.tokenId, page)
     }
     if (outpoint === undefined) throw new Error('Unsupported query')
     return await this.outpointAnswer(outpoint.txid, outpoint.outputIndex)
@@ -340,11 +344,11 @@ export class MandalaLookupService implements LookupService {
     const { storage } = this.deps
     const metadata = await storage.findMetadata(tokenId)
     let state = defaultAssetState(tokenId, metadata?.feeRatePerKb ?? null)
-    for (const entry of await storage.findAdminHistory(tokenId)) {
-      if (entry.txid === excludeTxid) continue
+    await eachInOrder(await storage.findAdminHistory(tokenId), async entry => {
+      if (entry.txid === excludeTxid) return
       const { details } = decodeAdminDetails(entry.detailsHex, ADMIN_KINDS, entry.outputIndex)
       state = await this.folded(state, details, entry)
-    }
+    })
     await storage.putAssetState(state)
   }
 
@@ -356,7 +360,7 @@ export class MandalaLookupService implements LookupService {
   async purgeAndRefold(txid: string): Promise<string[]> {
     const { storage } = this.deps
     const tokenIds = await storage.tokensTouchedBy(txid)
-    for (const tokenId of tokenIds) await this.rebuildState(tokenId, txid)
+    await eachInOrder(tokenIds, async tokenId => await this.rebuildState(tokenId, txid))
     await storage.deleteAdminHistoryByTxid(txid)
     return tokenIds
   }

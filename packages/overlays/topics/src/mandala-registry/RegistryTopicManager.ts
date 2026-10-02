@@ -119,15 +119,15 @@ export class RegistryTopicManager implements TopicManager {
     }
   }
 
-  async getDocumentation(): Promise<string> {
-    return docs
+  getDocumentation(): Promise<string> {
+    return Promise.resolve(docs)
   }
 
-  async getMetaData(): Promise<{ name: string; shortDescription: string }> {
-    return {
+  getMetaData(): Promise<{ name: string; shortDescription: string }> {
+    return Promise.resolve({
       name: REGISTRY_TOPIC,
       shortDescription:
         'Mandala identity registry on BRC-162: a single authority chain that admits and revokes identities. No value outputs.'
-    }
+    })
   }
 }

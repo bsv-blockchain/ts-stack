@@ -60,8 +60,12 @@ export function encodeAmountChunk(amount: bigint): ScriptChunk {
   if (amount === 0n) return { op: OP.OP_0 }
   if (amount <= 16n) return { op: OP.OP_1 + Number(amount) - 1 }
   const data: number[] = []
-  for (let v = amount; v > 0n; v >>= 8n) data.push(Number(v & 0xffn))
-  if ((data[data.length - 1] & 0x80) !== 0) data.push(0x00)
+  let top = 0
+  for (let v = amount; v > 0n; v >>= 8n) {
+    top = Number(v & 0xffn)
+    data.push(top)
+  }
+  if ((top & 0x80) !== 0) data.push(0x00)
   return { op: data.length, data }
 }
 
@@ -69,8 +73,10 @@ const isDirectAmountPush = (chunk: ScriptChunk): chunk is ScriptChunk & { data: 
   chunk.op >= 1 && chunk.op <= MAX_AMOUNT_BYTES && chunk.data?.length === chunk.op
 
 // The top byte may be zero only as the sign pad of a value byte with its high bit set.
-const isMinimalScriptNum = (data: readonly number[]): boolean =>
-  (data[data.length - 1] & 0x7f) !== 0 || (data.length > 1 && (data[data.length - 2] & 0x80) !== 0)
+const isMinimalScriptNum = (data: readonly number[]): boolean => {
+  const [top, below] = [...data].reverse()
+  return (top & 0x7f) !== 0 || (data.length > 1 && (below & 0x80) !== 0)
+}
 
 const littleEndianValue = (data: readonly number[]): bigint => {
   let v = 0n
@@ -85,7 +91,8 @@ export function decodeAmountChunk(chunk: ScriptChunk): bigint {
     return fail('amount must be OP_0, OP_1..OP_16 or a direct push of 1-9 bytes')
   }
   const { data } = chunk
-  if ((data[data.length - 1] & 0x80) !== 0) fail('amount must not be negative')
+  const [top] = [...data].reverse()
+  if ((top & 0x80) !== 0) fail('amount must not be negative')
   if (!isMinimalScriptNum(data)) fail('amount is not minimally encoded')
   const v = littleEndianValue(data)
   if (v <= 16n) fail('amounts 0..16 must use OP_0/OP_1..OP_16')

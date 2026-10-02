@@ -100,20 +100,20 @@ export class RegistryLookupService implements LookupService {
     await this.deps.storage.takeAuthority(txid, outputIndex)
   }
 
-  async lookup(_question: LookupQuestion): Promise<LookupFormula> {
-    return []
+  lookup(_question: LookupQuestion): Promise<LookupFormula> {
+    return Promise.resolve([])
   }
 
-  async getDocumentation(): Promise<string> {
-    return docs
+  getDocumentation(): Promise<string> {
+    return Promise.resolve(docs)
   }
 
-  async getMetaData(): Promise<{ name: string; shortDescription: string }> {
-    return {
+  getMetaData(): Promise<{ name: string; shortDescription: string }> {
+    return Promise.resolve({
       name: REGISTRY_LOOKUP,
       shortDescription:
         'Mandala identity registry index: folds admit and revoke actions into the membership cache and tracks the registry authority.'
-    }
+    })
   }
 }
 

@@ -579,7 +579,7 @@ describe('BRC-162 templates vectors', () => {
       const [chunk] = LockingScript.fromHex(v.chunkHex).chunks
       expect(decodeAmountChunk(chunk)).toBe(amount)
       expect(hexOf(chunk.data ?? [])).toBe(amount <= 16n ? '' : v.chunkHex.slice(2))
-      expect(v.chunkHex.length).toBe(amount <= 16n ? 2 : (chunk.op + 1) * 2)
+      expect(v.chunkHex).toHaveLength(amount <= 16n ? 2 : (chunk.op + 1) * 2)
       if (amount > 16n) expect(chunk.op).toBe(Math.floor(amount.toString(2).length / 8) + 1)
     }
     expect(vectors.amountChunks[0]).toEqual({ id: 'amount-0', amount: '0', chunkHex: '00' })

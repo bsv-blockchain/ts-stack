@@ -13,6 +13,7 @@ import { LockingScript } from '@bsv/sdk'
 import { Bsv21Binary, tokenIdToString } from '@bsv/templates'
 import type { Bsv21Role } from '@bsv/templates'
 import type { MandalaStorageManager } from './MandalaStorageManager.js'
+import { eachInOrder } from './inOrder.js'
 import type { EngineOutputReader, MandalaOwnerRecord } from './types.js'
 
 export interface ReconcileResult {
@@ -168,12 +169,12 @@ async function reconcilePage(
   deps: ReconcileDeps,
   result: ReconcileResult
 ): Promise<void> {
-  for (const op of page) {
+  await eachInOrder(page, async op => {
     result.scanned++
     const outcome = await reconcileOne(op, deps)
     if (outcome === 'repaired') result.repaired++
     else if (outcome === 'unrepairable') result.unrepairable.push(labelOf(op))
-  }
+  })
 }
 
 // A page that ends where the last one did would be read forever.
@@ -184,6 +185,20 @@ function requireProgress(page: readonly Outpoint[], cursor: Outpoint | null): vo
   }
 }
 
+// Reads and reconciles the page after `cursor`, then the rest, until a page comes back short.
+async function reconcileFrom(
+  cursor: Outpoint | null,
+  limit: number,
+  deps: ReconcileDeps,
+  result: ReconcileResult
+): Promise<void> {
+  const page = await deps.engine.listUnspentAdmittedOutputs(deps.topic, cursor, limit)
+  requireProgress(page, cursor)
+  await reconcilePage(page, deps, result)
+  const next = page.at(-1) ?? null
+  if (page.length >= limit) await reconcileFrom(next, limit, deps, result)
+}
+
 /**
  * Pages the engine's unspent admitted outputs of `topic` in keyset order and reconciles each one.
  * Every engine or store fault is rethrown, so the caller retries the whole run; repairs are
@@ -192,13 +207,6 @@ function requireProgress(page: readonly Outpoint[], cursor: Outpoint | null): vo
 export async function reconcileOwnerIndex(deps: ReconcileDeps): Promise<ReconcileResult> {
   const limit = batchSizeOf(deps)
   const result: ReconcileResult = { scanned: 0, repaired: 0, unrepairable: [] }
-  let cursor: Outpoint | null = null
-  let page: Outpoint[]
-  do {
-    page = await deps.engine.listUnspentAdmittedOutputs(deps.topic, cursor, limit)
-    requireProgress(page, cursor)
-    await reconcilePage(page, deps, result)
-    cursor = page.at(-1) ?? null
-  } while (page.length >= limit)
+  await reconcileFrom(null, limit, deps, result)
   return result
 }

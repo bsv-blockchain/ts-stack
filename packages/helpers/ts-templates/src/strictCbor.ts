@@ -58,19 +58,11 @@ const compareBytes = (a: ArrayLike<number>, b: ArrayLike<number>): number => {
 }
 
 // TextEncoder silently turns a lone surrogate into U+FFFD, which would change
-// the value (and could make two distinct keys collide). Refuse instead.
-const hasLoneSurrogate = (s: string): boolean => {
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i)
-    if (c >= 0xdc00 && c <= 0xdfff) return true
-    if (c >= 0xd800 && c <= 0xdbff) {
-      const next = s.charCodeAt(i + 1)
-      if (!(next >= 0xdc00 && next <= 0xdfff)) return true
-      i++
-    }
-  }
-  return false
-}
+// the value (and could make two distinct keys collide). Refuse instead. In a
+// `u` regex a surrogate pair is one code point, so \p{Cs} matches only a lone
+// surrogate.
+const LONE_SURROGATE = /\p{Cs}/u
+const hasLoneSurrogate = (s: string): boolean => LONE_SURROGATE.test(s)
 
 const encodeText = (text: string): number[] => {
   if (hasLoneSurrogate(text)) fail('text contains a lone surrogate')

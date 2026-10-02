@@ -8,6 +8,7 @@ import type { Brc162Input, TokenLedger } from '../brc162/ledger.js'
 import type { AssetAdminState } from './AssetStateReducer.js'
 import type { MandalaStateStore } from './MandalaStorageManager.js'
 import { readAssetState } from './authority.js'
+import { eachInOrder } from './inOrder.js'
 import type { AuthorityResult } from './authority.js'
 import type { VerifiedOwner } from './ownership.js'
 import { Reasons } from './reject.js'
@@ -115,11 +116,11 @@ async function requireNotSanctioned(
   screening: ScreeningProvider,
   identities: readonly string[]
 ): Promise<void> {
-  for (const key of identities) {
+  await eachInOrder(identities, async key => {
     if (await verdictOf(async () => await screening.isSanctioned(key), 'the screening provider')) {
       throw Reasons.sanctioned(key)
     }
-  }
+  })
 }
 
 async function requireMembers(
@@ -130,9 +131,9 @@ async function requireMembers(
   const ask = async (question: () => Promise<boolean>): Promise<boolean> =>
     await verdictOf(question, 'the membership provider')
   if (!(await ask(async () => await membership.isActive()))) return
-  for (const key of parties) {
+  await eachInOrder(parties, async key => {
     if (!(await ask(async () => await membership.isAdmitted(key)))) throw Reasons.notMember(key)
-  }
+  })
 }
 
 /**
@@ -149,9 +150,9 @@ export async function checkControls(
   deps: ControlDeps
 ): Promise<void> {
   const parties: Parties = { inputs, inputOwners, owners, exempt: lowered(deps.exempt) }
-  for (const tokenId of ledger.keys()) {
+  await eachInOrder(ledger.keys(), async tokenId => {
     await requireTokenControls(tokenId, auth.adminTokens.has(tokenId), parties, deps.store)
-  }
+  })
   const identities = allIdentities(parties)
   await requireNotSanctioned(deps.screening, identities)
   await requireMembers(

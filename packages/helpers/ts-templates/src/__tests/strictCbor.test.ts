@@ -79,6 +79,8 @@ describe('strictCbor encode', () => {
     expect(() => encodeStrictCbor({ a: '\ud800' })).toThrow(StrictCborError)
     expect(() => encodeStrictCbor({ '\udc00': 1n })).toThrow(StrictCborError)
     expect(() => encodeStrictCbor({ a: '\ud800x' })).toThrow(StrictCborError)
+    expect(() => encodeStrictCbor({ a: 'x\ude00\ud83d' })).toThrow(StrictCborError)
+    expect(() => encodeStrictCbor({ a: '\ud83d\ude00\ud800' })).toThrow(StrictCborError)
     expect(toHex(encodeStrictCbor({ a: '😀' }))).toBe('a1 6161 64f09f9880'.replace(/\s/g, ''))
   })
   it('enforces the 4096 byte ceiling', () => {
@@ -180,7 +182,7 @@ describe('strictCbor decode accepts exactly the subset', () => {
   })
   it('rejects input over 4096 bytes', () => {
     const big = mapWithBytes(4091)
-    expect(big.length).toBe(STRICT_CBOR_MAX_BYTES + 1)
+    expect(big).toHaveLength(STRICT_CBOR_MAX_BYTES + 1)
     expect(() => decodeStrictCbor(big)).toThrow(StrictCborError)
     expect(() => decodeStrictCbor(Uint8Array.from(big))).toThrow(StrictCborError)
   })

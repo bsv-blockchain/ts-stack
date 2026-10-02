@@ -22,6 +22,7 @@ import {
   deployMetadata
 } from './details.js'
 import type { AdminDetails } from './details.js'
+import { eachInOrder } from './inOrder.js'
 import { MAX_SAFE } from './ownership.js'
 import type { VerifiedOwner } from './ownership.js'
 import { Reasons } from './reject.js'
@@ -102,13 +103,13 @@ async function requireValidDeploys(
   owners: readonly VerifiedOwner[],
   env: MandalaEnvelope
 ): Promise<void> {
-  for (const output of outputs) {
-    if (output.role !== 'deploy') continue
+  await eachInOrder(outputs, async output => {
+    if (output.role !== 'deploy') return
     if (output.amount > 0n) throw Reasons.fixedSupply()
     deployMetadata(output.payload, output.payloadCanonical)
     const { identityKey } = ownerAt(owners, output.index)
     if (!(await verifyDeploySig(txid, env.deploySig, identityKey))) throw Reasons.deploySig()
-  }
+  })
 }
 
 // ---- 2. trusted identities (D4) ----
@@ -244,7 +245,7 @@ async function requireCaps(
   ledgers: readonly TokenLedger[],
   store: MandalaStateStore
 ): Promise<void> {
-  for (const ledger of ledgers) {
+  await eachInOrder(ledgers, async ledger => {
     if (ledger.valueIn > MAX_SAFE || ledger.valueOut > MAX_SAFE) {
       throw Reasons.sumCap(ledger.tokenId)
     }
@@ -252,7 +253,7 @@ async function requireCaps(
     if (delta > 0n && (await readSupply(store, ledger.tokenId)) + delta > MAX_SAFE) {
       throw Reasons.supplyCap(ledger.tokenId)
     }
-  }
+  })
 }
 
 // ---- 9. reissue ----
@@ -290,10 +291,10 @@ async function requireValidReissues(
   owners: readonly VerifiedOwner[],
   store: MandalaStateStore
 ): Promise<void> {
-  for (const ledger of ledgers) {
+  await eachInOrder(ledgers, async ledger => {
     const action = actionOf(actions, ledger.tokenId)
     if (action?.details.kind === 'reissue') await requireValidReissue(ledger, action, owners, store)
-  }
+  })
 }
 
 /**

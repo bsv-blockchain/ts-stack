@@ -102,8 +102,8 @@ export class InMemoryScreeningProvider implements ScreeningProvider {
     this.banned = new Set(keys.map(key => key.toLowerCase()))
   }
 
-  async isSanctioned(identityKey: string): Promise<boolean> {
-    return this.banned.has(identityKey.toLowerCase())
+  isSanctioned(identityKey: string): Promise<boolean> {
+    return Promise.resolve(this.banned.has(identityKey.toLowerCase()))
   }
 }
 

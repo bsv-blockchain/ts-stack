@@ -11,6 +11,7 @@ import { Bsv21Binary } from '@bsv/templates'
 import type { Bsv21Role } from '@bsv/templates'
 import type { Brc162Input, Brc162Output, InvalidTokenOutput } from '../brc162/ledger.js'
 import type { MandalaStateStore } from './MandalaStorageManager.js'
+import { eachInOrder } from './inOrder.js'
 import { Reasons } from './reject.js'
 import type { MandalaReject } from './reject.js'
 import type {
@@ -146,13 +147,13 @@ export async function verifyOutputOwners(
   verifierWallet: WalletInterface
 ): Promise<VerifiedOwner[]> {
   const owners: VerifiedOwner[] = []
-  for (const output of outputs) {
+  await eachInOrder(outputs, async output => {
     const linkage = env.outputs.find(entry => entry.index === output.index)?.linkage
     const linked = await linkedIdentity(linkage, verifierWallet, output.restPubKeyHash)
     if (linked === undefined) throw Reasons.noLinkage(output.index)
     const { index, tokenId, role, amount } = output
     owners.push({ index, tokenId, role, amount, ...linked })
-  }
+  })
   return owners
 }
 
@@ -311,12 +312,12 @@ export async function resolveInputOwners(
   deps: InputOwnerDeps
 ): Promise<Map<number, string>> {
   const owners = new Map<number, string>()
-  for (const input of inputs) {
+  await eachInOrder(inputs, async input => {
     const source = sourceOf(tx, input)
     const owner =
       (await storedOwner(input, source, deps.store)) ?? (await repairedOwner(input, source, deps))
     await requireInputLinkage(input, source, owner, env, deps.verifierWallet)
     owners.set(input.index, owner)
-  }
+  })
   return owners
 }
