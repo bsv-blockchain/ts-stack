@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-import OverlayExpress from '../OverlayExpress.js'
+import OverlayExpress, { type RegisteredRouterFactory } from '../OverlayExpress.js'
 import Knex from 'knex'
 import { MongoClient } from 'mongodb'
 import { TopicManager, LookupService, serializeErrorForLog, serializeLogValue } from '@bsv/overlay'
@@ -1506,7 +1506,7 @@ describe('OverlayExpress', () => {
       it('mounts a registered router after BRC-103 auth and before the 404 handler', async () => {
         instance.serverWallet = {} as any
         const handler = jest.fn()
-        const factory = jest.fn<any>().mockResolvedValue(handler)
+        const factory = jest.fn<RegisteredRouterFactory>(async () => handler)
         expect(instance.registerRouter('/extra', factory)).toBe(instance)
 
         const calls = await startAndCaptureUse()
@@ -1521,7 +1521,7 @@ describe('OverlayExpress', () => {
       })
 
       it('hands the factory an undefined wallet when no server wallet exists', async () => {
-        const factory = jest.fn<any>().mockReturnValue(jest.fn())
+        const factory = jest.fn<RegisteredRouterFactory>(() => jest.fn())
         instance.registerRouter('/extra', factory)
         await startAndCaptureUse()
         expect(factory).toHaveBeenCalledWith({ engine: mockEngine, wallet: undefined })
