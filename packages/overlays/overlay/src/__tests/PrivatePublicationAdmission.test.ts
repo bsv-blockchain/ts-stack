@@ -268,9 +268,24 @@ describe('private publication admission bridge', () => {
         })
     )
     const first = f.run()
-    await expect(f.run()).rejects.toMatchObject({ code: 'limited' })
-    resolve({ state: 'unresolved' })
-    await first
+    // Attach both settlement handlers before testing the competing call. Early
+    // validation failures must fail assertions, never become unhandled rejections.
+    const settled = Promise.allSettled([first])
+    try {
+      await expect(f.run()).rejects.toMatchObject({ code: 'limited' })
+    } finally {
+      resolve?.({ state: 'unresolved' })
+    }
+    expect(await settled).toEqual([
+      {
+        status: 'fulfilled',
+        value: {
+          operationId: f.job.operationId,
+          txid: f.job.request.evidence.txid,
+          status: 'unresolved'
+        }
+      }
+    ])
     await expect(f.run()).resolves.toMatchObject({ status: 'unresolved' })
   })
   test.each(['context', 'scope', 'topic', 'digest'] as const)(

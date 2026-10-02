@@ -2144,3 +2144,15 @@ introduced. Root health/lint/format rerun successfully after the correction, and
 the previously completed root typecheck remains applicable (the correction only
 changes Jest discovery and its governance test). Complete mutation reports and
 hosted validation are the next acceptance boundary, not implied by these passes.
+
+
+The initial private-admission mutation attempt on e5624c0fc began with all104
+canonical tests passing and362 generated mutants. Repeated injected early failures
+revealed an unobserved first promise in the new concurrency test, terminating
+workers before ordinary assertions. The run was explicitly stopped after180.687
+seconds with all10014 captured inputs and HEAD unchanged; it produced no complete
+qualification report and is not an accepted score. The test now attaches both
+settlement handlers immediately and releases the stalled read in a finally block.
+A deliberately inverted contract-identity check reaches one ordinary failed Jest
+assertion with a complete report. Production code and all canonical tests/gates
+are unchanged; a fresh complete campaign is required.
