@@ -144,4 +144,40 @@ describe('MessageBoxClient WebSocket Integration Tests', () => {
     expect(received.body).toBe(unencryptedMessage)
     expect(received.sender).toBe(recipientKey)
   }, 15000)
+
+  /** TEST 6: A new socket joins for itself, against a real server **/
+  test('resubscribes after the WebSocket is disconnected', async () => {
+    await messageBoxClient.disconnectWebSocket()
+    expect(messageBoxClient.getJoinedRooms().size).toBe(0)
+
+    const resubscribed = 'Message after a reconnect'
+    const messagePromise = new Promise<PeerMessage>((resolve, reject) => {
+      messageBoxClient
+        .listenForLiveMessages({
+          messageBox,
+          onMessage: (message: PeerMessage) => {
+            resolve(message)
+          }
+        })
+        .catch(reject)
+
+      setTimeout(() => {
+        reject(new Error('Test timed out: the rebuilt socket never joined its room'))
+      }, 10000)
+    })
+
+    const identityKey = await messageBoxClient.getIdentityKey()
+    expect(messageBoxClient.getJoinedRooms().has(`${identityKey}-${messageBox}`)).toBe(true)
+
+    const response = await messageBoxClient.sendLiveMessage({
+      recipient: recipientKey,
+      messageBox,
+      body: resubscribed,
+      skipEncryption: true
+    })
+    expect(response).toHaveProperty('status', 'success')
+
+    const received = await messagePromise
+    expect(received.body).toBe(resubscribed)
+  }, 20000)
 })
