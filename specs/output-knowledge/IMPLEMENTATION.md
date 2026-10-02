@@ -2600,3 +2600,28 @@ keep their emitted module formats separate. The six affected ordinary/private
 suites passed 214 tests with coverage using independent caches. A repeated warm
 cache run checks that cached compilation preserves the same actual constructors,
 SDK mocks and private HTTP behavior. Full campaign evidence remains pending.
+
+### October 2 upstream reconciliation and host module qualification
+
+The branch reconciles main `226e82e4a` (dependency maintenance and PostgreSQL
+wallet storage) without replacing the independently owned wallet work. The
+existing brace-expansion 5.0.12, OpenSSL package 3.5.9-r0 and DOMPurify 3.4.16
+floors remain. pnpm generated the lock, including the main toolchain's peer
+resolution and the reference application's matching Vitest 5 runner. To select
+the existing DOMPurify remediation within Mermaid 12's allowed range, pnpm
+temporarily selected it as a direct development dependency, then regenerated
+the lock after restoring the incoming manifest. No direct dependency or new
+override remains. The retained bundle inventory and its evidence digest agree.
+Frozen installation, high-severity advisory audit and third-party license
+validation pass.
+
+The complete Overlay Express coverage run passes 45 suites and 862 tests
+against the final installed graph, after repeated focused warm-cache runs of
+214 tests. The upstream ts-jest 29.4.12 compiler fixes its changed-module-kind
+program reuse; the legacy CommonJS and private ESM projects retain separate
+caches, all selected tests, assertions and type diagnostics. The updated Jest
+types require correctly typed public-key mock signatures. No tests, assertions,
+coverage gates or mutation gates were removed. Wallet-toolbox and Overlay
+Express builds and 58 dependency/container/mutation/release contract tests
+also pass. This reconciled step does not complete checkpoint two's domain,
+covenant, root and workbench integration or exact-head hosted qualification.

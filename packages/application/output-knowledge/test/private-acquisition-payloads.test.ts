@@ -27,10 +27,11 @@ function helper(scope = 1) {
   )
 }
 function records(changes: ProtectedLedgerChange[]): ProtectedLedgerRecord[] {
-  return changes.map(({ expectedRevision: _, ...rest }) => ({
-    ...structuredClone(rest),
-    revision: '1'
-  }))
+  return changes.map(change => {
+    const record = structuredClone(change)
+    Reflect.deleteProperty(record, 'expectedRevision')
+    return { ...record, revision: '1' }
+  })
 }
 it.each([0, 1, 786431, 786432, 786433, 4194304])(
   'reserves, stores and restores %i actual bytes in one native revision',

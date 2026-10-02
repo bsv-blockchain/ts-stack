@@ -27,6 +27,10 @@ describe('KnexMigrations tests', () => {
       const knexMySQL = _tu.createLocalMySQL(process.env.MYSQL_MIGRATION_TEST_DATABASE ?? 'migratetest')
       knexs.push(knexMySQL)
     }
+
+    if (env.runPostgres) {
+      knexs.push(await _tu.createLocalPostgres('migratetest'))
+    }
   })
 
   afterAll(async () => {

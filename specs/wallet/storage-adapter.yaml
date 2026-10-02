@@ -527,7 +527,7 @@ components:
           description: BSV chain this storage is associated with.
         dbtype:
           type: string
-          enum: ["SQLite", "MySQL", "IndexedDB"]
+          enum: ["SQLite", "MySQL", "Postgres", "IndexedDB"]
           description: Underlying database type.
         maxOutputScript:
           type: integer
