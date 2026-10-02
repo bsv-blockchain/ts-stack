@@ -465,6 +465,20 @@ export function buildMutationTargets(repositoryRoot) {
           repositoryRoot,
           'packages/wallet/wallet-toolbox',
           'src/storage/StorageKnex.ts',
+          'async openSnapshotJournalSource(',
+          'recoverSnapshotArchiveSources(): Promise<void>'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async destroy(): Promise<void>',
+          'override async migrate('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
           'override async dropAllData(): Promise<void>',
           'override async transaction<T>'
         ),
@@ -480,6 +494,8 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.cjs',
         [
           '<rootDir>/src/storage/snapshot/*.test.ts',
+          '<rootDir>/src/storage/snapshot/journal/SnapshotJournalCapture*.test.ts',
+          '<rootDir>/src/storage/snapshot/journal/SnapshotJournalConnections.test.ts',
           '<rootDir>/src/storage/__test/StorageKnexMigrationFailure.security.test.ts'
         ],
         {
@@ -510,6 +526,10 @@ export function buildMutationTargets(repositoryRoot) {
         'test/storage/snapshotJournalMysql.cjs',
         'test/storage/snapshotJournalMysqlServerCrash.cjs',
         'test/storage/snapshotJournalReceiptMysql.cjs',
+        'test/storage/snapshotJournalCaptureMysql.cjs',
+        'test/storage/snapshotJournalCaptureMysqlChild.cjs',
+        'test/storage/snapshotJournalCaptureProcessLoss.cjs',
+        'test/storage/snapshotJournalCaptureSqlite.cjs',
         'test/storage/snapshotJournalSqliteCrash.cjs',
         'test/storage/runSnapshotJournalMysql.cjs',
         'test/storage/snapshotArchiveDocker.cjs'
@@ -530,7 +550,11 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts',
         'src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts',
         'src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts',
-        'src/storage/snapshot/journal/SnapshotJournalReceipt.ts'
+        'src/storage/snapshot/journal/SnapshotJournalReceipt.ts',
+        'src/storage/snapshot/journal/SnapshotJournalCaptureFence.ts',
+        'src/storage/snapshot/journal/SnapshotJournalConnections.ts',
+        'src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts',
+        'src/storage/snapshot/journal/SnapshotJournalCapture.ts'
       ],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/journal/*.test.ts'], {
         maxTestRunnerReuse: 8,

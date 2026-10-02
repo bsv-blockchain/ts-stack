@@ -304,7 +304,7 @@ async function main() {
         readerAdvertised: false,
         limitations: [
           'tmpfs-backed single MySQL8.4 server; no machine power-loss,replication,PXC/failover or production performance acceptance',
-          'registered migration,quota,receipt and receiver remain incomplete'
+          'this server-crash fixture does not qualify capture; registered migration, floor/quota and receiver remain incomplete'
         ]
       })
     )

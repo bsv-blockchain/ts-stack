@@ -190,6 +190,7 @@ async function main() {
         }
       }
     )
+    await require('./snapshotJournalCaptureSqlite.cjs')()
     console.log(
       JSON.stringify({
         status: 'SQLite journal generation native WAL process-loss checks',
@@ -198,7 +199,7 @@ async function main() {
         limitations: [
           'not yet a registered forward migration',
           'no MySQL implicit-DDL lifecycle qualification',
-          'no receipt/quota/receiver or platform-scale acceptance'
+          'atomic floor/quota/receiver and platform-scale acceptance remain open'
         ]
       })
     )

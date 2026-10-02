@@ -1,3 +1,10 @@
+import {
+  retainSnapshotJournalCapture,
+  type SnapshotJournalCaptureRequest,
+  type SnapshotJournalCaptureLifetime,
+  type SnapshotJournalSource
+} from './snapshot/journal/SnapshotJournalCapture'
+import { SnapshotJournalConnectionCleanupError } from './snapshot/journal/SnapshotJournalConnections'
 import { dropGenerationForDataDeletion } from './schema/snapshotSqliteIndexMigration'
 import { migration as SNAPSHOT_SQLITE_INDEX_MIGRATION } from './schema/snapshotSqliteIndexState'
 import { SnapshotResourceLimitError } from './snapshot/SnapshotResourceLimitError'
@@ -140,6 +147,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   private snapshotSyncSource?: StorageKnex
   private snapshotSyncOpening?: Promise<WalletReadSnapshot | undefined>
   private snapshotSyncBusy = false
+  private snapshotJournalCapture?: SnapshotJournalCaptureLifetime
+  private snapshotJournalCaptureFailure?: SnapshotJournalConnectionCleanupError
   private snapshotArchiveRecovery?: Promise<void>
   private guardedSnapshotFailure?: { error: unknown }
   private retainedReadSnapshot?: RetainedReadSnapshotLifetime
@@ -274,9 +283,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     try {
       await this.snapshotArchiveRecovery
     } finally {
-      await this.snapshotSyncOpening?.catch(() => undefined)
-      await this.snapshotSyncSource?.destroy()
-      await this.retainedReadSnapshot?.close()
+      try {
+        await this.snapshotJournalCapture?.close()
+      } finally {
+        await this.snapshotSyncOpening?.catch(() => undefined)
+        await this.snapshotSyncSource?.destroy()
+        await this.retainedReadSnapshot?.close()
+      }
     }
   }
 
@@ -377,6 +390,58 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
   }
 
+  /** Internal complete-generation capture; no RPC or incremental capability is advertised.
+   * The source shares sync/archive admission and retains it through physical cleanup.
+   */
+  async openSnapshotJournalSource(
+    identityKey: string,
+    request: SnapshotJournalCaptureRequest,
+    options: RetainedReadSnapshotOptions = {}
+  ): Promise<SnapshotJournalSource> {
+    if (this.retainedReadSnapshotsStopped)
+      throw new WERR_INVALID_OPERATION('Snapshot journal sources are unavailable after destruction begins')
+    if (this.snapshotSyncBusy)
+      throw new WERR_INVALID_OPERATION('This provider already has a snapshot sync source opening or active')
+    this.snapshotSyncBusy = true
+    let lifetime: SnapshotJournalCaptureLifetime
+    try {
+      lifetime = retainSnapshotJournalCapture(
+        this.chain,
+        async () => {
+          if (this.retainedReadSnapshotsStopped)
+            throw new WERR_INVALID_OPERATION('Snapshot journal sources are unavailable after destruction begins')
+          return await this.concurrentSnapshotReaderConfig()
+        },
+        identityKey,
+        request,
+        options
+      )
+    } catch (error) {
+      this.snapshotSyncBusy = false
+      throw error
+    }
+    this.snapshotJournalCapture = lifetime
+    const release = (error?: unknown): void => {
+      if (error instanceof SnapshotJournalConnectionCleanupError) {
+        this.snapshotJournalCaptureFailure = error
+        this.retainedReadSnapshotsStopped = true
+        return
+      }
+      if (this.snapshotJournalCapture === lifetime) {
+        this.snapshotJournalCapture = undefined
+        this.snapshotSyncBusy = false
+      }
+    }
+    void lifetime.closed.then(() => release(), release)
+    return await lifetime.opened
+  }
+
+  /** Drain an already-stopping capture without admitting another source. */
+  awaitSnapshotJournalCaptureCleanup(): Promise<void> {
+    if (this.snapshotJournalCaptureFailure !== undefined) return Promise.reject(this.snapshotJournalCaptureFailure)
+    return this.snapshotJournalCapture?.closed ?? Promise.resolve()
+  }
+
   /** One bounded recovery flight per provider, drained by provider destruction. */
   recoverSnapshotArchiveSources(): Promise<void> {
     if (this.retainedReadSnapshotsStopped)
@@ -413,7 +478,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (!Number.isSafeInteger(lifetimeMs) || lifetimeMs < 1 || lifetimeMs > 3600000) {
       throw new WERR_INVALID_PARAMETER('lifetimeMs', 'an integer from 1 to 3600000')
     }
-    const deadline = { expiresAt: Date.now() + lifetimeMs, startedAt: performance.now(), lifetimeMs }
+    const deadline = {
+      expiresAt: Date.now() + lifetimeMs,
+      startedAt: performance.now(),
+      lifetimeMs
+    }
     this.snapshotSyncBusy = true
     const opening: Promise<T | undefined> = this.createConcurrentSyncSource(
       identityKey,
@@ -2045,7 +2114,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     } catch (error) {
       // Preserve an ordinary read failure for its read consumer. A typed
       // cleanup failure remains observable after the pool destruction below.
-      if (this.guardedSnapshotFailure === undefined || this.guardedSnapshotFailure.error !== error) throw error
+      if (
+        (this.guardedSnapshotFailure === undefined || this.guardedSnapshotFailure.error !== error) &&
+        this.snapshotJournalCaptureFailure !== error
+      )
+        throw error
     } finally {
       await this.stopPreparedBeefTasks()
       this.knex.off('query', this.onQuery)
@@ -2059,6 +2132,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     // A settled pool alone cannot prove that a failed native close succeeded.
     const failure = this.guardedSnapshotFailure?.error
     if (failure instanceof SnapshotArchiveSourceCleanupError) throw failure
+    if (this.snapshotJournalCaptureFailure !== undefined) throw this.snapshotJournalCaptureFailure
   }
 
   override async migrate(storageName: string, storageIdentityKey: string): Promise<string> {

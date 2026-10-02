@@ -259,3 +259,19 @@ fixtures exercise adoption and recovery. Explicit full-data deletion remains
 supported; normal downgrade refuses without removing standard records. This
 advances indexed selection/recovery within S2 and V2. It does not complete
 committed-change continuity, large-wallet performance or the remaining program.
+
+## Owned journal capture checkpoint
+
+The internal SQL capture controller now owns its writer/reader pools and keeps
+provider admission through physical cleanup. It binds the actual backend and
+pinned complete generation, profile and schema, commits an exact receipt before
+publication, and verifies closure after releasing the writer barrier. WAL and
+MySQL native fixtures cover process loss before commit, after durable commit and
+after publication. These component proofs advance S2; they do not complete it.
+Atomic continuity floors, bounded tombstone collection, runtime quotas, registered
+journal migration/recovery, generation-aware delta payload pages and receiver
+integration remain required. The other acceptance rows remain open.
+
+Main's Postgres storage contract is preserved through the legacy path. Snapshot
+auxiliary migrations are explicit no-ops there and the associated capabilities
+remain unavailable; future support requires new forward migrations.

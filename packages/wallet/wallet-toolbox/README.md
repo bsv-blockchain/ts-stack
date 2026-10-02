@@ -63,11 +63,17 @@ source-table observers, and recovery of an
 interrupted journal installation. Owned generations also bind explicit receipt
 capacity/lifetime policy; exact receipts are persisted, read and collected in
 bounded caller-owned transactions. Receipts prove a captured prefix and cannot
-reopen a lost retained view. The capture controller remains unfinished. Run `pnpm test:snapshot-journal-crash` for the
+reopen a lost retained view. The internal `openSnapshotJournalSource` controller
+reserves two owned native connections before its writer barrier, pins the profile
+and generation, persists the receipt, and publishes after receipt commit and
+closure verification. It requires an existing file-backed WAL database with
+`better-sqlite3` or a static `mysql2` connection; other drivers refuse before pool
+construction. Physical cleanup retains provider admission, and an unproved close
+fences further sources. Run `pnpm test:snapshot-journal-crash` for the
 SQLite process-loss fixture and `pnpm test:snapshot-journal-mysql` for the isolated
 MySQL client/server-process recovery fixtures. These helpers do not register a
 migration or advertise incremental synchronization. Full retention quotas,
-capture publication, continuity floors, receiver/primary integration and the remaining issue #544
+continuity floors, generation-aware delta pages and receiver/primary integration and the remaining issue #544
 acceptance work are still required; see the
 [journal foundation](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#internal-journal-foundation-unadvertised).
 

@@ -247,7 +247,7 @@ async function main() {
       productionAdoption: false,
       limitations: [
         'Synthetic receipt transactions do not establish full source-capture ordering',
-        'Capture controller, floor/tombstone lifecycle and registered migration remain incomplete',
+        'This synthetic receipt fixture does not qualify the separate capture controller; floor/tombstone lifecycle and registered migration remain incomplete',
         'A receipt cannot reopen a killed retained read view'
       ]
     })

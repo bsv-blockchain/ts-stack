@@ -1084,20 +1084,41 @@ indexed collection removes at most 64 records. Stored text projections and
 capacity probes are bounded. Receipt record/collection process-loss fixtures
 check state before and after commit under both MySQL isolation levels.
 
-A caller must reserve the reader before taking the short writer barrier, pin its
-view before recording the proof, and publish only after receipt commit. That
-capture controller and atomic floor/tombstone lifecycle are still unfinished.
-A durable prefix proof does not reopen a killed database read transaction.
+The internal `StorageKnex.openSnapshotJournalSource` controller reserves two
+owned one-slot pools before taking the nonwaiting writer barrier. Fresh
+`better-sqlite3` pools bind one existing file-backed WAL database; `mysql2` pools
+bind the actual matching server UUID and database returned by both native
+connections. Dynamic/external pools and other drivers refuse before construction.
+The controller pins generation, profile, schema and all thirteen standard tables,
+records a fresh request-bound prefix receipt, and awaits both commit and the
+transaction's completion promise. Closure verification runs after the writer
+barrier is released and before publication. Foreground writers can progress while
+that verification or later reads run.
+
+Cancellation rejects opening promptly while the provider retains its source
+admission until pending work and physical cleanup drain. Provider destruction
+closes an active view. Unproved native cleanup permanently fences further source
+admission and remains observable through cleanup and destruction. Native WAL and
+MySQL fixtures terminate the source process before receipt commit, after durable
+commit and after publication, then check receipt atomicity, new capture and writer
+progress. MySQL additionally exercises READ COMMITTED and REPEATABLE READ, busy
+barrier refusal and native provider shutdown. These are local synthetic engine
+proofs; exact-head hosted, deployed/PXC and power-loss acceptance remain separate.
+
+Atomic floor/tombstone lifecycle and generation-aware delta-page/receiver
+integration remain unfinished. A durable prefix proof does not reopen a killed
+database read transaction.
 
 This foundation adds no registered migration, public capability or reader
 advertisement. Its event-window invalidation is not a complete retention or
-resource policy. Full quotas, capture publication and continuity-floor ownership,
+resource policy. Full quotas and continuity-floor ownership,
 generation-aware receiver/primary integration, and remaining remote/IndexedDB,
 streaming and staged-import acceptance remain unfinished. Do not infer full
 incremental continuity or completed issue #544 from these helpers.
 
-The wallet-snapshot-journal mutation target owns all fourteen complete source
-modules in twelve execution parts, including the whole receipt module. Every part retains the complete canonical
+The wallet-snapshot-journal mutation target owns all eighteen complete source
+modules in sixteen execution parts, including the whole receipt, capture, native
+backend, connection ownership and barrier modules. Every part retains the complete canonical
 journal tests and fixtures, including one governed property entry for exact
 revision/page, generated source-observer and committed receipt-state schedules. A minimum score of 90%, zero
 uncovered/invalid mutants, 300 cases with seed 3242026, four workers, runner reuse 8 and 90-minute

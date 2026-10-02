@@ -294,7 +294,11 @@ for (const [id, expected, fallback] of [
       'sqlite-generation',
       'mysql-intent',
       'mysql-generation',
-      'receipts'
+      'receipts',
+      'capture-fence',
+      'connections',
+      'capture-backend',
+      'capture'
     ],
     'revision'
   ],

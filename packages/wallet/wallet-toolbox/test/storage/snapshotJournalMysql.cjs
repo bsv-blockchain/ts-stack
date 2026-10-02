@@ -312,7 +312,7 @@ async function main() {
         readerAdvertised: false,
         limitations: [
           'client SIGKILL only; server-crash/replication/failover remains open',
-          'registered forward migration,quota,receipt and receiver remain incomplete'
+          'this generation fixture does not qualify capture; registered migration, floor/quota and receiver remain incomplete'
         ]
       })
     )

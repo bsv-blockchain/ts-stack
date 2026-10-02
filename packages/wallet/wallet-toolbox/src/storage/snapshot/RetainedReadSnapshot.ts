@@ -52,7 +52,7 @@ export interface RetainedReadSnapshotLifetime {
 }
 
 export function retainReadSnapshot(
-  run: (read: (trx: TrxToken) => Promise<void>) => Promise<void>,
+  run: (read: (trx: TrxToken) => Promise<void>, assertActive: () => void) => Promise<void>,
   establishView: (trx: TrxToken) => Promise<void>,
   options: RetainedReadSnapshotOptions = {}
 ): RetainedReadSnapshotLifetime {
@@ -149,7 +149,7 @@ export function retainReadSnapshot(
           await stopped.promise
           await inFlight
           if (readFailure !== undefined) throw readFailure.error
-        })
+        }, assertOpen)
       }
       closed.resolve()
     } catch (error) {

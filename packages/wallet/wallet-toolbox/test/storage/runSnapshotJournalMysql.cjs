@@ -6,7 +6,7 @@ const { join } = require('node:path')
 const assert = require('node:assert/strict')
 const { executable, context, image, validateContext, validateContainer } = require('./snapshotArchiveDocker.cjs')
 const { runInSeries } = require('../../out/src/utility/runInSeries.js')
-const journalFixtureGroups = Object.freeze(['generation', 'server-crash', 'receipts'])
+const journalFixtureGroups = Object.freeze(['generation', 'server-crash', 'receipts', 'capture'])
 const execute = (file, args, options) =>
   new Promise((resolve, reject) => {
     execFile(
@@ -21,12 +21,13 @@ const execute = (file, args, options) =>
   })
 
 function fixtureScript(group) {
+  if (group === 'capture') return 'snapshotJournalCaptureMysql.cjs'
   if (group === 'generation') return 'snapshotJournalMysql.cjs'
   if (group === 'server-crash') return 'snapshotJournalMysqlServerCrash.cjs'
   return 'snapshotJournalReceiptMysql.cjs'
 }
 function fixtureTimeout(group) {
-  if (group === 'generation') return 180000
+  if (group === 'generation' || group === 'capture') return 180000
   if (group === 'server-crash') return 240000
   return 60000
 }

@@ -6,11 +6,23 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Add internal owned journal capture for `better-sqlite3` WAL and static `mysql2`.
+  Reserve both pools before the short writer barrier; pin generation/profile,
+  commit the exact receipt and verify closure before publication. Retain source
+  admission through physical cleanup and fence an unproved close. Native fixtures
+  cover commit/publication process loss, immutable pages and writer progress.
+  Continuity floors, quotas, delta receiver integration and full #544 acceptance
+  remain unfinished; no migration or incremental capability is advertised.
+
+- Preserve main's Postgres storage and legacy sync support. SQLite/MySQL snapshot
+  auxiliary migrations are recorded as no-ops there, with their capabilities
+  unavailable. Future Postgres snapshot support requires new forward migrations.
+
 - Add internal, unadvertised SQL journal foundation: exact revisions, bounded
   pages/bootstrap, full-table observers and source-bound generation ownership
   with interrupted-installation recovery. No public capability, registered
   migration, deployment or completed incremental sync is introduced. Full
-  quota/receipt/receiver/primary and portability acceptance remains pending.
+  quota/receiver/primary and portability acceptance remains pending.
 
 - Repair SQLite replacement maintenance with a new auxiliary generation, durable
   displaced-owner witnesses, bounded resumable source copying and physical-row

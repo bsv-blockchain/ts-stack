@@ -39,6 +39,71 @@ export async function readSnapshotArchiveSourceSchema(storage: StorageKnex, k: K
   return row.name
 }
 
+/** Read source metadata and index ownership in the caller's already pinned view. */
+export async function readKnexSnapshotArchiveHeader(storage: StorageKnex, identityKey: string, k: Knex) {
+  const generation = await readGenerationIndexState(k, storage.knex.client.config.migrations)
+  const sourceStorage = await storage.readSettings(k)
+  const user = await storage.findUserByIdentityKey(identityKey, k)
+  if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
+  return {
+    header: {
+      sourceStorage,
+      user,
+      sourceSchema: await readSnapshotArchiveSourceSchema(storage, k)
+    },
+    profileIndexes: generation ?? (await readSnapshotProfileIndexState(k, storage.knex.client.config.migrations)),
+    relationIndexes: generation ?? (await readSnapshotRelationIndexState(k, storage.knex.client.config.migrations)),
+    globalIndexes: generation ?? (await readSnapshotGlobalIndexState(k, storage.knex.client.config.migrations)),
+    certificateIndexes:
+      generation ?? (await readSnapshotCertificateIndexState(k, storage.knex.client.config.migrations))
+  }
+}
+
+export type KnexSnapshotArchiveHeader = Awaited<ReturnType<typeof readKnexSnapshotArchiveHeader>>
+
+/** Construct a handle only after its caller has proved capture publication. */
+export function createKnexSnapshotArchiveSource(
+  storage: StorageKnex,
+  view: RetainedReadSnapshot,
+  { header, profileIndexes, relationIndexes, certificateIndexes, globalIndexes }: KnexSnapshotArchiveHeader
+): SnapshotArchiveSource {
+  const userId = header.user.userId
+  const snapshotId = Utils.toHex(Random(32))
+  return {
+    version: 1,
+    snapshotId,
+    ...header,
+    expiresAt: view.expiresAt,
+    get isOpen() {
+      return view.isOpen
+    },
+    closed: view.closed,
+    close: view.close,
+    readPage: createKnexWalletSnapshotPageReader(
+      storage,
+      userId,
+      snapshotId,
+      view,
+      profileIndexes,
+      relationIndexes,
+      certificateIndexes,
+      globalIndexes
+    ),
+    validateClosure: async () => {
+      await view.read(trx =>
+        assertKnexSnapshotArchiveClosure(
+          storage.toDb(trx),
+          userId,
+          profileIndexes,
+          relationIndexes,
+          certificateIndexes,
+          globalIndexes
+        )
+      )
+    }
+  }
+}
+
 /**
  * Internal SQL capture source. The caller supplies a dedicated reader provider,
  * separate from the staging writer, and awaits close before releasing it.
@@ -55,68 +120,8 @@ export async function openKnexSnapshotArchiveSource(
   }
   const view = await openView()
   try {
-    const { header, profileIndexes, relationIndexes, certificateIndexes, globalIndexes } = await view.read(
-      async trx => {
-        const generation = await readGenerationIndexState(storage.toDb(trx), storage.knex.client.config.migrations)
-        const sourceStorage = await storage.readSettings(trx)
-        const user = await storage.findUserByIdentityKey(identityKey, trx)
-        if (user === undefined) throw new WERR_INVALID_PARAMETER('identityKey', 'an existing wallet profile')
-        return {
-          header: {
-            sourceStorage,
-            user,
-            sourceSchema: await readSnapshotArchiveSourceSchema(storage, storage.toDb(trx))
-          },
-          profileIndexes:
-            generation ??
-            (await readSnapshotProfileIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
-          relationIndexes:
-            generation ??
-            (await readSnapshotRelationIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
-          globalIndexes:
-            generation ??
-            (await readSnapshotGlobalIndexState(storage.toDb(trx), storage.knex.client.config.migrations)),
-          certificateIndexes:
-            generation ??
-            (await readSnapshotCertificateIndexState(storage.toDb(trx), storage.knex.client.config.migrations))
-        }
-      }
-    )
-    const userId = header.user.userId
-    const snapshotId = Utils.toHex(Random(32))
-    return {
-      version: 1,
-      snapshotId,
-      ...header,
-      expiresAt: view.expiresAt,
-      get isOpen() {
-        return view.isOpen
-      },
-      closed: view.closed,
-      close: view.close,
-      readPage: createKnexWalletSnapshotPageReader(
-        storage,
-        userId,
-        snapshotId,
-        view,
-        profileIndexes,
-        relationIndexes,
-        certificateIndexes,
-        globalIndexes
-      ),
-      validateClosure: async () => {
-        await view.read(trx =>
-          assertKnexSnapshotArchiveClosure(
-            storage.toDb(trx),
-            userId,
-            profileIndexes,
-            relationIndexes,
-            certificateIndexes,
-            globalIndexes
-          )
-        )
-      }
-    }
+    const header = await view.read(trx => readKnexSnapshotArchiveHeader(storage, identityKey, storage.toDb(trx)))
+    return createKnexSnapshotArchiveSource(storage, view, header)
   } catch (error) {
     await view.close().catch(() => undefined)
     throw error
