@@ -89,6 +89,29 @@ All notable changes to this project will be documented in this file. The format 
   admitted owner before admittance, repairs a missing owner-index row inline,
   and the lookup service carries the eviction API (`outputEvicted`,
   `purgeAndRefold`, `restoreInputRow`).
+- Mandala on BRC-162 hardening (2.0.0 candidate):
+  - Every authority coin a transaction spends must be owned by a trusted
+    issuer, or it is refused as `ERR_UNTRUSTED` with the reason
+    `input N: authority owner K is not a trusted issuer`. Removing a key from
+    `trustedIssuers` therefore takes away the authority it holds; rotate a key
+    by moving its authority coins first.
+  - An inline owner-row repair that raced a spend of the same coin (another
+    engine process) is taken back and answered `ERR_UNAVAILABLE`, instead of
+    leaving a phantom row and balance credit. `MandalaStateStore` gains
+    `takeToken`, `takeAuthority` and `adjustBalance` for that undo.
+  - A failed store write is `... could not be written; retry`
+    (`Reasons.storeWriteUnavailable`), not `... could not be read; retry`, and
+    every infra reject keeps the store's or provider's error as its `cause`.
+  - `membershipExempt` keys are validated at construction like
+    `trustedIssuers`.
+  - The lookup writes the records nothing can rebuild (the committed action,
+    the deploy metadata and first state, the linkage record) before the owner
+    index, and attempts every write even when one fails, rethrowing the first
+    fault. A freeze's history row records the frozen coin's `frozenAmount` and
+    `frozenOwner` (additive optional fields), and refolds use them; a freeze of
+    another token's coin freezes at 0. `tokenIdsWithHistory()` (lookup and
+    storage) lists the tokens the overlay must refold at boot; the README lists
+    the overlay's boot-refold and eviction duties.
 - Version 1.9.0 (1.x history): `foldAction`, `defaultAssetState` and the
   `AssetAdminState` / `FoldContext` / `FrozenRef` types are exported from the
   package entry point, so consumers can replay Mandala admin history themselves

@@ -68,7 +68,10 @@ refused.
    linkage, then the owner of every spent token input.
 3. **Layer C (authority).** Checks run in this order:
    - Deploys: no fixed supply, a valid deploy payload, a valid \`deploySig\`.
-   - Every deploy and authority owner and prover is a trusted issuer.
+   - Every deploy and authority owner and prover is a trusted issuer, and
+     then (in input order) the owner of every spent authority coin. A key
+     removed from \`trustedIssuers\` loses the authority coins it holds; to
+     rotate a key, move its authority coins to the new key first.
    - An authority output needs an admitted authority input, and a spent
      authority must be re-created.
    - At most one committed action per token, and its details must match.
@@ -89,8 +92,9 @@ asset state.
   every admitted token output, of every role, to the append-only
   \`mandalaOwners\` journal. The row is
   \`{txid, outputIndex, topic, tokenId, role, amount, identityKey, createdAt}\`.
-  - If the write fails, the answer is \`ERR_UNAVAILABLE\` and nothing is
-    broadcast. The store's error is kept as the reject's \`cause\`.
+  - If the write fails, the answer is \`ERR_UNAVAILABLE\` (\`the owner journal
+    could not be written; retry\`) and nothing is broadcast. The store's error
+    is kept as the reject's \`cause\`, as for every store fault.
   - \`context.dryRun\` (GASP) skips the write.
 - **Index.** The owner of a spent coin is its \`mandalaTokens\` or
   \`mandalaAuthorities\` row, which is an index, not the source of truth.
@@ -99,6 +103,10 @@ asset state.
   admitted output with the same locking script, and agreement between them.
   It credits the balance once, on insert only. Every repair is logged with
   its outpoint, and whether the row was inserted or corrected.
+- **Raced repair.** After an insert the manager reads the engine output once
+  more. If the coin was spent meanwhile (a concurrent double spend in another
+  engine process), the inserted row is taken back, its credit debited once,
+  and this spend is answered as unrepairable.
 - **Unrepairable.** If the row cannot be repaired, the answer is
   \`ERR_UNAVAILABLE\` (\`owner index unavailable for <txid>.<vout>\`). A
   linkage is never a fallback owner source.
@@ -111,8 +119,8 @@ asset state.
 | \`ERR_SATOSHIS\` | a token output not carrying exactly 1 satoshi |
 | \`ERR_LINKAGE\` | an output without a verified linkage; an input linkage that does not control the coin or names another owner |
 | \`ERR_AUTHORITY\` | fixed-supply deploy, missing or invalid \`deploySig\`, authority output without an authority input, continuity break, two commitments, commitment mismatch |
-| \`ERR_CONSERVATION\` | a supply delta that breaks its rule |
-| \`ERR_UNTRUSTED\` | a deploy or authority owner, or its prover, outside \`trustedIssuers\` (retryable, never persisted) |
+| \`ERR_CONSERVATION\` | value in != value out without an authority, or a supply delta that breaks its rule |
+| \`ERR_UNTRUSTED\` | a deploy or authority owner, or its prover, or a spent authority's owner, outside \`trustedIssuers\` (retryable, never persisted) |
 | \`ERR_FROZEN\`, \`ERR_PAUSED\`, \`ERR_ACCESS\`, \`ERR_SANCTIONED\`, \`ERR_MEMBERSHIP\` | issuer controls, screening and registry membership (liftable) |
 | \`ERR_UNAVAILABLE\` | a store, journal, engine or provider fault, or an owner index that cannot be repaired (retryable, never persisted) |
 
@@ -126,5 +134,6 @@ asset state.
 - \`onOwnerRepair\` receives the repair log (outpoint, inserted). It
   defaults to \`console.warn\`.
 - \`trustedIssuers\` must be a non-empty list of unique, compressed,
-  lowercase public keys. Otherwise construction throws.
+  lowercase public keys, and every \`membershipExempt\` key must be compressed
+  and lowercase. Otherwise construction throws.
 `

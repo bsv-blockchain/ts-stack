@@ -30,7 +30,7 @@ the Mandala owner journal and layers A to C of \`tm_mandala\`; there is no layer
 
 Collection \`mandalaRegistry\` holds one row per identity,
 \`{identityKey, status: 'admitted' | 'revoked', txid, outputIndex, admitSeq, createdAt}\`,
-and one meta document \`{_id: 'registryTokenId', tokenId}\` that names the claimed
+and one meta document \`{_id: 'registryTokenId', tokenId, createdAt}\` that names the claimed
 registry. The lookup service claims the registry token on the first deploy (or,
 if that claim was lost, on the first action) and only folds actions of the
 claimed token. \`admitSeq\` is a persisted counter, so newer actions sort first.

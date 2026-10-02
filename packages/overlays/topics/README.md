@@ -127,21 +127,24 @@ only through the strict DAG-CBOR subset of `@bsv/templates`.
 
 **Reject codes.**
 
-| Code                                                                         | When                                                                                                               |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `ERR_SHAPE`                                                                  | malformed envelope or output, deploy not at output 0, a cap, bad deploy payload, missing admin details             |
-| `ERR_SATOSHIS`                                                               | a token output that does not carry exactly one satoshi                                                             |
-| `ERR_LINKAGE`                                                                | an output without a verified linkage, or an input linkage that does not control the coin                           |
-| `ERR_AUTHORITY`                                                              | fixed-supply or unsigned deploy, authority without continuity, two commitments, commitment mismatch                |
-| `ERR_CONSERVATION`                                                           | a supply delta that breaks its rule                                                                                |
-| `ERR_UNTRUSTED`                                                              | a deploy or authority owner, or its prover, outside `trustedIssuers` (retryable, never persisted)                  |
-| `ERR_FROZEN`, `ERR_PAUSED`, `ERR_ACCESS`, `ERR_SANCTIONED`, `ERR_MEMBERSHIP` | issuer controls, screening and registry membership                                                                 |
-| `ERR_UNAVAILABLE`                                                            | a store, journal, engine or provider fault, or an owner index that cannot be repaired (retryable, never persisted) |
+| Code                                                                         | When                                                                                                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ERR_SHAPE`                                                                  | malformed envelope or output, deploy not at output 0, a cap, bad deploy payload, missing admin details                          |
+| `ERR_SATOSHIS`                                                               | a token output that does not carry exactly one satoshi                                                                          |
+| `ERR_LINKAGE`                                                                | an output without a verified linkage, or an input linkage that does not control the coin                                        |
+| `ERR_AUTHORITY`                                                              | fixed-supply or unsigned deploy, authority without continuity, two commitments, commitment mismatch                             |
+| `ERR_CONSERVATION`                                                           | value in != value out without an authority, or a supply delta that breaks its rule                                              |
+| `ERR_UNTRUSTED`                                                              | a deploy or authority owner, or its prover, or a spent authority's owner, outside `trustedIssuers` (retryable, never persisted) |
+| `ERR_FROZEN`, `ERR_PAUSED`, `ERR_ACCESS`, `ERR_SANCTIONED`, `ERR_MEMBERSHIP` | issuer controls, screening and registry membership                                                                              |
+| `ERR_UNAVAILABLE`                                                            | a store, journal, engine or provider fault, or an owner index that cannot be repaired (retryable, never persisted)              |
 
 **Trusted issuers.** `MandalaTopicManager` takes `trustedIssuers`: a non-empty
 list of unique, compressed, lowercase identity keys. Construction throws
 otherwise. Every deploy and authority output must be owned by a trusted issuer
-and proven by one. Trusted issuers and `membershipExempt` keys skip access mode
+and proven by one, and every authority coin a transaction spends must be owned
+by one: removing a key from the set takes away the authority coins it holds (to
+rotate a key, move its authority coins to the new key first). Trusted issuers
+and `membershipExempt` keys (validated the same way) skip access mode
 and registry membership. The set is configuration and never asset state.
 Sanctions are answered by a `ScreeningProvider` that must return exact
 booleans; registry membership is an optional `MembershipProvider`, enforced as
@@ -172,11 +175,26 @@ disagreeing row the same way, and returns `{ scanned, repaired, unrepairable }`.
 Run it at boot and on an interval, and report `unrepairable` as a degraded
 readiness check. Reruns are harmless.
 
-**Eviction.** `MandalaLookupService.outputEvicted` drops an evicted output's row
-(debiting its owner). `purgeAndRefold(txid)` refolds each affected token's admin
-state without that transaction and then deletes its history rows, and
-`restoreInputRow(journal)` restores a coin that is live again. `mandalaOwners`
-is never purged.
+**Boot refold (an overlay duty).** The lookup appends a committed action to
+`mandalaAdminHistory` and then folds it into `mandalaAssetStates`; the engine
+notifies each output once and only logs a lookup error, so a fault between the
+two leaves the action unfolded (a freeze or pause that does not take effect).
+At boot, before the engine accepts submissions, call `rebuildState(tokenId)` for
+every id in `tokenIdsWithHistory()`; repeat it on the reconciler interval with
+submissions quiesced. `rebuildState` reads the history and then writes the
+state, so it must never run beside a live fold. Each freeze's fold context (the
+frozen coin's amount and owner) is recorded on its history row, so a refold
+folds exactly what the live fold did.
+
+**Eviction (an overlay duty).** `MandalaLookupService.outputEvicted` drops an
+evicted output's row (debiting its owner). The overlay must also call
+`purgeAndRefold(txid)` once for every evicted txid, with submissions quiesced:
+it refolds each affected token's admin state without that transaction and then
+deletes its history rows (repeating an interrupted run is safe). It may call
+`restoreInputRow(journal)` for an input coin of the evicted transaction only
+after the engine confirms that coin is unspent and admitted again;
+`restoreInputRow` does not check, and would restore a row and a balance for a
+coin that is gone. `mandalaOwners` is never purged.
 
 **Storage (clean break).** `MandalaStorageManager` persists `mandalaOwners`
 (new, the journal), `mandalaAuthorities` (new), `mandalaTokens`,
