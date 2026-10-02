@@ -309,6 +309,21 @@ describe('MandalaStorageManager', () => {
       const page = await store.findTokensByTokenId(TOKEN, 2, 0)
       expect(page.map(r => r.outputIndex).sort()).toEqual([1, 3])
     })
+
+    it('pages in outpoint order, whatever the insert order', async () => {
+      for (const [txid, outputIndex] of [
+        [TXID_C, 0],
+        [TXID_A, 2],
+        [TXID_B, 1],
+        [TXID_A, 1]
+      ] as const) {
+        await store.storeTokenIfAbsent(tokenRow({ txid, outputIndex }))
+      }
+      const outpoints = async (skip: number): Promise<string[]> =>
+        (await store.findTokensByTokenId(TOKEN, 2, skip)).map(r => `${r.txid}.${r.outputIndex}`)
+      expect(await outpoints(0)).toEqual([`${TXID_A}.1`, `${TXID_A}.2`])
+      expect(await outpoints(2)).toEqual([`${TXID_B}.1`, `${TXID_C}.0`])
+    })
   })
 
   describe('circulatingSupply', () => {
@@ -541,6 +556,18 @@ describe('MandalaStorageManager', () => {
       await store.storeMetadata(metadata({ tokenId: OTHER_TOKEN, txid: TXID_B }))
       expect(await db.collection('mandalaMetadata').countDocuments()).toBe(2)
     })
+
+    it('deletes the record of one token only', async () => {
+      await store.storeMetadata(metadata())
+      await store.storeMetadata(metadata({ tokenId: OTHER_TOKEN, txid: TXID_B }))
+      await store.deleteMetadata(TOKEN)
+      expect(await store.findMetadata(TOKEN)).toBeNull()
+      expect(await store.findMetadata(OTHER_TOKEN)).toEqual(
+        metadata({ tokenId: OTHER_TOKEN, txid: TXID_B })
+      )
+      await store.deleteMetadata(TOKEN)
+      expect(await db.collection('mandalaMetadata').countDocuments()).toBe(1)
+    })
   })
 
   describe('asset state', () => {
@@ -569,6 +596,19 @@ describe('MandalaStorageManager', () => {
         blockedIdentities: []
       })
       expect(await db.collection('mandalaAssetStates').countDocuments()).toBe(1)
+    })
+
+    it('putAssetStateIfAbsent stores the first state only', async () => {
+      expect(await store.putAssetStateIfAbsent(assetState({ feeRatePerKb: 5 }))).toBe(true)
+      expect(await store.putAssetStateIfAbsent(assetState({ isPaused: true }))).toBe(false)
+      expect(await store.getAssetState(TOKEN)).toEqual(assetState({ feeRatePerKb: 5 }))
+      expect(await db.collection('mandalaAssetStates').countDocuments()).toBe(1)
+    })
+
+    it('putAssetStateIfAbsent leaves an existing state alone', async () => {
+      await store.putAssetState(assetState({ isPaused: true }))
+      expect(await store.putAssetStateIfAbsent(assetState())).toBe(false)
+      expect(await store.getAssetState(TOKEN)).toEqual(assetState({ isPaused: true }))
     })
   })
 
@@ -602,6 +642,17 @@ describe('MandalaStorageManager', () => {
       expect((await store.findAdminHistory(TOKEN, undefined, 2)).map(e => e.txid)).toEqual(['t3'])
       expect((await store.findAdminHistory(OTHER_TOKEN)).map(e => e.txid)).toEqual(['o1'])
       expect(await store.findAdminHistory('none_0')).toEqual([])
+    })
+
+    it('appends one row per (tokenId, txid, outputIndex): the first write wins', async () => {
+      expect(await store.appendAdminHistory(historyRow({ admitSeq: 1 }))).toBe(true)
+      expect(await store.appendAdminHistory(historyRow({ admitSeq: 2, kind: 'unpause' }))).toBe(
+        false
+      )
+      expect(await store.findAdminHistory(TOKEN)).toEqual([historyRow({ admitSeq: 1 })])
+      expect(await store.appendAdminHistory(historyRow({ outputIndex: 1 }))).toBe(true)
+      expect(await store.appendAdminHistory(historyRow({ tokenId: OTHER_TOKEN }))).toBe(true)
+      expect(await db.collection('mandalaAdminHistory').countDocuments()).toBe(3)
     })
 
     it('does not mutate the entry it is given', async () => {

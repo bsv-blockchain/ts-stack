@@ -180,6 +180,7 @@ export class MandalaStorageManager implements MandalaStateStore {
     return await this.tokens.findOneAndDelete({ txid, outputIndex }, { projection: { _id: 0 } })
   }
 
+  /** In outpoint order, so consecutive pages neither repeat nor skip a row. */
   async findTokensByTokenId(
     tokenId: string,
     limit: number,
@@ -188,6 +189,7 @@ export class MandalaStorageManager implements MandalaStateStore {
     await this.ensureIndexes()
     return await this.tokens
       .find(await this.liveTokenFilter(tokenId), { projection: { _id: 0 } })
+      .sort({ txid: 1, outputIndex: 1 })
       .skip(skip)
       .limit(limit)
       .toArray()
@@ -331,6 +333,11 @@ export class MandalaStorageManager implements MandalaStateStore {
     return await this.metadata.findOne({ tokenId }, { projection: { _id: 0 } })
   }
 
+  async deleteMetadata(tokenId: string): Promise<void> {
+    await this.ensureIndexes()
+    await this.metadata.deleteOne({ tokenId })
+  }
+
   // ---- asset state and admin history ----
 
   async getAssetState(tokenId: string): Promise<AssetAdminState> {
@@ -344,10 +351,30 @@ export class MandalaStorageManager implements MandalaStateStore {
     await this.assetStates.updateOne({ tokenId: s.tokenId }, { $set: s }, { upsert: true })
   }
 
-  async appendAdminHistory(e: AdminHistoryEntry): Promise<void> {
+  /** Stores `s` only when the token has no state yet; true when it did. A replay never resets one. */
+  async putAssetStateIfAbsent(s: AssetAdminState): Promise<boolean> {
     await this.ensureIndexes()
-    // a copy: the driver would add an `_id` to the caller's object
-    await this.adminHistory.insertOne({ ...e })
+    const result = await this.assetStates.updateOne(
+      { tokenId: s.tokenId },
+      { $setOnInsert: s },
+      { upsert: true }
+    )
+    return result.upsertedCount === 1
+  }
+
+  /**
+   * Appends one history row per `(tokenId, txid, outputIndex)`: the first write wins and a replay
+   * returns false, so a committed action is never recorded or folded twice. The key's index is not
+   * unique (§6.6), so only two truly concurrent writes of the same row could both insert.
+   */
+  async appendAdminHistory(e: AdminHistoryEntry): Promise<boolean> {
+    await this.ensureIndexes()
+    const result = await this.adminHistory.updateOne(
+      { tokenId: e.tokenId, txid: e.txid, outputIndex: e.outputIndex },
+      { $setOnInsert: e },
+      { upsert: true }
+    )
+    return result.upsertedCount === 1
   }
 
   /** In fold order: `(height, offset, admitSeq)` ascending. */
