@@ -139,6 +139,20 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 const ACTION_BATCH_BLOB_SQL_CHUNK = 500
 const OUTPUT_INSERT_SQL_CHUNK = 500
 
+// Only provider-owned snapshot callbacks can classify a transaction as a read
+// view. Keep this private and shared across providers that use the same token.
+const readSnapshotTransactions = new WeakSet<TrxToken>()
+
+async function withinReadSnapshot<T>(trx: TrxToken, read: (trx: TrxToken) => Promise<T>): Promise<T> {
+  const alreadyTracked = readSnapshotTransactions.has(trx)
+  readSnapshotTransactions.add(trx)
+  try {
+    return await read(trx)
+  } finally {
+    if (!alreadyTracked) readSnapshotTransactions.delete(trx)
+  }
+}
+
 interface KnexTelemetryQuery {
   __knexQueryUid?: string
   method?: string
@@ -242,10 +256,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       // SQLite establishes its read view on the first query. Do not request
       // Knex's unsupported SQLite isolation/readOnly options or write settings
       // into the shared connection. WAL writers may use another connection.
-      return await this.knex.transaction(read)
+      return await this.knex.transaction(trx => withinReadSnapshot(trx, read))
     }
     if (database === 'mysql') {
-      return await this.readMySQLSnapshot(read)
+      return await this.readMySQLSnapshot(trx => withinReadSnapshot(trx, read))
     }
     throw new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots require SQLite or MySQL isolation')
   }
@@ -271,7 +285,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       throw new WERR_INVALID_OPERATION('This provider already has a retained read snapshot opening or active')
     }
     const lifetime = retainReadSnapshot(
-      transaction,
+      read => transaction(trx => withinReadSnapshot(trx, read)),
       async trx => {
         // Pin SQLite's deferred read view before opening resolves. MySQL also
         // establishes its repeatable-read snapshot on this first data read.
@@ -2022,9 +2036,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
     const q = this.findProvenTxsQuery(args)
-    // A transactional exact-proof lookup is a read/modify/write authority
-    // check. Lock that row until commit so monitor and sync repairs cannot race.
-    if (args.trx != null && this.dbtype === 'MySQL' && (args.partial.txid != null || args.partial.provenTxId != null))
+    // Writable exact-proof lookups are read/modify/write authority checks.
+    // Snapshot views use consistent reads; MySQL rejects FOR UPDATE in READ ONLY.
+    if (
+      args.trx != null &&
+      !readSnapshotTransactions.has(args.trx) &&
+      this.dbtype === 'MySQL' &&
+      (args.partial.txid != null || args.partial.provenTxId != null)
+    )
       q.forUpdate()
     const r = await q
     return this.validateEntities(r)
@@ -2041,6 +2060,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     // Serialize sync checkpoint reads with the page transaction on MySQL and Postgres too.
     if (
       args.trx != null &&
+      !readSnapshotTransactions.has(args.trx) &&
       (this.dbtype === 'MySQL' || this.dbtype === 'Postgres') &&
       args.partial.userId != null &&
       (args.partial.syncStateId != null || args.partial.storageIdentityKey != null)

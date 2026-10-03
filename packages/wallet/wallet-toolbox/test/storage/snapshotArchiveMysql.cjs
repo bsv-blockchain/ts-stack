@@ -32,6 +32,7 @@ const {
 const { addSnapshotArchiveTables } = require('../../out/src/storage/schema/snapshotArchiveMigration.js')
 const { StorageKnex } = require('../../out/src/storage/StorageKnex.js')
 const { StorageProvider } = require('../../out/src/storage/StorageProvider.js')
+const { exportBRC38 } = require('../../out/src/storage/portable/index.js')
 const { captureKnexSnapshotArchive } = require('../../out/src/storage/snapshot/archive/captureKnexSnapshotArchive.js')
 const { decodeSyncTransfer } = require('../../out/src/storage/remoting/SyncTransfer.js')
 const { KnexSnapshotArchiveService } = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveService.js')
@@ -127,6 +128,17 @@ async function captureFixture() {
       reference: 'foreign'
     })
     await writer.knex('users').where({ userId: user.userId }).update({ activeStorage: 'historical selection' })
+    const portable = await exportBRC38(reader, identity, { requireSnapshot: true })
+    assert.equal(portable.user.activeStorage, 'historical selection')
+    assert.equal(portable.tables.provenTxs.length, 1)
+    assert.equal(portable.tables.provenTxs[0].rawTx, 'AQL/')
+    await reader.readSnapshot(async trx => {
+      assert.equal((await reader.findProvenTxs({ partial: { provenTxId: proof }, trx })).length, 1)
+      assert.deepEqual(
+        await reader.findSyncStates({ partial: { userId: user.userId, storageIdentityKey: 'native-source' }, trx }),
+        []
+      )
+    })
     let changedDuringCapture = false
     KnexSnapshotArchiveStore.prototype.append = async function (owner, page, authorize) {
       await originalAppend.call(this, owner, page, authorize)
@@ -191,6 +203,7 @@ async function captureFixture() {
       originalPrimary: true,
       originalSchema: true,
       packedBinary: true,
+      portableProofAndCheckpointReadOnly: true,
       crossProfileClosureRejected: true,
       requestLifecycle,
       remoteReader,
