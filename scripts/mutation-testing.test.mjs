@@ -11,6 +11,7 @@ import {
   evaluateMutationReport,
   parseArguments,
   selectAffectedMutationTargets,
+  strykerEnvironment,
   targetsForUnresolvedMutationRange
 } from './mutation-testing.mjs'
 
@@ -1530,4 +1531,14 @@ test('native root and original purchase signature fixtures remain in every depen
       )
     }
   }
+})
+
+test('Stryker runs cannot append per-mutant test reports to the job summary', () => {
+  const environment = strykerEnvironment(
+    { GITHUB_ACTIONS: 'true', GITHUB_STEP_SUMMARY: '/tmp/summary', PATH: '/bin' },
+    { TS_STACK_MUTATION_TARGET: 'one' }
+  )
+  assert.equal(environment.GITHUB_STEP_SUMMARY, undefined)
+  assert.equal(environment.PATH, '/bin')
+  assert.equal(environment.TS_STACK_MUTATION_TARGET, 'one')
 })
