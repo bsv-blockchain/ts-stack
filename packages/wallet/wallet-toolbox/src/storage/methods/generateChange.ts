@@ -356,12 +356,12 @@ async function generateChangeSdkCore(
      * Applies the per-transaction limit so that the UTXO pool grows
      * gradually rather than all at once.
      */
-    const maxChangeOutputs =
-      params.surplusToFee === true
-        ? 0 // no change output is ever added; surplus stays in the fee
-        : params.maxChangeOutputs === -1
-          ? Number.MAX_SAFE_INTEGER
-          : (params.maxChangeOutputs ?? maxChangeOutputsPerTransaction)
+    let maxChangeOutputs =
+      params.maxChangeOutputs === -1
+        ? Number.MAX_SAFE_INTEGER
+        : (params.maxChangeOutputs ?? maxChangeOutputsPerTransaction)
+    // No change output is ever added; surplus stays in the fee.
+    if (params.surplusToFee === true) maxChangeOutputs = 0
     const surplusPoolShaping = params.surplusPoolShaping === true
 
     const randomVals = [...(params.randomVals || [])]
