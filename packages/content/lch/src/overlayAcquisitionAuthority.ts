@@ -12,6 +12,14 @@ import type {
 } from './types.js'
 import type { LCHOverlayPaidTerms } from './overlayAcquisitionTerms.js'
 
+/** Common authority premises, independent of the payment or purchase transport.
+ * Existing complete paid terms remain structurally compatible.
+ */
+export type LCHOverlayAuthorityTerms = Pick<
+  LCHOverlayPaidTerms,
+  'inspected' | 'offer' | 'binding' | 'policy'
+>
+
 /** Explicit finite chain selection. No network search, guessed signer role or
  * automatically widened interest is hidden in an acquisition adapter.
  */
@@ -33,7 +41,7 @@ export interface LCHOverlayAuthorityAssessment {
  * Offer authorities. No unused malformed path is silently treated as evidence.
  */
 export async function validateLCHOverlayAuthoritySelection(
-  terms: LCHOverlayPaidTerms,
+  terms: LCHOverlayAuthorityTerms,
   paths: readonly LCHOverlayAuthorityPath[],
   now: bigint,
   network: RevocationObservation['network'],
@@ -111,7 +119,7 @@ export async function validateLCHOverlayAuthoritySelection(
  * current observation is not rewritten as a historical observation.
  */
 export async function validateLCHOverlayAuthority(
-  terms: LCHOverlayPaidTerms,
+  terms: LCHOverlayAuthorityTerms,
   actor: Uint8Array,
   capability: string,
   paths: readonly LCHOverlayAuthorityPath[],
@@ -203,7 +211,7 @@ export async function validateLCHOverlayAuthority(
 }
 
 export async function validateLCHOverlayPaidRoles(
-  terms: LCHOverlayPaidTerms,
+  terms: LCHOverlayAuthorityTerms,
   paths: readonly LCHOverlayAuthorityPath[],
   now: bigint,
   network: RevocationObservation['network'],

@@ -51,6 +51,33 @@
           "brotli": 77000
         }
       }
+    },
+    {
+      "entry": "./overlay-covenant",
+      "requiredExports": [
+        "LCHOverlayCovenantDomain",
+        "lchOverlayCovenantEntitlementDigest",
+        "bindLCHOverlayCovenantSettlement",
+        "decodeLCHOverlayCovenantPurchaseEvidence",
+        "validateLCHOverlayCovenantTerms"
+      ],
+      "prohibitedExports": [
+        "SQLiteProtectedOperationObjectStore",
+        "NodeProtectedPayloadCodec",
+        "RevenueListingPurchaseVerifier"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 550000,
+          "gzip": 160000,
+          "brotli": 140000
+        },
+        "esbuild": {
+          "raw": 430000,
+          "gzip": 140000,
+          "brotli": 120000
+        }
+      }
     }
   ]
 }

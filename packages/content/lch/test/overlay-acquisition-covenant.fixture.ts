@@ -6,6 +6,8 @@ import {
   signOutputPacket,
   Utils,
   type OutputCapabilities,
+  type OutputChain,
+  type OutputOutpoint,
   type OutputPurchasePrepare,
   type OutputPurchaseTerms
 } from '@bsv/sdk'
@@ -32,11 +34,13 @@ import { lchOverlayFixture } from './overlay-acquisition.fixture.js'
 /** Real Header/Offer/Request signatures and encrypted content. Descriptor and
  * outpoints are representation fixtures; these tests make no Bitcoin claim.
  */
-export async function lchCovenantFixture() {
-  const f = await lchOverlayFixture(),
+export async function lchCovenantFixture(
+  options: { chain?: OutputChain; anchor?: OutputOutpoint; embedCiphertext?: boolean } = {}
+) {
+  const f = await lchOverlayFixture(options.chain),
     chain = f.acquire.listing.chain,
     topic = 'tm_licensed_asset',
-    anchor = { chain, txid: '11'.repeat(32), outputIndex: 0 },
+    anchor = options.anchor ?? { chain, txid: '11'.repeat(32), outputIndex: 0 },
     releasePolicy = { kind: 'local-admission' as const },
     initialRevenue = {
       revision: '0',
@@ -166,9 +170,11 @@ export async function lchCovenantFixture() {
       metadataDigest: '00'.repeat(32),
       initialRevenue
     },
-    published = await f.publisher.publish(f.asset, [
-      { mode: 'inline', offer: offer as unknown as LCHValue }
-    ])
+    published = await f.publisher.publish(
+      f.asset,
+      [{ mode: 'inline', offer: offer as unknown as LCHValue }],
+      options.embedCiphertext ?? true
+    )
   async function requestFor(buyer: LCHSigner = f.buyer, selectedOffer: SignedObject = offer) {
     const request = await new LCHBuyer(buyer).createRequest({
         assetId: f.asset.assetId,

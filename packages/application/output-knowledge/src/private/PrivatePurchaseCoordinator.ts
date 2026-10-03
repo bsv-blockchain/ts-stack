@@ -313,7 +313,7 @@ export class PrivatePurchaseCoordinator {
                 validation()
               })
               outputAssert(
-                current && current.row.revision === loaded.row.revision,
+                current?.row.revision === loaded.row.revision,
                 'Purchase intent changed before external admission',
                 'conflict'
               )

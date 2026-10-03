@@ -1600,6 +1600,42 @@
           "Original CBOR Request bytes and outer request/acquisition digests cannot be replaced under one purchase.",
           "The complete Offer/capability recovery floor applies to the original cutoff; recovery never opens a new expired Offer."
         ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant-settlement.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Original covenant settlement commitments and authenticated recipient/transaction/release binding before independent Bitcoin and licensing verification",
+        "target": "At least 300 genuinely signed substituted commitments under genuine POTATOES",
+        "invariants": [
+          "A seller signature cannot authorize a different buyer, request, lineage, increment or release evidence.",
+          "The original complete preparation package and actual selected transaction remain immutable.",
+          "Representation and genesis-signature checks do not establish Script validity, release satisfaction or playable keys."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-license.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Shared exact acquisition License, original rights and recipient key validation",
+        "target": "At least 300 genuinely signed substituted License commitments before buyer decryption",
+        "invariants": [
+          "Wrong Asset, Offer or Request IDs never reach buyer key recovery.",
+          "Covenant and paid settlement profiles remain distinct and preserve original Agreement and subject.",
+          "Plaintext requires authenticated selected content and validated key commitments; a signature alone does not authorize playback."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Protected covenant entitlement and original consent through native restart, expiry and access interruption",
+        "target": "At least 300 generated expiry, cancellation and local access histories after a complete independently verified synthetic purchase",
+        "invariants": [
+          "Protected entitlement survives native restart and Offer expiry without another purchase or online proof.",
+          "Cancellation or inaccessible local custody cannot produce plaintext.",
+          "Restoring local access preserves the same verified original rights, transaction and recipient; no history starts a replacement financial operation."
+        ]
       }
     ],
     "exclusions": [

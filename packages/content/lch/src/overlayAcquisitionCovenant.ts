@@ -1,22 +1,22 @@
 import {
   canonicalOutputJSON,
+  Beef,
+  parseOutputPurchaseSubmit,
   decodeOutputBytes,
   Hash,
   Utils,
   outputU64,
-  type OutputChain,
-  type OutputEvidence,
-  type OutputPaidLookupAcquire,
-  type OutputPaidLookupAcquired,
-  type OutputPaidLookupChallenge,
-  type OutputPaidLookupPayment,
+  type OutputPurchasePrepare,
+  type OutputPurchaseEnvelope,
+  type OutputSignedPurchaseTerms,
+  type OutputPurchaseSubmit,
   type OutputReleaseBinding,
   type OutputReleaseEvidence,
   type WalletInterface
 } from '@bsv/sdk'
 import { decodeDeterministicCbor, encodeDeterministicCbor } from './cbor.js'
 import { LCHReader } from './core.js'
-import { lchOverlayPaidEntitlementDigest } from './overlayAcquisitionEntitlement.js'
+import { lchOverlayCovenantEntitlementDigest } from './overlayAcquisitionCovenantEntitlement.js'
 import { LCHOverlayPaidCustody, type LCHOverlayObjectCustody } from './overlayAcquisitionCustody.js'
 import { lchAssert } from './errors.js'
 import { toHex } from './hash.js'
@@ -32,17 +32,18 @@ import {
   type UnverifiedLCHOverlayContext
 } from './overlayAcquisitionCodec.js'
 import {
-  bindLCHOverlayPaidSettlement,
-  decodeLCHOverlayPaymentEvidence,
-  type LCHOverlayBoundPaidSettlement
-} from './overlayAcquisitionSettlement.js'
+  bindLCHOverlayCovenantSettlement,
+  decodeLCHOverlayCovenantPurchaseEvidence,
+  type LCHOverlayBoundCovenantSettlement,
+  type LCHOverlayCovenantPurchaseEvidence
+} from './overlayAcquisitionCovenantSettlement.js'
 import {
-  LCH_OVERLAY_PAID_MECHANISMS,
-  validateLCHOverlayPaidTerms,
-  validateLCHOverlayPaidWindow,
-  type LCHOverlayPaidTermsInput,
-  type LCHOverlayPaidTerms
-} from './overlayAcquisitionTerms.js'
+  LCH_OVERLAY_COVENANT_MECHANISMS,
+  validateLCHOverlayCovenantTerms,
+  validateLCHOverlayCovenantWindow,
+  type LCHOverlayCovenantTermsInput,
+  type LCHOverlayCovenantTerms
+} from './overlayAcquisitionCovenantTerms.js'
 import type {
   ContentSource,
   LCHSignatureVerifier,
@@ -52,38 +53,35 @@ import type {
   SignedObject
 } from './types.js'
 
-/** Locally installed proof boundaries. A remote seller report cannot implement
- * any of these ports. Reference composition uses SDK Script/SPV funding/listing
- * verification and retained SDK release-policy assessments.
+/** Installed independent BRC-197 and release proof boundaries. Remote packets
+ * and collector signatures cannot implement these locally selected verifiers.
  */
-export interface LCHOverlayPaidVerification {
+export interface LCHOverlayCovenantVerification {
   readonly id: string
-  funding(
-    payment: OutputPaidLookupPayment,
-    challenge: OutputPaidLookupChallenge,
-    chain: OutputChain,
+  preparation(
+    terms: OutputSignedPurchaseTerms,
+    request: OutputPurchasePrepare,
+    descriptor: LCHOverlayCovenantTerms['descriptor'],
     signal: AbortSignal
-  ): Promise<{
-    operation: { funding: { chain: OutputChain; txid: string; outputIndex: number }; beef: string }
-  }>
-  listing(
-    evidence: OutputEvidence,
-    selected: OutputPaidLookupAcquire['listing'],
+  ): Promise<{ checkCurrent(): void }>
+  purchase(
+    evidence: LCHOverlayCovenantPurchaseEvidence,
+    original: { request: OutputPurchasePrepare; terms: OutputSignedPurchaseTerms; seller: string },
     signal: AbortSignal
-  ): Promise<void>
+  ): Promise<{ checkCurrent(): void }>
   release(
     evidence: OutputReleaseEvidence,
     expected: OutputReleaseBinding,
     signal: AbortSignal
   ): Promise<{ checkCurrent(): void }>
 }
-export interface LCHOverlayPaidDomainOptions {
+export interface LCHOverlayCovenantDomainOptions {
   original: Omit<
-    LCHOverlayPaidTermsInput,
+    LCHOverlayCovenantTermsInput,
     'reader' | 'installedMechanisms' | 'verifier' | 'maximumCiphertextBytes'
   >
   source: ContentSource & { readonly id: string }
-  verification: LCHOverlayPaidVerification
+  verification: LCHOverlayCovenantVerification
   wallet: Pick<WalletInterface, 'getPublicKey' | 'decrypt'>
   authorityPaths?: readonly LCHOverlayAuthorityPath[]
   authorityNetwork: RevocationObservation['network']
@@ -101,19 +99,20 @@ interface Original {
   header: Uint8Array
   offer: SignedObject
   request: Uint8Array
-  acquire: Uint8Array
+  prepare: Uint8Array
+  descriptor: Uint8Array
   selection: Uint8Array
   paths: LCHOverlayAuthorityPath[]
 }
 const json = (value: unknown) => canonicalOutputJSON(value, { bytes: 4194304 })
 const utf8 = (value: unknown) => new TextEncoder().encode(json(value))
 
-/** Optional concrete fixed-render/direct-collector BRC-198 domain. Creating it
+/** Optional concrete fixed-render/standing-collector covenant BRC-198 domain. Creating it
  * never quotes, prepares, signs, pays or broadcasts. Its original bytes and
  * installation ID must be retained before constructing the durable buyer.
- * Generic buyer validation ports are structurally compatible with this class.
+ * The durable purchase buyer installs this adapter only after protected custody is initialized. Preparation never constructs or funds a wallet action.
  */
-export class LCHOverlayPaidDomain {
+export class LCHOverlayCovenantDomain {
   readonly id: string
   private readonly originalBytes: Uint8Array
   private readonly pins: (() => boolean)[]
@@ -126,7 +125,7 @@ export class LCHOverlayPaidDomain {
   private custodyOwner?: LCHOverlayObjectCustody
   private custodyTask?: Promise<LCHOverlayPaidCustody>
   private constructor(
-    private readonly ports: LCHOverlayPaidDomainOptions,
+    private readonly ports: LCHOverlayCovenantDomainOptions,
     retained?: Uint8Array
   ) {
     lchAssert(
@@ -159,12 +158,18 @@ export class LCHOverlayPaidDomain {
       header: ports.original.header,
       offer: ports.original.offer as unknown as LCHValue,
       request: ports.original.request,
-      acquire: utf8(ports.original.acquire),
+      prepare: utf8(ports.original.prepare),
+      descriptor: utf8(ports.original.descriptor),
       selection: utf8(ports.original.selection),
       paths: (ports.authorityPaths ?? []) as unknown as LCHValue
     })
+    lchAssert(
+      this.originalBytes.length <= 4194304,
+      'ERR_LCH_LICENSE',
+      'Original covenant terms exceed protected custody bound'
+    )
     this.id =
-      'urn:bsv:lch-overlay-paid:' +
+      'urn:bsv:lch-overlay-covenant:' +
       Utils.toHex(
         Hash.sha256(
           encodeDeterministicCbor({
@@ -174,15 +179,15 @@ export class LCHOverlayPaidDomain {
             maximumCiphertextBytes: this.maximumCiphertextBytes,
             authorityNetwork: ports.authorityNetwork,
             revocations: ports.revocations?.id ?? null,
-            adapter: 'fixed-render-direct-collector/1'
+            adapter: 'fixed-render-standing-collector/1'
           })
         )
       )
     this.keyDelivery = new WalletBRC78KeyRecovery(ports.wallet)
     this.pins = [
       pin(ports.source, 'read'),
-      pin(ports.verification, 'funding'),
-      pin(ports.verification, 'listing'),
+      pin(ports.verification, 'preparation'),
+      pin(ports.verification, 'purchase'),
       pin(ports.verification, 'release'),
       pin(ports.wallet, 'getPublicKey'),
       pin(ports.wallet, 'decrypt'),
@@ -197,9 +202,9 @@ export class LCHOverlayPaidDomain {
     if (ports.revocations !== undefined)
       this.pins.push(pin(ports.revocations, 'at'), pin(ports.revocations, 'id'))
   }
-  static async create(options: LCHOverlayPaidDomainOptions): Promise<LCHOverlayPaidDomain> {
-    const domain = new LCHOverlayPaidDomain(options)
-    await domain.preflightTerms(options.original.acquire, null, new AbortController().signal)
+  static async create(options: LCHOverlayCovenantDomainOptions): Promise<LCHOverlayCovenantDomain> {
+    const domain = new LCHOverlayCovenantDomain(options)
+    await domain.preflightTerms(options.original.prepare, null, new AbortController().signal)
     return domain
   }
   /** Complete both protected reservations before passing this adapter to a buyer.
@@ -220,7 +225,7 @@ export class LCHOverlayPaidDomain {
     this.custodyOwner = objects
     if (this.custodyTask === undefined) {
       const original = decodeDeterministicCbor(this.originalBytes) as unknown as Original,
-        acquire = JSON.parse(new TextDecoder().decode(original.acquire)) as OutputPaidLookupAcquire
+        acquire = JSON.parse(new TextDecoder().decode(original.prepare)) as OutputPurchasePrepare
       this.custodyTask = LCHOverlayPaidCustody[initialize ? 'initialize' : 'open'](
         objects,
         this.id,
@@ -243,12 +248,12 @@ export class LCHOverlayPaidDomain {
    * Offer expiry never turns a funded obligation into a new acquisition.
    */
   static async open(
-    options: LCHOverlayPaidDomainOptions,
+    options: LCHOverlayCovenantDomainOptions,
     retained: { id: string; original: Uint8Array },
     objects: LCHOverlayObjectCustody
-  ): Promise<LCHOverlayPaidDomain> {
+  ): Promise<LCHOverlayCovenantDomain> {
     const original = retained.original.slice(),
-      domain = new LCHOverlayPaidDomain(options, original)
+      domain = new LCHOverlayCovenantDomain(options, original)
     lchAssert(
       domain.id === retained.id && toHex(domain.originalBytes) === toHex(original),
       'ERR_LCH_LICENSE',
@@ -274,7 +279,7 @@ export class LCHOverlayPaidDomain {
     )
   }
   private async terms(signal: AbortSignal): Promise<{
-    terms: LCHOverlayPaidTerms
+    terms: LCHOverlayCovenantTerms
     paths: LCHOverlayAuthorityPath[]
     verifier: LCHSignatureVerifier
     reader: LCHReader
@@ -302,44 +307,49 @@ export class LCHOverlayPaidDomain {
         header: original.header,
         offer: original.offer,
         request: original.request,
-        acquire: parse<OutputPaidLookupAcquire>(original.acquire),
-        selection: parse<LCHOverlayPaidTermsInput['selection']>(original.selection),
-        installedMechanisms: new Set(LCH_OVERLAY_PAID_MECHANISMS),
+        prepare: parse<OutputPurchasePrepare>(original.prepare),
+        descriptor: parse<LCHOverlayCovenantTermsInput['descriptor']>(original.descriptor),
+        selection: parse<LCHOverlayCovenantTermsInput['selection']>(original.selection),
+        installedMechanisms: new Set(LCH_OVERLAY_COVENANT_MECHANISMS),
         reader,
         verifier,
         maximumCiphertextBytes: this.maximumCiphertextBytes
       },
-      terms = await validateLCHOverlayPaidTerms(input)
+      terms = await validateLCHOverlayCovenantTerms(input)
     this.current(signal)
     return { terms, paths: original.paths, verifier, reader }
   }
   async preflight(
-    request: OutputPaidLookupAcquire,
-    challenge: OutputPaidLookupChallenge | null,
+    request: OutputPurchasePrepare,
+    challenge: OutputSignedPurchaseTerms | null,
     signal: AbortSignal
   ): Promise<void> {
+    this.current(signal)
+    const ownedRequest = JSON.parse(json(request)) as OutputPurchasePrepare,
+      ownedChallenge =
+        challenge === null ? null : (JSON.parse(json(challenge)) as OutputSignedPurchaseTerms)
     await this.retained().check()
-    await this.preflightTerms(request, challenge, signal)
+    await this.preflightTerms(ownedRequest, ownedChallenge, signal)
   }
   private async preflightTerms(
-    request: OutputPaidLookupAcquire,
-    challenge: OutputPaidLookupChallenge | null,
+    request: OutputPurchasePrepare,
+    challenge: OutputSignedPurchaseTerms | null,
     signal: AbortSignal
   ): Promise<void> {
-    const owned = JSON.parse(json(request)) as OutputPaidLookupAcquire,
+    const owned = JSON.parse(json(request)) as OutputPurchasePrepare,
       prepared = await this.terms(signal),
       { terms, paths, verifier } = prepared,
       now = this.ports.clock()
     lchAssert(
-      json(owned) === json(terms.acquire),
+      json(owned) === json(terms.prepare),
       'ERR_LCH_LICENSE',
       'Original LCH request changed'
     )
-    validateLCHOverlayPaidWindow(terms, challenge, now, terms.advertisedRecoverySeconds)
+    validateLCHOverlayCovenantWindow(terms, challenge, now)
     const identity = await this.ports.wallet.getPublicKey({ identityKey: true })
     this.current(signal)
     lchAssert(
-      identity.publicKey === terms.acquire.recipient,
+      identity.publicKey === terms.prepare.recipient,
       'ERR_LCH_KEY',
       'Installed buyer wallet differs from signed LCH consent'
     )
@@ -352,132 +362,174 @@ export class LCHOverlayPaidDomain {
       this.ports.revocations?.at(now)
     )
     this.current(signal)
+    if (challenge !== null) {
+      const assessment = await this.ports.verification.preparation(
+        challenge,
+        terms.prepare,
+        terms.descriptor,
+        signal
+      )
+      this.assessment(assessment)()
+      this.current(signal)
+    }
+  }
+  private assessment(input: { checkCurrent(): void }): () => void {
+    const check = Object.getOwnPropertyDescriptor(input, 'checkCurrent')?.value as unknown
+    lchAssert(
+      typeof check === 'function' && check.constructor.name !== 'AsyncFunction',
+      'ERR_LCH_LICENSE',
+      'Purchase verification guard must be synchronous'
+    )
+    return () => {
+      const result: unknown = check.call(input)
+      if (result instanceof Promise) void result.catch(() => undefined)
+      lchAssert(
+        result === undefined && input.checkCurrent === check,
+        'ERR_LCH_LICENSE',
+        'Purchase verification guard changed or did not finish'
+      )
+    }
   }
   async verify(
-    request: OutputPaidLookupAcquire,
-    challenge: OutputPaidLookupChallenge,
-    payment: OutputPaidLookupPayment,
-    delivered: OutputPaidLookupAcquired,
+    request: OutputPurchasePrepare,
+    challenge: OutputSignedPurchaseTerms,
+    payment: OutputPurchaseSubmit,
+    delivered: OutputPurchaseEnvelope,
     signal: AbortSignal
   ): Promise<void> {
-    await this.retained().check()
+    this.current(signal)
     const owned = {
-        request: JSON.parse(json(request)) as OutputPaidLookupAcquire,
-        challenge: JSON.parse(json(challenge)) as OutputPaidLookupChallenge,
-        payment: JSON.parse(json(payment)) as OutputPaidLookupPayment,
-        delivered: JSON.parse(json(delivered)) as OutputPaidLookupAcquired
-      },
-      prepared = await this.terms(signal)
+      request: JSON.parse(json(request)) as OutputPurchasePrepare,
+      challenge: JSON.parse(json(challenge)) as OutputSignedPurchaseTerms,
+      payment: JSON.parse(json(payment)) as OutputPurchaseSubmit,
+      delivered: JSON.parse(json(delivered)) as OutputPurchaseEnvelope
+    }
+    await this.retained().check()
+    const prepared = await this.terms(signal)
     lchAssert(
-      json(owned.request) === json(prepared.terms.acquire),
+      json(owned.request) === json(prepared.terms.prepare),
       'ERR_LCH_LICENSE',
       'Original LCH request changed'
     )
     await this.material(prepared, owned.challenge, owned.payment, owned.delivered, signal)
     this.current(signal)
-    await this.retained().record(await lchOverlayPaidEntitlementDigest(owned.delivered))
+    await this.retained().record(await lchOverlayCovenantEntitlementDigest(owned.delivered))
     this.current(signal)
   }
-  async usable(delivered: OutputPaidLookupAcquired, signal: AbortSignal): Promise<boolean> {
+  async usable(delivered: OutputPurchaseEnvelope, signal: AbortSignal): Promise<boolean> {
     await this.verifiedMaterial(delivered, signal)
     return true
   }
   /** Explicit rendition boundary. Authentication and entitlement are checked
    * again; ciphertext chunks never escape as plaintext before AES-GCM success.
    */
-  async playback(delivered: OutputPaidLookupAcquired, signal: AbortSignal): Promise<Uint8Array> {
+  async playback(delivered: OutputPurchaseEnvelope, signal: AbortSignal): Promise<Uint8Array> {
     const { prepared, keys } = await this.verifiedMaterial(delivered, signal),
       plaintext = await prepared.reader.decrypt(prepared.terms.inspected, keys)
     this.current(signal)
     return plaintext
   }
-  private async verifiedMaterial(deliveredInput: OutputPaidLookupAcquired, signal: AbortSignal) {
-    const delivered = JSON.parse(json(deliveredInput)) as OutputPaidLookupAcquired
+  private async verifiedMaterial(deliveredInput: OutputPurchaseEnvelope, signal: AbortSignal) {
+    this.current(signal)
+    const delivered = JSON.parse(json(deliveredInput)) as OutputPurchaseEnvelope
     lchAssert(
-      await this.retained().verified(await lchOverlayPaidEntitlementDigest(delivered)),
+      await this.retained().verified(await lchOverlayCovenantEntitlementDigest(delivered)),
       'ERR_LCH_LICENSE',
       'Delivered LCH entitlement has not been locally verified and retained'
     )
     const prepared = await this.terms(signal),
       context = await this.context(delivered),
-      paymentEvidence = decodeLCHOverlayPaymentEvidence(context.paymentEvidence!)
-    const bound = bindLCHOverlayPaidSettlement(
+      evidence = decodeLCHOverlayCovenantPurchaseEvidence(context.purchaseEvidence!),
+      bound = bindLCHOverlayCovenantSettlement(
         context,
         prepared.terms,
-        paymentEvidence.challenge,
-        {
-          derivationPrefix: paymentEvidence.challenge.derivationPrefix,
-          derivationSuffix: paymentEvidence.derivationSuffix,
-          transaction: paymentEvidence.payment.beef
-        },
-        delivered
+        evidence.terms,
+        delivered,
+        evidence.purchase.txid
       ),
       keys = await this.license(prepared, context, bound, signal, true)
     return { prepared, keys }
   }
-  private context(delivered: OutputPaidLookupAcquired): Promise<UnverifiedLCHOverlayContext> {
-    lchAssert(delivered.result !== undefined, 'ERR_LCH_LICENSE', 'Delivered context is missing')
+  private context(delivered: OutputPurchaseEnvelope): Promise<UnverifiedLCHOverlayContext> {
+    lchAssert(
+      delivered.result.status === 'delivered',
+      'ERR_LCH_LICENSE',
+      'Delivered context is missing'
+    )
     return decodeUnverifiedLCHOverlayContext(
-      Uint8Array.from(decodeOutputBytes(delivered.result.context, 2097152)),
-      'paid-lookup'
+      Uint8Array.from(decodeOutputBytes(delivered.result.potatoes.body.secret, 2097152)),
+      'listing-covenant'
     )
   }
   private async material(
-    prepared: Awaited<ReturnType<LCHOverlayPaidDomain['terms']>>,
-    challenge: OutputPaidLookupChallenge,
-    payment: OutputPaidLookupPayment,
-    delivered: OutputPaidLookupAcquired,
+    prepared: Awaited<ReturnType<LCHOverlayCovenantDomain['terms']>>,
+    challenge: OutputSignedPurchaseTerms,
+    submission: OutputPurchaseSubmit,
+    delivered: OutputPurchaseEnvelope,
     signal: AbortSignal
   ): Promise<Map<string, Uint8Array>> {
-    const context = await this.context(delivered),
-      bound = bindLCHOverlayPaidSettlement(context, prepared.terms, challenge, payment, delivered),
-      funding = await this.ports.verification.funding(
-        payment,
+    const candidate = parseOutputPurchaseSubmit(submission),
+      context = await this.context(delivered),
+      bound = bindLCHOverlayCovenantSettlement(
+        context,
+        prepared.terms,
         challenge,
-        prepared.terms.acquire.listing.chain,
+        delivered,
+        candidate.txid
+      ),
+      raw = Beef.fromBinaryStrict(decodeOutputBytes(candidate.beef, 2097152)),
+      target = raw.findTxid(candidate.txid)?.tx
+    lchAssert(
+      candidate.acquisitionId === challenge.body.acquisitionId &&
+        (raw.atomicTxid ?? raw.txs.at(-1)?.txid) === candidate.txid &&
+        target?.id('hex') === candidate.txid,
+      'ERR_LCH_PAYMENT',
+      'Original wallet transaction differs from the purchased subject'
+    )
+    const purchase = this.assessment(
+      await this.ports.verification.purchase(
+        bound.evidence,
+        {
+          request: prepared.terms.prepare,
+          terms: challenge,
+          seller: prepared.terms.selected.seller
+        },
         signal
       )
+    )
+    purchase()
     this.current(signal)
-    lchAssert(
-      json(funding.operation.funding) === json(bound.packet.body.funding) &&
-        funding.operation.beef === payment.transaction,
-      'ERR_LCH_PAYMENT',
-      'Independent funding proof differs'
+    const release = this.assessment(
+      await this.ports.verification.release(
+        bound.evidence.release,
+        {
+          chain: prepared.terms.prepare.listing.chain,
+          txid: candidate.txid,
+          policy: challenge.body.releasePolicy
+        },
+        signal
+      )
     )
-    await this.ports.verification.listing(
-      delivered.result!.evidence,
-      prepared.terms.acquire.listing,
-      signal
-    )
-    this.current(signal)
-    const assessment = await this.ports.verification.release(
-      bound.evidence.release,
-      {
-        chain: prepared.terms.acquire.listing.chain,
-        txid: bound.packet.body.funding.txid,
-        policy: challenge.acceptancePolicy
-      },
-      signal
-    )
-    assessment.checkCurrent()
+    release()
     this.current(signal)
     const keys = await this.license(prepared, context, bound, signal)
-    assessment.checkCurrent()
+    purchase()
+    release()
     this.current(signal)
     return keys
   }
   private async license(
-    prepared: Awaited<ReturnType<LCHOverlayPaidDomain['terms']>>,
+    prepared: Awaited<ReturnType<LCHOverlayCovenantDomain['terms']>>,
     context: UnverifiedLCHOverlayContext,
-    bound: LCHOverlayBoundPaidSettlement,
+    bound: LCHOverlayBoundCovenantSettlement,
     signal: AbortSignal,
     locallyVerified = false
   ): Promise<Map<string, Uint8Array>> {
     return validateLCHOverlayLicense({
       ...prepared,
       context,
-      requestId: prepared.terms.acquire.requestId,
-      mode: 'paid-lookup',
+      requestId: prepared.terms.prepare.requestId,
+      mode: 'listing-covenant',
       settlement: {
         id: bound.id,
         issuedAt: bound.packet.body.issuedAt,

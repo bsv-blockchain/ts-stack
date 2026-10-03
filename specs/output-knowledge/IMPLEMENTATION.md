@@ -3015,3 +3015,69 @@ that sequentially builds the application prerequisite and LCH. The complete
 source/test union and every qualification gate remain unchanged. This failed
 startup establishes no mutation coverage or score; the complete campaign remains
 required after the remaining implementation is composed.
+
+### Portable covenant settlement, exact License and protected buyer entitlement
+
+The next optional LCH increment implements the full buyer-side standing-collector
+C domain in a separate `@bsv/lch/overlay-covenant` entry. The portable decoder owns
+closed JCS lineage packages, authenticates their signed genesis commitments and
+binds original seller-signed preparation, exact descriptor, buyer, request,
+predecessor/successor, price and release evidence to the signed settlement and
+STEAK/POTATOES context. Representation and collector signatures remain separate
+from actual Bitcoin and authority verification. Paid and covenant domains share
+the original complete License, Agreement, historical role, typed authority and
+recipient-key checks; the paid profile and ordinary core capabilities are unchanged.
+Internal BRC78 recipient recovery is extracted from the existing delivery class
+without changing its constructor, delivery, recovery or cryptographic rules.
+
+`LCHOverlayCovenantDomain` retains complete original consent and a protected local
+positive verification receipt. Preparation requires independently installed full
+lineage verification before wallet construction. Purchase material requires actual
+full Script/lineage and selected release verification before License/key checks and
+receipt commit. Guards must be owned synchronous functions and remain current after
+key recovery. Public preflight and verification own their input bytes before the
+first asynchronous boundary. Playback checks current access before decoding private
+material and can reopen verified original rights after Offer expiry without a new
+purchase or online proof. Equivalent signed reissue changes neither rights nor the
+historical settlement; encrypted grants are authenticated again on each use.
+
+The complete LCH run passes 234 tests in 35 suites in64.165seconds, with96.65percent
+statements,90.40branches,95.71functions and97.56lines. Covenant domain, both
+entitlement implementations, common License and recipient recovery have no uncovered
+statements. Tests execute complete disclosed synthetic genesis and purchase
+transactions using the actual family and easy-work chain, actual signed settlement,
+License/Agreement/BRC78 grants, encrypted SQLite reopen and real AES-GCM playback.
+They cover separate issuer/key-releaser delegations and retained role assessments,
+wrong signed commitments, changed custody and installations, invalid asynchronous
+verification guards, detached ciphertext limits and access loss, and mutable caller
+inputs. Three separately registered properties each exercise at least300seeded
+settlement substitutions, signed License substitutions or native entitlement histories.
+
+Initial native fixture attempts failed because the funding snapshot lacked explicit
+empty unlocking scripts, genesis incorrectly began above reserve, and a signing
+transaction accessor omitted the anchor's actual merkle proof. The corrected fixture
+satisfies the unchanged verifiers; no Script or evidence guard was weakened. A
+source-boundary test initially used embedded ciphertext and therefore did not invoke
+its source. It now uses detached ciphertext and changes the response only after
+read-only reopen. The first lifecycle property hit its150second ceiling at195cases;
+complete retained-receipt histories and fast currentness refusal now preserve the
+300case floor and original deadline, with explicit authenticated endpoint playback
+and separate reissue/corruption cases. No temporary shared mathematical cache was
+retained. Failed and superseded runs are not current qualification evidence.
+
+The exact shared registry ACKs retain all prior source/test selections and add three
+whole-source critical settlement, License and covenant-buyer regions. Actual branch
+inventory is133. Complete existing key-delivery tests and imported revenue fixture
+archives are appended to the inherited LCH unions. No thresholds, deadlines, case
+floors, worker limits or complete-campaign requirements change.39registry regressions
+pass. Packed payload, conditional exports, source maps, strict consumer types, CLI,
+all56compiled examples against24exact tarballs and the independent browser entries
+pass locally. The reference app adds only the existing LCH/wallet workspace links;
+structural lock comparison preserves every unrelated importer, resolution and setting,
+and the frozen offline installation passes.
+
+These buyer tests construct disclosed synthetic funding directly. Complete native
+wallet purchase ownership, concrete seller issuance, actual topic-admission/release
+recovery and the combined operator/application demonstrations remain required. So do
+all root/non-final/contradiction workflows, the complete affected mutation campaign
+and successful exact-head hosted qualification. Checkpoint two remains open.

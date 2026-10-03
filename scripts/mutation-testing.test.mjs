@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 130)
+  assert.equal(Object.keys(configured).length, 133)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -908,10 +908,13 @@ test('optional LCH acquisition qualifies every whole module and its complete cry
     'src/overlayAcquisitionEntitlement.ts',
     'src/overlayAcquisitionPaid.ts',
     'src/overlayAcquisitionSeller.ts',
-    'src/overlayAcquisitionVerification.ts'
+    'src/overlayAcquisitionVerification.ts',
+    'src/overlayAcquisitionLicense.ts',
+    'src/keyRecovery.ts'
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
-    '<rootDir>/test/overlay-acquisition*.test.ts'
+    '<rootDir>/test/overlay-acquisition*.test.ts',
+    '<rootDir>/test/key-delivery.test.ts'
   ])
   assert.equal(
     target.propertyTest,
@@ -1022,7 +1025,8 @@ test('standing covenant terms retain complete modes, consent and prior cryptogra
     'src/overlayAcquisitionConsent.ts'
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
-    '<rootDir>/test/overlay-acquisition*.test.ts'
+    '<rootDir>/test/overlay-acquisition*.test.ts',
+    '<rootDir>/test/key-delivery.test.ts'
   ])
   assert.equal(
     target.propertyTest,
@@ -1034,5 +1038,79 @@ test('standing covenant terms retain complete modes, consent and prior cryptogra
     selectAffectedMutationTargets(configured, [
       'packages/content/lch/src/overlayAcquisitionConsent.ts'
     ]).includes('lch-overlay-covenant-terms')
+  )
+})
+
+test('covenant settlement retains complete evidence and prior cryptographic qualification', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    target = configured['lch-overlay-covenant-settlement']
+  assert.deepEqual(target.mutate, ['src/overlayAcquisitionCovenantSettlement.ts'])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/overlay-acquisition*.test.ts',
+    '<rootDir>/test/key-delivery.test.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, configured['lch-overlay-acquisition'].additionalInputs)
+  assert.equal(target.runnerOptions.buildCommand, 'pnpm build:mutation')
+  assert.equal(
+    target.propertyTest,
+    'packages/content/lch/test/overlay-acquisition-covenant-settlement.property.test.ts'
+  )
+  assert.ok(
+    selectAffectedMutationTargets(configured, [
+      'packages/content/lch/src/overlayAcquisitionCovenantSettlement.ts'
+    ]).includes('lch-overlay-covenant-settlement')
+  )
+})
+
+test('common acquisition License retains both modes and every prior qualification module', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    target = configured['lch-overlay-license']
+  assert.deepEqual(target.mutate, ['src/overlayAcquisitionLicense.ts'])
+  assert.ok(
+    configured['lch-overlay-acquisition'].mutate.includes('src/overlayAcquisitionLicense.ts')
+  )
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/overlay-acquisition*.test.ts',
+    '<rootDir>/test/key-delivery.test.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, configured['lch-overlay-acquisition'].additionalInputs)
+  assert.equal(
+    target.propertyTest,
+    'packages/content/lch/test/overlay-acquisition-license.property.test.ts'
+  )
+  assert.equal(target.runnerOptions.buildCommand, 'pnpm build:mutation')
+})
+
+test('complete covenant buyer retains native fixture closure and the prior complete unions', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    target = configured['lch-overlay-covenant']
+  assert.deepEqual(target.mutate, [
+    'src/overlayAcquisitionCovenant.ts',
+    'src/overlayAcquisitionCovenantEntitlement.ts',
+    'src/overlayAcquisitionEntitlement.ts',
+    'src/keyRecovery.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/overlay-acquisition*.test.ts',
+    '<rootDir>/test/key-delivery.test.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, configured['lch-overlay-acquisition'].additionalInputs)
+  assert.ok(
+    configured['lch-overlay-acquisition'].mutate.includes('src/overlayAcquisitionEntitlement.ts')
+  )
+  for (const input of [
+    '../../application/output-knowledge/test/revenue-lineage-fixture.ts',
+    '../../application/output-knowledge/test/fixtures/revenue-listing/**'
+  ])
+    assert.ok(target.additionalInputs.includes(input))
+  assert.equal(
+    target.propertyTest,
+    'packages/content/lch/test/overlay-acquisition-covenant.property.test.ts'
+  )
+  assert.equal(target.runnerOptions.buildCommand, 'pnpm build:mutation')
+  assert.ok(
+    selectAffectedMutationTargets(configured, [
+      'packages/application/output-knowledge/test/fixtures/revenue-listing/lineage-package.json.gz'
+    ]).includes('lch-overlay-covenant')
   )
 })

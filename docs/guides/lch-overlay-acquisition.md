@@ -15,8 +15,9 @@ tags: [lch, overlay, acquisition, custody, payment]
 The optional `@bsv/lch/overlay-acquisition` entry adds the proposed
 [BRC-198](https://github.com/bsv-blockchain/BRCs/pull/284) overlay profile to
 ordinary licensed content. Its wire codecs cover paid lookup and covenant
-context. Its concrete buyer domain currently implements fixed-render,
-whole-Asset, direct authorized seller collection through paid lookup. It is a
+context. Its concrete buyer domains implement fixed-render,
+whole-Asset, authorized collector acquisition through paid lookup and covenant
+purchase. The covenant domain has a separate `@bsv/lch/overlay-covenant` entry. It is a
 minor API addition requiring the coordinated SDK3 output/revenue companions;
 ordinary imports, SDK2 peers and `CORE_CAPABILITIES` stay unchanged. The full
 covenant and reference-application demonstrations remain unfinished checkpoint-two
@@ -240,3 +241,64 @@ role authority, complete Bitcoin lineage, exact actual purchase increment,
 retained topical admission, release-policy satisfaction, license validity or
 usable keys. Those independent proof and issuance stages remain required for
 the full covenant reference flow.
+
+## Concrete covenant buyer and settlement
+
+Install `LCHOverlayCovenantDomain` from `@bsv/lch/overlay-covenant` with the
+complete original Header, reusable standing Offer, individual signed Request,
+outer preparation, exact descriptor and independently selected capability.
+Its protected original and positive verification slots follow the same custody
+rules as the paid domain. `create()` checks consent and the actual buyer wallet;
+it never constructs, funds, signs, submits or broadcasts a transaction.
+
+The installed `verification.preparation` must authenticate the authorized genesis,
+every related listing transition and the exact prepared outpoint before wallet
+construction. `RevenueListingLineageVerifier` provides the complete Script and
+selected-chain implementation. The installed `verification.purchase` must
+validate the actual full transaction and both histories of any merge, and bind
+the original acquisition ID, request digest, buyer, descriptor, price and receipt.
+`RevenueListingPurchaseVerifier` provides that implementation. Their independently
+selected chain context and currentness are local installation responsibilities.
+The release port separately assesses the originally selected release policy.
+Every port must return an owned synchronous `checkCurrent()` guard; unresolved,
+limited, cancelled or changed proof contexts cannot become positive receipts.
+
+`decodeLCHOverlayCovenantPurchaseEvidence` parses a closed portable lineage package
+and authenticates its signed genesis commitment. That is a representation check;
+it cannot replace either full Bitcoin verifier. `bindLCHOverlayCovenantSettlement`
+then authenticates the collector's settlement and STEAK/POTATOES envelope against
+the original signed preparation and the same transaction. It binds predecessor,
+successor, initial economics, contribution amount, buyer, Request/Offer/Asset IDs,
+release evidence and chronology. The C context contains purchase evidence and
+cannot silently switch to paid lookup. The exact context bytes must equal the
+signed POTATOES secret.
+
+`verify(request, terms, submission, delivered, signal)` performs those bindings,
+checks the original wallet transaction's raw identity, invokes full purchase and
+release verification and validates the exact License, Agreement, finite typed
+authority evidence and recipient-bound BRC-78 key grants. Guards are rechecked
+after asynchronous key recovery. Complete success alone commits the immutable
+positive entitlement. A signed License, topical admission or parseable lineage
+package alone cannot authorize decryption.
+
+`open()` restores the original domain and existing custody after Offer expiry.
+`usable()` and explicit `playback()` require its locally recorded entitlement,
+authenticate the signed material again and enforce current local access. They
+perform no new purchase or online lineage/release assessment. Equivalent signed
+reissue may vary signature and encrypted grant randomness without changing rights;
+every grant is authenticated again before use. The unverified
+`lchOverlayCovenantEntitlementDigest` is only a representation fingerprint, useful
+inside that protected positive receipt. It is never a remote authorization token.
+
+The disclosed synthetic native fixture executes actual genesis and purchase
+transactions against the installed BRC-197 family, verifies their complete BEEF
+and easy-work test chain, issues real signed C settlement/License/key grants and
+decrypts real ciphertext. It closes and reopens encrypted SQLite buyer custody
+after expiry. The lifecycle property checks at least 300 seeded cancellation and
+local-access histories: each refusal produces no plaintext, retained originals
+and the positive receipt remain identical, and restored endpoint playback still
+uses one purchase. Separate tests cover equivalent reissue, corrupted encrypted
+grants, changed installations, ciphertext bounds and invalid asynchronous guards.
+The fixture constructs public synthetic funding directly. The reusable wallet
+action owner, actual topical admission and seller issuance still need the complete
+combined reference workflow; these buyer tests do not claim that workflow is done.

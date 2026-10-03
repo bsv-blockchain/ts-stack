@@ -244,15 +244,16 @@ class PrivatePurchaseHTTPHandler {
       if (req.aborted || res.destroyed) return
       release = this.acquire(caller.buyer)
       const input = parseOutputJSON(text, { bytes: this.requestBytes })
-      const id =
-        operation === 'prepare'
-          ? await this.options.service.prepare(parseOutputPurchasePrepare(input), caller)
-          : operation === 'submit'
-            ? await this.options.service.submit(parseOutputPurchaseSubmit(input), caller)
-            : await this.options.service.recover(
-                parseOutputPurchaseRecover(input).acquisitionId,
-                caller
-              )
+      let id: string
+      if (operation === 'prepare')
+        id = await this.options.service.prepare(parseOutputPurchasePrepare(input), caller)
+      else if (operation === 'submit')
+        id = await this.options.service.submit(parseOutputPurchaseSubmit(input), caller)
+      else
+        id = await this.options.service.recover(
+          parseOutputPurchaseRecover(input).acquisitionId,
+          caller
+        )
       if (req.aborted || res.destroyed || res.writableEnded) return
       const prepared = this.options.disclosure.prepare(outputHex32(id), caller, {
         terms: operation === 'prepare'

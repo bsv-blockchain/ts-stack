@@ -1316,6 +1316,36 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-settlement",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-settlement.property.test.ts",
+      "risk": "critical",
+      "boundary": "Original consent, portable genesis and complete covenant settlement/evidence commitments before independent Script, release and License verification",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-license",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-license.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact paid or covenant License, Agreement, typed original authority evidence, persistent rights and recipient key grants before authenticated playback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant.property.test.ts",
+      "risk": "critical",
+      "boundary": "Independent complete purchase and release verification, protected original consent and immutable locally verified entitlement before recoverable covenant playback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

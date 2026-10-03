@@ -18,10 +18,12 @@
   },
   "dependencies": {
     "@bsv/auth-express-middleware": "workspace:^",
+    "@bsv/lch": "workspace:^",
     "@bsv/output-knowledge": "workspace:^",
     "@bsv/overlay": "workspace:^",
     "@bsv/overlay-express": "workspace:^",
     "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox": "workspace:^",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.1",
     "mongodb": "7.6.0"

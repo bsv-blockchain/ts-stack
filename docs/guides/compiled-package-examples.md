@@ -2033,3 +2033,44 @@ async function checkStandingOffer(
 }
 export { checkStandingOffer }
 ```
+
+## Protected covenant entitlement and explicit playback
+
+The independently installed proof ports must execute complete original lineage,
+purchase Script and selected release checks. The application owns ciphertext,
+wallet access and protected native or browser custody. This composition never
+constructs or pays for a transaction.
+
+```ts compile
+// example-id: lch-covenant-buyer-entitlement
+import {
+  LCHOverlayCovenantDomain,
+  type LCHOverlayCovenantDomainOptions,
+  type LCHOverlayObjectCustody
+} from '@bsv/lch/overlay-covenant'
+import type {
+  OutputSignedPurchaseTerms as ContentPurchaseTerms,
+  OutputPurchaseSubmit as ContentPurchaseSubmission,
+  OutputPurchaseEnvelope as ContentPurchaseDelivery
+} from '@bsv/sdk'
+
+async function openCovenantEntitlement(
+  options: LCHOverlayCovenantDomainOptions,
+  retained: { id: string; original: Uint8Array },
+  objects: LCHOverlayObjectCustody
+) {
+  return LCHOverlayCovenantDomain.open(options, retained, objects)
+}
+async function verifyAndPlayCovenantContent(
+  domain: LCHOverlayCovenantDomain,
+  original: LCHOverlayCovenantDomainOptions['original'],
+  terms: ContentPurchaseTerms,
+  submission: ContentPurchaseSubmission,
+  delivered: ContentPurchaseDelivery,
+  signal: AbortSignal
+) {
+  await domain.verify(original.prepare, terms, submission, delivered, signal)
+  return domain.playback(delivered, signal)
+}
+export { openCovenantEntitlement, verifyAndPlayCovenantContent }
+```

@@ -2823,9 +2823,12 @@ export function buildMutationTargets(repositoryRoot) {
       additionalInputs: [
         'src/**',
         'test/overlay-acquisition*.ts',
+        'test/key-delivery.test.ts',
         '../../application/output-knowledge/src/**',
         '../../application/output-knowledge/test/evidence-fixture.ts',
         '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../application/output-knowledge/test/revenue-lineage-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**'
       ],
       mutate: [
@@ -2840,12 +2843,18 @@ export function buildMutationTargets(repositoryRoot) {
         'src/overlayAcquisitionEntitlement.ts',
         'src/overlayAcquisitionPaid.ts',
         'src/overlayAcquisitionSeller.ts',
-        'src/overlayAcquisitionVerification.ts'
+        'src/overlayAcquisitionVerification.ts',
+        'src/overlayAcquisitionLicense.ts',
+        'src/keyRecovery.ts'
       ],
-      ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
-        esm: true,
-        buildCommand: 'pnpm build:mutation'
-      })
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/overlay-acquisition*.test.ts', '<rootDir>/test/key-delivery.test.ts'],
+        {
+          esm: true,
+          buildCommand: 'pnpm build:mutation'
+        }
+      )
     },
     'lch-overlay-covenant-terms': {
       packageDirectory: 'packages/content/lch',
@@ -2854,16 +2863,104 @@ export function buildMutationTargets(repositoryRoot) {
       additionalInputs: [
         'src/**',
         'test/overlay-acquisition*.ts',
+        'test/key-delivery.test.ts',
         '../../application/output-knowledge/src/**',
         '../../application/output-knowledge/test/evidence-fixture.ts',
         '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../application/output-knowledge/test/revenue-lineage-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**'
       ],
       mutate: ['src/overlayAcquisitionCovenantTerms.ts', 'src/overlayAcquisitionConsent.ts'],
-      ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
-        esm: true,
-        buildCommand: 'pnpm build:mutation'
-      })
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/overlay-acquisition*.test.ts', '<rootDir>/test/key-delivery.test.ts'],
+        {
+          esm: true,
+          buildCommand: 'pnpm build:mutation'
+        }
+      )
+    },
+    'lch-overlay-covenant-settlement': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest:
+        'packages/content/lch/test/overlay-acquisition-covenant-settlement.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/overlay-acquisition*.ts',
+        'test/key-delivery.test.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../application/output-knowledge/test/revenue-lineage-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/revenue-listing/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      mutate: ['src/overlayAcquisitionCovenantSettlement.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/overlay-acquisition*.test.ts', '<rootDir>/test/key-delivery.test.ts'],
+        {
+          esm: true,
+          buildCommand: 'pnpm build:mutation'
+        }
+      )
+    },
+    'lch-overlay-license': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest: 'packages/content/lch/test/overlay-acquisition-license.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/overlay-acquisition*.ts',
+        'test/key-delivery.test.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../application/output-knowledge/test/revenue-lineage-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/revenue-listing/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      mutate: ['src/overlayAcquisitionLicense.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/overlay-acquisition*.test.ts', '<rootDir>/test/key-delivery.test.ts'],
+        {
+          esm: true,
+          buildCommand: 'pnpm build:mutation'
+        }
+      )
+    },
+    'lch-overlay-covenant': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest: 'packages/content/lch/test/overlay-acquisition-covenant.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/overlay-acquisition*.ts',
+        'test/key-delivery.test.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../application/output-knowledge/test/revenue-lineage-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/revenue-listing/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      mutate: [
+        'src/overlayAcquisitionCovenant.ts',
+        'src/overlayAcquisitionCovenantEntitlement.ts',
+        'src/overlayAcquisitionEntitlement.ts',
+        'src/keyRecovery.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/overlay-acquisition*.test.ts', '<rootDir>/test/key-delivery.test.ts'],
+        {
+          esm: true,
+          buildCommand: 'pnpm build:mutation'
+        }
+      )
     },
     'lch-cbor': {
       packageDirectory: 'packages/content/lch',

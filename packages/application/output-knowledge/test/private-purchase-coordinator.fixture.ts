@@ -33,6 +33,7 @@ export function purchaseCoordinatorFixture(
     prepare: async () => {
       counts.prepare++
       outputAssert(available, 'Private material unavailable', 'unavailable')
+      await Promise.resolve()
       return {
         preparation: {
           terms: structuredClone(contract.terms),
@@ -50,6 +51,7 @@ export function purchaseCoordinatorFixture(
     verify: async () => {
       counts.verify++
       outputAssert(validation, 'Purchase candidate invalid', 'invalid')
+      await Promise.resolve()
       return {
         checkCurrent: () => {
           outputAssert(validation, 'Purchase context changed', 'context-changed')
@@ -60,6 +62,7 @@ export function purchaseCoordinatorFixture(
     issue: async () => {
       counts.issue++
       if (!issue) throw new Error('issuer unavailable')
+      await Promise.resolve()
       return f.custody.material
     }
   }
@@ -67,6 +70,7 @@ export function purchaseCoordinatorFixture(
     recover: async (job, _signal, context) => {
       context.checkCurrent()
       counts.admission++
+      await Promise.resolve()
       return admitted
         ? {
             status: 'admitted',
@@ -90,8 +94,9 @@ export function purchaseCoordinatorFixture(
     domain,
     admission,
     release: {
-      assess: async () =>
-        release
+      assess: async () => {
+        await Promise.resolve()
+        return release
           ? {
               evidence: {
                 chain: contract.chain,
@@ -104,10 +109,12 @@ export function purchaseCoordinatorFixture(
               }
             }
           : undefined
+      }
     },
     validationPolicy: f.policy,
     sign: async (type, body) => {
       counts[type === 'purchase-terms' ? 'terms' : 'potatoes']++
+      await Promise.resolve()
       return signOutputPacket(type, body, contract.key)
     },
     manifest: contract.manifest,

@@ -283,3 +283,17 @@ These terms checks do not execute Bitcoin Script, authenticate complete
 lineage, assess release, issue a License or authorize playback. Compose the
 independent verifiers before financial work; the complete covenant licensing
 and application demonstration remain checkpoint-two work.
+
+`@bsv/lch/overlay-covenant` adds `LCHOverlayCovenantDomain` for complete
+standing-collector buyer validation and protected entitlement playback. Install
+independent full lineage, actual purchase Script and release-policy proof ports;
+initialize protected original/verification custody before wallet construction.
+The domain binds the signed C settlement, STEAK/POTATOES secret and original
+transaction, then validates the exact License, derived Agreement, typed role
+evidence and recipient-bound keys. Reopen and playback retain the original
+verified rights after Offer expiry without another purchase. The portable
+lineage and entitlement codecs remain representations rather than verdicts.
+Actual disclosed native tests execute the family scripts, complete synthetic
+chain evidence, encrypted SQLite restart and real ciphertext playback. The
+combined native wallet/seller/topical-admission workbench remains required before
+checkpoint-two acceptance. The ordinary and existing paid entries stay separate.

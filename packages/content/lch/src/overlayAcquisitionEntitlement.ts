@@ -12,7 +12,7 @@ import {
   decodeUnverifiedLCHOverlayContext
 } from './overlayAcquisitionCodec.js'
 import { lchAssert } from './errors.js'
-import type { LCHValue } from './types.js'
+import type { LCHValue, SignedObject } from './types.js'
 
 /** Representation fingerprint, never an authorization verdict by itself.
  * It is useful only after the complete acquisition has been independently
@@ -36,23 +36,9 @@ export async function lchOverlayPaidEntitlementDigest(
       Uint8Array.from(decodeOutputBytes(delivered.result.context, 2097152)),
       'paid-lookup'
     ),
-    license = snapshotSignedObject(context.license),
-    body = license.body,
+    body = lchOverlayEntitlementLicense(context.license),
     result = { ...delivered.result }
   Reflect.deleteProperty(result, 'context')
-  Reflect.deleteProperty(body, 'issuedAt')
-  lchAssert(Array.isArray(body.keyGrants), 'ERR_LCH_KEY', 'Missing key grants')
-  body.keyGrants = body.keyGrants.map(value => {
-    const grant = snapshotLCHRecord(value, 'Entitlement key grant')
-    lchAssert(
-      grant.payload instanceof Uint8Array && grant.payload.length > 102,
-      'ERR_LCH_KEY',
-      'Key grant payload is truncated'
-    )
-    const payload = grant.payload
-    Reflect.deleteProperty(grant, 'payload')
-    return { ...grant, sender: payload.slice(4, 37), recipient: payload.slice(37, 70) }
-  })
   const settlement = decodeLCHOverlayJSON(context.settlement)
   lchAssert(
     settlement !== null &&
@@ -75,4 +61,24 @@ export async function lchOverlayPaidEntitlementDigest(
     evidence: context.evidence.map(entry => ({ type: entry.type, body: entry.object.body }))
   }
   return Utils.toHex(Hash.sha256(encodeDeterministicCbor(fingerprint as unknown as LCHValue)))
+}
+
+/** Internal representation fingerprint. It never establishes a valid License. */
+export function lchOverlayEntitlementLicense(input: SignedObject): Record<string, LCHValue> {
+  const license = snapshotSignedObject(input),
+    body = license.body
+  Reflect.deleteProperty(body, 'issuedAt')
+  lchAssert(Array.isArray(body.keyGrants), 'ERR_LCH_KEY', 'Missing key grants')
+  body.keyGrants = body.keyGrants.map(value => {
+    const grant = snapshotLCHRecord(value, 'Entitlement key grant')
+    lchAssert(
+      grant.payload instanceof Uint8Array && grant.payload.length > 102,
+      'ERR_LCH_KEY',
+      'Key grant payload is truncated'
+    )
+    const payload = grant.payload
+    Reflect.deleteProperty(grant, 'payload')
+    return { ...grant, sender: payload.slice(4, 37), recipient: payload.slice(37, 70) }
+  })
+  return body
 }

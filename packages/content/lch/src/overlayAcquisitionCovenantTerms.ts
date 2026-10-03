@@ -343,7 +343,10 @@ export function validateLCHOverlayCovenantPromise(
     body = packet.body,
     cutoff = outputU64(body.purchaseUntil),
     minimum = [86400n, outputU64(terms.advertisedRecoverySeconds), terms.recoverySeconds].reduce(
-      (a, b) => (a > b ? a : b),
+      (a, b) => {
+        if (a > b) return a
+        return b
+      },
       0n
     )
   lchAssert(
