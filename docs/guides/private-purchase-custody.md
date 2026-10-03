@@ -3,8 +3,8 @@ id: private-purchase-custody
 title: 'Original Covenant Purchase Custody'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -216,8 +216,9 @@ candidate bytes; they establish custody behavior, not a Bitcoin or admission
 verdict. The authenticated HTTP suites use actual BRC-103 middleware and native
 custody, with controlled domain/admission fixtures. They establish transport,
 recipient checks, staged responses and revoked physical disclosure, not chain
-truth. The complete reference covenant/domain/LCH and buyer demonstrations remain
-separate checkpoint requirements.
+truth. The native licensed-purchase composition below separately exercises the
+actual domain, wallet, admission and playback path; the complete checkpoint still
+requires the remaining workflows and final qualification.
 
 ## One original buyer and native wallet action
 
@@ -300,5 +301,130 @@ Wallet Toolbox tests construct and sign the permissionless covenant, recover its
 byte-identical transaction after native reopen and verify the complete Script,
 authorized genesis and selected synthetic header history independently. Public
 synthetic keys and isolated databases are used; no live chain or broadcast is
-claimed. Actual authenticated HTTP, retained topic admission and LCH playback
-composition remain distinct end-to-end qualification requirements.
+claimed. The authenticated HTTP, retained topic admission and LCH playback
+composition described below exercises these components together.
+
+## Choose the native purchase clock profile explicitly
+
+`SQLitePrivatePurchaseStore` accepts an optional fifth constructor argument,
+`'native-observation-v1'`. Install it when creating new purchase custody if progress
+must be derived from the protected ledger's transaction clock observation. The
+profile uses the additive synchronous `SQLiteProtectedLedger.commitPrepared`
+method: check the current head and authority, derive and own a bounded write plan
+from that observation, check authority again, and apply the existing native record
+CAS and capacity rules in the same transaction. The frozen view expires when the callback
+returns. The callback must perform local calculation only; it must not sign,
+broadcast, disclose material or perform another ledger transaction.
+
+This avoids deriving a progress timestamp in an earlier read and then refusing
+every attempt because owning or sealing a large payload advanced the clock before
+commit. The original exact timestamp guard remains. The observation is the native
+transaction's monotonic clock sample, not a claim about the later instant when
+SQLite finishes writing or about block time. Original signed terms, deadlines,
+financial identity, admission and delivered result bytes remain immutable.
+
+The default constructor and existing `commit` method preserve their prior
+behavior, including timestamp-conflict refusals. Each opt-in purchase records the
+profile in its authenticated private state. A differently configured owner refuses
+that custody with `context-changed`; changing the profile does not migrate an
+existing obligation. Older readers also refuse opt-in state. Keep the original
+profile available until every retained obligation has been reconciled, and use a
+separately identified installation for a new profile rather than recreating old
+requests or fences. This is a local persistence choice and changes no wire packet
+or payment authorization.
+
+## Run the native licensed-purchase composition
+
+The executable `PrivatePurchaseNative.integration.test.ts` demonstration composes
+these public implementations with actual Wallet Toolbox SQLite action recovery,
+full signed listing genesis and selected-chain Script verification, BRC-103/104
+HTTP authentication, Engine submission, retained Mongo admission, cumulative
+private proof custody, protected buyer state and LCH licence playback. Build the
+workspace dependencies and run it from the repository root:
+
+```sh
+pnpm --filter @bsv/overlay-express... --filter @bsv/output-knowledge... --filter @bsv/lch... --workspace-concurrency=4 run build
+pnpm --filter @bsv/overlay-express test --runInBand --runTestsByPath src/__tests__/PrivatePurchaseNative.integration.test.ts
+```
+
+Each scenario owns fresh local wallet and private SQLite databases, a randomly
+named database on a three-member Mongo fixture, and loopback HTTP ports. The Mongo
+fixture may download its pinned binary on first use. All identities, funding and
+content keys are disclosed public fixtures. An explicit local adapter maps the
+selected fixture HTTPS origin to the actual authenticated loopback listener;
+it does not establish TLS termination or a live-chain outcome. Neither wallet
+nor Engine has an external broadcaster installed.
+
+The buyer first reserves its original request, contract, terms, plan, candidate
+and delivered result, together with the domain's separate licence custody. The
+real wallet funds and signs the permissionless listing purchase once. The seller
+independently verifies the complete lineage and purchase, durably retains the
+same-transaction proof, submits through the actual topic owner, and obtains the
+original committed Mongo receipt. The issuer supplies recipient-bound LCH licence
+material only after independently checking that original local admission. Both
+roles in this local installation read the selected host's retained admission
+history; a remote deployment must provide its own independently selected evidence
+owner. A response claiming admission is insufficient by itself.
+
+The scenarios cut replies after preparation, actual wallet finalization and the
+first delivered authenticated response. Delivery can arrive through submission or
+recovery, so its cut follows the result rather than assuming one particular
+route. They reopen original seller custody, native wallet recovery, protected
+buyer control/objects and LCH licence custody, and require one original allocation
+and signature. The old wallet connection is closed before the reopened wallet is
+installed. Seller restart here reopens its original private SQLite owner; the
+HTTP listener, Engine and Mongo fixture remain running. Read-only buyer recovery
+cannot start either financial effect.
+The delivered bytes remain identical and decrypt the actual encrypted content
+after catalogue withdrawal; a current authorization change refuses usability.
+
+An optimistic clock or CAS conflict is an explicit refusal, not permission to
+replace a request or transaction. The demonstration performs a bounded retry
+through the original durable buyer. It preserves all existing commit guards and
+explicitly installs the native observation profile for new seller custody. It
+never freezes the clock, changes the financial ID or signs replacement bytes.
+An exhausted retry leaves the original obligation unresolved for explicit
+reconciliation. The local-admission policy exercised here deliberately makes no
+mining claim. The independent release-policy adapters and economic script routes
+have their own qualification; this test alone does not establish their complete
+composition or checkpoint readiness.
+
+## Exercise every economic route with the native wallet
+
+`private-purchase-wallet-routes.test.ts` funds and signs purchase, split, merge,
+payout, amendment and retirement through the actual Wallet Toolbox SQLite owner.
+Every action closes its original connection after preparation and recovers that
+same prepared intent through a fresh connection before finalization. Independent
+Script and selected synthetic-chain verification checks every final transaction;
+the lineage verifier checks the complete authorized genesis and both merge paths.
+
+The example supplies dedicated public fixture authority keys separately from
+wallet funding. All old recipients sign the amendment, including a recipient
+removed by the new schedule; omission is refused. Payout uses weights 7:3,
+distributes 693 and 297 satoshis, and retains 12 in the listing. After a unanimously
+authorized 4:3 schedule change, retirement explicitly funds a two-satoshi top-up
+and pays 8 and 6 to the new recipients. The required one-satoshi receipt and wallet
+fees are funded separately. Retirement requires seller authorization and exact
+Script-enforced recipient outputs; it does not require recipients to sign again.
+
+Sequential `noSend` actions carry the wallet's originally identified change
+outpoints under each finalized transaction ID. This allows the next action to
+use those unbroadcast outputs through the existing wallet mechanism. It does not
+change wallet defaults or waive input ownership. Complete history packages use
+the existing compact representation: a declared ancestor's complete bytes are
+retained once across the package rather than copied into every descendant BEEF.
+All original covenant resource bounds remain in force; exceeding them is a
+`limited` result, not permission to omit history.
+
+Run the demonstration after building workspace dependencies:
+
+```sh
+pnpm --filter @bsv/output-knowledge test --runInBand --runTestsByPath test/private-purchase-wallet-routes.test.ts
+```
+
+These are disclosed synthetic-chain, public-key, isolated native database tests.
+They perform no broadcast, establish no current unspentness or live mining, and do
+not qualify a miner's fee/resource policy. Altered purchase and merge outputs
+are rejected by actual Script execution; the dedicated covenant corpus separately
+re-signs negative economic vectors to distinguish covenant rejection from stale
+transaction signatures. Neither result substitutes for production review.

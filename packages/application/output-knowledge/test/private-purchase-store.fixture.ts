@@ -19,7 +19,10 @@ afterEach(() => {
 })
 
 /** Actual protected native storage with public fixture keys and unproved lifecycle-only candidate bytes. */
-export function purchaseStoreFixture(overrides: Partial<PrivatePurchaseStoreLimits> = {}) {
+export function purchaseStoreFixture(
+  overrides: Partial<PrivatePurchaseStoreLimits> = {},
+  clockProfile?: 'native-observation-v1'
+) {
   const f = purchaseProgressFixture(),
     directory = mkdtempSync(join(tmpdir(), 'private-purchase-store-')),
     path = join(directory, 'private.db'),
@@ -69,7 +72,10 @@ export function purchaseStoreFixture(overrides: Partial<PrivatePurchaseStoreLimi
       new NodeProtectedPayloadCodec({ resolve: () => payload }, 'payload', 2 * 1048576)
     )
     opened.add(domain)
-    return { domain, store: new SQLitePrivatePurchaseStore(domain, f.f.contracts, limits, policy) }
+    return {
+      domain,
+      store: new SQLitePrivatePurchaseStore(domain, f.f.contracts, limits, policy, clockProfile)
+    }
   }
   const owner = open(true),
     id = f.original.terms.body.acquisitionId,

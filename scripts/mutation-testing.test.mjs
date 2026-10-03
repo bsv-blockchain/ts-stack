@@ -473,10 +473,22 @@ test('protected ledger retains complete storage and custody source with native c
     '<rootDir>/test/protected-ledger-enumeration.test.ts',
     '<rootDir>/test/protected-ledger.test.ts',
     '<rootDir>/test/protected-ledger-batch.test.ts',
-    '<rootDir>/test/protected-ledger.property.test.ts'
+    '<rootDir>/test/protected-ledger.property.test.ts',
+    '<rootDir>/test/protected-ledger-prepared.test.ts',
+    '<rootDir>/test/private-purchase-native-clock.test.ts',
+    '<rootDir>/test/private-purchase-native-clock.property.test.ts',
+    '<rootDir>/test/private-purchase-state.property.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('src/storage/**'))
+  for (const input of [
+    'test/private-purchase-store.fixture.ts',
+    'test/private-purchase-progress.fixture.ts',
+    'test/private-purchase-contract.fixture.ts',
+    '../../sdk/src/**',
+    '../../sdk/package.json'
+  ])
+    assert.ok(target.additionalInputs.includes(input))
 })
 
 test('lineage graph execution recycles workers without changing other application or wallet targets', () => {
@@ -998,6 +1010,11 @@ test('private purchase preparation and native state retain complete qualificatio
     '<rootDir>/test/private-purchase-contract.property.test.ts'
   ])
   const state = configured['private-purchase-state']
+  for (const input of [
+    'test/protected-ledger-fixture.ts',
+    'test/protected-ledger-restoration-fixture.ts'
+  ])
+    assert.ok(state.additionalInputs.includes(input))
   assert.deepEqual(state.mutate, [
     'src/private/PrivatePurchaseProgress.ts',
     'src/private/SQLitePrivatePurchaseStore.ts'
@@ -1005,7 +1022,10 @@ test('private purchase preparation and native state retain complete qualificatio
   assert.deepEqual(state.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/private-purchase-progress.test.ts',
     '<rootDir>/test/private-purchase-store.test.ts',
-    '<rootDir>/test/private-purchase-state.property.test.ts'
+    '<rootDir>/test/private-purchase-state.property.test.ts',
+    '<rootDir>/test/protected-ledger-prepared.test.ts',
+    '<rootDir>/test/private-purchase-native-clock.test.ts',
+    '<rootDir>/test/private-purchase-native-clock.property.test.ts'
   ])
   assert.equal(
     state.propertyTest,

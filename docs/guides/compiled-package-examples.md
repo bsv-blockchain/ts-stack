@@ -1942,6 +1942,10 @@ this reservation. An independently selected signer signs the frozen body. This
 example reserves original custody and enqueues payable terms; it does not fund,
 admit or release a purchase. The caller supplies current authenticated authority
 to the native guard and separately signs the complete HTTP response.
+The explicit native clock installer below is for a new installation; existing
+custody must retain its original profile. The prepared local record example
+exercises the public domain's synchronous transaction view and performs no
+external effect.
 
 ```ts compile
 // example-id: original-private-purchase-custody
@@ -1951,8 +1955,43 @@ import {
   SQLitePrivatePurchaseStore as OriginalPurchaseStore,
   type PrivatePurchasePreparedContract as OriginalPreparedPurchase,
   type PrivatePurchaseCustody as OriginalPurchaseCustody,
-  type ProtectedLedgerGuard as OriginalPurchaseGuard
+  type ProtectedLedgerGuard as OriginalPurchaseGuard,
+  type PrivatePurchaseStoreLimits as OriginalPurchaseLimits,
+  type PrivateServiceDomain as OriginalPurchaseDomain
 } from '@bsv/output-knowledge/private/node'
+
+export function installNativeObservedPurchaseStore(
+  domain: OriginalPurchaseDomain,
+  contracts: OriginalPurchaseContracts,
+  limits: OriginalPurchaseLimits,
+  policy: OriginalPurchaseCustody['validationPolicy']
+) {
+  return new OriginalPurchaseStore(domain, contracts, limits, policy, 'native-observation-v1')
+}
+
+export function commitObservedLocalRecord(
+  domain: OriginalPurchaseDomain,
+  expectedRevision: string,
+  key: string,
+  clock: () => string,
+  guard: OriginalPurchaseGuard
+) {
+  return domain.ledger.commitPrepared(
+    expectedRevision,
+    view => [
+      {
+        kind: 'rules',
+        key,
+        expectedRevision: null,
+        reservedBytes: 1024,
+        reservedUpdates: 0,
+        value: { observedAt: view.observedAt }
+      }
+    ],
+    clock,
+    guard
+  )
+}
 
 export function reserveOriginalPurchase(
   store: OriginalPurchaseStore,

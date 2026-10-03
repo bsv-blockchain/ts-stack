@@ -411,12 +411,7 @@ export class SQLiteProtectedLedger {
     changes: readonly ProtectedLedgerChange[],
     input: ProtectedLedgerCommitOptions
   ) {
-    const options = parseOutputJSON(canonicalOutputJSON(input, { bytes: 1024 }))
-    closedOutputObject(options, ['maximumBatchBytes'])
-    const maximum = protectedInteger(
-      options.maximumBatchBytes,
-      this.configuration.maximumReservedBytes + 65536
-    )
+    const maximum = this.ownCommitOptions(input).maximumBatchBytes
     outputAssert(
       Array.isArray(changes) && changes.length >= 1 && changes.length <= 64,
       'Protected ledger commit must contain 1–64 records'
@@ -452,6 +447,16 @@ export class SQLiteProtectedLedger {
     }
     return result
   }
+  private ownCommitOptions(input: ProtectedLedgerCommitOptions): ProtectedLedgerCommitOptions {
+    const options = parseOutputJSON(canonicalOutputJSON(input, { bytes: 1024 }))
+    closedOutputObject(options, ['maximumBatchBytes'])
+    return {
+      maximumBatchBytes: protectedInteger(
+        options.maximumBatchBytes,
+        this.configuration.maximumReservedBytes + 65536
+      )
+    }
+  }
   commit(
     expectedRevision: string,
     changes: readonly ProtectedLedgerChange[],
@@ -459,7 +464,62 @@ export class SQLiteProtectedLedger {
     guard: ProtectedLedgerGuard,
     options?: ProtectedLedgerCommitOptions
   ): string {
-    const expected = outputU64(expectedRevision).toString()
+    const expected = outputU64(expectedRevision).toString(),
+      owned = this.ownChanges(changes, options)
+    return this.observed(clock, guard, head => this.applyChanges(expected, owned, head))
+  }
+  /** Additive synchronous write derived from the same native observation that
+   * authorizes and commits it. The prior commit method still owns inputs before
+   * observing time. No callback may escape its view or perform external effects.
+   */
+  commitPrepared(
+    expectedRevision: string,
+    prepare: (view: ProtectedLedgerView) => readonly ProtectedLedgerChange[],
+    clock: () => string,
+    guard: ProtectedLedgerGuard,
+    options?: ProtectedLedgerCommitOptions
+  ): string {
+    const expected = outputU64(expectedRevision).toString(),
+      retainedOptions = options === undefined ? undefined : this.ownCommitOptions(options)
+    this.synchronous(prepare)
+    this.synchronous(guard)
+    let owned!: ReturnType<SQLiteProtectedLedger['ownChanges']>
+    return this.observed(
+      clock,
+      view => {
+        const nativeView = Object.freeze({ ...view })
+        outputAssert(
+          nativeView.revision === expected,
+          'Protected ledger changed before commit',
+          'conflict'
+        )
+        this.preparedGuard(guard, nativeView)
+        const result: unknown = prepare(nativeView)
+        if (result instanceof Promise) void result.catch(() => undefined)
+        outputAssert(
+          Array.isArray(result),
+          'Protected prepared write must return synchronous records'
+        )
+        owned = this.ownChanges(result, retainedOptions)
+        this.preparedGuard(guard, nativeView)
+      },
+      head => {
+        return this.applyChanges(expected, owned, head)
+      }
+    )
+  }
+  private preparedGuard(guard: ProtectedLedgerGuard, view: ProtectedLedgerView): void {
+    const result: unknown = guard(view)
+    if (result instanceof Promise) void result.catch(() => undefined)
+    outputAssert(
+      result === undefined,
+      'Protected ledger guard returned asynchronous or invalid state'
+    )
+  }
+  private ownChanges(
+    changes: readonly ProtectedLedgerChange[],
+    options?: ProtectedLedgerCommitOptions
+  ) {
     const inputs =
       options === undefined
         ? parseOutputJSON(canonicalOutputJSON(changes))
@@ -495,74 +555,79 @@ export class SQLiteProtectedLedger {
         .size === owned.length,
       'Protected ledger commit repeats an address'
     )
-    return this.observed(clock, guard, head => {
-      outputAssert(head.revision === expected, 'Protected ledger changed before commit', 'conflict')
-      const revision = incrementOutputU64(head.revision)
-      let count = head.records,
-        capacity = head.reservedBytes
-      for (const change of owned) {
-        const prior = this.record(change)
-        outputAssert(
-          (prior?.revision ?? null) === change.expectedRevision,
-          'Protected record changed before commit',
-          'conflict'
-        )
-        const bytes = Buffer.byteLength(change.text, 'utf8')
-        outputAssert(
-          bytes <= change.reservedBytes && (!prior || change.reservedBytes >= prior.reservedBytes),
-          'Protected record reservation cannot be exceeded or silently reduced',
-          'limited'
-        )
-        capacity += change.reservedBytes - (prior?.reservedBytes ?? 0)
-        if (!prior) count++
-        outputAssert(
-          count <= this.configuration.maximumRecords &&
-            capacity <= this.configuration.maximumReservedBytes,
-          'Protected ledger capacity is full',
-          'limited'
-        )
-        outputAssert(
-          change.reservedUpdates >= Math.max(0, (prior?.reservedUpdates ?? 0) - 1),
-          'Protected completion reservation cannot be silently discarded',
-          'limited'
-        )
-        const recordRevision = prior ? incrementOutputU64(prior.revision) : '1'
-        const binding = this.binding('record', {
-          recordKind: change.kind,
-          key: change.key,
-          revision: recordRevision,
-          reservedBytes: change.reservedBytes,
-          reservedUpdates: change.reservedUpdates,
-          bytes
-        })
-        const envelope = this.encode(binding, change.text)
-        this.database
-          .prepare(
-            'INSERT INTO protected_records VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(kind,key) DO UPDATE SET revision=excluded.revision,reserved_bytes=excluded.reserved_bytes,reserved_updates=excluded.reserved_updates,bytes=excluded.bytes,sealed_digest=excluded.sealed_digest,envelope=excluded.envelope'
-          )
-          .run(
-            change.kind,
-            change.key,
-            recordRevision,
-            change.reservedBytes,
-            change.reservedUpdates,
-            bytes,
-            protectedDigest(envelope),
-            envelope
-          )
-      }
-      Object.assign(
-        head,
-        protectedInventory(
-          this.headers(),
-          this.configuration.maximumRecords,
-          this.configuration.maximumReservedBytes
-        ),
-        { revision }
+    return owned
+  }
+  private applyChanges(
+    expected: string,
+    owned: ReturnType<SQLiteProtectedLedger['ownChanges']>,
+    head: ProtectedLedgerHead
+  ): string {
+    outputAssert(head.revision === expected, 'Protected ledger changed before commit', 'conflict')
+    const revision = incrementOutputU64(head.revision)
+    let count = head.records,
+      capacity = head.reservedBytes
+    for (const change of owned) {
+      const prior = this.record(change)
+      outputAssert(
+        (prior?.revision ?? null) === change.expectedRevision,
+        'Protected record changed before commit',
+        'conflict'
       )
-      protectedRevisionCapacity(revision, head.reservedUpdates)
-      return revision
-    })
+      const bytes = Buffer.byteLength(change.text, 'utf8')
+      outputAssert(
+        bytes <= change.reservedBytes && (!prior || change.reservedBytes >= prior.reservedBytes),
+        'Protected record reservation cannot be exceeded or silently reduced',
+        'limited'
+      )
+      capacity += change.reservedBytes - (prior?.reservedBytes ?? 0)
+      if (!prior) count++
+      outputAssert(
+        count <= this.configuration.maximumRecords &&
+          capacity <= this.configuration.maximumReservedBytes,
+        'Protected ledger capacity is full',
+        'limited'
+      )
+      outputAssert(
+        change.reservedUpdates >= Math.max(0, (prior?.reservedUpdates ?? 0) - 1),
+        'Protected completion reservation cannot be silently discarded',
+        'limited'
+      )
+      const recordRevision = prior ? incrementOutputU64(prior.revision) : '1'
+      const binding = this.binding('record', {
+        recordKind: change.kind,
+        key: change.key,
+        revision: recordRevision,
+        reservedBytes: change.reservedBytes,
+        reservedUpdates: change.reservedUpdates,
+        bytes
+      })
+      const envelope = this.encode(binding, change.text)
+      this.database
+        .prepare(
+          'INSERT INTO protected_records VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(kind,key) DO UPDATE SET revision=excluded.revision,reserved_bytes=excluded.reserved_bytes,reserved_updates=excluded.reserved_updates,bytes=excluded.bytes,sealed_digest=excluded.sealed_digest,envelope=excluded.envelope'
+        )
+        .run(
+          change.kind,
+          change.key,
+          recordRevision,
+          change.reservedBytes,
+          change.reservedUpdates,
+          bytes,
+          protectedDigest(envelope),
+          envelope
+        )
+    }
+    Object.assign(
+      head,
+      protectedInventory(
+        this.headers(),
+        this.configuration.maximumRecords,
+        this.configuration.maximumReservedBytes
+      ),
+      { revision }
+    )
+    protectedRevisionCapacity(revision, head.reservedUpdates)
+    return revision
   }
   /** The service must durably create the disclosure obligation before calling this final enqueue. */
   disclose(

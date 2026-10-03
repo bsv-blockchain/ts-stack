@@ -79,7 +79,13 @@ See [original purchase custody](../../../docs/guides/private-purchase-custody.md
 before installing the separately composed host and domain owners. The complete
 cumulative-proof profile installs the evidence owner before preparation, verifies
 incoming and combined proof independently and preserves original financial and
-delivered-result bytes. Omitted-companion behavior remains available.
+delivered-result bytes. Omitted-companion behavior remains available. New native purchase installations
+may explicitly select the `native-observation-v1` local clock profile; it derives
+bounded progress writes from their authorizing transaction observation. Existing
+constructors and commits retain their default behavior. Restore each obligation
+with its original authenticated profile; changing an installation is not migration
+of existing custody. The purchase guide includes actual native six-route and
+authenticated Engine/Mongo/LCH demonstrations with their assurance limits.
 
 The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,
 `privatePurchaseBuyerBinding` and `PRIVATE_PURCHASE_BUYER_INITIAL`. The separate

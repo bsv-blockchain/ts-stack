@@ -37,13 +37,15 @@ import { lchOverlayFixture } from './overlay-acquisition.fixture.js'
 export async function lchCovenantFixture(
   options: {
     chain?: OutputChain
+    now?: number
     anchor?: OutputOutpoint
     embedCiphertext?: boolean
     maximumRequestBytes?: number
     maximumResponseBytes?: number
   } = {}
 ) {
-  const f = await lchOverlayFixture(options.chain),
+  const now = options.now ?? 20,
+    f = await lchOverlayFixture(options.chain, undefined, true, { now }),
     chain = f.acquire.listing.chain,
     topic = 'tm_licensed_asset',
     anchor = options.anchor ?? { chain, txid: '11'.repeat(32), outputIndex: 0 },
@@ -159,7 +161,7 @@ export async function lchCovenantFixture(
       profile: OUTPUT_PROFILES.purchase,
       maximumAgeSeconds: '100',
       clockSkewSeconds: '0',
-      now: '20',
+      now: String(now),
       rules: new Map([[rules.id, () => {}]])
     }),
     descriptor: RevenueListingDescriptor = {
@@ -189,7 +191,7 @@ export async function lchCovenantFixture(
         selection: { type: 'all' },
         acceptedPolicyDigest: (selectedOffer.body.policy as Record<string, LCHValue>)
           .digest as Uint8Array,
-        createdAt: 20
+        createdAt: now
       }),
       requestBytes = encodeDeterministicCbor(request as unknown as LCHValue),
       prepare: OutputPurchasePrepare = {
@@ -239,8 +241,8 @@ export async function lchCovenantFixture(
           bytes: 'e30='
         },
         releasePolicy,
-        purchaseUntil: '100',
-        recoveryUntil: '172900',
+        purchaseUntil: String(now + 80),
+        recoveryUntil: String(now + 172880),
         ...changes
       }
     return signOutputPacket('purchase-terms', body, f.sellerKey)

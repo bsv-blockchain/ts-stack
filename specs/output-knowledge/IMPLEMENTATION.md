@@ -3285,3 +3285,71 @@ files to the other two services. All six isolated native watcher assertions and
 all three service lints pass on the unchanged frozen installed graphs. No analysis
 setting, dependency, startup recipe or acceptance threshold changes. Hosted
 qualification of the resulting published commit remains a separate requirement.
+
+### Native observation and complete reference compositions
+
+Actual simultaneous host work exposed a timestamp conflict: a private purchase
+progress plan used an earlier read, then owning and sealing its large payload
+advanced the real clock before commit. The existing exact guard correctly refused
+that stale plan. No retry budget, cutoff, authority check or clock was relaxed.
+The additive `commitPrepared` derives an owned synchronous plan from its native
+transaction observation, freezes the view and call-time limits, rechecks current
+authority, then applies the original CAS, reservation and rollback rules. The
+private purchase store selects this behavior only through the authenticated,
+installation-bound `native-observation-v1` fifth argument. Existing defaults,
+methods and obligations retain their prior behavior; profile mismatch refuses
+reopen. Signed terms and financial identity are unchanged.
+
+The full protected-ledger and purchase union passes 314 tests in 21 suites in
+128.097 seconds, with 100 percent statements, branches, functions and lines in
+both complete native implementations. This includes the original properties and
+an additional 300 clock-advancing native interruption histories under unchanged
+case floors, seed/path replay and deadlines. The new test callbacks were then
+split for analysis clarity without dropping assertions. The final changed union
+passes 14 tests, including the complete 300-history property and six native routes,
+in 74.578 seconds; all 16 changed/new authored TypeScript/JavaScript files have
+zero local analysis findings. The final five actual native HTTP/admission/LCH
+scenarios also pass again in 118.684 seconds.
+
+The actual Wallet Toolbox/BRC-103/104 HTTP/Engine-Mongo/protected custody/LCH
+composition passes the complete original host union: 878 tests in 49 suites,
+225.226 seconds. Five native scenarios demonstrate actual original noSend funding,
+full genesis and Script checks, retained admission and real encrypted playback;
+reply cuts cover preparation, actual wallet finalization and delivery, including
+concurrent original buyers and fresh native wallet connections. Seller restart
+reopens its private SQLite owner while its listener, Engine and Mongo remain
+running. Both roles independently read the selected local host's retained history.
+The selected synthetic chain and explicit HTTPS-to-loopback fixture adapter make
+no mainnet, TLS termination, mining, remote evidence or current unspentness claim.
+Original LCH 244 tests and native wallet 8 tests, including its 300-history property,
+pass without changing their defaults.
+
+The reference app passes all 19 tests and both actual Chrome/IndexedDB direct and
+Engine-Mongo admission profiles. Its new native two-host case completes progressive
+pages and live updates together, preserves source-local withdrawal, verifies a
+spend, durably rejects a contradictory raw-BEEF report and reopens the same
+journals/cursors. No public fault-injection endpoint was added.
+
+The separate six-route native wallet demonstration passes in 42.342 seconds. Each
+purchase, split, merge, payout, unanimous amendment and retirement recovers its
+original prepared action after connection reopen, then independently verifies the
+full transaction and complete authorized lineage where a listing remains. It
+carries original noSend change references and compacts declared ancestors under
+existing covenant limits. Payout retains a 12-satoshi remainder; retirement after
+an approved schedule change supplies the explicit two-satoshi top-up and pays the
+new recipients exactly. The one-satoshi receipt remains a separate required output.
+Initial assertions omitted that receipt and incorrectly demanded fresh recipient
+signatures for retirement; the final assertions match the approved family and
+check exact recipient scripts. Economic corpus negatives independently re-sign
+mutations; this integration's altered-output negatives also execute actual Script.
+No fixture extracts the funding wallet's root key for revenue authority.
+
+The 59 compiled examples pass against 24 exact packed tarballs. Existing root
+mutation registrations retain all whole modules, selectors, inputs, 138 targets
+and every previous gate; exact coordinated additions cover native observation and
+its complete dependent tests. The final literal-backslash watcher correction is
+adopted from the acknowledged source-owner handoff, synchronized deterministically,
+and passes all six native checks and three lints on unchanged frozen graphs.
+Checkpoint two remains open: the richer same-raw-proof actual composition, complete
+private/public-serving and root/GASP demonstrations, full affected mutation
+campaign, review and exact-head hosted qualification remain required.

@@ -92,6 +92,14 @@ expected results, storage boundaries and qualification limits.
 
 Run `pnpm --filter output-knowledge-reference-app test` for real Script/SPV,
 progressive snapshot and authenticated HTTP/SQLite client recovery checks.
+The native two-host test prepopulates both independent indices before connecting,
+forces progressive pages, waits for each snapshot's completion, then follows live
+source-local withdrawal and an independently verified spend. It also publishes a
+framed but contradictory raw BEEF through an actual authenticated host and requires
+the client to reject it while preserving its original Bitcoin facts. Closing and
+reopening the client's SQLite journal and controls retains both hosts' original
+selections and cursors. A provider signature authenticates a report; it does not
+make its transaction bytes true.
 The proposal pipeline test starts an isolated three-member MongoDB 8.2.6 replica
 set through the workspace's existing audited test fixture. Its first run needs
 the pinned Mongo binary available or downloadable; it never contacts an existing

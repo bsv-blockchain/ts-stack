@@ -38,7 +38,8 @@ export async function lchOverlayFixture(
     maximumRequestBytes: number
     maximumResponseBytes: number
   },
-  embedCiphertext = true
+  embedCiphertext = true,
+  timeline = { now: 20 }
 ) {
   chain ??= { network: 'fixture', genesisHash: '09'.repeat(32) }
   installation ??= {
@@ -145,8 +146,8 @@ export async function lchOverlayFixture(
       },
       keyDelivery: { mechanism: LCH_MECHANISMS.brc78Key },
       enforcement: { class: 'https://bsv.brc.dev/apps/0170#conformingApplication' },
-      notBefore: 1,
-      notAfter: 100,
+      notBefore: timeline.now - 19,
+      notAfter: timeline.now + 80,
       nonce: crypto.getRandomValues(new Uint8Array(16)),
       critical: [LCH_OVERLAY_PROFILES.acquisition, LCH_OVERLAY_PROFILES.paidSettlement],
       extensions: {
@@ -167,7 +168,7 @@ export async function lchOverlayFixture(
       action: 'play',
       selection: { type: 'all' },
       acceptedPolicyDigest: (offer.body.policy as Record<string, LCHValue>).digest as Uint8Array,
-      createdAt: 20
+      createdAt: timeline.now
     }),
     requestBytes = encodeDeterministicCbor(request as unknown as LCHValue),
     published = await publisher.publish(
@@ -181,8 +182,8 @@ export async function lchOverlayFixture(
       identity: toHex(seller.identityKey),
       baseURL,
       chain,
-      issuedAt: '10',
-      expiresAt: '100',
+      issuedAt: String(timeline.now - 10),
+      expiresAt: String(timeline.now + 80),
       services: [
         {
           kind: 'lookup',
@@ -227,7 +228,7 @@ export async function lchOverlayFixture(
       profile: OUTPUT_PROFILES.acquisition,
       maximumAgeSeconds: '100',
       clockSkewSeconds: '0',
-      now: '20',
+      now: String(timeline.now),
       rules: new Map([[rules.id, () => {}]])
     }),
     acquire: OutputPaidLookupAcquire = {

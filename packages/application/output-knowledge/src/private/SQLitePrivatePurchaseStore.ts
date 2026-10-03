@@ -60,6 +60,7 @@ export interface PrivatePurchaseStoreLimits {
 }
 interface State {
   format: 'private-purchase-state/1'
+  clockProfile?: 'native-observation-v1'
   recipient: string
   progress: PrivatePurchaseProgress
   original: PrivateAcquisitionPayload
@@ -116,12 +117,19 @@ export class SQLitePrivatePurchaseStore {
   private readonly limits: PrivatePurchaseStoreLimits
   private readonly payloads: PrivateAcquisitionPayloads
   private readonly policy: PrivatePurchaseCustody['validationPolicy']
+  private readonly clockProfile?: 'native-observation-v1'
   constructor(
     private readonly domain: PrivateServiceDomain,
     private readonly contracts: PrivatePurchaseContracts,
     limits: PrivatePurchaseStoreLimits,
-    policy: PrivatePurchaseCustody['validationPolicy']
+    policy: PrivatePurchaseCustody['validationPolicy'],
+    clockProfile?: 'native-observation-v1'
   ) {
+    outputAssert(
+      clockProfile === undefined || clockProfile === 'native-observation-v1',
+      'Unsupported purchase clock profile'
+    )
+    this.clockProfile = clockProfile
     const value = parseOutputJSON(canonicalOutputJSON(limits, { bytes: 4096 }))
     closedOutputObject(value, [
       'maximumStateBytes',
@@ -266,14 +274,16 @@ export class SQLitePrivatePurchaseStore {
     view: ProtectedLedgerView
   ): PrivatePurchaseLoaded | undefined {
     const value = row.value
-    closedOutputObject(value, [
-      'format',
-      'recipient',
-      'progress',
-      'original',
-      'candidate',
-      'result'
-    ])
+    closedOutputObject(
+      value,
+      ['format', 'recipient', 'progress', 'original', 'candidate', 'result'],
+      ['clockProfile']
+    )
+    outputAssert(
+      value.clockProfile === this.clockProfile,
+      'Purchase clock profile differs from original custody',
+      'context-changed'
+    )
     outputAssert(
       value.format === 'private-purchase-state/1',
       'Unsupported purchase state',
@@ -370,6 +380,7 @@ export class SQLitePrivatePurchaseStore {
     )
     const state: State = {
       format: 'private-purchase-state/1',
+      ...(this.clockProfile ? { clockProfile: this.clockProfile } : {}),
       recipient: buyer,
       progress,
       original: originalPayload,
@@ -430,14 +441,51 @@ export class SQLitePrivatePurchaseStore {
       'Purchase reservation/fence already exists',
       'unavailable'
     )
+    let plan: ReturnType<SQLitePrivatePurchaseStore['preparationPlan']> | undefined
+    const check = (view: ProtectedLedgerView) => {
+      authorize(guard, view)
+      outputAssert(
+        (!plan || view.observedAt === plan.progress.createdAt) &&
+          outputU64(view.observedAt) < outputU64(custody.original.terms.body.purchaseUntil),
+        'Purchase preparation cutoff changed before reservation',
+        'expired'
+      )
+    }
+    if (this.clockProfile) {
+      this.domain.ledger.commitPrepared(
+        read.revision,
+        view => {
+          plan = this.preparationPlan(custody, view.observedAt)
+          return plan.changes
+        },
+        clock,
+        check,
+        { maximumBatchBytes: this.limits.maximumBatchBytes }
+      )
+    } else {
+      plan = this.preparationPlan(custody, read.observedAt)
+      this.domain.ledger.commit(read.revision, plan.changes, clock, check, {
+        maximumBatchBytes: this.limits.maximumBatchBytes
+      })
+    }
+    const loaded = this.load(id, buyer, clock, guard)
+    outputAssert(loaded, 'Original purchase reservation is unavailable', 'unavailable')
+    return loaded
+  }
+  private preparationPlan(input: PrivatePurchaseCustody, observedAt: string) {
+    const custody = this.custody(input),
+      id = custody.original.terms.body.acquisitionId,
+      buyer = custody.original.request.recipient,
+      address = this.address(id),
+      fenceAddress = this.fence(id)
     // The private metadata records the actual native reservation observation.
     // PurchaseTerms bytes and their original public deadlines remain unchanged.
     outputAssert(
-      outputU64(read.observedAt) >= outputU64(custody.original.createdAt),
+      outputU64(observedAt) >= outputU64(custody.original.createdAt),
       'Purchase reservation clock moved backwards',
       'context-changed'
     )
-    custody.original = this.contracts.original({ ...custody.original, createdAt: read.observedAt })
+    custody.original = this.contracts.original({ ...custody.original, createdAt: observedAt })
     const progress = createPrivatePurchaseProgress(custody.original),
       original = this.payloads.reserve(
         id,
@@ -463,6 +511,7 @@ export class SQLitePrivatePurchaseStore {
       ),
       state: State = {
         format: 'private-purchase-state/1',
+        ...(this.clockProfile ? { clockProfile: this.clockProfile } : {}),
         recipient: buyer,
         progress,
         original: original.descriptor,
@@ -493,24 +542,7 @@ export class SQLitePrivatePurchaseStore {
         ...candidate.changes,
         ...result.changes
       ]
-    this.domain.ledger.commit(
-      read.revision,
-      changes,
-      clock,
-      view => {
-        authorize(guard, view)
-        outputAssert(
-          view.observedAt === progress.createdAt &&
-            outputU64(view.observedAt) < outputU64(custody.original.terms.body.purchaseUntil),
-          'Purchase preparation cutoff changed before reservation',
-          'expired'
-        )
-      },
-      { maximumBatchBytes: this.limits.maximumBatchBytes }
-    )
-    const loaded = this.load(id, buyer, clock, guard)
-    outputAssert(loaded, 'Original purchase reservation is unavailable', 'unavailable')
-    return loaded
+    return { progress, changes }
   }
   private require(
     id: string,
@@ -564,7 +596,8 @@ export class SQLitePrivatePurchaseStore {
       'candidate',
       encoded(candidate, this.limits.maximumCandidateBytes),
       clock,
-      guard
+      guard,
+      { type: 'pin', txid: candidate.txid }
     )
     return this.require(id, buyer, String(BigInt(expected) + 1n), clock, guard)
   }
@@ -590,7 +623,7 @@ export class SQLitePrivatePurchaseStore {
       canonicalOutputJSON(progress.admission, { bytes: this.limits.maximumOutcomeBytes })
     if (progress.decision !== null)
       canonicalOutputJSON(progress.decision, { bytes: this.limits.maximumOutcomeBytes })
-    this.commit(loaded, { ...loaded.state, progress }, [], clock, guard)
+    this.commit(loaded, { ...loaded.state, progress }, [], clock, guard, event)
     return this.require(id, buyer, String(BigInt(expected) + 1n), clock, guard)
   }
   /** Retain the exact first complete signed result and progress in one native commit. */
@@ -634,7 +667,8 @@ export class SQLitePrivatePurchaseStore {
       'result',
       encoded(result, this.limits.maximumResultBytes),
       clock,
-      guard
+      guard,
+      { type: 'delivered', envelope: result }
     )
     return this.require(id, buyer, String(BigInt(expected) + 1n), clock, guard)
   }
@@ -644,7 +678,8 @@ export class SQLitePrivatePurchaseStore {
     purpose: 'candidate' | 'result',
     payload: string,
     clock: () => string,
-    guard: ProtectedLedgerGuard
+    guard: ProtectedLedgerGuard,
+    event: PrivatePurchaseEvent
   ): void {
     let sealed: ReturnType<PrivateAcquisitionPayloads['seal']> | undefined
     this.domain.ledger.read([this.address(loaded.progress.acquisitionId)], clock, view => {
@@ -659,7 +694,8 @@ export class SQLitePrivatePurchaseStore {
       { ...loaded.state, progress, [purpose]: sealed.descriptor },
       sealed.changes,
       clock,
-      guard
+      guard,
+      event
     )
   }
   private commit(
@@ -667,9 +703,10 @@ export class SQLitePrivatePurchaseStore {
     state: State,
     additional: ProtectedLedgerChange[],
     clock: () => string,
-    guard: ProtectedLedgerGuard
+    guard: ProtectedLedgerGuard,
+    event: PrivatePurchaseEvent
   ): void {
-    const changes: ProtectedLedgerChange[] = [
+    const changes = (progress: PrivatePurchaseProgress): ProtectedLedgerChange[] => [
       {
         ...this.address(state.progress.acquisitionId),
         expectedRevision: loaded.row.revision,
@@ -677,14 +714,42 @@ export class SQLitePrivatePurchaseStore {
         // A terminal transition can use fewer steps than the promised happy
         // path. Preserve unused revision capacity rather than silently release
         // reservations made before the buyer funded its purchase.
-        reservedUpdates: Math.max(remaining(state.progress.status), loaded.row.reservedUpdates - 1),
-        value: protectedValue(state, this.limits.maximumStateBytes).value
+        reservedUpdates: Math.max(remaining(progress.status), loaded.row.reservedUpdates - 1),
+        value: protectedValue({ ...state, progress }, this.limits.maximumStateBytes).value
       },
       ...additional
     ]
+    if (this.clockProfile) {
+      const retainedEvent = structuredClone(event)
+      let progress: PrivatePurchaseProgress | undefined
+      this.domain.ledger.commitPrepared(
+        loaded.revision,
+        view => {
+          progress = advancePrivatePurchaseProgress(
+            loaded.progress,
+            loaded.custody.original,
+            retainedEvent,
+            view.observedAt
+          )
+          return changes(progress)
+        },
+        clock,
+        view => {
+          authorize(guard, view)
+          if (progress)
+            outputAssert(
+              view.observedAt === progress.updatedAt,
+              'Purchase progress clock changed before commit',
+              'conflict'
+            )
+        },
+        { maximumBatchBytes: this.limits.maximumBatchBytes }
+      )
+      return
+    }
     this.domain.ledger.commit(
       loaded.revision,
-      changes,
+      changes(state.progress),
       clock,
       view => {
         authorize(guard, view)

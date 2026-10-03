@@ -264,3 +264,142 @@ it('two authenticated SQLite clients learn a real spend and recover a missed sou
     )
   ).toBe(true)
 }, 30000)
+
+it('joins two authenticated progressive/live hosts, rejects contradictory raw evidence and preserves independently verified spends after native restart', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'output-reference-independent-'))
+  cleanups.push(() => rm(directory, { recursive: true, force: true }))
+  const first = await startReferenceServer({
+      path: join(directory, 'first.sqlite'),
+      create: true,
+      id: 'one',
+      identityKey: new PrivateKey(71)
+    }),
+    second = await startReferenceServer({
+      path: join(directory, 'second.sqlite'),
+      create: true,
+      id: 'two',
+      identityKey: new PrivateKey(72)
+    })
+  cleanups.push(
+    () => first.close(),
+    () => second.close()
+  )
+  await first.provider.publish()
+  await second.provider.publish()
+  const open = () =>
+    createReferenceClient({
+      account: 'alice',
+      journal: new SQLiteJournal(join(directory, 'alice.sqlite'), 'alice'),
+      controls: async (namespace, binding, initial) =>
+        initial
+          ? SQLiteOperationStateStore.create(
+              join(directory, namespace + '-control.sqlite'),
+              namespace,
+              binding,
+              initial.value,
+              initial.limits
+            )
+          : SQLiteOperationStateStore.open(
+              join(directory, namespace + '-control.sqlite'),
+              namespace,
+              binding
+            )
+    })
+  let client = await open()
+  cleanups.push(() => client.close())
+  await client.connect(first.host, first.provider.manifest())
+  await client.connect(second.host, second.provider.manifest())
+  const a = referenceEvidence('A').evidence,
+    q = referenceEvidence('Q').evidence,
+    state = async () => {
+      await client.runtime.flush()
+      return client.core.read()
+    },
+    memberships = async (txid: string) =>
+      (await state()).reconciled.memberships.filter(
+        row => row.outpoint.txid === txid && row.present
+      )
+  await eventually(() => memberships(a.txid).then(rows => rows.length)).toBe(2)
+  await eventually(async () => {
+    await client.runtime.flush()
+    const history = await client.core.inspect()
+    return [first.host.identity, second.host.identity].every(identity =>
+      history.entries.some(
+        entry =>
+          entry.body.kind === 'receive' &&
+          entry.body.batch.coverage.scope.provider === identity &&
+          entry.body.batch.coverage.phase === 'snapshot' &&
+          entry.body.batch.coverage.status === 'complete'
+      )
+    )
+  }).toBe(true)
+  const initial = await client.core.inspect()
+  for (const identity of [first.host.identity, second.host.identity]) {
+    const pages = initial.entries.flatMap(entry =>
+      entry.body.kind === 'receive' &&
+      entry.body.batch.coverage.scope.provider === identity &&
+      entry.body.batch.coverage.phase === 'snapshot'
+        ? [entry.body.batch]
+        : []
+    )
+    expect(pages.length).toBeGreaterThanOrEqual(2)
+    expect(pages[0].coverage.status).toBe('partial')
+    expect(pages.at(-1)?.coverage.status).toBe('complete')
+  }
+  await second.provider.withdraw()
+  await eventually(() => memberships(q.txid).then(rows => rows.length)).toBe(1)
+  await first.provider.replace()
+  await eventually(async () =>
+    (await state()).assessments.some(row => row.outpoint.txid === a.txid && row.state === 'spent')
+  ).toBe(true)
+  // An independently authenticated source supplies syntactically valid framing
+  // whose BEEF contains a different transaction than the claimed A outpoint.
+  // Authentication proves its origin, not the truth of that representation.
+  const head = await second.provider.index.head(),
+    key = a.txid + a.outputIndex.toString(16).padStart(8, '0'),
+    row = await second.provider.index.row(key, head.sequence)
+  expect(row).not.toBeNull()
+  await second.provider.index.commit({
+    base: head.sequence,
+    evaluatedAt: String(Math.floor(Date.now() / 1000)),
+    edits: [
+      {
+        key,
+        previous: row!.revision,
+        next: {
+          expiresAt: null,
+          data: {
+            collection: 'records',
+            audience: 'public',
+            output: { evidence: { ...a, beef: q.beef } }
+          }
+        }
+      }
+    ],
+    event: { type: 'explicit-contradictory-fixture/1' }
+  })
+  await eventually(async () => {
+    await client.runtime.flush()
+    return (await client.core.inspect()).entries.some(
+      entry =>
+        entry.body.kind === 'accept' &&
+        entry.body.results.some(result => result.status === 'invalid')
+    )
+  }).toBe(true)
+  expect((await state()).facts.some(fact => fact.txid === a.txid)).toBe(true)
+  expect(
+    (await state()).assessments.some(
+      value => value.outpoint.txid === a.txid && value.state === 'spent'
+    )
+  ).toBe(true)
+  await client.close()
+  client = await open()
+  await client.connect(first.host)
+  await client.connect(second.host)
+  await eventually(() => memberships(q.txid).then(rows => rows.length)).toBe(1)
+  expect(
+    (await state()).assessments.some(
+      value => value.outpoint.txid === a.txid && value.state === 'spent'
+    )
+  ).toBe(true)
+}, 60000)

@@ -12,6 +12,7 @@ import {
   signOutputPacket,
   type OutputPurchasePrepare
 } from '@bsv/sdk'
+import type { RevenueListingDescriptor } from '@bsv/sdk/script/templates/RevenueListing'
 import { revenueListingId } from '@bsv/sdk/script/templates/RevenueListing'
 import {
   assembleLineage,
@@ -39,21 +40,35 @@ const publicGenesis = completeGenesis()
 /** Actual native wallet, disclosed synthetic mature-chain funding, complete
  * authenticated listing genesis and independently verified resulting purchase.
  * No HTTP/topic/mining/live-customer claim and no broadcast. */
-export async function nativePurchaseWalletFixture(maximumCandidateBytes = 524288) {
+export async function nativePurchaseWalletFixture(
+  maximumCandidateBytes = 524288,
+  application?: {
+    descriptor: RevenueListingDescriptor
+    prepare: OutputPurchasePrepare
+    sellerKey: PrivateKey
+    buyerKeyCode: number
+    now: number
+  }
+) {
   const original = structuredClone(publicGenesis),
     assembly = assembleLineage(original, lineageLimits({})),
     anchor = assembly.beef.findAtomicTransaction(original.descriptor.lineageAnchor.txid)!,
-    descriptor = structuredClone(original.descriptor)
+    descriptor = structuredClone(application?.descriptor ?? original.descriptor)
   descriptor.chain.network = 'mock'
   descriptor.lineageAnchor.chain.network = 'mock'
   const view = context()
   view.view.chain = descriptor.chain
   const selected = { ...descriptor.chain, network: 'mock' as const },
     resolved = await chains.resolve(view.view, new AbortController().signal),
-    native = await acquisitionNativeWalletFixture(selected, resolved.tracker, 44, {
-      maxOutputsPerAction: 1,
-      migrationInputsPerAction: 0
-    }),
+    native = await acquisitionNativeWalletFixture(
+      selected,
+      resolved.tracker,
+      application?.buyerKeyCode ?? 44,
+      {
+        maxOutputsPerAction: 1,
+        migrationInputsPerAction: 0
+      }
+    ),
     sender = new ProtoWallet(new PrivateKey(90)),
     senderIdentityKey = (await sender.getPublicKey({ identityKey: true })).publicKey,
     derivationPrefix = 'bmF0aXZlLWNvdmVuYW50',
@@ -98,7 +113,7 @@ export async function nativePurchaseWalletFixture(maximumCandidateBytes = 524288
     description: 'Disclosed synthetic covenant funding'
   })
   const point = { chain: selected, txid: genesis.id('hex'), outputIndex: 0 },
-    sellerKey = new PrivateKey(41),
+    sellerKey = application?.sellerKey ?? new PrivateKey(41),
     lineage: RevenueListingLineagePackage = {
       version: 1,
       descriptor,
@@ -110,16 +125,18 @@ export async function nativePurchaseWalletFixture(maximumCandidateBytes = 524288
       target: point,
       transactions: [{ txid: point.txid, beef: Utils.toBase64(genesis.toAtomicBEEF()) }]
     },
-    prepare: OutputPurchasePrepare = {
-      version: 1,
-      requestId: 'native-covenant-purchase',
-      topic: 'tm_native_purchase',
-      listing: point,
-      assetId: descriptor.assetId,
-      termsDigest: descriptor.termsDigest,
-      recipient: native.native.identities.wallet,
-      request: 'AA=='
-    },
+    prepare: OutputPurchasePrepare = application
+      ? { ...structuredClone(application.prepare), listing: point }
+      : {
+          version: 1,
+          requestId: 'native-covenant-purchase',
+          topic: 'tm_native_purchase',
+          listing: point,
+          assetId: descriptor.assetId,
+          termsDigest: descriptor.termsDigest,
+          recipient: native.native.identities.wallet,
+          request: 'AA=='
+        },
     terms = signOutputPacket(
       'purchase-terms',
       {
@@ -146,12 +163,19 @@ export async function nativePurchaseWalletFixture(maximumCandidateBytes = 524288
           )
         },
         releasePolicy: { kind: 'local-admission' as const },
-        purchaseUntil: '100',
-        recoveryUntil: '86500'
+        purchaseUntil: application ? String(application.now + 80) : '100',
+        recoveryUntil: application ? String(application.now + 172880) : '86500'
       },
       sellerKey
     ),
     counts = { prepare: 0, recover: 0, finalize: 0 }
+  outputAssert(
+    prepare.recipient === native.native.identities.wallet &&
+      prepare.assetId === descriptor.assetId &&
+      prepare.termsDigest === descriptor.termsDigest &&
+      descriptor.seller === sellerKey.toPublicKey().toString(),
+    'Native application fixture differs from the installed buyer/seller/asset'
+  )
   let allowed = true,
     lose = false
   async function open(owner = native.native, create = false) {

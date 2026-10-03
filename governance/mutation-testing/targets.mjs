@@ -567,6 +567,8 @@ export function buildMutationTargets(repositoryRoot) {
         'test/private-purchase-contract.fixture.ts',
         'test/private-purchase-progress.fixture.ts',
         'test/private-purchase-store.fixture.ts',
+        'test/protected-ledger-fixture.ts',
+        'test/protected-ledger-restoration-fixture.ts',
         '../../sdk/src/**',
         '../../sdk/package.json'
       ],
@@ -579,7 +581,10 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/test/private-purchase-progress.test.ts',
           '<rootDir>/test/private-purchase-store.test.ts',
-          '<rootDir>/test/private-purchase-state.property.test.ts'
+          '<rootDir>/test/private-purchase-state.property.test.ts',
+          '<rootDir>/test/protected-ledger-prepared.test.ts',
+          '<rootDir>/test/private-purchase-native-clock.test.ts',
+          '<rootDir>/test/private-purchase-native-clock.property.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
@@ -1466,6 +1471,10 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/private-*.ts',
         '../../application/output-knowledge/test/evidence-fixture.ts',
         '../../application/output-knowledge/test/fixtures/**',
+        '../../content/lch/src/**',
+        '../../content/lch/test/overlay-acquisition*.ts',
+        '../../content/lch/package.json',
+        '../../content/lch/tsconfig*.json',
         '../overlay/src/**',
         '../../sdk/src/**',
         '../../middleware/auth-express-middleware/src/**'
@@ -1751,7 +1760,12 @@ export function buildMutationTargets(repositoryRoot) {
         'src/private/**',
         'src/storage/**',
         'test/protected-ledger-fixture.ts',
-        'test/protected-ledger-restoration-fixture.ts'
+        'test/protected-ledger-restoration-fixture.ts',
+        'test/private-purchase-store.fixture.ts',
+        'test/private-purchase-progress.fixture.ts',
+        'test/private-purchase-contract.fixture.ts',
+        '../../sdk/src/**',
+        '../../sdk/package.json'
       ],
       mutate: [
         'src/private/SQLiteProtectedLedger.ts',
@@ -1768,7 +1782,11 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/protected-ledger-enumeration.test.ts',
           '<rootDir>/test/protected-ledger.test.ts',
           '<rootDir>/test/protected-ledger-batch.test.ts',
-          '<rootDir>/test/protected-ledger.property.test.ts'
+          '<rootDir>/test/protected-ledger.property.test.ts',
+          '<rootDir>/test/protected-ledger-prepared.test.ts',
+          '<rootDir>/test/private-purchase-native-clock.test.ts',
+          '<rootDir>/test/private-purchase-native-clock.property.test.ts',
+          '<rootDir>/test/private-purchase-state.property.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )

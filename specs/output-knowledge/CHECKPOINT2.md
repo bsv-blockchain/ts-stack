@@ -66,3 +66,24 @@ checkpoint requires every item below, demonstrated on the published PR commit.
 
 The downstream application migrations belong to checkpoint three. This inventory
 does not authorize package publication, deployment, funded operations or merge.
+
+## Demonstrated integration progress
+
+The native two-host reference application now demonstrates progressive pages and
+live ingestion together, source-local withdrawal, a verified spend, durable
+contradiction rejection and recovery of the original journals/cursors. All 19 app
+tests and both actual Chrome/IndexedDB profiles pass; the admission profile uses
+actual Engine/Mongo. The native licensed-purchase composition now exercises real
+wallet funding/reopen, authenticated HTTP, original retained admission, private
+custody and recipient-bound LCH decryption, including lost replies and concurrent
+buyers. The complete host union passes 878 tests. All six native economic routes
+also execute with full authorized genesis/lineage, unanimous amendment, retained
+remainders and exact final top-up/payout. See the implementation record and the
+purchase custody guide for commands and assurance limits.
+
+These receipts establish concrete progress, but the unchecked rows continue to
+require their complete published-source and final qualification evidence. In
+particular, cumulative proof custody still needs the richer alternate-proof
+composition with actual Script/domain/host checks; the private public-serving and
+root/GASP compositions and complete mutation campaign remain open. No component
+or synthetic local-chain receipt announces production or checkpoint readiness.
