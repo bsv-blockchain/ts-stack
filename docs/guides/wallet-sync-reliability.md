@@ -979,6 +979,13 @@ failure identity and released timers/listeners. Same-server MySQL evidence cover
 the source-side fence and delayed pool destruction. These tests do not establish
 PXC or a global physical-pool bound.
 
+The HTTP test fixture independently drains each native archive RPC and listening
+socket before destroying the primary database pool. It preserves the tested
+public close outcome, including rejection with `undefined`, and continues
+cleanup after a synchronous close failure. Four native opening-capture cases
+verify that both listeners withdraw, capture destruction settles before the
+primary connection closes, and the provider releases its source admission.
+
 ## Backend-bound owner recovery (unadvertised implementation)
 
 Apply `2026-10-01-002 add snapshot archive source guards` through the normal
