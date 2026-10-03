@@ -15,14 +15,18 @@ export async function lchOverlayLicenseFixture() {
     bound = bindLCHOverlayCovenantSettlement(f.context, f.terms, f.prepared, f.delivered, f.txid),
     delivery = new WalletBRC78KeyDelivery(f.sellerWallet),
     keyGrants: KeyGrant[] = []
-  for (const [key, cek] of f.asset.keys) {
-    const keyId = Uint8Array.from(Utils.toArray(key, 'hex'))
-    keyGrants.push({
-      keyId,
-      delivery: 'https://bsv.brc.dev/apps/0170#brc78-key-v1',
-      payload: await delivery.deliver(f.prepare.recipient, keyId, cek)
-    })
-  }
+  await [...f.asset.keys].reduce(
+    (pending, [key, cek]) =>
+      pending.then(async () => {
+        const keyId = Uint8Array.from(Utils.toArray(key, 'hex'))
+        keyGrants.push({
+          keyId,
+          delivery: 'https://bsv.brc.dev/apps/0170#brc78-key-v1',
+          payload: await delivery.deliver(f.prepare.recipient, keyId, cek)
+        })
+      }),
+    Promise.resolve()
+  )
   const license = await f.issuer.issueLicense({
       assetId: f.asset.assetId,
       offerId: Uint8Array.from(Utils.toArray(f.prepare.termsDigest, 'hex')),

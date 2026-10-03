@@ -3081,3 +3081,63 @@ wallet purchase ownership, concrete seller issuance, actual topic-admission/rele
 recovery and the combined operator/application demonstrations remain required. So do
 all root/non-final/contradiction workflows, the complete affected mutation campaign
 and successful exact-head hosted qualification. Checkpoint two remains open.
+
+### Concrete covenant seller and retained candidate issuance
+
+The optional `LCHOverlayCovenantSeller` implements the installed private purchase
+seller port. It owns complete private Header/Offer/Request, finite authority paths
+and committed content keys before promising delivery. It requires independent
+complete genesis/lineage verification at preparation and complete actual purchase
+Script verification before admission or issuance. A separate locally installed
+release verifier supplies the selected release guard. Settlement, License,
+Agreement and BRC78 recipient grants are issued only under those still-current
+proofs. Catalogue withdrawal and Offer expiry do not erase the original recovery
+obligation. The coordinator passes an owned copy of its exact retained candidate
+as an optional fifth issuer argument; existing four-argument issuers remain
+compatible. No transient candidate cache or reconstructed payment is used.
+
+Preparation derives complete finite future response capacity from advertised
+request bounds, retained lineage, authority paths, Agreement and keys. It refuses
+an installation that cannot deliver within the selected response and protected
+secret bounds before any financial effect. The concrete example advertises a
+512KiB request and4MiB response; it does not claim that every4MiB request can fit
+inside a2MiB private context. Repeated recovery returns the coordinator's exact
+first retained result, rather than asking the issuer to create a replacement.
+
+Full current LCH coverage passes244tests/37suites in76.261seconds. The entire
+seller has191/191 statements,46/46 functions and74/75 branches exercised. Its
+unit/property coverage includes real disclosed synthetic genesis/purchase Script,
+independent release validation, original capacity reservation, changed installations
+and mutable inputs, historical roles, access loss, Promise-guard refusal and
+actual encrypted native buyer playback. The initial governed property check
+rejected missing replay controls; the corrected suite supports FAST_CHECK_PATH,
+seed and the minimum300cases under its unchanged60second ceiling and passes.
+All84 combined registry/dependency governance tests pass at the exact ACKed134
+inventory, retaining every prior133 source/test union and qualification gate.
+
+Coordinator units and its complete300case native lifecycle property pass22tests
+in44.269seconds, including mutation of the owned fifth argument without modifying
+original native custody. The existing actual wallet demonstration independently
+passes all six covenant routes in32.106seconds, with exact remainder retention,
+all-recipient amendment consent and final payout top-up. It uses an isolated local
+wallet and no broadcast; that component result is not selected-chain/SPV proof of
+the combined wallet/host composition. Source typing/lint, LCH packed exports and
+strict consumers, browser ceilings and57compiled examples against24exact tarballs
+pass. Five hosted fixture style findings are corrected without changing ordering.
+Complete mutation, durable wallet-backed C buyer, actual admission/HTTP/release
+composition and remaining full reference demonstrations still remain required.
+
+The separately reviewed exact Metro-file-map0.87.1 paired watcher repair is
+incorporated froma7ceefb86 without adopting unrelated wallet capture or mapper
+changes. Independent graph comparison preserves all43 current importers/settings
+and1631 retained package records, adds no version, removes only five unused matcher
+packages, and changes only file-map/Metro snapshots. The patch hash is
+28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b.
+Frozen offline installation and a fresh unexcluded high-severity audit pass;
+all1120 actual installed watcher/path/event/stat oracle cases pass. The current
+packed mobile gate passes unchanged ceilings at Metro2328360/616783/471694 and
+Hermes4793129/2003779/1563017 raw/gzip/Brotli bytes. An initial standalone watcher
+invocation resolved from the mobile package instead of Metro and failed before
+validation; the corrected actual Metro resolver and full platform gate pass.
+No audit exception, lowered threshold, release, deployment or device qualification
+is implied. Checkpoint two and successful exact-head CI remain open.

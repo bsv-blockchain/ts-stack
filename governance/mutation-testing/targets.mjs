@@ -2932,6 +2932,32 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'lch-overlay-covenant-seller': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest:
+        'packages/content/lch/test/overlay-acquisition-covenant-seller.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/overlay-acquisition*.ts',
+        'test/key-delivery.test.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../application/output-knowledge/test/revenue-lineage-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/revenue-listing/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      mutate: ['src/overlayAcquisitionCovenantSeller.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/test/overlay-acquisition*.test.ts', '<rootDir>/test/key-delivery.test.ts'],
+        {
+          esm: true,
+          buildCommand: 'pnpm build:mutation'
+        }
+      )
+    },
     'lch-overlay-covenant': {
       packageDirectory: 'packages/content/lch',
       manifest: 'packages/content/lch/package.json',

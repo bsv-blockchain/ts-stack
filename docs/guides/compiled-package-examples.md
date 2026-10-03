@@ -2074,3 +2074,25 @@ async function verifyAndPlayCovenantContent(
 }
 export { openCovenantEntitlement, verifyAndPlayCovenantContent }
 ```
+
+## Pure covenant seller with protected coordinator custody
+
+The seller adapter verifies the installed full purchase and release boundaries.
+It receives exact retained BEEF from the coordinator during issuance. Wallet,
+topic admission and first-result byte retention stay in their respective owners.
+
+```ts compile
+// example-id: lch-covenant-seller-domain
+import {
+  LCHOverlayCovenantSeller,
+  type LCHOverlayCovenantSellerOptions
+} from '@bsv/lch/overlay-covenant'
+import type { PrivatePurchaseDomain as ProtectedCovenantDomainPort } from '@bsv/output-knowledge/private/node'
+
+function installCovenantContentSeller(
+  options: LCHOverlayCovenantSellerOptions
+): ProtectedCovenantDomainPort {
+  return new LCHOverlayCovenantSeller(options)
+}
+export { installCovenantContentSeller }
+```

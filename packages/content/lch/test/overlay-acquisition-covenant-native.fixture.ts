@@ -52,7 +52,7 @@ import { lchOverlayCustodyBinding } from '../src/overlayAcquisitionCustody.js'
 
 const cleanups = new Set<() => Promise<void>>()
 afterEach(async () => {
-  for (const close of cleanups) await close()
+  await [...cleanups].reduce((pending, close) => pending.then(close), Promise.resolve())
   cleanups.clear()
 })
 
@@ -64,7 +64,9 @@ afterEach(async () => {
 export async function lchNativeCovenantFixture(
   fixtureOptions: {
     detached?: boolean
-    revocations?: LCHOverlayCovenantDomainOptions['revocations']
+    maximumRequestBytes?: number
+    maximumResponseBytes?: number
+    revocations?: NonNullable<LCHOverlayCovenantDomainOptions['revocations']>
   } = {}
 ) {
   const original = completeGenesis(),
@@ -73,7 +75,9 @@ export async function lchNativeCovenantFixture(
     f = await lchCovenantFixture({
       chain: original.descriptor.chain,
       anchor: original.descriptor.lineageAnchor,
-      embedCiphertext: fixtureOptions.detached !== true
+      embedCiphertext: fixtureOptions.detached !== true,
+      maximumRequestBytes: fixtureOptions.maximumRequestBytes,
+      maximumResponseBytes: fixtureOptions.maximumResponseBytes
     }),
     total = anchor.outputs[original.descriptor.lineageAnchor.outputIndex].satoshis!,
     genesis = new Transaction(
@@ -200,14 +204,18 @@ export async function lchNativeCovenantFixture(
     settlementId = outputPacketDigest('lch-covenant-settlement', settlementBody),
     sender = new WalletBRC78KeyDelivery(f.sellerWallet),
     keyGrants: KeyGrant[] = []
-  for (const [key, cek] of f.asset.keys) {
-    const keyId = Uint8Array.from(Utils.toArray(key, 'hex'))
-    keyGrants.push({
-      keyId,
-      delivery: 'https://bsv.brc.dev/apps/0170#brc78-key-v1',
-      payload: await sender.deliver(f.prepare.recipient, keyId, cek)
-    })
-  }
+  await [...f.asset.keys].reduce(
+    (pending, [key, cek]) =>
+      pending.then(async () => {
+        const keyId = Uint8Array.from(Utils.toArray(key, 'hex'))
+        keyGrants.push({
+          keyId,
+          delivery: 'https://bsv.brc.dev/apps/0170#brc78-key-v1',
+          payload: await sender.deliver(f.prepare.recipient, keyId, cek)
+        })
+      }),
+    Promise.resolve()
+  )
   const license = await f.issuer.issueLicense({
     assetId: f.asset.assetId,
     offerId: Uint8Array.from(Utils.toArray(f.prepare.termsDigest, 'hex')),
@@ -359,7 +367,7 @@ export async function lchNativeCovenantFixture(
     objects = SQLiteProtectedOperationObjectStore.create(path, configuration, codec),
     owners = [objects]
   cleanups.add(async () => {
-    for (const owner of owners) await owner.close()
+    await owners.reduce((pending, owner) => pending.then(() => owner.close()), Promise.resolve())
     rmSync(directory, { recursive: true, force: true })
   })
   await domain.initializeCustody(objects)

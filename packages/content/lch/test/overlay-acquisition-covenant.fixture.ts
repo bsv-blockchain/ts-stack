@@ -35,7 +35,13 @@ import { lchOverlayFixture } from './overlay-acquisition.fixture.js'
  * outpoints are representation fixtures; these tests make no Bitcoin claim.
  */
 export async function lchCovenantFixture(
-  options: { chain?: OutputChain; anchor?: OutputOutpoint; embedCiphertext?: boolean } = {}
+  options: {
+    chain?: OutputChain
+    anchor?: OutputOutpoint
+    embedCiphertext?: boolean
+    maximumRequestBytes?: number
+    maximumResponseBytes?: number
+  } = {}
 ) {
   const f = await lchOverlayFixture(options.chain),
     chain = f.acquire.listing.chain,
@@ -119,8 +125,8 @@ export async function lchCovenantFixture(
               id: OUTPUT_PROFILES.purchase,
               authentication: 'brc103',
               payment: 'covenant',
-              maxRequestBytes: 4194304,
-              maxResponseBytes: 4194304,
+              maxRequestBytes: options.maximumRequestBytes ?? 4194304,
+              maxResponseBytes: options.maximumResponseBytes ?? 4194304,
               parameters: {
                 recoverySeconds: '86400',
                 releasePolicies: [releasePolicy],

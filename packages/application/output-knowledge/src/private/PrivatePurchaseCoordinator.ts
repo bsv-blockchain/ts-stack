@@ -372,7 +372,8 @@ export class PrivatePurchaseCoordinator {
       structuredClone(loaded.custody),
       structuredClone(progress),
       structuredClone(releaseEvidence),
-      signal
+      signal,
+      structuredClone(loaded.candidate)
     )
     this.requireCurrent(caller, signal)
     decodeOutputBytes(secret, loaded.custody.maximumSecretBytes)

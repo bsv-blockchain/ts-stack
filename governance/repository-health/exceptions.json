@@ -413,6 +413,25 @@
       "created": "2026-10-02",
       "reviewBy": "2026-11-02",
       "removeWhen": "Remove when a released @stryker-mutator/vitest-runner supports Vitest 5 test-name chains, the governed Stryker pin is moved to it, and fund-wallet-cli and payment-402 meet their policy floors on Vitest 5 with zero survived mutants reporting testsCompleted 0."
+    },
+    {
+      "id": "metro-file-map-picomatch-advisory-repair",
+      "category": "override",
+      "target": "pnpm-workspace.yaml exact metro-file-map@0.87.1>micromatch removal, Picomatch2.3.2 package extension and paired watcher patch",
+      "owner": "ts-stack-maintainers",
+      "reason": "No patched braces release or compatible Metro/file-map/micromatch upgrade is available for high GHSA-vfj7-8cjw-p6xm. Metro-file-map0.87.1 only consumes micromatch.some(), which already delegates to Picomatch2.3.2. The source/distribution patch retains that exact loop and adds the same exact direct matcher dependency, permitting scoped removal of micromatch and its unused vulnerable braces closure. All other package versions/importers and installation controls are preserved. This is a temporary dependency repair, not an advisory exclusion.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        "https://github.com/micromatch/braces/pull/72",
+        "patches/metro-file-map@0.87.1.patch",
+        "scripts/lib/metro-watcher-contract.mjs",
+        "scripts/lib/fixtures/metro-watcher-contract.json",
+        "scripts/check-wallet-toolbox-platform.mjs",
+        "https://github.com/bsv-blockchain/ts-stack/discussions/757"
+      ],
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-01",
+      "removeWhen": "Remove the patch, exact-version package extension and scoped removal together after an official compatible Metro/file-map release removes the affected dependency path; require the complete watcher oracle, fresh unexcluded audit, frozen graph and packed Metro/Hermes platform checks before retirement."
     }
   ]
 }

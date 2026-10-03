@@ -61,7 +61,12 @@ export interface PrivatePurchaseDomain {
     custody: PrivatePurchaseCustody,
     progress: PrivatePurchaseProgress,
     releaseEvidence: OutputReleaseEvidence,
-    signal: AbortSignal
+    signal: AbortSignal,
+    /** Exact candidate loaded from the original protected native reservation.
+     * New issuers need its complete BEEF for independent purchase verification
+     * and portable evidence. Existing four-argument adapters remain compatible.
+     */
+    candidate?: OutputPurchaseSubmit
   ): Promise<string>
 }
 export interface PrivatePurchaseAccessPort {

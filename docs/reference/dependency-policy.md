@@ -127,6 +127,25 @@ Actual Chrome renders all 14 Mermaid diagrams across the wallet lifecycle and LC
 production guides without page errors. The existing license inventory and root
 health checks pass; no public runtime package or version changes with this update.
 
+## Temporary Metro watcher dependency repair
+
+Metro-file-map 0.87.1 uses only micromatch.some(), whose matcher is already
+Picomatch 2.3.2. The exact-version paired source/distribution patch calls that
+same loop directly, declares the same exact Picomatch dependency and removes
+only the scoped micromatch dependency and its now-unused braces closure.
+The reviewed [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+lists no patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
+is still unreleased. No advisory exclusion or audit threshold change is added.
+
+The existing mobile platform gate checks 1,120 watcher results frozen from the
+unmodified published implementation, event/stat/path contracts, and absence of
+the removed matcher packages before its packed Metro/Hermes compilation,
+source-map/composition and unchanged bundle budgets. The dated override registry
+owns the patch, exact package extension and scoped removal as one repair. Remove
+all three together when an official compatible release removes the affected
+path and the full compatibility, frozen graph, audit and platform checks pass.
+This build-tool repair does not change published wallet APIs or package versions.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:

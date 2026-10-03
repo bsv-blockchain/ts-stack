@@ -3,6 +3,27 @@ import { PrivateKey, outputAssert, OutputProtocolError } from '@bsv/sdk'
 import { purchaseCoordinatorFixture as fixture } from './private-purchase-coordinator.fixture.js'
 import { PrivatePurchaseCoordinator } from '../src/private/PrivatePurchaseCoordinator.js'
 
+test('passes owned complete retained candidate bytes to issuance and preserves the native original', async () => {
+  const f = fixture()
+  let retained: unknown
+  const prior = f.owner.domain.issue
+  f.owner.domain.issue = async (...args) => {
+    retained = structuredClone(args[4])
+    if (args[4]) args[4].beef = 'AA=='
+    return prior(...args)
+  }
+  await f.reopen()
+  try {
+    await f.prepare()
+    await f.submit()
+    expect(retained).toEqual(f.f.candidate)
+    expect(f.current()!.candidate).toEqual(f.f.candidate)
+    expect(f.current()!.progress.status).toBe('delivered')
+  } finally {
+    await f.dispose()
+  }
+})
+
 test('reconciles another native writer completing the exact admission while this call is outstanding', async () => {
   let f: ReturnType<typeof fixture>
   f = fixture({

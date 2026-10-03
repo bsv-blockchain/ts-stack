@@ -1636,6 +1636,18 @@
           "Cancellation or inaccessible local custody cannot produce plaintext.",
           "Restoring local access preserves the same verified original rights, transaction and recipient; no history starts a replacement financial operation."
         ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant-seller.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Original covenant preparation, complete independent purchase and selected release checks before authorized collector settlement, License and protected recipient key issuance",
+        "target": "At least 300 generated catalogue withdrawal, expiry and original current-access histories after independently verified synthetic covenant purchases",
+        "invariants": [
+          "Preparation reserves complete finite protected key and delivery capacity before purchase.",
+          "Only the original request, actual independently verified purchase and selected release can authorize issuance.",
+          "Withdrawal and expiry preserve the original recovery promise without a replacement payment; loss of current access refuses disclosure."
+        ]
       }
     ],
     "exclusions": [

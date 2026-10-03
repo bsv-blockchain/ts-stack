@@ -300,5 +300,51 @@ and the positive receipt remain identical, and restored endpoint playback still
 uses one purchase. Separate tests cover equivalent reissue, corrupted encrypted
 grants, changed installations, ciphertext bounds and invalid asynchronous guards.
 The fixture constructs public synthetic funding directly. The reusable wallet
-action owner, actual topical admission and seller issuance still need the complete
+action owner, actual topical admission and concrete seller still need the complete
 combined reference workflow; these buyer tests do not claim that workflow is done.
+
+## Concrete covenant seller and retained purchase evidence
+
+`LCHOverlayCovenantSeller` implements the protected purchase coordinator's domain
+port. Its installation ID binds seller/issuer identities, verifier and retained
+revocation-source IDs, authority network, content ceiling and purchase interval.
+The catalogue supplies complete original Header/Offer, descriptor, authorized
+lineage, finite role paths and actual whole-Asset CEKs. Preparation owns these
+bytes, checks consent and key commitments, and independently executes full genesis
+and lineage verification before returning private material and a bounded promise.
+The coordinator reserves that material and future completion slots before signed
+terms leave the host. CEKs belong to protected off-chain custody and never to
+public lookup, ordinary topical metadata or GASP payloads.
+
+Advertised request limits must be small enough for the complete portable C
+context to fit its 2 MiB ceiling. The seller reserves conservative framing for
+original lineage and its repeated signed-terms commitment, the complete accepted
+request, bounded release/License/settlement fields, exact typed authority archive,
+derived Agreement and every permitted 64 KiB BRC-78 payload. It also reserves the
+outer base64 and response framing. It refuses an incompatible capability before
+preparation; reducing an already advertised contract after purchase is invalid.
+The demonstrated profile accepts 512 KiB requests and 4 MiB responses. These are
+explicit installation bounds, not new defaults imposed on unrelated services.
+
+`verify()` independently checks the complete original candidate and exact purchase
+receipt before admission. `issue()` receives the native owner's complete retained
+candidate as the optional fifth domain-port argument. New C issuers require it;
+existing four-argument adapters continue working. Transaction ID alone cannot
+replace full BEEF, and a transient in-memory candidate cache cannot substitute for
+native custody after restart. Issuance independently repeats full purchase checks
+and selected-release assessment, validates historical Offer/payment roles and
+current License authority, and emits the exact C settlement, derived Agreement,
+recipient License and encrypted key grants. It makes no wallet, admission,
+broadcast or HTTP payment call. The coordinator retains the first complete result
+bytes; later recovery returns that same result without another issuance or payment.
+
+The seller component tests use the registered executable, genuine public-fixture
+Bitcoin/BEEF/genesis/purchase evidence and actual buyer decryption. They cover
+missing keys, wrong issuer, fabricated proof, incomplete admission, original-byte
+substitution, detached source bounds, changed or asynchronous guards, finite
+signed-authority archives, catalogue withdrawal and Offer expiry. At least 300
+seeded histories preserve original custody while current access controls issuance.
+The local native wallet test separately funds/signs/recovers all six routes,
+including retained payout remainders, unanimous amendment and external retirement
+top-up. These component receipts do not complete the combined native wallet,
+actual topical-admission, authenticated HTTP and workbench acceptance row.

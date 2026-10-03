@@ -1346,6 +1346,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-seller",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-seller.property.test.ts",
+      "risk": "critical",
+      "boundary": "Original covenant preparation, complete independent purchase and selected release checks before authorized collector settlement, License and protected recipient key issuance",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

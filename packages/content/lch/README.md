@@ -297,3 +297,14 @@ Actual disclosed native tests execute the family scripts, complete synthetic
 chain evidence, encrypted SQLite restart and real ciphertext playback. The
 combined native wallet/seller/topical-admission workbench remains required before
 checkpoint-two acceptance. The ordinary and existing paid entries stay separate.
+
+`LCHOverlayCovenantSeller` is the separate optional C seller domain. It retains
+complete original private CEKs and independently verifies genesis/lineage,
+purchase and release before issuing collector settlement, Agreement and
+recipient License/key grants. The protected purchase coordinator supplies the
+owned complete candidate as an additive fifth issuance argument; existing
+four-argument adapters stay compatible. Advertised finite limits must reserve
+the complete future C response before preparation. Catalogue withdrawal or an
+expired new-Offer window cannot erase the retained obligation. See the
+[acquisition guide](../../../docs/guides/lch-overlay-acquisition.md) for installation,
+private custody, recovery and the remaining combined-workflow qualification.
