@@ -23,6 +23,7 @@ Build and operate overlay services that index, validate, and serve on-chain data
 | [@bsv/overlay-express](./overlay-express.md)                       | Opinionated Express.js HTTP server with configuration, health checks, and admin endpoints            |
 | [@bsv/overlay-topics](./overlay-topics.md)                         | 20+ pre-built topic managers and lookup services (BTMS, DID, KVStore, UHRP, UMP, Supply Chain, etc.) |
 | [@bsv/overlay-discovery-services](./overlay-discovery-services.md) | SHIP/SLAP peer discovery and WalletAdvertiser for certificate-based advertisements                   |
+| [@bsv/eqc](./eqc.md)                                               | Economic Query Client and host handlers for BRC-178 race-settled collection markets                  |
 | [@bsv/gasp](./gasp.md)                                             | Graph Aware Sync Protocol for incremental transaction graph synchronization with SPV validation      |
 | [@bsv/btms-backend](./btms-backend.md)                             | BTMS token validation and indexing (legacy; core moved to @bsv/overlay-topics)                       |
 
