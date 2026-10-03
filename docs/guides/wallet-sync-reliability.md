@@ -520,6 +520,17 @@ timestamp rule; they do not replace it with a manager's older cached selection.
 Pull retains the destination manager's selection. Serialized fallback preserves
 the same directional rules. This compatibility behavior does not refresh the
 manager cache or implement primary reconciliation.
+A queued `setActive` request checks the selected provider after earlier switches
+finish. For example, a request to reselect A while a switch from A to B is pending
+waits for that switch, then selects A. The same ordering holds when the earlier
+switch fails. A progress formatter that throws before a transition starts leaves
+existing sync sessions valid. If a transition fails after changing a store, the
+manager discards cached primary authorization and reloads persisted selections
+before subsequent access. Conflicting selections refuse active authorization
+until a later successful selection reconciles the stores. A failed recovery
+reload releases ownership so later requests can retry. Primary reconciliation
+still uses the serialized copy loop; bounded reconciliation remains part of the
+implementation program.
 A prepared page is single-use and stale checkpoints reject. If an acknowledgement
 is lost while the same source view remains alive, read the destination checkpoint
 and resume it. When the source view is lost, open a new view and restart traversal

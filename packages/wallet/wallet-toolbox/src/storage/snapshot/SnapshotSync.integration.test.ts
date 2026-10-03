@@ -1185,15 +1185,15 @@ test('archive positions persist with rows, detach before proof I/O and reject an
     const first = await view.readPage('txLabels', undefined, { maxRows: 1 })
     const second = await view.readPage('txLabels', first.cursor, { maxRows: 1 })
     const last = await view.readPage('txLabels', second.cursor, { maxRows: 1 })
-    first.cursor!.archivePosition = { version: 1, archiveId: 'c'.repeat(64), sequence: 3, rowOffset: 1 }
+    Reflect.set(first.cursor!, 'archivePosition', { version: 1, archiveId: 'c'.repeat(64), sequence: 3, rowOffset: 1 })
     checkpoint = (await (await writer.prepare(checkpoint, first))()).checkpoint
     expect((await writer.checkpoint(identity, 'source'))!.cursor!.archivePosition).toEqual(
       first.cursor!.archivePosition
     )
-    second.cursor!.archivePosition = { ...first.cursor!.archivePosition, rowOffset: 2 }
+    Reflect.set(second.cursor!, 'archivePosition', { ...first.cursor!.archivePosition, rowOffset: 2 })
     const preparing = writer.prepare(checkpoint, second)
-    checkpoint.cursor!.archivePosition!.rowOffset = 999
-    second.cursor!.archivePosition.rowOffset = 999
+    Reflect.set(checkpoint.cursor!.archivePosition!, 'rowOffset', 999)
+    Reflect.set(second.cursor!.archivePosition!, 'rowOffset', 999)
     checkpoint = (await (await preparing)()).checkpoint
     expect(checkpoint.cursor!.archivePosition!.rowOffset).toBe(2)
     expect(await destination.findTxLabels({ partial: {} })).toHaveLength(2)

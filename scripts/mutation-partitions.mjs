@@ -13,6 +13,21 @@ const plans = new Map([
     }
   ],
   [
+    'wallet-snapshot-sync',
+    {
+      fallback: 'session',
+      files: new Map([
+        ['src/utility/runInSeries.ts', 'session'],
+        ['src/storage/sync/syncSession.ts', 'session'],
+        ['src/storage/snapshot/SnapshotSync.ts', 'session'],
+        ['src/storage/sync/syncCheckpoint.ts', 'checkpoint'],
+        ['src/storage/snapshot/runSnapshotSyncSession.ts', 'copy'],
+        ['src/storage/StorageKnex.ts', 'storage'],
+        ['src/storage/WalletStorageManager.ts', 'primary']
+      ])
+    }
+  ],
+  [
     'wallet-retained-snapshot',
     {
       fallback: 'lifecycle',

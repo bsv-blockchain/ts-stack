@@ -342,6 +342,16 @@ export class WalletStorageManager implements sdk.WalletStorage {
       concurrent ? 'read' : 'exclusive',
       background ? 'background' : 'foreground'
     )
+    // A preceding transition can fail after updating a managed store. Reload
+    // its persisted selection under ownership before using the cached provider.
+    if (!this._isAvailable) {
+      try {
+        await this.makeAvailable()
+      } catch (error) {
+        release()
+        throw error
+      }
+    }
     // Primary selection may have changed while this request was queued. Never
     // apply the former provider's read-sharing promise to its replacement.
     if (concurrent && this._active?.access?.concurrentReads !== true) {
@@ -893,7 +903,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
                 snapshotCheckpoint:
                   progress.snapshotCheckpoint === undefined
                     ? undefined
-                    : { ...progress.snapshotCheckpoint, cursor: copySnapshotCursor(progress.snapshotCheckpoint.cursor) }
+                    : {
+                        ...progress.snapshotCheckpoint,
+                        cursor: copySnapshotCursor(progress.snapshotCheckpoint.cursor)
+                      }
               }
               options.onProgress?.(progress)
             }
@@ -1258,85 +1271,92 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
     let log = progLog(`setActive to ${(newActive.settings as TableSettings).storageName}`)
 
-    if (storageIdentityKey === this.getActiveStore() && this.isActiveEnabled) {
-      /** Setting the current active as the new active is a permitted no-op. */
-      return log + progLog(' unchanged\n')
-    }
-
-    log += progLog('\n')
-
     log += await this.runAsSync(async _sync => {
+      // An earlier queued switch may have changed the primary since this call.
+      // Decide even a no-op under the same ownership as an actual switch.
+      if (storageIdentityKey === this.getActiveStore() && this.isActiveEnabled) {
+        return progLog(' unchanged\n')
+      }
+      let log = progLog('\n')
       this.generation++
-      let log = ''
 
-      if ((this._conflictingActives as ManagedStorage[]).length > 0) {
-        // Merge state from conflicting actives into `newActive`.
+      try {
+        if ((this._conflictingActives as ManagedStorage[]).length > 0) {
+          // Merge state from conflicting actives into `newActive`.
 
-        // Handle case where new active is current active to resolve conflicts.
-        // And where new active is one of the current conflict actives.
-        ;(this._conflictingActives as ManagedStorage[]).push(this._active as ManagedStorage)
-        // Remove the new active from conflicting actives and
-        // set new active as the conflicting active that matches the target `storageIdentityKey`
-        this._conflictingActives = (this._conflictingActives as ManagedStorage[]).filter(ca => {
-          const isNewActive = (ca.settings as TableSettings).storageIdentityKey === storageIdentityKey
-          return !isNewActive
-        })
+          // Handle case where new active is current active to resolve conflicts.
+          // And where new active is one of the current conflict actives.
+          ;(this._conflictingActives as ManagedStorage[]).push(this._active as ManagedStorage)
+          // Remove the new active from conflicting actives and
+          // set new active as the conflicting active that matches the target `storageIdentityKey`
+          this._conflictingActives = (this._conflictingActives as ManagedStorage[]).filter(ca => {
+            const isNewActive = (ca.settings as TableSettings).storageIdentityKey === storageIdentityKey
+            return !isNewActive
+          })
 
-        // Merge state from conflicting actives into `newActive`.
-        for (const conflict of this._conflictingActives) {
-          log += progLog('MERGING STATE FROM CONFLICTING ACTIVES:\n')
-          const sfr = await this.syncToWriter(
-            { identityKey, userId: (newActive.user as TableUser).userId, isActive: false },
-            newActive.storage,
-            conflict.storage,
-            undefined,
-            progLog
-          )
-          log += sfr.log
+          // Merge state from conflicting actives into `newActive`.
+          for (const conflict of this._conflictingActives) {
+            log += progLog('MERGING STATE FROM CONFLICTING ACTIVES:\n')
+            const sfr = await this.syncToWriter(
+              { identityKey, userId: (newActive.user as TableUser).userId, isActive: false },
+              newActive.storage,
+              conflict.storage,
+              undefined,
+              progLog
+            )
+            log += sfr.log
+          }
+          log += progLog('PROPAGATE MERGED ACTIVE STATE TO NON-ACTIVES\n')
+        } else {
+          log += progLog('BACKUP CURRENT ACTIVE STATE THEN SET NEW ACTIVE\n')
         }
-        log += progLog('PROPAGATE MERGED ACTIVE STATE TO NON-ACTIVES\n')
-      } else {
-        log += progLog('BACKUP CURRENT ACTIVE STATE THEN SET NEW ACTIVE\n')
-      }
 
-      // If there were conflicting actives,
-      // Push state merged from all merged actives into newActive to all stores other than the now single active.
-      // Otherwise,
-      // Push state from current active to all other stores.
-      const backupSource =
-        (this._conflictingActives as ManagedStorage[]).length > 0 ? newActive : (this._active as ManagedStorage)
+        // If there were conflicting actives,
+        // Push state merged from all merged actives into newActive to all stores other than the now single active.
+        // Otherwise,
+        // Push state from current active to all other stores.
+        const backupSource =
+          (this._conflictingActives as ManagedStorage[]).length > 0 ? newActive : (this._active as ManagedStorage)
 
-      // Update the backupSource's user record with the new activeStorage
-      // which will propagate to all other stores in the following backup loop.
-      await backupSource.storage.setActive(
-        { identityKey, userId: (backupSource.user as TableUser).userId },
-        storageIdentityKey
-      )
+        // Update the backupSource's user record with the new activeStorage
+        // which will propagate to all other stores in the following backup loop.
+        await backupSource.storage.setActive(
+          { identityKey, userId: (backupSource.user as TableUser).userId },
+          storageIdentityKey
+        )
 
-      for (const store of this._stores) {
-        // Update cached user.activeStorage of all stores
-        ;(store.user as TableUser).activeStorage = storageIdentityKey
+        for (const store of this._stores) {
+          // Update cached user.activeStorage of all stores
+          ;(store.user as TableUser).activeStorage = storageIdentityKey
 
-        if (
-          (store.settings as TableSettings).storageIdentityKey !==
-          (backupSource.settings as TableSettings).storageIdentityKey
-        ) {
-          // If this store is not the backupSource store push state from backupSource to this store.
-          const stwr = await this.syncToWriter(
-            { identityKey, userId: (store.user as TableUser).userId, isActive: false },
-            store.storage,
-            backupSource.storage,
-            undefined,
-            progLog
-          )
-          log += stwr.log
+          if (
+            (store.settings as TableSettings).storageIdentityKey !==
+            (backupSource.settings as TableSettings).storageIdentityKey
+          ) {
+            // If this store is not the backupSource store push state from backupSource to this store.
+            const stwr = await this.syncToWriter(
+              { identityKey, userId: (store.user as TableUser).userId, isActive: false },
+              store.storage,
+              backupSource.storage,
+              undefined,
+              progLog
+            )
+            log += stwr.log
+          }
         }
+
+        this._isAvailable = false
+        await this.makeAvailable()
+
+        return log
+      } catch (error) {
+        // Partial propagation can leave stores disagreeing about the primary.
+        // Discard cached users before the next authorization or queued access.
+        this._isAvailable = false
+        this._authId.isActive = false
+        for (const store of this._stores) store.isAvailable = false
+        throw error
       }
-
-      this._isAvailable = false
-      await this.makeAvailable()
-
-      return log
     })
 
     return log

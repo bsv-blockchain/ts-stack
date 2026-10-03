@@ -6,6 +6,15 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Preserve queued primary reselection: a request to select A during a pending
+  switch from A to B waits for that switch and then selects A, including after
+  an earlier failure. Check no-op selections under the existing ownership
+  boundary and preserve valid sync sessions when a progress formatter throws
+  before the transition. After partial propagation failure, reload persisted
+  selections before authorizing or executing queued access. Conflicting stores
+  refuse active authorization; failed reloads release ownership for retry. No
+  API, wire or schema migration is required.
+
 - Add internal monotonic continuity-floor transactions and bounded primary-key
   tombstone collection. Current receipt locks pin all live prefixes; collection
   preserves live/newer records and all thirteen source tables. WAL/RC/RR fixtures

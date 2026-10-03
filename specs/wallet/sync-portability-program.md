@@ -35,6 +35,18 @@ manager ownership across entire copy loops. Near-realtime backup therefore still
 blocks foreground wallet operations. Existing benchmarks cover pull scheduling,
 not this push/backup acceptance case.
 
+Primary selection now checks apparent no-op requests inside the existing
+exclusive ownership boundary. Queued B then A requests therefore finish with A
+selected, including when the earlier switch fails. The progress formatter runs
+before generation advancement so a formatting failure before the transition
+does not invalidate an in-flight copy. Regression cases and generated queued
+histories cover this correction. Partial propagation failure invalidates cached
+primary authorization and managed user rows before ownership is released. Queued
+requests reload persisted selections after acquiring ownership; a reload failure
+preserves its cause and releases the queue. Conflicting persisted selections
+refuse active authorization until explicitly reconciled. Primary reconciliation
+still holds ownership across its copy loop; these corrections do not complete S1.
+
 Removing those locks alone is insufficient. A source can change between live
 offset pages, and an old source reply can overlap primary replacement. Source
 isolation, checkpoint ownership and generation fencing must accompany yielding.

@@ -33,8 +33,16 @@ function session() {
     begin: jest.fn(async () => checkpoint),
     prepare: jest.fn(async () => apply)
   } as unknown as SnapshotSyncStorage
-  const commit = jest.fn(async <T>(work: () => Promise<T>) => await work())
-  return { input: { view, destination, commit, activeStorage: 'source' }, checkpoint, view, destination, apply, commit }
+  const ownership = { commit: async <T>(work: () => Promise<T>): Promise<T> => await work() }
+  const commit = jest.spyOn(ownership, 'commit')
+  return {
+    input: { view, destination, commit: ownership.commit, activeStorage: 'source' },
+    checkpoint,
+    view,
+    destination,
+    apply,
+    commit
+  }
 }
 
 test.each([
@@ -56,16 +64,21 @@ test.each([
 
 test('progress uses detached checkpoints and reports the committed counts and timings', async () => {
   const f = session()
-  f.checkpoint.cursor!.archivePosition = { version: 1, archiveId: 'c'.repeat(64), sequence: 12, rowOffset: 7 }
+  Reflect.set(f.checkpoint.cursor!, 'archivePosition', {
+    version: 1,
+    archiveId: 'c'.repeat(64),
+    sequence: 12,
+    rowOffset: 7
+  })
   const states: SyncSessionProgress['state'][] = []
   const result = await runSnapshotSyncSession(f.input, {
     maxItems: 17,
     maxRoughSize: 2048,
     onProgress: progress => {
       states.push(progress.state)
-      if (progress.snapshotCheckpoint?.cursor) progress.snapshotCheckpoint.cursor.after[0] = 999
+      if (progress.snapshotCheckpoint?.cursor) Reflect.set(progress.snapshotCheckpoint.cursor.after, '0', 999)
       if (progress.snapshotCheckpoint?.cursor?.archivePosition)
-        progress.snapshotCheckpoint.cursor.archivePosition.rowOffset = 999
+        Reflect.set(progress.snapshotCheckpoint.cursor.archivePosition, 'rowOffset', 999)
       if (progress.snapshotCheckpoint) progress.snapshotCheckpoint.identityKey = 'changed-by-listener'
       if (progress.state === 'committed') {
         expect(progress).toMatchObject({ pages: 1, inserts: 2, updates: 3 })
@@ -217,8 +230,8 @@ test('a nonterminal acknowledgement advances a detached cursor before finishing 
   const result = await runSnapshotSyncSession(f.input, {
     onProgress: progress => {
       if (progress.state === 'committed' && progress.pages === 1) {
-        acknowledged.cursor!.after[0] = 999
-        acknowledged.cursor!.archivePosition!.rowOffset = 999
+        Reflect.set(acknowledged.cursor!.after, '0', 999)
+        Reflect.set(acknowledged.cursor!.archivePosition!, 'rowOffset', 999)
         acknowledged.sequence = 999
       }
     }

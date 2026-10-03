@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
@@ -347,4 +348,32 @@ test('every inherited snapshot-sync target keeps the complete journal tests for 
       )
     )
   }
+})
+
+test('snapshot sync owns every inherited manager region and complete primary selection', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['wallet-snapshot-sync']
+  const file = 'src/storage/WalletStorageManager.ts'
+  const lines = readFileSync(
+    `${REPOSITORY_ROOT}/packages/wallet/wallet-toolbox/${file}`,
+    'utf8'
+  ).split('\n')
+  const expected = [
+    ['private async runSnapshotCopy(', 'async syncFromReader('],
+    ['async syncFromReader(', '    let inserts = 0'],
+    ['async syncFromReaderResumable(', '    const generation ='],
+    ['async syncToWriterResumable(', 'async syncToWriter('],
+    ['async syncToWriter(', '    let inserts = 0'],
+    ['async updateBackups(', 'async setActive('],
+    ['async setActive(', 'getStoreEndpointURL('],
+    ['private async withAccess<R>(', 'runAsWriter<R>(']
+  ].map(([startMarker, endMarker]) => {
+    const start = lines.findIndex(line => line.includes(startMarker))
+    const end = lines.findIndex((line, index) => index > start && line.includes(endMarker))
+    assert.ok(start >= 0 && end > start)
+    return `${file}:${start + 1}-${end}`
+  })
+  assert.deepEqual(
+    target.mutate.filter(specification => specification.startsWith(`${file}:`)),
+    expected
+  )
 })

@@ -164,6 +164,20 @@ function snapshotSyncMutationTargets(repositoryRoot) {
         'src/storage/WalletStorageManager.ts',
         'async updateBackups(',
         'async setActive('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async setActive(',
+        'getStoreEndpointURL('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'private async withAccess<R>(',
+        'runAsWriter<R>('
       )
     ],
     ...jestTarget(

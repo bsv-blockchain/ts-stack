@@ -324,7 +324,7 @@ test('progress observers cannot corrupt checkpoint state and unfinished zero-pro
   expect(await writer.countTxLabels({ partial: {} })).toBe(25)
   const process = jest
     .spyOn(writer, 'prepareSyncChunk')
-    .mockResolvedValue(async () => ({ done: false, inserts: 0, updates: 0 }))
+    .mockResolvedValue(async () => ({ done: false, inserts: 0, updates: 0, maxUpdated_at: undefined }))
   await expect(manager.syncFromReaderResumable(identityKey, reader)).rejects.toThrow('without advancing')
   expect(process).toHaveBeenCalledTimes(1)
 })
@@ -451,3 +451,156 @@ test.each([undefined, 10000000])(
     expect(calls.mock.calls.every(([args]) => args.maxRoughSize === (maximum ?? 262144))).toBe(true)
   }
 )
+
+test.each([false, true])(
+  'queued primary reselection waits for the earlier switch, including failure=%s',
+  async failEarlier => {
+    const first = await makeStorage(),
+      second = await makeStorage()
+    const manager = new WalletStorageManager(identityKey, first, [second])
+    await manager.makeAvailable()
+    const firstKey = first.getSettings().storageIdentityKey,
+      secondKey = second.getSettings().storageIdentityKey
+    await manager.setActive(firstKey)
+    const entered = deferred(),
+      release = deferred(),
+      failure = new Error('synthetic primary switch failure')
+    const update = first.setActive.bind(first)
+    jest.spyOn(first, 'setActive').mockImplementationOnce(async (...args) => {
+      entered.resolve()
+      await release.promise
+      if (failEarlier) throw failure
+      return await update(...args)
+    })
+    const switching = manager.setActive(secondKey)
+    const checkedSwitch = failEarlier ? expect(switching).rejects.toBe(failure) : switching
+    await entered.promise
+    let settled = false
+    const reselecting = manager.setActive(firstKey).then(log => {
+      settled = true
+      return log
+    })
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(settled).toBe(false)
+    } finally {
+      release.resolve()
+      await checkedSwitch
+      await reselecting
+    }
+    expect(manager.getActiveStore()).toBe(firstKey)
+    expect(manager.isActiveEnabled).toBe(true)
+    expect((await first.findUserByIdentityKey(identityKey))!.activeStorage).toBe(firstKey)
+    expect((await second.findUserByIdentityKey(identityKey))!.activeStorage).toBe(firstKey)
+  }
+)
+
+test('a failed primary-switch prelude leaves an in-flight sync on the same primary usable', async () => {
+  const { reader, writer } = await fixture(3),
+    replacement = await makeStorage()
+  const manager = new WalletStorageManager(identityKey, writer, [replacement])
+  await manager.makeAvailable()
+  const current = writer.getSettings().storageIdentityKey
+  await manager.setActive(current)
+  const entered = deferred(),
+    release = deferred(),
+    failure = new Error('synthetic primary progress observer failure')
+  const read = reader.getSyncChunk.bind(reader)
+  jest.spyOn(reader, 'getSyncChunk').mockImplementationOnce(async args => {
+    const chunk = await read(args)
+    entered.resolve()
+    await release.promise
+    return chunk
+  })
+  const copying = manager.syncFromReaderResumable(identityKey, reader, { maxItems: 2 })
+  const checkedCopy = expect(copying).resolves.toMatchObject({ status: 'completed', mode: 'paged' })
+  await entered.promise
+  try {
+    await expect(
+      manager.setActive(replacement.getSettings().storageIdentityKey, message => {
+        if (message === '\n') throw failure
+        return message
+      })
+    ).rejects.toBe(failure)
+    expect(manager.getActiveStore()).toBe(current)
+  } finally {
+    release.resolve()
+    await checkedCopy
+  }
+  expect(await writer.countTxLabels({ partial: {} })).toBe(3)
+})
+
+test.each(['', 'unregistered'])(
+  'an invalid primary %s initializes safely and refuses before provider mutation',
+  async key => {
+    const first = await makeStorage()
+    const manager = new WalletStorageManager(identityKey, first)
+    const update = jest.spyOn(first, 'setActive')
+    const format = jest.fn((message: string) => message)
+    expect(manager.isAvailable()).toBe(false)
+    await expect(manager.setActive(key, format)).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    expect(manager.getActiveStore()).toBe(first.getSettings().storageIdentityKey)
+    expect(manager.isActiveEnabled).toBe(true)
+    expect(update).not.toHaveBeenCalled()
+    expect(format).not.toHaveBeenCalled()
+    expect(await manager.setActive(first.getSettings().storageIdentityKey)).toContain(' unchanged\n')
+  }
+)
+
+test('a partial primary propagation failure reloads persisted selection before authorizing or retrying', async () => {
+  const first = await makeStorage(),
+    second = await makeStorage()
+  const manager = new WalletStorageManager(identityKey, first, [second])
+  await manager.makeAvailable()
+  const firstKey = first.getSettings().storageIdentityKey,
+    secondKey = second.getSettings().storageIdentityKey
+  await manager.setActive(firstKey)
+  const failure = new Error('synthetic partial propagation failure')
+  jest.spyOn(second, 'processSyncChunk').mockRejectedValueOnce(failure)
+  await expect(manager.setActive(secondKey)).rejects.toBe(failure)
+  expect((await first.findUserByIdentityKey(identityKey))!.activeStorage).toBe(secondKey)
+  expect((await second.findUserByIdentityKey(identityKey))!.activeStorage).toBe(firstKey)
+  await expect(manager.getAuth(true)).rejects.toMatchObject({ code: 'WERR_NOT_ACTIVE' })
+  expect(manager.isActiveEnabled).toBe(false)
+  await manager.setActive(firstKey)
+  expect(manager.isActiveEnabled).toBe(true)
+  expect((await first.findUserByIdentityKey(identityKey))!.activeStorage).toBe(firstKey)
+  expect((await second.findUserByIdentityKey(identityKey))!.activeStorage).toBe(firstKey)
+})
+
+test('a queued request releases ownership after a failed primary recovery reload', async () => {
+  const first = await makeStorage(),
+    second = await makeStorage()
+  const manager = new WalletStorageManager(identityKey, first, [second])
+  await manager.makeAvailable()
+  const firstKey = first.getSettings().storageIdentityKey,
+    secondKey = second.getSettings().storageIdentityKey
+  await manager.setActive(firstKey)
+  const entered = deferred(),
+    release = deferred()
+  const failure = new Error('synthetic partial propagation failure'),
+    reloadFailure = new Error('synthetic recovery reload failure')
+  jest.spyOn(second, 'processSyncChunk').mockImplementationOnce(async () => {
+    entered.resolve()
+    await release.promise
+    throw failure
+  })
+  const switching = expect(manager.setActive(secondKey)).rejects.toBe(failure)
+  await entered.promise
+  jest.spyOn(first, 'findOrInsertUser').mockRejectedValueOnce(reloadFailure)
+  const operation = jest.fn(async () => undefined)
+  const queued = expect(manager.runAsWriter(operation)).rejects.toBe(reloadFailure)
+  try {
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(operation).not.toHaveBeenCalled()
+  } finally {
+    release.resolve()
+    await switching
+    await queued
+  }
+  expect(operation).not.toHaveBeenCalled()
+  expect(await manager.runAsReader(async provider => provider.getSettings().storageIdentityKey)).toBe(firstKey)
+  await expect(manager.getAuth(true)).rejects.toMatchObject({ code: 'WERR_NOT_ACTIVE' })
+  await manager.setActive(firstKey)
+  expect((await manager.getAuth(true)).isActive).toBe(true)
+})

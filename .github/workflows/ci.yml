@@ -605,6 +605,11 @@ jobs:
           pattern: mutation-wallet-retained-snapshot-*
           path: .mutation-parts/wallet-retained-snapshot
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-sync')
+        with:
+          pattern: mutation-wallet-snapshot-sync-*
+          path: .mutation-parts/wallet-snapshot-sync
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-journal')
         with:
           pattern: mutation-wallet-snapshot-journal-*

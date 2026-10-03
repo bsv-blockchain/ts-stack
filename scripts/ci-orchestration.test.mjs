@@ -6,7 +6,7 @@ import test from 'node:test'
 
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
-import { partitionedMutationTargets } from './mutation-partitions.mjs'
+import { partitionedMutationTargets, partitionMutationTarget } from './mutation-partitions.mjs'
 
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
 const MUTATION_PATH = join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml')
@@ -38,6 +38,13 @@ test('CI downloads every canonical execution partition before verifying its comp
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const partitioned = partitionedMutationTargets(Object.keys(targets), targets)
   assert.ok(partitioned.length > 0)
+  assert.ok(partitioned.includes('wallet-snapshot-sync'))
+  assert.deepEqual(
+    partitionMutationTarget('wallet-snapshot-sync', targets['wallet-snapshot-sync']).map(
+      part => part.id
+    ),
+    ['session', 'checkpoint', 'copy', 'storage', 'primary']
+  )
   const workflow = readFileSync(CI_PATH, 'utf8')
   const gate = workflowJobBlocks(workflow).find(job => job.name === 'mutation-quality').source
   const verify = gate.indexOf(

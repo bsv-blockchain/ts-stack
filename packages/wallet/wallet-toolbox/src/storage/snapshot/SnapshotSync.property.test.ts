@@ -6,6 +6,8 @@ import { knex } from 'knex'
 import { StorageKnex } from '../StorageKnex'
 import { StorageProvider } from '../StorageProvider'
 import { snapshotSyncTables } from './SnapshotSync'
+import { WalletStorageManager } from '../WalletStorageManager'
+import type { WalletStorageProvider } from '../../sdk/WalletStorage.interfaces'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -146,3 +148,97 @@ test('random durable page schedules recover acknowledgements and restarts withou
     await rm(directory, { recursive: true, force: true })
   }
 }, 120000)
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+test('primary requests retain queue order through a delayed success or failure', async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      fc.array(fc.constantFrom('A', 'B', 'C'), { minLength: 1, maxLength: 12 }),
+      fc.boolean(),
+      async (requests, failFirst) => {
+        const entered = deferred(),
+          release = deferred(),
+          failure = new Error('synthetic first primary switch failure')
+        let first = true
+        function provider(key: string, userId: number) {
+          const settings = {
+            chain: 'test',
+            storageIdentityKey: key,
+            storageName: key,
+            dbtype: 'SQLite',
+            maxOutputScriptLength: 1024
+          }
+          const user = { userId, identityKey: 'synthetic-primary-order', activeStorage: 'A' }
+          return {
+            user,
+            isStorageProvider: () => false,
+            makeAvailable: async () => settings,
+            getSettings: () => settings,
+            findOrInsertUser: async () => ({ user: { ...user } }),
+            setActive: async (_auth: unknown, activeStorage: string) => {
+              if (first) {
+                first = false
+                entered.resolve()
+                await release.promise
+                if (failFirst) throw failure
+              }
+              user.activeStorage = activeStorage
+            }
+          }
+        }
+        const providers = ['A', 'B', 'C'].map((key, index) => provider(key, index + 1))
+        const manager = new WalletStorageManager(
+          'synthetic-primary-order',
+          providers[0] as unknown as WalletStorageProvider,
+          providers.slice(1) as unknown as WalletStorageProvider[]
+        )
+        await manager.makeAvailable()
+        manager.syncToWriter = async (_auth, writer, source) => {
+          const target = providers.find(
+            p => p.getSettings().storageIdentityKey === writer.getSettings().storageIdentityKey
+          )!
+          const origin = providers.find(
+            p => p.getSettings().storageIdentityKey === source!.getSettings().storageIdentityKey
+          )!
+          target.user.activeStorage = origin.user.activeStorage
+          return { inserts: 0, updates: 0, log: '' }
+        }
+        const switching = manager.setActive('B')
+        const checkedSwitch = failFirst ? expect(switching).rejects.toBe(failure) : switching
+        await entered.promise
+        let completed = 0
+        const queued = requests.map(key =>
+          manager.setActive(key).then(() => {
+            completed++
+          })
+        )
+        try {
+          await new Promise<void>(resolve => setImmediate(resolve))
+          expect(completed).toBe(0)
+        } finally {
+          release.resolve()
+          await checkedSwitch
+          await Promise.all(queued)
+        }
+        const expected = requests[requests.length - 1]
+        expect(manager.getActiveStore()).toBe(expected)
+        expect(manager.isActiveEnabled).toBe(true)
+        expect(providers.map(p => p.user.activeStorage)).toEqual([expected, expected, expected])
+      }
+    ),
+    {
+      numRuns: Number.isSafeInteger(requestedRuns) ? Math.max(MIN_PROPERTY_RUNS, requestedRuns) : MIN_PROPERTY_RUNS,
+      seed: Number.isSafeInteger(requestedSeed) ? requestedSeed : 3242026,
+      ...(replayPath !== undefined && replayPath !== '' ? { path: replayPath } : {}),
+      interruptAfterTimeLimit: 150000,
+      markInterruptAsFailure: true
+    }
+  )
+}, 180000)
