@@ -225,6 +225,15 @@ export function evaluateMutationReport(targetName, metrics, policy, { requireSco
   return errors
 }
 
+export function strykerEnvironment(environment, overrides) {
+  const result = { ...environment, ...overrides }
+  // Vitest's auto-enabled github-actions reporter appends a job summary on every
+  // run. Under Stryker that is one "failing" report per killed mutant, which
+  // reads as real test failures on the workflow run page.
+  delete result.GITHUB_STEP_SUMMARY
+  return result
+}
+
 function runCommand(command, arguments_, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, arguments_, { ...options, stdio: 'inherit' })
@@ -258,12 +267,11 @@ async function runTarget(targetName, target, policy, partition = 'whole') {
   }
   const exitCode = await runCommand(stryker, ['run', CONFIG_PATH, '--reporters', reporters], {
     cwd: path.join(REPOSITORY_ROOT, target.packageDirectory),
-    env: {
-      ...process.env,
+    env: strykerEnvironment(process.env, {
       ...propertyEnvironment,
       TS_STACK_MUTATION_TARGET: targetName,
       TS_STACK_MUTATION_PARTITION: partition
-    }
+    })
   })
   if (exitCode !== 0) throw new Error(`${targetName} mutation process exited ${exitCode}`)
 
