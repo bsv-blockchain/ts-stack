@@ -1128,25 +1128,40 @@ collection commit and committed lost acknowledgements, then independently check
 metadata/source preservation and writer progress. These remain synthetic engine
 proofs, with production/PXC and power-loss acceptance separate.
 
-These primitives require the caller to validate complete owned DDL/source and
-exclude migration before a fresh transaction. Provider-owned maintenance and
-registered retention recovery remain unfinished, as does generation-aware
-delta-page/receiver integration. A durable prefix proof does not reopen a killed
+The internal `StorageKnex.maintainSnapshotJournal` controller owns each bounded
+floor or collection transaction. It shares admission with retained capture,
+validates the complete owned generation, ceiling and receipt policy, and excludes
+the configured Knex migration owner before maintenance. SQLite reserves its WAL
+writer before generation reads; MySQL locks only the configured migration-owner
+row during schema validation, allowing foreground wallet writes until the short
+clock/retention operation. Raw operator DDL remains outside this owner contract.
+
+Requests detach their cursor keys before configuration work. Cancellation or a
+1–30,000 millisecond lifetime rejects the result promptly while physical drain
+continues to own provider admission. Destruction fences admission synchronously;
+transaction or pool cleanup failure remains observable and prevents new retained
+work. A cancellation after commit can lose its result but cannot undo that commit;
+recovery reads the durable floor/metadata before repeating a bounded operation.
+WAL and actual RC/RR owned pools exercise eight process-loss cuts each, plus
+provider cancellation, shutdown and physical native cleanup.
+
+Registered generation/retention recovery and generation-aware delta-page/receiver
+integration remain unfinished. A durable prefix proof does not reopen a killed
 database read transaction.
 
 This foundation adds no registered migration, public capability or reader
 advertisement. Its event-window invalidation is not a complete retention or
-resource policy. Runtime quotas and provider continuity-floor ownership,
+resource policy. Runtime quotas and registered generation lifecycle,
 generation-aware receiver/primary integration, and remaining remote/IndexedDB,
 streaming and staged-import acceptance remain unfinished. Do not infer full
 incremental continuity or completed issue #544 from these helpers.
 
-The wallet-snapshot-journal mutation target owns all nineteen complete source
-modules in seventeen execution parts, including the whole receipt, collection, capture, native
-backend, connection ownership and barrier modules. Every part retains the complete canonical
+The wallet-snapshot-journal mutation target owns all twenty-two complete source
+modules in twenty execution parts, including the whole receipt, collection, maintenance, capture, native
+backend, connection ownership and migration/barrier modules. Every part retains the complete canonical
 journal tests and fixtures, including one governed property entry for exact
 revision/page, generated source-observer and committed receipt-state schedules. A minimum score of 90%, zero
-uncovered/invalid mutants, 300 cases with seed 3242026, four workers, runner reuse 8 and 90-minute
+uncovered/invalid/unexecuted mutants, 300 cases with seed 3242026, four workers, runner reuse 8 and 90-minute
 bounds remain in force. Native ownership, client/server process-loss and broader
 platform/performance evidence are separate required validation; source helpers
 alone do not establish deployment, replication, PXC or power-loss readiness.

@@ -178,7 +178,8 @@ function snapshotSyncMutationTargets(repositoryRoot) {
         '<rootDir>/src/storage/sync/syncFailure.test.ts',
         '<rootDir>/src/storage/sync/syncSession.test.ts',
         '<rootDir>/src/storage/sync/syncCheckpoint.test.ts',
-        '<rootDir>/src/utility/__tests__/runInSeries.test.ts'
+        '<rootDir>/src/utility/__tests__/runInSeries.test.ts',
+        '<rootDir>/src/storage/snapshot/journal/*.test.ts'
       ],
       {
         config: {
@@ -496,6 +497,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/storage/snapshot/*.test.ts',
           '<rootDir>/src/storage/snapshot/journal/SnapshotJournalCapture*.test.ts',
           '<rootDir>/src/storage/snapshot/journal/SnapshotJournalConnections.test.ts',
+          '<rootDir>/src/storage/snapshot/journal/SnapshotJournalMaintenance*.test.ts',
           '<rootDir>/src/storage/__test/StorageKnexMigrationFailure.security.test.ts'
         ],
         {
@@ -537,6 +539,13 @@ export function buildMutationTargets(repositoryRoot) {
         'test/storage/snapshotJournalRetentionMysqlRr.cjs',
         'test/storage/snapshotJournalRetentionProcessLoss.cjs',
         'test/storage/snapshotJournalRetentionSqlite.cjs',
+        'test/storage/snapshotJournalMaintenanceFixture.cjs',
+        'test/storage/snapshotJournalMaintenanceCuts.cjs',
+        'test/storage/snapshotJournalMaintenanceChild.cjs',
+        'test/storage/snapshotJournalMaintenanceProcessLoss.cjs',
+        'test/storage/snapshotJournalMaintenanceWal.cjs',
+        'test/storage/snapshotJournalMaintenanceMysqlRc.cjs',
+        'test/storage/snapshotJournalMaintenanceMysqlRr.cjs',
         'test/storage/snapshotJournalSqliteCrash.cjs',
         'test/storage/runSnapshotJournalMysql.cjs',
         'test/storage/snapshotArchiveDocker.cjs'
@@ -562,7 +571,10 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/snapshot/journal/SnapshotJournalConnections.ts',
         'src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts',
         'src/storage/snapshot/journal/SnapshotJournalCapture.ts',
-        'src/storage/snapshot/journal/SnapshotJournalCollection.ts'
+        'src/storage/snapshot/journal/SnapshotJournalCollection.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMaintenance.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMaintenanceFence.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMaintenanceTask.ts'
       ],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/journal/*.test.ts'], {
         maxTestRunnerReuse: 8,

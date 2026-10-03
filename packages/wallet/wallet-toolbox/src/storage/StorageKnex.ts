@@ -1,4 +1,13 @@
 import {
+  maintainSnapshotJournal as startSnapshotJournalMaintenance,
+  type SnapshotJournalMaintenanceRequest,
+  type SnapshotJournalMaintenanceResult
+} from './snapshot/journal/SnapshotJournalMaintenance'
+import type {
+  SnapshotJournalMaintenanceTask,
+  SnapshotJournalMaintenanceOptions
+} from './snapshot/journal/SnapshotJournalMaintenanceTask'
+import {
   retainSnapshotJournalCapture,
   type SnapshotJournalCaptureRequest,
   type SnapshotJournalCaptureLifetime,
@@ -149,6 +158,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   private snapshotSyncBusy = false
   private snapshotJournalCapture?: SnapshotJournalCaptureLifetime
   private snapshotJournalCaptureFailure?: SnapshotJournalConnectionCleanupError
+  private snapshotJournalMaintenance?: SnapshotJournalMaintenanceTask<SnapshotJournalMaintenanceResult>
+  private snapshotJournalMaintenanceFailure?: SnapshotJournalConnectionCleanupError
   private snapshotArchiveRecovery?: Promise<void>
   private guardedSnapshotFailure?: { error: unknown }
   private retainedReadSnapshot?: RetainedReadSnapshotLifetime
@@ -286,9 +297,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       try {
         await this.snapshotJournalCapture?.close()
       } finally {
-        await this.snapshotSyncOpening?.catch(() => undefined)
-        await this.snapshotSyncSource?.destroy()
-        await this.retainedReadSnapshot?.close()
+        try {
+          await this.snapshotJournalMaintenance?.close()
+        } finally {
+          await this.snapshotSyncOpening?.catch(() => undefined)
+          await this.snapshotSyncSource?.destroy()
+          await this.retainedReadSnapshot?.close()
+        }
       }
     }
   }
@@ -434,6 +449,54 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
     void lifetime.closed.then(() => release(), release)
     return await lifetime.opened
+  }
+
+  /** One internal global floor/page operation; shares source admission until native cleanup drains. */
+  async maintainSnapshotJournal(
+    request: SnapshotJournalMaintenanceRequest,
+    options: SnapshotJournalMaintenanceOptions = {}
+  ): Promise<SnapshotJournalMaintenanceResult> {
+    if (this.retainedReadSnapshotsStopped)
+      throw new WERR_INVALID_OPERATION('Snapshot journal maintenance is unavailable after destruction begins')
+    if (this.snapshotSyncBusy)
+      throw new WERR_INVALID_OPERATION('This provider already has a snapshot source or maintenance opening or active')
+    this.snapshotSyncBusy = true
+    let lifetime: SnapshotJournalMaintenanceTask<SnapshotJournalMaintenanceResult>
+    try {
+      lifetime = startSnapshotJournalMaintenance(
+        async () => {
+          if (this.retainedReadSnapshotsStopped)
+            throw new WERR_INVALID_OPERATION('Snapshot journal maintenance is unavailable after destruction begins')
+          return await this.concurrentSnapshotReaderConfig()
+        },
+        request,
+        options
+      )
+    } catch (error) {
+      this.snapshotSyncBusy = false
+      throw error
+    }
+    this.snapshotJournalMaintenance = lifetime
+    const release = (error?: unknown): void => {
+      if (error instanceof SnapshotJournalConnectionCleanupError) {
+        this.snapshotJournalMaintenanceFailure = error
+        this.retainedReadSnapshotsStopped = true
+        return
+      }
+      if (this.snapshotJournalMaintenance === lifetime) {
+        this.snapshotJournalMaintenance = undefined
+        this.snapshotSyncBusy = false
+      }
+    }
+    void lifetime.closed.then(() => release(), release)
+    return await lifetime.result
+  }
+
+  /** Drain an already-stopping maintenance owner; a failed native cleanup remains observable. */
+  awaitSnapshotJournalMaintenanceCleanup(): Promise<void> {
+    if (this.snapshotJournalMaintenanceFailure !== undefined)
+      return Promise.reject(this.snapshotJournalMaintenanceFailure)
+    return this.snapshotJournalMaintenance?.closed ?? Promise.resolve()
   }
 
   /** Drain an already-stopping capture without admitting another source. */
@@ -2116,7 +2179,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       // cleanup failure remains observable after the pool destruction below.
       if (
         (this.guardedSnapshotFailure === undefined || this.guardedSnapshotFailure.error !== error) &&
-        this.snapshotJournalCaptureFailure !== error
+        this.snapshotJournalCaptureFailure !== error &&
+        this.snapshotJournalMaintenanceFailure !== error
       )
         throw error
     } finally {
@@ -2133,6 +2197,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const failure = this.guardedSnapshotFailure?.error
     if (failure instanceof SnapshotArchiveSourceCleanupError) throw failure
     if (this.snapshotJournalCaptureFailure !== undefined) throw this.snapshotJournalCaptureFailure
+    if (this.snapshotJournalMaintenanceFailure !== undefined) throw this.snapshotJournalMaintenanceFailure
   }
 
   override async migrate(storageName: string, storageIdentityKey: string): Promise<string> {

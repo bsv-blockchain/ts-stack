@@ -76,8 +76,11 @@ the global writer clock before current receipt locks and cannot pass a live
 receipt's prefix. Tombstone collection examines at most 256 primary-key rows,
 including live and newer records, and binds its cursor to one epoch, floor and
 stream. Native WAL/RC/RR checks cover twenty-four real process-loss boundaries.
-Callers must validate the complete owned generation and exclude migrations before
-these short transactions; automatic provider maintenance remains unfinished.
+The internal `maintainSnapshotJournal` provider controller validates the complete
+owned generation and excludes the configured migration owner before each short
+floor or collection transaction. It shares source admission through cancellation,
+rollback and physical cleanup; failed cleanup fences further retained admission.
+Automatic scheduling remains unfinished.
 These helpers do not register a migration or advertise incremental
 synchronization. Runtime quotas, registered recovery, generation-aware delta pages
 and receiver/primary integration and the remaining issue #544 acceptance work are

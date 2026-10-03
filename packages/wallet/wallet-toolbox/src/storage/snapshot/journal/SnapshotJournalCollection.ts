@@ -62,7 +62,9 @@ function key(value: SnapshotJournalCollectionKey, stream: 'scope' | 'physical'):
   else if (value.userId !== undefined) return invalid()
   return result
 }
-function detached(value: SnapshotJournalCollectionRequest): SnapshotJournalCollectionRequest {
+export function snapshotJournalCollectionRequest(
+  value: SnapshotJournalCollectionRequest
+): SnapshotJournalCollectionRequest {
   if (!object(value)) return invalid()
   const { epoch, stream } = value
   if (typeof epoch !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(epoch))
@@ -78,7 +80,12 @@ function detached(value: SnapshotJournalCollectionRequest): SnapshotJournalColle
   if (after !== undefined) {
     if (!object(after) || after.epoch !== epoch || after.floor !== result.floor || after.stream !== stream)
       return invalid()
-    result.after = { epoch, stream, floor: result.floor, key: key(after.key, stream) }
+    result.after = {
+      epoch,
+      stream,
+      floor: result.floor,
+      key: key(after.key, stream)
+    }
   }
   return result
 }
@@ -124,7 +131,7 @@ function seek(query: Knex.QueryBuilder, k: Knex, request: SnapshotJournalCollect
 }
 /** Primary-key scan bounds examined metadata, including live and newer rows. */
 export function snapshotJournalCollectionQuery(k: Knex, input: SnapshotJournalCollectionRequest): Knex.QueryBuilder {
-  const request = detached(input),
+  const request = snapshotJournalCollectionRequest(input),
     sqlite = local(k),
     table = 'snapshot_journal_' + request.stream
   const hint = sqlite ? '?? AS ?? INDEXED BY ??' : '?? AS ?? FORCE INDEX (??)'
@@ -186,7 +193,11 @@ function metadata(row: Record<string, unknown>, stream: 'scope' | 'physical', sq
     const generation = snapshotJournalRevision(row.generationText)
     if (generation === '0' || compareSnapshotJournalRevisions(generation, revision) > 0) return invalid()
   }
-  return { key: position, revision, present: row.present === 1 || row.present === true }
+  return {
+    key: position,
+    revision,
+    present: row.present === 1 || row.present === true
+  }
 }
 async function generation(k: Knex, epoch: string): Promise<void> {
   const query = k('snapshot_journal_generation')
@@ -235,7 +246,7 @@ export async function collectSnapshotJournalTombstones(
     }
   | undefined
 > {
-  const request = detached(input)
+  const request = snapshotJournalCollectionRequest(input)
   if (!k.isTransaction) return invalid()
   const highWater = await reserveSnapshotJournalCaptureFence(k)
   if (highWater === undefined) return undefined
@@ -269,6 +280,13 @@ export async function collectSnapshotJournalTombstones(
     complete: rows.length < request.limit,
     ...(previous === undefined
       ? {}
-      : { after: { epoch: request.epoch, stream: request.stream, floor: request.floor, key: previous } })
+      : {
+          after: {
+            epoch: request.epoch,
+            stream: request.stream,
+            floor: request.floor,
+            key: previous
+          }
+        })
   }
 }

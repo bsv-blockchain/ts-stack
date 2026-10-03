@@ -307,3 +307,29 @@ Provider maintenance integration, runtime quotas and registered forward lifecycl
 and recovery remain required within S2. No public reader advertisement or
 migration registration is introduced by this checkpoint. Every acceptance row
 remains open until its complete implementation and end-to-end evidence exist.
+
+## Owned bounded journal maintenance checkpoint
+
+The internal provider controller now owns complete generation validation and
+configured migration-owner exclusion before each bounded floor or tombstone-page
+transaction. MySQL permits foreground writes during generation validation and
+reserves the global clock only for the bounded operation; SQLite obtains the WAL
+writer before generation reads. Admission is shared with retained source capture.
+Cancellation/result expiry retains that admission through native drain, and
+provider destruction fences new work synchronously. Cleanup failures preserve
+operation and native causes and stop further retained admission.
+
+Unit fault tests, 300 seeded lifecycle schedules and native WAL/RC/RR proofs
+exercise commit, partial deletion, lost acknowledgement, cancellation, shutdown
+and preservation of all thirteen source arrays. The journal mutation registration
+now owns twenty-two complete modules in twenty parts, while every part retains
+the complete journal test union. The retained-provider test union also includes
+the complete maintenance suites. Each inherited snapshot-sync target retains the
+complete journal test union for its owned provider ranges. Policies, thresholds
+and deadlines are preserved.
+
+This advances the internal maintenance portion of S2. Runtime quotas, registered
+forward generation lifecycle/recovery, payload/receiver integration and all other
+#544 acceptance requirements remain open. It adds no migration, advertised
+capability or complete-program readiness claim. Raw operator DDL must remain
+outside maintenance unless separately excluded by the operator.

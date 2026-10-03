@@ -12,7 +12,9 @@ const journalFixtureGroups = Object.freeze([
   'receipts',
   'capture',
   'retention-rc',
-  'retention-rr'
+  'retention-rr',
+  'maintenance-rc',
+  'maintenance-rr'
 ])
 const execute = (file, args, options) =>
   new Promise((resolve, reject) => {
@@ -28,6 +30,8 @@ const execute = (file, args, options) =>
   })
 
 function fixtureScript(group) {
+  if (group === 'maintenance-rc') return 'snapshotJournalMaintenanceMysqlRc.cjs'
+  if (group === 'maintenance-rr') return 'snapshotJournalMaintenanceMysqlRr.cjs'
   if (group === 'retention-rc') return 'snapshotJournalRetentionMysqlRc.cjs'
   if (group === 'retention-rr') return 'snapshotJournalRetentionMysqlRr.cjs'
   if (group === 'capture') return 'snapshotJournalCaptureMysql.cjs'
@@ -36,7 +40,13 @@ function fixtureScript(group) {
   return 'snapshotJournalReceiptMysql.cjs'
 }
 function fixtureTimeout(group) {
-  if (group === 'generation' || group === 'capture' || group.startsWith('retention-')) return 180000
+  if (
+    group === 'generation' ||
+    group === 'capture' ||
+    group.startsWith('retention-') ||
+    group.startsWith('maintenance-')
+  )
+    return 180000
   if (group === 'server-crash') return 240000
   return 60000
 }

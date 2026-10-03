@@ -276,7 +276,10 @@ test('journal mutation registration retains its complete source, canonical tests
     'src/storage/snapshot/journal/SnapshotJournalConnections.ts',
     'src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts',
     'src/storage/snapshot/journal/SnapshotJournalCapture.ts',
-    'src/storage/snapshot/journal/SnapshotJournalCollection.ts'
+    'src/storage/snapshot/journal/SnapshotJournalCollection.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMaintenance.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMaintenanceFence.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMaintenanceTask.ts'
   ])
   assert.deepEqual(target.additionalInputs, [
     'test/fixtures/snapshotJournal/mysql-generation-ddl-fixture.json',
@@ -303,6 +306,13 @@ test('journal mutation registration retains its complete source, canonical tests
     'test/storage/snapshotJournalRetentionMysqlRr.cjs',
     'test/storage/snapshotJournalRetentionProcessLoss.cjs',
     'test/storage/snapshotJournalRetentionSqlite.cjs',
+    'test/storage/snapshotJournalMaintenanceFixture.cjs',
+    'test/storage/snapshotJournalMaintenanceCuts.cjs',
+    'test/storage/snapshotJournalMaintenanceChild.cjs',
+    'test/storage/snapshotJournalMaintenanceProcessLoss.cjs',
+    'test/storage/snapshotJournalMaintenanceWal.cjs',
+    'test/storage/snapshotJournalMaintenanceMysqlRc.cjs',
+    'test/storage/snapshotJournalMaintenanceMysqlRr.cjs',
     'test/storage/snapshotJournalSqliteCrash.cjs',
     'test/storage/runSnapshotJournalMysql.cjs',
     'test/storage/snapshotArchiveDocker.cjs'
@@ -317,4 +327,24 @@ test('journal mutation registration retains its complete source, canonical tests
         'packages/wallet/wallet-toolbox/' + input
       ]).includes('wallet-snapshot-journal')
     )
+})
+
+test('every inherited snapshot-sync target keeps the complete journal tests for owned provider ranges', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  for (const name of [
+    'wallet-snapshot-sync',
+    'wallet-snapshot-sync-destination',
+    'wallet-snapshot-sync-rows'
+  ]) {
+    assert.ok(
+      targets[name].runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/src/storage/snapshot/journal/*.test.ts'
+      )
+    )
+    assert.ok(
+      targets[name].runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/src/storage/snapshot/SnapshotSync*.test.ts'
+      )
+    )
+  }
 })

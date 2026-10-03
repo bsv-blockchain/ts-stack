@@ -63,7 +63,10 @@ const plans = new Map([
         ['src/storage/snapshot/journal/SnapshotJournalConnections.ts', 'connections'],
         ['src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts', 'capture-backend'],
         ['src/storage/snapshot/journal/SnapshotJournalCapture.ts', 'capture'],
-        ['src/storage/snapshot/journal/SnapshotJournalCollection.ts', 'collection']
+        ['src/storage/snapshot/journal/SnapshotJournalCollection.ts', 'collection'],
+        ['src/storage/snapshot/journal/SnapshotJournalMaintenance.ts', 'maintenance'],
+        ['src/storage/snapshot/journal/SnapshotJournalMaintenanceFence.ts', 'maintenance-fence'],
+        ['src/storage/snapshot/journal/SnapshotJournalMaintenanceTask.ts', 'maintenance-task']
       ])
     }
   ],
