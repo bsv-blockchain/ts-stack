@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 134)
+  assert.equal(result.summary.propertySuites, 137)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 134)
+  assert.equal(result.summary.mutationTargets, 137)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -589,7 +589,8 @@ test('finite HTTP extraction preserves existing authentication ranges and adds i
     '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
     '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
     '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
-    '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
+    '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts',
+    '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
   ])
   const mutation = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
@@ -815,7 +816,8 @@ test('proposal client retains complete operation and shared finite HTTP qualific
     '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
     '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
     '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
-    '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
+    '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts',
+    '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
   ])
   const registration = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')

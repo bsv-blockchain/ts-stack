@@ -1356,6 +1356,36 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-purchase-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseTransport.property.test.ts",
+      "boundary": "Original authenticated covenant preparation, immutable recipient and transaction binding with bounded uncharged submission and read-only recovery",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-buyer",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-buyer.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable original covenant purchase with bounded protected custody, one original native action and separately verified usable rights",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-purchase-payment",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-wallet-native.property.test.ts",
+      "risk": "critical",
+      "boundary": "Original full lineage, actual native noSend covenant funding/signing and exact transaction recovery under immutable capacity and selected context",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

@@ -78,6 +78,20 @@ a purchase, perform topic admission, satisfy a release policy or issue a licence
 See [original purchase custody](../../../docs/guides/private-purchase-custody.md)
 before installing the separately composed host and domain owners.
 
+The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,
+`privatePurchaseBuyerBinding` and `PRIVATE_PURCHASE_BUYER_INITIAL`. The separate
+`private/purchase-wallet` entry exports `WalletToolboxPurchasePayment` without
+authenticated HTTP orchestration. Six protected object reservations precede seller
+preparation and wallet work. The small durable control journal contains no large
+lineage, BEEF or delivered secret. `recover` reads the original wallet intent and
+seller obligation; `advance` explicitly permits new work under the original
+cutoff. The concrete native payment adapter independently verifies the complete
+listing history before allocation/signing and refuses insufficient submission
+capacity before signing. Delivered custody, independent validation and current
+usability remain separate. Reopen the original protected owners and native action
+store instead of creating another operation after a missing reply. The purchase
+custody guide describes installation, wallet layout and shutdown requirements.
+
 ## Durable progressive and live provider
 
 The optional `@bsv/output-knowledge/lookup` entry composes durable snapshot/live

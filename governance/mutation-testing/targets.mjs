@@ -1955,6 +1955,14 @@ export function buildMutationTargets(repositoryRoot) {
       ],
       additionalInputs: [
         'src/operations/**',
+        'src/revenue-listing/**',
+        'test/private-purchase-wallet*.ts',
+        'test/private-purchase*.ts',
+        'test/revenue-*.ts',
+        'test/fixtures/revenue-listing/**',
+        '../../sdk/src/script/**',
+        '../../sdk/src/transaction/**',
+        '../../sdk/src/chaintrackers/**',
         'src/private/**',
         'src/internal/BoundedOutputWork.ts',
         'src/storage/SQLiteTransactionDomain.ts',
@@ -1976,7 +1984,109 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/private-lookup-buyer.test.ts',
-          '<rootDir>/test/private-buyer-payment.test.ts'
+          '<rootDir>/test/private-buyer-payment.test.ts',
+          '<rootDir>/test/private-purchase-buyer*.test.ts',
+          '<rootDir>/test/private-purchase-wallet-native*.test.ts'
+        ],
+        {
+          esm: true,
+          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          maxTestRunnerReuse: 8
+        }
+      )
+    },
+    'private-purchase-buyer': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-purchase-buyer.property.test.ts',
+      mutate: [
+        'src/private/PrivatePurchaseBuyer.ts',
+        'src/private/PrivatePurchaseBuyerPorts.ts',
+        'src/private/purchase-buyer.ts'
+      ],
+      additionalInputs: [
+        'src/operations/**',
+        'src/revenue-listing/**',
+        'test/private-purchase-wallet*.ts',
+        'test/private-purchase*.ts',
+        'test/revenue-*.ts',
+        'test/fixtures/revenue-listing/**',
+        '../../sdk/src/script/**',
+        '../../sdk/src/transaction/**',
+        '../../sdk/src/chaintrackers/**',
+        'src/private/**',
+        'src/internal/BoundedOutputWork.ts',
+        'src/storage/SQLiteTransactionDomain.ts',
+        'test/private-*buyer*.ts',
+        'test/private-buyer*.ts',
+        'test/private-acquisition*fixture.ts',
+        'test/protected-operation-object.fixture.ts',
+        'test/protected-ledger*fixture.ts',
+        '../../wallet/wallet-toolbox/src/**',
+        '../../wallet/wallet-toolbox/test/utils/**',
+        '../../wallet/wallet-toolbox/tsconfig*.json',
+        '../../wallet/wallet-toolbox/package.json',
+        '../../sdk/src/primitives/**',
+        '../../sdk/src/wallet/**',
+        '../../sdk/src/overlay-tools/**',
+        '../../sdk/src/auth/**'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-lookup-buyer*.test.ts',
+          '<rootDir>/test/private-buyer-payment.test.ts',
+          '<rootDir>/test/private-purchase-buyer*.test.ts',
+          '<rootDir>/test/private-purchase-wallet-native*.test.ts'
+        ],
+        {
+          esm: true,
+          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          maxTestRunnerReuse: 8
+        }
+      )
+    },
+    'wallet-purchase-payment': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-purchase-wallet-native.property.test.ts',
+      mutate: ['src/private/WalletToolboxPurchasePayment.ts', 'src/private/purchase-wallet.ts'],
+      additionalInputs: [
+        'src/operations/**',
+        'src/revenue-listing/**',
+        'test/private-purchase-wallet*.ts',
+        'test/private-purchase*.ts',
+        'test/revenue-*.ts',
+        'test/fixtures/revenue-listing/**',
+        '../../sdk/src/script/**',
+        '../../sdk/src/transaction/**',
+        '../../sdk/src/chaintrackers/**',
+        'src/private/**',
+        'src/internal/BoundedOutputWork.ts',
+        'src/storage/SQLiteTransactionDomain.ts',
+        'test/private-*buyer*.ts',
+        'test/private-buyer*.ts',
+        'test/private-acquisition*fixture.ts',
+        'test/protected-operation-object.fixture.ts',
+        'test/protected-ledger*fixture.ts',
+        '../../wallet/wallet-toolbox/src/**',
+        '../../wallet/wallet-toolbox/test/utils/**',
+        '../../wallet/wallet-toolbox/tsconfig*.json',
+        '../../wallet/wallet-toolbox/package.json',
+        '../../sdk/src/primitives/**',
+        '../../sdk/src/wallet/**',
+        '../../sdk/src/overlay-tools/**',
+        '../../sdk/src/auth/**'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-lookup-buyer*.test.ts',
+          '<rootDir>/test/private-buyer-payment.test.ts',
+          '<rootDir>/test/private-purchase-buyer*.test.ts',
+          '<rootDir>/test/private-purchase-wallet-native*.test.ts'
         ],
         {
           esm: true,
@@ -2276,7 +2386,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
-          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
         ],
         { esm: true }
       )
@@ -2297,7 +2408,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
-          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
         ],
         { esm: true }
       )
@@ -2319,7 +2431,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
-          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
         ],
         { esm: true }
       )
@@ -2341,7 +2454,31 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
           '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
-          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts'
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
+        ],
+        { esm: true, maxTestRunnerReuse: 8 }
+      )
+    },
+    'sdk-purchase-http': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/overlay-tools/__tests/OutputPurchaseTransport.property.test.ts',
+      mutate: [
+        'src/overlay-tools/OutputPurchaseTransport.ts',
+        'src/overlay-tools/internal/OutputFiniteHTTP.ts'
+      ],
+      additionalInputs: ['src/overlay-tools/**', 'src/auth/**', 'src/wallet/Wallet.interfaces.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/overlay-tools/__tests/OutputProposalTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputRootEvictionTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputLookupTransport.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupTransport*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPaidLookupFunding*.test.ts',
+          '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
         ],
         { esm: true, maxTestRunnerReuse: 8 }
       )

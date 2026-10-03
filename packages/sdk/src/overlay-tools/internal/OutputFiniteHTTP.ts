@@ -30,6 +30,8 @@ export interface OutputFiniteHTTPMessages {
 export interface OutputFiniteHTTPOptions {
   selection: OutputCapabilitySelection
   wallet?: WalletInterface
+  /** Optional original private recipient; identity checks share the finite deadline. */
+  recipient?: string
   fetch?: typeof fetch
   requestTimeoutMs?: number
   messages: Readonly<OutputFiniteHTTPMessages>
@@ -41,7 +43,11 @@ export interface OutputFiniteHTTPResponse {
   readonly headers: Headers
   readonly body: Uint8Array
 }
-interface AcquisitionExchange { buyer: string; paymentHeader?: string; allowChallenge: boolean }
+interface AcquisitionExchange {
+  buyer: string
+  paymentHeader?: string
+  allowChallenge: boolean
+}
 
 function checkHeaders(headers: Headers, messages: OutputFiniteHTTPMessages, maximum = 16384): void {
   let bytes = 0
@@ -78,6 +84,7 @@ export class OutputFiniteHTTP {
   private readonly timeout: number
   private readonly messages: Readonly<OutputFiniteHTTPMessages>
   private readonly serviceError: (packet: OutputServiceError) => Error
+  private readonly recipient?: string
   private readonly walletIdentity?: WalletInterface['getPublicKey']
   private active = false
 
@@ -85,6 +92,7 @@ export class OutputFiniteHTTP {
     this.selection = options.selection
     this.wallet = options.wallet
     this.walletIdentity = options.wallet?.getPublicKey
+    this.recipient = options.recipient === undefined ? undefined : outputIdentity(options.recipient)
     this.messages = Object.freeze({ ...options.messages })
     this.serviceError = options.serviceError
     const fetchClient = options.fetch ?? globalThis.fetch
@@ -115,16 +123,36 @@ export class OutputFiniteHTTP {
     acquisition: AcquisitionExchange,
     signal?: AbortSignal
   ): Promise<OutputFiniteHTTPResponse> {
-    outputAssert(this.selection.profile.id === OUTPUT_PROFILES.acquisition &&
-      this.selection.profile.authentication === 'brc103' && this.selection.profile.payment === 'brc105',
-      'Paid lookup requires its explicit authenticated acquisition profile', 'unsupported')
-    outputAssert(typeof acquisition.allowChallenge === 'boolean', 'Invalid paid lookup challenge mode')
+    outputAssert(
+      this.selection.profile.id === OUTPUT_PROFILES.acquisition &&
+        this.selection.profile.authentication === 'brc103' &&
+        this.selection.profile.payment === 'brc105',
+      'Paid lookup requires its explicit authenticated acquisition profile',
+      'unsupported'
+    )
+    outputAssert(
+      typeof acquisition.allowChallenge === 'boolean',
+      'Invalid paid lookup challenge mode'
+    )
     const buyer = outputIdentity(acquisition.buyer)
     const paymentHeader = acquisition.paymentHeader
-    outputAssert(paymentHeader === undefined || (typeof paymentHeader === 'string' && paymentHeader.length > 0 &&
-      new TextEncoder().encode(paymentHeader).length <= 98304), 'Paid lookup payment header limit', 'limited')
-    outputAssert(paymentHeader === undefined || !acquisition.allowChallenge, 'A paid retry cannot authorize another challenge')
-    return await this.exchangeResponse(url, body, maximumBytes, signal, { buyer, paymentHeader, allowChallenge: acquisition.allowChallenge })
+    outputAssert(
+      paymentHeader === undefined ||
+        (typeof paymentHeader === 'string' &&
+          paymentHeader.length > 0 &&
+          new TextEncoder().encode(paymentHeader).length <= 98304),
+      'Paid lookup payment header limit',
+      'limited'
+    )
+    outputAssert(
+      paymentHeader === undefined || !acquisition.allowChallenge,
+      'A paid retry cannot authorize another challenge'
+    )
+    return await this.exchangeResponse(url, body, maximumBytes, signal, {
+      buyer,
+      paymentHeader,
+      allowChallenge: acquisition.allowChallenge
+    })
   }
 
   private async exchangeResponse(
@@ -178,16 +206,34 @@ export class OutputFiniteHTTP {
     signal: AbortSignal,
     acquisition?: AcquisitionExchange
   ): Promise<OutputFiniteHTTPResponse> {
-    if (acquisition) {
-      outputAssert(this.wallet !== undefined && typeof this.walletIdentity === 'function' && this.wallet.getPublicKey === this.walletIdentity,
-        'Paid lookup wallet capability changed', 'context-changed')
+    const recipient = acquisition?.buyer ?? this.recipient
+    if (recipient !== undefined) {
+      outputAssert(
+        this.wallet !== undefined &&
+          typeof this.walletIdentity === 'function' &&
+          this.wallet.getPublicKey === this.walletIdentity,
+        acquisition
+          ? 'Paid lookup wallet capability changed'
+          : 'Private HTTP wallet capability changed',
+        'context-changed'
+      )
       const identity = await this.walletIdentity.call(this.wallet, { identityKey: true })
       signal.throwIfAborted()
-      outputAssert(this.wallet.getPublicKey === this.walletIdentity && identity.publicKey === acquisition.buyer,
-        'Paid lookup authentication wallet differs from original buyer', 'unauthorized')
+      outputAssert(
+        this.wallet.getPublicKey === this.walletIdentity && identity.publicKey === recipient,
+        acquisition
+          ? 'Paid lookup authentication wallet differs from original buyer'
+          : 'Private HTTP wallet differs from original recipient',
+        'unauthorized'
+      )
     }
-    const headers = { 'content-type': 'application/json', ...this.selection.headers,
-      ...(acquisition?.paymentHeader === undefined ? {} : { 'x-bsv-payment': acquisition.paymentHeader }) }
+    const headers = {
+      'content-type': 'application/json',
+      ...this.selection.headers,
+      ...(acquisition?.paymentHeader === undefined
+        ? {}
+        : { 'x-bsv-payment': acquisition.paymentHeader })
+    }
     const boundedFetch = this.boundedFetch(url, maximumBytes, signal, acquisition)
     const response =
       this.selection.profile.authentication === 'brc103'
@@ -211,14 +257,27 @@ export class OutputFiniteHTTP {
           })
         : await boundedFetch(url, { method: 'POST', headers, body })
     signal.throwIfAborted()
-    if (acquisition) outputAssert(this.wallet?.getPublicKey === this.walletIdentity, 'Paid lookup wallet capability changed', 'context-changed')
+    if (recipient !== undefined)
+      outputAssert(
+        this.wallet?.getPublicKey === this.walletIdentity,
+        acquisition
+          ? 'Paid lookup wallet capability changed'
+          : 'Private HTTP wallet capability changed',
+        'context-changed'
+      )
     for (const [key, value] of Object.entries(this.selection.headers))
       outputAssert(response.headers.get(key) === value, this.messages.contract, 'context-changed')
     const bytes = await readLookupResponseBytes(response, {
-      maxResponseBytes: response.status === 200 || (response.status === 402 && acquisition?.allowChallenge === true) ? maximumBytes : OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES,
+      maxResponseBytes:
+        response.status === 200 || (response.status === 402 && acquisition?.allowChallenge === true)
+          ? maximumBytes
+          : OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES,
       signal
     })
-    if (response.status === 200 || (response.status === 402 && acquisition?.allowChallenge === true))
+    if (
+      response.status === 200 ||
+      (response.status === 402 && acquisition?.allowChallenge === true)
+    )
       return { statusCode: response.status, headers: new Headers(response.headers), body: bytes }
     outputAssert(response.status !== 402, this.messages.payment, 'unsupported')
     const packet = parseOutputServiceError(bytes)
@@ -263,7 +322,10 @@ export class OutputFiniteHTTP {
         signal.throwIfAborted()
         checkHTTPResponse(response, url, this.messages)
         const applicationLimit =
-          response.status === 200 || (response.status === 402 && acquisition?.allowChallenge === true) ? maximumBytes : OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES
+          response.status === 200 ||
+          (response.status === 402 && acquisition?.allowChallenge === true)
+            ? maximumBytes
+            : OUTPUT_SERVICE_ERROR_MAXIMUM_BYTES
         const bytes = await readLookupResponseBytes(response, {
           maxResponseBytes: url === authURL ? 1048576 : applicationLimit,
           signal

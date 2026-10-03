@@ -1648,6 +1648,42 @@
           "Only the original request, actual independently verified purchase and selected release can authorize issuance.",
           "Withdrawal and expiry preserve the original recovery promise without a replacement payment; loss of current access refuses disclosure."
         ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Original authenticated covenant preparation, immutable recipient and transaction binding with bounded uncharged submission and read-only recovery",
+        "target": "At least 300 signed response, selected-contract and original transaction histories",
+        "invariants": [
+          "Every retry owns its original request, recipient, terms and transaction.",
+          "Signed replacement commitments cannot change the selected preparation or release terms.",
+          "Prepare, submit and recovery never authorize an HTTP payment or replacement financial operation."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-buyer.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable original covenant purchase with bounded protected custody, one original native action and separately verified usable rights",
+        "target": "At least 300 protected original purchase interruption, expiry, unknown-effect and restart histories",
+        "invariants": [
+          "No missing or unsupported original wallet outcome authorizes a replacement allocation, signature or transaction.",
+          "Six completion objects are reserved before signing and original delivered bytes cannot be replaced.",
+          "Logical cancellation retains physical work capacity until the underlying original work settles."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-wallet-native.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Original full lineage, actual native noSend covenant funding/signing and exact transaction recovery under immutable capacity and selected context",
+        "target": "At least 300 freshly reopened native original purchase recovery histories",
+        "invariants": [
+          "Independent full genesis and Script verification precedes funding and signing.",
+          "Lost finalization resolves to the same original transaction and immutable original bytes, without broadcast or another signature.",
+          "Changed construction, asynchronous guards and inadequate complete-submission capacity refuse new signing."
+        ]
       }
     ],
     "exclusions": [

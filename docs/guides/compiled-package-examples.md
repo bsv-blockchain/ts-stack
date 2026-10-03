@@ -1828,6 +1828,73 @@ void openOriginalPrivateBuyer
 void useOriginalPrivateBuyer
 ```
 
+## Durable original covenant purchase buyer
+
+The original protected owners are created with the computed installation binding
+before initialization. A local recoverable native wallet owner is supplied
+explicitly. These types compose transport, payment and independent validation;
+compilation does not establish those owners' runtime or chain premises.
+
+```ts compile
+// example-id: durable-private-purchase-buyer
+import {
+  PrivatePurchaseBuyer as CovenantBuyer,
+  privatePurchaseBuyerBinding as covenantBuyerBinding,
+  type PrivatePurchaseBuyerOptions as CovenantBuyerOptions
+} from '@bsv/output-knowledge/private/purchase-buyer'
+import {
+  WalletToolboxPurchasePayment as CovenantPayment,
+  type WalletToolboxPurchasePaymentOptions as CovenantPaymentOptions
+} from '@bsv/output-knowledge/private/purchase-wallet'
+
+function installNativeCovenantPayment(options: CovenantPaymentOptions) {
+  return new CovenantPayment(options)
+}
+async function openOriginalCovenantBuyer(options: CovenantBuyerOptions, create: boolean) {
+  const binding = covenantBuyerBinding(options)
+  const buyer = create ? await CovenantBuyer.initialize(options) : await CovenantBuyer.open(options)
+  return { binding, buyer }
+}
+async function useOriginalCovenantBuyer(buyer: CovenantBuyer, explicitlyAuthorize: boolean) {
+  const envelope = explicitlyAuthorize ? await buyer.advance() : await buyer.recover()
+  if (envelope?.result.status !== 'delivered') return undefined
+  if ((await buyer.validate()) !== 'usable') return undefined
+  return buyer.usableResult()
+}
+void installNativeCovenantPayment
+void openOriginalCovenantBuyer
+void useOriginalCovenantBuyer
+```
+
+## One finite authenticated original purchase exchange
+
+The caller has already retained the original selected contract and exact request.
+This opt-in client performs no automatic HTTP payment or wallet action. The
+durable buyer above should normally own its lifecycle and retries.
+
+```ts compile
+// example-id: finite-private-purchase-transport
+import {
+  OutputPurchaseTransport as CovenantPurchaseHTTP,
+  type OutputPurchaseTransportOptions as CovenantPurchaseHTTPOptions
+} from '@bsv/sdk'
+
+async function sendOriginalCovenantPreparation(
+  options: CovenantPurchaseHTTPOptions<'prepare'>,
+  signal: AbortSignal
+) {
+  return new CovenantPurchaseHTTP(options).send(signal)
+}
+async function recoverOriginalCovenantDelivery(
+  options: CovenantPurchaseHTTPOptions<'recover'>,
+  signal: AbortSignal
+) {
+  return new CovenantPurchaseHTTP(options).send(signal)
+}
+void sendOriginalCovenantPreparation
+void recoverOriginalCovenantDelivery
+```
+
 ## Prepared purchase verification
 
 The independently selected seller, original request/terms and trusted chain view

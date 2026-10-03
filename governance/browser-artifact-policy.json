@@ -151,6 +151,13 @@
       "budget": "packages/application/output-knowledge/browser-buyer-budget.json",
       "entry": "./private/buyer",
       "splittingDisposition": "The optional durable buyer entry exports original-obligation orchestration and a structural local-wallet adapter. Its complete exact-tarball graph measures Vite 532712/139158/116367 and esbuild 412901/127650/109218 raw/gzip/Brotli bytes, one chunk and only output-knowledge and SDK. Separate rounded limits retain at least 10% headroom. Native wallet storage, seller storage and Node custody remain outside this browser graph; existing entry budgets are unchanged."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-purchase-buyer-budget.json",
+      "entry": "./private/purchase-buyer",
+      "splittingDisposition": "The optional durable covenant buyer and Script/lineage-aware native payment construction use distinct ./private/purchase-buyer and ./private/purchase-wallet entries. The full exact-tarball buyer graph measures Vite346431/96207/81422 and esbuild274311/89256/77368 raw/gzip/Brotli bytes; the wallet graph measures Vite448929/121170/101214 and esbuild346370/111091/95241. Each is one chunk with only output-knowledge and SDK. Both retain the existing buyer-style size ceilings without increases and exclude Node/paid owners and cross-entry orchestration. The prior ./private/buyer remains unchanged and measures Vite534399/139650/116705; every earlier profile and budget remains intact."
     }
   ]
 }

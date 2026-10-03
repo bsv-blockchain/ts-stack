@@ -392,6 +392,13 @@ wallet-derived locking key, and field signature before reading or spending it.
   authenticated private-result bindings. Persist the verified original contract
   and exact transaction before dispatch; these codecs do not reserve, pay or
   durably admit an acquisition.
+  `OutputPurchaseTransport` performs one explicitly selected authenticated
+  preparation, submission or recovery exchange, preserving the original signed
+  terms, recipient, topic, domain and transaction binding. It rejects HTTP payment
+  challenges. Restore the original durable owner before retrying; this finite
+  transport does not allocate, sign, broadcast or persist a purchase, validate
+  Script, or make delivered keys usable. See the
+  [purchase custody guide](../../docs/guides/private-purchase-custody.md).
   `OutputPrivatePublicationProtocol` adds bounded protected-publication requests
   and semantic digests that exclude only alternate BEEF proof bytes.
   `OutputPaidLookupProtocol` adds frozen quote and recovery-state representations,

@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 134)
+  assert.equal(Object.keys(configured).length, 137)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -873,7 +873,9 @@ test('durable buyer qualifies every complete owner and retains native one-action
   ])
   assert.deepEqual(buyer.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/private-lookup-buyer.test.ts',
-    '<rootDir>/test/private-buyer-payment.test.ts'
+    '<rootDir>/test/private-buyer-payment.test.ts',
+    '<rootDir>/test/private-purchase-buyer*.test.ts',
+    '<rootDir>/test/private-purchase-wallet-native*.test.ts'
   ])
   assert.equal(
     buyer.runnerOptions.buildCommand,
@@ -1129,4 +1131,64 @@ test('complete covenant seller retains independent verification and every inheri
     'packages/content/lch/test/overlay-acquisition-covenant-seller.property.test.ts'
   )
   assert.equal(target.runnerOptions.buildCommand, 'pnpm build:mutation')
+})
+
+test('purchase HTTP retains the full shared finite source and all prior transport suites', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  const target = configured['sdk-purchase-http']
+  assert.deepEqual(target.mutate, [
+    'src/overlay-tools/OutputPurchaseTransport.ts',
+    'src/overlay-tools/internal/OutputFiniteHTTP.ts'
+  ])
+  assert.deepEqual(
+    target.runnerOptions.jest.config.testMatch,
+    configured['sdk-paid-lookup-http'].runnerOptions.jest.config.testMatch
+  )
+  for (const retained of Object.values(configured)) {
+    if (retained.mutate.includes('src/overlay-tools/internal/OutputFiniteHTTP.ts'))
+      assert.ok(
+        retained.runnerOptions.jest.config.testMatch.includes(
+          '<rootDir>/src/overlay-tools/__tests/OutputPurchaseTransport*.test.ts'
+        )
+      )
+  }
+})
+
+test('covenant buyer and native payment retain whole entries and complete original recovery unions', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  assert.deepEqual(configured['private-purchase-buyer'].mutate, [
+    'src/private/PrivatePurchaseBuyer.ts',
+    'src/private/PrivatePurchaseBuyerPorts.ts',
+    'src/private/purchase-buyer.ts'
+  ])
+  assert.deepEqual(configured['wallet-purchase-payment'].mutate, [
+    'src/private/WalletToolboxPurchasePayment.ts',
+    'src/private/purchase-wallet.ts'
+  ])
+  for (const id of ['private-purchase-buyer', 'wallet-purchase-payment']) {
+    const target = configured[id]
+    for (const pattern of [
+      '<rootDir>/test/private-lookup-buyer*.test.ts',
+      '<rootDir>/test/private-buyer-payment.test.ts',
+      '<rootDir>/test/private-purchase-buyer*.test.ts',
+      '<rootDir>/test/private-purchase-wallet-native*.test.ts'
+    ])
+      assert.ok(target.runnerOptions.jest.config.testMatch.includes(pattern))
+    for (const pattern of [
+      'src/operations/**',
+      'src/revenue-listing/**',
+      'test/private-purchase-wallet*.ts',
+      'test/fixtures/revenue-listing/**',
+      '../../wallet/wallet-toolbox/src/**',
+      '../../sdk/src/script/**',
+      '../../sdk/src/transaction/**',
+      '../../sdk/src/auth/**'
+    ])
+      assert.ok(target.additionalInputs.includes(pattern))
+    assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+    assert.equal(
+      target.runnerOptions.buildCommand,
+      'pnpm --filter @bsv/wallet-toolbox build && pnpm build'
+    )
+  }
 })

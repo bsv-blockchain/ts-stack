@@ -3141,3 +3141,95 @@ invocation resolved from the mobile package instead of Metro and failed before
 validation; the corrected actual Metro resolver and full platform gate pass.
 No audit exception, lowered threshold, release, deployment or device qualification
 is implied. Checkpoint two and successful exact-head CI remain open.
+
+### Durable covenant buyer and native purchase ownership
+
+The optional SDK `OutputPurchaseTransport` owns the original selected capability,
+request, terms and submitted candidate across finite authenticated prepare, submit
+and recovery calls. Recipient identity checking runs inside the existing finite
+HTTP deadline. HTTPS, mutual authentication and original seller/chain/topic
+bindings apply; these requests never initiate an HTTP payment. Existing finite
+lookup, paid lookup and proposal/root transport behavior remains compatible. The
+complete prior and new transport union passes 225 tests; its separate 300-case
+property suite and strict declarations pass.
+
+`PrivatePurchaseBuyer` retains six pre-reserved protected objects and a bounded
+control journal. It reconciles the original wallet action before permitting new
+work, retains the signed transaction through the original recovery promise, and
+separates receipt, independent validation and current usability. Unknown or
+unsupported wallet outcomes remain unresolved. Lost object and control replies,
+concurrent completion, asynchronous guard refusal and physical cancellation drain
+are exercised. Retained usable rights can be read while the wallet is unavailable.
+A missing original owner never causes a replacement request or transaction.
+
+`WalletToolboxPurchasePayment` independently verifies complete genesis and lineage
+before original native allocation and signing. It constructs the permissionless
+covenant purchase using the real recoverable action controller with `noSend`,
+checks the entire future submission capacity before signing, and recovers the
+original finalized bytes after native restart. The original declared capacity and
+wallet/storage/chain configuration cannot be widened by mutating public fields.
+The native example explicitly installs the existing one-change-output policy and
+disables migration funding; older examples and wallet defaults are unchanged.
+Unsupported layouts leave a recoverable prepared action, requiring the documented
+explicit operator policy rather than automatic abort, refund or broadcast.
+
+Both full implementations have 100 percent focused statement, branch, function
+and line coverage across 31 tests. The current protected buyer property passes
+300 generated native interruption histories in 90.3 seconds. A separate property
+independently verifies one actual signed purchase, then exercises 300 freshly
+reopened native recovery histories in 70.146 seconds, requiring exact original
+bytes and one allocation/signature without broadcast. Earlier attempts to create
+a new funded fixture per history exceeded the unchanged 150-second limit at
+145 and 156 cases; those runs are failures. The final property changes its
+meaningful subject to original-operation recovery and retains its 300-case floor,
+seed/path replay and original deadlines. These disclosed synthetic-chain tests
+establish native ownership and Script/history behavior; topical admission and
+authenticated LCH playback composition remain separate acceptance work.
+
+The original `private/buyer` entry is byte-identical to the preceding commit.
+Generic covenant orchestration and native construction have separate optional
+`private/purchase-buyer` and `private/purchase-wallet` entries. Combining them in
+the old or new single namespace initially exceeded the unchanged 590000-byte
+ceiling at 625705 and 592837 bytes. Separate complete packed browser graphs now
+pass the existing ceilings without a budget increase and exclude Node and paid
+owners. All conditional exports, source maps, publint and strict clean consumers
+pass. The guides compile 59 examples against 24 exact packed tarballs.
+
+Exact peer registration agreement adds two whole-source critical regions at the
+derived 137 inventory, preserving every earlier source/test union and wallet
+maintenance part. The complete new C unit/property/native fixture closure joins
+the original paid buyer selection. The complete original paid and new C buyer union passes 53 tests across seven
+suites in 215.047 seconds, retaining all three independent 300-case properties.
+No source partitions, threshold changes,
+case-floor reductions, deadline increases or campaign-policy exceptions are used.
+
+### Reviewed standalone dependency repairs
+
+The independently reviewed watcher repair is incorporated from a646d3cc3 only in
+its 22 watcher, governance and documentation paths. The unrelated wallet-client
+test is excluded, and the application branch's prior dependency history is
+preserved. Source-owned adapters retain glob-aware ignore semantics, TypeScript
+and env changes, manual restart, preloads and graceful shutdown. Fresh isolated
+frozen installs, unexcluded audits, builds, lint, all six native watcher checks
+and the original 100, 112 and 202 service tests pass. WAB's first test attempt
+failed because its SQLite3 native driver had not been rebuilt after the
+script-disabled install; an explicit driver rebuild fixes setup and the full
+original suite passes. Production startup and public APIs are unchanged.
+
+MessageBox adopts only the existing Busboy 3.2.2 and ip-address 10.7.1 nodes'
+version, URL and integrity fields. The initial Busboy-only audit passed its high
+gate but reported a remaining moderate ip-address finding; it is not recorded as
+an all-clear. After the separately reviewed compatible row update, the fresh
+frozen install, native rebuild, build, lint and 227 original tests pass, and the
+unexcluded audit reports zero findings. The reviewed Metro String.raw correction
+preserves the installed watcher oracle. These source repairs do not publish or
+deploy images.
+
+Checkpoint two remains open. In particular, same-transaction alternate valid BEEF
+proofs are independently checked but the current coordinator retains only its
+first candidate. BRC-196 requires cumulative proof merging; a bounded durable
+evidence owner and its integration are still required before this boundary is
+complete. Actual retained Engine/Mongo admission, authenticated native-wallet and
+LCH playback composition, the remaining reference workflows, complete affected
+mutation campaign and successful exact-head hosted qualification also remain
+required.

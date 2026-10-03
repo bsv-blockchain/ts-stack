@@ -60,7 +60,8 @@ afterEach(async () => {
 export async function acquisitionNativeWalletFixture(
   chain: { network: 'main' | 'test' | 'mock'; genesisHash: string },
   tracker: ChainTracker,
-  rootKey = 83
+  rootKey = 83,
+  managedChangePolicy?: { maxOutputsPerAction: number; migrationInputsPerAction: number }
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'acquisition-wallet-native-'))
   const opened = new Set<() => Promise<void>>()
@@ -83,7 +84,8 @@ export async function acquisitionNativeWalletFixture(
       chain: chain.network,
       knex,
       commissionSatoshis: 0,
-      feeModel: { model: 'sat/kb', value: 1 }
+      feeModel: { model: 'sat/kb', value: 1 },
+      ...(managedChangePolicy ? { managedChangePolicy: { ...managedChangePolicy } } : {})
     })
     if (create) await active.migrate('acquisition-native', 'synthetic-acquisition-wallet-storage')
     await active.makeAvailable()

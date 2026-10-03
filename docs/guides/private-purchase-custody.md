@@ -159,3 +159,87 @@ custody, with controlled domain/admission fixtures. They establish transport,
 recipient checks, staged responses and revoked physical disclosure, not chain
 truth. The complete reference covenant/domain/LCH and buyer demonstrations remain
 separate checkpoint requirements.
+
+## One original buyer and native wallet action
+
+`@bsv/output-knowledge/private/purchase-buyer` supplies the portable
+`PrivatePurchaseBuyer`, its installation-binding helper and initial control value,
+and interchangeable payment/validation ports. The independent
+`@bsv/output-knowledge/private/purchase-wallet` entry supplies
+`WalletToolboxPurchasePayment`, separating native Script/lineage-aware transaction
+construction from authenticated HTTP orchestration. Neither entry imports a native
+wallet or Node storage implementation. A native host
+may supply the existing Wallet Toolbox `RecoverableActionController`; a browser
+needs a durable owner exposing the same original-action semantics. A plain
+BRC-100 wallet interface cannot establish recovery of a lost action reply.
+
+Compute `privatePurchaseBuyerBinding` from the independently selected retained
+capability, original request, installed wallet payment configuration and independent
+validation identity. Create protected control and object owners with that exact
+binding. Explicit initialization reserves six immutable objects: request,
+contract, signed terms, wallet plan, complete signed candidate and delivered result.
+The control journal needs at least 16384 bytes; the object installation needs six
+slots and a maximum object ceiling of 4194304 bytes. Request/candidate and
+terms/result reservations use the original advertised request/response ceilings
+within that upper bound. Protect the encryption keys and original store identity,
+account for aggregate reserved storage, and back up the owners together.
+
+`initialize` creates only a deliberately selected new operation. `open` checks
+the exact original binding, every reservation and retained request/contract; it
+does not initialize missing custody or discover a replacement seller. Large
+signed lineage and BEEF reside in separate protected objects, rather than the
+small control value. Successful retention proves custody only. The application
+must supply independent preflight, delivered-material verification and current
+usability, for example the covenant LCH domain. A seller signature or STEAK
+cannot supply those premises.
+
+Use `recover` for status and lost-reply reconciliation. It never requests new
+preparation, allocates or signs wallet funding, or submits a transaction. It can
+consult the seller's original recovery endpoint; delivered rights already retained
+locally remain readable without another wallet query. Use `advance` only when
+the user has explicitly authorized finishing that original purchase. Before new
+preparation or funding/signing, it checks current recipient permission, selected
+domain, original cutoff and a nondecreasing clock. An already finalized retained
+transaction may be submitted after the construction cutoff under the original
+recovery promise. This does not authorize constructing a replacement transaction.
+
+`WalletToolboxPurchasePayment` installs the original wallet/storage/chain/originator
+and independently selected seller, actual covenant family, chain-view resolver,
+verification identity and synchronous current-context guard. It authenticates the
+signed complete genesis package and independently checks lineage before creating
+a wallet plan and before new native allocation/signing. The permissionless purchase
+uses the actual predecessor, required successor/recipient receipt and native
+`noSend` action with stable output order. Stored plan BEEF is base64, while native
+wallet arguments receive the original bytes. It requests no seller signature and
+never broadcasts. Fees and native funding signatures remain wallet obligations.
+
+The current script profile permits at most one native P2PKH change output. Install
+the existing Wallet Toolbox managed-change policy with
+`maxOutputsPerAction: 1` and `migrationInputsPerAction: 0` for this owner, and preserve
+that installation through reopen. Native commission, migration or additional
+outputs that do not fit the exact covenant layout are refused. This configuration
+does not change wallet defaults or ordinary actions. Before new signing, the
+adapter bounds complete BEEF plus the remaining P2PKH unlocking scripts against
+its declared `maximumCandidateBytes`, which must fit the originally selected
+request ceiling. A refused already prepared action remains an original reserved
+intent. The application must report it and use the native wallet's explicit
+recovery/abort policy; a timeout or failed capacity check is not an automatic
+refund, cancellation or authorization for another payment.
+
+Call `validate` after delivered bytes are retained, then `usableResult` only when
+the independent domain has established usability. Reads recheck current permission
+and owner identity. Guards must complete synchronously; Promise-valued guards are
+refused and rejected promises are drained. `stop` prevents new work, cancels logical
+requests and waits for physically outstanding owners to settle. Stop the buyer
+before closing protected stores or the wallet, and preserve uncertain original
+intents through restart.
+
+Native buyer lifecycle tests cover committed object/control replies lost after
+SQLite commit, concurrent owner completion, original cutoff, physical cancellation
+drain and rights retained while the original wallet is offline. Separate actual
+Wallet Toolbox tests construct and sign the permissionless covenant, recover its
+byte-identical transaction after native reopen and verify the complete Script,
+authorized genesis and selected synthetic header history independently. Public
+synthetic keys and isolated databases are used; no live chain or broadcast is
+claimed. Actual authenticated HTTP, retained topic admission and LCH playback
+composition remain distinct end-to-end qualification requirements.

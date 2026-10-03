@@ -33,6 +33,8 @@ checkpoint requires every item below, demonstrated on the published PR commit.
 - [ ] Compose authorized genesis and complete lineage validation with actual
       wallet-funded purchase, split, merge, payout, unanimous recipient-change and
       retirement transactions. Exercise their scripts and economic refusals.
+- [ ] Durably merge independently verified alternate BEEF proofs for the same raw
+      transaction without replacing original custody, payment, admission or delivery.
 - [ ] Demonstrate authenticated topic submission returning bound STEAK and
       POTATOES, with retained original admission and release-policy recovery. Show
       that admission alone does not establish mining or decryption.
