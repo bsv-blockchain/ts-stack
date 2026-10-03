@@ -1,6 +1,6 @@
+import { signPurchaseFixturePacket } from './private-purchase-signing.fixture.js'
 import {
   outputPacketDigest,
-  signOutputPacket,
   type OutputPurchaseEnvelope,
   type OutputReleaseEvidence
 } from '@bsv/sdk'
@@ -50,7 +50,7 @@ export function purchaseProgressFixture() {
         txid,
         recoveryUntil: terms.recoveryUntil,
         steak: structuredClone(steak),
-        potatoes: signOutputPacket(
+        potatoes: signPurchaseFixturePacket(
           'potatoes',
           {
             version: 1,

@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 139)
+  assert.equal(result.summary.propertySuites, 141)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 139)
+  assert.equal(result.summary.mutationTargets, 141)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -411,6 +411,8 @@ test('root eviction partitions retain the complete source set, tests and indepen
   assert.deepEqual(
     files.toSorted(),
     [
+      'RootAdvertisementServing',
+      'RootLookupServingDisclosure',
       'RootEvictionService',
       'RootEvictionCodec',
       'RootEvictionContractRecords',
@@ -446,7 +448,11 @@ test('root eviction partitions retain the complete source set, tests and indepen
     })
     assert.deepEqual(definition.additionalInputs, targets[names[0]].additionalInputs)
     assert.deepEqual(definition.runnerOptions.jest.config.testMatch, [
-      '<rootDir>/test/root-eviction*.test.ts'
+      '<rootDir>/test/root-eviction*.test.ts',
+      path.resolve(
+        REPOSITORY_ROOT,
+        'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+      )
     ])
     const registration = policy.targets.find(target => target.id === name)
     assert.equal(registration.minimumScore, 90)
@@ -606,7 +612,12 @@ test('root scheduling retains a complete source target and generated lifecycle s
   assert.deepEqual(target.mutate, ['src/root-eviction/RootEvictionScheduler.ts'])
   assert.ok(target.additionalInputs.includes('test/root-eviction-scheduler-fixture.ts'))
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
-    '<rootDir>/test/root-eviction-scheduler*.test.ts'
+    '<rootDir>/test/root-eviction-scheduler*.test.ts',
+    '<rootDir>/test/root-eviction*.test.ts',
+    path.resolve(
+      REPOSITORY_ROOT,
+      'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+    )
   ])
   const policy = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
@@ -664,17 +675,44 @@ test('local advertisement verification retains the full signed-request source an
   assert.equal(registration.maximumInvalid, 0)
 })
 
+const retainedBeefTestClosure = [
+  '<rootDir>/src/__tests/RetainedTransactionBEEF.test.ts',
+  '<rootDir>/src/__tests/RetainedTransactionBEEF.property.test.ts',
+  '<rootDir>/src/__tests/EngineAdmission*.test.ts',
+  '<rootDir>/src/__tests/OverlayGASPStorage.test.ts',
+  '<rootDir>/src/__tests/mongo/*.test.ts',
+  path.resolve(
+    REPOSITORY_ROOT,
+    'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+  )
+]
+const retainedBeefSourceClosure = [
+  'src/**',
+  'jest.projects.mjs',
+  'jest.config.js',
+  '../../sdk/src/**',
+  '../../application/output-knowledge/src/**',
+  '../../application/output-knowledge/test/*fixture.ts',
+  '../../application/output-knowledge/test/fixtures/**',
+  '../overlay-express/src/__tests__/PrivateOverlayHostRootServing*.ts',
+  '../overlay-express/src/RootEviction*.ts',
+  '../overlay-express/src/OutputLookup*.ts',
+  '../../middleware/auth-express-middleware/src/**'
+]
+
 test('proposal admission retains its complete source and generated provenance tests', () => {
   const target = buildMutationTargets(REPOSITORY_ROOT)['overlay-proposal-admission']
   assert.deepEqual(target.mutate, ['src/ProposalAdmission.ts', 'src/RetainedTopicAdmission.ts'])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/src/__tests/ProposalAdmission.test.ts',
-    '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
+    '<rootDir>/src/__tests/ProposalAdmission.property.test.ts',
+    ...retainedBeefTestClosure
   ])
   assert.deepEqual(target.additionalInputs, [
     'src/EngineAdmission.ts',
     'src/storage/AdmissionStorage.ts',
-    'src/__tests/ProposalAdmissionFixture.ts'
+    'src/__tests/ProposalAdmissionFixture.ts',
+    ...retainedBeefSourceClosure
   ])
   const mutationPolicy = JSON.parse(
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
@@ -697,14 +735,16 @@ test('private publication admission retains both complete sources and original p
     '<rootDir>/src/__tests/PrivatePublicationAdmission.test.ts',
     '<rootDir>/src/__tests/PrivatePublicationAdmission.property.test.ts',
     '<rootDir>/src/__tests/ProposalAdmission.test.ts',
-    '<rootDir>/src/__tests/ProposalAdmission.property.test.ts'
+    '<rootDir>/src/__tests/ProposalAdmission.property.test.ts',
+    ...retainedBeefTestClosure
   ])
   assert.deepEqual(target.additionalInputs, [
     'src/EngineAdmission.ts',
     'src/storage/AdmissionStorage.ts',
     'src/ProposalAdmission.ts',
     'src/__tests/ProposalAdmissionFixture.ts',
-    'src/__tests/PrivatePublicationAdmissionFixture.ts'
+    'src/__tests/PrivatePublicationAdmissionFixture.ts',
+    ...retainedBeefSourceClosure
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   const policy = JSON.parse(
@@ -893,4 +933,46 @@ test('protected ledger has no reduced mutation or property acceptance gate', () 
   assert.equal(registration.maximumNoCoverage, 0)
   assert.equal(registration.maximumInvalid, 0)
   assert.ok(policy.propertyTesting.suites.some(suite => suite.path === registration.propertyTest))
+})
+
+test('public retained BEEF is one complete critical module with the full native and legacy closure', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT),
+    target = targets['overlay-retained-beef']
+  assert.deepEqual(target.mutate, ['src/RetainedTransactionBEEF.ts'])
+  assert.equal(
+    target.propertyTest,
+    'packages/overlays/overlay/src/__tests/RetainedTransactionBEEF.property.test.ts'
+  )
+  assert.deepEqual(target.additionalInputs, retainedBeefSourceClosure)
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, retainedBeefTestClosure)
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  const projects = target.runnerOptions.jest.config.projects
+  assert.equal(projects.length, 2)
+  assert.deepEqual(
+    projects.map(project => project.displayName),
+    ['legacy-commonjs', 'native-mongo-esm']
+  )
+  for (const project of projects) assert.deepEqual(project.testMatch, retainedBeefTestClosure)
+  assert.equal(projects[1].moduleNameMapper['^@bsv/overlay$'], '<rootDir>/mod.ts')
+  for (const id of [
+    'overlay-proposal-admission',
+    'overlay-private-publication-admission',
+    'overlay-private-purchase-admission',
+    'overlay-integrity'
+  ]) {
+    for (const selector of retainedBeefTestClosure)
+      assert.ok(
+        targets[id].runnerOptions.jest.config.testMatch.includes(selector),
+        `${id}: ${selector}`
+      )
+    for (const input of retainedBeefSourceClosure)
+      assert.ok(targets[id].additionalInputs.includes(input), `${id}: ${input}`)
+  }
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const entry = policy.targets.find(item => item.id === 'overlay-retained-beef')
+  assert.equal(entry.minimumScore, 90)
+  assert.equal(entry.maximumNoCoverage, 0)
+  assert.equal(entry.maximumInvalid, 0)
 })

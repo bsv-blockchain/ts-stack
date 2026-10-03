@@ -439,3 +439,48 @@ original private intent before invoking the adapter. It does not issue POTATOES
 or establish mining. See [purchase custody and composition](../../../docs/guides/private-purchase-custody.md)
 for current guards, required time provenance, staged release, private disclosure
 and shutdown. Ordinary Engine submission and root exports remain unchanged.
+
+## Optional public BEEF ancestry and historical GASP reads
+
+Construct `MongoOverlayStorage` with
+`{ retainedBEEF: { maximumBytes: 4194304 } }` when the installed topic/history
+profile needs original raw ancestors after a leaf acquires a Merkle proof.
+The byte budget is an owned, sealed-in-the-instance positive safe integer at most
+4 MiB. Ordinary configurations keep their original admission payload and hydration
+behavior. This option adds a bounded `beef-manifest` to new atomic Engine admissions,
+checked before any payload publication. Hydration binds it to the exact stored raw
+subject and attaches a separately retained current leaf proof. It retains available
+raw ancestors below that proof and excludes unrelated transactions, using the
+existing BRC-95 Atomic header and BEEF encoding. It does not change SDK serialization
+defaults. Original off-chain values and lookup context are absent from this public
+manifest. Script, SPV, selected-chain and currentness verification remain separate.
+
+A missing manifest on an older transaction preserves the older read behavior;
+missing ancestry cannot be invented. A present but missing, malformed, oversized or
+contradictory manifest fails closed when BEEF is requested. Keep the selected budget
+and original payload custody available through recovery. This is an explicit
+storage profile, not an automatic migration of old transactions or a promise that
+alternate proofs have been independently verified.
+
+`Storage.findHistoricalOutput` is an optional separate audit/history port.
+`MongoOverlayStorage` implements it for an exact node/chain/topic/outpoint, including
+retained consumed or evicted rows. Its `spent` field reflects recorded spend
+knowledge; serving eviction alone does not become a spend. Ordinary output, UTXO
+and lookup queries still exclude evicted rows. Do not use a historical read as a
+current-membership or unspentness oracle.
+
+Construct `OverlayGASPStorage(topic, engine, maxNodes, maxBytes,
+{ historicalOutputs: true })` to use that installed port explicitly. Construction
+refuses a missing port; hydration pins and rechecks its owner and method and retains
+all original topic/raw/output binding checks. The original four-argument/default
+construction continues using ordinary `findOutput`. Public GASP nodes contain raw
+transaction/proof evidence without private context. Resynchronization still applies
+ordinary topic/spend validation and the host's independent root serving fences;
+retaining a historical node cannot reintroduce a spent or suppressed discovery row.
+
+The native SHIP/SLAP composition in Overlay Express exercises admission, physical
+lookup, spend, restart and public GASP replay together. Separate native Mongo tests
+cover ordinary defaults, bounded manifests, damaged custody, node/topic isolation
+and the difference between an evicted unspent row and a recorded spend. The
+[root integration guide](../../../docs/guides/root-eviction-coordination.md)
+describes the required pre-effect writer fence and projection acknowledgement.

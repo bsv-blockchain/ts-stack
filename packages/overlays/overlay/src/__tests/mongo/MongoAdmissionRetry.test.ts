@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import type { Db } from 'mongodb'
 import {
   admissionSemanticDigest,

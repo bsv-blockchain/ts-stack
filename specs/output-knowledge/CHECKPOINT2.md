@@ -83,7 +83,9 @@ remainders and exact final top-up/payout. See the implementation record and the
 purchase custody guide for commands and assurance limits.
 
 These receipts establish concrete progress, but the unchecked rows continue to
-require their complete published-source and final qualification evidence. In
-particular, the private public-serving and
-root/GASP compositions and complete mutation campaign remain open. No component
+require their complete published-source and final qualification evidence. The native protected recipient-context and complete two-root SHIP/SLAP serving,
+spend and GASP-history compositions now pass, including separate-owner grant
+revocation and pre-effect writer fencing. Their final source qualification,
+non-final producer/client integration, complete mutation campaign and exact-head
+hosted gates remain open. No component
 or synthetic local-chain receipt announces production or checkpoint readiness.

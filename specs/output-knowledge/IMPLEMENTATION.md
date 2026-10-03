@@ -3411,3 +3411,77 @@ The complete host suite subsequently passes 879 tests across 49 suites under
 coverage in 158.872 seconds. The resulting published head's hosted gates remain
 required. Root/public serving compositions and the full
 canonical mutation campaign remain open; this batch does not complete checkpoint 2.
+
+### Native root serving and primitive private lookup context
+
+The optional protected publication lookup reader now maps owned private bytes to
+recipient-authorized legacy lookup context, using durable entitlement records in
+its native protected ledger view. A request-local Engine hydrates the original
+outpoint without changing the public lookup registry. The actual authenticated
+host test revokes the reader's grant from a separate native connection after
+response signing, requires identifier-free refusal, restores the explicit grant
+and reopens the original protected custody without another admission. Ordinary
+public finite lookup, progressive/live withdrawal and replay, and GASP return
+public evidence without context. The classic off-chain-values hook profile is
+exercised separately; atomic Mongo retains a notification intent, and the test
+makes no claim that a generic outbox dispatcher has run it.
+
+`RootAdvertisementServing` and `RootLookupServingDisclosure` compose complete
+owned response bytes, positive SHIP/SLAP inventory, native root eligibility and
+current provider/session authority through one physical synchronous enqueue.
+The provider gate precedes the root gate. Existing asynchronous root enqueue and
+ordinary lookup contracts remain available. Opaque extensions require a separately
+installed complete inventory; a supported-extension identifier alone is refused.
+The complete native SHIP and SLAP pipelines pass two scenarios in21.362seconds
+(`/private/tmp/utxo-root-native-host-v10.log`). They use actual SDK advertisement
+and spend Script/SPV verification on the selected public synthetic chain,
+Engine/Mongo admission, two independent SQLite root journals and native lookup
+sessions, BRC-103/104 response authentication, caches/snapshots/live/replay,
+independent suppression bases, restoration pending projection, stale projection
+acknowledgements, post-signing refusal, pre-effect spend invalidation and restart.
+GASP history replay cannot recreate a spent query row.
+
+That composition exposed two evidence-retention gaps: leaf-only hydration lacked
+raw ancestry, and ordinary current-output reads correctly hid consumed/evicted
+rows. The explicit bounded Mongo retained-BEEF profile stores public ancestor
+history without off-chain values. Its history serializer walks raw inputs below
+a proven leaf, retains available parents and excludes unrelated branches. Ordinary
+SDK Atomic serialization and default storage behavior are unchanged. A separate
+node/topic/outpoint historical port and opt-in pinned GASP reader expose retained
+history for verification without granting current membership or unspentness.
+The full73-case structural/default/GASP union passes with100statement/function/line
+and97.22branch coverage of the complete retained module before the final traversal
+simplification (`/private/tmp/utxo-retained-whole-coverage-v2.log`). The first
+CommonJS Mongo selection failed during driver startup before assertions; the same
+complete native three-suite17-case selection passes30.148seconds under ESM
+(`/private/tmp/utxo-retained-native-mongo-v1.log`). The larger native baseline and
+canonical runtime correction remain under qualification; neither focused receipt
+completes a mutation campaign or final package qualification.
+
+Exact published9da31fb hosted coverage interrupted the original buyer property at
+its150second bound after208cases, then the35minute job was cancelled. These failures
+remain retained. A bounded public synthetic test-fixture signature memo now keys
+actual signed packets by complete canonical domain/signer/body and returns fresh
+copies. It changes no production verification, case floor, financial history or
+deadline. The original300-case buyer property passes84.631seconds under focused
+coverage (`/private/tmp/utxo-purchase-buyer-signing-cache-coverage-v1.log`), and its
+complete two-suite25-case union passes113.647seconds. Exact final-head hosted
+qualification remains necessary.
+
+Shared whole root/native fixture registration is acknowledged at18728707; one
+additional complete retained-BEEF property/critical module is acknowledged at 18729051. Local inventory becomes141 when installed, preserving all previous140
+profiles, wallet22whole/20parts and unchanged thresholds/deadlines/full-campaign
+requirements. Separately owned wallet branch additions remain outside this branch;
+future combined inventories must derive the complete key union, preserving every
+wallet and application target. No local component receipt establishes checkpoint
+two readiness, production operation, publication or merge.
+
+The complete native Mongo ESM baseline now passes 270 cases across all 19 original
+suites in 195.837 seconds. Explicit Jest imports preserve the existing mock
+behavior in ESM; the earlier driver-handshake and fixture-global failures remain
+recorded. Canonical package runner adoption still awaits the separately requested
+shared-scope acknowledgement; this receipt is not a successful default package
+campaign. The complete retained-public-BEEF module now has 100 percent statements,
+branches, functions and lines with 73 passing cases across five suites. All 62
+compiled examples pass against 24 exact package tarballs. These source-level
+receipts do not complete the final mutation campaign or exact-head hosted gates.

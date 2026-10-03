@@ -84,6 +84,10 @@ export function verifiedFixture(payloads?: NodeProtectedPayloadCodec) {
     stage,
     reopen() {
       return new SQLitePrivatePublicationStore(domain(false), limits(), service)
+    },
+    reopenWithDomain() {
+      const owner = domain(false)
+      return { owner, store: new SQLitePrivatePublicationStore(owner, limits(), service) }
     }
   }
 }

@@ -10,7 +10,8 @@ import {
   signOutputPacket,
   type OutputCapabilities,
   type OutputSignedPacket,
-  type OutputLookupBatch
+  type OutputLookupBatch,
+  type OutputChain
 } from '@bsv/sdk'
 import {
   CollectionOutputQueryPolicy,
@@ -70,27 +71,36 @@ export function providerRead(batch: OutputLookupBatch, waitMs = 0) {
 
 export async function providerFixture(
   authentication: 'none' | 'brc103' = 'none',
-  baseURL = 'https://lookup.example.test/api'
+  baseURL = 'https://lookup.example.test/api',
+  options: {
+    service?: string
+    chain?: OutputChain
+    identityKey?: PrivateKey
+    principal?: string
+  } = {}
 ) {
+  const serviceName = options.service ?? 'records',
+    selectedChain = options.chain ?? chain,
+    signingKey = options.identityKey ?? new PrivateKey(1)
   const directory = await mkdtemp(join(tmpdir(), 'lookup-provider-')),
     path = join(directory, 'index.db')
-  const binding = { service: 'records', test: 'provider' }
-  const index = SQLiteLookupIndex.create(path, 'records', binding),
+  const binding = { service: serviceName, test: 'provider' }
+  const index = SQLiteLookupIndex.create(path, serviceName, binding),
     stores = [index]
   const clock = { now: '1000' }
   const source = {
     selection: {
       baseURL,
-      identity: new PrivateKey(1).toPublicKey().toString(),
-      chain,
-      service: 'records',
+      identity: signingKey.toPublicKey().toString(),
+      chain: selectedChain,
+      service: serviceName,
       maximumAgeSeconds: '10000',
       clockSkewSeconds: '2',
       allowLocalHTTP: baseURL.startsWith('http://127.0.0.1:')
     },
     open: {
       version: 1 as const,
-      service: 'records',
+      service: serviceName,
       requestId: 'provider-opening-00000000',
       query: { collection: 'records' },
       limits: { maxBytes: 4194304, maxObservations: 1024, waitMs: 0 }
@@ -118,12 +128,12 @@ export async function providerFixture(
           version: 1,
           identity: source.selection.identity,
           baseURL,
-          chain,
+          chain: selectedChain,
           issuedAt,
           expiresAt,
           services: [
             {
-              name: 'records',
+              name: serviceName,
               kind: 'lookup',
               ...describe,
               profiles: [
@@ -143,15 +153,18 @@ export async function providerFixture(
               ]
             }
           ],
-          extensions: lookupServingEpochExtension([{ service: 'records', epoch: nextEpoch }])
+          extensions: lookupServingEpochExtension([{ service: serviceName, epoch: nextEpoch }])
         },
-        new PrivateKey(1)
+        signingKey
       ),
       baseURL.startsWith('http://127.0.0.1:')
     )
   manifest = sign(epoch)
   const caller = {
-    principal: authentication === 'none' ? null : new PrivateKey(2).toPublicKey().toString(),
+    principal:
+      authentication === 'none'
+        ? null
+        : (options.principal ?? new PrivateKey(2).toPublicKey().toString()),
     capabilityDigest: outputPacketDigest('capabilities', manifest.body)
   }
   const hooks: { authorization?: (context: LookupAuthorizationContext) => Promise<void> } = {}
@@ -203,7 +216,7 @@ export async function providerFixture(
       return { ...caller, capabilityDigest: outputPacketDigest('capabilities', manifest.body) }
     },
     peer() {
-      const peerIndex = SQLiteLookupIndex.open(path, 'records', binding)
+      const peerIndex = SQLiteLookupIndex.open(path, serviceName, binding)
       stores.push(peerIndex)
       const peerSessions = SQLiteLookupSessions.open(peerIndex, codec, () => clock.now)
       return {

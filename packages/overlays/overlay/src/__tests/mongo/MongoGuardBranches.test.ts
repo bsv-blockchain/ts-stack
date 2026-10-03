@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import { randomUUID } from 'node:crypto'
 import type { ClientSession, Db } from 'mongodb'
 import {
@@ -353,7 +354,7 @@ describe('Mongo payload store input and operation guards', () => {
 
   test('idempotent and conflicting reference slots are decided from the existing row', async () => {
     const payloadId = mongoRecordKey(mongoChainKey(scope), 'outbox-data', digest)
-    const refs: { findOne: jest.Mock } = {
+    const refs: { findOne: ReturnType<typeof jest.fn> } = {
       findOne: jest.fn()
     }
     const payloads = {

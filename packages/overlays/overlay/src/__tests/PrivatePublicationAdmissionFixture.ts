@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import {
   OverlayPrivatePublicationAdmission,
   type OverlayPrivatePublicationContext,
@@ -113,9 +114,9 @@ export function privateAdmissionFixture(
     view: { chain: { ...chain } }
   }
   const read = jest
-    .fn<Promise<AdmissionHistoryResult>, [AdmissionHistoryQuery]>()
+    .fn<(query: AdmissionHistoryQuery) => Promise<AdmissionHistoryResult>>()
     .mockResolvedValue({ state: 'unresolved' })
-  const submit = jest.fn().mockResolvedValue({ [topic]: { outputsToAdmit: [], coinsToRetain: [] } })
+  const submit = jest.fn(async () => ({ [topic]: { outputsToAdmit: [], coinsToRetain: [] } }))
   const engine = {
     storage: {
       admissionScope: { ...scope },
@@ -129,7 +130,7 @@ export function privateAdmissionFixture(
     managers: { [topic]: {} },
     submit
   } as unknown as Engine
-  const current = jest.fn<boolean, [OverlayPrivatePublicationContext]>(() => true)
+  const current = jest.fn<(context: OverlayPrivatePublicationContext) => boolean>(() => true)
   const options: OverlayPrivatePublicationAdmissionOptions = {
     engine,
     identity,

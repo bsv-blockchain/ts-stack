@@ -1138,6 +1138,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "private-publication-lookup",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-publication-lookup.property.test.ts",
+      "boundary": "Native protected lookup context, current recipient entitlement and original publication binding through physical disclosure",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "private-publication-http",
       "manifest": "packages/overlays/overlay-express/package.json",
       "propertyTest": "packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts",
@@ -1403,6 +1413,16 @@
       "propertyTest": "packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts",
       "risk": "critical",
       "boundary": "Native purchase progress derived from the authorizing monotonic transaction observation with original profile, CAS, cutoff, capacity and recipient authority preserved",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-retained-beef",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/RetainedTransactionBEEF.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded original raw subject and available dependency history under plain and Atomic BEEF plus separate current leaf evidence",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

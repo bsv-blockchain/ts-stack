@@ -1,4 +1,5 @@
-import { signOutputPacket, outputAssert, outputPacketDigest, type OutputJSONObject } from '@bsv/sdk'
+import { signPurchaseFixturePacket } from './private-purchase-signing.fixture.js'
+import { outputAssert, outputPacketDigest, type OutputJSONObject } from '@bsv/sdk'
 import {
   PrivatePurchaseCoordinator,
   type PrivatePurchaseCoordinatorOptions
@@ -116,7 +117,7 @@ export function purchaseCoordinatorFixture(
     sign: async (type, body) => {
       counts[type === 'purchase-terms' ? 'terms' : 'potatoes']++
       await Promise.resolve()
-      return signOutputPacket(type, body, contract.key)
+      return signPurchaseFixturePacket(type, body, contract.key)
     },
     manifest: contract.manifest,
     clock: f.clock,
@@ -186,7 +187,7 @@ export function purchaseCoordinatorFixture(
       releaseCurrent = value
     },
     sign: (type: 'purchase-terms' | 'potatoes', body: OutputJSONObject) =>
-      signOutputPacket(type, body, contract.key),
+      signPurchaseFixturePacket(type, body, contract.key),
     unresolved: (operationId: string): PrivatePurchaseAdmissionOutcome => ({
       status: 'unresolved',
       operationId,

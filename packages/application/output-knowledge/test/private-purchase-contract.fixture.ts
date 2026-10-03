@@ -1,8 +1,8 @@
+import { signPurchaseFixturePacket } from './private-purchase-signing.fixture.js'
 import {
   OUTPUT_PROFILES,
   outputPacketDigest,
   PrivateKey,
-  signOutputPacket,
   type OutputCapabilities,
   type OutputPurchasePrepare
 } from '@bsv/sdk'
@@ -85,14 +85,17 @@ export function purchaseContractFixture(overrides: Partial<PrivatePurchaseInstal
       ]
     }
   function manifest() {
-    return signOutputPacket('capabilities', body, key)
+    return signPurchaseFixturePacket('capabilities', body, key)
   }
   function prepared() {
     return contracts.prepare(request, manifest(), terms, '20')
   }
   function original() {
     const selected = prepared()
-    return contracts.authenticate(selected, signOutputPacket('purchase-terms', selected.body, key))
+    return contracts.authenticate(
+      selected,
+      signPurchaseFixturePacket('purchase-terms', selected.body, key)
+    )
   }
   return {
     key,

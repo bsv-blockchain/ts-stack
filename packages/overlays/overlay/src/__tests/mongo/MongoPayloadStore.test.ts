@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { Binary, GridFSBucket } from 'mongodb'
@@ -49,7 +50,10 @@ function fakeAbortSignal(): AbortSignal & {
     },
     addEventListener: () => undefined,
     removeEventListener: () => undefined
-  } as unknown as AbortSignal & { setAborted: (aborted: boolean) => void; setReason: (reason: unknown) => void }
+  } as unknown as AbortSignal & {
+    setAborted: (aborted: boolean) => void
+    setReason: (reason: unknown) => void
+  }
 }
 
 describe('MongoPayloadStore', () => {
@@ -215,8 +219,11 @@ describe('MongoPayloadStore', () => {
       })
     ).resolves.toMatchObject({ digest: hash })
     expect(
-      (await fixture.db.collection('overlay_payloads').findOne({ kind: 'outbox-data', digest: hash }))
-        ?.state
+      (
+        await fixture.db
+          .collection('overlay_payloads')
+          .findOne({ kind: 'outbox-data', digest: hash })
+      )?.state
     ).toBe('ready')
   })
 
@@ -377,11 +384,8 @@ describe('MongoPayloadStore', () => {
       await store.addReference(session, { ...basePin, expiresAt: laterExpiry })
     })
     expect(
-      (
-        await fixture.db
-          .collection('overlay_payload_references')
-          .findOne({ ownerId: 'pin-extend' })
-      )?.expiresAt
+      (await fixture.db.collection('overlay_payload_references').findOne({ ownerId: 'pin-extend' }))
+        ?.expiresAt
     ).toEqual(laterExpiry)
     const earlierExpiry = new Date(Date.now() + 90_000)
     await expect(
@@ -390,11 +394,8 @@ describe('MongoPayloadStore', () => {
       })
     ).rejects.toThrow('must not shorten')
     expect(
-      (
-        await fixture.db
-          .collection('overlay_payload_references')
-          .findOne({ ownerId: 'pin-extend' })
-      )?.expiresAt
+      (await fixture.db.collection('overlay_payload_references').findOne({ ownerId: 'pin-extend' }))
+        ?.expiresAt
     ).toEqual(laterExpiry)
     await session.endSession()
   })
@@ -420,11 +421,13 @@ describe('MongoPayloadStore', () => {
     await session.withTransaction(async () => {
       await store.addReference(session, pin)
     })
-    await fixture.db.collection('overlay_payload_references').updateOne({ ownerId: 'pin-reactivate' }, [
-      {
-        $set: { expiresAt: { $dateSubtract: { startDate: '$$NOW', unit: 'second', amount: 1 } } }
-      }
-    ])
+    await fixture.db
+      .collection('overlay_payload_references')
+      .updateOne({ ownerId: 'pin-reactivate' }, [
+        {
+          $set: { expiresAt: { $dateSubtract: { startDate: '$$NOW', unit: 'second', amount: 1 } } }
+        }
+      ])
     const revived = { ...pin, expiresAt: new Date(Date.now() + 60_000) }
     await session.withTransaction(async () => {
       await store.addReference(session, revived)
@@ -463,11 +466,13 @@ describe('MongoPayloadStore', () => {
     await session.withTransaction(async () => {
       await store.addReference(session, pin)
     })
-    await fixture.db.collection('overlay_payload_references').updateOne({ ownerId: 'pin-gc-cleanup' }, [
-      {
-        $set: { expiresAt: { $dateSubtract: { startDate: '$$NOW', unit: 'second', amount: 1 } } }
-      }
-    ])
+    await fixture.db
+      .collection('overlay_payload_references')
+      .updateOne({ ownerId: 'pin-gc-cleanup' }, [
+        {
+          $set: { expiresAt: { $dateSubtract: { startDate: '$$NOW', unit: 'second', amount: 1 } } }
+        }
+      ])
     await session.withTransaction(async () => {
       expect(await store.claimGarbage(session, payload)).toBe(true)
     })
@@ -661,12 +666,29 @@ describe('MongoPayloadStore', () => {
   test('refreshes the declared length when reclaiming a deleted upload', async () => {
     const content = Buffer.from('reclaimed-upload')
     const hash = digest(content)
-    await store.publish({ kind: 'outbox-data', digest: hash, byteLength: String(content.byteLength), bytes: bytes(content) })
+    await store.publish({
+      kind: 'outbox-data',
+      digest: hash,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
     const payloads = fixture.db.collection('overlay_payloads')
     const row = await payloads.findOne({ kind: 'outbox-data', digest: hash })
-    await payloads.updateOne({ _id: row?._id }, { $set: { state: 'deleted', byteLength: '00000000000000000999' } })
-    await expect(store.publish({ kind: 'outbox-data', digest: hash, byteLength: String(content.byteLength), bytes: bytes(content) })).resolves.toMatchObject({ digest: hash })
-    expect(BigInt((await payloads.findOne({ _id: row?._id }))?.byteLength.toString() ?? '0')).toBe(BigInt(content.byteLength))
+    await payloads.updateOne(
+      { _id: row?._id },
+      { $set: { state: 'deleted', byteLength: '00000000000000000999' } }
+    )
+    await expect(
+      store.publish({
+        kind: 'outbox-data',
+        digest: hash,
+        byteLength: String(content.byteLength),
+        bytes: bytes(content)
+      })
+    ).resolves.toMatchObject({ digest: hash })
+    expect(BigInt((await payloads.findOne({ _id: row?._id }))?.byteLength.toString() ?? '0')).toBe(
+      BigInt(content.byteLength)
+    )
   })
 
   test('recovers a too-small declared length by reclaiming the deleted row on retry with the correct length', async () => {
@@ -700,13 +722,29 @@ describe('MongoPayloadStore', () => {
     const content = Buffer.from('reclaimed-reference')
     const hash = digest(content)
     const payload = { kind: 'outbox-data' as const, digest: hash }
-    await store.publish({ ...payload, byteLength: String(content.byteLength), bytes: bytes(content) })
-    const reference = { scope: fixture.scope, payload, ownerKind: 'output' as const, ownerId: 'reclaimed-reference', slot: '0' }
+    await store.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
+    const reference = {
+      scope: fixture.scope,
+      payload,
+      ownerKind: 'output' as const,
+      ownerId: 'reclaimed-reference',
+      slot: '0'
+    }
     const session = fixture.client.startSession()
-    await session.withTransaction(async () => { await store.addReference(session, reference) })
-    await fixture.db.collection('overlay_payloads').updateOne({ digest: hash, kind: payload.kind }, { $set: { state: 'deleted' } })
     await session.withTransaction(async () => {
-      await expect(store.addReference(session, reference)).rejects.toThrow('not ready for reference')
+      await store.addReference(session, reference)
+    })
+    await fixture.db
+      .collection('overlay_payloads')
+      .updateOne({ digest: hash, kind: payload.kind }, { $set: { state: 'deleted' } })
+    await session.withTransaction(async () => {
+      await expect(store.addReference(session, reference)).rejects.toThrow(
+        'not ready for reference'
+      )
     })
     await session.endSession()
   })
@@ -752,20 +790,22 @@ describe('MongoPayloadStore', () => {
       byteLength: String(content.byteLength),
       bytes: bytes(content, 64 * 1024)
     })
-    const row = await fixture.db.collection('overlay_payloads').findOne({ digest: hash, kind: 'outbox-data' })
+    const row = await fixture.db
+      .collection('overlay_payloads')
+      .findOne({ digest: hash, kind: 'outbox-data' })
     expect(row?.fileId).toBeDefined()
     const session = fixture.client.startSession()
     await session.withTransaction(async () => {
       expect(await store.claimGarbage(session, payload)).toBe(true)
     })
     await session.endSession()
-    expect((await fixture.db.collection('overlay_payloads').findOne({ _id: row?._id }))?.state).toBe(
-      'deleting'
-    )
+    expect(
+      (await fixture.db.collection('overlay_payloads').findOne({ _id: row?._id }))?.state
+    ).toBe('deleting')
     await store.recoverUploads()
-    expect((await fixture.db.collection('overlay_payloads').findOne({ _id: row?._id }))?.state).toBe(
-      'deleted'
-    )
+    expect(
+      (await fixture.db.collection('overlay_payloads').findOne({ _id: row?._id }))?.state
+    ).toBe('deleted')
     expect(
       await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.fileId })
     ).toBe(0)
@@ -970,7 +1010,11 @@ describe('MongoPayloadStore', () => {
     const content = Buffer.from('pin-identical-expiry')
     const hash = digest(content)
     const payload = { kind: 'outbox-data' as const, digest: hash }
-    await stable.publish({ ...payload, byteLength: String(content.byteLength), bytes: bytes(content) })
+    await stable.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
     const expiresAt = new Date(fixedNow.getTime() + 60_000)
     const pin = {
       scope: fixture.scope,
@@ -1019,7 +1063,11 @@ describe('MongoPayloadStore', () => {
     const content = Buffer.from('hook-delete-claim')
     const hash = digest(content)
     const payload = { kind: 'outbox-data' as const, digest: hash }
-    await hooked.publish({ ...payload, byteLength: String(content.byteLength), bytes: bytes(content) })
+    await hooked.publish({
+      ...payload,
+      byteLength: String(content.byteLength),
+      bytes: bytes(content)
+    })
     const session = fixture.client.startSession()
     await session.withTransaction(async () => {
       expect(await hooked.claimGarbage(session, payload)).toBe(true)
@@ -1336,7 +1384,9 @@ describe('MongoPayloadStore', () => {
     expect(payloadRow?.state).toBe('uploading')
     expect(payloadRow?.fileId).toBeDefined()
     expect(
-      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: payloadRow?.fileId })
+      await fixture.db
+        .collection('overlayPayloads.files')
+        .countDocuments({ _id: payloadRow?.fileId })
     ).toBe(1)
   })
 
@@ -1357,7 +1407,9 @@ describe('MongoPayloadStore', () => {
     expect(row?.state).toBe('deleted')
     expect(row?.retiredFileId).toBeDefined()
     expect(
-      await fixture.db.collection('overlayPayloads.files').countDocuments({ _id: row?.retiredFileId })
+      await fixture.db
+        .collection('overlayPayloads.files')
+        .countDocuments({ _id: row?.retiredFileId })
     ).toBe(0)
   })
 
@@ -1510,7 +1562,9 @@ describe('MongoPayloadStore', () => {
       .collection('overlayPayloads.chunks')
       .findOne({ files_id: row?.fileId, n: 0 })
     const originalData = chunk?.data as Buffer | Binary
-    const originalLength = Buffer.isBuffer(originalData) ? originalData.length : originalData.length()
+    const originalLength = Buffer.isBuffer(originalData)
+      ? originalData.length
+      : originalData.length()
     await fixture.db
       .collection('overlayPayloads.chunks')
       .updateOne({ _id: chunk?._id }, { $set: { data: Buffer.alloc(originalLength, 0xcc) } })

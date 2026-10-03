@@ -1,3 +1,7 @@
+import {
+  hydrateRetainedTransactionBEEF,
+  retainedBEEFConfiguration
+} from '../../RetainedTransactionBEEF.js'
 import { createHash } from 'node:crypto'
 import type { Db, Document } from 'mongodb'
 import { MerklePath, Transaction } from '@bsv/sdk'
@@ -35,6 +39,11 @@ const isPayloadKind = (value: string): value is MongoPayloadKind =>
   value === 'locking-script' ||
   value === 'outbox-data'
 
+/** Opt-in public BEEF ancestry; ordinary storage reads and payloads stay unchanged. */
+export interface MongoOverlayStorageOptions extends MongoAdmissionStorageOptions {
+  retainedBEEF?: Readonly<{ maximumBytes: number }>
+}
+
 /**
  * Opt-in Mongo Storage adapter that advertises overlay-admission-v1 only because
  * commitAdmission actually honors majority ack, spends, history, and outbox.
@@ -42,13 +51,15 @@ const isPayloadKind = (value: string): value is MongoPayloadKind =>
 export class MongoOverlayStorage implements Storage {
   readonly admission: MongoAdmissionStorage
   readonly admissionScope: StorageScope
+  readonly retainedBEEF?: Readonly<{ maximumBytes: number }>
   private readonly payloads: MongoPayloadStore
 
   constructor(
     private readonly db: Db,
     scope: StorageScope,
-    options: MongoAdmissionStorageOptions = {}
+    options: MongoOverlayStorageOptions = {}
   ) {
+    this.retainedBEEF = retainedBEEFConfiguration(options.retainedBEEF)
     this.admissionScope = { ...scope }
     this.payloads = options.payloads ?? new MongoPayloadStore(db, this.admissionScope)
     this.admission = new MongoAdmissionStorage(db, this.admissionScope, {
@@ -195,6 +206,22 @@ export class MongoOverlayStorage implements Storage {
       })
     if (document === null) return null
     return await this.toOutput(document, includeBEEF)
+  }
+
+  /** Explicit history read, separate from every current lookup and serving query. */
+  async findHistoricalOutput(
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    includeBEEF = false
+  ): Promise<Output | null> {
+    const document = await this.db.collection<IdDocument>(MongoCollectionNames.outputs).findOne(
+      {
+        _id: this.outputId(topic, txid, outputIndex)
+      },
+      { readConcern: { level: 'majority' }, readPreference: 'primary' }
+    )
+    return document === null ? null : await this.toOutput(document, includeBEEF, true)
   }
 
   async findOutputsForTransaction(txid: string, includeBEEF = false): Promise<Output[]> {
@@ -440,9 +467,10 @@ export class MongoOverlayStorage implements Storage {
    */
   private async toOutput(
     document: Record<string, unknown>,
-    includeBEEF: boolean
+    includeBEEF: boolean,
+    historical = false
   ): Promise<Output | null> {
-    if (document.state === 'evicted') return null
+    if (document.state === 'evicted' && !historical) return null
     const topic = document.topic as string
     const txid = document.txid as string
     const outputIndex = String(document.outputIndex)
@@ -464,7 +492,7 @@ export class MongoOverlayStorage implements Storage {
       outputScript: await this.readScript(document),
       satoshis: this.toSafeNumber(decodeMongoUint64(document.satoshis as string), 'satoshis'),
       topic,
-      spent: document.state === 'spent',
+      spent: document.state === 'spent' || (historical && typeof document.spender === 'string'),
       outputsConsumed,
       consumedBy,
       score: this.toSafeNumber(decodeMongoUint64(document.score as string), 'score')
@@ -589,6 +617,28 @@ export class MongoOverlayStorage implements Storage {
         tx.merklePath = MerklePath.fromBinary(Array.from(path))
       }
     }
+    if (this.retainedBEEF !== undefined && typeof transaction?.manifestPayloadId === 'string') {
+      return await this.readRetainedBeef(transaction.manifestPayloadId, txid, tx)
+    }
     return tx.merklePath === undefined ? tx.toBEEF() : tx.toAtomicBEEF()
+  }
+  private async readRetainedBeef(
+    payloadId: string,
+    txid: string,
+    current: Transaction
+  ): Promise<number[]> {
+    const limit = this.retainedBEEF!.maximumBytes
+    const record = await this.db
+      .collection<IdDocument>(MongoCollectionNames.payloads)
+      .findOne({ _id: payloadId, state: 'ready' })
+    if (
+      record?.kind !== 'beef-manifest' ||
+      typeof record.digest !== 'string' ||
+      typeof record.byteLength !== 'string' ||
+      BigInt(decodeMongoUint64(record.byteLength)) > BigInt(limit)
+    )
+      throw new Error('Retained BEEF payload unavailable or exceeds byte limit')
+    const bytes = await this.payloads.read({ kind: 'beef-manifest', digest: record.digest })
+    return hydrateRetainedTransactionBEEF(bytes, txid, current, this.retainedBEEF!)
   }
 }

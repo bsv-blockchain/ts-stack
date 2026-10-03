@@ -2206,3 +2206,92 @@ function installCovenantContentSeller(
 }
 export { installCovenantContentSeller }
 ```
+
+## Compound native root and lookup response fence
+
+The lookup session owner enters its native gate first. Its synchronous send
+callback enters the root decision gate, keeping both owners current through
+physical enqueue. Projection never acquires those gates in reverse order.
+
+```ts compile
+// example-id: native-root-lookup-disclosure
+import { LookupResponseDisclosure } from '@bsv/output-knowledge/lookup'
+import {
+  RootAdvertisementServing,
+  RootLookupServingDisclosure,
+  type RootAdvertisementServingGate
+} from '@bsv/output-knowledge/root-eviction'
+
+function composeRootLookup(
+  provider: LookupResponseDisclosure,
+  journal: RootAdvertisementServingGate,
+  authorize: (identity: string, kind: 'data' | 'control') => boolean
+) {
+  return new RootLookupServingDisclosure({
+    disclosure: provider,
+    serving: new RootAdvertisementServing(journal),
+    authorize
+  })
+}
+void composeRootLookup
+```
+
+## Explicit public history storage
+
+The new options preserve default current-output reads. A historical GASP reader
+must use the exact installed storage port; it does not grant lookup visibility.
+
+```ts compile
+// example-id: retained-public-beef-history
+import type {
+  Engine as PublicHistoryEngine,
+  StorageScope as PublicHistoryScope
+} from '@bsv/overlay'
+import { MongoOverlayStorage } from '@bsv/overlay/storage/mongo/MongoOverlayStorage'
+import { OverlayGASPStorage } from '@bsv/overlay/GASP/OverlayGASPStorage.ts'
+
+function publicHistoryStorage(
+  db: ConstructorParameters<typeof MongoOverlayStorage>[0],
+  scope: PublicHistoryScope
+) {
+  return new MongoOverlayStorage(db, scope, {
+    retainAdmissionHistory: true,
+    retainedBEEF: { maximumBytes: 4194304 }
+  })
+}
+function publicHistorySync(topic: string, engine: PublicHistoryEngine) {
+  return new OverlayGASPStorage(topic, engine, undefined, undefined, {
+    historicalOutputs: true
+  })
+}
+export { publicHistoryStorage, publicHistorySync }
+```
+
+## Recipient-authorized primitive lookup context
+
+Use the original protected publication and a transport-authenticated caller.
+Request-local hydration and the final native disclosure remain separate steps.
+
+```ts compile
+// example-id: protected-publication-context-reader
+import {
+  PrivatePublicationLookupContext as ProtectedContextLookup,
+  type PrivatePublicationLookupCaller as ProtectedContextCaller,
+  type PrivatePublicationLookupContextOptions as ProtectedContextOptions
+} from '@bsv/output-knowledge/private/node'
+
+function recipientContext(
+  installation: ProtectedContextOptions,
+  publicationId: string,
+  authenticatedCaller: ProtectedContextCaller
+) {
+  const reader = new ProtectedContextLookup(installation)
+  const prepared = reader.prepare(publicationId, authenticatedCaller)
+  return {
+    formula: prepared.formula(),
+    bindHydratedAnswer: (answer: unknown) => prepared.bind(answer),
+    dispose: () => prepared.dispose()
+  }
+}
+export { recipientContext }
+```

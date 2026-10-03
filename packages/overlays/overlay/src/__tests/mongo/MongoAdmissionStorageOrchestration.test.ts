@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import type { Db } from 'mongodb'
 import type { AdmissionCommit, AdmissionReceipt } from '../../storage/AdmissionStorage.js'
 import { admissionReceiptFor } from '../../storage/mongo/MongoAdmissionPlan.js'

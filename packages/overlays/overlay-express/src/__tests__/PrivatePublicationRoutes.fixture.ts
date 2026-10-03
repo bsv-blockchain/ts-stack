@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { type Express, type RequestHandler } from 'express'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { AuthFetch, CompletedProtoWallet, PrivateKey } from '@bsv/sdk'
@@ -14,7 +14,12 @@ export async function privatePublicationHTTPFixture(
     | ((
         owner: ReturnType<typeof coordinatorFixture>
       ) => Promise<Partial<PrivatePublicationRouteOptions>>) = {},
-  beforeParser = false
+  beforeParser = false,
+  mount?: (
+    app: Express,
+    authenticate: RequestHandler,
+    owner: ReturnType<typeof coordinatorFixture>
+  ) => void | Promise<void>
 ) {
   const f = coordinatorFixture()
   const httpState = { control: true }
@@ -51,6 +56,7 @@ export async function privatePublicationHTTPFixture(
     ...installed
   }
   app.use(createPrivatePublicationRouter(options))
+  await mount?.(app, auth, f)
   app.post('/lookup', express.json(), (_req, res) => res.json({ type: 'output-list', outputs: [] }))
   const server = createServer({ maxHeaderSize: 65536 }, app)
   await new Promise<void>((resolve, reject) => {

@@ -3,8 +3,8 @@ id: root-eviction-coordination
 title: 'Root Advertisement Coordination'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: experimental
 tags: [overlays, sdk, discovery, evidence]
@@ -22,9 +22,10 @@ The SDK 3.0.0 source candidate includes the request, status and result contracts
 `@bsv/sdk/overlay-tools/OutputRootEvictionProtocol`, also exported from the root SDK.
 The output-knowledge source candidate also supplies a durable local decision journal.
 Optional authenticated request/status routes are available in the Overlay Express
-source candidate. Installed evidence policy and complete serving integration remain
-under implementation. Importing
-these helpers does not enable the profile or modify existing discovery behavior.
+source candidate. The native serving composition below combines checked
+advertisement evidence, independently selected root policy, Mongo admission,
+SQLite projection and authenticated physical response guards. Importing these
+helpers does not enable the profile or modify existing discovery behavior.
 
 ## Preserve the selected coordination contract
 
@@ -799,3 +800,83 @@ the cache on restart. A different signature or selection requires verification;
 failed signatures are never cached. Packet parsing, persisted row bindings,
 clock windows, immutable request-ID fences, current authority and serving guards
 remain live checks. This changes no wire packet, stored record or permission.
+
+## Compose native lookup and root serving
+
+`RootAdvertisementServing` is an optional adapter over the actual native
+`SQLiteRootEvictionStore` gate. It captures the root's revision before asynchronous
+lookup/hydration/signing and binds the complete response bytes and exact positive
+advertisement inventory to that revision. `enqueueNow` rechecks the installed
+owner, revision, every target's eligibility and the caller's synchronous current
+permission inside the same SQLite transaction as the physical enqueue. Existing
+asynchronous `enqueue` remains available with its original behavior. The new
+adapter refuses a store lacking the explicit `root-serving-send/1` native marker;
+a structural callback that merely promises to check later is insufficient.
+
+For finite legacy lookup, derive each inventory entry with
+`rootAdvertisementServingTarget(service, chain, evidence)`. This checks the
+selected raw transaction, output and script digest. It performs no Script/SPV,
+unspentness or owner-authority verification; install those independent evidence
+and currentness policies before granting eligibility. An incoming advertisement,
+a signed peer request and a local serving assessment remain different facts.
+
+For progressive lookup, `RootLookupServingDisclosure` composes a provider's
+`LookupResponseDisclosure` with the native root gate. The host derives the complete
+positive inventory from the unsigned batch using `rootLookupAdvertisementTargets`
+and captures the root revision at binding, before asynchronous response signing.
+Finite/cache adapters can additionally pass a head captured before lookup preparation
+to their lower-level binding. The bound disclosure enters
+the provider/session gate first and the root gate second, holding both through
+one actual synchronous response enqueue. Every writer and reader must preserve
+that order; a root transaction must never wait for the provider gate. Neither gate
+holds an asynchronous hydration, signing, network or application-policy operation.
+Use `control` for independently prepared identifier-free control bytes.
+
+The generic batch inventory supports public SHIP/SLAP output observations and
+non-positive withdrawal/spend/invalidation observations. It refuses private context
+and opaque batch or observation extensions: an unknown extension could contain
+another positive advertisement. Installing an extension requires a separately
+reviewed complete inventory derivation and the lower-level exact binding. A
+supported-extension identifier alone cannot prove that derivation. Limits are
+4 MiB for the complete body and 1,024 positive targets. Headers must not carry
+additional advertisements outside the bound inventory.
+
+A stale positive result is refused as a whole. The HTTP adapter then produces a
+new signed, identifier-free reset/control response. It must not filter a prepared
+or signed response, resend a binding after an uncertain enqueue, or return the
+old session/cursor/advertisement in an error. The native binding permits one
+physical attempt. A root's suppression becomes effective before the materialized
+lookup index has caught up: old snapshots, caches, replayed pages and newly
+prepared responses all pass through the current native serving fence.
+
+All installed source writers must invalidate affected serving eligibility before
+changing admission, spend or synchronization state. An uncertain source effect
+leaves conservative ineligibility. After recovering the original operation, a
+fresh verified assessment may queue projection. Commit the index's exact intended
+membership before acknowledging that original root projection intent. A stale
+acknowledgement cannot confirm a newer decision. Mongo source state and SQLite
+root/index state are separate commits; this protocol reconciles them without
+claiming a distributed atomic transaction. A root decision never marks a Bitcoin
+output spent. A verified spend cannot be undone by lifting suppression or replaying
+an earlier advertisement.
+
+The complete native example is
+`packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts`
+and its adjacent fixture. It runs the same pipeline for SHIP and SLAP with two
+independent root journals, actual SDK advertisement/spend Script and selected
+synthetic-chain verification, Engine/Mongo admission, SQLite live/snapshot sessions,
+BRC-103/104 authentication and physical response guards. It covers independent
+suppression bases, disagreement, restoration pending projection, stale projection
+acknowledgement, withdrawal after signing, cached and retained snapshots, live/replay
+withdrawals, pre-effect spend fencing, native restart and public GASP history replay.
+Its selected owner policy and public easy-PoW test chain are explicit premises;
+it does not establish production chain truth, another operator's policy or a
+production root deployment. Existing coordinated-contract/local-rule tests and
+HTTP intake tests qualify their separate interfaces. A deployment advertising the
+full profile must install those interfaces and every serving writer together.
+
+Use Mongo's explicit public-ancestry retention and GASP historical-read options
+in the [Overlay README](../../../packages/overlays/overlay/README.md) when original
+proof history must survive current serving removal. The
+history port supplies evidence for verification; it grants no lookup membership,
+restoration, current unspentness or administrative authority.

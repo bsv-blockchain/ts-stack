@@ -107,7 +107,7 @@
     "test": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
     "test:watch": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
-    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false --runTestsByPath src/__tests/BASM.property.test.ts src/__tests/ProposalAdmission.property.test.ts src/__tests/PrivatePublicationAdmission.property.test.ts src/__tests/PurchaseAdmission.property.test.ts",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false --runTestsByPath src/__tests/BASM.property.test.ts src/__tests/ProposalAdmission.property.test.ts src/__tests/PrivatePublicationAdmission.property.test.ts src/__tests/PurchaseAdmission.property.test.ts src/__tests/RetainedTransactionBEEF.property.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",

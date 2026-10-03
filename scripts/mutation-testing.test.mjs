@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 139)
+  assert.equal(Object.keys(configured).length, 141)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -477,7 +477,9 @@ test('protected ledger retains complete storage and custody source with native c
     '<rootDir>/test/protected-ledger-prepared.test.ts',
     '<rootDir>/test/private-purchase-native-clock.test.ts',
     '<rootDir>/test/private-purchase-native-clock.property.test.ts',
-    '<rootDir>/test/private-purchase-state.property.test.ts'
+    '<rootDir>/test/private-purchase-state.property.test.ts',
+    '<rootDir>/test/private-publication-lookup.test.ts',
+    '<rootDir>/test/private-publication-lookup.property.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('src/storage/**'))
@@ -518,7 +520,9 @@ test('private publication retains every complete implementation and native resta
     '<rootDir>/test/private-publication-exclusion.test.ts',
     '<rootDir>/test/private-verified-publication-store.test.ts',
     '<rootDir>/test/private-verified-publication.property.test.ts',
-    '<rootDir>/test/private-publication-availability.test.ts'
+    '<rootDir>/test/private-publication-availability.test.ts',
+    '<rootDir>/test/private-publication-lookup.test.ts',
+    '<rootDir>/test/private-publication-lookup.property.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('test/private-publication-fixture.ts'))
@@ -534,7 +538,11 @@ test('measured root targets recycle workers while retaining complete canonical s
     'src/root-eviction/RootEvictionRecoveryStorage.ts'
   ])
   assert.deepEqual(selected.runnerOptions.jest.config.testMatch, [
-    '<rootDir>/test/root-eviction*.test.ts'
+    '<rootDir>/test/root-eviction*.test.ts',
+    resolve(
+      REPOSITORY_ROOT,
+      'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+    )
   ])
   const recycled = new Set([
     'root-eviction-coordination',
@@ -579,7 +587,9 @@ test('verified private service retains every complete source and all canonical n
     '<rootDir>/test/private-publication-contract.test.ts',
     '<rootDir>/test/private-lookup-binding.test.ts',
     '<rootDir>/test/private-publication-service-records.test.ts',
-    '<rootDir>/test/private-publication-availability.test.ts'
+    '<rootDir>/test/private-publication-availability.test.ts',
+    '<rootDir>/test/private-publication-lookup.test.ts',
+    '<rootDir>/test/private-publication-lookup.property.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.ok(target.additionalInputs.includes('test/fixtures/**'))
@@ -621,7 +631,9 @@ test('private publication composition retains its complete sources and canonical
     resolve(
       REPOSITORY_ROOT,
       'packages/overlays/overlay-express/src/__tests__/PrivatePublication*.integration.test.ts'
-    )
+    ),
+    '<rootDir>/test/private-publication-lookup.test.ts',
+    '<rootDir>/test/private-publication-lookup.property.test.ts'
   ])
   const http = targets['private-publication-http']
   assert.deepEqual(http.mutate, [
@@ -1275,4 +1287,99 @@ test('native observation profile governs whole modules and all previous ledger/p
   }
   assert.equal(target.runnerOptions.buildCommand, 'pnpm build')
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+})
+
+test('private lookup and root serving retain complete sources and original native test unions', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const lookup = targets['private-publication-lookup']
+  assert.deepEqual(lookup.mutate, ['src/private/PrivatePublicationLookupContext.ts'])
+  assert.equal(
+    lookup.propertyTest,
+    'packages/application/output-knowledge/test/private-publication-lookup.property.test.ts'
+  )
+  assert.equal(lookup.runnerOptions.maxTestRunnerReuse, 8)
+  assert.deepEqual(
+    lookup.runnerOptions.jest.config.testMatch,
+    targets['private-publication-coordination'].runnerOptions.jest.config.testMatch
+  )
+  for (const id of [
+    'private-publication-state',
+    'private-publication-service',
+    'private-publication-coordination',
+    'protected-ledger',
+    'private-purchase-native-clock'
+  ]) {
+    const target = targets[id]
+    assert.ok(
+      target.additionalInputs.includes('src/private/PrivatePublicationLookupContext.ts'),
+      id
+    )
+    assert.ok(target.additionalInputs.includes('test/private-publication-lookup.fixture.ts'), id)
+    assert.ok(
+      target.runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/test/private-publication-lookup.test.ts'
+      ),
+      id
+    )
+    assert.ok(
+      target.runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/test/private-publication-lookup.property.test.ts'
+      ),
+      id
+    )
+  }
+  const root = targets['root-eviction-journal']
+  assert.deepEqual(root.mutate, [
+    'src/root-eviction/SQLiteRootEvictionStore.ts',
+    'src/root-eviction/RootAdvertisementServing.ts',
+    'src/root-eviction/RootLookupServingDisclosure.ts'
+  ])
+  assert.deepEqual(root.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/root-eviction*.test.ts',
+    resolve(
+      REPOSITORY_ROOT,
+      'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+    )
+  ])
+  assert.ok(root.additionalInputs.includes('test/root-advertisement-fixture.ts'))
+  assert.ok(root.additionalInputs.includes('../../sdk/src/**'))
+})
+
+test('native root and original purchase signature fixtures remain in every dependent complete selection', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT),
+    native = resolve(
+      REPOSITORY_ROOT,
+      'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+    )
+  for (const [id, target] of Object.entries(targets)) {
+    if (target.packageDirectory !== 'packages/application/output-knowledge') continue
+    if (target.additionalInputs?.includes('test/private-purchase-contract.fixture.ts'))
+      assert.ok(target.additionalInputs.includes('test/private-purchase-signing.fixture.ts'), id)
+    if (
+      target.additionalInputs?.includes(
+        '../../overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.fixture.ts'
+      )
+    ) {
+      assert.ok(target.runnerOptions.jest.config.testMatch.includes(native), id)
+      assert.ok(
+        target.runnerOptions.jest.config.testMatch.includes(
+          '<rootDir>/test/root-eviction*.test.ts'
+        ),
+        id
+      )
+      assert.ok(
+        target.runnerOptions.jest.config.roots.includes(
+          resolve(REPOSITORY_ROOT, 'packages/overlays/overlay-express/src/__tests__')
+        ),
+        id
+      )
+      assert.equal(
+        target.runnerOptions.jest.config.moduleNameMapper[
+          String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`
+        ],
+        '<rootDir>/$1.ts',
+        id
+      )
+    }
+  }
 })

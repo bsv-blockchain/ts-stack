@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import { OverlayProposalAdmission } from '../ProposalAdmission.js'
 import type { Engine } from '../Engine.js'
 import {
@@ -149,9 +150,9 @@ export function retained(): RetainedAdmission {
 
 export function fixture(maximumOutcomeBytes?: number) {
   const read = jest
-    .fn<Promise<AdmissionHistoryResult>, [unknown]>()
+    .fn<(query: unknown) => Promise<AdmissionHistoryResult>>()
     .mockResolvedValue({ state: 'unresolved' })
-  const submit = jest.fn().mockResolvedValue({ [topic]: { outputsToAdmit: [], coinsToRetain: [] } })
+  const submit = jest.fn(async () => ({ [topic]: { outputsToAdmit: [], coinsToRetain: [] } }))
   const engine = {
     storage: {
       admissionScope: { ...scope },

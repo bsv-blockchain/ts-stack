@@ -1,3 +1,4 @@
+import { createCoreOverlayTestProjects } from '../../packages/overlays/overlay/jest.projects.mjs'
 import { createOverlayTestProjects } from '../../packages/overlays/overlay-express/jest.projects.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -94,7 +95,7 @@ function lookupProviderTarget(
   }
 }
 
-function rootEvictionTarget(property, files, { maxTestRunnerReuse } = {}) {
+function rootEvictionTarget(repositoryRoot, property, files, { maxTestRunnerReuse } = {}) {
   return {
     packageDirectory: 'packages/application/output-knowledge',
     manifest: 'packages/application/output-knowledge/package.json',
@@ -115,14 +116,48 @@ function rootEvictionTarget(property, files, { maxTestRunnerReuse } = {}) {
       'test/root-contract-fixture.ts',
       'test/root-eviction-coordination-fixture.ts',
       'test/fixtures/root-coordination-worker.mjs',
-      'test/fixtures/root-maintenance-worker.mjs'
+      'test/fixtures/root-maintenance-worker.mjs',
+      'test/root-advertisement-fixture.ts',
+      'test/evidence-fixture.ts',
+      'test/fixtures/reconciliation-vectors.json',
+      '../../sdk/src/**',
+      'src/**',
+      'test/*fixture.ts',
+      'test/fixtures/**',
+      '../../overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.fixture.ts',
+      '../../overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts',
+      '../../overlays/overlay-express/src/RootEviction*.ts',
+      '../../overlays/overlay-express/src/OutputLookup*.ts',
+      '../../overlays/overlay/src/**',
+      '../../middleware/auth-express-middleware/src/**'
     ],
     mutate: files.map(name => `src/root-eviction/${name}.ts`),
-    ...jestTarget('jest.config.js', ['<rootDir>/test/root-eviction*.test.ts'], {
-      esm: true,
-      buildCommand: 'pnpm build',
-      maxTestRunnerReuse
-    })
+    ...jestTarget(
+      'jest.config.js',
+      [
+        '<rootDir>/test/root-eviction*.test.ts',
+        resolve(
+          repositoryRoot,
+          'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+        )
+      ],
+      {
+        esm: true,
+        buildCommand: 'pnpm build',
+        maxTestRunnerReuse,
+        config: {
+          roots: [
+            '<rootDir>',
+            resolve(repositoryRoot, 'packages/overlays/overlay-express/src/__tests__')
+          ],
+          moduleNameMapper: {
+            [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]:
+              '<rootDir>/$1.ts',
+            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1'
+          }
+        }
+      }
+    )
   }
 }
 
@@ -301,7 +336,7 @@ export function buildMutationTargets(repositoryRoot) {
     [],
     sessionRecordTests
   )
-  return {
+  const targets = {
     'sdk-paid-lookup-funding': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
@@ -697,7 +732,7 @@ export function buildMutationTargets(repositoryRoot) {
       )
     },
     'root-eviction-local-rules': {
-      ...rootEvictionTarget('root-eviction-local-rules.property.test.ts', [
+      ...rootEvictionTarget(repositoryRoot, 'root-eviction-local-rules.property.test.ts', [
         'SQLiteRootEvictionLocalRules',
         'RootEvictionLocalRuleSchema',
         'RootEvictionLocalRules'
@@ -708,20 +743,26 @@ export function buildMutationTargets(repositoryRoot) {
       })
     },
     'root-eviction-scheduler': {
-      ...rootEvictionTarget('root-eviction-scheduler.property.test.ts', ['RootEvictionScheduler']),
+      ...rootEvictionTarget(repositoryRoot, 'root-eviction-scheduler.property.test.ts', [
+        'RootEvictionScheduler'
+      ]),
       ...jestTarget('jest.config.js', ['<rootDir>/test/root-eviction-scheduler*.test.ts'], {
         esm: true,
         buildCommand: 'pnpm build'
       })
     },
-    'root-eviction-service': rootEvictionTarget('root-eviction-service.property.test.ts', [
-      'RootEvictionService'
-    ]),
-    'root-eviction-maintenance': rootEvictionTarget('root-eviction-maintenance.property.test.ts', [
-      'SQLiteRootEvictionMaintenance',
-      'RootEvictionMaintenanceStorage'
-    ]),
+    'root-eviction-service': rootEvictionTarget(
+      repositoryRoot,
+      'root-eviction-service.property.test.ts',
+      ['RootEvictionService']
+    ),
+    'root-eviction-maintenance': rootEvictionTarget(
+      repositoryRoot,
+      'root-eviction-maintenance.property.test.ts',
+      ['SQLiteRootEvictionMaintenance', 'RootEvictionMaintenanceStorage']
+    ),
     'root-eviction-coordination': rootEvictionTarget(
+      repositoryRoot,
       'root-eviction-coordination.property.test.ts',
       [
         'RootEvictionContractRecords',
@@ -730,25 +771,31 @@ export function buildMutationTargets(repositoryRoot) {
       ],
       { maxTestRunnerReuse: 8 }
     ),
-    'root-eviction-commit': rootEvictionTarget('root-eviction-commit.property.test.ts', [
-      'RootEvictionCommitContext'
-    ]),
+    'root-eviction-commit': rootEvictionTarget(
+      repositoryRoot,
+      'root-eviction-commit.property.test.ts',
+      ['RootEvictionCommitContext']
+    ),
     'root-eviction-journal': rootEvictionTarget(
+      repositoryRoot,
       'root-eviction.property.test.ts',
-      ['SQLiteRootEvictionStore'],
+      ['SQLiteRootEvictionStore', 'RootAdvertisementServing', 'RootLookupServingDisclosure'],
       { maxTestRunnerReuse: 8 }
     ),
     'root-eviction-records': rootEvictionTarget(
+      repositoryRoot,
       'root-eviction-records.property.test.ts',
       ['RootEvictionRequests', 'RootEvictionServingRecords'],
       { maxTestRunnerReuse: 8 }
     ),
     'root-eviction-codec': rootEvictionTarget(
+      repositoryRoot,
       'root-eviction-codec.property.test.ts',
       ['RootEvictionCodec'],
       { maxTestRunnerReuse: 8 }
     ),
     'root-eviction-storage': rootEvictionTarget(
+      repositoryRoot,
       'root-eviction-storage.property.test.ts',
       ['SQLiteRootEvictionDatabase', 'RootEvictionStorage'],
       { maxTestRunnerReuse: 8 }
@@ -3273,4 +3320,115 @@ export function buildMutationTargets(repositoryRoot) {
       )
     }
   }
+  // Lookup disclosure exercises the same durable publication and custody
+  // dependencies. Append its complete suites without narrowing any old union.
+  const lookupTests = [
+    '<rootDir>/test/private-publication-lookup.test.ts',
+    '<rootDir>/test/private-publication-lookup.property.test.ts'
+  ]
+  const publication = targets['private-publication-coordination']
+  const lookupInputs = [
+    ...publication.additionalInputs,
+    'src/private/PrivatePublicationLookupContext.ts',
+    'test/private-publication-lookup.fixture.ts'
+  ]
+  for (const id of [
+    'private-publication-state',
+    'private-publication-service',
+    'private-publication-coordination',
+    'protected-ledger',
+    'private-purchase-native-clock'
+  ]) {
+    const target = targets[id]
+    target.additionalInputs.push(...lookupInputs)
+    target.runnerOptions.jest.config.testMatch.push(...lookupTests)
+  }
+  targets['private-publication-lookup'] = {
+    ...structuredClone(publication),
+    propertyTest:
+      'packages/application/output-knowledge/test/private-publication-lookup.property.test.ts',
+    mutate: ['src/private/PrivatePublicationLookupContext.ts']
+  }
+  for (const target of Object.values(targets)) {
+    if (
+      target.packageDirectory === 'packages/application/output-knowledge' &&
+      target.additionalInputs?.includes('test/private-purchase-contract.fixture.ts')
+    )
+      target.additionalInputs.push('test/private-purchase-signing.fixture.ts')
+  }
+  const retainedTests = [
+    '<rootDir>/src/__tests/RetainedTransactionBEEF.test.ts',
+    '<rootDir>/src/__tests/RetainedTransactionBEEF.property.test.ts',
+    '<rootDir>/src/__tests/EngineAdmission*.test.ts',
+    '<rootDir>/src/__tests/OverlayGASPStorage.test.ts',
+    '<rootDir>/src/__tests/mongo/*.test.ts',
+    resolve(
+      repositoryRoot,
+      'packages/overlays/overlay-express/src/__tests__/PrivateOverlayHostRootServing.integration.test.ts'
+    )
+  ]
+  const retainedInputs = [
+    'src/**',
+    'jest.projects.mjs',
+    'jest.config.js',
+    '../../sdk/src/**',
+    '../../application/output-knowledge/src/**',
+    '../../application/output-knowledge/test/*fixture.ts',
+    '../../application/output-knowledge/test/fixtures/**',
+    '../overlay-express/src/__tests__/PrivateOverlayHostRootServing*.ts',
+    '../overlay-express/src/RootEviction*.ts',
+    '../overlay-express/src/OutputLookup*.ts',
+    '../../middleware/auth-express-middleware/src/**'
+  ]
+  const retainedRunner = testMatch =>
+    jestTarget('jest.config.js', testMatch, {
+      esm: true,
+      buildCommand: 'pnpm build',
+      maxTestRunnerReuse: 8,
+      config: {
+        projects: createCoreOverlayTestProjects(testMatch, {
+          roots: [
+            '<rootDir>',
+            resolve(repositoryRoot, 'packages/overlays/overlay-express/src/__tests__')
+          ],
+          moduleNameMapper: {
+            [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
+              repositoryRoot,
+              'packages/application/output-knowledge/$1.ts'
+            ),
+            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1'
+          }
+        })
+      }
+    })
+  for (const id of [
+    'overlay-proposal-admission',
+    'overlay-private-publication-admission',
+    'overlay-private-purchase-admission',
+    'overlay-integrity'
+  ]) {
+    const target = targets[id]
+    target.additionalInputs = [...(target.additionalInputs ?? []), ...retainedInputs]
+    const testMatch = [...target.runnerOptions.jest.config.testMatch, ...retainedTests]
+    const originalReuse = target.runnerOptions.maxTestRunnerReuse
+    target.runnerOptions = { ...target.runnerOptions, ...retainedRunner(testMatch).runnerOptions }
+    if (originalReuse === undefined) delete target.runnerOptions.maxTestRunnerReuse
+    else target.runnerOptions.maxTestRunnerReuse = originalReuse
+  }
+  targets['overlay-retained-beef'] = {
+    packageDirectory: 'packages/overlays/overlay',
+    manifest: 'packages/overlays/overlay/package.json',
+    propertyTest: 'packages/overlays/overlay/src/__tests/RetainedTransactionBEEF.property.test.ts',
+    additionalInputs: retainedInputs,
+    mutate: ['src/RetainedTransactionBEEF.ts'],
+    ...retainedRunner(retainedTests)
+  }
+  for (const id of ['root-eviction-local-rules', 'root-eviction-scheduler']) {
+    const config = targets[id].runnerOptions.jest.config
+    const native = targets['root-eviction-journal'].runnerOptions.jest.config
+    config.testMatch.push(...native.testMatch)
+    config.roots = [...native.roots]
+    config.moduleNameMapper = { ...native.moduleNameMapper, ...config.moduleNameMapper }
+  }
+  return targets
 }

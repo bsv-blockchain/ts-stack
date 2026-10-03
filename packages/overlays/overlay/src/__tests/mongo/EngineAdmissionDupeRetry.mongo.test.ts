@@ -53,50 +53,46 @@ describe('Engine admission retries against real MongoAdmissionStorage', () => {
     await fixture.close()
   }, 60000)
 
-  test(
-    'a multi-topic resubmit that overlaps an already-applied topic commits only the new topic instead of rejecting invalid-plan',
-    async () => {
-      const storage = new MongoOverlayStorage(fixture.db, fixture.scope)
-      // getOverlayAdmissionHost() lifts these off the storage instance into a
-      // plain object, so they must be pre-bound here or they lose `this`
-      // when EngineAdmission invokes them later — unrelated to the F1 fix
-      // under test, this is only how MongoOverlayStorage's admission host is
-      // wired up for direct use outside of a DI container.
-      storage.publishAdmissionPayload = storage.publishAdmissionPayload.bind(storage)
-      storage.enlistedIndexTargets = storage.enlistedIndexTargets.bind(storage)
-      storage.getHistoryFence = storage.getHistoryFence.bind(storage)
-      const engine = new Engine(
-        { TopicA: admittingManager(), TopicC: admittingManager() },
-        { TopicA: noopLookup(), TopicC: noopLookup() },
-        storage,
-        mockChainTracker
-      )
+  test('a multi-topic resubmit that overlaps an already-applied topic commits only the new topic instead of rejecting invalid-plan', async () => {
+    const storage = new MongoOverlayStorage(fixture.db, fixture.scope)
+    // getOverlayAdmissionHost() lifts these off the storage instance into a
+    // plain object, so they must be pre-bound here or they lose `this`
+    // when EngineAdmission invokes them later — unrelated to the F1 fix
+    // under test, this is only how MongoOverlayStorage's admission host is
+    // wired up for direct use outside of a DI container.
+    storage.publishAdmissionPayload = storage.publishAdmissionPayload.bind(storage)
+    storage.enlistedIndexTargets = storage.enlistedIndexTargets.bind(storage)
+    storage.getHistoryFence = storage.getHistoryFence.bind(storage)
+    const engine = new Engine(
+      { TopicA: admittingManager(), TopicC: admittingManager() },
+      { TopicA: noopLookup(), TopicC: noopLookup() },
+      storage,
+      mockChainTracker
+    )
 
-      const tx = Transaction.fromHexBEEF(BRC62Hex)
-      const beef = tx.toBEEF()
+    const tx = Transaction.fromHexBEEF(BRC62Hex)
+    const beef = tx.toBEEF()
 
-      // Live admit under a single topic, TopicA.
-      const first = await engine.submit(
-        { beef, topics: ['TopicA'] },
-        undefined,
-        'historical-tx-no-spv'
-      )
-      expect(first.TopicA.outputsToAdmit).toEqual([0])
+    // Live admit under a single topic, TopicA.
+    const first = await engine.submit(
+      { beef, topics: ['TopicA'] },
+      undefined,
+      'historical-tx-no-spv'
+    )
+    expect(first.TopicA.outputsToAdmit).toEqual([0])
 
-      // A later resubmission of the same tx names TopicA again (now a dupe)
-      // alongside a brand-new topic, TopicC — the "multi-topic retry" shape
-      // the finding describes. This must not throw
-      // "Overlay admission rejected: invalid-plan" / "digest-mismatch".
-      const second = await engine.submit(
-        { beef, topics: ['TopicA', 'TopicC'] },
-        undefined,
-        'historical-tx-no-spv'
-      )
-      expect(second.TopicC.outputsToAdmit).toEqual([0])
-      expect(second.TopicA).toEqual({ outputsToAdmit: [], coinsToRetain: [], coinsRemoved: [] })
+    // A later resubmission of the same tx names TopicA again (now a dupe)
+    // alongside a brand-new topic, TopicC — the "multi-topic retry" shape
+    // the finding describes. This must not throw
+    // "Overlay admission rejected: invalid-plan" / "digest-mismatch".
+    const second = await engine.submit(
+      { beef, topics: ['TopicA', 'TopicC'] },
+      undefined,
+      'historical-tx-no-spv'
+    )
+    expect(second.TopicC.outputsToAdmit).toEqual([0])
+    expect(second.TopicA).toEqual({ outputsToAdmit: [], coinsToRetain: [], coinsRemoved: [] })
 
-      await storage.close()
-    },
-    30000
-  )
+    await storage.close()
+  }, 30000)
 })

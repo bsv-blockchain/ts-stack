@@ -57,6 +57,7 @@ export class SQLiteRootEvictionStore
     RootEvictionRecoveryStorage
 {
   readonly durability = 'durable' as const
+  readonly servingEnqueue = 'root-serving-send/1' as const
   private readonly database: SQLiteRootEvictionDatabase
   private readonly requests: RootEvictionRequests
   private readonly views: RootEvictionServingRecords
@@ -422,43 +423,57 @@ export class SQLiteRootEvictionStore
    * current-authorization check and the actual final transport enqueue, after any
    * asynchronous middleware signing. A handler's buffered res.send is insufficient.
    */
+  /** Optional synchronous head capture for a compound native lookup/root gate. */
+  captureServing(): RootEvictionHead {
+    return this.database.transaction(() => this.database.head())
+  }
   enqueue(
     candidate: { revision: string; targets: RootEvictionServingTarget[]; bytes: Uint8Array },
     authorize: () => boolean,
     enqueue: (bytes: Uint8Array) => undefined
   ): Promise<void> {
-    return this.work(() => {
-      outputU64(candidate.revision)
-      outputAssert(
-        Array.isArray(candidate.targets) &&
-          candidate.targets.length <= 1024 &&
-          candidate.bytes instanceof Uint8Array &&
-          candidate.bytes.byteLength <= 4194304,
-        'Invalid root response candidate'
-      )
-      outputAssert(
-        authorize.constructor.name !== 'AsyncFunction' &&
-          enqueue.constructor.name !== 'AsyncFunction',
-        'Root send callbacks must be synchronous'
-      )
-      const targets = candidate.targets.map(target => this.selectedTarget(target))
-      const bytes = new Uint8Array(candidate.bytes)
-      outputAssert(
-        this.database.head().revision === candidate.revision,
-        'Root serving revision changed before enqueue',
-        'reset-required'
-      )
-      outputAssert(authorize() === true, 'Root response is no longer authorized', 'unauthorized')
-      outputAssert(
-        targets.every(target => this.views.serving(target).state === 'eligible'),
-        'Root response contains a prohibited or unresolved advertisement',
-        'reset-required'
-      )
-      outputAssert(
-        enqueue(bytes) === undefined,
-        'Root transport enqueue must complete synchronously'
-      )
-    })
+    return this.work(() => this.enqueueWithinGate(candidate, authorize, enqueue))
+  }
+  /** Additive native callback port; never await or perform I/O while this gate is held. */
+  enqueueNow(
+    candidate: { revision: string; targets: RootEvictionServingTarget[]; bytes: Uint8Array },
+    authorize: () => boolean,
+    enqueue: (bytes: Uint8Array) => undefined
+  ): void {
+    this.database.transaction(() => this.enqueueWithinGate(candidate, authorize, enqueue))
+  }
+  private enqueueWithinGate(
+    candidate: { revision: string; targets: RootEvictionServingTarget[]; bytes: Uint8Array },
+    authorize: () => boolean,
+    enqueue: (bytes: Uint8Array) => undefined
+  ): void {
+    outputU64(candidate.revision)
+    outputAssert(
+      Array.isArray(candidate.targets) &&
+        candidate.targets.length <= 1024 &&
+        candidate.bytes instanceof Uint8Array &&
+        candidate.bytes.byteLength <= 4194304,
+      'Invalid root response candidate'
+    )
+    outputAssert(
+      authorize.constructor.name !== 'AsyncFunction' &&
+        enqueue.constructor.name !== 'AsyncFunction',
+      'Root send callbacks must be synchronous'
+    )
+    const targets = candidate.targets.map(target => this.selectedTarget(target))
+    const bytes = new Uint8Array(candidate.bytes)
+    outputAssert(
+      this.database.head().revision === candidate.revision,
+      'Root serving revision changed before enqueue',
+      'reset-required'
+    )
+    outputAssert(authorize() === true, 'Root response is no longer authorized', 'unauthorized')
+    outputAssert(
+      targets.every(target => this.views.serving(target).state === 'eligible'),
+      'Root response contains a prohibited or unresolved advertisement',
+      'reset-required'
+    )
+    outputAssert(enqueue(bytes) === undefined, 'Root transport enqueue must complete synchronously')
   }
   close(): Promise<void> {
     return synchronousPromise(() => this.database.close())

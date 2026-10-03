@@ -1392,6 +1392,17 @@
         ]
       },
       {
+        "path": "packages/application/output-knowledge/test/private-publication-lookup.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Native protected lookup context, current recipient entitlement and original publication binding through physical disclosure",
+        "target": "At least 300 native custody, reopen, recipient revocation, cancellation, readiness-loss and exact response-binding schedules",
+        "invariants": [
+          "Only current recipient policy may disclose the exact context of an originally admitted and actively bound publication; private bytes never enter public lookup or synchronization responses.",
+          "A separate native writer, restart, cancellation or altered response cannot bypass the protected revision and one synchronous physical enqueue; retries cannot issue a second response."
+        ]
+      },
+      {
         "path": "packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts",
         "manifest": "packages/overlays/overlay-express/package.json",
         "risk": "critical",
@@ -1709,6 +1720,17 @@
           "Profile-bound native reopening retains the original signed preparation, one financial candidate and the first delivered result.",
           "Current authority, exact cutoffs, native CAS and promised future completion capacity remain enforced before commit.",
           "Default owners preserve their original timestamp refusals; another clock profile never silently migrates existing obligations."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/RetainedTransactionBEEF.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Bounded original raw subject and available dependency history under plain and Atomic BEEF plus separate current leaf evidence",
+        "target": "At least300 raw-subject, ancestry, leaf-proof, byte-budget and damaged-input histories",
+        "invariants": [
+          "Retained raw subjects and available parents remain byte-identical after leaf hydration; unrelated branches confer no authority.",
+          "Wrong Atomic subjects, absent raw targets, changed current raw bytes and complete input/output budget overflows fail closed."
         ]
       }
     ],

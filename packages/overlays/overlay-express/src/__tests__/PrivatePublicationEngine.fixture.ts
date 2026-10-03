@@ -1,4 +1,4 @@
-import { Engine, type TopicManager } from '@bsv/overlay'
+import { Engine, type TopicManager, type LookupService, type LookupFormula } from '@bsv/overlay'
 import { OverlayPrivatePublicationAdmission } from '@bsv/overlay/private-publication-admission'
 import { MongoOverlayStorage } from '@bsv/overlay/storage/mongo/MongoOverlayStorage'
 import { bootstrapMongoOverlay } from '@bsv/overlay/storage/mongo/MongoSchema'
@@ -14,7 +14,11 @@ export async function privatePublicationEngineFixture() {
   const replica = await createMongoReplicaFixture()
   const owners: MongoOverlayStorage[] = []
   return {
-    async install(f: ReturnType<typeof coordinatorFixture>, name: string, loseReply = false) {
+    async install(
+      f: Pick<ReturnType<typeof coordinatorFixture>, 'contract' | 'leases' | 'service'>,
+      name: string,
+      loseReply = false
+    ) {
       const cfg = f.contract.installation,
         scope = { ...cfg.chain, nodeId: name }
       await bootstrapMongoOverlay(replica.db, scope)
@@ -34,7 +38,38 @@ export async function privatePublicationEngineFixture() {
         }
       }
       const view = await resolver.resolve(context().view, new AbortController().signal)
-      const engine = new Engine({ [cfg.topic]: manager }, {}, storage, view.tracker)
+      const lookupCalls: { offChainValues?: number[]; txid?: string }[] = []
+      const lookupService: LookupService = {
+        admissionMode: 'locking-script',
+        spendNotificationMode: 'none',
+        outputAdmittedByTopic(payload) {
+          lookupCalls.push({
+            ...(payload.mode === 'locking-script' ? { txid: payload.txid } : {}),
+            ...(payload.offChainValues ? { offChainValues: [...payload.offChainValues] } : {})
+          })
+        },
+        outputEvicted() {},
+        async lookup() {
+          const outputs = await storage.findUTXOsForTopic(cfg.topic, undefined, 64)
+          return outputs.map(output => ({ txid: output.txid, outputIndex: output.outputIndex }))
+        },
+        async getDocumentation() {
+          return 'Public evidence only; private context requires request-local authorization.'
+        },
+        async getMetaData() {
+          return {
+            name: 'Public synthetic catalogue',
+            shortDescription: 'Public outpoints without private context'
+          }
+        }
+      }
+      const lookupName = f.service.lookup.service
+      const engine = new Engine(
+        { [cfg.topic]: manager },
+        { [lookupName]: lookupService },
+        storage,
+        view.tracker
+      )
       const submit = engine.submit.bind(engine)
       let submissions = 0
       engine.submit = async (...args) => {
@@ -58,6 +93,36 @@ export async function privatePublicationEngineFixture() {
         bridge,
         storage,
         calls,
+        lookupCalls,
+        engine,
+        lookupName,
+        /** Explicit original CRUD/hook profile; does not claim atomic admission/history. */
+        legacyEngine() {
+          const legacyStorage = new Proxy(storage, {
+            get(target, property) {
+              if (property === 'admission') return undefined
+              const value = Reflect.get(target, property)
+              return typeof value === 'function' ? value.bind(target) : value
+            }
+          })
+          return new Engine(
+            { [cfg.topic]: manager },
+            { [lookupName]: lookupService },
+            legacyStorage,
+            view.tracker
+          )
+        },
+        /** Never replace the shared public registry with a caller's secret-bearing service. */
+        async privateLookup(formula: LookupFormula) {
+          const owned = structuredClone(formula)
+          const requestEngine = new Engine(
+            { [cfg.topic]: manager },
+            { [lookupName]: { ...lookupService, lookup: async () => structuredClone(owned) } },
+            storage,
+            view.tracker
+          )
+          return await requestEngine.lookup({ service: lookupName, query: {} })
+        },
         get submissions() {
           return submissions
         }

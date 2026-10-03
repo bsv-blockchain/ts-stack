@@ -141,3 +141,5 @@ its qualification limits.
 Bind original signed consent, finite role authority, concrete compensation,
 independent funding and recipient-bound keys to a protected retained entitlement.
 Covers the optional paid domain, native recovery and authenticated offline playback.
+
+- [Recipient-authorized private lookup context](./private-publication-lookup-context.md)

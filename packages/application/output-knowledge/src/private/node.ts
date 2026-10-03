@@ -180,3 +180,9 @@ export {
   SQLitePrivatePurchaseEvidence,
   type PrivatePurchaseEvidenceLimits
 } from './SQLitePrivatePurchaseEvidence.js'
+
+export {
+  PrivatePublicationLookupContext,
+  type PrivatePublicationLookupCaller,
+  type PrivatePublicationLookupContextOptions
+} from './PrivatePublicationLookupContext.js'

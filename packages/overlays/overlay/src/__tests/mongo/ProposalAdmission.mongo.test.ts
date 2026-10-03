@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals'
 import { Engine } from '../../Engine.js'
 import { OverlayProposalAdmission } from '../../ProposalAdmission.js'
 import type { TopicManager } from '../../TopicManager.js'
