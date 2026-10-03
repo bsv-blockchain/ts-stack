@@ -9,6 +9,7 @@ import {
   parseArguments,
   REPOSITORY_ROOT,
   selectAffectedMutationTargets,
+  strykerEnvironment,
   targetsForUnresolvedMutationRange
 } from './mutation-testing.mjs'
 
@@ -213,7 +214,7 @@ test('additional package-relative fixture inputs select their target without rep
   )
 
   const canonical = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(canonical).length, 47)
+  assert.equal(Object.keys(canonical).length, 48)
   assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
     'test/utils/snapshotRelationFixtures.ts',
     'test/utils/snapshotCertificateFixtures.ts',
@@ -376,4 +377,14 @@ test('snapshot sync owns every inherited manager region and complete primary sel
     target.mutate.filter(specification => specification.startsWith(`${file}:`)),
     expected
   )
+})
+
+test('Stryker runs cannot append per-mutant test reports to the job summary', () => {
+  const environment = strykerEnvironment(
+    { GITHUB_ACTIONS: 'true', GITHUB_STEP_SUMMARY: '/tmp/summary', PATH: '/bin' },
+    { TS_STACK_MUTATION_TARGET: 'one' }
+  )
+  assert.equal(environment.GITHUB_STEP_SUMMARY, undefined)
+  assert.equal(environment.PATH, '/bin')
+  assert.equal(environment.TS_STACK_MUTATION_TARGET, 'one')
 })

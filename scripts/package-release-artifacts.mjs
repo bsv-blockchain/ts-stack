@@ -32,6 +32,9 @@ const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 // Keep reconciliation bounded while allowing the observed propagation delay.
 const REGISTRY_RETRY_ATTEMPTS = 41
 const REGISTRY_RETRY_DELAY_MS = 15_000
+// Each tarball publishes and reconciles independently; a rerun accepts only
+// versions already present with the staged digest, so order is irrelevant.
+const PUBLISH_CONCURRENCY = 8
 const URL_NAMESPACE_UUID = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
 const PACKED_MANIFEST_DEPENDENCY_FIELDS = [
   'dependencies',
@@ -200,6 +203,11 @@ function dependencyNames(project) {
 }
 
 export function topologicallyOrderProjects(projects) {
+  return dependencyWaves(projects).flat()
+}
+
+// Group projects into waves whose members depend only on earlier waves.
+export function dependencyWaves(projects) {
   const byName = new Map(projects.map(project => [project.name, project]))
   const remainingDependencies = new Map(
     projects.map(project => [
@@ -207,7 +215,7 @@ export function topologicallyOrderProjects(projects) {
       new Set([...dependencyNames(project)].filter(name => byName.has(name)))
     ])
   )
-  const ordered = []
+  const waves = []
   while (remainingDependencies.size > 0) {
     const ready = [...remainingDependencies]
       .filter(([, dependencies]) => dependencies.size === 0)
@@ -217,13 +225,13 @@ export function topologicallyOrderProjects(projects) {
       const cycleMembers = [...remainingDependencies.keys()].toSorted(compareStrings)
       throw new Error(`npm package dependency cycle: ${cycleMembers.join(', ')}`)
     }
+    waves.push(ready.map(name => byName.get(name)))
     for (const name of ready) {
-      ordered.push(byName.get(name))
       remainingDependencies.delete(name)
       for (const dependencies of remainingDependencies.values()) dependencies.delete(name)
     }
   }
-  return ordered
+  return waves
 }
 
 function validateRequestedPackages(requested, projects) {
@@ -1350,36 +1358,70 @@ async function waitForPublishedArtifact(item) {
   throw new Error(`npm did not expose ${item.name}@${item.version} with the staged digest`)
 }
 
+async function publishArtifact(item, releaseRoot, dryRun) {
+  const tarballPath = resolveArtifactPath(releaseRoot, item.tarball)
+  if (dryRun) {
+    await run(
+      'npm',
+      ['publish', tarballPath, '--access', 'public', '--ignore-scripts', '--dry-run', '--force'],
+      { cwd: REPOSITORY_ROOT }
+    )
+    console.log(`Dry-run verified npm publication for ${item.name}@${item.version}.`)
+    return
+  }
+  const existing = await registryMetadata(item.name, item.version)
+  if (existing.published) {
+    if (existing.integrity !== item.integrity) {
+      throw new Error(
+        `${item.name}@${item.version} is already published with different immutable bytes`
+      )
+    }
+    console.log(`${item.name}@${item.version} is already published with the staged digest.`)
+    return
+  }
+  await run(
+    'npm',
+    ['publish', tarballPath, '--access', 'public', '--ignore-scripts', '--provenance'],
+    { cwd: REPOSITORY_ROOT }
+  )
+  await waitForPublishedArtifact(item)
+}
+
+// Let every started publication settle before failing, so no in-flight
+// publish is abandoned; report every failed package at once.
+export async function settleWithConcurrency(items, concurrency, operation) {
+  const outcomes = await mapWithConcurrency(items, concurrency, item =>
+    operation(item).then(
+      () => undefined,
+      error => error
+    )
+  )
+  const failures = outcomes.filter(error => error !== undefined)
+  if (failures.length === 1) throw failures[0]
+  if (failures.length > 1) {
+    throw new AggregateError(
+      failures,
+      failures.map(error => error?.message ?? String(error)).join('\n')
+    )
+  }
+}
+
 async function publishArtifacts(manifestOption, dryRun) {
   const { manifest, releaseRoot } = await verifyArtifacts(manifestOption)
   if (!dryRun) validatePublishEnvironment()
-  for (const item of manifest.packages) {
-    const tarballPath = resolveArtifactPath(releaseRoot, item.tarball)
-    if (dryRun) {
-      await run(
-        'npm',
-        ['publish', tarballPath, '--access', 'public', '--ignore-scripts', '--dry-run', '--force'],
-        { cwd: REPOSITORY_ROOT }
-      )
-      console.log(`Dry-run verified npm publication for ${item.name}@${item.version}.`)
-      continue
-    }
-    const existing = await registryMetadata(item.name, item.version)
-    if (existing.published) {
-      if (existing.integrity !== item.integrity) {
-        throw new Error(
-          `${item.name}@${item.version} is already published with different immutable bytes`
-        )
-      }
-      console.log(`${item.name}@${item.version} is already published with the staged digest.`)
-      continue
-    }
-    await run(
-      'npm',
-      ['publish', tarballPath, '--access', 'public', '--ignore-scripts', '--provenance'],
-      { cwd: REPOSITORY_ROOT }
+  // A dependent never becomes installable before its first-party dependencies:
+  // each wave publishes concurrently and is registry-verified before the next.
+  const projects = await Promise.all(
+    manifest.packages.map(async item => ({
+      name: item.name,
+      item,
+      manifest: await readJson(path.join(REPOSITORY_ROOT, item.sourcePath, 'package.json'))
+    }))
+  )
+  for (const wave of dependencyWaves(projects)) {
+    await settleWithConcurrency(wave, PUBLISH_CONCURRENCY, project =>
+      publishArtifact(project.item, releaseRoot, dryRun)
     )
-    await waitForPublishedArtifact(item)
   }
   if (!dryRun) await appendGitHubOutput('published', manifest.packages.length)
 }
