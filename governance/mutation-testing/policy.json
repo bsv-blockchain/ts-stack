@@ -1396,6 +1396,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-native-clock",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts",
+      "risk": "critical",
+      "boundary": "Native purchase progress derived from the authorizing monotonic transaction observation with original profile, CAS, cutoff, capacity and recipient authority preserved",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 138)
+  assert.equal(Object.keys(configured).length, 139)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -1191,7 +1191,8 @@ test('covenant buyer and native payment retain whole entries and complete origin
       '<rootDir>/test/private-lookup-buyer*.test.ts',
       '<rootDir>/test/private-buyer-payment.test.ts',
       '<rootDir>/test/private-purchase-buyer*.test.ts',
-      '<rootDir>/test/private-purchase-wallet-native*.test.ts'
+      '<rootDir>/test/private-purchase-wallet-native*.test.ts',
+      '<rootDir>/test/private-purchase-wallet-routes.test.ts'
     ])
       assert.ok(target.runnerOptions.jest.config.testMatch.includes(pattern))
     for (const pattern of [
@@ -1252,4 +1253,26 @@ test('cumulative purchase proof owns full modules and retains every original lif
     for (const file of proof.mutate) assert.ok(target.additionalInputs.includes(file))
     assert.ok(target.additionalInputs.includes('test/private-purchase-evidence.fixture.ts'))
   }
+})
+
+test('native observation profile governs whole modules and all previous ledger/purchase checks', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    target = configured['private-purchase-native-clock']
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts'
+  )
+  assert.deepEqual(target.mutate, [
+    'src/private/SQLiteProtectedLedger.ts',
+    'src/private/SQLitePrivatePurchaseStore.ts',
+    'src/private/PrivatePurchaseProgress.ts'
+  ])
+  for (const parent of ['protected-ledger', 'private-purchase-state']) {
+    for (const selection of configured[parent].runnerOptions.jest.config.testMatch)
+      assert.ok(target.runnerOptions.jest.config.testMatch.includes(selection))
+    for (const input of configured[parent].additionalInputs)
+      assert.ok(target.additionalInputs.includes(input))
+  }
+  assert.equal(target.runnerOptions.buildCommand, 'pnpm build')
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
 })

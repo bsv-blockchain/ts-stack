@@ -556,6 +556,48 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
+    'private-purchase-native-clock': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts',
+      additionalInputs: [
+        'src/private/**',
+        'src/storage/**',
+        'test/protected-ledger-fixture.ts',
+        'test/protected-ledger-restoration-fixture.ts',
+        'test/private-purchase-store.fixture.ts',
+        'test/private-purchase-progress.fixture.ts',
+        'test/private-purchase-contract.fixture.ts',
+        '../../sdk/src/**',
+        '../../sdk/package.json'
+      ],
+      mutate: [
+        'src/private/SQLiteProtectedLedger.ts',
+        'src/private/SQLitePrivatePurchaseStore.ts',
+        'src/private/PrivatePurchaseProgress.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-ledger-codec.test.ts',
+          '<rootDir>/test/protected-ledger-integrity.test.ts',
+          '<rootDir>/test/protected-ledger-boundaries.test.ts',
+          '<rootDir>/test/protected-ledger-enumeration.test.ts',
+          '<rootDir>/test/protected-ledger.test.ts',
+          '<rootDir>/test/protected-ledger-batch.test.ts',
+          '<rootDir>/test/protected-ledger.property.test.ts',
+          '<rootDir>/test/protected-ledger-prepared.test.ts',
+          '<rootDir>/test/private-purchase-native-clock.test.ts',
+          '<rootDir>/test/private-purchase-native-clock.property.test.ts',
+          '<rootDir>/test/private-purchase-state.property.test.ts',
+          '<rootDir>/test/private-purchase-progress.test.ts',
+          '<rootDir>/test/private-purchase-store.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
     'private-purchase-state': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -2094,7 +2136,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-lookup-buyer*.test.ts',
           '<rootDir>/test/private-buyer-payment.test.ts',
           '<rootDir>/test/private-purchase-buyer*.test.ts',
-          '<rootDir>/test/private-purchase-wallet-native*.test.ts'
+          '<rootDir>/test/private-purchase-wallet-native*.test.ts',
+          '<rootDir>/test/private-purchase-wallet-routes.test.ts'
         ],
         {
           esm: true,
@@ -2142,7 +2185,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-lookup-buyer*.test.ts',
           '<rootDir>/test/private-buyer-payment.test.ts',
           '<rootDir>/test/private-purchase-buyer*.test.ts',
-          '<rootDir>/test/private-purchase-wallet-native*.test.ts'
+          '<rootDir>/test/private-purchase-wallet-native*.test.ts',
+          '<rootDir>/test/private-purchase-wallet-routes.test.ts'
         ],
         {
           esm: true,

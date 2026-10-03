@@ -3353,3 +3353,13 @@ and passes all six native checks and three lints on unchanged frozen graphs.
 Checkpoint two remains open: the richer same-raw-proof actual composition, complete
 private/public-serving and root/GASP demonstrations, full affected mutation
 campaign, review and exact-head hosted qualification remain required.
+
+The first coherent native batch passed lint, format and type checks, but the health
+gate correctly rejected the new property as unregistered. A superseding exact
+source-owner agreement adds one critical native-clock property and one whole-source
+mutation target, deriving 139 from the previous 138. Its three complete modules
+and full ledger/purchase test and input unions preserve every previous target,
+selector, threshold, case floor and deadline. The six-route unit demonstration
+joins both existing native-payment dependent selections. This repairs registration;
+it does not qualify the full campaign or weaken its zero-uncovered/invalid/
+unexecuted requirements.

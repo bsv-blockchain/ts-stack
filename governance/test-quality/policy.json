@@ -1697,6 +1697,19 @@
           "Missing proof custody is never initialized during recovery, and exact duplicates consume no reserved update.",
           "Richer proof cannot replace the first financial candidate or the first delivered result."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Native purchase progress derived from the authorizing monotonic transaction observation with original profile, CAS, cutoff, capacity and recipient authority preserved",
+        "target": "At least 300 clock-advancing native interruption, original-profile reopening and immutable terminal-outcome histories",
+        "invariants": [
+          "A synchronous prepared plan uses exactly its authorizing native clock observation while preserving monotonic time on refusal.",
+          "Profile-bound native reopening retains the original signed preparation, one financial candidate and the first delivered result.",
+          "Current authority, exact cutoffs, native CAS and promised future completion capacity remain enforced before commit.",
+          "Default owners preserve their original timestamp refusals; another clock profile never silently migrates existing obligations."
+        ]
       }
     ],
     "exclusions": [
