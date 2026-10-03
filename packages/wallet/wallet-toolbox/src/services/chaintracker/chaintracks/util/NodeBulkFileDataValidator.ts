@@ -101,7 +101,10 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
     ) {
       throw new Error('workerPath must be a non-empty filesystem path when defined')
     }
-    this.workerPath = path.resolve(options.workerPath ?? path.join(__dirname, 'BulkFileDataValidator.worker.js'))
+    // The worker sits beside this module in each build: .js in the CommonJS tree, .mjs in the ESM bundle.
+    this.workerPath = path.resolve(
+      options.workerPath ?? path.join(__dirname, `BulkFileDataValidator.worker${path.extname(__filename)}`)
+    )
     for (let index = 0; index < maxWorkers; index++) this.spawnWorker()
   }
 

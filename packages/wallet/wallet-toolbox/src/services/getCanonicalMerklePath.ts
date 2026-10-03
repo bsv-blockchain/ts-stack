@@ -30,22 +30,30 @@ export async function validateCanonicalMerklePathResult(
   const paths = Array.isArray(snapshot.merklePath) ? snapshot.merklePath : [snapshot.merklePath]
   const header = snapshot.header == null ? undefined : copyValidatedBlockHeader(snapshot.header, false, false)
   const canonical: MerklePath[] = []
+  const rejections: string[] = []
   for (const path of paths) {
     try {
       const proof = copyMerklePath(requestedTxid, path)
       if (header != null && (proof.merklePath.blockHeight !== header.height || proof.root !== header.merkleRoot)) {
+        rejections.push('path does not match the returned header')
         continue
       }
-      if ((await chaintracker.isValidRootForHeight(proof.root, proof.merklePath.blockHeight)) !== true) continue
+      if ((await chaintracker.isValidRootForHeight(proof.root, proof.merklePath.blockHeight)) !== true) {
+        rejections.push(`root is not on the active chain at height ${proof.merklePath.blockHeight}`)
+        continue
+      }
       canonical.push(proof.merklePath)
-    } catch {
+    } catch (error: unknown) {
       // A malformed or unrelated path is not allowed to hide a later valid
       // candidate in a legacy multi-proof response.
+      rejections.push(WalletError.fromUnknown(error).description)
     }
   }
 
   if (canonical.length === 0) {
-    throw new WERR_INVALID_OPERATION('Proof provider returned no Merkle path on the active chain')
+    throw new WERR_INVALID_OPERATION(
+      `Proof provider returned no Merkle path on the active chain: ${rejections.join('; ')}`
+    )
   }
   Object.assign(result, {
     ...snapshot,

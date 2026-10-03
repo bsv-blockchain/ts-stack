@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.14.5'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+version: '2.15.0'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,15 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+## Module formats
+
+The package ships a CommonJS build (`out/src`) and an ESM build (`out/esm/src`).
+`require` resolves the CommonJS build and `import` resolves the ESM build, for
+the package root, `./out/src/sdk`, and every `./out/src/*` deep path. Load the
+toolbox the same way you load `@bsv/sdk`, so objects you hand it, such as the
+`MerklePath` a `WalletServices` implementation returns, come from the same
+`@bsv/sdk` build the toolbox validates against.
 
 ## Optional registry descriptions
 

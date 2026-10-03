@@ -96,10 +96,10 @@
     },
     {
       "name": "@bsv/fund-wallet",
-      "publishedVersion": "1.5.2",
+      "publishedVersion": "1.5.3",
       "releaseType": "patch",
-      "summary": "Requires the funding wallet's internalizeAction result to contain accepted: true before reporting a funded transaction as successfully internalized. Adds an SDK3 peer alternative while preserving the existing SDK2 lower bound; clean packed SDK2.8.11 and SDK3 candidate consumers are documented in the identity/DID/VC migration guide.",
-      "migration": "No public API migration is required for conforming wallets. Custom WalletInterface adapters must return the literal accepted: true verdict after successful internalization; refusals and malformed or coercive results now throw instead of being reported as success. SDK consumers may retain ^2.1.6 or install the proposed SDK3 candidate. The immutable SDK2.8.11 reference has nine pre-existing SDK cold-leaf/UMD import defects; all historical floor versions are not qualified by this matrix. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No other public API or wire migration is introduced by the peer alternative."
+      "summary": "Imports @bsv/sdk as ESM alongside @bsv/wallet-toolbox's new ESM build, replacing the CommonJS require of @bsv/sdk that matched the previously CommonJS-only toolbox. Both packages again share one @bsv/sdk module, so private-field classes such as PrivateKey keep one identity.",
+      "migration": "No consumer migration is required. The fund-metanet CLI's options and behavior are unchanged."
     },
     {
       "name": "@bsv/gasp",
@@ -208,24 +208,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.14.4",
-      "releaseType": "patch",
-      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions. Adds an SDK3 peer alternative while retaining the existing SDK2.8.0 floor. Public Argon2id declarations reference the typed hash-wasm package while retaining the same generic binary/string contract and emitted runtime bytes.",
-      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
+      "publishedVersion": "2.14.5",
+      "releaseType": "minor",
+      "summary": "Publishes an ESM build alongside the CommonJS build: the package root, ./out/src/sdk, and every ./out/src/* deep path resolve to ESM modules under out/esm/src for import and to the existing CommonJS tree for require. ESM hosts that implement WalletServices now share @bsv/sdk's ESM MerklePath class with the toolbox, so proof validation accepts their Merkle paths. Remote storage sends createAction and no-send-expiry inputBEEF and internalizeAction AtomicBEEF as bytes, and Knex storage returns listOutputs BEEF, createAction sourceTransaction, and double-spend competingBeef as bytes, so negotiated binary JSON carries them compactly. Proof lookups that return no Merkle path record the provider's error in the request history, and canonical-path validation reports why each candidate was rejected.",
+      "migration": "No consumer migration is required. require() resolves the same CommonJS files as before. Byte fields change encoding on the wire only after client and server have negotiated binary JSON; legacy peers keep receiving JSON number arrays, and the affected fields' declared types already accept Uint8Array. Wallet.listOutputs still returns BEEF as before."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.14.4",
-      "releaseType": "patch",
-      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions.",
-      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
+      "publishedVersion": "2.14.5",
+      "releaseType": "minor",
+      "summary": "Remote storage sends createAction and no-send-expiry inputBEEF and internalizeAction AtomicBEEF as bytes, so negotiated binary JSON carries them compactly. Proof lookups that return no Merkle path record the provider's error in the request history, and canonical-path validation reports why each candidate was rejected.",
+      "migration": "No consumer migration is required. Byte fields change encoding on the wire only after client and server have negotiated binary JSON; legacy peers keep receiving JSON number arrays, and the affected fields' declared types already accept Uint8Array."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.14.4",
-      "releaseType": "patch",
-      "summary": "WalletPermissionsManager retires signed no-send ownership and reference aliases after createAction or signAction reports sending or unproven, including sendWith-only calls and successful members of an undelayed review error. Failed or unreported actions retain their originator binding for retry or abort. Cleanup visits only the retired transaction's references and preserves aliases reused by newer actions. Adds an SDK3 peer alternative while retaining the existing SDK2.8.0 floor.",
-      "migration": "No public API, wire, database, or consumer migration is required. Pending no-send actions and retryable failures retain the same originator-bound abort behavior; positively queued or broadcast actions no longer retain session ownership records."
+      "publishedVersion": "2.14.5",
+      "releaseType": "minor",
+      "summary": "Remote storage sends createAction and no-send-expiry inputBEEF and internalizeAction AtomicBEEF as bytes, so negotiated binary JSON carries them compactly. Proof lookups that return no Merkle path record the provider's error in the request history, and canonical-path validation reports why each candidate was rejected.",
+      "migration": "No consumer migration is required. Byte fields change encoding on the wire only after client and server have negotiated binary JSON; legacy peers keep receiving JSON number arrays, and the affected fields' declared types already accept Uint8Array."
     },
     {
       "name": "create-bsv-app",

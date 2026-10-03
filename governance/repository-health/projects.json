@@ -757,7 +757,7 @@
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "node-library",
-      "consumerProfiles": ["node-cjs"],
+      "consumerProfiles": ["node-cjs", "node-esm"],
       "criticality": "tier-0",
       "runtimeTargets": ["node"],
       "declarationDependencies": ["@types/express"],

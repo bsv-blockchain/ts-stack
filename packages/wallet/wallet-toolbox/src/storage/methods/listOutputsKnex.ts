@@ -334,6 +334,6 @@ export async function listOutputs(
       await hydrateKnexWalletOutput(dsk, output, vargs, labelsByTransactionId, tagsByOutputId, beef, trx)
     )
   }
-  if (vargs.includeTransactions) result.BEEF = beef.toBinary()
+  if (vargs.includeTransactions) result.BEEF = beef.toUint8Array()
   return result
 }

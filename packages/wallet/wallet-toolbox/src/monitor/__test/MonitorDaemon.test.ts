@@ -1,8 +1,10 @@
-jest.mock('knex', () => ({
-  knex: jest.fn(() => ({}))
-}))
+// knex exports its factory as both the default and the named `knex` export.
+jest.mock('knex', () => {
+  const knex = jest.fn(() => ({}))
+  return { __esModule: true, default: knex, knex }
+})
 
-import { knex as makeKnex } from 'knex'
+import makeKnex from 'knex'
 import { MonitorDaemon } from '../MonitorDaemon'
 import { Services } from '../../services/Services'
 import { StorageKnex } from '../../storage/StorageKnex'

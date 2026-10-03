@@ -1,4 +1,4 @@
-import { Knex, knex as makeKnex } from 'knex'
+import makeKnex, { type Knex } from 'knex'
 import { KeyPairAddress, SetupWallet, SetupWalletClient } from './SetupWallet'
 import {
   BEEF,

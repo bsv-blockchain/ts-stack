@@ -23,8 +23,8 @@ import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 import { toBinaryBaseBlockHeader, validateScriptHash } from '../services/Services'
 import { MockChainStorage } from './MockChainStorage'
 import { MockChainTracker } from './MockChainTracker'
-import { MockMiner } from './MockMiner'
-import { computeMerklePath } from './merkleTree'
+import { MockMiner, createCoinbaseTransaction } from './MockMiner'
+import { computeMerklePath, computeMerkleRoot } from './merkleTree'
 import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyOutputUtxo'
 
 const mockFiatRatesByUsd: Record<FiatCurrencyCode, number> = {
@@ -260,8 +260,6 @@ export class MockServices implements WalletServices {
     numBlocks: number,
     txidMap?: Record<string, number>
   ): Promise<void> {
-    const { createCoinbaseTransaction } = await import('./MockMiner')
-    const { computeMerkleRoot } = await import('./merkleTree')
 
     for (let i = 0; i < numBlocks; i++) {
       const newHeight = startingHeight + i

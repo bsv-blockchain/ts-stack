@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "outDir": "./out/esm",
+    "lib": ["es2022", "dom"]
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "out",
+    "client/out",
+    "mobile/out",
+    "src/**/__tests/**",
+    "src/**/__tests__/**",
+    "src/**/*.test.ts"
+  ]
+}

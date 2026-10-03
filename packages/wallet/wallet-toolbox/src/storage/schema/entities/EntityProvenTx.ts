@@ -420,6 +420,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     }
 
     if (proofResult.merklePath == null) {
+      if (proofResult.error != null) EntityProvenTx.recordProofError(req, proofResult.error)
       EntityProvenTx.applyProofTimeoutIfExpired(req, maxRebroadcastAttempts)
       return undefined
     }

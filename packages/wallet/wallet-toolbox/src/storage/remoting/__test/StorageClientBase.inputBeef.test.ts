@@ -1,5 +1,6 @@
 import { BEEF_V1, Beef, Script, Transaction, UnlockingScript, Validation, type WalletInterface } from '@bsv/sdk'
 import { StorageClientBase } from '../StorageClientBase'
+import { stringifyJsonRpc } from '../BinaryJson'
 
 class CapturingStorageClient extends StorageClientBase {
   calls: Array<{ method: string; params: unknown[] }> = []
@@ -93,8 +94,92 @@ describe('StorageClientBase createAction inputBEEF pruning', () => {
     await client.createAction(auth, args)
 
     const sentArgs = client.calls[0].params[1] as Validation.ValidCreateActionArgs
-    expect(sentArgs).toBe(args)
-    expect(sentArgs.inputBEEF).toBe(originalBytes)
+    expect(sentArgs.inputBEEF).toBeInstanceOf(Uint8Array)
+    expect(Array.from(sentArgs.inputBEEF!)).toEqual(Array.from(originalBytes!))
+    expect(args.inputBEEF).toBe(originalBytes)
+  })
+
+  test('passes inputBEEF that is already bytes through unchanged', async () => {
+    const required = makeTransaction(1000)
+    const beef = new Beef()
+    beef.mergeTransaction(required)
+    const args = Validation.validateCreateActionArgs({
+      description: 'forward byte proof data',
+      inputs: [
+        {
+          outpoint: `${required.id('hex')}.0`,
+          unlockingScript: '00',
+          inputDescription: 'declared byte input'
+        }
+      ],
+      inputBEEF: beef.toUint8Array(),
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'replacement output' }]
+    })
+    const client = new CapturingStorageClient({} as WalletInterface, 'https://storage.example.test')
+
+    await client.createAction(auth, args)
+
+    expect(client.calls[0].params[1]).toBe(args)
+  })
+
+  test('sends pruned inputBEEF as bytes that negotiated binary JSON tags', async () => {
+    const required = makeTransaction(1000)
+    const beef = new Beef()
+    beef.mergeTransaction(required)
+    beef.mergeTransaction(makeTransaction(2000))
+    const args = Validation.validateCreateActionArgs({
+      description: 'prune and send bytes',
+      inputs: [
+        {
+          outpoint: `${required.id('hex')}.0`,
+          unlockingScript: '00',
+          inputDescription: 'declared input'
+        }
+      ],
+      inputBEEF: beef.toBinary(),
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'replacement output' }]
+    })
+    const client = new CapturingStorageClient({} as WalletInterface, 'https://storage.example.test')
+
+    await client.createAction(auth, args)
+
+    const sentArgs = client.calls[0].params[1] as Validation.ValidCreateActionArgs
+    expect(sentArgs.inputBEEF).toBeInstanceOf(Uint8Array)
+    const wire = JSON.parse(stringifyJsonRpc({ params: client.calls[0].params }, true))
+    expect(wire.params[1].inputBEEF.$bsvBinary).toBe('base64')
+  })
+
+  test('sends no-send expiry inputBEEF as bytes', async () => {
+    const required = makeTransaction(1000)
+    const beef = new Beef()
+    beef.mergeTransaction(required)
+    const target = Validation.validateCreateActionArgs({
+      description: 'expiry target with proof data',
+      inputs: [
+        {
+          outpoint: `${required.id('hex')}.0`,
+          unlockingScript: '00',
+          inputDescription: 'declared input'
+        }
+      ],
+      inputBEEF: beef.toBinary(),
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'replacement output' }]
+    })
+    const client = new CapturingStorageClient({} as WalletInterface, 'https://storage.example.test')
+
+    await client.prepareNoSendExpiry(auth, target)
+    await client.activateNoSendExpiry(auth, {
+      target,
+      fundingReference: 'ref',
+      fundingTxid: '33'.repeat(32),
+      anchorVout: 0
+    })
+
+    expect((client.calls[0].params[1] as Validation.ValidCreateActionArgs).inputBEEF).toBeInstanceOf(Uint8Array)
+    expect(
+      (client.calls[1].params[1] as { target: Validation.ValidCreateActionArgs }).target.inputBEEF
+    ).toBeInstanceOf(Uint8Array)
+    expect(target.inputBEEF).not.toBeInstanceOf(Uint8Array)
   })
 
   test('preserves BEEF V1 when client-side pruning is required', async () => {

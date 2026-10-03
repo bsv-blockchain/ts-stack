@@ -150,6 +150,29 @@ describe('canonical Merkle path acquisition', () => {
     ).rejects.toThrow('no Merkle path on the active chain')
   })
 
+  test('reports why each returned path was rejected', async () => {
+    const stale = resultFor(staleSibling, 'stale')
+    const canonical = resultFor(canonicalSibling, 'canonical')
+    class ForeignMerklePath {
+      constructor(
+        public blockHeight: number,
+        public path: MerklePath['path']
+      ) {}
+    }
+    const foreign = new ForeignMerklePath(height, (canonical.merklePath as MerklePath).path)
+
+    await expect(
+      validateCanonicalMerklePathResult(txid, stale, trackerFor(canonical.header!.merkleRoot))
+    ).rejects.toThrow(`root is not on the active chain at height ${height}`)
+    await expect(
+      validateCanonicalMerklePathResult(
+        txid,
+        { ...canonical, merklePath: foreign as unknown as MerklePath },
+        trackerFor(canonical.header!.merkleRoot)
+      )
+    ).rejects.toThrow('accessor-free data object')
+  })
+
   test('returns the fallback validation error and combines provider notes', async () => {
     const stale = resultFor(staleSibling, 'stale')
     const fallback = resultFor(staleSibling, 'fallback')

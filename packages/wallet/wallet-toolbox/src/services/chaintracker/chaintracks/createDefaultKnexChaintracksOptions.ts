@@ -1,4 +1,4 @@
-import { Knex, knex as makeKnex } from 'knex'
+import makeKnex, { type Knex } from 'knex'
 import { ChaintracksOptions } from './Api/ChaintracksApi'
 import { ChaintracksFs } from './util/ChaintracksFs'
 import { ChaintracksStorageKnex } from './Storage/ChaintracksStorageKnex'
