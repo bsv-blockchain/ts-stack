@@ -24,7 +24,14 @@ export class PayerWallet extends CompletedProtoWallet {
     this.identityKey = key.toPublicKey().toString()
   }
 
-  override async createAction(args?: CreateActionArgs): Promise<CreateActionResult> {
+  override createAction(args?: CreateActionArgs): Promise<CreateActionResult> {
+    // The executor turns a synchronous throw into a rejection, as an async method would.
+    return new Promise(resolve => {
+      resolve(this.buildAction(args))
+    })
+  }
+
+  private buildAction(args?: CreateActionArgs): CreateActionResult {
     if (this.failCreateAction) throw new Error('Insufficient funds')
     if (args === undefined) throw new Error('createAction requires args')
     this.actions.push(args)
@@ -74,29 +81,32 @@ export class HostWallet extends CompletedProtoWallet {
     if (this.declinePayments) return { accepted: false } as unknown as InternalizeActionResult
     if (args === undefined) throw new Error('internalizeAction requires args')
     const transaction = Transaction.fromAtomicBEEF(args.tx)
-    for (const entry of args.outputs) {
-      const remittance = entry.paymentRemittance
-      if (entry.protocol !== 'wallet payment' || remittance === undefined) {
-        throw new Error('Only wallet payments are supported')
-      }
-      const { publicKey } = await this.getPublicKey({
-        protocolID: [2, '3241645161d8'],
-        keyID: `${remittance.derivationPrefix} ${remittance.derivationSuffix}`,
-        counterparty: remittance.senderIdentityKey,
-        forSelf: true
+    const received = await Promise.all(
+      args.outputs.map(async entry => {
+        const remittance = entry.paymentRemittance
+        if (entry.protocol !== 'wallet payment' || remittance === undefined) {
+          throw new Error('Only wallet payments are supported')
+        }
+        const { publicKey } = await this.getPublicKey({
+          protocolID: [2, '3241645161d8'],
+          keyID: `${remittance.derivationPrefix} ${remittance.derivationSuffix}`,
+          counterparty: remittance.senderIdentityKey,
+          forSelf: true
+        })
+        const expected = new P2PKH().lock(PublicKey.fromString(publicKey).toAddress()).toHex()
+        const output = transaction.outputs[entry.outputIndex]
+        if (output === undefined || output.lockingScript.toHex() !== expected) {
+          throw new Error('Output is not locked by a script conforming to BRC-29')
+        }
+        return {
+          txid: transaction.id('hex'),
+          outputIndex: entry.outputIndex,
+          satoshis: output.satoshis ?? 0,
+          sender: remittance.senderIdentityKey
+        }
       })
-      const expected = new P2PKH().lock(PublicKey.fromString(publicKey).toAddress()).toHex()
-      const output = transaction.outputs[entry.outputIndex]
-      if (output === undefined || output.lockingScript.toHex() !== expected) {
-        throw new Error('Output is not locked by a script conforming to BRC-29')
-      }
-      this.internalized.push({
-        txid: transaction.id('hex'),
-        outputIndex: entry.outputIndex,
-        satoshis: output.satoshis ?? 0,
-        sender: remittance.senderIdentityKey
-      })
-    }
+    )
+    this.internalized.push(...received)
     return { accepted: true }
   }
 }

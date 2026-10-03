@@ -60,16 +60,17 @@ export function nonPayingWallet(wallet: WalletInterface): WalletInterface {
   return new Proxy(wallet, {
     get(target, property, receiver) {
       if (property === 'listCertificates') {
-        return async () => ({ totalCertificates: 0, certificates: [] })
+        return () => Promise.resolve({ totalCertificates: 0, certificates: [] })
       }
       const value: unknown = Reflect.get(target, property, receiver)
       if (typeof value !== 'function' || typeof property === 'symbol') return value
       if (FORWARDED_METHODS.has(property)) return value.bind(target)
-      return async () => {
-        throw new Error(
-          `The EQC transport never pays an HTTP 402 challenge or reveals wallet data: ${property} is blocked`
+      return () =>
+        Promise.reject(
+          new Error(
+            `The EQC transport never pays an HTTP 402 challenge or reveals wallet data: ${property} is blocked`
+          )
         )
-      }
     }
   })
 }
@@ -106,9 +107,10 @@ async function readBoundedBody(
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
   let total = 0
-  for (;;) {
+  // Each read starts only after the previous chunk was counted, so the cap stops the download.
+  const pump = async (): Promise<void> => {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) return
     total += value.byteLength
     if (total > maxBytes) {
       await reader.cancel()
@@ -116,7 +118,9 @@ async function readBoundedBody(
       throw new Error(tooLargeMessage)
     }
     chunks.push(value)
+    await pump()
   }
+  await pump()
   const merged = new Uint8Array(total)
   let offset = 0
   for (const chunk of chunks) {

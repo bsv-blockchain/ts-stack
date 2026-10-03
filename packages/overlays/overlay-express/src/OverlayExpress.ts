@@ -3083,10 +3083,13 @@ export default class OverlayExpress {
       this.logger.log(chalk.blue('BSV mutual authentication middleware enabled.'))
     }
 
-    for (const { path, factory } of this.registeredRouters) {
+    // Routers mount strictly in registration order: each factory starts after the previous one
+    // was mounted. reduce invokes every callback up front, so nothing may run before the await.
+    await this.registeredRouters.reduce<Promise<void>>(async (previous, { path, factory }) => {
+      await previous
       this.app.use(path, await factory({ engine, wallet: this.serverWallet }))
       this.logger.log(chalk.blue(`Mounted registered router at ${path}`))
-    }
+    }, Promise.resolve())
 
     /**
      * Middleware for checking admin authentication.

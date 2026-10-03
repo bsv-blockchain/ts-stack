@@ -41,18 +41,20 @@ function invalid(description: string): HostError {
 async function readAnchors(engine: LookupEngineLike, topics: string[]): Promise<TopicAnchor[]> {
   const provide = engine.provideTopicAnchorTip?.bind(engine)
   if (provide === undefined) return []
-  const anchors: TopicAnchor[] = []
-  for (const topic of topics) {
-    try {
-      const tip = await provide(topic)
-      const anchor: TopicAnchor = { topic, blockHeight: tip.blockHeight, tac: tip.tac }
-      if (tip.blockHash !== undefined) anchor.blockHash = tip.blockHash
-      anchors.push(anchor)
-    } catch {
-      // A node without BASM support still answers; the client reports its anchors as unknown.
-    }
-  }
-  return anchors
+  const anchors = await Promise.all(
+    topics.map(async (topic): Promise<TopicAnchor | undefined> => {
+      try {
+        const tip = await provide(topic)
+        const anchor: TopicAnchor = { topic, blockHeight: tip.blockHeight, tac: tip.tac }
+        if (tip.blockHash !== undefined) anchor.blockHash = tip.blockHash
+        return anchor
+      } catch {
+        // A node without BASM support still answers; the client reports its anchors as unknown.
+        return undefined
+      }
+    })
+  )
+  return anchors.filter((anchor): anchor is TopicAnchor => anchor !== undefined)
 }
 
 /**

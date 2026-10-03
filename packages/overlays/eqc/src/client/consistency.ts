@@ -1,6 +1,8 @@
 import { compareCodeUnits } from '../protocol/canonicalJson.js'
 import type { Arrival } from './race.js'
 
+type TopicAnchor = NonNullable<Arrival['attestation']['anchors']>[number]
+
 export type ConsistencyStatus = 'agreed' | 'lagging' | 'diverged' | 'unknown'
 
 export interface TopicConsistency {
@@ -26,31 +28,40 @@ interface Reference {
  * reference at all.
  */
 function referenceFor(topic: string, winners: Arrival[]): Reference | undefined {
-  const hostsByHeight = new Map<number, Set<string>>()
-  for (const winner of winners) {
-    for (const anchor of winner.attestation.anchors ?? []) {
-      if (anchor.topic !== topic) continue
-      const hosts = hostsByHeight.get(anchor.blockHeight) ?? new Set<string>()
-      hosts.add(winner.host)
-      hostsByHeight.set(anchor.blockHeight, hosts)
-    }
-  }
-  let blockHeight: number | undefined
-  for (const [height, hosts] of hostsByHeight) {
-    if (hosts.size < 2) continue
-    if (blockHeight === undefined || height > blockHeight) blockHeight = height
-  }
+  const blockHeight = corroboratedHeight(topic, winners)
   if (blockHeight === undefined) return undefined
-  const tacs = new Set<string>()
-  for (const winner of winners) {
-    for (const anchor of winner.attestation.anchors ?? []) {
-      if (anchor.topic === topic && anchor.blockHeight === blockHeight) tacs.add(anchor.tac)
-    }
-  }
+  const tacs = new Set(
+    anchorsFor(topic, winners)
+      .filter(({ anchor }) => anchor.blockHeight === blockHeight)
+      .map(({ anchor }) => anchor.tac)
+  )
   return tacs.size === 1 ? { blockHeight, tac: [...tacs][0] } : { blockHeight }
 }
 
-type TopicAnchor = NonNullable<Arrival['attestation']['anchors']>[number]
+function anchorsFor(
+  topic: string,
+  winners: Arrival[]
+): Array<{ host: string; anchor: TopicAnchor }> {
+  return winners.flatMap(winner =>
+    (winner.attestation.anchors ?? [])
+      .filter(anchor => anchor.topic === topic)
+      .map(anchor => ({ host: winner.host, anchor }))
+  )
+}
+
+/** The highest height at least two distinct winners reported for the topic. */
+function corroboratedHeight(topic: string, winners: Arrival[]): number | undefined {
+  const hostsByHeight = new Map<number, Set<string>>()
+  for (const { host, anchor } of anchorsFor(topic, winners)) {
+    const hosts = hostsByHeight.get(anchor.blockHeight) ?? new Set<string>()
+    hosts.add(host)
+    hostsByHeight.set(anchor.blockHeight, hosts)
+  }
+  const corroborated = [...hostsByHeight]
+    .filter(([, hosts]) => hosts.size >= 2)
+    .map(([height]) => height)
+  return corroborated.length === 0 ? undefined : Math.max(...corroborated)
+}
 
 function hostStatus(anchor: TopicAnchor, reference: Reference): ConsistencyStatus {
   if (anchor.blockHeight < reference.blockHeight) return 'lagging'

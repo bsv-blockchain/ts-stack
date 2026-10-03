@@ -90,7 +90,34 @@ export class InMemoryPendingStore implements PendingStore {
     this.clock = clock
   }
 
-  async get(queryId: string): Promise<PendingQuery | undefined> {
+  get(queryId: string): Promise<PendingQuery | undefined> {
+    return Promise.resolve(this.lookup(queryId))
+  }
+
+  put(record: PendingQuery): Promise<PendingPutResult> {
+    return Promise.resolve(this.insert(record))
+  }
+
+  beginSettle(queryId: string): Promise<boolean> {
+    return Promise.resolve(this.claim(queryId))
+  }
+
+  abortSettle(queryId: string): Promise<void> {
+    const record = this.records.get(queryId)
+    if (record?.state === 'settling') record.state = 'pending'
+    return Promise.resolve()
+  }
+
+  completeSettle(queryId: string): Promise<void> {
+    const record = this.records.get(queryId)
+    if (record !== undefined) {
+      this.releasePayload(record)
+      record.state = 'settled'
+    }
+    return Promise.resolve()
+  }
+
+  private lookup(queryId: string): PendingQuery | undefined {
     const record = this.records.get(queryId)
     if (record === undefined) return undefined
     const now = this.clock()
@@ -102,7 +129,7 @@ export class InMemoryPendingStore implements PendingStore {
     return record
   }
 
-  async put(record: PendingQuery): Promise<PendingPutResult> {
+  private insert(record: PendingQuery): PendingPutResult {
     const size = payloadBytesOf(record) + queryBytesOf(record)
     if (size > this.limits.maxBytes) return 'too-large'
     const now = this.clock()
@@ -132,24 +159,12 @@ export class InMemoryPendingStore implements PendingStore {
     return 'stored'
   }
 
-  async beginSettle(queryId: string): Promise<boolean> {
+  private claim(queryId: string): boolean {
     const record = this.records.get(queryId)
     if (record?.state !== 'pending') return false
     if (this.releaseIfExpired(record, this.clock())) return false
     record.state = 'settling'
     return true
-  }
-
-  async abortSettle(queryId: string): Promise<void> {
-    const record = this.records.get(queryId)
-    if (record?.state === 'settling') record.state = 'pending'
-  }
-
-  async completeSettle(queryId: string): Promise<void> {
-    const record = this.records.get(queryId)
-    if (record === undefined) return
-    this.releasePayload(record)
-    record.state = 'settled'
   }
 
   private purge(now: number): void {
