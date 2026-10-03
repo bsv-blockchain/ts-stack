@@ -4251,3 +4251,77 @@ the unrelated package-wide coverage threshold because it selects only one
 suite. It is a performance profile, not package qualification. The full
 227-suite coverage profile is separately measured with serial workers to
 isolate contention while retaining every case, deadline and global gate.
+
+### Complete serial coverage and immutable execution batches
+
+The complete original application coverage selection passes all 3,347 tests in
+227 suites with one worker, the original global thresholds, 300-case properties,
+seed `3242026`, empty replay path and unchanged 150-second property interruption.
+Jest completes in 1,028.073 seconds within the existing 2,100-second supervisor.
+All 2,208 recorded source/configuration hashes remain unchanged. Native buyer,
+native wallet and acquisition coordination properties complete in 73.526, 59.503
+and 52.072 seconds. The canonical coverage configuration now uses this measured
+serial scheduling while retaining complete discovery and its worker memory
+boundary; mutation runner settings remain separate. This local diagnostic does
+not qualify the final hosted commit.
+
+The preceding published `a59b5856` run retains two coverage failures: original
+native publication and purchase-buyer properties interrupt after 297 and 270
+of 300 cases. That full run passes 3,345 of 3,347 tests and 225 of 227 suites in
+1,146.22 seconds; 49 other hosted checks pass and four checks are explicitly
+skipped. These partial properties remain failures. A fresh hosted complete run
+must establish the effect of serial scheduling on the eventual candidate.
+
+The runtime held-worker fixture now checks that close has actually aborted the
+active signal before waiting for work to finish. Its `finally` block releases and
+awaits the already-observed work before closing the observer. Every prior lifecycle
+assertion remains. With an isolated empty-close counterexample, the original case
+times out after five seconds and leaves work active; the strengthened case fails
+immediately and drains that work. The complete original runtime selection passes
+all 117 tests in 5.689 seconds with unchanged recorded inputs. This demonstrates
+fixture cleanup and the missing abort assertion; it does not independently
+reproduce or resolve the earlier Stryker runtime error. The complete 431-mutant
+runtime replay remains required.
+
+Scheduling now supports execution inventories larger than one GitHub matrix.
+`mutationExecutionMatrix` remains the canonical flat inventory. The additive
+planner creates ordered slices of at most 256 rows and verifies their exact union.
+Outer batches execute serially; the reusable executor preserves inner concurrency
+of six for ordinary CI and twenty for qualification, both fail-fast settings,
+every original 45/90-minute target allowance, four mutation workers, frozen
+installation, original baseline/property limits and all score/coverage/validity
+requirements. The current 141-target, 246-row inventory is unchanged. Further
+source subdivisions require their own complete inventory proof and coordination.
+
+Each invocation checks out the original caller SHA and binds the original run,
+attempt, uploaded build artifact ID/name, archive SHA-256 and complete flat-matrix
+digest. Verification rederives the selected matrix and exact batch before archive
+extraction or test execution. A moving branch cannot supply later batches. Both
+new execution controls participate in the original affected-target selection and
+final configuration fingerprint. Existing artifact names and independent
+canonical partition aggregation remain; the final issuer still requires every
+canonical target, exact original source/settings and same-run complete receipts.
+Missing, failed, cancelled, repeated, stale or diagnostic evidence cannot produce
+`qualifiedSha`. Empty scope retains the existing explicit skip rule. Boundary and
+negative controls exercise the actual required CI gate as well as the planner;
+synthetic multi-batch controls do not substitute for a full hosted campaign.
+
+Outside-only JSON/string and private-binding cache experiments remain unadopted.
+Preserving sampled outcomes or improving one profile does not establish complete
+compatibility or qualification. All failures and original budgets remain visible;
+checkpoint two remains open pending a clean exact-source complete hosted campaign.
+
+The workflow-governance companion follows only the real `mutation-tests` job's
+exact local executor call, an existing `workflow_call` declaration and the actual
+mutation runner in the execution job. Missing or changed callers, executor files,
+commands, comments-only substitutes and external workflow paths fail; original
+inline execution remains compatible. Required caller fields remain on the caller.
+Complete combined installed, scheduling, selection, receipt and governance
+controls pass all 153 tests without skips. All four required root checks pass;
+main-base recommended-rule comparison across eleven changed code files introduces
+zero findings, with 45 inherited baseline findings and 41 current findings.
+Typed actual-rule analysis covers 907 source files and finds zero in the new
+planner and its controls; inherited whole-file findings remain recorded. A final
+runtime fixture rerun passes all 117 tests in 5.429 seconds with unchanged recorded
+inputs and no open handles. These checks make the corrective batch reviewable;
+fresh hosted source qualification remains mandatory.

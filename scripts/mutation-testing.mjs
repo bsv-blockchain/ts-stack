@@ -21,7 +21,9 @@ const CONTROL_PATHS = new Set([
   'package.json',
   'pnpm-workspace.yaml',
   'tsconfig.base.json',
-  'scripts/mutation-build.mjs'
+  'scripts/mutation-build.mjs',
+  'scripts/mutation-execution-batches.mjs',
+  '.github/workflows/mutation-execution.yml'
 ])
 const REGEXP_META = new Set('.*+?^$(){}|[]\\')
 const OPTION_REQUIREMENTS = new Map([

@@ -195,7 +195,14 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   for (const job of jobs) {
     if (job.name === 'mutation-tests') {
       const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}`
-      assert.equal(job.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
+      const executor = readFileSync(
+        join(REPOSITORY_ROOT, '.github/workflows/mutation-execution.yml'),
+        'utf8'
+      )
+      const executionJob = workflowJobBlocks(executor).find(
+        candidate => candidate.name === 'execution'
+      )
+      assert.equal(executionJob?.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
       const dedicated = readFileSync(
         join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'),
         'utf8'
@@ -203,7 +210,11 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
       const dedicatedJob = workflowJobBlocks(dedicated).find(
         candidate => candidate.name === 'mutation-tests'
       )
-      assert.equal(dedicatedJob?.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
+      for (const caller of [job, dedicatedJob]) {
+        assert.ok(caller)
+        assert.match(caller.source, /^ {4}uses: \.\/\.github\/workflows\/mutation-execution\.yml$/m)
+        assert.doesNotMatch(caller.source, /^ {4}(?:timeout-minutes|runs-on):/m)
+      }
     } else {
       assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
     }
@@ -428,22 +439,27 @@ test('every HTTP latency scenario retains its own required coverage execution', 
   assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
 })
 
+function mutationQualityGateScript(job) {
+  return / {8}run: \|\n([\s\S]*?)(?=\n {6}-|$)/
+    .exec(job)[1]
+    .split('\n')
+    .map(line => line.replace(/^ {10}/, ''))
+    .join('\n')
+}
+
 test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {
   const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
     candidate => candidate.name === 'mutation-quality'
   ).source
   assert.match(job, /MUTATION_TARGETS: \$\{\{ needs\.prepare\.outputs\.mutation-targets \}\}/)
-  const script = /        run: \|\n([\s\S]*?)(?=\n      -|$)/
-    .exec(job)[1]
-    .split('\n')
-    .map(line => line.replace(/^          /, ''))
-    .join('\n')
+  const script = mutationQualityGateScript(job)
   for (const targets of ['[]', '["selected"]', '']) {
     for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
       const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
         env: {
           NODE_EXECUTABLE: process.execPath,
           MUTATION_MATRIX: '{"include":[]}',
+          MUTATION_BATCHES: '{"include":[]}',
           PARTITION_TARGETS: '[]',
           PREPARE_RESULT: 'success',
           MUTATION_TARGETS: targets,
@@ -463,6 +479,70 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     env: { PREPARE_RESULT: 'failure', MUTATION_TARGETS: '[]', MUTATION_RESULT: 'skipped' }
   })
   assert.notEqual(failedBuild.status, 0)
+})
+
+test('the actual required mutation gate rejects missing, altered and unordered execution batches', () => {
+  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    candidate => candidate.name === 'mutation-quality'
+  ).source
+  const script = mutationQualityGateScript(job)
+  const matrix = {
+    include: Array.from({ length: 257 }, (_, index) => ({
+      target: `fixture-${index}`,
+      partition: 'whole'
+    }))
+  }
+  const batches = {
+    include: [
+      { batch: 1, executionMatrix: { include: matrix.include.slice(0, 256) } },
+      { batch: 2, executionMatrix: { include: matrix.include.slice(256) } }
+    ]
+  }
+  const execute = value =>
+    spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: {
+        NODE_EXECUTABLE: process.execPath,
+        MUTATION_MATRIX: JSON.stringify(matrix),
+        MUTATION_BATCHES: JSON.stringify(value),
+        PARTITION_TARGETS: '[]',
+        PREPARE_RESULT: 'success',
+        MUTATION_TARGETS: '["selected"]',
+        MUTATION_RESULT: 'success',
+        MUTATION_CLASSIFICATION: '{"deferred":[]}',
+        GITHUB_STEP_SUMMARY: '/dev/null',
+        PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
+      },
+      encoding: 'utf8'
+    })
+  assert.equal(execute(batches).status, 0)
+  for (const altered of [
+    {},
+    { include: [] },
+    { include: batches.include.slice(0, 1) },
+    { include: [...batches.include].reverse() },
+    { include: [...batches.include, batches.include[0]] },
+    { include: batches.include, unknown: true },
+    { include: [{ batch: 1, executionMatrix: matrix }] }
+  ])
+    assert.notEqual(execute(altered).status, 0)
+  for (const change of [
+    value => {
+      value.include[1].batch = 1
+    },
+    value => {
+      value.include[0].executionMatrix.include.pop()
+    },
+    value => {
+      value.include[0].executionMatrix.include[0] = value.include[0].executionMatrix.include[1]
+    },
+    value => {
+      value.include[1].executionMatrix.include[0].target = 'unexpected'
+    }
+  ]) {
+    const altered = structuredClone(batches)
+    change(altered)
+    assert.notEqual(execute(altered).status, 0)
+  }
 })
 
 test('every selected application and LCH execution part is downloaded before canonical aggregation', () => {

@@ -495,11 +495,55 @@ function validateMutationTool(root, tool, propertyTesting, errors) {
   validateMutationToolBudget(tool, propertyTesting, errors)
 }
 
+function workflowJob(workflow, name) {
+  const marker = `\n  ${name}:\n`
+  const start = workflow.indexOf(marker)
+  if (start < 0) return ''
+  const remaining = workflow.slice(start + marker.length)
+  const end = remaining.search(/\n {2}[a-z][a-z0-9-]*:\n/)
+  return end < 0 ? remaining : remaining.slice(0, end)
+}
+
+function workflowRunsMutation(workflow) {
+  const lines = workflow.split('\n')
+  const commands = []
+  for (const [index, line] of lines.entries()) {
+    const run = /^ {8}run: (.+)$/.exec(line)
+    if (!run) continue
+    if (run[1] !== '|') {
+      commands.push(run[1])
+      continue
+    }
+    for (let next = index + 1; next < lines.length && /^ {10}/.test(lines[next]); next++)
+      commands.push(lines[next].slice(10))
+  }
+  return commands.some(command =>
+    /^node scripts\/mutation-testing\.mjs --(?:target|all)(?:\s|$)/.test(command)
+  )
+}
+
+function hasLocalMutationExecutor(root, workflow) {
+  const caller = workflowJob(workflow, 'mutation-tests')
+  if (!/^ {4}uses: \.\/\.github\/workflows\/mutation-execution\.yml$/m.test(caller)) return false
+  const executorPath = path.join(root, '.github/workflows/mutation-execution.yml')
+  if (!fs.existsSync(executorPath)) return false
+  const executor = fs.readFileSync(executorPath, 'utf8')
+  return (
+    /^on:\n {2}workflow_call:/m.test(executor) &&
+    workflowRunsMutation(workflowJob(executor, 'execution'))
+  )
+}
+
 function validateMutationWorkflow(root, workflowPath, fragments, errors) {
   if (typeof workflowPath !== 'string' || !fs.existsSync(path.join(root, workflowPath))) return
   const workflow = fs.readFileSync(path.join(root, workflowPath), 'utf8')
   for (const fragment of fragments) {
-    if (!workflow.includes(fragment)) {
+    const present =
+      fragment === 'scripts/mutation-testing.mjs'
+        ? workflowRunsMutation(workflowJob(workflow, 'mutation-tests')) ||
+          hasLocalMutationExecutor(root, workflow)
+        : workflow.split('\n').some(line => line.trimStart().startsWith(fragment))
+    if (!present) {
       errors.push(`mutation testing workflow ${workflowPath} lacks ${fragment}`)
     }
   }

@@ -44,6 +44,114 @@ test('current required, manual, live, resource, and conformance tests are govern
   assert.equal(result.summary.conformanceSkips, 211)
 })
 
+test('mutation workflow governance follows only the exact local executor and retains every caller gate', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mutation-workflow-governance-'))
+  const files = ['ci.yml', 'mutation-tests.yml', 'mutation-execution.yml']
+  const original = Object.fromEntries(
+    files.map(file => [
+      file,
+      fs.readFileSync(path.join(REPOSITORY_ROOT, '.github/workflows', file), 'utf8')
+    ])
+  )
+  const current = () => evaluateTestGovernance({ root, policy, today: '2026-07-31' })
+  const write = values => {
+    for (const file of files) {
+      const target = path.join(root, '.github/workflows', file)
+      if (values[file] === null) fs.rmSync(target, { force: true })
+      else fs.writeFileSync(target, values[file])
+    }
+  }
+  try {
+    for (const entry of fs.readdirSync(REPOSITORY_ROOT, { withFileTypes: true })) {
+      if (['.git', '.github', 'artifacts', 'node_modules'].includes(entry.name)) continue
+      fs.symlinkSync(
+        path.join(REPOSITORY_ROOT, entry.name),
+        path.join(root, entry.name),
+        entry.isDirectory() ? 'dir' : 'file'
+      )
+    }
+    fs.cpSync(path.join(REPOSITORY_ROOT, '.github'), path.join(root, '.github'), {
+      recursive: true
+    })
+    write(original)
+    assert.deepEqual(current().errors, [])
+    const caller = '    uses: ./.github/workflows/mutation-execution.yml'
+    const runner =
+      '        run: node scripts/mutation-testing.mjs --target "$TARGET" --partition "$PARTITION"'
+    for (const replacement of [
+      '    uses: owner/repo/.github/workflows/mutation-execution.yml@main',
+      '    uses: ./.github/workflows/other.yml',
+      `    # ${caller.trim()}`,
+      ''
+    ]) {
+      write({ ...original, 'ci.yml': original['ci.yml'].replace(caller, replacement) })
+      assert.match(
+        current().errors.join('\n'),
+        /workflow .*ci\.yml lacks scripts\/mutation-testing\.mjs/
+      )
+    }
+    write({
+      ...original,
+      'ci.yml': original['ci.yml'].replace('\n  mutation-tests:\n', '\n  other-job:\n')
+    })
+    assert.match(
+      current().errors.join('\n'),
+      /workflow .*ci\.yml lacks mutation-tests:|workflow .*ci\.yml lacks scripts\/mutation-testing\.mjs/
+    )
+    for (const executor of [
+      null,
+      original['mutation-execution.yml'].replace('  workflow_call:', '  workflow_dispatch:'),
+      original['mutation-execution.yml'].replace('\n  execution:\n', '\n  other-job:\n'),
+      original['mutation-execution.yml'].replace(
+        runner,
+        '        run: node scripts/mutation-testing.mjs --list'
+      ),
+      original['mutation-execution.yml'].replace(
+        runner,
+        '        run: node scripts/other.mjs --target "$TARGET"'
+      ),
+      original['mutation-execution.yml'].replace(runner, `        # ${runner.trim()}`)
+    ]) {
+      write({ ...original, 'mutation-execution.yml': executor })
+      assert.match(current().errors.join('\n'), /workflow .* lacks scripts\/mutation-testing\.mjs/)
+    }
+    for (const [file, fragment] of [
+      ['ci.yml', '  mutation-quality:'],
+      ['mutation-tests.yml', '  schedule:'],
+      ['mutation-tests.yml', '  workflow_dispatch:'],
+      ['mutation-tests.yml', '      matrix:']
+    ]) {
+      write({
+        ...original,
+        [file]: original[file].replaceAll(fragment, fragment.replace(':', '-removed:'))
+      })
+      assert.match(current().errors.join('\n'), /workflow .* lacks/)
+    }
+    const start = original['ci.yml'].indexOf('\n  mutation-tests:\n')
+    const end = original['ci.yml'].indexOf('\n  mutation-quality:\n', start)
+    assert.ok(start >= 0 && end > start)
+    const inline =
+      original['ci.yml'].slice(0, start) +
+      '\n  mutation-tests:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Mutation runner\n        run: node scripts/mutation-testing.mjs --all\n' +
+      original['ci.yml'].slice(end)
+    write({ ...original, 'ci.yml': inline })
+    assert.deepEqual(current().errors, [])
+    write({
+      ...original,
+      'ci.yml': inline.replace(
+        '        run: node scripts/mutation-testing.mjs --all',
+        '        # run: node scripts/mutation-testing.mjs --all'
+      )
+    })
+    assert.match(
+      current().errors.join('\n'),
+      /workflow .*ci\.yml lacks scripts\/mutation-testing\.mjs/
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('every property suite must retain an exact mutation-quality target', () => {
   const mutationPolicyPath = path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json')
   const mutationPolicy = JSON.parse(fs.readFileSync(mutationPolicyPath, 'utf8'))

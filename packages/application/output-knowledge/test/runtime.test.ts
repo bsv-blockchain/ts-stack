@@ -95,6 +95,22 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve }
 }
 
+function heldWorkPause(entered: ReturnType<typeof deferred>, release: ReturnType<typeof deferred>) {
+  let hold = false
+  return {
+    hold() {
+      hold = true
+    },
+    async pause() {
+      if (hold) {
+        hold = false
+        entered.resolve()
+        await release.promise
+      }
+    }
+  }
+}
+
 describe('runtime orchestration and publication ports', () => {
   it('does not return a retained projection after its publication gate changes during an asynchronous read', async () => {
     const fixture = await open(noWork, {
@@ -1022,12 +1038,14 @@ describe('bounded runtime intake and lifecycle recovery', () => {
   it('keeps physical worker capacity occupied through cancellation and closes observers', async () => {
     const entered = deferred(),
       release = deferred()
-    let hold = false
+    let hold = false,
+      activeSignal: AbortSignal | undefined
     const f = await open(
       {
         ...noWork,
-        advance: async () => {
+        advance: async (_store, signal) => {
           if (hold) {
+            activeSignal = signal
             entered.resolve()
             await release.promise
           }
@@ -1053,11 +1071,13 @@ describe('bounded runtime intake and lifecycle recovery', () => {
       expect((await f.journal.head()).received).toBe('1')
       expect((await observer.next()).value).toMatchObject({ kind: 'error', code: 'limited' })
       await f.runtime.close()
+      expect(activeSignal?.aborted).toBe(true)
       expect(await work).toMatchObject({ code: 'cancelled', message: expect.stringMatching(/\S/) })
       release.resolve()
       expect((await observer.next()).done).toBe(true)
     } finally {
       release.resolve()
+      await work
       await observer.return?.()
       await f.runtime.close()
     }
@@ -1329,14 +1349,7 @@ describe('pending context publication barrier', () => {
         release = deferred(),
         committing = deferred(),
         commitRelease = deferred()
-      let hold = false
-      const pause = async () => {
-        if (hold) {
-          hold = false
-          entered.resolve()
-          await release.promise
-        }
-      }
+      const { hold: holdWork, pause } = heldWorkPause(entered, release)
       const f = await open(
         {
           ...noWork,
@@ -1373,7 +1386,7 @@ describe('pending context publication barrier', () => {
       let changed: Promise<void> | undefined
       let flushing: Promise<unknown> | undefined
       try {
-        hold = true
+        holdWork()
         flushing = f.runtime.flush().then(
           () => undefined,
           error => error
@@ -1714,14 +1727,7 @@ describe('runtime lifecycle release and recovery', () => {
         committing = deferred(),
         commitRelease = deferred(),
         published = deferred()
-      let hold = false
-      const pause = async () => {
-        if (hold) {
-          hold = false
-          entered.resolve()
-          await release.promise
-        }
-      }
+      const { hold: holdWork, pause } = heldWorkPause(entered, release)
       const f = await open(
         {
           ...noWork,
@@ -1756,7 +1762,7 @@ describe('runtime lifecycle release and recovery', () => {
       })
       let changed: Promise<unknown> | undefined, flushing: Promise<unknown> | undefined
       try {
-        hold = true
+        holdWork()
         flushing = f.runtime.flush().then(
           () => undefined,
           error => error

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 import {
+  qualificationIdentity,
   makeTargetReceipt,
   verifyFullCampaign,
   loadCanonicalEvidence
@@ -42,6 +47,73 @@ const capture = value =>
     evidence,
     executionFor(JSON.stringify(value))
   )
+
+test('both batch controls bind the actual final configuration identity alongside all prior inputs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'mutation-identity-inputs-'))
+  const originalInputs = [
+    'governance/mutation-testing/targets.mjs',
+    'governance/mutation-testing/policy.json',
+    'governance/mutation-testing/stryker.config.mjs',
+    'scripts/mutation-testing.mjs',
+    'scripts/mutation-final-qualification.mjs',
+    'scripts/mutation-partitions.mjs',
+    'scripts/mutation-partition-evidence.mjs',
+    '.github/workflows/mutation-tests.yml',
+    'package.json',
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    'tsconfig.base.json'
+  ]
+  const batchInputs = [
+    'scripts/mutation-execution-batches.mjs',
+    '.github/workflows/mutation-execution.yml'
+  ]
+  const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
+  const commit = () => {
+    git(['add', '.'])
+    git([
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-m',
+      'Fixture'
+    ])
+  }
+  const actualIdentity = () =>
+    qualificationIdentity(
+      root,
+      {
+        GITHUB_SHA: git(['rev-parse', 'HEAD']).trim(),
+        GITHUB_RUN_ID: '1',
+        GITHUB_RUN_ATTEMPT: '1'
+      },
+      { fixture: { packageDirectory: 'packages/fixture' } }
+    )
+  try {
+    for (const file of [...originalInputs, ...batchInputs]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true })
+      writeFileSync(join(root, file), file)
+    }
+    git(['init', '--quiet'])
+    commit()
+    for (const file of [...originalInputs, ...batchInputs]) {
+      const before = actualIdentity()
+      writeFileSync(join(root, file), `${file}\nchanged`)
+      assert.throws(actualIdentity, /Tracked source changed/)
+      commit()
+      const after = actualIdentity()
+      assert.notEqual(after.inputsDigest, before.inputsDigest, file)
+      assert.notEqual(after.sourceSha, before.sourceSha, file)
+      assert.equal(after.targetsDigest, before.targetsDigest)
+      assert.equal(after.runId, before.runId)
+      assert.equal(after.runAttempt, before.runAttempt)
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test('complete exact-source campaigns preserve every target score, no-coverage and invalid gate', () => {
   const qualified = qualify([entry('two'), entry('one')])

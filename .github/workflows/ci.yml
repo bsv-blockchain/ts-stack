@@ -233,6 +233,9 @@ jobs:
       mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
       mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
       partition-targets: ${{ needs.scope.outputs.partition-targets }}
+      mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
+      mutation-matrix-digest: ${{ steps.mutation-execution.outputs.matrix-digest }}
+      mutation-execution-identity: ${{ steps.mutation-execution.outputs.identity }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
@@ -421,12 +424,26 @@ jobs:
           } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
 
       - name: Share build outputs
+        id: mutation-build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: build-outputs
           path: build-outputs.tar.gz
           if-no-files-found: error
           retention-days: 1
+
+      - name: Pin complete immutable mutation execution batches
+        id: mutation-execution
+        env:
+          MUTATION_MATRIX: ${{ needs.scope.outputs.mutation-matrix }}
+          BUILD_ARTIFACT_ID: ${{ steps.mutation-build.outputs.artifact-id }}
+          BUILD_ARTIFACT_NAME: build-outputs
+        run: |
+          batches="$(node scripts/mutation-execution-batches.mjs plan)"
+          matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
+          identity="$(node scripts/mutation-execution-batches.mjs build-identity)"
+          printf 'batches=%s\nmatrix-digest=%s\nidentity=%s\n' \
+            "$batches" "$matrix_digest" "$identity" >> "$GITHUB_OUTPUT"
 
   package-artifacts:
     name: Package artifacts and documentation consumers
@@ -486,7 +503,7 @@ jobs:
             --dry-run
 
   mutation-tests:
-    name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
+    name: Mutation batch / ${{ matrix.batch }}
     # Analyzer failures stop expensive qualification; explicit diagnostics only
     # collect evidence and never waive the required final analyzer/merge gates.
     if: >-
@@ -499,47 +516,21 @@ jobs:
     needs:
       - prepare
       - sonar-zero-findings
-    runs-on: ubuntu-latest
-    # Preserve the full-source deadline allowances and complete canonical gates.
-    # Job time does not change individual mutant/test deadlines or worker counts.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      max-parallel: 6
-      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.18.0
-          cache: pnpm
-      - name: Install frozen dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: build-outputs
-          path: .ci-artifacts
-      - name: Restore build outputs
-        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-      - name: Enforce the affected mutation-quality ratchet
-        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}" --partition "${{ matrix.partition }}"
-      - name: Capture complete execution-partition evidence
-        if: matrix.partition != 'whole'
-        run: |
-          node scripts/mutation-partition-evidence.mjs capture --mode diagnostic \
-            --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
-            --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
-      - name: Preserve the machine-readable mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: mutation-${{ matrix.target }}-${{ matrix.partition }}
-          path: artifacts/mutation/${{ matrix.target }}
-          if-no-files-found: ignore
-          retention-days: 30
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-batches) }}
+    uses: ./.github/workflows/mutation-execution.yml
+    with:
+      execution-matrix: ${{ toJSON(matrix.executionMatrix) }}
+      execution-batch: ${{ matrix.batch }}
+      selected-targets: ${{ needs.prepare.outputs.mutation-targets }}
+      matrix-digest: ${{ needs.prepare.outputs.mutation-matrix-digest }}
+      identity: ${{ needs.prepare.outputs.mutation-execution-identity }}
+      profile: ci
+      mode: diagnostic
 
   mutation-quality:
     name: Mutation quality
@@ -559,6 +550,7 @@ jobs:
           MUTATION_TARGETS: ${{ needs.prepare.outputs.mutation-targets }}
           MUTATION_CLASSIFICATION: ${{ needs.prepare.outputs.mutation-classification }}
           MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
+          MUTATION_BATCHES: ${{ needs.prepare.outputs.mutation-batches }}
           PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
@@ -568,7 +560,16 @@ jobs:
             exit 1
           fi
           "${NODE_EXECUTABLE:-node}" --input-type=module <<'NODE'
+          const batches = JSON.parse(process.env.MUTATION_BATCHES)
           const matrix = JSON.parse(process.env.MUTATION_MATRIX)
+          if (!Array.isArray(matrix.include) || matrix.include.length > 256 ** 2)
+            throw new Error('Invalid complete execution matrix')
+          const expectedBatches = { include: [] }
+          for (let offset = 0; offset < matrix.include.length; offset += 256)
+            expectedBatches.include.push({ batch: expectedBatches.include.length + 1,
+              executionMatrix: { include: matrix.include.slice(offset, offset + 256) } })
+          if (JSON.stringify(batches) !== JSON.stringify(expectedBatches))
+            throw new Error('Incomplete, unordered or malformed execution batch union')
           const actual = JSON.parse(process.env.PARTITION_TARGETS)
           if (!Array.isArray(matrix.include) || !Array.isArray(actual) ||
               actual.some(target => typeof target !== 'string') || new Set(actual).size !== actual.length)

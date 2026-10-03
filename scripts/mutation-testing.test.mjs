@@ -19,6 +19,19 @@ const targets = {
   two: { packageDirectory: 'packages/two' }
 }
 
+test('each batch execution control selects every original canonical mutation target', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  for (const control of [
+    'scripts/mutation-execution-batches.mjs',
+    '.github/workflows/mutation-execution.yml'
+  ])
+    assert.deepEqual(
+      selectAffectedMutationTargets(configured, [control]),
+      Object.keys(configured),
+      control
+    )
+})
+
 test('every core overlay profile fingerprints its canonical and native fixture inputs', () => {
   for (const target of Object.values(buildMutationTargets(REPOSITORY_ROOT))) {
     if (target.packageDirectory !== 'packages/overlays/overlay') continue
