@@ -3627,3 +3627,25 @@ Full hosted campaign 37120402535 selected the complete 141-target inventory and
 its partitions, but is stopped before superseding that head. Its retained
 partial results are not final qualification. The corrected source requires a
 new complete campaign and successful exact-head analyzer/CI checks.
+
+### Shared build artifact completeness
+
+On 1e281c1ff, hosted Sonar verifies the exact revision with zero new findings and
+zero unreviewed hotspots. CodeQL completes successfully and the PR has no open
+alerts. The browser platform lane then fails because the real shared archive
+contains `dist` and `dist-server`, but omits the newly built `dist-proposals`.
+The prebuilt runner correctly cannot start the absent proposal server.
+
+The actual shell/tar regression is expanded with the proposal server and its
+license payload. The original archive fails that regression, preserving the
+missing-output error. The archive now adds only the explicit `dist-proposals`
+directory, keeping every old output and node_modules/sandbox prune. The app's
+existing notice copier supplies the identical governed notice files to all three
+bundles; this also supplies notices for the original server bundle. Neither
+change rebuilds behind the prebuilt runner or relaxes an artifact/platform gate.
+
+The acceptance inventory now separates demonstrated integration workflows from
+immutable final qualification conditions. Its integration marks describe the
+actual runnable reference compositions. Final readiness remains governed by
+complete full-campaign receipts and applicable exact-head checks recorded in the
+PR; the source document cannot certify its own future commit or test run.

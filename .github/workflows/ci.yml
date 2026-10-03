@@ -414,7 +414,7 @@ jobs:
           {
             find packages -type d \( -name dist -o -name out \) -prune -print0
             find packages -type f -name '*.tsbuildinfo' -print0
-            find apps -type d \( -name node_modules -o -name .stryker-tmp \) -prune -o -type d \( -name dist -o -name dist-server \) -print0 -prune
+            find apps -type d \( -name node_modules -o -name .stryker-tmp \) -prune -o -type d \( -name dist -o -name dist-server -o -name dist-proposals \) -print0 -prune
           } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
 
       - name: Share build outputs

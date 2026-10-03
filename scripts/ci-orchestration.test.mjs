@@ -30,6 +30,8 @@ test('the shared build archive carries application browser and server bundles', 
     'packages/example/build.tsbuildinfo',
     'apps/reference/dist/assets/main.js',
     'apps/reference/dist-server/server.js',
+    'apps/reference/dist-proposals/proposalNodeServer.js',
+    'apps/reference/dist-proposals/licenses/LICENSE.txt',
     'apps/another app/dist/index.html'
   ]
   const excluded = [
