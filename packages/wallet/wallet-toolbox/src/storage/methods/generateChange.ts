@@ -166,7 +166,7 @@ interface ChangeRecaptureRequest extends SurplusChangeMaterializationRequest {
  */
 function materializeSurplusChangeOutput(request: SurplusChangeMaterializationRequest): void {
   const { params, result } = request
-  if (!params.surplusPoolShaping || result.changeOutputs.length > 0) return
+  if (!params.surplusPoolShaping || result.changeOutputs.length > 0 || params.maxChangeOutputs === 0) return
 
   const availableAfterOutputFee = request.feeExcess(0, 1)
   if (availableAfterOutputFee < request.dustFloor) return
@@ -187,6 +187,8 @@ async function requireViableChangeOrRetainBoundedFee(request: ChangeRecaptureReq
   const { params, result } = request
   const feeExcessNow = request.feeExcess()
   if (result.changeOutputs.length > 0 || feeExcessNow <= 0) return
+  // A zero change cap leaves any surplus in the fee by request.
+  if (params.maxChangeOutputs === 0) return
 
   const hasOnlyUnreturnableShapingSurplus =
     params.surplusPoolShaping === true && request.feeExcess(0, 1) < request.dustFloor
@@ -741,7 +743,8 @@ export function validateGenerateChangeSdkResult(
     r.changeOutputs.length === 0 &&
     r.fee > feeRequired &&
     r.fee - feeWithChangeOutput < dustFloor
-  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus) {
+  const isNoChangeSurplus = params.maxChangeOutputs === 0 && r.changeOutputs.length === 0 && r.fee > feeRequired
+  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus && !isNoChangeSurplus) {
     log += `required fee error ${feeRequired} !== ${r.fee};`
     ok = false
   }
@@ -799,6 +802,7 @@ export interface GenerateChangeSdkParams {
    * Maximum number of change outputs to create in this transaction.
    * Defaults to `maxChangeOutputsPerTransaction` (8). Set to -1 only when an
    * operator deliberately wants the basket target to be the sole bound.
+   * Set to 0 to create no change: any surplus is paid as fee.
    *
    * Callers may override this to allow more outputs in special cases (e.g.
    * consolidation transactions) or fewer outputs when a compact transaction
@@ -880,7 +884,7 @@ export function validateGenerateChangeSdkParams(
 
   validateOptionalInteger(params.targetNetCount, 'targetNetCount')
   if (params.maxChangeOutputs !== -1) {
-    validateOptionalInteger(params.maxChangeOutputs, 'maxChangeOutputs', 1)
+    validateOptionalInteger(params.maxChangeOutputs, 'maxChangeOutputs', 0)
   }
   if (params.maxMigrationInputs !== -1) {
     validateOptionalInteger(params.maxMigrationInputs, 'maxMigrationInputs', 0)

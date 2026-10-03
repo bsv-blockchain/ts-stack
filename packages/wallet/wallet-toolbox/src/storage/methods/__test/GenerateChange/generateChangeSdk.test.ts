@@ -1087,6 +1087,30 @@ describe('generateChange tests', () => {
     expectTransactionSize(params, r)
   })
 
+  test.each([true, false])(
+    '9a2 maxChangeOutputs 0 creates no change and pays the surplus as fee (surplusPoolShaping=%s)',
+    async surplusPoolShaping => {
+      const params: GenerateChangeSdkParams = {
+        ...defParams,
+        fixedInputs: [{ satoshis: 1, unlockingScriptLength: 1 }],
+        fixedOutputs: [{ satoshis: 1, lockingScriptLength: 1 }],
+        feeModel: { model: 'sat/kb', value: 1 },
+        targetNetCount: 8,
+        maxChangeOutputs: 0,
+        surplusPoolShaping
+      }
+      const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([{ satoshis: 194, outputId: 1 }])
+
+      const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+      expect(r.allocatedChangeInputs).toMatchObject([{ satoshis: 194, outputId: 1 }])
+      expect(r.changeOutputs).toHaveLength(0)
+      expect(r.fee).toBe(194)
+      expect(r.fee).toBeGreaterThan(Math.ceil((r.size / 1000) * 1))
+      expectTransactionSize(params, r)
+    }
+  )
+
   test('9b maxChangeOutputs cap: gradual pool build-up over multiple transactions', async () => {
     // Simulates a user importing one large UTXO and making sequential actions.
     // Each action should add at most maxChangeOutputsPerTransaction net new outputs.

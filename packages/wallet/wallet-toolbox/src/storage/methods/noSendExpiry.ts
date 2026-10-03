@@ -97,14 +97,19 @@ function feeForSize(storage: StorageProvider, size: number, minimumSatsPerKb = 0
   return Math.ceil((size / 1000) * satsPerKb)
 }
 
-function reclaimValues(
-  storage: StorageProvider,
-  anchorSatoshis: number
-): { reclaimFee: number; reclaimSatoshis: number } {
+function reclaimFloor(storage: StorageProvider): { reclaimFee: number; minimumOutput: number } {
   const reclaimSize = transactionSize([MANAGED_INPUT_UNLOCKING_SCRIPT_LENGTH], [MANAGED_OUTPUT_LOCKING_SCRIPT_LENGTH])
   const reclaimFee = feeForSize(storage, reclaimSize, CONSERVATIVE_RECLAIM_SATS_PER_KB)
   const currentFee = feeForSize(storage, reclaimSize)
   const minimumOutput = Math.max(1, currentFee * 2)
+  return { reclaimFee, minimumOutput }
+}
+
+function reclaimValues(
+  storage: StorageProvider,
+  anchorSatoshis: number
+): { reclaimFee: number; reclaimSatoshis: number } {
+  const { reclaimFee, minimumOutput } = reclaimFloor(storage)
   const reclaimSatoshis = anchorSatoshis - reclaimFee
   if (reclaimSatoshis < minimumOutput) {
     throw new WERR_INVALID_PARAMETER(
@@ -128,11 +133,17 @@ async function estimateAnchorSatoshis(
   )
   const inputSatoshis = xinputs.reduce((sum, input) => sum + input.satoshis, 0)
   const outputSatoshis = xoutputs.reduce((sum, output) => sum + output.satoshis, 0)
-  const anchorSatoshis = outputSatoshis + feeForSize(storage, size) - inputSatoshis
-  if (!Number.isSafeInteger(anchorSatoshis) || anchorSatoshis <= 0) {
+  const actionSatoshis = outputSatoshis + feeForSize(storage, size) - inputSatoshis
+  if (!Number.isSafeInteger(actionSatoshis) || actionSatoshis <= 0) {
     throw new WERR_INVALID_PARAMETER('inputs', 'a BRC-177 action requiring a positive, exactly sized revocation anchor')
   }
-  return anchorSatoshis
+  // BRC-177 Prefunding step 2: the anchor MUST both fund the protected action
+  // and be reclaimable net of the reclaim fee. When the reclaim floor is the
+  // larger need (e.g. a value-neutral token transfer), that MUST outweighs the
+  // spec's SHOULD against material overpayment: the protected action creates
+  // no change, so the surplus is paid as fee if the action is broadcast.
+  const { reclaimFee, minimumOutput } = reclaimFloor(storage)
+  return Math.max(actionSatoshis, reclaimFee + minimumOutput)
 }
 
 export async function prepareNoSendExpiry(
