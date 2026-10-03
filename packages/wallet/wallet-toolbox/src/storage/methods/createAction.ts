@@ -505,7 +505,7 @@ async function createNewInputs(
     if (doubleSpendTxid) {
       const beef = await getCompetingBeefForReview(storage, doubleSpendTxid)
       throw new WERR_REVIEW_ACTIONS(
-        [{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toUint8Array() }],
+        [{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toBinary() }],
         []
       )
     }
