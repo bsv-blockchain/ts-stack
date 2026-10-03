@@ -425,6 +425,75 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'wallet-read-snapshot-consistency': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      additionalInputs: [
+        'test/storage/snapshotArchiveMysql.cjs',
+        'test/storage/runSnapshotArchiveMysql.cjs',
+        'test/storage/snapshotArchiveDocker.cjs',
+        'test/storage/snapshotMysqlFixtureGroups.cjs',
+        'test/utils/mysqlReadSnapshotFixture.ts'
+      ],
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/portable/mysqlReadSnapshot.property.test.ts',
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          '// Only provider-owned snapshot callbacks',
+          'interface KnexTelemetryQuery'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async readSnapshot<T>',
+          'override supportsRetainedReadSnapshot(): boolean'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'private async readMySQLSnapshot<T>',
+          'override getSnapshotSync():'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async findProvenTxs(',
+          'override async findStaleMerkleRoots('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async findSyncStates(',
+          'override async findTransactions('
+        )
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/portable/snapshot.test.ts',
+          '<rootDir>/src/storage/portable/mysqlSnapshot.test.ts',
+          '<rootDir>/src/storage/snapshot/StorageKnex.retainedSnapshot.test.ts',
+          '<rootDir>/src/storage/snapshot/KnexWalletReadSnapshot.test.ts',
+          '<rootDir>/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
+          '<rootDir>/src/storage/portable/mysqlReadSnapshot.property.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
     'wallet-retained-snapshot': {
       packageDirectory: 'packages/wallet/wallet-toolbox',
       manifest: 'packages/wallet/wallet-toolbox/package.json',

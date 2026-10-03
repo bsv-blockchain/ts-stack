@@ -40,8 +40,14 @@ tests cover independent writes during capture. A local MySQL 8.4.11 fixture
 verifies repeatable-read isolation, read-only enforcement and connection cleanup
 without changing session defaults. Exact proof and checkpoint reads inside these
 provider-owned snapshots retain the consistent view without requesting write
-locks; ordinary writable transactions retain their row locks. Deployed/PXC
-recovery remains unqualified. Custom providers
+locks; ordinary writable transactions retain their row locks. The critical
+`wallet-read-snapshot-consistency` mutation target covers the complete transaction
+classification and lookup methods with all six retained, portable and generated
+read-view suites. Generated schedules exercise direct/retained failure cleanup,
+cross-provider tokens, partial/exact selectors and independent writable work;
+ordinary lookups also preserve returned checkpoint date/boolean normalization.
+The original property strength and zero-uncovered/invalid/unexecuted mutation
+gates apply. Deployed/PXC recovery remains unqualified. Custom providers
 opt in with `supportsReadSnapshot` and `readSnapshot`. Use the export option
 `requireSnapshot: true` to refuse unsupported capture; old custom-provider calls
 retain their documented caller-quiesced fallback.

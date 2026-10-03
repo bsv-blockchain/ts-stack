@@ -74,6 +74,7 @@ test('retains an already-pinned SQLite view across independent writes, idle peri
     view.read(trx =>
       source
         .toDb(trx)<{
+          userId: number
           txLabelId: number
           label: string
           isDeleted: boolean | number

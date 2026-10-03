@@ -486,6 +486,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-read-snapshot-consistency",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/mysqlReadSnapshot.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet callback-owned coherent transaction classification, exact proof/checkpoint consistent reads and preservation of writable authority locks",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

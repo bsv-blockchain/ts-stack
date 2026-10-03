@@ -650,6 +650,20 @@
           "Same-position retries reproduce identical rows, cursor and allocation charge.",
           "A cursor for another archive is rejected and each opened reader cancels its original immutable request exactly once."
         ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/mysqlReadSnapshot.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet callback-owned coherent transaction classification, exact proof/checkpoint consistent reads and preservation of writable authority locks",
+        "target": "Generated direct/retained read schedules across providers with interleaved independent writable transactions, partial/exact selectors and callback failures",
+        "invariants": [
+          "Provider-owned coherent snapshots never request writable row locks.",
+          "Independent ordinary transactions preserve each existing exact-selector lock requirement.",
+          "Snapshot classification follows the transaction token across provider instances and never marks an independent transaction.",
+          "Direct and retained callbacks preserve exact failure causes and release their database connection.",
+          "Every generated schedule preserves the complete selector/query count without an unbounded queue."
+        ]
       }
     ],
     "exclusions": [
