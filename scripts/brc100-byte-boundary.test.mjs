@@ -103,7 +103,8 @@ test('the byte compatibility contract remains part of the public SDK wallet API'
 })
 
 const dependentPackageSdkRanges = [
-  ['packages/middleware/auth-express-middleware/package.json', '^2.8.5 || ^3.0.0'],
+  ['packages/middleware/auth-express-middleware/package.json', '^2.9.0 || ^3.0.0'],
+  ['packages/middleware/payment-express-middleware/package.json', '^2.9.0 || ^3.0.0'],
   ['packages/messaging/authsocket-client/package.json', '^2.4.1 || ^3.0.0'],
   ['packages/messaging/authsocket/package.json', '^2.4.1 || ^3.0.0'],
   ['packages/messaging/message-box-client/package.json', '^2.8.6 || ^3.0.0'],

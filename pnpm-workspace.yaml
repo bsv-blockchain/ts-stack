@@ -37,7 +37,7 @@ overrides:
   # readableEnded. Yamux 8.0.1 allows @libp2p/utils ^7.0.0 but the lock selected
   # 7.3.0, whose AbstractStream does not declare that field. 7.4.1 does.
   '@chainsafe/libp2p-yamux>@libp2p/utils': 7.4.1
-  brace-expansion@<5.0.11: 5.0.11
+  brace-expansion@<5.0.12: 5.0.12
   # Socket.IO retains engine.io releases vulnerable to the protocol-revision
   # mismatch DoS. Select the first patched release; authsocket consumes the
   # same public API.
@@ -61,9 +61,21 @@ overrides:
   # by GHSA-r5fr-rjxr-66jc (_.template imports key-name code injection). Select
   # the patched release already used elsewhere in the graph; the API is unchanged.
   lodash-es@<4.18.0: 4.18.1
+  # Metro-file-map only uses micromatch.some, which delegates to Picomatch.
+  # The paired patch retains that matcher and removes the affected unused closure.
+  'metro-file-map@0.87.1>micromatch': '-'
 strictDepBuilds: true
 trustPolicy: no-downgrade
 # Apply provenance downgrade checks to the recent supply-chain window. Older
 # packages predate consistent registry attestations and otherwise create known
 # false positives (for example chokidar 4.0.3 in pnpm's own documentation).
 trustPolicyIgnoreAfter: 525600
+
+# Temporary exact-version build-tool repair; ownership/removal criteria live in
+# governance/dependency-release-policy.json and the override exception registry.
+packageExtensions:
+  'metro-file-map@0.87.1':
+    dependencies:
+      picomatch: 2.3.2
+patchedDependencies:
+  'metro-file-map@0.87.1': patches/metro-file-map@0.87.1.patch

@@ -214,6 +214,24 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 3.0.0 candidate — prepared BRC-118 payments and recipient interoperability
+
+- Preserve native body serialization and inferred Content-Type on ordinary HTTP
+  fallback, including cached unauthenticated peers; retain owned payment bytes.
+
+- Negotiate bounded multipart payments, preserving original payload bytes and exact
+  signed boundary parameters while retaining nonempty non-multipart signature preimages.
+- Prepare the real payment and request before broadcast; submit once, reuse the
+  transaction across retries, abort refused reservations where supported, and
+  retain typed context for cancellation, size refusal and uncertain outcomes.
+- Pair zero-length byte request normalization with auth middleware 2.3.0: both
+  use the BRC-104 `-1` sentinel, including the existing Express raw-parser path.
+  Empty-byte clients/receivers that used length `0` need a coordinated upgrade;
+  nonempty request preimages are unchanged.
+- Derive the recipient's own BRC-29 child key on settlement receipt.
+- Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
+  adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
+
 ### Removed (3.0.0 candidate)
 
 - Remove the legacy `identity/DIDTokenValidation` module and its

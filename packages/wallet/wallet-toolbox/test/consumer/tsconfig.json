@@ -1,0 +1,13 @@
+{
+  "extends": "../../../../../config/typescript/test.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": false,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "files": ["hashWasm.cts", "hashWasm.mts"]
+}

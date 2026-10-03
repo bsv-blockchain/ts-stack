@@ -6,12 +6,7 @@ import { KnexSessionManager } from '../src/storage/remoting/KnexSessionManager'
 import { StorageServer, WalletStorageServerOptions } from '../src/storage/remoting/StorageServer'
 import { StorageKnex } from '../src/storage/StorageKnex'
 import { managedChangeOutputFields } from '../src/storage/methods/managedChange'
-import {
-  TableOutput,
-  TableOutputBasket,
-  TableProvenTx,
-  TableTransaction
-} from '../src/storage/schema/tables'
+import { TableOutput, TableOutputBasket, TableProvenTx, TableTransaction } from '../src/storage/schema/tables'
 import { ScriptTemplateBRC29 } from '../src/utility/ScriptTemplateBRC29'
 import { BdkVerifier } from '@bsv/verifast'
 
@@ -44,17 +39,14 @@ interface BenchmarkContext {
   ctx: TestWalletNoSetup
   basket: TableOutputBasket
   storageEvents: TelemetryEvent[]
+  canonicalRoots: Set<string>
 }
 
 interface QueryProbe {
-  stop: () => { queryCount: number, databaseTransactions: number, databaseMs: number }
+  stop: () => { queryCount: number; databaseTransactions: number; databaseMs: number }
 }
 
-function makeSourceTransaction (
-  index: number,
-  satoshis: number,
-  lockingScript: Script
-): Transaction {
+function makeSourceTransaction(index: number, satoshis: number, lockingScript: Script): Transaction {
   const transaction = new Transaction()
   transaction.addInput({
     sourceTXID: '00'.repeat(32),
@@ -66,14 +58,11 @@ function makeSourceTransaction (
   return transaction
 }
 
-function makeBenchmarkMerklePaths (txids: string[], height: number, seed: number): MerklePath[] {
+function makeBenchmarkMerklePaths(txids: string[], height: number, seed: number): MerklePath[] {
   const sharedLevels = Math.log2(txids.length)
   if (!Number.isInteger(sharedLevels)) throw new Error('benchmark proof group must be a power of two')
   const path = Array.from({ length: 24 }, (_, level) => {
-    const siblingHash = (BigInt(seed + 1) * 10_000n + BigInt(level + 1))
-      .toString(16)
-      .padStart(64, '0')
-      .slice(-64)
+    const siblingHash = (BigInt(seed + 1) * 10_000n + BigInt(level + 1)).toString(16).padStart(64, '0').slice(-64)
     if (level === 0) return txids.map((hash, offset) => ({ offset, hash, txid: true }))
     if (level < sharedLevels) return []
     return [{ offset: 1, hash: siblingHash }]
@@ -82,27 +71,41 @@ function makeBenchmarkMerklePaths (txids: string[], height: number, seed: number
   return txids.map(txid => compound.extract([txid]))
 }
 
-async function createBenchmarkContext (): Promise<BenchmarkContext> {
+async function createBenchmarkContext(): Promise<BenchmarkContext> {
   const databaseName = process.env.WALLET_TOOLBOX_BENCH_MYSQL_DATABASE ?? 'createActionBeefBench'
-  const ctx = process.env.WALLET_TOOLBOX_BENCH_MYSQL === 'true'
-    ? await _tu.createLegacyWalletMySQLCopy(databaseName, 'legacy')
-    : await _tu.createLegacyWalletSQLiteCopy(databaseName, 'legacy')
+  const ctx =
+    process.env.WALLET_TOOLBOX_BENCH_MYSQL === 'true'
+      ? await _tu.createLegacyWalletMySQLCopy(databaseName, 'legacy')
+      : await _tu.createLegacyWalletSQLiteCopy(databaseName, 'legacy')
+  const canonicalRoots = new Set<string>()
+  // Synthetic benchmark proofs are valid only at their explicitly registered
+  // fixture heights. Never query a live chain or approve arbitrary roots.
+  jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+    isValidRootForHeight: async (root, height) => canonicalRoots.has(`${height}:${root}`),
+    currentHeight: async () => 1_000_000
+  })
   const storageEvents: TelemetryEvent[] = []
-  Reflect.set(ctx.activeStorage, 'telemetry', new Telemetry({
-    sink: { capture: event => storageEvents.push({ ...event }) }
-  }))
+  Reflect.set(
+    ctx.activeStorage,
+    'telemetry',
+    new Telemetry({
+      sink: { capture: event => storageEvents.push({ ...event }) }
+    })
+  )
   ctx.activeStorage.feeModel = { model: 'sat/kb', value: 100 }
-  const basket = (await ctx.activeStorage.findOutputBaskets({
-    partial: { userId: ctx.userId, name: 'default' }
-  }))[0] as TableOutputBasket
+  const basket = (
+    await ctx.activeStorage.findOutputBaskets({
+      partial: { userId: ctx.userId, name: 'default' }
+    })
+  )[0] as TableOutputBasket
   await ctx.activeStorage.updateOutputBasket(basket.basketId, {
     numberOfDesiredUTXOs: 0,
     minimumDesiredUTXOValue: 1
   })
-  return { ctx, basket, storageEvents }
+  return { ctx, basket, storageEvents, canonicalRoots }
 }
 
-function collectPhaseDurations (events: TelemetryEvent[], firstEvent: number): Record<string, number> {
+function collectPhaseDurations(events: TelemetryEvent[], firstEvent: number): Record<string, number> {
   const phaseMs: Record<string, number> = {}
   for (const event of events.slice(firstEvent)) {
     if (event.type !== 'span' || event.durationMs == null) continue
@@ -113,7 +116,7 @@ function collectPhaseDurations (events: TelemetryEvent[], firstEvent: number): R
   return phaseMs
 }
 
-async function replaceFundingCandidatesWithDistinctProvenSources (
+async function replaceFundingCandidatesWithDistinctProvenSources(
   setup: BenchmarkContext,
   candidateCount: number,
   outputSatoshis: number,
@@ -129,10 +132,10 @@ async function replaceFundingCandidatesWithDistinctProvenSources (
     const derivationSuffix = `beef-benchmark-${uniqueIndex}`
     const lockingScript = signableManagedOutputs
       ? new ScriptTemplateBRC29({
-        derivationPrefix,
-        derivationSuffix,
-        keyDeriver: ctx.keyDeriver
-      }).lock(changeKeys.privateKey, changeKeys.publicKey)
+          derivationPrefix,
+          derivationSuffix,
+          keyDeriver: ctx.keyDeriver
+        }).lock(changeKeys.privateKey, changeKeys.publicKey)
       : Script.fromHex('51')
     const source = makeSourceTransaction(uniqueIndex, outputSatoshis, lockingScript)
     return {
@@ -171,6 +174,7 @@ async function replaceFundingCandidatesWithDistinctProvenSources (
     for (const preparedSource of prepared) {
       const { derivationSuffix, lockingScript, source, rawTx, txid } = preparedSource
       const merklePath = preparedSource.merklePath!
+      setup.canonicalRoots.add(`${merklePath.blockHeight}:${merklePath.computeRoot(txid)}`)
       const now = new Date()
       const proven: TableProvenTx = {
         created_at: now,
@@ -228,24 +232,26 @@ async function replaceFundingCandidatesWithDistinctProvenSources (
   return sourceTxids
 }
 
-function createActionArgs (satoshis = 150_000) {
+function createActionArgs(satoshis = 150_000) {
   return Validation.validateCreateActionArgs({
-    outputs: [{
-      satoshis,
-      lockingScript: '51',
-      outputDescription: 'proof-bearing benchmark output'
-    }],
+    outputs: [
+      {
+        satoshis,
+        lockingScript: '51',
+        outputDescription: 'proof-bearing benchmark output'
+      }
+    ],
     description: 'createAction proof-bearing fragmented funding benchmark',
     options: { noSend: true, randomizeOutputs: false, returnTXIDOnly: false }
   })
 }
 
-function startQueryProbe (setup: BenchmarkContext): QueryProbe {
+function startQueryProbe(setup: BenchmarkContext): QueryProbe {
   let queryCount = 0
   let databaseTransactions = 0
   let databaseMs = 0
-  const started = new Map<string, { at: number, operation: string }>()
-  const countQuery = (query: { sql?: string, __knexQueryUid?: string }): void => {
+  const started = new Map<string, { at: number; operation: string }>()
+  const countQuery = (query: { sql?: string; __knexQueryUid?: string }): void => {
     queryCount++
     if (/^begin\b/i.test(query.sql?.trim() ?? '')) databaseTransactions++
     if (query.__knexQueryUid != null) {
@@ -282,17 +288,11 @@ function startQueryProbe (setup: BenchmarkContext): QueryProbe {
   }
 }
 
-async function measureStorageCreateAction (
-  setup: BenchmarkContext,
-  candidateCount: number
-): Promise<Measurement> {
+async function measureStorageCreateAction(setup: BenchmarkContext, candidateCount: number): Promise<Measurement> {
   const firstEvent = setup.storageEvents.length
   const probe = startQueryProbe(setup)
   const start = performance.now()
-  const result = await setup.ctx.activeStorage.createAction(
-    { userId: setup.ctx.userId },
-    createActionArgs()
-  )
+  const result = await setup.ctx.activeStorage.createAction({ userId: setup.ctx.userId }, createActionArgs())
   const elapsedMs = performance.now() - start
   const query = probe.stop()
   return {
@@ -306,9 +306,7 @@ async function measureStorageCreateAction (
   }
 }
 
-async function createRemoteClient (
-  setup: BenchmarkContext
-): Promise<{
+async function createRemoteClient(setup: BenchmarkContext): Promise<{
   client: TestWalletOnly
   server: StorageServer
   verifier: BdkVerifier
@@ -356,7 +354,7 @@ async function createRemoteClient (
   return { client, server, verifier, verifyDigestBatch, events, serverEvents }
 }
 
-async function measureRemoteWalletCreateAction (
+async function measureRemoteWalletCreateAction(
   setup: BenchmarkContext,
   client: TestWalletOnly,
   events: TelemetryEvent[],
@@ -369,11 +367,13 @@ async function measureRemoteWalletCreateAction (
   const probe = startQueryProbe(setup)
   const start = performance.now()
   const result = await client.wallet.createAction({
-    outputs: [{
-      satoshis: 150_000,
-      lockingScript: '51',
-      outputDescription: 'proof-bearing benchmark output'
-    }],
+    outputs: [
+      {
+        satoshis: 150_000,
+        lockingScript: '51',
+        outputDescription: 'proof-bearing benchmark output'
+      }
+    ],
     description: 'authenticated remote proof-bearing fragmented funding benchmark',
     options: { noSend: true, randomizeOutputs: false, returnTXIDOnly: false }
   })
@@ -403,12 +403,12 @@ async function measureRemoteWalletCreateAction (
   }
 }
 
-function percentile (values: number[], percentileValue: number): number {
+function percentile(values: number[], percentileValue: number): number {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.max(0, Math.ceil(percentileValue * sorted.length) - 1)]
 }
 
-function summarize (measurements: Measurement[]): MeasurementSummary {
+function summarize(measurements: Measurement[]): MeasurementSummary {
   const elapsed = measurements.map(measurement => measurement.elapsedMs)
   const database = measurements.map(measurement => measurement.databaseMs)
   const phaseNames = new Set(measurements.flatMap(measurement => Object.keys(measurement.phaseMs ?? {})))
@@ -473,13 +473,12 @@ describe('createAction proof-bearing fragmented funding benchmark', () => {
         readEnabled: true,
         writeEnabled: true
       })
-      jest.spyOn(setup.ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-        isValidRootForHeight: async () => true
-      })
-      expect(setup.ctx.activeStorage.enqueuePreparedBeef({
-        userId: setup.ctx.userId,
-        rootTxids: warmTxids
-      })).toBe(true)
+      expect(
+        setup.ctx.activeStorage.enqueuePreparedBeef({
+          userId: setup.ctx.userId,
+          rootTxids: warmTxids
+        })
+      ).toBe(true)
       await setup.ctx.activeStorage.waitForPreparedBeefTasks()
       const canonicalBuilder = jest.spyOn(setup.ctx.activeStorage, 'getBeefForTransactions')
       const prepared = await measureStorageCreateAction(setup, warmTxids.length)
@@ -512,42 +511,40 @@ describe('createAction proof-bearing fragmented funding benchmark', () => {
       for (let sample = 0; sample < samples; sample++) {
         await replaceFundingCandidatesWithDistinctProvenSources(setup, 178, 1_000, sample + 1_000, true)
         await new Promise(resolve => setTimeout(resolve, 1_250))
-        remoteMeasurements.push(await measureRemoteWalletCreateAction(
-          setup,
-          remote.client,
-          remote.events,
-          remote.serverEvents,
-          178
-        ))
+        remoteMeasurements.push(
+          await measureRemoteWalletCreateAction(setup, remote.client, remote.events, remote.serverEvents, 178)
+        )
       }
 
       const typicalRemoteMeasurements: Measurement[] = []
       for (let sample = 0; sample < samples; sample++) {
         await replaceFundingCandidatesWithDistinctProvenSources(setup, 8, 200_000, sample + 2_000, true)
         await new Promise(resolve => setTimeout(resolve, 1_250))
-        typicalRemoteMeasurements.push(await measureRemoteWalletCreateAction(
-          setup,
-          remote.client,
-          remote.events,
-          remote.serverEvents,
-          8
-        ))
+        typicalRemoteMeasurements.push(
+          await measureRemoteWalletCreateAction(setup, remote.client, remote.events, remote.serverEvents, 8)
+        )
       }
 
       const direct = summarize(directMeasurements)
       const authenticatedRemote = summarize(remoteMeasurements)
       const typicalAuthenticatedRemote = summarize(typicalRemoteMeasurements)
-      const digestVerdicts = (await Promise.all(
-        remote.verifyDigestBatch.mock.results.map(async result => await result.value)
-      )).flat()
-      process.stdout.write(`${JSON.stringify({
-        direct,
-        authenticatedRemote,
-        typicalAuthenticatedRemote,
-        digestVerificationBatches: remote.verifyDigestBatch.mock.calls.length,
-        digestVerificationCount: digestVerdicts.length,
-        digestVerificationFailures: digestVerdicts.filter(valid => !valid).length
-      }, null, 2)}\n`)
+      const digestVerdicts = (
+        await Promise.all(remote.verifyDigestBatch.mock.results.map(async result => await result.value))
+      ).flat()
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            direct,
+            authenticatedRemote,
+            typicalAuthenticatedRemote,
+            digestVerificationBatches: remote.verifyDigestBatch.mock.calls.length,
+            digestVerificationCount: digestVerdicts.length,
+            digestVerificationFailures: digestVerdicts.filter(valid => !valid).length
+          },
+          null,
+          2
+        )}\n`
+      )
       expect(direct.p50Ms).toBeLessThan(150)
       expect(direct.p95Ms).toBeLessThan(500)
       expect(authenticatedRemote.p50Ms).toBeLessThan(450)
@@ -617,17 +614,22 @@ describe('createAction proof-bearing fragmented funding benchmark', () => {
           resultBeefBytes: result.inputBeef?.length ?? 0,
           phaseMs
         })
-        await expect(storage.abortAction(
-          { userId: user.userId },
-          { reference: result.reference }
-        )).resolves.toEqual({ aborted: true })
+        await expect(storage.abortAction({ userId: user.userId }, { reference: result.reference })).resolves.toEqual({
+          aborted: true
+        })
       }
       const summary = summarize(measurements)
-      process.stdout.write(`${JSON.stringify({
-        productionShaped: summary,
-        minSelectedInputCount: Math.min(...measurements.map(measurement => measurement.selectedInputCount)),
-        minDistinctSourceCount: Math.min(...measurements.map(measurement => measurement.distinctSourceCount))
-      }, null, 2)}\n`)
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            productionShaped: summary,
+            minSelectedInputCount: Math.min(...measurements.map(measurement => measurement.selectedInputCount)),
+            minDistinctSourceCount: Math.min(...measurements.map(measurement => measurement.distinctSourceCount))
+          },
+          null,
+          2
+        )}\n`
+      )
       expect(measurements.every(measurement => measurement.candidateCount > 100)).toBe(true)
       expect(measurements.every(measurement => measurement.selectedInputCount > 100)).toBe(true)
       expect(measurements.every(measurement => measurement.resultBeefBytes > 0)).toBe(true)

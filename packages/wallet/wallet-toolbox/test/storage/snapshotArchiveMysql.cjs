@@ -1,0 +1,627 @@
+const assert = require('node:assert/strict')
+const { execFileSync } = require('node:child_process')
+const { knex } = require('knex')
+const { runInSeries } = require('../../out/src/utility/runInSeries.js')
+const { SnapshotArchiveCleanupPendingError } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveOwner.js')
+const { executable, context, validateContext, validateContainer } = require('./snapshotArchiveDocker.cjs')
+const container = process.env.TS_STACK_SNAPSHOT_CONTAINER
+const expectedId = process.env.TS_STACK_SNAPSHOT_CONTAINER_ID
+const owner = process.env.TS_STACK_SNAPSHOT_CONTAINER_OWNER
+const secret = process.env.TS_STACK_SNAPSHOT_MYSQL_SECRET
+if (!container || !expectedId || !owner || !secret) throw new Error('Use the bounded fixture launcher')
+const docker = (...args) =>
+  execFileSync(executable, ['--context', context, ...args], { encoding: 'utf8', timeout: 15000 })
+validateContext(JSON.parse(docker('context', 'inspect', context)))
+const actual = JSON.parse(docker('inspect', container))[0]
+validateContainer(actual, { name: container, owner, id: expectedId })
+const port = Number(docker('port', expectedId, '3306/tcp').trim().split(':').at(-1))
+const connection = {
+  host: '127.0.0.1',
+  port,
+  user: 'root',
+  password: secret,
+  database: 'ts569_snapshot',
+  timezone: 'Z'
+}
+
+const {
+  KnexSnapshotArchiveStore,
+  snapshotArchiveTables,
+  snapshotArchiveLimits
+} = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveStore.js')
+const { addSnapshotArchiveTables } = require('../../out/src/storage/schema/snapshotArchiveMigration.js')
+const { StorageKnex } = require('../../out/src/storage/StorageKnex.js')
+const { StorageProvider } = require('../../out/src/storage/StorageProvider.js')
+const { captureKnexSnapshotArchive } = require('../../out/src/storage/snapshot/archive/captureKnexSnapshotArchive.js')
+const { decodeSyncTransfer } = require('../../out/src/storage/remoting/SyncTransfer.js')
+const { KnexSnapshotArchiveService } = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveService.js')
+const {
+  KnexSnapshotArchiveRequestStore
+} = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.js')
+const { snapshotArchiveRequestId } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveRequest.js')
+const { snapshotArchiveDatabaseNow } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveSql.js')
+const { KnexSnapshotArchiveRpc } = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveRpc.js')
+const { SnapshotArchiveTransport } = require('../../out/src/storage/snapshot/archive/SnapshotArchiveTransport.js')
+const { openRemoteSnapshot } = require('../../out/src/storage/snapshot/archive/openRemoteSnapshot.js')
+const {
+  SnapshotArchiveTransportFailure
+} = require('../../out/src/storage/snapshot/archive/SnapshotArchiveTransportFailure.js')
+const {
+  verifySnapshotArchiveDirectory,
+  verifySnapshotArchivePage
+} = require('../../out/src/storage/snapshot/archive/SnapshotArchiveDirectory.js')
+const open = () => knex({ client: 'mysql2', connection, pool: { min: 1, max: 1 } })
+const database = open(),
+  replica = open(),
+  third = open()
+const identity = '02' + '11'.repeat(32),
+  other = '03' + '22'.repeat(32)
+const date = new Date('2026-01-01T00:00:00.000Z')
+const binding = {
+  version: 1,
+  snapshotId: 'a'.repeat(64),
+  sourceSchema: 'synthetic-v1',
+  sourceStorage: {
+    created_at: date,
+    updated_at: date,
+    storageIdentityKey: 'source',
+    storageName: 'source',
+    chain: 'test',
+    dbtype: 'MySQL',
+    maxOutputScript: 1024
+  },
+  user: { created_at: date, updated_at: date, userId: 7, identityKey: identity, activeStorage: 'source' }
+}
+
+async function captureFixture() {
+  const writer = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: open() })
+  const reader = new StorageKnex({ ...StorageProvider.createStorageBaseOptions('test'), knex: open() })
+  const originalAppend = KnexSnapshotArchiveStore.prototype.append
+  try {
+    await writer.migrate('native capture source', 'native-source')
+    await writer.makeAvailable()
+    await reader.makeAvailable()
+    const { user } = await writer.findOrInsertUser(identity)
+    const { user: foreign } = await writer.findOrInsertUser(other)
+    const labels = Array.from({ length: 140 }, (_, index) => ({
+      userId: user.userId,
+      label: `original-${index}`,
+      isDeleted: index % 7 === 0,
+      created_at: date,
+      updated_at: date
+    }))
+    await writer.knex('tx_labels').insert(labels)
+    await writer.findOrInsertTxLabel(foreign.userId, 'foreign label')
+    const tx = {
+      created_at: date,
+      updated_at: date,
+      status: 'completed',
+      isOutgoing: false,
+      satoshis: 1,
+      description: 'synthetic fixture'
+    }
+    const proof = await writer.insertProvenTx({
+      created_at: date,
+      updated_at: date,
+      provenTxId: 0,
+      txid: 'a'.repeat(64),
+      height: 1,
+      index: 0,
+      merklePath: [4, 5, 255],
+      rawTx: [1, 2, 255],
+      blockHash: 'b'.repeat(64),
+      merkleRoot: 'c'.repeat(64)
+    })
+    await writer.insertTransaction({
+      ...tx,
+      transactionId: 0,
+      userId: user.userId,
+      provenTxId: proof,
+      txid: 'a'.repeat(64),
+      reference: 'owned'
+    })
+    const foreignTransaction = await writer.insertTransaction({
+      ...tx,
+      transactionId: 0,
+      userId: foreign.userId,
+      reference: 'foreign'
+    })
+    await writer.knex('users').where({ userId: user.userId }).update({ activeStorage: 'historical selection' })
+    let changedDuringCapture = false
+    KnexSnapshotArchiveStore.prototype.append = async function (owner, page, authorize) {
+      await originalAppend.call(this, owner, page, authorize)
+      if (page.sequence === 0) {
+        await writer
+          .knex('tx_labels')
+          .where({ userId: user.userId, label: 'original-0' })
+          .update({ label: 'replacement' })
+        await writer.knex('users').where({ userId: user.userId }).update({ activeStorage: 'replacement selection' })
+        changedDuringCapture = true
+      }
+    }
+    const manifest = await captureKnexSnapshotArchive(reader, writer.knex, identity, 'test')
+    KnexSnapshotArchiveStore.prototype.append = originalAppend
+    assert.equal(changedDuringCapture, true)
+    assert.equal(manifest.pages, 14)
+    assert.equal(manifest.binding.sourceStorage.storageIdentityKey, 'native-source')
+    assert.equal(manifest.binding.user.activeStorage, 'historical selection')
+    assert.equal(manifest.binding.sourceSchema, '2026-10-02-001 repair snapshot SQLite conflict maintenance')
+    const store = new KnexSnapshotArchiveStore(writer.knex)
+    const first = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 8)).bytes)
+    const second = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 9)).bytes)
+    assert.equal(first.table, 'txLabels')
+    assert.equal(first.rows.length, 128)
+    assert.equal(second.rows.length, 12)
+    assert.deepEqual(
+      [...first.rows, ...second.rows].map(row => row.label),
+      labels.map(row => row.label)
+    )
+    assert.equal(first.rows[0].created_at, date.toISOString())
+    assert.equal(first.rows[0].isDeleted, true)
+    const proofPage = decodeSyncTransfer((await store.read(identity, manifest.archiveId, 0)).bytes)
+    assert.deepEqual(proofPage.rows[0].rawTx, new Uint8Array([1, 2, 255]))
+    await store.close(identity, manifest.archiveId)
+    const requestLifecycle = await requestFixture(writer, reader)
+    const remoteReader = await readerFixture(writer, reader)
+    const ownerDrain = await ownerDrainFixture(writer, reader)
+    const { qualifyGuardProcessLoss } = require('./snapshotArchiveGuardCrash.cjs')
+    const ownerProcessLoss = await qualifyGuardProcessLoss(writer.knex, {
+      client: 'mysql2',
+      connection,
+      pool: { min: 0, max: 1 }
+    })
+    await writer.insertCommission({
+      created_at: date,
+      updated_at: date,
+      commissionId: 0,
+      userId: user.userId,
+      transactionId: foreignTransaction,
+      satoshis: 1,
+      keyOffset: 'synthetic',
+      isRedeemed: false,
+      lockingScript: [1]
+    })
+    await assert.rejects(captureKnexSnapshotArchive(reader, writer.knex, identity, 'test'), /relation/)
+    assert.equal((await writer.knex('snapshot_archive_capacity').first()).archives, 0)
+    return {
+      tables: 13,
+      pages: manifest.pages,
+      labels: 140,
+      pinnedConcurrentWrites: true,
+      originalPrimary: true,
+      originalSchema: true,
+      packedBinary: true,
+      crossProfileClosureRejected: true,
+      requestLifecycle,
+      remoteReader,
+      ownerDrain,
+      ownerProcessLoss
+    }
+  } finally {
+    KnexSnapshotArchiveStore.prototype.append = originalAppend
+    await reader.destroy()
+    await writer.destroy()
+  }
+}
+function boundary() {
+  let resolve
+  const promise = new Promise(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+async function ownerDrainFixture(writer, reader) {
+  const controller = new KnexSnapshotArchiveService(writer)
+  const replacement = new KnexSnapshotArchiveService(reader)
+  const originalOpen = writer.openSnapshotArchiveSource.bind(writer)
+  const reading = boundary()
+  const allowRead = boundary()
+  const destroying = boundary()
+  const allowDestroy = boundary()
+  const fields = {
+    version: 1,
+    nonce: 'd'.repeat(64),
+    notAfter: (await snapshotArchiveDatabaseNow(writer.knex)) + 300000,
+    maxBytes: 1048576
+  }
+  const input = { ...fields, requestId: snapshotArchiveRequestId(fields) }
+  writer.openSnapshotArchiveSource = async (...args) => {
+    const source = await originalOpen(...args)
+    assert.ok(source)
+    const pool = writer.snapshotSyncSource
+    assert.ok(pool)
+    const destroy = pool.knex.client.destroyRawConnection.bind(pool.knex.client)
+    pool.knex.client.destroyRawConnection = async connection => {
+      destroying.resolve()
+      await allowDestroy.promise
+      await destroy(connection)
+    }
+    return {
+      ...source,
+      readPage: async (...pageArgs) => {
+        reading.resolve()
+        await allowRead.promise
+        return await source.readPage(...pageArgs)
+      }
+    }
+  }
+  const capture = controller.create(identity, input)
+  void capture.catch(() => undefined)
+  try {
+    await reading.promise
+    await assert.rejects(replacement.cancelRequest(identity, input), SnapshotArchiveCleanupPendingError)
+    assert.equal((await replacement.status(identity, input.requestId)).state, 'closed')
+    const requests = new KnexSnapshotArchiveRequestStore(reader.knex, true)
+    await requests.reap()
+    await new KnexSnapshotArchiveStore(reader.knex).reap()
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), fields.maxBytes)
+    assert.equal((await writer.knex('snapshot_archive_owners')).length, 1)
+    allowRead.resolve()
+    await destroying.promise
+    assert.equal((await writer.knex('snapshot_archive_pages')).length, 0)
+    assert.equal((await writer.knex('snapshot_archive_owners')).length, 1)
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), fields.maxBytes)
+    await writer.knex('tx_labels').where({ label: 'after-reader-pin' }).update({ label: 'during-owner-drain' })
+    assert.equal((await writer.knex('tx_labels').where({ label: 'during-owner-drain' })).length, 1)
+    allowDestroy.resolve()
+    await assert.rejects(capture, /unavailable/)
+    assert.equal(writer.snapshotSyncSource, undefined)
+    assert.equal((await writer.knex('snapshot_archive_owners')).length, 0)
+    assert.equal((await writer.knex('snapshot_archives')).length, 0)
+    assert.equal((await writer.knex('snapshot_archive_pages')).length, 0)
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), 0)
+    await replacement.cancelRequest(identity, input)
+    return {
+      crossControllerCancellation: true,
+      nextAppendFenced: true,
+      reapingRetainsQuota: true,
+      foregroundWriteDuringPoolDrain: true,
+      exactPhysicalCleanupAcknowledgement: true
+    }
+  } finally {
+    allowRead.resolve()
+    allowDestroy.resolve()
+    await capture.catch(() => undefined)
+    writer.openSnapshotArchiveSource = originalOpen
+    await Promise.all([controller.close(), replacement.close()])
+  }
+}
+
+async function readerFixture(writer, reader) {
+  const owner = new KnexSnapshotArchiveRpc(writer)
+  const replacement = new KnexSnapshotArchiveRpc(reader)
+  const originalOpen = writer.openSnapshotArchiveSource.bind(writer)
+  const retained = Number((await writer.knex('snapshot_archive_requests').count({ count: '*' }).first()).count)
+  let captures = 0
+  let receiver = owner
+  let admissionLost = false
+  const admissions = []
+  writer.openSnapshotArchiveSource = async (...args) => {
+    captures++
+    return await originalOpen(...args)
+  }
+  const transport = new SnapshotArchiveTransport(
+    async (method, params) => {
+      const value = await receiver.dispatch(method, params, identity)
+      if (method === 'admitSnapshotArchive') {
+        admissions.push(params)
+        if (!admissionLost) {
+          admissionLost = true
+          throw new SnapshotArchiveTransportFailure('synthetic lost admission acknowledgement')
+        }
+      }
+      return value
+    },
+    identity,
+    'native-source',
+    'test',
+    true
+  )
+  try {
+    await runInSeries([0, 1, 2, 3, 4], async iteration => {
+      receiver = owner
+      const view = await openRemoteSnapshot(transport)
+      assert.ok(view)
+      try {
+        assert.equal(view.sourceStorage.dbtype, 'MySQL')
+        assert.equal(view.user.identityKey, identity)
+        assert.ok(view.user.created_at instanceof Date)
+        assert.equal(writer.snapshotSyncSource, undefined)
+        receiver = replacement
+        if (iteration === 0)
+          await writer.knex('tx_labels').where({ label: 'after-service-pin' }).update({ label: 'after-reader-pin' })
+        const labels = []
+        let cursor
+        let done = false
+        function* pendingPages() {
+          while (!done) yield cursor
+        }
+        await runInSeries(pendingPages(), async next => {
+          const page = await view.readPage('txLabels', next, { maxRows: 17 })
+          assert.ok(page.rows.length <= 17)
+          assert.equal(page.cursor.archivePosition.version, 1)
+          assert.equal(page.cursor.archivePosition.archiveId.length, 64)
+          labels.push(...page.rows)
+          cursor = page.cursor
+          done = page.done
+        })
+        assert.equal(labels.length, 140)
+        assert.equal(labels[0].label, iteration === 0 ? 'after-service-pin' : 'after-reader-pin')
+        assert.equal(new Set(labels.map(row => row.txLabelId)).size, 140)
+        assert.ok(labels.every(row => row.userId === view.user.userId && row.created_at instanceof Date))
+        assert.ok(labels.every(row => typeof row.isDeleted === 'boolean'))
+        await runInSeries(snapshotArchiveTables, async table => {
+          const page = await view.readPage(table, undefined, { maxRows: 1000 })
+          assert.equal(page.done, true)
+          if (table === 'provenTxs') assert.deepEqual(page.rows[0].rawTx, new Uint8Array([1, 2, 255]))
+        })
+      } finally {
+        await view.close()
+      }
+      assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), 0)
+      assert.equal((await writer.knex('snapshot_archive_requests')).length, retained)
+      assert.equal((await writer.knex('snapshot_archive_pages')).length, 0)
+    })
+    assert.equal(captures, 5)
+    assert.equal(admissions.length, 6)
+    assert.deepEqual(admissions[0], admissions[1])
+    const issued = await transport.readerOffer({ lifetimeMs: 300000, maxBytes: 1048576 })
+    assert.equal(issued.outcome, 'offered')
+    await transport.cancelRequest(issued.request)
+    await assert.rejects(transport.admit(issued.request), /unavailable/)
+    assert.equal(captures, 5)
+    assert.equal((await writer.knex('snapshot_archive_requests')).length, retained)
+    return {
+      transport: 'profile-bound dispatcher over independent MySQL connections; HTTP qualified separately',
+      tables: 13,
+      captures,
+      maxPageRows: 17,
+      pinnedConcurrentWrite: true,
+      packedBytesAndDates: true,
+      replacementReader: true,
+      exactLostAdmissionRetry: true,
+      readerReceiptsCollected: true,
+      cancellationBeforeAdmission: true
+    }
+  } finally {
+    writer.openSnapshotArchiveSource = originalOpen
+    await Promise.all([owner.close(), replacement.close()])
+  }
+}
+async function requestFixture(writer, reader) {
+  const controller = new KnexSnapshotArchiveService(writer)
+  const replacement = new KnexSnapshotArchiveService(reader)
+  const fields = {
+    version: 1,
+    nonce: 'b'.repeat(64),
+    notAfter: (await snapshotArchiveDatabaseNow(writer.knex)) + 300000,
+    maxBytes: 1048576
+  }
+  const input = { ...fields, requestId: snapshotArchiveRequestId(fields) }
+  const originalOpen = writer.openSnapshotArchiveSource.bind(writer)
+  const originalAppend = KnexSnapshotArchiveStore.prototype.append
+  let claimedBeforePool = false
+  let recoveredWhileCapturing = false
+  writer.openSnapshotArchiveSource = async (...args) => {
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), fields.maxBytes)
+    claimedBeforePool = true
+    return await originalOpen(...args)
+  }
+  KnexSnapshotArchiveStore.prototype.append = async function (owner, page, authorize) {
+    await originalAppend.call(this, owner, page, authorize)
+    if (page.sequence === 0) {
+      const receipt = await replacement.create(identity, input)
+      assert.equal(receipt.state, 'building')
+      assert.equal(receipt.requestId, input.requestId)
+      recoveredWhileCapturing = true
+      await writer.knex('tx_labels').where({ label: 'replacement' }).update({ label: 'after-service-pin' })
+    }
+  }
+  try {
+    const pending = controller.create(identity, input)
+    assert.equal(controller.create(identity, { ...input }), pending)
+    const ready = await pending
+    assert.equal(ready.state, 'ready')
+    assert.equal(ready.expiresAt, fields.notAfter)
+    assert.equal(claimedBeforePool, true)
+    assert.equal(recoveredWhileCapturing, true)
+    const directory = await replacement.directory(identity, ready.archiveId)
+    const verified = verifySnapshotArchiveDirectory(directory, {
+      identityKey: identity,
+      chain: 'test',
+      sourceStorageIdentityKey: 'native-source',
+      digest: ready.digest
+    })
+    assert.equal(verified.manifest.binding.sourceSchema, '2026-10-02-001 repair snapshot SQLite conflict maintenance')
+    const page = await replacement.read(identity, ready.archiveId, 8)
+    const decoded = decodeSyncTransfer(verifySnapshotArchivePage(page, verified.receipts[8]))
+    assert.equal(decoded.rows[0].label, 'replacement')
+    assert.equal(writer.snapshotSyncSource, undefined)
+    await controller.close()
+    assert.deepEqual(await replacement.create(identity, input), ready)
+    await assert.rejects(replacement.status(other, input.requestId), /unavailable/)
+    const requests = new KnexSnapshotArchiveRequestStore(writer.knex)
+    await Promise.all([replacement.cancel(identity, input.requestId), requests.close(identity, input.requestId)])
+    assert.equal((await replacement.create(identity, input)).state, 'closed')
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), 0)
+    const nextFields = { ...fields, nonce: 'c'.repeat(64) }
+    const next = { ...nextFields, requestId: snapshotArchiveRequestId(nextFields) }
+    const admitted = await requests.claim(identity, next)
+    await writer.knex.raw(
+      "CREATE TRIGGER synthetic_request_assignment_failure BEFORE UPDATE ON snapshot_archive_requests FOR EACH ROW BEGIN IF NEW.archiveId IS NOT NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic request assignment failure'; END IF; END"
+    )
+    try {
+      await assert.rejects(
+        requests.begin(admitted.owner, verified.manifest.binding),
+        /synthetic request assignment failure/
+      )
+    } finally {
+      await writer.knex.raw('DROP TRIGGER synthetic_request_assignment_failure')
+    }
+    assert.equal(
+      (await writer.knex('snapshot_archive_requests').where({ requestId: next.requestId }).first()).state,
+      'claimed'
+    )
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).reservedBytes), fields.maxBytes)
+    assert.equal((await writer.knex('snapshot_archives')).length, 0)
+    await requests.close(identity, next.requestId)
+    assert.equal(Number((await writer.knex('snapshot_archive_capacity').first()).archives), 0)
+    return {
+      claimedBeforePool,
+      recoveredWhileCapturing,
+      fixedDeadline: true,
+      verifiedDirectoryAndPage: true,
+      foregroundWrite: true,
+      replacementReadyReceipt: true,
+      concurrentClose: true,
+      atomicAssignmentRollback: true
+    }
+  } finally {
+    writer.openSnapshotArchiveSource = originalOpen
+    KnexSnapshotArchiveStore.prototype.append = originalAppend
+    await Promise.all([controller.close(), replacement.close()])
+  }
+}
+const { mysqlFixtureGroups } = require('./snapshotMysqlFixtureGroups.cjs')
+const indexFixtures = {
+  profile: async () => {
+    const { qualifyMysqlProfileIndexProcessLoss } = require('./snapshotProfileIndexCrash.cjs')
+    const profileIndexProcessLoss = await qualifyMysqlProfileIndexProcessLoss(database, connection)
+    const { qualifyMysqlProfileIndexLocks } = require('./snapshotProfileIndexMysql.cjs')
+    const profileIndexLocks = await qualifyMysqlProfileIndexLocks(database, connection)
+    return { profileIndexProcessLoss, profileIndexLocks }
+  },
+  relation: async () => {
+    const { qualifyMysqlRelationIndexProcessLoss } = require('./snapshotRelationIndexCrash.cjs')
+    const relationIndexProcessLoss = await qualifyMysqlRelationIndexProcessLoss(database, connection)
+    const { qualifyMysqlRelationIndexLocks } = require('./snapshotRelationIndexMysql.cjs')
+    const relationIndexLocks = await qualifyMysqlRelationIndexLocks(database, connection)
+    const { qualifyMysqlRelationIndexSeeks } = require('./snapshotRelationIndexSeeks.cjs')
+    const relationIndexSeeks = await qualifyMysqlRelationIndexSeeks(database, connection)
+    return { relationIndexProcessLoss, relationIndexLocks, relationIndexSeeks }
+  },
+  certificate: async () => {
+    const { qualifyMysqlCertificateIndexProcessLoss } = require('./snapshotCertificateIndexCrash.cjs')
+    const certificateIndexProcessLoss = await qualifyMysqlCertificateIndexProcessLoss(database, connection)
+    const { qualifyMysqlCertificateIndexLocks } = require('./snapshotCertificateIndexMysql.cjs')
+    const certificateIndexLocks = await qualifyMysqlCertificateIndexLocks(database, connection)
+    const { qualifyMysqlCertificateIndexSchedules } = require('./snapshotCertificateIndexMysqlSchedules.cjs')
+    const certificateIndexSchedules = await qualifyMysqlCertificateIndexSchedules(database, connection)
+    const { qualifyMysqlCertificateIndexSeeks } = require('./snapshotCertificateIndexSeeks.cjs')
+    const certificateIndexSeeks = await qualifyMysqlCertificateIndexSeeks(database, connection)
+    return { certificateIndexProcessLoss, certificateIndexLocks, certificateIndexSchedules, certificateIndexSeeks }
+  },
+  'global-crash': async () => {
+    const { qualifyMysqlGlobalIndexProcessLoss } = require('./snapshotGlobalIndexCrash.cjs')
+    return { globalIndexProcessLoss: await qualifyMysqlGlobalIndexProcessLoss(database, connection) }
+  },
+  'global-locks': async () => {
+    const { qualifyMysqlGlobalIndexLocks } = require('./snapshotGlobalIndexMysql.cjs')
+    return { globalIndexLocks: await qualifyMysqlGlobalIndexLocks(database, connection) }
+  },
+  'global-schedules': async () => {
+    const { qualifyMysqlGlobalIndexSchedules } = require('./snapshotGlobalIndexMysqlSchedules.cjs')
+    return { globalIndexSchedules: await qualifyMysqlGlobalIndexSchedules(database, connection) }
+  },
+  'global-seeks': async () => {
+    const { qualifyMysqlGlobalIndexSeeks } = require('./snapshotGlobalIndexSeeks.cjs')
+    return { globalIndexSeeks: await qualifyMysqlGlobalIndexSeeks(database, connection) }
+  },
+  'global-integration': async () => {
+    const { qualifyMysqlGlobalIndexIntegration } = require('./snapshotGlobalIndexIntegration.cjs')
+    return { globalIndexIntegration: await qualifyMysqlGlobalIndexIntegration(database, connection) }
+  }
+}
+async function runIndexFixtures(group) {
+  const results = {}
+  const groups = group === 'all' ? mysqlFixtureGroups.slice(1) : [group]
+  await runInSeries(groups, async name => {
+    Object.assign(results, await indexFixtures[name]())
+  })
+  return results
+}
+async function main() {
+  const group = process.argv[2] ?? 'all'
+  try {
+    assert.ok(group === 'all' || mysqlFixtureGroups.includes(group), 'Unknown native fixture group')
+    const version = (await database.raw('SELECT VERSION() AS version'))[0][0].version
+    if (group !== 'archive' && group !== 'all') {
+      console.log(JSON.stringify({ version, group, ...(await runIndexFixtures(group)) }))
+      return
+    }
+    await addSnapshotArchiveTables(database)
+    const store = new KnexSnapshotArchiveStore(database),
+      peer = new KnexSnapshotArchiveStore(replica),
+      final = new KnexSnapshotArchiveStore(third)
+    const writer = await store.begin(binding)
+    await assert.rejects(peer.inspect(identity, writer.archiveId), /unavailable/)
+    await assert.rejects(peer.begin(binding), /occupied/)
+    const payload = new Uint8Array(snapshotArchiveLimits.pageBytes).fill(42)
+    await runInSeries(snapshotArchiveTables.entries(), ([sequence, table]) =>
+      store.append(writer, { sequence, table, rows: 1, done: true, bytes: payload })
+    )
+    const manifest = await store.seal(writer)
+    assert.deepEqual(manifest.binding, binding)
+    assert.equal(manifest.pages, 13)
+    assert.equal(manifest.rows, 13)
+    assert.deepEqual(await peer.inspect(identity, writer.archiveId), manifest)
+    assert.deepEqual((await peer.read(identity, writer.archiveId, 0)).bytes, payload)
+    await assert.rejects(peer.read(other, writer.archiveId, 0), /unavailable/)
+    await addSnapshotArchiveTables(database)
+    assert.equal(Number((await database('snapshot_archive_capacity').first()).archives), 1)
+    await Promise.all([peer.close(identity, writer.archiveId), final.close(identity, writer.archiveId)])
+    assert.equal(Number((await database('snapshot_archive_pages').count({ count: '*' }))[0].count), 0)
+    assert.equal(Number((await database('snapshot_archive_capacity').first()).reservedBytes), 0)
+    // SQL failure after page insertion must roll back both the page and cursor.
+    const failing = await store.begin(binding)
+    await database.raw(
+      "CREATE TRIGGER synthetic_archive_failure BEFORE UPDATE ON snapshot_archives FOR EACH ROW BEGIN IF NEW.nextSequence > OLD.nextSequence THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic append failure'; END IF; END"
+    )
+    await assert.rejects(
+      store.append(failing, { sequence: 0, table: 'provenTxs', rows: 0, done: true, bytes: new Uint8Array([91, 93]) }),
+      /synthetic append failure/
+    )
+    await database.raw('DROP TRIGGER synthetic_archive_failure')
+    assert.equal(Number((await database('snapshot_archive_pages').count({ count: '*' }))[0].count), 0)
+    assert.equal((await database('snapshot_archives').where({ archiveId: failing.archiveId }).first()).nextSequence, 0)
+    await database('snapshot_archives').where({ archiveId: failing.archiveId }).update({ expiresAt: 0 })
+    await peer.reap()
+    assert.equal(Number((await database('snapshot_archive_capacity').first()).archives), 0)
+    // Independent servers racing for one profile can admit exactly one capture.
+    const contested = await Promise.allSettled([store.begin(binding), peer.begin(binding), final.begin(binding)])
+    assert.equal(contested.filter(x => x.status === 'fulfilled').length, 1)
+    const admitted = contested.find(x => x.status === 'fulfilled').value
+    await peer.close(identity, admitted.archiveId)
+    await database.schema.dropTable('snapshot_archive_pages')
+    await addSnapshotArchiveTables(database)
+    assert.equal(await database.schema.hasTable('snapshot_archive_pages'), true)
+    assert.equal(Number((await database('snapshot_archive_capacity').first()).archives), 0)
+    const capture = await captureFixture()
+    const indexes = group === 'all' ? await runIndexFixtures(group) : {}
+    console.log(
+      JSON.stringify({
+        version,
+        source: 'built checkout; internal staging only',
+        crossReplicaImmutableReads: true,
+        exactMaximumPageBytes: payload.length,
+        profileOwnership: true,
+        concurrentCloseExactlyOnce: true,
+        appendRollback: true,
+        expiredPartialUnreadable: true,
+        profileReservationRace: true,
+        idempotentPartialDdl: true,
+        ...indexes,
+        capture
+      })
+    )
+  } finally {
+    await third.destroy()
+    await replica.destroy()
+    await database.destroy()
+  }
+}
+main().catch(error => {
+  console.error(error)
+  process.exitCode = 1
+})

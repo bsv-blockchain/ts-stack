@@ -6,6 +6,12 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+Postgres storage retains standard wallet migrations and legacy synchronization.
+The candidate's SQLite/MySQL auxiliary snapshot migrations are recorded as no-ops
+on Postgres, and its retained, paged and incremental snapshot capabilities are
+unavailable there. Future Postgres snapshot support requires forward migrations;
+those no-op entries must not be rewritten as deployed schema changes.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users
@@ -27,6 +33,150 @@ accessible backups and a tested restore procedure.
 These guides cover the recovery design. The measurements below describe
 specific tests and do not establish that every wallet product has complete
 key-and-data disaster recovery.
+
+The unpublished 2.15 candidate captures BRC-38 source settings, wallet identity
+and standard table closure in one local provider read view. SQLite and IndexedDB
+tests cover independent writes during capture. A local MySQL 8.4.11 fixture
+verifies repeatable-read isolation, read-only enforcement and connection cleanup
+without changing session defaults; deployed/PXC recovery remains unqualified. Custom providers
+opt in with `supportsReadSnapshot` and `readSnapshot`. Use the export option
+`requireSnapshot: true` to refuse unsupported capture; old custom-provider calls
+retain their documented caller-quiesced fallback.
+Recognized optional nullable JSON fields are omitted in a detached archive copy;
+array entries and meaningful falsy values are preserved. The helpers still
+materialize the full document/file, and IndexedDB writers wait during capture.
+Run `pnpm test:snapshot-archive-crash` for native SQLite process recovery and
+`pnpm test:snapshot-archive-mysql` for the disposable MySQL fixture from this
+package. Local MySQL qualification uses Docker Desktop and requires the pinned
+image already present. Required wallet CI shard 1 provisions that same immutable
+image on its ephemeral Linux runner, then runs both native fixtures from the
+same-head build before Jest. Hosted MySQL mode accepts only the local default
+Unix socket. The fixture uses a unique ownership label, loopback port, bounded
+memory/CPU/process count and temporary data volume; individual Docker calls,
+readiness and the child proof have deadlines. Failure or cancellation drains
+owned work and attempts exact-owner cleanup before reporting its outcome;
+unproved cleanup fails qualification. Other wallet shards do not start MySQL.
+
+The candidate also contains internal SQL journal primitives for exact revisions,
+bounded metadata pages, bootstrap with a durable explicit row allowance,
+source-table observers, and recovery of an
+interrupted journal installation. Owned generations also bind explicit receipt
+capacity/lifetime policy; exact receipts are persisted, read and collected in
+bounded caller-owned transactions. Receipts prove a captured prefix and cannot
+reopen a lost retained view. The internal `openSnapshotJournalSource` controller
+reserves two owned native connections before its writer barrier, pins the profile
+and generation, persists the receipt, and publishes after receipt commit and
+closure verification. It requires an existing file-backed WAL database with
+`better-sqlite3` or a static `mysql2` connection; other drivers refuse before pool
+construction. Physical cleanup retains provider admission, and an unproved close
+fences further sources. If source work and transaction cleanup both fail, the
+ownership error retains the original source failure and each rollback cause.
+Run `pnpm test:snapshot-journal-crash` for the
+SQLite process-loss fixture and `pnpm test:snapshot-journal-mysql` for the isolated
+MySQL client/server-process recovery fixtures. Internal floor transactions reserve
+the global writer clock before current receipt locks and cannot pass a live
+receipt's prefix. Tombstone collection examines at most 256 primary-key rows,
+including live and newer records, and binds its cursor to one epoch, floor and
+stream. Native WAL/RC/RR checks cover twenty-four real process-loss boundaries.
+The internal `maintainSnapshotJournal` provider controller validates the complete
+owned generation and excludes the configured migration owner before each short
+floor or collection transaction. It shares source admission through cancellation,
+rollback and physical cleanup; failed cleanup fences further retained admission.
+Automatic scheduling remains unfinished.
+These helpers do not register a migration or advertise incremental
+synchronization. Runtime quotas, registered recovery, generation-aware delta pages
+and receiver/primary integration and the remaining issue #544 acceptance work are
+still required; see the
+[journal foundation](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#internal-journal-foundation-unadvertised).
+
+Required wallet CI shard 1 also runs both native journal entry points from the
+same-head build after the existing archive fixtures. The complete journal mutation
+aggregate and native recovery checks are separate qualification requirements.
+
+Both native archive entry points include interrupted auxiliary profile and numeric
+relation migrations through the real migrator. The numeric relation fixture
+terminates seven migration boundaries, repairs the abandoned migration lock and
+compares recovered membership with an independent source-table oracle. The MySQL
+entry point also observes relation writer/reader lock ordering under both
+supported isolation levels and checks late composite pages against 8,192
+interleaved map rows per relation. It requires bounded handler reads and the
+auxiliary primary-key range plan. These synthetic fixture results qualify the
+tested engine/configuration; deployed PXC remains a separate acceptance gate.
+
+SQL providers also expose `supportsRetainedReadSnapshot` / `openReadSnapshot`
+for a local view held across idle reads, with one view per provider, one read at
+a time, and bounded lifetime/cancellation. Await `closed`/`close()` for physical
+cleanup. This low-level view occupies a caller-pool connection; driver deadlines
+remain separate and a single-connection pool cannot serve other work until
+release. The [durable local SQL backup integration](#durable-local-sql-backup-integration-215-candidate)
+below adds bounded pages and uses a dedicated reader to preserve foreground
+capacity. IndexedDB and remote RPC do not expose retained views. See the
+[retained view contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#retained-local-sql-read-views-unpublished-candidate).
+The SQL candidate also includes [bounded archive staging](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#shared-sql-snapshot-staging-unpublished-internal-component)
+for the ongoing remote snapshot implementation. This internal component does not
+add an authenticated export endpoint or a browser/mobile database adapter.
+Its metadata-only receipt directory binds every page and all thirteen table
+positions to the archive root before arbitrary-table reads; each payload is
+checked against that verified directory. The original binding JSON bytes are
+preserved as the hash preimage. This verifies transport integrity, not the source's
+honesty or portable transaction/proof semantics.
+An additional internal SQL request table binds retries to an immutable deadline
+and archive, reserves capacity before source acquisition, and retains bounded
+terminal receipts through cleanup. Its internal capture controller shares the
+provider's single owned reader slot, publishes readiness after physical cleanup,
+and drains cancellation/shutdown. Completed archives survive controller replacement;
+failed cleanup fences admission and retains its reservation. The candidate now
+adds a negotiated authenticated archive transport on migrated WAL/MySQL servers
+and both client variants, with bounded responses and durable admission/status.
+`getSnapshotArchiveTransport(identityKey)` is a low-level API; remote row reading,
+ordinary sync/export adoption and portable validation remain incomplete. Server
+or client `snapshotArchives: false`, or provider `snapshotSync: false`, disables
+this capability. See the [transport contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#authenticated-snapshot-archive-transport-unpublished-candidate).
+The candidate's additive source-owner table now retains request/archive capacity
+until the exact controller acknowledges physical source cleanup. Cross-controller
+cancellation fences the next page; pending cleanup reports an error and keeps its
+reservation. Do not mix older candidate binaries or remove the owner schema while
+captures remain. The reader now waits for an exact completion acknowledgement through bounded
+pending-cleanup polling, preserving independent failures. The additive guard
+migration now permits exact-owner recovery after physical source closure, using
+stable local SQLite WAL guard files or a same-server MySQL connection lock.
+Older unguarded owners remain reserved, and changed backend identities fail closed.
+An unproved native close also fences further snapshot sources on that provider,
+even after its read promise settles. Ordinary read failures remain retryable
+after physical cleanup succeeds.
+Keep the guard files and bindings intact and drain captures before downgrade.
+The server reader capability remains unadvertised pending complete qualification.
+The auxiliary profile-key migration preserves standard-table indexes and legacy
+OFFSET ordering while adding indexed snapshot selection for eight direct tables.
+Its triggers track independent writers; bounded bootstrap batches survive restart,
+and readers enable the index only from a complete migration in their retained
+view. See the [migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-profile-indexes-unpublished-candidate).
+The separate numeric relation migration indexes label/tag maps while retaining
+both parent ownership bases, tombstones and cross-profile inconsistency checks.
+It preserves composite cursor and legacy OFFSET order, resumes bounded bootstrap
+after interruption, and bounds MySQL paging before and after statistics refresh
+with the auxiliary primary index and indexed source lookups. See its
+[migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-numeric-relation-indexes-unpublished-candidate).
+The certificate-field migration adds collation-preserving composite keys and
+independent direct/parent ownership. Empty text keys, interrupted bootstrap and
+case-only renames retain their source meaning. It leaves standard indexes and
+legacy cursor order intact; readers require the complete migration in their
+pinned view. See the [certificate migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-certificate-field-indexes-unpublished-candidate).
+The global proof/request migration adds exact profile reference counts and
+presence guards, with resumable bootstrap and retained ordinary/archive reads.
+Direct and request-based proof references remain independent; removing the last
+reference collects its auxiliary presence guard. Standard rows, text comparisons,
+indexes and cursor/portable bytes remain unchanged. See the
+[global migration and recovery contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#auxiliary-global-proofrequest-indexes-unpublished-candidate).
+The additive SQLite conflict-repair migration installs metadata-bound witnesses,
+rebuilds all four index families in bounded resumable pages, and retires obsolete
+auxiliary rows without changing standard wallet data. Reader adoption follows
+journal publication inside the pinned view. Legacy ownership checks distinguish
+triggers from views even when their names coincide; foreign readers of auxiliary
+data refuse migration. Preserve partial state for recovery;
+ordinary downgrade refuses, while explicit `dropAllData()` retains its destructive
+contract. See the [SQLite generation migration contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#sqlite-conflict-safe-index-generation-unpublished-candidate).
+The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results
 
@@ -51,14 +201,18 @@ Timing compares successive candidates, not a controlled comparison against upstr
 
 ### SQLite migration recovery
 
-SQLite migration handling introduced in 2.13.2 runs migration DDL and the migration
-journal update transactionally. Foreign-key enforcement is disabled before the
+SQLite migration handling introduced in 2.13.2 runs transactional migration DDL
+and the migration journal update together. The unpublished profile-index and
+numeric relation, certificate-field and global proof/request migrations are explicit resumable exceptions: auxiliary keys and progress commit
+in bounded batches before its final migration journal entry. Foreign-key enforcement is disabled before the
 migration transaction for table rebuilds and restored after success or failure.
-Failed migrations can be retried after reopening the database without partial
-schema objects from that attempt. MySQL's existing transaction configuration
+Failed transactional migrations can be retried after reopening the database
+without partial schema objects from that attempt. These resumable index
+migrations instead retain their verified auxiliary objects and committed progress;
+see its linked recovery contract before retrying an interrupted migrator. MySQL's existing transaction configuration
 is unchanged.
 
-This prevents future partial migrations. It does not automatically repair a
+Transactional migration handling prevents partial table rebuilds. It does not automatically repair a
 store already left with unjournaled schema objects by an older version. Preserve
 the database and verified backups and reconcile the exact schema and migration
 journal before recovery; do not delete journal rows or wallet data blindly.
@@ -221,8 +375,13 @@ The toolbox publishes three npm packages from this repo:
 ### Sync performance and recovery
 
 Sync pages start at 64 records and adapt after successful commits toward a
-five-second page budget. Proof-bearing pages cap growth at 128 records; cheap
-metadata pages can grow to 1,000, while provider byte/item ceilings still apply.
+five-second marginal-work budget. A bounded history separates fixed read and
+commit overhead from per-record work, so slow fixed latency does not collapse
+large copies to one record per request. A two-record probe permits recovery from
+the single-record floor. Proof-bearing pages cap growth at 128 records; metadata
+pages can grow to 1,000, while provider byte/item ceilings still apply. These are
+work estimates, not deadlines: an individual proof or unavailable dependency can
+still take longer.
 The server checks at most eight proofs concurrently and waits for all started
 checks to settle on failure before rejecting the page. Every proof still passes
 transaction, Merkle path, active-root and active-header validation before a merge.
@@ -245,9 +404,9 @@ client bundle cost. The [artifact measurements and limits](./docs/sync-transfer.
 include the combined upstream security fixes. These are explicit feature costs;
 the RPC validation coordinator remains excluded from browser/mobile bundles.
 
-The transfer extension is an **unpublished 2.13.0 candidate**. Published 2.12.0
-has no record-transfer methods. Check exact build provenance and authenticated
-runtime capabilities, not a version label alone. An oversized record on a legacy
+The transfer extension is included in the published 2.13.2 graph. Older 2.12.0
+providers have no record-transfer methods. Check exact build provenance and
+authenticated runtime capabilities, not a version label alone. An oversized record on a legacy
 source cannot be rescued by upgrading only its destination; upgrade the source
 before retrying. Records exceeding the negotiated 64 MiB frame limit fail safely
 without being skipped or advancing their checkpoint.
@@ -371,6 +530,94 @@ retained privately, outside this repository.
 `listOutputs` reports `totalOutputs` as the full matching result count on every
 page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.
+
+### Resumable pulls and foreground access
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, reader, options)`
+adds per-page progress and cancellation without changing the existing sync
+method signatures. The result reports `completed` or `cancelled`, page and row
+counts, the last acknowledged checkpoint, and the selected execution mode.
+
+The new resumable API defaults to a 256 KiB rough page target, with an explicit
+ceiling up to 10 MB. Existing sync methods retain their previous defaults.
+
+```ts
+const cancellation = new AbortController()
+const result = await storage.syncFromReaderResumable(identityKey, reader, {
+  signal: cancellation.signal,
+  maxItems: 128,
+  maxRoughSize: 262144,
+  onProgress: progress => console.log(progress.state, progress.pages)
+})
+// A later invocation loads durable destination progress, including any page
+// whose acknowledgement was lost. Do not replay a saved request manually.
+```
+
+Local SQLite/MySQL and IndexedDB destinations advertise `storageAccess.version`
+1 with atomic sync checkpoints. Their paged pull reads and prepares one source
+page outside manager write ownership, then queues its atomic data/checkpoint
+commit. Network-backed proof checks finish before that queue is acquired; the
+commit rejects changed proof records. Payloads are detached during preparation,
+and a prepared page can only be consumed once. Foreground operations can run
+between pages and during source/proof I/O. Supported reads share up to eight
+slots; writers remain exclusive. A waiting background page gets a turn within
+eight foreground grants or after one second of waiting at the next release.
+This bounds queue preference, not the duration of a provider operation.
+
+Cancellation before a commit discards that page. Cancellation during a commit
+waits for its acknowledgement, reports the committed checkpoint, then stops.
+Source I/O also settles before the stopped result: custom providers must supply
+their own I/O deadlines. Failures propagate without blind write replay; restart
+loads the durable checkpoint. Changing the selected primary fences an older
+session before its next write. Concurrent copies of the same source cannot both
+commit the same checkpoint. Progress observers receive independent checkpoint
+copies and run outside page ownership in paged mode.
+
+Missing capabilities, remote destinations, self-copies and primary reconciliation
+retain exclusive execution. Supported ordinary local SQL copies use the durable
+snapshot path described below. The legacy atomic-page capability probe retains
+its serialized fallback; snapshot validation and I/O failures reject. Page ceilings are rough encoded
+size hints; the existing negotiated per-record transfer bounds still apply to
+large records. One page is in flight, and progress does not accumulate wallet
+records or per-record logs. Legacy source pagination retains the existing eventual
+replication contract. Supported local SQL sources use one coherent retained view;
+the destination remains a merged replica. Remote snapshot handles and streaming
+portable archives require their separate consistency and format contracts.
+The existing timestamp boundary is inclusive: an unchanged copy can reread rows
+sharing the final timestamp, including an entire same-timestamp import. Those
+rows are not rewritten. This protects late same-time arrivals; a coherent source
+revision/snapshot is needed to eliminate that boundary traffic safely. Smaller
+`maxRoughSize` values (for example 262144) reduce transient authenticated HTTP
+memory and event-loop work for constrained devices, at the cost of more pages.
+
+Every live sync checks declared network chains before registering a destination
+user or checkpoint. A missing or unrecognized chain is not inferred. Thrown and
+returned provider errors take precedence over `done`, counters and checkpoint
+hints; unfinished pages without durable progress stop instead of spinning.
+`WERR_NETWORK_CHAIN` and `ProcessSyncChunkResult.error` remain compatible.
+
+### Canonical proof recovery during actions
+
+When services are configured, selected-change BEEF is checked before returning
+to the signer, including embedded ancestry and prepared artifacts. The actual
+send/monitor path checks its rebuilt bundle as well. Valid graphs avoid extra
+proof-record reads and copies; checks run with at most eight operations in
+flight. Stale roots trigger bounded canonical lookups. Replacement transaction
+bytes, Merkle membership, root and active header must agree before use.
+
+SQLite/MySQL and IndexedDB persist verified corrections with a compare-and-set
+against the original proof, and invalidate prepared artifacts in the same
+transaction. A concurrent repair is never overwritten. Custom providers may
+implement `compareAndSetProvenTxProof`; the default repairs only the outgoing
+graph. Failed recovery retains the source records, stops before broadcast, and
+returns `WERR_INVALID_MERKLE_ROOT` with its txid, root and height across JSON-RPC.
+Failed construction releases its funding reservation through the existing
+failed-action cleanup; it does not mark the input spent without evidence.
+
+Standalone storage construction without configured services retains its offline
+contract; its caller must validate before signing or broadcasting. This change
+does not audit historical block-hash metadata or repair every stored proof:
+BEEF root validity and an operator's historical-store audit remain distinct.
 
 ### UMP account continuity and phone changes
 
@@ -1122,3 +1369,36 @@ for the full stack-wide policy.
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.
+
+### Local packed snapshot pages (2.15 candidate)
+
+SQL providers expose `supportsWalletReadSnapshot()` and
+`openWalletReadSnapshot(identityKey, options)`. Settings, the selected user and
+all thirteen standard tables share one retained read view. `readPage(table,
+cursor, { maxRows, maxBytes })` uses stable storage keys and checks payload size
+before loading rows; binary columns remain `Uint8Array`. Always close the view.
+Cursors expire with the view and cannot resume after process loss. Oversized rows
+explicitly refuse pending large-value streaming. IndexedDB and RPC do not expose
+this capability; the page primitive preserves existing indexes and legacy cursors. See the
+[page contract and limits](../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).
+The full #544 program remains incomplete.
+
+### Durable local SQL backup integration (2.15 candidate)
+
+Supported ordinary push, pull and backup calls now consume those pages outside
+manager ownership and commit each destination page, ID mapping and cursor
+atomically. `syncToWriterResumable` joins `syncFromReaderResumable` for progress and
+cancellation. A dedicated reader preserves foreground pool capacity. SQLite
+requires file-backed WAL; MySQL requires a static database connection. Unsupported
+providers, oversized rows and retention limits use the serialized fallback.
+Push and backup propagate the source view's stored primary selection, even when
+the manager's cached selection is older. Pull keeps its destination selection.
+The same direction-specific behavior applies during serialized fallback.
+
+Apply migration `2026-09-30-001 add durable snapshot sync` through `migrate()`.
+It adds auxiliary session/mapping/primary-epoch tables and a primary-change trigger;
+legacy checkpoint JSON and standard-table indexes are preserved. Use
+`snapshotSync: false` for forward rollback on a current binary while keeping the
+schema. See [durability, limits and downgrade guidance](../../../docs/guides/wallet-sync-reliability.md#durable-local-sql-sync-and-ordinary-backup).
+Primary reconciliation, remote/IDB retained views, large-value streaming and
+staged archive restore remain part of the incomplete #544 program.

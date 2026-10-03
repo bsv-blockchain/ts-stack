@@ -4,6 +4,192 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## 2.15.0 candidate — bounded synchronization and canonical proof recovery
+
+- Preserve queued primary reselection: a request to select A during a pending
+  switch from A to B waits for that switch and then selects A, including after
+  an earlier failure. Check no-op selections under the existing ownership
+  boundary and preserve valid sync sessions when a progress formatter throws
+  before the transition. After partial propagation failure, reload persisted
+  selections before authorizing or executing queued access. Conflicting stores
+  refuse active authorization; failed reloads release ownership for retry. No
+  API, wire or schema migration is required.
+
+- Add internal monotonic continuity-floor transactions and bounded primary-key
+  tombstone collection. Current receipt locks pin all live prefixes; collection
+  preserves live/newer records and all thirteen source tables. WAL/RC/RR fixtures
+  cover partial deletion, rollback and committed lost acknowledgements. Provider
+  maintenance integration, runtime quotas, registered recovery and full #544
+  acceptance remain required; incremental reader advertisement stays off.
+
+- Add internal owned journal capture for `better-sqlite3` WAL and static `mysql2`.
+  Reserve both pools before the short writer barrier; pin generation/profile,
+  commit the exact receipt and verify closure before publication. Retain source
+  admission through physical cleanup and fence an unproved close. Native fixtures
+  cover commit/publication process loss, immutable pages and writer progress.
+  Provider retention ownership, quotas, delta receiver integration and full #544 acceptance
+  remain unfinished; no migration or incremental capability is advertised.
+
+- Preserve main's Postgres storage and legacy sync support. SQLite/MySQL snapshot
+  auxiliary migrations are recorded as no-ops there, with their capabilities
+  unavailable. Future Postgres snapshot support requires new forward migrations.
+
+- Add internal, unadvertised SQL journal foundation: exact revisions, bounded
+  pages/bootstrap, full-table observers and source-bound generation ownership
+  with interrupted-installation recovery. No public capability, registered
+  migration, deployment or completed incremental sync is introduced. Full
+  quota/receiver/primary and portability acceptance remains pending.
+
+- Repair SQLite replacement maintenance with a new auxiliary generation, durable
+  displaced-owner witnesses, bounded resumable source copying and physical-row
+  retirement. Preserve source tables, profile/reference semantics and pinned
+  ordinary/archive views. Bind legacy trigger ownership to its object type so
+  foreign views sharing a trigger name cannot bypass retirement refusal. Apply
+  the explicit forward migration; normal downgrade
+  refuses, while explicit full-data deletion remains supported. Complete native,
+  mutation, larger-wallet and hosted acceptance remain required.
+
+- Accept a valid all-zero terminal offset reset when an unchanged backup keeps
+  the same timestamp. Preserve remote state binding, monotonic timestamps and
+  nonterminal/partial-reset checks in HTTP and resumable sessions. Repeated
+  ordinary/binary HTTP backups and lost terminal acknowledgements are covered;
+  returned provider failures retain precedence over checkpoint fields. Checkpoint
+  bytes and stored schemas remain unchanged.
+
+- Add resumable global proof/request ownership indexes with exact reference
+  counts and proof-presence guards. Preserve both ownership bases, current
+  independent-writer changes and pinned ordinary/archive views. Bootstrap,
+  process-loss recovery and native first/late page qualification keep standard
+  rows/indexes and portable/cursor bytes unchanged. Complete system acceptance
+  and the remaining sync/portability program are still required.
+
+- Add resumable certificate-field profile indexes preserving source collation,
+  empty names, direct/parent ownership and exact rename bytes. Ordinary and
+  archive readers adopt complete migration state inside their retained view;
+  standard indexes, legacy OFFSET order and BRC-38/cursor bytes stay unchanged.
+  The subsequent global checkpoint extends this selection to proofs/requests;
+  the full program remains incomplete.
+
+- Add auxiliary numeric relationship indexes for label/tag maps without changing
+  standard indexes, composite cursors, legacy OFFSET order or BRC-38 bytes.
+  Preserve both parent ownership bases through moves, rekeys, tombstones and
+  deletion; retain inconsistent relationships for explicit closure refusal.
+  Resume bounded bootstrap after interrupted DDL/transactions and use the
+  matching auxiliary primary index, recorded membership and indexed source
+  lookups for bounded MySQL pages before and after statistics refresh. The remaining indirect
+  tables and full sync/portability program are incomplete.
+
+- Add an exact-claim source-owner fence and additive owner migration. Remote
+  cancellation cannot release archive/request capacity or publish ready before
+  the owning source and pool have closed. Append checks cancellation atomically;
+  direct archive cleanup follows the same fence. The reader validates request-bound
+  pending-cleanup receipts and uses a separate fixed deadline, bounded backoff and
+  awaited I/O settlement. Add fixed-slot SQLite WAL/MySQL backend guards and
+  exact-owner recovery only after physical connection closure. Preserve old
+  unguarded reservations and refuse changed backend identities. Reader
+  advertisement stays disabled pending complete qualification.
+  Keep the provider's source slot fenced after unproved native cleanup, including
+  an already-settled read promise; preserve retry after an ordinary read failure
+  whose physical cleanup succeeds.
+
+- Add the unadvertised remote row-reader foundation: immutable server-issued
+  offers, exact-request retry, fixed leases, verified packed rows and durable
+  cursor integration with local sync. Reader advertisement stays disabled while
+  cross-replica physical cleanup and owner recovery remain incomplete.
+
+- Preserve the public hash-wasm Argon2id generic signature in emitted types.
+  Strict CommonJS and ESM require-consumer checks cover binary/string results
+  without ambient internal-bundle declarations. Runtime bytes and SDK peer ranges
+  remain unchanged.
+
+- Add shared SQL snapshot staging with profile-bound internal capture ownership,
+  immutable completed pages, exact replay receipts, explicit logical byte/page
+  reservations and resumable bounded cleanup. A second auxiliary migration
+  leaves standard tables, legacy sync checkpoints and wire formats unchanged.
+  The local capture controller binds source metadata/schema to one read view,
+  verifies profile relationships and stores all thirteen raw tables through
+  bounded binary frames, with cancellation and cleanup. Canonical portable
+  validation and larger-wallet policy remain open.
+
+- Add negotiated authenticated archive admission/status/directory/page/cancel
+  methods for migrated static WAL/MySQL sources, with exact profile-bound
+  arguments and no writer credentials. Both client variants enforce a separate
+  two-MiB response ceiling and retain server/storage identity binding. Expired
+  request cleanup precedes admission; resource-limit receipts are explicit.
+  Shutdown awaits physical capture and HTTP cleanup. Remote row-reader/manager
+  integration, portable semantics and the full program remain incomplete.
+
+- Integrate coherent SQL pages into ordinary local push, pull and backup, with
+  a dedicated source reader and short, fair destination commits. Add resumable
+  push progress/cancellation. Commit rows, normalized ID maps and durable cursors
+  together; reject stale sessions and independent primary ABA transitions.
+  Preserve source primary metadata for push/backup and destination selection
+  for pull, including serialized fallback when the manager's cache is older.
+  Add the version-one auxiliary schema migration and primary-epoch trigger.
+  Existing legacy checkpoint JSON is preserved. Unsupported configurations and
+  explicit row/reference/retention limits retain serialized fallback; genuine
+  validation and I/O errors reject. `snapshotSync: false` is the supported forward
+  rollback with schema retained. Primary reconciliation, remote/IDB retained
+  views, streaming and staged restore remain required work.
+
+- Add local profile-bound SQL keyset pages over retained views. All thirteen
+  standard tables preserve tombstones and original source records; binary values
+  stay packed. SQL preflights bounded keys and payload sizes before fetching a
+  page. Oversized individual rows explicitly refuse pending large-value streaming.
+  Cursors belong only to their live view and table; expiry/process loss requires
+  restart. The page primitive preserves existing indexes, OFFSET checkpoints and RPC.
+  This is a prerequisite for the active streaming/resumable-backup program.
+
+- Add local retained SQLite/MySQL views with explicit lifetime, cancellation and
+  cleanup ownership. Opening pins the transaction before the first consumer read;
+  one view per provider and one read per view prevent unbounded admission. Closing
+  discards late results and awaits physical cleanup, including failed reads.
+  Internal opening/cleanup rejections remain observed if a view is cancelled
+  before its opening consumer resumes; callers still receive the original errors.
+  Driver/query deadlines remain separate. Each view occupies a pool connection;
+  IndexedDB and RPC explicitly remain unsupported for retention. This is a paging
+  prerequisite; the separate sync integration above changes scheduling and adds
+  auxiliary persistence without changing wire formats.
+
+- Capture BRC-38 source metadata and every table from one provider read view.
+  Custom providers opt in with `supportsReadSnapshot` and `readSnapshot`. The
+  additive `requireSnapshot` export option refuses unsupported views; old
+  custom-provider calls keep their caller-quiesced compatibility path. SQLite,
+  MySQL and IndexedDB implement the local boundary. MySQL uses valid
+  next-transaction characteristics on one reserved connection and closes failed
+  connections before returning them to the pool. Recognized optional nullable
+  JSON object fields normalize in a detached copy without
+  dropping array values. Streaming files and the full #544 program remain in
+  implementation; IndexedDB writers still wait during source capture.
+- Add resumable local atomic pages, durable checkpoints, cancellation/progress,
+  concurrent read capability checks and fair foreground/background ownership.
+- Separate fixed source/commit latency from marginal row cost and bound upward
+  probes, page records and proof concurrency.
+- Reduce redundant storage promise forwarding while retaining authorization
+  inside exclusive ownership; failures release the next queued operation.
+- Share the remote forwarding rejection boundary, skip uncontended priority
+  searches and avoid repeated queue/checkpoint helper allocations. Custom RPC
+  throws remain Promise rejections; wire, result and fairness contracts remain.
+- Share reader/writer admission helpers without moving authorization across the
+  queue boundary. Normalize entity arrays in place using one field list and a
+  Map of property descriptors, avoiding an intermediate mapping array
+  while preserving date, null, byte and non-enumerable-field behavior.
+- Adjust only the reviewed mobile Hermes Brotli ceiling to 1,675,000 bytes,
+  retaining the other five limits. The mobile README records composition,
+  upstream comparison and 9.97% measured headroom; build settings are unchanged.
+- Check chains before sync writes and preserve returned, serialized and thrown
+  failures without advancing progress.
+- Repair stale selected/input/broadcast proofs against canonical evidence; fence
+  monitor updates against primary replacement and concurrent proof corrections.
+- Keep proof changes and prepared-BEEF invalidation atomic, and retain safe custom
+  provider behavior. No persisted-schema migration is required.
+- Use lazy asynchronous producers for sequential storage and proof work, preserving the
+  eight-worker proof limit, failure draining, deterministic transaction order
+  and Promise rejection contracts.
+- Exercise large copies, tombstones, restart/lost acknowledgements and foreground
+  latency on SQLite, authenticated HTTP and native Chromium IndexedDB. Inclusive
+  timestamp boundary traffic remains a snapshot/high-water follow-up.
+
 ## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference

@@ -3,8 +3,8 @@ id: wallet-recovery-agent-brief
 title: 'Wallet Recovery Implementation Brief for AI Agents'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 status: stable
 tags: [wallet, recovery, backup, agents, implementation]
@@ -57,6 +57,12 @@ Provide encrypted export for the selected profile with a recoverable passphrase,
 confirmed file-save completion, freshness information and clear exclusions.
 Preserve library format/KDF defaults and enforce tested resource limits. Keep
 key recovery and wallet-data backup as separate statuses and instructions.
+For remote device backups, expose retained devices/generations and completion
+evidence. Do not select a newer empty device solely by timestamp or begin its
+backup writes before recovery source selection and validation finish. Preserve
+access to older complete copies and test two successive reinstalls. Inventory
+custom app tables even when they share the wallet database; define their separate
+recovery contract and disclose missing context instead of claiming full export.
 
 For import, recover the expected identity independently, decrypt/validate for
 preview, compare identity and network, then confirm target and explicit mode.
@@ -72,6 +78,9 @@ resource limits and clean-device/provider-loss recovery. Verify transaction and
 derivation records, relationships, tombstones and binary data; balance alone is
 insufficient. Exercise restart and a controlled synthetic/testnet spend. Test
 each claimed runtime and cross-wallet direction with exact versions.
+Include a restored synthetic BRC-29 output: sign a noSend spend, verify its
+unlocking script locally against the independently retained source output, then
+abort the isolated test action and verify cleanup without broadcasting.
 
 Deliver implementation, user instructions, recovery inventory, acceptance
 evidence and explicit unresolved limits. Distinguish implemented, locally

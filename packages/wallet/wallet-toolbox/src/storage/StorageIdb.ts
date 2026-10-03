@@ -1,3 +1,4 @@
+import { recoveredProofUpdate, sameSyncProof } from './methods/validateSyncProof'
 import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { deleteDB, IDBPDatabase, IDBPObjectStore, IDBPTransaction, openDB } from 'idb'
 import {
@@ -139,6 +140,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return true
   }
 
+  protected override supportsStorageAccessScheduling(): boolean {
+    return true
+  }
+
   protected override supportsNoSendExpiryPersistence(): boolean {
     return true
   }
@@ -212,8 +217,13 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    *
    * @param trx
    */
-  async readSettings(_trx?: TrxToken): Promise<TableSettings> {
+  async readSettings(trx?: TrxToken): Promise<TableSettings> {
     await this.verifyDB()
+    if (trx != null) {
+      const rows = await this.toDbTrx(['settings'], 'readonly', trx).objectStore('settings').getAll()
+      if (rows.length !== 1) throw new WERR_INTERNAL('Wallet snapshot requires exactly one settings row')
+      return this.validateEntity(rows[0])
+    }
     return this._settings as TableSettings
   }
 
@@ -1236,6 +1246,25 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return await this.updateIdb(id, update, 'provenTxId', 'proven_txs', trx)
   }
 
+  override async compareAndSetProvenTxProof(
+    expected: TableProvenTx,
+    replacement: TableProvenTx,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    const update = recoveredProofUpdate(expected, replacement)
+    const dbTrx = this.toDbTrx(['proven_txs'], 'readwrite', trx)
+    const store = dbTrx.objectStore('proven_txs')
+    try {
+      const current = await store.get(expected.provenTxId)
+      if (current == null || !sameSyncProof(current, expected)) return false
+      await (store.put as (value: TableProvenTx) => Promise<IDBValidKey>)({ ...current, ...update })
+      this.isDirty = true
+      return true
+    } finally {
+      if (trx == null) await dbTrx.done
+    }
+  }
+
   async updateProvenTxReq(id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> {
     return await this.updateIdb(id, update, 'provenTxReqId', 'proven_tx_reqs', trx)
   }
@@ -1522,11 +1551,33 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (trx == null) await tx.done
   }
 
-  /**
-   * @param scope
-   * @param trx
-   * @returns
-   */
+  override supportsReadSnapshot(): boolean {
+    return true
+  }
+
+  /** Capture settings and wallet tables in one local readonly view. */
+  override async readSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    const db = await this.verifyDB()
+    // One readonly transaction gives all wallet tables the same view. This
+    // permits other reads; IndexedDB serializes overlapping writers until
+    // capture ends. No peer I/O or consumer callback belongs in this scope.
+    const tx = db.transaction(['settings', ...this.allStores], 'readonly')
+    try {
+      const result = await read(tx as TrxToken)
+      await tx.done
+      return result
+    } catch (error) {
+      try {
+        tx.abort()
+        await tx.done
+      } catch {
+        // An already-aborted/finished transaction needs no further cleanup;
+        // preserve the original capture error rather than its abort result.
+      }
+      throw error
+    }
+  }
+
   async transaction<T>(scope: (trx: TrxToken) => Promise<T>, trx?: TrxToken): Promise<T> {
     if (trx != null) return await scope(trx)
 
@@ -2091,10 +2142,21 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
+    let offset = args.paged?.offset ?? 0
+    // A full user-label index scan already enforces its entire predicate. Skip
+    // prior pages in IndexedDB rather than cloning and filtering every prior
+    // row for every source query. Keep the filtered/since path unchanged.
+    const indexedOnly =
+      args.since == null &&
+      Object.entries(args.partial ?? {}).every(([key, value]) => value === undefined || key === 'userId')
+    if (cursor != null && indexedOnly && Number.isSafeInteger(offset) && offset > 0) {
+      cursor = await cursor.advance(offset)
+      offset = 0
+    }
     await scanCursor<TableTxLabel>(
       cursor,
       args.since,
-      args.paged?.offset ?? 0,
+      offset,
       args.paged?.limit,
       r => matchesTxLabelPartial(r, args.partial),
       filtered

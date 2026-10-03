@@ -1,3 +1,9 @@
+import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
+import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
+import type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
+import { runInSeries } from '../utility/runInSeries'
+import { findProofRecords, mapProofWork } from './methods/proofWork'
+import { snapshotSyncPage } from './sync/snapshotSyncPage'
 import {
   type ValidCreateActionArgs,
   type ValidListActionsArgs,
@@ -97,6 +103,7 @@ import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyO
 import { processNoSendExpiryLifecycle } from './methods/noSendExpiryLifecycle'
 import {
   canonicalizeSyncProofIdentifiers,
+  markSyncProofReconciled,
   markSyncProofInsertOnly,
   sameSyncProof,
   validateSyncProof
@@ -425,6 +432,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async getCapabilities(): Promise<StorageCapabilities> {
     return {
+      ...(this.supportsStorageAccessScheduling()
+        ? {
+            storageAccess: { version: 1 as const, concurrentReads: true, atomicSyncPages: true }
+          }
+        : {}),
       ...(this.supportsNoSendExpiryPersistence() ? { brc177NoSendExpiry: { version: 1 as const } } : {}),
       ...(this.supportsActionBatchPersistence()
         ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
@@ -500,6 +512,52 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   protected supportsNoSendExpiryPersistence(): boolean {
     return false
+  }
+
+  /** Custom providers retain serialized manager access until explicitly supported. */
+  protected supportsStorageAccessScheduling(): boolean {
+    return false
+  }
+
+  /** Local provider contract only; this does not advertise a remote export RPC. */
+  supportsReadSnapshot(): boolean {
+    return false
+  }
+
+  /**
+   * Capture related rows from one database read view. The callback must use
+   * this token for every query and must not perform network or file I/O.
+   * Custom providers must implement their actual isolation guarantee rather
+   * than inheriting an ordinary transaction with unknown isolation.
+   */
+  readSnapshot<T>(_read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    return Promise.reject(
+      new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots are not supported by this provider')
+    )
+  }
+
+  /** Local transaction retention only; no remote/profile export capability is implied. */
+  supportsRetainedReadSnapshot(): boolean {
+    return false
+  }
+
+  /** Older and auto-closing transaction providers must explicitly refuse retention. */
+  openReadSnapshot(_options?: RetainedReadSnapshotOptions): Promise<RetainedReadSnapshot> {
+    return Promise.reject(new WERR_NOT_IMPLEMENTED('Retained read snapshots are not supported by this provider'))
+  }
+
+  /** Local, profile-bound packed keyset pages; never implied by ordinary sync support. */
+  supportsWalletReadSnapshot(): boolean {
+    return false
+  }
+
+  openWalletReadSnapshot(_identityKey: string, _options: WalletReadSnapshotOptions = {}): Promise<WalletReadSnapshot> {
+    return Promise.reject(new WERR_NOT_IMPLEMENTED('Wallet read snapshot pages are not supported by this provider'))
+  }
+
+  /** Local versioned snapshot merge capability; older providers keep serialized sync. */
+  getSnapshotSync(): SnapshotSyncStorage | undefined {
+    return undefined
   }
 
   protected supportsActionBatchPersistence(): boolean {
@@ -1196,6 +1254,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return await processAction(this, auth, args)
   }
 
+  /** Custom providers may opt into atomic canonical-proof repair; default is no mutation. */
+  compareAndSetProvenTxProof(_expected: TableProvenTx, _replacement: TableProvenTx, _trx?: TrxToken): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+
   async attemptToPostReqsToNetwork(
     reqs: EntityProvenTxReq[],
     trx?: TrxToken,
@@ -1389,7 +1452,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     })
   }
 
-  async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
+  protected async prepareSyncProofs(chunk: SyncChunk): Promise<Map<string, TableProvenTx>> {
+    const expected = new Map<string, TableProvenTx>()
     // Canonicalize before text-key lookup in every sync mode. Direct
     // backup/conflict sync retains its established trust for new proof rows,
     // but may replace an existing global proof only after active-chain
@@ -1397,23 +1461,64 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const incomingProofs = chunk.provenTxs ?? []
     for (const proof of incomingProofs) canonicalizeSyncProofIdentifiers(proof)
     if (incomingProofs.length > 0) {
-      const existingProofs = await this.findProvenTxs({
-        partial: {},
-        txids: [...new Set(incomingProofs.map(proof => proof.txid))]
-      })
+      const existingProofs = await findProofRecords(
+        this,
+        incomingProofs.map(proof => proof.txid)
+      )
       const existingByTxid = new Map(existingProofs.map(proof => [proof.txid.toLowerCase(), proof]))
-      for (const proof of incomingProofs) {
+      await mapProofWork(incomingProofs, async proof => {
         const existing = existingByTxid.get(proof.txid)
         if (existing == null) markSyncProofInsertOnly(proof)
-        else if (!sameSyncProof(existing, proof)) await validateSyncProof(this, proof)
-      }
+        else if (!sameSyncProof(existing, proof)) {
+          await validateSyncProof(this, proof)
+          markSyncProofReconciled(proof)
+          expected.set(proof.txid, existing)
+        }
+      })
     }
 
+    return expected
+  }
+
+  /** Local-only preparation: detach and validate proof I/O before taking manager write ownership. */
+  async prepareSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<() => Promise<ProcessSyncChunkResult>> {
+    const snapshot = snapshotSyncPage(args, chunk)
+    const expected = await this.prepareSyncProofs(snapshot.chunk)
+    let consumed = false
+    return async () => {
+      if (consumed)
+        throw new WERR_INVALID_OPERATION('Prepared sync page already consumed; resume from its durable checkpoint.')
+      consumed = true
+      return await this.commitSyncChunk(snapshot.args, snapshot.chunk, expected)
+    }
+  }
+
+  async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
+    return await this.commitSyncChunk(args, chunk, await this.prepareSyncProofs(chunk))
+  }
+
+  private async commitSyncChunk(
+    args: RequestSyncChunkArgs,
+    chunk: SyncChunk,
+    expected: Map<string, TableProvenTx>
+  ): Promise<ProcessSyncChunkResult> {
     // A sync page may contain hundreds of related entities. Keep their lookups,
     // inserts, ID remapping, and sync-state checkpoint in one transaction. This
     // avoids a transaction startup/commit for every record (especially costly
     // in IndexedDB) and makes the page checkpoint atomic with its data changes.
     return await this.transaction(async trx => {
+      // Serial sorted reads retain deterministic lock ordering on the shared transaction.
+      await runInSeries(
+        [...expected.values()].sort((left, right) => left.txid.localeCompare(right.txid)),
+        async previous => {
+          const current = verifyOneOrNone(await this.findProvenTxs({ partial: { txid: previous.txid }, trx }))
+          if (current == null || !sameSyncProof(current, previous)) {
+            throw new WERR_INVALID_OPERATION(
+              'Proof changed during sync preparation; resume from the durable checkpoint.'
+            )
+          }
+        }
+      )
       const user = verifyTruthy(
         verifyOneOrNone(await this.findUsers({ partial: { identityKey: args.identityKey }, trx }))
       )

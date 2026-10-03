@@ -58,6 +58,106 @@
       "maximumInvalid": 0
     },
     {
+      "id": "wallet-retained-snapshot",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership, profile-bound keyset cursors and bounded packed payload admission",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-journal",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/journal/SnapshotJournal.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet exact journal revisions, bounded metadata pages and bootstrap, full-table observers, source binding and owned crash-resumable generation lifecycle",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-sync",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet durable profile-bound snapshot merges, normalized ID mappings, acknowledged cursors and primary-generation fencing",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-sync-destination",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncDestination.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet durable snapshot destination binding, atomic checkpoint admission and primary-generation fencing",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-sync-rows",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncRows.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet bounded snapshot row detachment and profile/source-scoped normalized parent and child ID mapping",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-archive",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet coherent SQL snapshot capture and staging, profile closure, immutable receipts, quotas and cleanup accounting",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-remote-directory",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet authenticated snapshot receipt directories, original binding bytes, complete table hash chains and page inclusion",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-remote-service",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet remote snapshot creation request identity, durable receipt publication, bounded reservation, exact source ownership, backend guards and physical cleanup recovery",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-remote-http",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet authenticated snapshot HTTP negotiation, exact protocol fields, profile binding, immutable client receipts and bounded transport lifecycle",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-snapshot-remote-reader",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/RemoteSnapshotReader.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet immutable remote snapshot row decoding, fixed archive cursors, bounded leases, exact admission recovery and pending cleanup",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "overlay-linkage",
       "manifest": "packages/overlays/topics/package.json",
       "propertyTest": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",

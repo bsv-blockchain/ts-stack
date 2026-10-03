@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.2'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+version: '1.3.4'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -108,6 +108,60 @@ notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
 audit and CodeQL results, package and consumer tests, bundle/performance
 impact, and affected public versions.
 
+The docs-site Mermaid graph selects DOMPurify 3.4.16 instead of 3.4.13 for
+[GHSA-p98j-92pf-mc4p](https://github.com/advisories/GHSA-p98j-92pf-mc4p).
+The reviewed [3.4.16 release](https://github.com/cure53/DOMPurify/releases/tag/3.4.16)
+fits Mermaid 11.16.1's existing `^3.3.3` range and exceeds the seven-day release
+age. pnpm regenerates only that package resolution, integrity and existing graph
+reference; all importers, manifests and unrelated resolutions remain unchanged.
+The governed bundle inventory records the same version, with its license
+expression and license-file hash unchanged. This private documentation dependency does not change wallet runtime packages,
+public APIs or candidate versions. Frozen installation, root checks, docs tests
+and a built-site browser check qualify the ordinary Mermaid consumer. No service
+or package is deployed by this source change.
+
+## Temporary Metro watcher dependency repair
+
+Metro-file-map 0.87.1 uses only micromatch.some(), whose matcher is already
+Picomatch 2.3.2. The exact-version paired source/distribution patch calls that
+same loop directly, declares the same exact Picomatch dependency and removes
+only the scoped micromatch dependency and its now-unused braces closure.
+The reviewed [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+lists no patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
+is still unreleased. No advisory exclusion or audit threshold change is added.
+
+The existing mobile platform gate checks 1,120 watcher results frozen from the
+unmodified published implementation, event/stat/path contracts, and absence of
+the removed matcher packages before its packed Metro/Hermes compilation,
+source-map/composition and unchanged bundle budgets. The dated override registry
+owns the patch, exact package extension and scoped removal as one repair. Remove
+all three together when an official compatible release removes the affected
+path and the full compatibility, frozen graph, audit and platform checks pass.
+This build-tool repair does not change published wallet APIs or package versions.
+
+## Temporary standalone service watcher repair
+
+The basic and cloud UHRP services and WAB use Nodemon 3.1.14 with a parent-scoped
+Chokidar 4.0.3 substitution, removing the same affected braces closure without
+an advisory exclusion. Nodemon already resolves watched globs to literal
+directories; the source-owned adapter retains the old anymatch 3 ignore
+semantics, including recursive literal directories, custom cwd, dotfiles,
+regex and function options. WAB replaces ts-node-dev with this same CLI.
+The existing Node/ts-node/telemetry execution paths remain intact, with explicit
+TypeScript and env extensions, manual `rs` and graceful shutdown regressions
+run before each service's ordinary tests. The service-copy policy keeps both
+adapter and native regression identical across all three service contexts.
+
+The adapter normalizes every backslash and repeated slash without changing its
+ignore matching. Native watcher polling permits 400 predicate attempts, with a
+25 ms wait after every failed attempt, and preserves early process-exit errors.
+
+The three new registered substitutions bring the combined retained count to 30. Remove them and the adapter together after a compatible official Nodemon
+release resolves the dependency path natively and all watcher, frozen audit,
+service and protected Linux image gates pass. These standalone development
+tools change no public npm candidate version, service HTTP API, production
+startup or persisted schema; deployed images require separate promotion.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:
@@ -136,13 +190,67 @@ must be a dependency or peer, and clean packed consumers must typecheck it.
 This keeps build-only advisory trees out of consumer installs without shipping
 unresolvable public declarations.
 
-The root workspace carries seven narrow audited dependency overrides:
+The September 30 audit refresh also selects compatible transitive releases within
+existing ranges: `engine.io` 6.6.10 in the workspace and Message Box server;
+`ip-address` 10.7.1 in Message Box, both UHRP servers and WAB; `fast-uri` 3.1.8 in
+Message Box; and `undici` 6.28.1 in WAB. These generated lock changes add no
+manifest ranges or overrides. All selected versions exceed the seven-day release
+age. Upstream releases preserve their module and Node contracts; service suites,
+AuthSocket coverage and frozen-install audits qualify the affected consumers.
+The relevant upstream releases are [Engine.IO](https://github.com/socketio/socket.io/releases/tag/engine.io%406.6.10),
+[ip-address](https://github.com/beaugunderson/ip-address/releases/tag/v10.7.1),
+[fast-uri](https://github.com/fastify/fast-uri/releases/tag/v3.1.8) and
+[Undici](https://github.com/nodejs/undici/releases/tag/v6.28.1).
+Source reconciliation does not release packages or deploy service images.
 
-- Jest 30.4.2 and Stryker still constrain parts of their reporting and coverage
-  graphs to minimatch releases with older `brace-expansion` ranges.
-  GHSA-rgw5-rvv9-x895 required 5.0.9. GHSA-6j4f-fj2g-mc7p requires 5.0.10 and
-  GHSA-qhr7-859c-m2p7 requires 5.0.11, so the workspace substitutes 5.0.11
-  until every supported path resolves it natively.
+The follow-up Axios audit correction selects `axios` 1.20.0 in the five existing
+Message Box, UHRP basic, UHRP cloud, notifier and WAB locks. Only Axios resolution
+and dependency metadata change; manifests, declared ranges, lock formats and all
+other resolved versions are preserved. The already-selected `form-data` 4.0.6
+satisfies the raised dependency floor. Review of the
+[1.19.0](https://github.com/axios/axios/releases/tag/v1.19.0) and
+[1.20.0](https://github.com/axios/axios/releases/tag/v1.20.0) releases includes
+configuration hardening, proxy behavior, cancellation and declaration changes.
+The services use ordinary own-property request options; their frozen installs,
+high/critical audits, builds where applicable and deterministic suites pass on
+Node 24. Public workspace manifests and browser/mobile dependency graphs are
+unchanged. Infrastructure locks are container/function build inputs, so this
+correction needs no public npm version change or consumer migration. Hosted
+Linux image and exact-head analysis gates remain required before promotion;
+these local results do not establish deployed behavior.
+
+The subsequent gRPC correction selects `@grpc/grpc-js` 1.14.5 in all seven
+standalone service locks for the September 30 audit correction, addressing
+[GHSA-m9gg-hp2v-232j](https://github.com/advisories/GHSA-m9gg-hp2v-232j) and
+[GHSA-f596-whhp-79r4](https://github.com/advisories/GHSA-f596-whhp-79r4).
+The reviewed [1.14.5 release](https://github.com/grpc/grpc-node/releases/tag/%40grpc/grpc-js%401.14.5)
+preserves the Node engine and dependency ranges; its fixes also cover stale call
+retention, status fields and completed HTTP/2 streams. Chaintracks Server and
+Wallet Infra additionally adopt the already-reviewed `ip-address` 10.7.2 within
+their existing ranges; the [10.7.2 release](https://github.com/beaugunderson/ip-address/releases/tag/v10.7.2) accepts case-insensitive ARPA suffixes. Package-manager regeneration changes only these nine
+resolved nodes; manifests, lock formats, all other dependencies, the workspace
+lock and the earlier Axios correction are unchanged.
+
+All seven frozen installs, allowlisted native rebuilds, builds and lints pass
+on Node 24, with 658 service tests and seven zero-finding audits. Wallet Infra
+has no standalone test script; its build/lint and the shared dependency checks
+are reported separately. Each installed gRPC copy passes an ordinary loopback
+unary call and client cancellation; both changed IP consumers pass IPv4/IPv6
+parsing and invalid-syntax checks. The gRPC registry's unpacked size grows by
+49,814 bytes; no public workspace/browser/mobile graph changes. These are
+compatibility checks, not a throughput or memory benchmark. No public npm
+version or consumer migration changes; protected Linux image and exact-head
+analysis gates still qualify the eventual service artifacts before promotion.
+
+The combined workspace and standalone registries carry 30 audited dependency overrides, including:
+
+- Jest 30.5.1 and Stryker still constrain parts of their reporting and coverage graphs to
+  minimatch releases with older `brace-expansion` ranges. The follow-up
+  advisories GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p and
+  GHSA-q2hr-2g5m-vwhr require `brace-expansion` 5.0.12, so the workspace
+  and existing standalone substitutions select 5.0.12 until every supported
+  path resolves it natively. The release preserves the existing module exports,
+  types and Node engine range.
 - `socket.io` in `@bsv/authsocket` still admits `engine.io` releases below
   6.6.10. GHSA-2gc4-cqfq-p2gv is a protocol-revision mismatch that can crash
   the Node process during a transport upgrade, so the workspace selects
@@ -176,17 +284,15 @@ changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
 produce maintenance reminders in source CI and fail the separate weekly
 maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
-The 2026-10-01 review rechecked all 25 selectors against the frozen graph.
-Jest, Stryker, and socket.io still admit the vulnerable `brace-expansion` and
-`engine.io` ranges, so those two substitutions stay. The earlier findings still
-hold for the rest: the supported graphs select exact `gaxios@7.1.3`, admit
-`uuid@9`, and pin `qs@6.15.1` without their registered substitutions, while the
-current frontmatter plugin still requests TOML 3.x. New upstream majors can
-remove some legacy paths only through a coordinated Stryker or Google Cloud
-migration. Metro 0.87.1 replaced its `image-size` dependency with an in-tree
-parser, so the former Metro-scoped substitution was retired; the mobile
-platform contract verifies that boundary. The method, result, count, and next
-rehearsal are enforced in
+The 2026-10-02 reconciliation retains 26 selectors from the reviewed main
+updates, including the Mermaid/chevrotain `lodash-es` remediation and the
+Yamux-scoped stream-interface compatibility substitution. It preserves the
+qualified `brace-expansion` 5.0.12 workspace and standalone floor for
+GHSA-q2hr-2g5m-vwhr; Jest and Stryker still admit vulnerable earlier ranges.
+The `engine.io` substitution remains. Metro 0.87.1 replaced its `image-size`
+dependency with an in-tree parser, so the former Metro-scoped substitution
+was retired; the mobile platform contract verifies that boundary. The method,
+result, count and next rehearsal are enforced in
 `governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly

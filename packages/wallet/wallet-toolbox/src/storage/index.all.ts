@@ -1,6 +1,7 @@
 export * from './WalletStorageManager'
 export * from './StorageProvider'
 export * from './StorageSyncReader'
+export type { SyncSessionOptions, SyncSessionProgress, SyncSessionResult } from './sync/syncSession'
 export * from './remoting/StorageClient'
 export * from './remoting/StorageServer'
 export * from './remoting/KnexSessionManager'
@@ -19,3 +20,26 @@ export * from './schema/tables/index'
 export * from './schema/entities/index'
 export * as sync from './sync'
 export * from './portable'
+
+export type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapshot/RetainedReadSnapshot'
+
+export type {
+  PackedSnapshotRow,
+  WalletReadSnapshot,
+  WalletReadSnapshotOptions,
+  WalletSnapshotArchivePosition,
+  WalletSnapshotCursor,
+  WalletSnapshotPage,
+  WalletSnapshotPageLimits,
+  WalletSnapshotTable,
+  WalletSnapshotTables
+} from './snapshot/WalletReadSnapshot'
+
+export { snapshotSyncTables } from './snapshot/SnapshotSync'
+export type {
+  SnapshotSyncSource,
+  SnapshotSyncCheckpoint,
+  SnapshotSyncCommit,
+  SnapshotSyncStorage,
+  SnapshotSyncTable
+} from './snapshot/SnapshotSync'

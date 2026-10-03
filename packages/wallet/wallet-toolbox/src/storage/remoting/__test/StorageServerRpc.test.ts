@@ -409,6 +409,32 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
   })
 
+  test.each([
+    'readSnapshot',
+    'supportsReadSnapshot',
+    'openReadSnapshot',
+    'supportsRetainedReadSnapshot',
+    'openWalletReadSnapshot',
+    'getSnapshotSync',
+    'supportsWalletReadSnapshot'
+  ])(
+    'keeps local snapshot method %s outside the authenticated RPC surface',
+    async method => {
+      const handler = jest.fn(async () => undefined)
+      const server = makeServer({ [method]: handler })
+      const response = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest({ jsonrpc: '2.0', method, params: [], id: 1 }),
+        response.response
+      )
+      expect(response.statusCode).toBe(400)
+      expect(response.body).toMatchObject({ error: { code: -32601, message: `Method not found: ${method}` } })
+      expect(handler).not.toHaveBeenCalled()
+    }
+  )
+
   test('redacts internal storage failures from JSON-RPC wallet errors', async () => {
     const server = makeServer(
       {
@@ -917,4 +943,80 @@ describe('StorageServer JSON-RPC boundary', () => {
       invoke(server, 'authorizeStandardRpcCall', 'abortAction', [{ identityKey: 'mallory' }, {}], request)
     ).rejects.toThrow('identityKey does not match authentication')
   })
+})
+
+describe('shared RPC framing used by snapshot transport', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined)
+    jest.spyOn(console, 'error').mockImplementation(() => undefined)
+  })
+  afterEach(() => jest.restoreAllMocks())
+
+  test.each([{ jsonrpc: '1.0' }, { method: '' }, { method: 123 }, { params: {} }])(
+    'rejects a malformed envelope at the RPC boundary: %p',
+    async changes => {
+      const server = makeServer()
+      const captured = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest({ jsonrpc: '2.0', method: 'getSettings', params: [], id: 1, ...changes }),
+        captured.response
+      )
+      expect(captured.statusCode).toBe(400)
+      expect(captured.body).toEqual({ error: { code: -32600, message: 'Invalid Request' } })
+      expect(captured.headers[BINARY_ENCODING_HEADER]).toBeUndefined()
+    }
+  )
+
+  test.each([false, true])('decodes request bytes only with explicit negotiation: %p', async binary => {
+    const server = makeServer()
+    const dispatch = jest
+      .spyOn(server as never, 'dispatchRpcCall' as never)
+      .mockResolvedValue({ found: true, result: null } as never)
+    const captured = makeResponse()
+    const tagged = { $bsvBinary: 'base64', data: 'AQI=' }
+    await invoke(
+      server,
+      'handleRpcRequest',
+      makeRequest(
+        { jsonrpc: '2.0', method: 'getSettings', params: [tagged], id: 1 },
+        binary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {}
+      ),
+      captured.response
+    )
+    expect(dispatch.mock.calls[0][1]).toEqual(binary ? [new Uint8Array([1, 2])] : [tagged])
+    expect(captured.body).toEqual({ jsonrpc: '2.0', id: 1, result: null })
+  })
+
+  test.each(['exact', 'over', 'unlimited'] as const)(
+    'response limits preserve transfer negotiation at %s',
+    async mode => {
+      const chunk = { ...emptyChunk, padding: 'x'.repeat(1024) }
+      const bytes = Buffer.byteLength(JSON.stringify({ jsonrpc: '2.0', result: chunk, id: 1 }))
+      const maximum = mode === 'unlimited' ? -1 : bytes - Number(mode === 'over')
+      const server = makeServer({ getSyncChunk: async () => chunk }, { maxRpcResponseBytes: maximum })
+      const beginRead = jest.fn(async () => ({ transferId: 'fixture-transfer' }))
+      Reflect.set(server, 'syncTransfers', { beginRead })
+      const captured = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest({
+          jsonrpc: '2.0',
+          method: 'getSyncChunk',
+          params: [{ identityKey: 'alice', syncTransferVersion: 1 }],
+          id: 1
+        }),
+        captured.response
+      )
+      expect(captured.statusCode).toBe(200)
+      expect(beginRead).toHaveBeenCalledTimes(Number(mode === 'over'))
+      expect(captured.body).toEqual({
+        jsonrpc: '2.0',
+        id: 1,
+        result: mode === 'over' ? { syncTransfer: { transferId: 'fixture-transfer' } } : chunk
+      })
+    }
+  )
 })

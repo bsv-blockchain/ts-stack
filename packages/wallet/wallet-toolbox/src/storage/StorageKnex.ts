@@ -1,3 +1,41 @@
+import {
+  maintainSnapshotJournal as startSnapshotJournalMaintenance,
+  type SnapshotJournalMaintenanceRequest,
+  type SnapshotJournalMaintenanceResult
+} from './snapshot/journal/SnapshotJournalMaintenance'
+import type {
+  SnapshotJournalMaintenanceTask,
+  SnapshotJournalMaintenanceOptions
+} from './snapshot/journal/SnapshotJournalMaintenanceTask'
+import {
+  retainSnapshotJournalCapture,
+  type SnapshotJournalCaptureRequest,
+  type SnapshotJournalCaptureLifetime,
+  type SnapshotJournalSource
+} from './snapshot/journal/SnapshotJournalCapture'
+import { SnapshotJournalConnectionCleanupError } from './snapshot/journal/SnapshotJournalConnections'
+import { dropGenerationForDataDeletion } from './schema/snapshotSqliteIndexMigration'
+import { migration as SNAPSHOT_SQLITE_INDEX_MIGRATION } from './schema/snapshotSqliteIndexState'
+import { SnapshotResourceLimitError } from './snapshot/SnapshotResourceLimitError'
+import { readGuardedSnapshotArchive, recoverSnapshotArchiveGuards } from './snapshot/archive/SnapshotArchiveGuard'
+import type { SnapshotArchiveRequestOwner } from './snapshot/archive/SnapshotArchiveRequest'
+import { SnapshotCancelledError } from './snapshot/SnapshotCancelledError'
+import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
+import { KnexSnapshotSyncDestination } from './snapshot/KnexSnapshotSyncDestination'
+import type { WalletReadSnapshot, WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
+import { openKnexWalletReadSnapshot } from './snapshot/KnexWalletReadSnapshot'
+import {
+  openKnexSnapshotArchiveSource,
+  SnapshotArchiveSourceCleanupError,
+  type SnapshotArchiveSource
+} from './snapshot/archive/KnexSnapshotArchiveSource'
+import {
+  retainReadSnapshot,
+  type RetainedReadSnapshot,
+  type RetainedReadSnapshotLifetime,
+  type RetainedReadSnapshotOptions
+} from './snapshot/RetainedReadSnapshot'
+import { recoveredProofUpdate } from './methods/validateSyncProof'
 import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
 import {
@@ -24,7 +62,7 @@ import {
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
 import { TablePreparedBeef } from './schema/tables/TablePreparedBeef.interfaces'
 import { KnexMigrations } from './schema/KnexMigrations'
-import { Knex } from 'knex'
+import { knex as createKnex, Knex } from 'knex'
 import { AdminStatsResult, StorageProvider, StorageProviderOptions } from './StorageProvider'
 import { purgeData } from './methods/purgeData'
 import { listActions } from './methods/listActionsKnex'
@@ -60,7 +98,13 @@ import {
   SyncChunkTotals,
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
+import {
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER,
+  WERR_NOT_IMPLEMENTED,
+  WERR_UNAUTHORIZED
+} from '../sdk/WERR_errors'
 import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
@@ -86,6 +130,8 @@ export interface StorageKnexOptions extends StorageProviderOptions {
   knex: Knex
   /** Optional prepared-BEEF (COOK) rollout controls. Disabled by default. */
   preparedBeef?: PreparedBeefOptions
+  /** Default true. False keeps legacy sync scheduling while retaining the additive schema for forward rollback. */
+  snapshotSync?: boolean
 }
 
 // Keep bulk statements below conservative SQLite/MySQL bind-parameter
@@ -105,6 +151,19 @@ interface PreparedBeefMetadata {
 
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
+  private readonly snapshotSyncEnabled: boolean
+  private readonly snapshotSyncTelemetry: StorageKnexOptions['telemetry']
+  private snapshotSyncSource?: StorageKnex
+  private snapshotSyncOpening?: Promise<WalletReadSnapshot | undefined>
+  private snapshotSyncBusy = false
+  private snapshotJournalCapture?: SnapshotJournalCaptureLifetime
+  private snapshotJournalCaptureFailure?: SnapshotJournalConnectionCleanupError
+  private snapshotJournalMaintenance?: SnapshotJournalMaintenanceTask<SnapshotJournalMaintenanceResult>
+  private snapshotJournalMaintenanceFailure?: SnapshotJournalConnectionCleanupError
+  private snapshotArchiveRecovery?: Promise<void>
+  private guardedSnapshotFailure?: { error: unknown }
+  private retainedReadSnapshot?: RetainedReadSnapshotLifetime
+  private retainedReadSnapshotsStopped = false
   readonly preparedBeefPolicy: PreparedBeefPolicy
   private readonly preparedBeefCoordinator: PreparedBeefCoordinator
   private readonly preparedBeefReadSuspensions = new Set<number>()
@@ -136,6 +195,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (options.knex == null) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
     parsePostgresInt8AsNumber(this.knex)
+    this.snapshotSyncEnabled = options.snapshotSync ?? true
+    this.snapshotSyncTelemetry = options.telemetry
+    if (typeof this.snapshotSyncEnabled !== 'boolean') throw new WERR_INVALID_PARAMETER('snapshotSync', 'a boolean')
     this.preparedBeefPolicy = validatePreparedBeefPolicy(options.preparedBeef)
     this.preparedBeefCoordinator = new PreparedBeefCoordinator(this)
     if (this.telemetry.enabled) {
@@ -164,6 +226,445 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   protected override supportsActionBatchPersistence(): boolean {
     return true
   }
+
+  protected override supportsStorageAccessScheduling(): boolean {
+    return true
+  }
+
+  override supportsReadSnapshot(): boolean {
+    return this.databaseSystem() === 'sqlite' || this.databaseSystem() === 'mysql'
+  }
+
+  override async readSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    await this.makeAvailable()
+    const database = this.databaseSystem()
+    if (database === 'sqlite') {
+      // SQLite establishes its read view on the first query. Do not request
+      // Knex's unsupported SQLite isolation/readOnly options or write settings
+      // into the shared connection. WAL writers may use another connection.
+      return await this.knex.transaction(read)
+    }
+    if (database === 'mysql') {
+      return await this.readMySQLSnapshot(read)
+    }
+    throw new WERR_NOT_IMPLEMENTED('Coherent wallet source snapshots require SQLite or MySQL isolation')
+  }
+
+  override supportsRetainedReadSnapshot(): boolean {
+    return this.supportsReadSnapshot()
+  }
+
+  /** One retained local transaction per provider; it occupies one pool connection until physical cleanup. */
+  override async openReadSnapshot(options: RetainedReadSnapshotOptions = {}): Promise<RetainedReadSnapshot> {
+    return await this.openTrackedReadSnapshot(options, read => this.readSnapshot(read))
+  }
+
+  private async openTrackedReadSnapshot(
+    options: RetainedReadSnapshotOptions,
+    transaction: (read: (trx: TrxToken) => Promise<void>) => Promise<void>
+  ): Promise<RetainedReadSnapshot> {
+    if (this.retainedReadSnapshotsStopped) {
+      throw new WERR_INVALID_OPERATION('Retained read snapshots are unavailable after provider destruction begins')
+    }
+    if (!this.supportsRetainedReadSnapshot()) return await super.openReadSnapshot(options)
+    if (this.retainedReadSnapshot !== undefined) {
+      throw new WERR_INVALID_OPERATION('This provider already has a retained read snapshot opening or active')
+    }
+    const lifetime = retainReadSnapshot(
+      transaction,
+      async trx => {
+        // Pin SQLite's deferred read view before opening resolves. MySQL also
+        // establishes its repeatable-read snapshot on this first data read.
+        await this.readSettings(trx)
+      },
+      options
+    )
+    this.retainedReadSnapshot = lifetime
+    const release = (): void => {
+      if (this.retainedReadSnapshot === lifetime) this.retainedReadSnapshot = undefined
+    }
+    void lifetime.closed.then(release, release)
+    return await lifetime.opened
+  }
+
+  private async stopRetainedReadSnapshots(): Promise<void> {
+    // Fence admission before any asynchronous cleanup can yield. A view whose
+    // close releases the capacity slot must not permit reopening during destroy.
+    this.retainedReadSnapshotsStopped = true
+    try {
+      await this.snapshotArchiveRecovery
+    } finally {
+      try {
+        await this.snapshotJournalCapture?.close()
+      } finally {
+        try {
+          await this.snapshotJournalMaintenance?.close()
+        } finally {
+          await this.snapshotSyncOpening?.catch(() => undefined)
+          await this.snapshotSyncSource?.destroy()
+          await this.retainedReadSnapshot?.close()
+        }
+      }
+    }
+  }
+
+  override supportsWalletReadSnapshot(): boolean {
+    return this.supportsRetainedReadSnapshot()
+  }
+
+  override async openWalletReadSnapshot(
+    identityKey: string,
+    options: WalletReadSnapshotOptions = {}
+  ): Promise<WalletReadSnapshot> {
+    if (!this.supportsWalletReadSnapshot()) return await super.openWalletReadSnapshot(identityKey, options)
+    return await openKnexWalletReadSnapshot(this, identityKey, options)
+  }
+
+  private async readMySQLSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    const client = this.knex.client
+    const connection = await client.acquireConnection()
+    try {
+      // MySQL requires a comma between transaction characteristics. Knex's
+      // combined isolationLevel/readOnly options currently omit it. Reserve
+      // one connection, set only its NEXT transaction, then let Knex own the
+      // begin/commit/rollback lifecycle without changing pool session defaults.
+      await this.knex.raw('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY').connection(connection)
+      return await this.knex.transaction(
+        async trx => {
+          if (trx.isCompleted()) throw new WERR_INTERNAL('MySQL snapshot transaction did not begin')
+          return await read(trx)
+        },
+        { connection }
+      )
+    } catch (error) {
+      // A setup/begin failure can leave pending transaction characteristics.
+      // Closing before release prevents a later wallet write inheriting them.
+      // Driver destroy also removes native mysql2 pooled connections; end()
+      // may merely return those connections to their external pool.
+      connection.destroy()
+      throw error
+    } finally {
+      delete connection.__knexTxId
+      await client.releaseConnection(connection)
+    }
+  }
+
+  override getSnapshotSync(): SnapshotSyncStorage | undefined {
+    if (!this.snapshotSyncEnabled || !this.supportsWalletReadSnapshot()) return undefined
+    const destination = new KnexSnapshotSyncDestination(this, chunk => this.prepareSyncProofs(chunk))
+    return {
+      supportsDestination: () => destination.supportsDestination(),
+      openSource: (identityKey, options) =>
+        this.openConcurrentSyncSource(identityKey, options ?? {}, (reader, identity, settings) =>
+          reader.openWalletReadSnapshot(identity, settings)
+        ),
+      begin: (source, activeStorage) => destination.begin(source, activeStorage),
+      checkpoint: (identityKey, sourceIdentity) => destination.checkpoint(identityKey, sourceIdentity),
+      prepare: (checkpoint, page) => destination.prepare(checkpoint, page)
+    }
+  }
+
+  /** Local capability probe; no reader pool is constructed or RPC advertised. */
+  async supportsSnapshotArchiveSource(): Promise<boolean> {
+    if (this.retainedReadSnapshotsStopped) return false
+    const config = await this.concurrentSnapshotReaderConfig()
+    return (
+      !this.retainedReadSnapshotsStopped &&
+      config !== undefined &&
+      (config.client === 'better-sqlite3' || String(config.client).includes('mysql'))
+    )
+  }
+
+  /** Shares local sync's single owned reader slot and awaited physical cleanup. */
+  async openSnapshotArchiveSource(
+    identityKey: string,
+    options: WalletReadSnapshotOptions = {},
+    owner?: SnapshotArchiveRequestOwner
+  ): Promise<SnapshotArchiveSource | undefined> {
+    const claim = owner === undefined ? undefined : { ...owner }
+    try {
+      return await this.openConcurrentSyncSource(identityKey, options, async (reader, identity, settings) => {
+        if (claim === undefined) return await openKnexSnapshotArchiveSource(reader, identity, settings)
+        return await openKnexSnapshotArchiveSource(reader, identity, settings, () =>
+          reader.openTrackedReadSnapshot(settings, async read => {
+            try {
+              await reader.makeAvailable()
+              await readGuardedSnapshotArchive(this.knex, reader.knex, claim, read)
+            } catch (error) {
+              reader.guardedSnapshotFailure = { error }
+              throw error
+            }
+          })
+        )
+      })
+    } catch (error) {
+      if (error instanceof SnapshotArchiveSourceCleanupError) throw error
+      if (this.retainedReadSnapshotsStopped && this.snapshotSyncSource !== undefined)
+        throw new SnapshotArchiveSourceCleanupError(error)
+      throw error
+    }
+  }
+
+  /** Internal complete-generation capture; no RPC or incremental capability is advertised.
+   * The source shares sync/archive admission and retains it through physical cleanup.
+   */
+  async openSnapshotJournalSource(
+    identityKey: string,
+    request: SnapshotJournalCaptureRequest,
+    options: RetainedReadSnapshotOptions = {}
+  ): Promise<SnapshotJournalSource> {
+    if (this.retainedReadSnapshotsStopped)
+      throw new WERR_INVALID_OPERATION('Snapshot journal sources are unavailable after destruction begins')
+    if (this.snapshotSyncBusy)
+      throw new WERR_INVALID_OPERATION('This provider already has a snapshot sync source opening or active')
+    this.snapshotSyncBusy = true
+    let lifetime: SnapshotJournalCaptureLifetime
+    try {
+      lifetime = retainSnapshotJournalCapture(
+        this.chain,
+        async () => {
+          if (this.retainedReadSnapshotsStopped)
+            throw new WERR_INVALID_OPERATION('Snapshot journal sources are unavailable after destruction begins')
+          return await this.concurrentSnapshotReaderConfig()
+        },
+        identityKey,
+        request,
+        options
+      )
+    } catch (error) {
+      this.snapshotSyncBusy = false
+      throw error
+    }
+    this.snapshotJournalCapture = lifetime
+    const release = (error?: unknown): void => {
+      if (error instanceof SnapshotJournalConnectionCleanupError) {
+        this.snapshotJournalCaptureFailure = error
+        this.retainedReadSnapshotsStopped = true
+        return
+      }
+      if (this.snapshotJournalCapture === lifetime) {
+        this.snapshotJournalCapture = undefined
+        this.snapshotSyncBusy = false
+      }
+    }
+    void lifetime.closed.then(() => release(), release)
+    return await lifetime.opened
+  }
+
+  /** One internal global floor/page operation; shares source admission until native cleanup drains. */
+  async maintainSnapshotJournal(
+    request: SnapshotJournalMaintenanceRequest,
+    options: SnapshotJournalMaintenanceOptions = {}
+  ): Promise<SnapshotJournalMaintenanceResult> {
+    if (this.retainedReadSnapshotsStopped)
+      throw new WERR_INVALID_OPERATION('Snapshot journal maintenance is unavailable after destruction begins')
+    if (this.snapshotSyncBusy)
+      throw new WERR_INVALID_OPERATION('This provider already has a snapshot source or maintenance opening or active')
+    this.snapshotSyncBusy = true
+    let lifetime: SnapshotJournalMaintenanceTask<SnapshotJournalMaintenanceResult>
+    try {
+      lifetime = startSnapshotJournalMaintenance(
+        async () => {
+          if (this.retainedReadSnapshotsStopped)
+            throw new WERR_INVALID_OPERATION('Snapshot journal maintenance is unavailable after destruction begins')
+          return await this.concurrentSnapshotReaderConfig()
+        },
+        request,
+        options
+      )
+    } catch (error) {
+      this.snapshotSyncBusy = false
+      throw error
+    }
+    this.snapshotJournalMaintenance = lifetime
+    const release = (error?: unknown): void => {
+      if (error instanceof SnapshotJournalConnectionCleanupError) {
+        this.snapshotJournalMaintenanceFailure = error
+        this.retainedReadSnapshotsStopped = true
+        return
+      }
+      if (this.snapshotJournalMaintenance === lifetime) {
+        this.snapshotJournalMaintenance = undefined
+        this.snapshotSyncBusy = false
+      }
+    }
+    void lifetime.closed.then(() => release(), release)
+    return await lifetime.result
+  }
+
+  /** Drain an already-stopping maintenance owner; a failed native cleanup remains observable. */
+  awaitSnapshotJournalMaintenanceCleanup(): Promise<void> {
+    if (this.snapshotJournalMaintenanceFailure !== undefined)
+      return Promise.reject(this.snapshotJournalMaintenanceFailure)
+    return this.snapshotJournalMaintenance?.closed ?? Promise.resolve()
+  }
+
+  /** Drain an already-stopping capture without admitting another source. */
+  awaitSnapshotJournalCaptureCleanup(): Promise<void> {
+    if (this.snapshotJournalCaptureFailure !== undefined) return Promise.reject(this.snapshotJournalCaptureFailure)
+    return this.snapshotJournalCapture?.closed ?? Promise.resolve()
+  }
+
+  /** One bounded recovery flight per provider, drained by provider destruction. */
+  recoverSnapshotArchiveSources(): Promise<void> {
+    if (this.retainedReadSnapshotsStopped)
+      return Promise.reject(new WERR_INVALID_OPERATION('Snapshot source recovery is unavailable after destruction'))
+    if (this.snapshotArchiveRecovery !== undefined) return this.snapshotArchiveRecovery
+    const recovery = Promise.resolve()
+      .then(async () => {
+        const config = await this.concurrentSnapshotReaderConfig()
+        if (config === undefined) return
+        await recoverSnapshotArchiveGuards(this.knex, config)
+      })
+      .finally(() => {
+        if (this.snapshotArchiveRecovery === recovery) this.snapshotArchiveRecovery = undefined
+      })
+    this.snapshotArchiveRecovery = recovery
+    return recovery
+  }
+
+  /** Drain an already-started recovery without admitting another one during service shutdown. */
+  awaitSnapshotArchiveRecovery(): Promise<void> {
+    return this.snapshotArchiveRecovery ?? Promise.resolve()
+  }
+
+  private async openConcurrentSyncSource<T extends WalletReadSnapshot>(
+    identityKey: string,
+    options: WalletReadSnapshotOptions,
+    openSource: (reader: StorageKnex, identityKey: string, options: WalletReadSnapshotOptions) => Promise<T>
+  ): Promise<T | undefined> {
+    if (this.retainedReadSnapshotsStopped)
+      throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
+    if (this.snapshotSyncBusy)
+      throw new WERR_INVALID_OPERATION('This provider already has a snapshot sync source opening or active')
+    const lifetimeMs = options.lifetimeMs ?? 300000
+    if (!Number.isSafeInteger(lifetimeMs) || lifetimeMs < 1 || lifetimeMs > 3600000) {
+      throw new WERR_INVALID_PARAMETER('lifetimeMs', 'an integer from 1 to 3600000')
+    }
+    const deadline = {
+      expiresAt: Date.now() + lifetimeMs,
+      startedAt: performance.now(),
+      lifetimeMs
+    }
+    this.snapshotSyncBusy = true
+    const opening: Promise<T | undefined> = this.createConcurrentSyncSource(
+      identityKey,
+      { ...options },
+      deadline,
+      openSource
+    )
+      .then(
+        view => {
+          if (view === undefined) this.snapshotSyncBusy = false
+          return view
+        },
+        error => {
+          this.snapshotSyncBusy = false
+          throw error
+        }
+      )
+      .finally(() => {
+        if (this.snapshotSyncOpening === opening) this.snapshotSyncOpening = undefined
+      })
+    this.snapshotSyncOpening = opening
+    return await opening
+  }
+
+  private async createConcurrentSyncSource<T extends WalletReadSnapshot>(
+    identityKey: string,
+    options: WalletReadSnapshotOptions,
+    deadline: { expiresAt: number; startedAt: number; lifetimeMs: number },
+    openSource: (reader: StorageKnex, identityKey: string, options: WalletReadSnapshotOptions) => Promise<T>
+  ): Promise<T | undefined> {
+    if (options.signal?.aborted === true) throw new SnapshotCancelledError('Snapshot sync source was cancelled')
+    const config = await this.concurrentSnapshotReaderConfig()
+    if (config === undefined) return undefined
+    if (this.retainedReadSnapshotsStopped)
+      throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
+    const remaining = Math.floor(
+      Math.min(deadline.expiresAt - Date.now(), deadline.lifetimeMs - (performance.now() - deadline.startedAt))
+    )
+    if (remaining < 1) throw new SnapshotResourceLimitError('Snapshot sync source expired during connection setup')
+    const reader = new StorageKnex({
+      ...StorageProvider.createStorageBaseOptions(this.chain),
+      snapshotSync: false,
+      telemetry: this.snapshotSyncTelemetry,
+      knex: createKnex(config)
+    })
+    this.snapshotSyncSource = reader
+    try {
+      const view = await openSource(reader, identityKey, { ...options, lifetimeMs: remaining })
+      if (this.retainedReadSnapshotsStopped) {
+        await view.close()
+        throw new WERR_INVALID_OPERATION('Snapshot sync is unavailable after destruction begins')
+      }
+      const closed = view.closed.finally(() => this.releaseConcurrentSource(reader))
+      void closed.catch(() => undefined)
+      return {
+        ...view,
+        get isOpen() {
+          return view.isOpen
+        },
+        closed,
+        close: async () => {
+          await view.close().catch(() => undefined)
+          await closed
+        }
+      }
+    } catch (error) {
+      await this.releaseConcurrentSource(reader)
+      throw error
+    }
+  }
+
+  private async concurrentSnapshotReaderConfig(): Promise<Knex.Config | undefined> {
+    const config = this.knex.client.config as Knex.Config
+    const connection = config.connection
+    // A function or external pool cannot promise an independent connection.
+    // In-memory SQLite cannot share a coherent WAL view with a separate pool.
+    if (
+      connection === null ||
+      typeof connection !== 'object' ||
+      ('connectionPool' in config && config.connectionPool != null)
+    )
+      return undefined
+    if (this.databaseSystem() === 'sqlite') {
+      const filename = (connection as Knex.Sqlite3ConnectionConfig).filename
+      if (
+        typeof filename !== 'string' ||
+        filename.length === 0 ||
+        filename === ':memory:' ||
+        filename.startsWith('file:')
+      )
+        return undefined
+      const modes: Array<{ journal_mode: string }> = await this.knex.raw('PRAGMA journal_mode')
+      if (modes[0]?.journal_mode.toLowerCase() !== 'wal') return undefined
+    } else if (
+      this.databaseSystem() !== 'mysql' ||
+      !('database' in connection) ||
+      typeof connection.database !== 'string'
+    )
+      return undefined
+    return {
+      ...config,
+      // Preserve hidden credentials and accessors without making them log-visible.
+      connection: Object.create(Object.getPrototypeOf(connection), Object.getOwnPropertyDescriptors(connection)),
+      pool: { ...config.pool, min: 0, max: 1 }
+    }
+  }
+
+  private async releaseConcurrentSource(reader: StorageKnex): Promise<void> {
+    try {
+      await reader.destroy()
+    } catch (error) {
+      // Failed physical cleanup must never reopen capacity for another view.
+      this.retainedReadSnapshotsStopped = true
+      throw error
+    }
+    if (this.snapshotSyncSource === reader) this.snapshotSyncSource = undefined
+    this.snapshotSyncBusy = false
+  }
+
   protected override supportsNoSendExpiryPersistence(): boolean {
     return true
   }
@@ -1101,6 +1602,27 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .update(this.validatePartialForUpdate(update))
   }
 
+  override async compareAndSetProvenTxProof(
+    expected: TableProvenTx,
+    replacement: TableProvenTx,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    await this.verifyReadyForDatabaseAccess(trx)
+    const update = recoveredProofUpdate(expected, replacement)
+    const where = {
+      provenTxId: expected.provenTxId,
+      txid: expected.txid,
+      height: expected.height,
+      index: expected.index,
+      merkleRoot: expected.merkleRoot,
+      blockHash: expected.blockHash,
+      rawTx: Buffer.from(expected.rawTx),
+      merklePath: Buffer.from(expected.merklePath)
+    }
+    const count = await this.toDb(trx)('proven_txs').where(where).update(this.validatePartialForUpdate(update))
+    return count === 1
+  }
+
   override async updateSyncState(id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableSyncState>('sync_states')
@@ -1500,6 +2022,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
     const q = this.findProvenTxsQuery(args)
+    // A transactional exact-proof lookup is a read/modify/write authority
+    // check. Lock that row until commit so monitor and sync repairs cannot race.
+    if (args.trx != null && this.dbtype === 'MySQL' && (args.partial.txid != null || args.partial.provenTxId != null))
+      q.forUpdate()
     const r = await q
     return this.validateEntities(r)
   }
@@ -1646,13 +2172,32 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async destroy(): Promise<void> {
-    await this.stopPreparedBeefTasks()
-    this.knex.off('query', this.onQuery)
-    this.knex.off('query-response', this.onQueryResponse)
-    this.knex.off('query-error', this.onQueryError)
-    for (const span of this.querySpans.values()) span.end({ status: 'cancelled' })
-    this.querySpans.clear()
-    await this.knex?.destroy()
+    try {
+      await this.stopRetainedReadSnapshots()
+    } catch (error) {
+      // Preserve an ordinary read failure for its read consumer. A typed
+      // cleanup failure remains observable after the pool destruction below.
+      if (
+        (this.guardedSnapshotFailure === undefined || this.guardedSnapshotFailure.error !== error) &&
+        this.snapshotJournalCaptureFailure !== error &&
+        this.snapshotJournalMaintenanceFailure !== error
+      )
+        throw error
+    } finally {
+      await this.stopPreparedBeefTasks()
+      this.knex.off('query', this.onQuery)
+      this.knex.off('query-response', this.onQueryResponse)
+      this.knex.off('query-error', this.onQueryError)
+      for (const span of this.querySpans.values()) span.end({ status: 'cancelled' })
+      this.querySpans.clear()
+      await this.knex?.destroy()
+    }
+    // The lifetime may have settled and cleared its slot before destroy runs.
+    // A settled pool alone cannot prove that a failed native close succeeded.
+    const failure = this.guardedSnapshotFailure?.error
+    if (failure instanceof SnapshotArchiveSourceCleanupError) throw failure
+    if (this.snapshotJournalCaptureFailure !== undefined) throw this.snapshotJournalCaptureFailure
+    if (this.snapshotJournalMaintenanceFailure !== undefined) throw this.snapshotJournalMaintenanceFailure
   }
 
   override async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
@@ -1689,6 +2234,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async dropAllData(): Promise<void> {
     // Only using migrations to migrate down, don't need valid properties for settings table.
     const migrationSource = new KnexMigrations('test', '', '', 1024)
+    migrationSource.migrations[SNAPSHOT_SQLITE_INDEX_MIGRATION].down = dropGenerationForDataDeletion
 
     // Check if this is a SQLite database by looking at the Knex client config
     const clientName = (this.knex.client as { config?: { client?: string } }).config?.client ?? ''
@@ -1711,6 +2257,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
 
     try {
+      // An interrupted, unpublished generation has no journal entry to roll back.
+      // Explicit full deletion still removes its owned auxiliary schema first.
+      await dropGenerationForDataDeletion(this.knex)
       for (let i = 0; i < count; i++) {
         const version = await this.knex.migrate.currentVersion(config)
         if (version === 'none') return
@@ -2254,7 +2803,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
             void this.select(1).from('action_batch_outputs as abo').whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           })
           .whereIn('t.status', status)
-          .select('o.*')
+          .select<TableOutput[]>('o.*')
           .forUpdate()
 
       let output: TableOutput | undefined

@@ -3,10 +3,10 @@ id: pkg-payment-express-middleware
 title: '@bsv/payment-express-middleware'
 kind: package
 domain: middleware
-version: '2.1.9'
+version: '2.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/payment-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware'
@@ -16,7 +16,9 @@ tags: [middleware, express, payment, '402', brc-29]
 
 # @bsv/payment-express-middleware
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+The unpublished 2.2 candidate adds opt-in BRC-118 multipart payments behind verified raw authentication. It preserves the existing payment validation, replay and internalization path. See the [BRC-118 deployment guide](../../guides/brc118-payments.md), including CORS and receiver-first rollout.
+
+This source candidate declares SDK peer `^2.9.0 || ^3.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 

@@ -77,6 +77,45 @@ describe('StorageClient telemetry', () => {
     }
   )
 
+  describe.each([
+    ['browser and Node', StorageClient],
+    ['mobile', StorageMobile]
+  ])('%s callback failures', (_name, Client) => {
+    it.each([false, true])('preserves response-read rejection with telemetry enabled=%s', async enabled => {
+      const events: TelemetryEvent[] = []
+      const client = new Client(
+        {} as WalletInterface,
+        'https://storage.example.test/rpc',
+        enabled ? { telemetry: { sink: { capture: (event: TelemetryEvent) => events.push(event) } } } : {}
+      )
+      const error = new Error('response read failed')
+      const text = jest.fn(() => {
+        throw error
+      })
+      Reflect.set(client, 'authClient', {
+        fetch: jest.fn(async () => ({
+          ok: true,
+          status: 200,
+          headers: new Headers(AUTHENTICATED_HEADERS),
+          text
+        }))
+      })
+
+      const result = Reflect.get(client, 'rpcCall').call(client, 'isAvailable', [{ userId: 1 }])
+      expect(result).toBeInstanceOf(Promise)
+      await expect(result).rejects.toBe(error)
+      expect(text).toHaveBeenCalledTimes(1)
+      if (enabled) {
+        expect(events.filter(event => event.spanStatus === 'error').map(event => event.name)).toEqual([
+          'wallet.storage.response.read',
+          'wallet.storage.rpc'
+        ])
+      } else {
+        expect(events).toEqual([])
+      }
+    })
+  })
+
   it('preserves caller logging while reporting remote and protocol failures', async () => {
     const events: TelemetryEvent[] = []
     const client = new StorageClient({} as WalletInterface, 'https://storage.example.test/rpc', {

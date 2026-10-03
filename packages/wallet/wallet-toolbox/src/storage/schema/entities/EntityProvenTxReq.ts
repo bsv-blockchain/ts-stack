@@ -26,11 +26,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     return new EntityProvenTxReq(reqApi)
   }
 
-  static fromTxid(
-    txid: string,
-    rawTx: number[] | Uint8Array,
-    inputBEEF?: number[] | Uint8Array
-  ): EntityProvenTxReq {
+  static fromTxid(txid: string, rawTx: number[] | Uint8Array, inputBEEF?: number[] | Uint8Array): EntityProvenTxReq {
     const now = new Date()
     return new EntityProvenTxReq({
       provenTxReqId: 0,
@@ -626,6 +622,10 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     syncMap: SyncMap,
     trx?: TrxToken
   ): Promise<boolean> {
+    const previousBatch = this.batch
+    const previousHistory = this.apiHistory
+    const previousNotify = this.apiNotify
+    const previousUpdatedAt = this.updated_at.getTime()
     if (!this.batch && ei.batch) this.batch = ei.batch
     else if (this.batch && ei.batch && this.batch !== ei.batch) {
       throw new WERR_INTERNAL('ProvenTxReq merge batch not equal.')
@@ -635,6 +635,13 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     this.mergeNotifyTransactionIds(ei, syncMap)
 
     this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
+    if (
+      this.batch === previousBatch &&
+      this.apiHistory === previousHistory &&
+      this.apiNotify === previousNotify &&
+      this.updated_at.getTime() === previousUpdatedAt
+    )
+      return false
     await storage.updateProvenTxReq(this.id, this.toApi(), trx)
     return false
   }

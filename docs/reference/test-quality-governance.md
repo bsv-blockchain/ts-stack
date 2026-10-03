@@ -147,8 +147,8 @@ when an arbitrary-input invariant can be stated.
 ## Mutation-validated fuzzing
 
 Property generation is only valuable when its assertions can detect a broken
-invariant. Every one of the 25 registered property suites therefore has a
-matching Stryker mutation target. The target mutates the implementation owned
+invariant. Each registered property suite therefore has a matching Stryker mutation
+target. The target mutates the implementation owned
 by that property boundary and runs the smallest relevant combination of
 property and deterministic regression tests. This catches weak round trips,
 uncorrelated generators, assertions that only prove “did not throw,” and rare
@@ -180,7 +180,7 @@ fan out to all targets; selector, scoring, unrelated SDK, CI, or governance
 edits do not. Selector and score evaluation are covered by the zero-install
 repository contract. The independent `Mutation quality` workflow runs the full
 matrix every Sunday and can run one exact target manually. Targets execute
-in parallel, reuse one workspace build, cancel unfinished siblings after a
+in parallel, reuse one workspace build, let selected siblings finish after a
 failure, and preserve machine-readable reports for 30 days. Mutation runs use
 the policy's fixed 300-case fast-check seed by default so the dry run and every
 mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
@@ -192,11 +192,105 @@ browser/mobile consumers, infrastructure, and runtime images. Empty image and
 infrastructure matrices do not allocate build runners. The standalone
 TypeScript conformance workflow runs only when its vectors, specifications,
 generator, or workflow change; SDK-dependent conformance behavior remains an
-affected workspace regression. Cheap repository, dependency, scope, and Sonar
-checks gate installation and compilation, matrix lanes cancel siblings on a
-failure, and every CI job has a reviewed timeout instead of GitHub's six-hour
-default. The zero-install orchestration tests enforce these resource and
-fail-fast controls.
+affected workspace regression. Cheap repository, dependency and scope checks gate installation and
+compilation; Sonar remains required by the final merge gate. Selected matrix
+lanes finish after a sibling failure, and every CI job has a reviewed timeout
+instead of GitHub's six-hour default. The zero-install orchestration tests
+enforce these resource and complete-campaign controls.
+
+The retained-snapshot target recycles each Stryker test worker after eight mutant
+executions to bound accumulated worker state. Every replacement worker runs the
+same canonical test selection; the complete mutant union, four-worker concurrency,
+property seeds and budgets, per-test limits and aggregate gates remain unchanged.
+Worker exits and incomplete reports remain failed qualification evidence.
+
+The retained-snapshot campaign and the three snapshot-sync groups have a
+90-minute limit in PR CI and the standalone mutation workflow. The retained
+campaign completed within that allowance, but the complete snapshot-sync campaign
+still exceeded it ([hosted timeout](https://github.com/bsv-blockchain/ts-stack/actions/runs/36721037438/job/109907026722)).
+Snapshot sync is therefore divided into orchestration (`wallet-snapshot-sync`),
+destination (`wallet-snapshot-sync-destination`) and row mapping
+(`wallet-snapshot-sync-rows`). Their disjoint ranges preserve the entire original
+source scope, and every group runs the complete original selected test suite.
+Each group independently requires at least 90% detection and zero uncovered or
+invalid mutants; an aggregate score cannot hide a weak group.
+
+The remote HTTP and service campaigns also exceeded their existing 90-minute
+allowances on `6814ed282e617a7b572899915648fe03cf3d47f2`: the
+[HTTP job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36854954813/job/110346098383)
+started 694 mutants after 550 passing dry-run tests, and the
+[service job](https://github.com/bsv-blockchain/ts-stack/actions/runs/36854954813/job/110346098403)
+started 1,357 mutants after 266 passing dry-run tests. Neither produced a complete
+report. Their execution partitions keep every canonical specification exactly
+once. HTTP places all server ranges together, all client ranges together, and
+the whole protocol/RPC/transport sources in the protocol fallback. Service places
+the whole controller in one part, guard/registry in another, the whole guard
+backend separately, and all other sources in the persistence fallback.
+Future canonical files join the
+fallback automatically. Every execution part keeps the full original tests,
+property suite, input dependencies and runner configuration. The existing
+provenance and aggregate checks require all parts from the same source and
+configuration, then evaluate the complete canonical mutant union; scores are
+not averaged. These execution parts do not create new canonical targets.
+
+The [next complete run](https://github.com/bsv-blockchain/ts-stack/actions/runs/36874901071)
+also reached the 90-minute limit for retained reader/lifecycle, archive, remote
+reader and service guard execution. Retained profile and relation migrations now
+each execute as a whole-file part, alongside reader, storage and the lifecycle
+fallback. The subsequent certificate-field migration is registered as another
+complete source and whole-file part with the same full retained test selection;
+its independently defined fixture is included in the input digest. Global
+proof/request migration, model, MySQL metadata, SQLite metadata, bootstrap and
+trigger sources are each registered in full, with the independent global fixture
+included in the same retained input digest. The entry point and model share
+`global-index`; the metadata backends, bootstrap and triggers each run in a
+separate whole-file part. This follows a complete local monolithic run lasting
+64 minutes that failed the zero-invalid gate; that failed evidence is retained.
+The extraction preserves the original declaration bodies, and the separately
+tested descriptor/SQL-binding corrections make broken variants fail within the
+awaited migration. Every part retains the complete canonical test selection and
+the existing 90-minute limit. These parts preserve the complete canonical
+source and test union. Archive groups store/migration, source/closure and the capture fallback.
+Remote reader groups lease, rows, page/open/cursor and the admission fallback.
+These partitions retain every original source specification and full test
+configuration. The single-file retained reader remains one complete part;
+its traversal tests assert fixture bounds and cursor progress so broken paging
+fails promptly. Partitioning and test changes require fresh complete evidence;
+the cancelled run does not qualify these targets.
+
+The eight SQLite conflict-repair helpers remain complete canonical retained
+sources. Identity and membership each execute as a whole-file part; generation
+shares its part with legacy ownership, bootstrap with state, and retirement with
+the migration entry point. The identity/membership split follows a local
+90-minute timeout on source `18748e2f4`, with 465 instrumented mutants and all 759
+baseline tests passing but no complete mutation result. Preserve that failure
+and its three worker crash warnings. All parts keep the full current canonical
+tests and fixtures, four workers, reuse eight, the 90-minute limit, and their
+independent critical score and zero-uncovered/invalid gates. Aggregation requires
+the complete disjoint source union and fresh matching provenance; no target,
+property budget, dependency-selection rule or acceptance threshold changes.
+
+The journal target includes the complete receipt module in its own execution
+part. All twelve journal parts retain the common complete tests/fixtures and
+the existing governed property suite, including generated receipt histories.
+The native receipt fixture is an explicit additional input and a 60-second group
+alongside the unchanged owned MySQL generation/server-crash groups. Target and
+property counts, 90% aggregate gate, zero invalid/uncovered requirement, 300-case
+seeded property settings, worker/reuse limits and existing deadlines are preserved.
+
+PR CI downloads each selected target's complete partition artifacts before
+canonical verification. The orchestration regression derives the required
+downloads from the canonical target registry and execution map, preventing a
+new partitioned target from being omitted. Scheduled/manual qualification uses
+its existing target matrix to download and independently verify the same union.
+
+Both workflows use a 45-minute default and the same explicit 90-minute target
+allowance list, including retained snapshots, snapshot sync, archive, remote
+HTTP, remote reader and remote service. The execution split does not change
+those limits, four mutation workers, six parallel jobs, individual mutant/test
+deadlines, the 300-case fixed-seed property campaign or the 90% detection and
+zero-uncovered/zero-invalid gates. A deadline cancellation is not a completed
+report or a passing score.
 
 List and run targets locally:
 

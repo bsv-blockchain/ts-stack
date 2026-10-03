@@ -155,6 +155,7 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
     'wallet-snapshot-sync',
     'wallet-snapshot-sync-destination',
     'wallet-snapshot-sync-rows',
+    'wallet-snapshot-remote-reader',
     'root-eviction-journal',
     'root-eviction-records'
   ])

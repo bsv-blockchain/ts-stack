@@ -13,6 +13,20 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
 
+## Resumable synchronization (2.15 candidate)
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, source, options)` adds
+cancellation, durable checkpoints and per-page progress. IndexedDB and Knex local
+destinations yield the manager queue during source/proof I/O and between atomic
+page commits. Remote destinations retain exclusive execution. Use
+`maxRoughSize: 262144` as a measured starting point for constrained clients;
+one oversized record may still exceed this rough page target and is subject to
+the provider's separate transfer bound. Resume by invoking the API again: the
+destination checkpoint is authoritative, including after a lost acknowledgement.
+See the [sync contract and next-stage design](../../../../docs/guides/wallet-sync-reliability.md).
+This is an eventual replica merge; it does not create a coherent source snapshot
+or change the existing archive format.
+
 ## BRC-100 result compatibility
 
 Version 2.14.1 keeps internal exact-spend accounting off public `createAction`
@@ -32,6 +46,13 @@ Test the independent key and data recovery paths on a replacement device.
 Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
 [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
 [recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
+The unpublished candidate exports `RetainedReadSnapshot` and
+`RetainedReadSnapshotOptions` types. They do not add a retained IndexedDB,
+remote, or native mobile implementation. Unsupported local providers report
+`supportsRetainedReadSnapshot() === false` and refuse `openReadSnapshot()`.
+The SQL implementation and its connection/lifetime limits are described in the
+[sync guide](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#retained-local-sql-read-views-unpublished-candidate).
+
 Portable helpers require a concrete local `StorageProvider`; a remote client
 is not one. Qualify the local-copy path and device memory limits before adding
 export/import UI.
@@ -62,6 +83,10 @@ The package publishes:
 - explicit `react-native`, `import`, and `require` export conditions.
 
 The packed package is validated with Metro and compiled to optimized Hermes bytecode. Node.js 22 or newer is required for the published tooling and contributor workflow, not as an on-device runtime.
+
+The Hermes probe uses a stable relative input filename and verifies identical
+bytecode from two independent build directories. Source maps and debug data are
+retained; random temporary paths must not affect the unchanged size budgets.
 
 ### Password derivation without WebAssembly
 
@@ -187,6 +212,40 @@ pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 
 The gate installs the packed packages in a clean project, bundles them with Metro, checks the public export and mobile-safe module contracts, validates source maps, compiles the result with Hermes, and enforces compressed and uncompressed size budgets.
 
+### 2.15 candidate size review and integration history
+
+The September 28 integration with current main measures Metro **2,401,423 /
+619,596 / 468,551** bytes and Hermes **4,646,003 / 1,969,117 / 1,532,602**
+bytes (raw/gzip/Brotli), within every retained ceiling. Native module composition,
+source maps and Hermes compilation pass.
+
+The reviewed Hermes Brotli ceiling increases from 1,520,000 to 1,675,000 bytes
+for bounded resumable sync, proof recovery and prepared BRC-118 payment transport.
+The integrated candidate retains main’s subsequently reviewed Metro ceilings
+and Hermes raw/gzip ceilings, plus this candidate’s 1,675,000-byte Hermes
+Brotli ceiling. No production dependency,
+minifier configuration, public export, source-map or compression setting changes
+accompany this budget adjustment.
+
+The September 24 candidate, before current-main integration, measured with
+official Node 24.18.0:
+
+| Artifact | Raw bytes | gzip bytes | Brotli bytes |
+| -------- | --------: | ---------: | -----------: |
+| Metro    | 2,377,408 |    609,909 |      463,868 |
+| Hermes   | 4,619,927 |  1,955,135 |    1,523,206 |
+
+The approved Hermes Brotli ceiling gives 9.97% headroom after the final forwarding
+and normalization refinements. Retaining the explicitly reviewed 1,675,000-byte ceiling
+is the rationale for this small difference from the normal 10% margin.
+For comparison, [upstream SDK 2.8.3 validation](https://github.com/bsv-blockchain/ts-stack/actions/runs/35948047970)
+measured Metro at 2,360,475 / 602,505 / 458,183 bytes and Hermes at
+4,609,755 / 1,931,907 / 1,500,120 bytes. The gate continues to inspect the installed
+module graph, reject Node-only modules, validate maps and compile Hermes bytecode.
+A matching-input cross-platform check produced identical Hermes bytes on Linux
+x86_64 and macOS ARM, including reproduction across independent build directories.
+These measurements describe this candidate fixture, not an application-size guarantee.
+
 The reviewed 2.14.2 identity candidate `b088c1bef` measures Metro **2,379,919 / 612,262 /
 462,261** bytes and Hermes **4,629,563 / 1,943,675 / 1,510,174** bytes
 (raw/gzip/Brotli). Compared with the preceding unpublished 2.14.2 candidate,
@@ -204,3 +263,27 @@ This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
 mobile build.
+
+The 2.15 candidate also exports version-one `WalletReadSnapshot`, cursor/page and
+packed-row types. The base provider explicitly refuses unsupported local pages;
+only `StorageKnex` currently implements them. Type availability does not imply an
+IndexedDB, native mobile or remote snapshot implementation. Existing sync and
+archive APIs retain their behavior. See the [SQL paging contract](../../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).
+
+The candidate also exports `snapshotSyncTables` and the version-one
+`SnapshotSyncSource`, `SnapshotSyncCheckpoint`, `SnapshotSyncCommit`,
+`SnapshotSyncStorage` and `SnapshotSyncTable` types. `syncToWriterResumable` adds
+push progress/cancellation with an explicit exclusive fallback. These exports
+support adapter integration; they do not enable SQL retention or the auxiliary
+SQL migration in this browser/mobile entry point. Current IndexedDB and remote
+paths retain their documented behavior. See the [local SQL integration and remaining limits](../../../../docs/guides/wallet-sync-reliability.md#durable-local-sql-sync-and-ordinary-backup).
+
+The candidate now includes `getSnapshotArchiveTransport(identityKey)` on
+`StorageClient`. It negotiates a migrated WAL/MySQL server's immutable archive
+capability and validates bounded authenticated admission/status, directories and
+pages. A dedicated response ceiling applies before parsing; server and storage
+identity bindings remain shared with ordinary RPC. `snapshotArchives: false`
+disables the transport, and old/disabled peers decline it. This is a low-level
+transport, not a retained database adapter or adoption by ordinary sync/export.
+Remote row cursors, manager integration, portable semantics and physical platform
+acceptance remain open. See the [archive transport contract](../../../../docs/guides/wallet-sync-reliability.md#authenticated-snapshot-archive-transport-unpublished-candidate).

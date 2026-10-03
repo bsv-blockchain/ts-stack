@@ -13,6 +13,20 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For React Native / mobile, use [`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile).
 
+## Resumable synchronization (2.15 candidate)
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, source, options)` adds
+cancellation, durable checkpoints and per-page progress. IndexedDB and Knex local
+destinations yield the manager queue during source/proof I/O and between atomic
+page commits. Remote destinations retain exclusive execution. Use
+`maxRoughSize: 262144` as a measured starting point for constrained clients;
+one oversized record may still exceed this rough page target and is subject to
+the provider's separate transfer bound. Resume by invoking the API again: the
+destination checkpoint is authoritative, including after a lost acknowledgement.
+See the [sync contract and next-stage design](../../../../docs/guides/wallet-sync-reliability.md).
+This is an eventual replica merge; it does not create a coherent source snapshot
+or change the existing archive format.
+
 ## BRC-100 result compatibility
 
 Version 2.14.1 keeps internal exact-spend accounting off public `createAction`
@@ -32,6 +46,13 @@ data copy and test recovery on a clean profile.
 Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
 [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
 [recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
+The unpublished candidate exports `RetainedReadSnapshot` and
+`RetainedReadSnapshotOptions` types. They do not add a retained IndexedDB,
+remote, or native mobile implementation. Unsupported local providers report
+`supportsRetainedReadSnapshot() === false` and refuse `openReadSnapshot()`.
+The SQL implementation and its connection/lifetime limits are described in the
+[sync guide](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#retained-local-sql-read-views-unpublished-candidate).
+
 Portable helpers require a concrete local `StorageProvider`; a remote client
 is not one. Qualify the local-copy path and device memory limits before adding
 export/import UI.
@@ -206,3 +227,27 @@ reference, reclaim, commission, and relation lookups avoid repeated full-wallet
 scans during restores. Legacy duplicate transaction IDs remain intact. Clients
 that request an older IndexedDB schema version cannot reopen this database;
 retain a compatible client when using the local backup.
+
+The 2.15 candidate also exports version-one `WalletReadSnapshot`, cursor/page and
+packed-row types. The base provider explicitly refuses unsupported local pages;
+only `StorageKnex` currently implements them. Type availability does not imply an
+IndexedDB, native mobile or remote snapshot implementation. Existing sync and
+archive APIs retain their behavior. See the [SQL paging contract](../../../../docs/guides/wallet-sync-reliability.md#profile-bound-local-sql-pages).
+
+The candidate also exports `snapshotSyncTables` and the version-one
+`SnapshotSyncSource`, `SnapshotSyncCheckpoint`, `SnapshotSyncCommit`,
+`SnapshotSyncStorage` and `SnapshotSyncTable` types. `syncToWriterResumable` adds
+push progress/cancellation with an explicit exclusive fallback. These exports
+support adapter integration; they do not enable SQL retention or the auxiliary
+SQL migration in this browser/mobile entry point. Current IndexedDB and remote
+paths retain their documented behavior. See the [local SQL integration and remaining limits](../../../../docs/guides/wallet-sync-reliability.md#durable-local-sql-sync-and-ordinary-backup).
+
+The candidate now includes `getSnapshotArchiveTransport(identityKey)` on
+`StorageClient`. It negotiates a migrated WAL/MySQL server's immutable archive
+capability and validates bounded authenticated admission/status, directories and
+pages. A dedicated response ceiling applies before parsing; server and storage
+identity bindings remain shared with ordinary RPC. `snapshotArchives: false`
+disables the transport, and old/disabled peers decline it. This is a low-level
+transport, not a retained database adapter or adoption by ordinary sync/export.
+Remote row cursors, manager integration, portable semantics and physical platform
+acceptance remain open. See the [archive transport contract](../../../../docs/guides/wallet-sync-reliability.md#authenticated-snapshot-archive-transport-unpublished-candidate).

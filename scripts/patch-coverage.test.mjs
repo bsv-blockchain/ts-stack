@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 import {
   changedLinesFromDiff,
@@ -8,6 +11,7 @@ import {
   hasRuntimeChange,
   isStaticMarkdownModule,
   omitStaticMarkdownModules,
+  omitTypeOnlyChanges,
   mergeLcov,
   runtimeComparisonAvailable
 } from './patch-coverage.mjs'
@@ -280,4 +284,68 @@ test('the coverage aggregation job installs its locked compiler before classifyi
   assert.match(beforeGate, /if \(!runtimeComparisonAvailable\(\)\) throw new Error/)
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   assert.equal(typeof manifest.devDependencies.esbuild, 'string')
+})
+
+test('new erased declarations need no LCOV while runtime, unsupported syntax and unreadable Git sources stay governed', t => {
+  const repository = mkdtempSync(join(tmpdir(), 'patch-coverage-source-'))
+  t.after(() => rmSync(repository, { recursive: true, force: true }))
+  const git = (...args) =>
+    execFileSync('/usr/bin/git', args, {
+      cwd: repository,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    }).trim()
+  const write = (name, source) => writeFileSync(join(repository, 'packages', name), source)
+  git('init', '--initial-branch=main')
+  mkdirSync(join(repository, 'packages'))
+  write('existing.ts', 'export interface Options { first: string }')
+  git('add', 'packages')
+  const commit = () =>
+    git(
+      '-c',
+      'user.name=Coverage fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-m',
+      'Synthetic source'
+    )
+  commit()
+  const base = git('rev-parse', 'HEAD')
+  write('existing.ts', 'export interface Options { first: string; second?: number }')
+  write(
+    'new-types.ts',
+    "import type * as values from './values'; export type Value = values.Value; export interface Options { value: Value }"
+  )
+  write('new-runtime.ts', 'export const value = 1')
+  write('new-enum.ts', 'export enum State { Ready }')
+  write('new-effect.ts', 'import "./start.js"; export interface Options {}')
+  write('new-invalid.ts', 'invalid TypeScript {')
+  git('add', 'packages')
+  commit()
+  const names = [
+    'existing.ts',
+    'new-types.ts',
+    'new-runtime.ts',
+    'new-enum.ts',
+    'new-effect.ts',
+    'new-invalid.ts'
+  ]
+  const changed = new Map(names.map(name => ['packages/' + name, new Set([1])]))
+  omitTypeOnlyChanges(changed, base, repository)
+  const expected = runtimeComparisonAvailable() ? names.slice(2) : names
+  assert.deepEqual(
+    [...changed.keys()],
+    expected.map(name => 'packages/' + name)
+  )
+  assert.throws(() =>
+    omitTypeOnlyChanges(new Map([['packages/missing.ts', new Set([1])]]), base, repository)
+  )
+  assert.throws(() =>
+    omitTypeOnlyChanges(
+      new Map([['packages/new-types.ts', new Set([1])]]),
+      'missing-base',
+      repository
+    )
+  )
 })

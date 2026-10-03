@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.14.5'
+version: '2.15.0'
 last_updated: '2026-09-29'
 last_verified: '2026-09-29'
 review_cadence_days: 30
@@ -14,6 +14,8 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-client
+
+The unpublished 2.15 candidate exposes resumable sync with atomic IndexedDB page commits and foreground work between pages. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md), including cancellation, inclusive timestamp boundaries and measured native-browser behavior.
 
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
