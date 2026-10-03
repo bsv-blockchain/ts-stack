@@ -248,7 +248,7 @@ const rangePlans = new Map(
           'src/overlayAcquisitionCovenantTerms.ts',
           {
             label: 'terms',
-            starts: [1, 136, 338]
+            starts: [1, 132, 167, 225, 288, 402]
           }
         ],
         [
@@ -325,6 +325,22 @@ const rangePlans = new Map(
       ]
     ],
     [
+      'wallet-recovery-codec',
+      [
+        [
+          'src/storage/actionRecovery/ActionRecoveryCodec.ts',
+          { label: 'codec', starts: [1, 51, 102] }
+        ]
+      ]
+    ],
+    [
+      'overlay-proposal-admission',
+      [
+        ['src/ProposalAdmission.ts', { label: 'proposal', starts: [1, 155, 229, 294] }],
+        ['src/RetainedTopicAdmission.ts', { label: 'retained', starts: [1] }]
+      ]
+    ],
+    [
       'revenue-listing-purchase',
       [
         [
@@ -338,6 +354,20 @@ const rangePlans = new Map(
     ]
   ].map(([id, files]) => [id, new Map(files)])
 )
+
+const refinedFileParts = new Map([
+  [
+    'private-publication-coordination',
+    new Map([
+      [
+        'access',
+        new Map([
+          ['src/private/PrivatePublicationAccess.ts', { label: 'access', starts: [1, 125] }]
+        ])
+      ]
+    ])
+  ]
+])
 
 function specificationRange(specification, lines) {
   const match = /:(\d+)(?:-(\d+))?$/.exec(specification)
@@ -415,7 +445,12 @@ export function partitionMutationTarget(targetId, target) {
     groups.set(id, mutate)
   }
   if (groups.size === 0) throw new Error('Empty canonical mutation source union')
-  return [...groups].map(([id, mutate]) => ({ id, target: { ...target, mutate } }))
+  const refinements = refinedFileParts.get(targetId)
+  return [...groups].flatMap(([id, mutate]) => {
+    const original = { id, target: { ...target, mutate } },
+      refinement = refinements?.get(id)
+    return refinement ? semanticPartitions(original.target, refinement) : [original]
+  })
 }
 
 export function partitionedMutationTargets(selected, targets) {
@@ -431,6 +466,15 @@ export function partitionedMutationTargets(selected, targets) {
 export function selectedMutationPartition(targetId, target, partition = 'whole') {
   if (partition === 'whole') return target
   const selected = partitionMutationTarget(targetId, target).find(value => value.id === partition)
+  // Keep an existing complete file-part CLI usable as a diagnostic alias. The
+  // execution matrix and complete aggregate require every new refined part.
+  if (!selected && refinedFileParts.get(targetId)?.has(partition)) {
+    const plan = plans.get(targetId)
+    const mutate = target.mutate.filter(
+      specification => (plan.files.get(partitionFile(specification)) ?? plan.fallback) === partition
+    )
+    if (mutate.length) return { ...target, mutate }
+  }
   if (!selected) throw new Error(`Unknown mutation execution partition ${targetId}/${partition}`)
   return selected.target
 }

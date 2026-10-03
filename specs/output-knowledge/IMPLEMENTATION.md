@@ -123,7 +123,14 @@ submission and GASP behavior remains available to applications that do not opt i
   delivery with commit-before-acknowledgement. Optional adapters live under the
   separate `@bsv/output-knowledge/sources` entry.
 
-## Remaining checkpoint-two work
+## Earlier checkpoint-two work inventory
+
+The entries in this section record the earlier implementation progression. The
+[current acceptance inventory](./CHECKPOINT2.md) tracks the integrated workflows
+and reproducible selectors. Those reference compositions are implemented and
+demonstrated; the remaining checkpoint requirement is complete qualification on
+one final published commit. Historical component results below do not satisfy
+that final gate.
 
 Current wallet/domain work adds an opt-in local SQLite action-recovery controller,
 atomic allocation records and exact prepared/final transaction retention. The
@@ -4160,3 +4167,87 @@ JavaScript analysis independently reproduces all four original findings under
 the corresponding actual rules and reports zero on the corrected file. The
 complete four-file installed/control suite passes all 96 tests without skips.
 Final-head remote reanalysis and complete campaign evidence remain required.
+
+### Complete covenant stages and remaining bounded execution
+
+The original 295-mutant covenant execution part reaches its unchanged 45-minute
+limit without a complete report. All 936 declared consumed inputs remain
+unchanged through termination; no score or qualification is inferred. The
+private-publication binding part separately completes all 146 mutants in
+1,733.455 seconds: 134 killed, twelve survived, 91.78% and zero uncovered, invalid
+or unexecuted mutants. All 1,145 consumed source/configuration hashes remain
+unchanged. Its immutable hosted baseline failure remains recorded independently.
+
+The covenant terms validator now separates standing mechanism checks,
+authenticated Offer, individual consent and listing binding, selected capability
+and accepted policy, and content resolution. The original validation expressions,
+order, public signature, returned fields and error codes remain. Its new helper
+blocks introduce eight additional mutants; the new canonical inventory is 503,
+not a relabeled 495. Exact pinned-engine replay covers every new tuple once,
+across parts of 68, 82, 47, 96, 78, 65 and 67. The complete original 89-test union
+in twenty suites passes in 77.599 seconds with the original 300-case properties,
+seed, replay and interrupt limits; all 1,250 recorded source/configuration hashes
+remain unchanged.
+The largest 96-mutant part completes in 1,266.515 seconds within the original
+45-minute bound: 76 killed and twenty survived, 79.17%, with zero uncovered,
+invalid or unexecuted mutants. All 1,250 recorded inputs remain unchanged. This
+partial report does not enforce or satisfy the original full-target minimum
+score of 90%; the complete 503-mutant aggregate is still required.
+
+Additional execution subdivisions preserve every original wallet recovery codec
+and proposal admission mutant: 264 and 336 respectively. Only the existing
+private-publication access part is refined from 104 to 95 and nine; every other
+publication part remains identical. Its prior complete-file selector remains a
+diagnostic alias, while canonical aggregation requires both refined parts.
+All 141 canonical target definitions and every original source, test, additional
+input, configuration, property, runner, worker and budget setting are unchanged.
+An independent before/after comparison confirms the 137 unaffected execution
+plans and every non-access publication part are identical. The full derived
+matrix has 246 rows. Both additive pinned artifact downloaders run before
+canonical aggregation, with the original selection guards.
+
+The initial complete controls reject source boundaries shifted by canonical
+formatting and downloaders placed after aggregation; those failures are retained
+and corrected. The complete installed/control union passes all 96 tests, and
+workspace health, lint, full formatting and strict type checks pass. LCH build
+and lint also pass. Actual-rule typed analyzer comparison retains the four
+original remote findings and reports zero for the correction. Main-base
+comparison across the five changed code files introduces zero recommended-rule
+findings, without calling inherited findings a clean full-file scan.
+
+The older immutable full campaign exposes further original deadline and baseline
+failures. Smaller complete execution parts do not repair a five-minute baseline
+timeout; original-profile reproduction and performance measurement remain
+required. If the necessary derived execution inventory exceeds GitHub's single
+matrix limit, its dispatch must be partitioned without losing canonical rows,
+increasing concurrency or weakening any original receipt or final gate. That
+follow-on design is separately coordinated before shared controls change. All
+failures remain visible. A final blank-selector campaign must still independently
+qualify every canonical target and execution part on the exact published source.
+
+The exact published `26b0963f` head passes hosted Sonar and CodeQL, but its full
+application coverage run remains red: 226 of 227 suites and 3,346 of 3,347 tests
+pass, while the native purchase-buyer property reaches the original 150-second
+interrupt after 227 of 300 cases. The complete run finishes in 1,305.244 seconds
+within the existing coverage supervisor allowance. The failed property and
+all original limits remain; 227 cases do not substitute for 300. A full
+300-case native buyer CPU profile without coverage passes in 79.981 seconds,
+with every recorded input unchanged. JSON parsing and durable JSON handling
+are the measured major costs. A first outside-only plain-string parser candidate
+preserves 40,028 tested string/UTF-8 outcomes but is slower in all five paired
+rounds and is not adopted. Microbenchmarks and individual property profiles do
+not qualify the full package or final hosted head.
+
+Complete LCH package coverage, including every original suite beyond the
+covenant target's 89-test union, passes all 245 tests in 37 suites in 80.398
+seconds with the original global thresholds and 300-case properties. All 1,250
+recorded inputs remain unchanged. Exact-tarball browser and public export/bin
+checks also pass. An earlier coverage diagnostic selected the covenant-only
+89-test union against package-wide thresholds and correctly failed those
+thresholds; that incomplete package run is retained and does not count as
+package qualification. A separate original native buyer property with coverage
+enabled completes all 300 cases in 79.177 seconds, while appropriately failing
+the unrelated package-wide coverage threshold because it selects only one
+suite. It is a performance profile, not package qualification. The full
+227-suite coverage profile is separately measured with serial workers to
+isolate contention while retaining every case, deadline and global gate.

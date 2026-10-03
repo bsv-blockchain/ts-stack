@@ -129,13 +129,42 @@ export interface LCHOverlayCovenantTerms {
   notAfter?: bigint
 }
 
-/** Authenticate one reusable standing Offer and individual consent. No buyer
- * is inserted into the Offer; no signature/descriptor substitutes for Script,
- * lineage, role authority, admission or release verification.
- */
-export async function validateLCHOverlayCovenantTerms(
-  input: LCHOverlayCovenantTermsInput
-): Promise<LCHOverlayCovenantTerms> {
+function validateCovenantOfferMechanism(offer: SignedObject) {
+  const payment = map(offer.body.payment, 'Offer payment'),
+    pricing = map(payment.pricing, 'Offer pricing'),
+    keyDelivery = map(offer.body.keyDelivery, 'Offer key delivery'),
+    enforcement = map(offer.body.enforcement, 'Offer enforcement')
+  closed(payment, ['protocol', 'endpoint', 'asset', 'unit', 'recoveryPeriodSeconds', 'pricing'])
+  closed(pricing, ['kind', 'requirements'])
+  closed(keyDelivery, ['mechanism'])
+  closed(enforcement, ['class'])
+  lchAssert(
+    offer.body.usageProfile === LCH_PROFILES.fixedRender &&
+      payment.protocol === LCH_OVERLAY_PROFILES.collectorSettlement &&
+      keyDelivery.mechanism === LCH_MECHANISMS.brc78Key &&
+      (enforcement.class === LCH_IRI + '#advisory' ||
+        enforcement.class === LCH_IRI + '#conformingApplication') &&
+      pricing.kind === 'fixed' &&
+      Array.isArray(pricing.requirements) &&
+      pricing.requirements.length === 1,
+    'ERR_LCH_PROFILE_UNSUPPORTED',
+    'Unsupported covenant fixed-render mechanism'
+  )
+  const requirement = map(pricing.requirements[0], 'Standing requirement')
+  // Buyer is forbidden even if it equals this Request's authenticated buyer.
+  closed(requirement, ['dutyUid', 'payee', 'endpoint', 'satoshis'], ['interest'])
+  lchAssert(
+    requirement.interest === undefined ||
+      (typeof requirement.interest === 'string' &&
+        requirement.interest.length > 0 &&
+        requirement.interest.length <= 4096),
+    'ERR_LCH_PROFILE_UNSUPPORTED',
+    'Standing requirement interest is invalid'
+  )
+  return { payment, requirement }
+}
+
+async function authenticateCovenantOffer(input: LCHOverlayCovenantTermsInput) {
   lchAssert(
     input.header instanceof Uint8Array &&
       input.header.length <= LCH_LIMITS.headerBytes &&
@@ -175,37 +204,37 @@ export async function validateLCHOverlayCovenantTerms(
     'Covenant Offer critical semantics differ'
   )
   await validateOffer(offer, verifier, binding.seller, { supportedCriticalIdentifiers: CRITICAL })
-  const payment = map(offer.body.payment, 'Offer payment'),
-    pricing = map(payment.pricing, 'Offer pricing'),
-    keyDelivery = map(offer.body.keyDelivery, 'Offer key delivery'),
-    enforcement = map(offer.body.enforcement, 'Offer enforcement')
-  closed(payment, ['protocol', 'endpoint', 'asset', 'unit', 'recoveryPeriodSeconds', 'pricing'])
-  closed(pricing, ['kind', 'requirements'])
-  closed(keyDelivery, ['mechanism'])
-  closed(enforcement, ['class'])
-  lchAssert(
-    offer.body.usageProfile === LCH_PROFILES.fixedRender &&
-      payment.protocol === LCH_OVERLAY_PROFILES.collectorSettlement &&
-      keyDelivery.mechanism === LCH_MECHANISMS.brc78Key &&
-      (enforcement.class === LCH_IRI + '#advisory' ||
-        enforcement.class === LCH_IRI + '#conformingApplication') &&
-      pricing.kind === 'fixed' &&
-      Array.isArray(pricing.requirements) &&
-      pricing.requirements.length === 1,
-    'ERR_LCH_PROFILE_UNSUPPORTED',
-    'Unsupported covenant fixed-render mechanism'
-  )
-  const requirement = map(pricing.requirements[0], 'Standing requirement')
-  // Buyer is forbidden even if it equals this Request's authenticated buyer.
-  closed(requirement, ['dutyUid', 'payee', 'endpoint', 'satoshis'], ['interest'])
-  lchAssert(
-    requirement.interest === undefined ||
-      (typeof requirement.interest === 'string' &&
-        requirement.interest.length > 0 &&
-        requirement.interest.length <= 4096),
-    'ERR_LCH_PROFILE_UNSUPPORTED',
-    'Standing requirement interest is invalid'
-  )
+  const { payment, requirement } = validateCovenantOfferMechanism(offer)
+  return {
+    requestBytes,
+    offer,
+    prepare,
+    descriptor,
+    selection,
+    installed,
+    inspected,
+    verifier,
+    binding,
+    initialRevenue,
+    payment,
+    requirement
+  }
+}
+type AuthenticatedCovenantOffer = Awaited<ReturnType<typeof authenticateCovenantOffer>>
+
+async function authenticateCovenantConsent(context: AuthenticatedCovenantOffer) {
+  const {
+    requestBytes,
+    offer,
+    prepare,
+    descriptor,
+    inspected,
+    verifier,
+    binding,
+    initialRevenue,
+    payment,
+    requirement
+  } = context
   const request = snapshotSignedObject(
       decodeDeterministicCbor(requestBytes),
       'Original License Request'
@@ -252,6 +281,16 @@ export async function validateLCHOverlayCovenantTerms(
     'ERR_LCH_LICENSE',
     'Standing Offer differs from listing descriptor or initial revenue'
   )
+  return { request, releasePolicy, price }
+}
+type AuthenticatedCovenantConsent = Awaited<ReturnType<typeof authenticateCovenantConsent>>
+
+async function validateCovenantCapabilityAndPolicy(
+  context: AuthenticatedCovenantOffer,
+  consent: AuthenticatedCovenantConsent
+) {
+  const { selection, binding, installed, offer, requestBytes, prepare, requirement } = context
+  const { request, releasePolicy, price } = consent
   lchAssert(
     selection.service.kind === 'topic' && selection.profile.id === OUTPUT_PROFILES.purchase,
     'ERR_LCH_PROFILE_UNSUPPORTED',
@@ -290,6 +329,13 @@ export async function validateLCHOverlayCovenantTerms(
     'ERR_LCH_POLICY',
     'Standing Offer policy must leave its assignee open'
   )
+  return policy
+}
+
+async function resolveCovenantContent(
+  input: LCHOverlayCovenantTermsInput,
+  inspected: InspectedLCH
+) {
   const encryption = map(
     inspected.representation.encryption,
     'Asset encryption'
@@ -310,6 +356,24 @@ export async function validateLCHOverlayCovenantTerms(
     'Committed ciphertext exceeds the local bound'
   )
   await input.reader.resolve(inspected)
+  return encryption
+}
+
+/** Authenticate one reusable standing Offer and individual consent. No buyer
+ * is inserted into the Offer; no signature/descriptor substitutes for Script,
+ * lineage, role authority, admission or release verification.
+ */
+export async function validateLCHOverlayCovenantTerms(
+  input: LCHOverlayCovenantTermsInput
+): Promise<LCHOverlayCovenantTerms> {
+  const context = await authenticateCovenantOffer(input)
+  const { prepare, descriptor, selection, inspected, offer, requestBytes, binding, payment } =
+    context
+  const consent = await authenticateCovenantConsent(context)
+  const { request, releasePolicy } = consent
+  const policy = await validateCovenantCapabilityAndPolicy(context, consent)
+  const encryption = await resolveCovenantContent(input, inspected)
+
   return {
     prepare,
     descriptor,

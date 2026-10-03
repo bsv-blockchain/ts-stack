@@ -471,7 +471,12 @@ test('every selected application and LCH execution part is downloaded before can
     id => targets[id].packageDirectory === 'packages/application/output-knowledge'
   )
   const selected = partitionedMutationTargets(
-    [...application, 'lch-overlay-covenant-terms'],
+    [
+      ...application,
+      'lch-overlay-covenant-terms',
+      'wallet-recovery-codec',
+      'overlay-proposal-admission'
+    ],
     targets
   )
   assert.ok(selected.includes('output-knowledge-proposal-core'))
@@ -482,7 +487,9 @@ test('every selected application and LCH execution part is downloaded before can
     'private-purchase-state',
     'private-purchase-coordination',
     'private-purchase-native-clock',
-    'revenue-listing-purchase'
+    'revenue-listing-purchase',
+    'wallet-recovery-codec',
+    'overlay-proposal-admission'
   ]) {
     assert.ok(selected.includes(id), id)
   }

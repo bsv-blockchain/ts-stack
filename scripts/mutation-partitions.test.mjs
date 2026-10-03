@@ -27,24 +27,28 @@ const semanticTargets = [
   'private-purchase-state',
   'private-purchase-coordination',
   'private-purchase-native-clock',
-  'revenue-listing-purchase'
+  'revenue-listing-purchase',
+  'wallet-recovery-codec',
+  'overlay-proposal-admission',
+  'private-publication-coordination'
 ]
+const sourceLines = (target, specifications) =>
+  new Set(
+    specifications.flatMap(specification => {
+      const file = specification.replace(/:\d+(?:-\d+)?$/, '')
+      const match = /:(\d+)(?:-(\d+))?$/.exec(specification)
+      const lines = readFileSync(
+        new URL(`../${target.packageDirectory}/${file}`, import.meta.url),
+        'utf8'
+      ).split('\n').length
+      const start = match ? Number(match[1]) : 1
+      const end = match ? Number(match[2] ?? match[1]) : lines
+      return Array.from({ length: end - start + 1 }, (_, index) => `${file}:${start + index}`)
+    })
+  )
+
 test('semantic execution ranges retain the complete source line union and every original setting without installed tools', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
-  const sourceLines = (target, specifications) =>
-    new Set(
-      specifications.flatMap(specification => {
-        const file = specification.replace(/:\d+(?:-\d+)?$/, '')
-        const match = /:(\d+)(?:-(\d+))?$/.exec(specification)
-        const lines = readFileSync(
-          new URL(`../${target.packageDirectory}/${file}`, import.meta.url),
-          'utf8'
-        ).split('\n').length
-        const start = match ? Number(match[1]) : 1
-        const end = match ? Number(match[2] ?? match[1]) : lines
-        return Array.from({ length: end - start + 1 }, (_, index) => `${file}:${start + index}`)
-      })
-    )
   for (const id of semanticTargets) {
     const original = targets[id],
       parts = partitionMutationTarget(id, original)
@@ -69,7 +73,7 @@ test('semantic execution ranges retain the complete source line union and every 
     assert.equal(selectedMutationPartition(id, original), original)
   }
   assert.equal(Object.keys(targets).length, 141)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 236)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 246)
 })
 
 test('semantic ranges retain future files and the exact original overlapping line union', () => {
@@ -422,8 +426,40 @@ test('private publication coordination and HTTP partitions retain complete canon
   for (const id of ['private-publication-coordination', 'private-publication-http']) {
     const canonical = buildMutationTargets(REPOSITORY_ROOT)[id]
     const parts = partitionMutationTarget(id, canonical)
-    assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
-    assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
+    if (id === 'private-publication-coordination') {
+      assert.deepEqual(
+        sourceLines(
+          canonical,
+          parts.flatMap(part => part.target.mutate)
+        ),
+        sourceLines(canonical, canonical.mutate)
+      )
+      const access = 'src/private/PrivatePublicationAccess.ts'
+      const legacy = selectedMutationPartition(id, canonical, 'access')
+      assert.deepEqual(legacy, { ...canonical, mutate: [access] })
+      assert.equal(legacy.runnerOptions, canonical.runnerOptions)
+      assert.equal(legacy.additionalInputs, canonical.additionalInputs)
+      assert.ok(!parts.some(part => part.id === 'access'))
+      assert.deepEqual(
+        parts.filter(part => part.id.startsWith('access-')).map(part => part.id),
+        ['access-1', 'access-2']
+      )
+      const untouched = parts.filter(part => !part.id.startsWith('access-'))
+      assert.deepEqual(
+        untouched.flatMap(part => part.target.mutate).sort(),
+        canonical.mutate.filter(file => file !== access).sort()
+      )
+      assert.equal(
+        new Set(parts.flatMap(part => part.target.mutate)).size,
+        parts.flatMap(part => part.target.mutate).length
+      )
+    } else {
+      assert.deepEqual(
+        parts.flatMap(part => part.target.mutate).sort(),
+        [...canonical.mutate].sort()
+      )
+      assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
+    }
     for (const part of parts) {
       assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
     }

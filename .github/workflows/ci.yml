@@ -731,6 +731,16 @@ jobs:
         with:
           pattern: mutation-revenue-listing-purchase-*
           path: .mutation-parts/revenue-listing-purchase
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-codec')
+        with:
+          pattern: mutation-wallet-recovery-codec-*
+          path: .mutation-parts/wallet-recovery-codec
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-proposal-admission')
+        with:
+          pattern: mutation-overlay-proposal-admission-*
+          path: .mutation-parts/overlay-proposal-admission
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
