@@ -2844,7 +2844,7 @@ export function buildMutationTargets(repositoryRoot) {
       ],
       ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
         esm: true,
-        buildCommand: 'pnpm --filter @bsv/output-knowledge build && pnpm build'
+        buildCommand: 'pnpm build:mutation'
       })
     },
     'lch-overlay-covenant-terms': {
@@ -2862,7 +2862,7 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: ['src/overlayAcquisitionCovenantTerms.ts', 'src/overlayAcquisitionConsent.ts'],
       ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
         esm: true,
-        buildCommand: 'pnpm --filter @bsv/output-knowledge build && pnpm build'
+        buildCommand: 'pnpm build:mutation'
       })
     },
     'lch-cbor': {

@@ -38,6 +38,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "build:mutation": "pnpm --filter @bsv/output-knowledge build && pnpm build",
     "typecheck": "tsc --noEmit",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/content/lch/**/*.{json,md,ts}\"",
     "lint": "oxlint src test --deny-warnings",

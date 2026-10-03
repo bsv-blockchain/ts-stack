@@ -918,6 +918,13 @@ test('optional LCH acquisition qualifies every whole module and its complete cry
     'packages/content/lch/test/overlay-acquisition-codec.property.test.ts'
   )
   assert.ok(target.additionalInputs.includes('../../application/output-knowledge/src/**'))
+  assert.equal(target.runnerOptions.buildCommand, 'pnpm build:mutation')
+  assert.equal(
+    JSON.parse(readFileSync(resolve(REPOSITORY_ROOT, target.manifest), 'utf8')).scripts[
+      'build:mutation'
+    ],
+    'pnpm --filter @bsv/output-knowledge build && pnpm build'
+  )
   assert.ok(
     selectAffectedMutationTargets(configured, [
       'packages/content/lch/src/overlayAcquisitionPaid.ts'
@@ -1022,6 +1029,7 @@ test('standing covenant terms retain complete modes, consent and prior cryptogra
     'packages/content/lch/test/overlay-acquisition-covenant-terms.property.test.ts'
   )
   assert.deepEqual(target.additionalInputs, configured['lch-overlay-acquisition'].additionalInputs)
+  assert.equal(target.runnerOptions.buildCommand, 'pnpm build:mutation')
   assert.ok(
     selectAffectedMutationTargets(configured, [
       'packages/content/lch/src/overlayAcquisitionConsent.ts'

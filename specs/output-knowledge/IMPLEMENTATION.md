@@ -3007,3 +3007,11 @@ negative checks; all 13 cache-boundary regressions pass. The complete current
 application gate is being rerun. The earlier failure remains a failed receipt,
 not a qualified whole-package result. Covenant licensing/buyer orchestration,
 actual complete reference flows and the final campaign/hosted C2 gate remain open.
+
+The first covenant-terms mutation invocation failed before its test dry run:
+Stryker parses its build command without a shell and passed the literal `&&`
+to TypeScript. Both LCH target registrations now invoke one package script
+that sequentially builds the application prerequisite and LCH. The complete
+source/test union and every qualification gate remain unchanged. This failed
+startup establishes no mutation coverage or score; the complete campaign remains
+required after the remaining implementation is composed.
