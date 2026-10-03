@@ -3840,3 +3840,124 @@ exact-head hosted checks and complete 141-target campaign;
 previous heads, partial runs and component scores cannot certify it. Every
 original union, case floor, seed, worker/reuse bound, deadline and quality gate is
 preserved.
+
+### Protected browser custody and relocated dependency feedback
+
+The bounded JSON/native-custody batch is published at `4d2dce002`. Its exact-head
+Sonar gate and independent read-back pass with zero new findings and zero
+unreviewed hotspots; CodeQL and conformance also pass. All 40 ordinary CI jobs pass at that exact head. Complete final mutation
+qualification remains a separate obligation.
+
+The prior full campaign's protected-object browser partition reports 63.31%
+with 29 uncovered mutations. Forty additive cases exercise declared
+database capabilities and open deadlines, synchronous opener failures, version
+change, late blocked initialization, whole-database/table schemas, sorted
+multi-object inventory, raw row capacity, authenticated completion, transaction
+abort/quota/missing-result behavior and outgoing byte clearing. Existing tests
+and their exact inputs remain. Tests use `fake-indexeddb`'s actual transactional
+port and AES-GCM synthetic custody; controlled provider faults complement the
+separately retained real Chrome demonstrations rather than establishing a new
+Chrome result. The new file passes all 40 cases and strict application typing. Additional
+cases cover strict transaction durability, exhausted reservations, independent
+object writers, same-head row/key drift, synchronous read quota/retry and pinned
+opener ownership across asynchronous custody.
+Local analysis has zero findings. An empty-selection bug in the external local
+analysis helper initially scanned the whole checkout after staging; that owned
+process was stopped, and the corrected helper explicitly includes staged inputs
+and refuses an empty selection.
+
+The initial unchanged browser execution partition's complete baseline passes
+all 502 tests in 35 seconds with the first 28 additive cases. Its complete 357
+mutation replay reports 85.99% (285 killed, 50 survived, 22 timeouts), with zero
+uncovered, invalid or unexecuted mutations. The subsequent 12 cases address meaningful surviving boundaries. Their complete
+514-test baseline passes in 34 seconds and the full 357-mutation replay reports
+92.44% (309 killed, 27 survived, 21 timeouts), with zero uncovered, invalid or
+unexecuted mutations. The replay completes in 473.594 seconds locally.
+All replays retain the original four-worker, reuse, floor, seed and deadline
+contracts. Exact staged patches and input receipts are retained as local
+diagnostic inputs. Partition execution does not enforce the complete target
+threshold independently and cannot qualify the final campaign.
+
+The prior campaign's six LCH overlay targets fail before mutation execution on
+the same relocated relative application-source import. After explicit peer acknowledgement, an ordered mapper on only those six
+existing targets resolves the independent application source before the
+unchanged generic relative `.js` fallback. The complete original LCH selection
+passes all 89 tests in 20 suites in 78.511 seconds, including all property
+histories. All 58 configuration/helper tests pass. Independent comparison of
+all 141 target definitions confirms only those six new mapper fields differ;
+every original source/test/input union, part and quality bound remains. The
+actual governed sandbox then builds and passes its complete 89-test baseline in
+77 seconds. Its original 495-mutation replay exhausts a worker heap, restarts
+that worker and ultimately reaches the unchanged 2,700-second local supervisor
+limit without a complete report. This failure is retained; it establishes no
+mutation score or production-memory diagnosis. The exact six-target finite
+runner-reuse cap of eight is acknowledged again on the fresh handle and applied
+after both owned pools drain. A complete comparison of all 141 target definitions
+permits only those six ordered dependency mappings and six reuse caps; every
+original source/test/input/partition and remaining runner field is unchanged.
+All 58 configuration/helper tests pass with the explicit cap assertions. A fresh
+complete governed replay remains required.
+
+Thirty-three additive purchase transport cases bring that file to 44 passing
+tests. They check constructor authority, signed domain/release/recovery promises,
+exact deadlines, selected request/physical response capacity, payment/status and
+response contracts, encoding/redirect/URL/header guards, held identity work and
+post-response wallet capability. They retain the original controlled physical
+fetch path and complement the separately retained native authenticated HTTP
+demonstrations. The initial negative recovery fixture was itself invalid before
+the selected-service check; the corrected fixture signs valid one-day terms and
+advertises one additional second, so it exercises exactly that promise. All four
+changed code files have zero local analysis findings after extracting an
+existing nested test expectation without changing its bytes or assertions.
+An external strict SDK test compiler check identifies one inferred empty-header
+union; an explicit `Record<string, string>` annotation retains exactly the same
+physical response bytes, and strict typing then passes. The original attempts
+are retained. The complete original six-selector SDK purchase HTTP selection
+passes all 259 tests in 13 suites in 11.87 seconds. All 58 helper/control tests
+still pass and all four changed code files have zero local analysis findings.
+The complete 413-mutation purchase HTTP replay then passes 91.53% (370 killed,
+35 survived, eight timeouts), with zero uncovered, invalid or unexecuted
+mutations, in 361.855 seconds locally. Its actual governed baseline retains all
+259 tests and passes in 11 seconds. These local results are not final hosted
+qualification.
+
+### Publication test ownership on failed assertions
+
+Three existing publication tests deliberately hold non-cooperating validation
+or admission work while checking capacity, cancellation and physical shutdown.
+Previously, their release calls followed assertions, so a failed assertion
+could leave held work or a reconciliation loop unsettled. Each original test
+and assertion remains. The tests now release the barrier in `finally`, stop
+the owner and await its physical settlement. Entry checks also observe
+premature publication completion or a completed reconciliation pass rather
+than silently waiting for a boundary that the failed operation never enters.
+The reconciliation observer is a synchronous report callback; loop rejection
+is observed separately through `done`.
+
+All 29 original tests in both files pass with strict application typing and
+zero local analyzer findings. A separate copied-fixture diagnostic deliberately
+throws before each of the three releases. All three expected failures are
+observed; the runner exits normally in 1.283 seconds, with zero open handles
+and without `forceExit`. The initial diagnostic selected only two test names;
+that incomplete attempt is retained, and the corrected three-case diagnostic
+provides the cleanup evidence. The diagnostic changes no authored production
+source and is not qualification.
+
+The previous access partition passes its complete 363-test baseline in 224
+seconds but has no terminal mutation result. Its owned process group is stopped
+and verified drained when the BotBoard lease expires; the lease is recovered
+as expired and a fresh handle acquires the ongoing work. This interrupted run
+is retained without a score or qualification claim. After these test-only
+lifecycle corrections, the complete original publication selection passes all
+363 tests in 25 suites, with zero failed tests. Its observed completion is
+195.875 seconds. A fresh governed access replay remains required, preserving all
+original histories, selectors, quality thresholds and bounds.
+
+Final self-review applies the same unconditional barrier release to the new
+SDK held-identity test while preserving every assertion. The complete original
+purchase HTTP selection again passes all 259 tests in 13 suites, and the explicit
+strict SDK fixture compiler check passes. The reference application also passes
+all 20 tests in five files, retaining the progressive/live lookup, native
+admission, proposal recovery and Bitcoin evidence demonstrations. These results
+are local feedback for the authored batch; fresh exact-head remote checks and
+the complete canonical mutation campaign remain mandatory.

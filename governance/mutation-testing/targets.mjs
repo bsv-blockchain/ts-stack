@@ -3468,6 +3468,26 @@ export function buildMutationTargets(repositoryRoot) {
     config.roots = [...native.roots]
     config.moduleNameMapper = { ...native.moduleNameMapper, ...config.moduleNameMapper }
   }
+  // Relocated LCH tests import the independent application owner by its original
+  // source path. Resolve that dependency without redirecting instrumented LCH code.
+  for (const id of [
+    'lch-overlay-acquisition',
+    'lch-overlay-covenant-terms',
+    'lch-overlay-covenant-settlement',
+    'lch-overlay-license',
+    'lch-overlay-covenant-seller',
+    'lch-overlay-covenant'
+  ]) {
+    const config = targets[id].runnerOptions.jest.config
+    targets[id].runnerOptions.maxTestRunnerReuse = 8
+    config.moduleNameMapper = {
+      [String.raw`^\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
+        repositoryRoot,
+        'packages/application/output-knowledge/$1.ts'
+      ),
+      [String.raw`^(\.{1,2}/.*)\.js$`]: '$1'
+    }
+  }
   appendMutationBuildInputs(repositoryRoot, targets)
   return targets
 }

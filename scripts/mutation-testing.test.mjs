@@ -1043,6 +1043,52 @@ test('overlay project options reach both complete partitions without changing mo
   assert.deepEqual(projects[1].extensionsToTreatAsEsm, ['.ts', '.tsx'])
 })
 
+test('relocated LCH overlay tests retain their independent application dependency and original local fallback', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  const dependency = '../../../application/output-knowledge/src/private/PrivatePurchaseContracts.js'
+  for (const id of [
+    'lch-overlay-acquisition',
+    'lch-overlay-covenant-terms',
+    'lch-overlay-covenant-settlement',
+    'lch-overlay-license',
+    'lch-overlay-covenant-seller',
+    'lch-overlay-covenant'
+  ]) {
+    const target = configured[id],
+      mappings = Object.entries(target.runnerOptions.jest.config.moduleNameMapper)
+    assert.equal(target.packageDirectory, 'packages/content/lch')
+    assert.ok(target.additionalInputs.includes('../../application/output-knowledge/src/**'))
+    assert.ok(target.additionalInputs.includes('test/overlay-acquisition*.ts'))
+    assert.ok(
+      target.runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/test/overlay-acquisition*.test.ts'
+      )
+    )
+    assert.ok(
+      target.runnerOptions.jest.config.testMatch.includes('<rootDir>/test/key-delivery.test.ts')
+    )
+    assert.equal(target.runnerOptions.buildCommand, 'pnpm build:mutation')
+    assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+    assert.deepEqual(target.runnerOptions.testRunnerNodeArgs, ['--experimental-vm-modules'])
+    assert.equal(mappings.length, 2)
+    assert.equal(
+      dependency.replace(new RegExp(mappings[0][0]), mappings[0][1]),
+      resolve(
+        REPOSITORY_ROOT,
+        'packages/application/output-knowledge/src/private/PrivatePurchaseContracts.ts'
+      )
+    )
+    assert.equal(mappings[1][0], String.raw`^(\.{1,2}/.*)\.js$`)
+    assert.equal(mappings[1][1], '$1')
+    assert.equal(
+      '../src/overlayAcquisition.js'.replace(new RegExp(mappings[1][0]), mappings[1][1]),
+      '../src/overlayAcquisition'
+    )
+    assert.equal(new RegExp(mappings[0][0]).test('../src/overlayAcquisition.js'), false)
+  }
+  assert.equal(Object.keys(configured).length, 141)
+})
+
 test('compound private builds retain every dependency and append the sequential helper input', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT),
     helper = resolve(REPOSITORY_ROOT, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ '),

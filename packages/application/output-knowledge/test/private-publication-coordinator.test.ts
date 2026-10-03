@@ -226,19 +226,33 @@ it('retains occupied physical capacity after a cancelled non-cooperating validat
       value => ({ value }),
       error => ({ error })
     )
-  await entry
-  abort.abort()
-  expect(await pending).toMatchObject({ error: { code: 'cancelled' } })
-  await expect(f.coordinator.publish(f.contract.request, f.caller)).rejects.toMatchObject({
-    code: 'limited'
-  })
-  release()
-  await new Promise(resolve => setImmediate(resolve))
-  expect(f.native.rows()).toEqual([])
-  f.validate.mockImplementation(async () => {})
-  await expect(f.coordinator.publish(f.contract.request, f.caller)).resolves.toMatchObject({
-    status: 'ready'
-  })
+  try {
+    try {
+      await Promise.race([
+        entry,
+        pending.then(() => {
+          throw new Error('Publication settled before its held validation was entered')
+        })
+      ])
+      abort.abort()
+      expect(await pending).toMatchObject({ error: { code: 'cancelled' } })
+      await expect(f.coordinator.publish(f.contract.request, f.caller)).rejects.toMatchObject({
+        code: 'limited'
+      })
+    } finally {
+      release()
+    }
+    await new Promise(resolve => setImmediate(resolve))
+    expect(f.native.rows()).toEqual([])
+    f.validate.mockImplementation(async () => {})
+    await expect(f.coordinator.publish(f.contract.request, f.caller)).resolves.toMatchObject({
+      status: 'ready'
+    })
+  } finally {
+    release()
+    await f.coordinator.stop()
+    await pending
+  }
 })
 
 it('owns the remote body before asynchronous work can observe caller mutation', async () => {
@@ -319,21 +333,32 @@ it('stop revokes new intake and waits for non-cooperating physical validation to
     value => ({ value }),
     error => ({ error })
   )
-  await entry
-  let settled = false
-  const stopped = f.coordinator.stop().then(() => {
-    settled = true
-  })
-  expect(await pending).toMatchObject({ error: { code: 'cancelled' } })
-  expect(settled).toBe(false)
-  await expect(f.coordinator.publish(f.contract.request, f.caller)).rejects.toMatchObject({
-    code: 'cancelled'
-  })
-  release()
-  await stopped
-  expect(settled).toBe(true)
-  expect(f.native.rows()).toEqual([])
-  await f.coordinator.stop()
+  try {
+    await Promise.race([
+      entry,
+      pending.then(() => {
+        throw new Error('Publication settled before its held validation was entered')
+      })
+    ])
+    let settled = false
+    const stopped = f.coordinator.stop().then(() => {
+      settled = true
+    })
+    expect(await pending).toMatchObject({ error: { code: 'cancelled' } })
+    expect(settled).toBe(false)
+    await expect(f.coordinator.publish(f.contract.request, f.caller)).rejects.toMatchObject({
+      code: 'cancelled'
+    })
+    release()
+    await stopped
+    expect(settled).toBe(true)
+    expect(f.native.rows()).toEqual([])
+    await f.coordinator.stop()
+  } finally {
+    release()
+    await f.coordinator.stop()
+    await pending
+  }
 })
 
 it('supports one bounded work slot without requiring an explicit per-publisher override', async () => {

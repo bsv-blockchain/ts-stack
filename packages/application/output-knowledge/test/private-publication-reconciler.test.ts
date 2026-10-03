@@ -147,19 +147,36 @@ it('waits for physical settlement on loop stop and refuses an overlapping pass',
     }
   })
   const reconciler = new PrivatePublicationReconciler(coordinator)
-  const loop = reconciler.start(100, () => {})
-  await entry
-  await expect(reconciler.runOnce()).rejects.toMatchObject({ code: 'limited' })
-  let stopped = false
-  const closing = loop.stop().then(() => {
-    stopped = true
+  let completedPass: () => void = () => {}
+  const unexpectedPass = new Promise<never>((_resolve, reject) => {
+    completedPass = () => reject(new Error('Reconciliation pass completed before held admission'))
   })
-  await new Promise(resolve => setImmediate(resolve))
-  expect(stopped).toBe(false)
-  release()
-  await closing
-  await loop.done
-  expect(stopped).toBe(true)
+  const loop = reconciler.start(100, completedPass)
+  try {
+    await Promise.race([
+      entry,
+      unexpectedPass,
+      loop.done.then(() => {
+        throw new Error('Reconciliation loop settled before held admission')
+      })
+    ])
+    await expect(reconciler.runOnce()).rejects.toMatchObject({ code: 'limited' })
+    let stopped = false
+    const closing = loop.stop().then(() => {
+      stopped = true
+    })
+    await new Promise(resolve => setImmediate(resolve))
+    expect(stopped).toBe(false)
+    release()
+    await closing
+    await loop.done
+    expect(stopped).toBe(true)
+  } finally {
+    release()
+    await loop.stop()
+    await loop.done
+    await coordinator.stop()
+  }
   expect(
     f.store.loadVerified(f.worker.scan(null, 1).entries[0].publicationId, () => '20', allow)!.fence
       .state.progress.phase
