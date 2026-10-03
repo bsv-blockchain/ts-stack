@@ -242,6 +242,36 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const rangePlans = new Map(
   [
     [
+      'root-eviction-journal',
+      [
+        ['src/root-eviction/SQLiteRootEvictionStore.ts', { label: 'store', starts: [1, 275, 371] }],
+        [
+          'src/root-eviction/RootAdvertisementServing.ts',
+          { label: 'advertisement', starts: [1, 136] }
+        ],
+        ['src/root-eviction/RootLookupServingDisclosure.ts', { label: 'disclosure', starts: [1] }]
+      ]
+    ],
+    [
+      'root-eviction-storage',
+      [
+        [
+          'src/root-eviction/SQLiteRootEvictionDatabase.ts',
+          { label: 'database', starts: [1, 134, 225, 305, 380] }
+        ]
+      ]
+    ],
+    [
+      'overlay-private-publication-admission',
+      [
+        [
+          'src/PrivatePublicationAdmission.ts',
+          { label: 'publication', starts: [1, 172, 277, 344] }
+        ],
+        ['src/RetainedTopicAdmission.ts', { label: 'retained', starts: [1] }]
+      ]
+    ],
+    [
       'lch-overlay-covenant-terms',
       [
         [
@@ -357,6 +387,76 @@ const rangePlans = new Map(
 
 const refinedFileParts = new Map([
   [
+    'root-eviction-records',
+    new Map([
+      [
+        'requests',
+        new Map([
+          [
+            'src/root-eviction/RootEvictionRequests.ts',
+            { label: 'requests', starts: [1, 149, 188] }
+          ]
+        ])
+      ],
+      [
+        'serving',
+        new Map([
+          [
+            'src/root-eviction/RootEvictionServingRecords.ts',
+            { label: 'serving', starts: [1, 93, 246] }
+          ]
+        ])
+      ]
+    ])
+  ],
+  [
+    'private-publication-state',
+    new Map([
+      [
+        'store',
+        new Map([
+          [
+            'src/private/SQLitePrivatePublicationStore.ts',
+            { label: 'store', starts: [1, 148, 262, 396, 521] }
+          ]
+        ])
+      ],
+      [
+        'records',
+        new Map([
+          ['src/private/PrivatePublicationRecords.ts', { label: 'records', starts: [1, 150] }]
+        ])
+      ],
+      [
+        'progress',
+        new Map([
+          [
+            'src/private/PrivatePublicationProgress.ts',
+            { label: 'progress', starts: [1, 188, 242, 285, 380] }
+          ]
+        ])
+      ]
+    ])
+  ],
+  [
+    'private-publication-service',
+    new Map([
+      [
+        'original',
+        new Map([
+          [
+            'src/private/PrivatePublicationContractRecord.ts',
+            { label: 'original', starts: [1, 139] }
+          ]
+        ])
+      ],
+      [
+        'binding',
+        new Map([['src/private/PrivateLookupBinding.ts', { label: 'binding', starts: [1, 146] }]])
+      ]
+    ])
+  ],
+  [
     'private-publication-coordination',
     new Map([
       [
@@ -367,6 +467,12 @@ const refinedFileParts = new Map([
       ]
     ])
   ]
+])
+
+// Keep the complete presently type-only module in a nonempty execution part.
+// Future executable content in that module remains part of the same full union.
+const rangeCompanions = new Map([
+  ['root-eviction-storage', new Map([['src/root-eviction/RootEvictionStorage.ts', 'database-1']])]
 ])
 
 function specificationRange(specification, lines) {
@@ -404,7 +510,23 @@ function rangeGroups(target, file, specifications, plan) {
   })
 }
 
-function semanticPartitions(target, plan) {
+function appendCompanion(attachments, destination, specifications) {
+  if (typeof destination !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(destination))
+    throw new Error('Invalid mutation companion destination')
+  const attached = attachments.get(destination) ?? []
+  attached.push(...specifications)
+  attachments.set(destination, attached)
+}
+
+function attachCompanions(parts, attachments) {
+  for (const [destination, mutate] of attachments) {
+    const part = parts.find(value => value.id === destination)
+    if (!part) throw new Error('Mutation companion requires its nonempty source destination')
+    part.target = { ...part.target, mutate: [...part.target.mutate, ...mutate] }
+  }
+}
+
+function semanticPartitions(target, plan, companions) {
   const files = new Map()
   for (const specification of target.mutate) {
     const file = partitionFile(specification)
@@ -416,12 +538,18 @@ function semanticPartitions(target, plan) {
   }
   if (!files.size) throw new Error('Empty canonical mutation source union')
   const parts = [],
-    future = []
+    future = [],
+    attachments = new Map()
   for (const [file, specifications] of files) {
-    const sourcePlan = plan.get(file)
+    const sourcePlan = plan.get(file),
+      destination = companions?.get(file)
+    if (sourcePlan && destination !== undefined)
+      throw new Error('Mutation source has conflicting range and companion ownership')
     if (sourcePlan) parts.push(...rangeGroups(target, file, specifications, sourcePlan))
+    else if (destination !== undefined) appendCompanion(attachments, destination, specifications)
     else future.push(...specifications)
   }
+  attachCompanions(parts, attachments)
   if (future.length) parts.push({ id: 'remaining', target: { ...target, mutate: future } })
   if (!parts.length) throw new Error('Empty canonical mutation range union')
   return parts
@@ -431,7 +559,7 @@ function semanticPartitions(target, plan) {
 // New canonical files join the target's fallback; a future helper cannot disappear.
 export function partitionMutationTarget(targetId, target) {
   const ranges = rangePlans.get(targetId)
-  if (ranges) return semanticPartitions(target, ranges)
+  if (ranges) return semanticPartitions(target, ranges, rangeCompanions.get(targetId))
   const plan = plans.get(targetId)
   if (!plan) return [{ id: 'whole', target }]
   const groups = new Map()

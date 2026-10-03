@@ -4316,7 +4316,7 @@ exact local executor call, an existing `workflow_call` declaration and the actua
 mutation runner in the execution job. Missing or changed callers, executor files,
 commands, comments-only substitutes and external workflow paths fail; original
 inline execution remains compatible. Required caller fields remain on the caller.
-Complete combined installed, scheduling, selection, receipt and governance
+Combined pinned-engine, scheduling, selection, receipt and governance
 controls pass all 153 tests without skips. All four required root checks pass;
 main-base recommended-rule comparison across eleven changed code files introduces
 zero findings, with 45 inherited baseline findings and 41 current findings.
@@ -4325,3 +4325,53 @@ planner and its controls; inherited whole-file findings remain recorded. A final
 runtime fixture rerun passes all 117 tests in 5.429 seconds with unchanged recorded
 inputs and no open handles. These checks make the corrective batch reviewable;
 fresh hosted source qualification remains mandatory.
+
+### Remaining complete execution ranges and installed workflow controls
+
+Six further execution plans divide root request/serving records, root journals,
+root database storage, private publication admission, publication state and
+publication service records at complete function or class-member boundaries.
+All 141 canonical target definitions remain identical, as do the other 135 plans.
+The unchanged publication identity, evidence, contracts and service-record parts
+retain their original complete modules. The storage interface module accompanies
+the first nonempty database part in its entirety, including any future executable
+content; it cannot form an empty standalone job or lose its destination. Unknown
+future files remain included once. Existing complete file-part CLI selections
+remain diagnostic aliases, while canonical aggregation requires every refined part.
+
+The actual pinned instrumenter verifies the exact mutant tuple union for all six
+plans, with 484, 463, 357, 374, 943 and 456 mutants respectively. Every execution
+part is nonempty, and original test selections, input fingerprints, runner options,
+property strength, deadlines and canonical score gates remain unchanged. The full
+execution matrix now contains 274 rows in two ordered batches of 256 and 18.
+Both new root plans have guarded artifact collection before their canonical
+verification; a successful part alone cannot qualify its target.
+
+Hosted CI at `c7cbc139f` exposed three failures in the additional installed
+`scripts/ci-integration/*.test.mjs` directory. The preceding 153-control local run
+included the installed engine integration but omitted that separate directory.
+Its original workflow assertions still expected inline mutation job steps and
+concurrency and did not supply the new batch environment to the actual CI gate.
+These are retained failures, not successful qualification. Complete discovery of
+that installed directory, preservation of its original positive and negative
+cases against the actual reusable executor, and a fresh exact-head hosted run
+are required before checkpoint two can close.
+
+The installed companion now follows only the actual local reusable executor and
+checks both serial outer batches and the original six/twenty inner concurrency,
+unchanged 45/90-minute routing, profiles, same-run build archive, whole-target
+receipts and final raw-part recheck. Every original publisher and selection case
+remains, with derived batch input and additional missing/stale/malformed rejection
+cases. All 167 combined controls pass without skips, including complete discovery
+of the twelve installed CI tests. Recommended-rule comparison introduces zero
+findings in the four changed code files. Typed analysis covers 146 source files;
+the only finding is the publisher control's unchanged complexity of 21, whose
+complete source is identical to `main`. Authored partition comparisons now use
+explicit comparators without removing their original union assertions.
+
+The complete hosted runtime diagnostic at `c7cbc139f`, run `37155872712`, retains
+431 mutants: 322 killed, 69 timeouts, 38 survivors and two runtime errors, for a
+valid-mutant score of 91.14 percent. The two invalid mutants correctly fail the
+zero-invalid policy. The abort assertion and cleanup counterexample therefore
+have not resolved complete runtime qualification; both reports require further
+diagnosis. This partial diagnostic cannot issue full-registry qualification.

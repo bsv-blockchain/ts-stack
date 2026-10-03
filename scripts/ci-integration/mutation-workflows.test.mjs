@@ -4,7 +4,21 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPOSITORY_ROOT } from '../repository-health.mjs'
+import { mutationExecutionBatches } from '../mutation-execution-batches.mjs'
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
+async function mutationExecutor(workflow) {
+  const caller = workflow.jobs['mutation-tests']
+  assert.equal(caller.uses, './.github/workflows/mutation-execution.yml')
+  assert.deepEqual(caller.permissions, { contents: 'read' })
+  const { parse } = await import('yaml')
+  const callee = parse(
+    readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-execution.yml'), 'utf8')
+  )
+  assert.ok(callee.on.workflow_call)
+  assert.deepEqual(callee.permissions, {})
+  assert.deepEqual(callee.jobs.execution.permissions, { contents: 'read' })
+  return callee.jobs.execution
+}
 async function releaseWorkflows() {
   const { parse } = await import('yaml')
   return ['release.yaml', 'infra-release.yaml', 'wab-marketplace-release.yml'].map(file => ({
@@ -125,10 +139,13 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
     download.with.pattern,
     'mutation-receipt-${{ github.run_id }}-${{ github.run_attempt }}-*'
   )
-  const capture = workflow.jobs['mutation-tests'].steps.find(
+  const executor = await mutationExecutor(workflow)
+  assert.equal(workflow.jobs['mutation-tests'].with.profile, 'qualification')
+  assert.equal(workflow.jobs['mutation-tests'].with.mode, '${{ needs.prepare.outputs.mode }}')
+  const capture = executor.steps.find(
     step => step.name === 'Capture successful exact-source complete target evidence'
   )
-  assert.equal(capture.if, "matrix.partition == 'whole'")
+  assert.equal(capture.if, "inputs.profile == 'qualification' && matrix.partition == 'whole'")
   assert.match(capture.run, /mutation-final-qualification\.mjs capture/)
   assert.match(
     gate.steps.find(step => step.id === 'qualification').run,
@@ -147,8 +164,11 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
     workflow.jobs.prepare.outputs['partition-targets'],
     '${{ steps.targets.outputs.partition-targets }}'
   )
-  const deadline = workflow.jobs['mutation-tests']['timeout-minutes']
-  assert.equal(ci.jobs['mutation-tests']['timeout-minutes'], deadline)
+  const ciExecutor = await mutationExecutor(ci)
+  assert.equal(ci.jobs['mutation-tests'].with.profile, 'ci')
+  assert.equal(ci.jobs['mutation-tests'].with.mode, 'diagnostic')
+  const deadline = executor['timeout-minutes']
+  assert.equal(ciExecutor['timeout-minutes'], deadline)
   const allowance = JSON.parse(/fromJSON\('([^']+)'\)/.exec(deadline)[1])
   for (const target of [
     'wallet-retained-snapshot',
@@ -168,18 +188,55 @@ test('partition jobs cannot replace each original canonical global gate or the f
     readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
   )
   const ci = parse(readFileSync(CI_PATH, 'utf8'))
-  assert.equal(ci.jobs['mutation-tests'].strategy['max-parallel'], 6)
-  // Release qualification runs every target at once; one target bounds wall time.
-  assert.equal(full.jobs['mutation-tests'].strategy['max-parallel'], 20)
+  const executor = await mutationExecutor(full)
+  assert.deepEqual(await mutationExecutor(ci), executor)
+  assert.equal(
+    executor.strategy['max-parallel'],
+    "${{ inputs.profile == 'qualification' && 20 || 6 }}"
+  )
+  assert.equal(executor.strategy['fail-fast'], false)
+  assert.equal(executor.strategy.matrix, '${{ fromJSON(inputs.execution-matrix) }}')
+  const ratchet = executor.steps.find(step => step.name?.includes('mutation-quality ratchet'))
+  assert.match(ratchet.run, /--partition/)
+  assert.equal(ratchet.env.TARGET, '${{ matrix.target }}')
+  assert.equal(ratchet.env.PARTITION, '${{ matrix.partition }}')
   for (const workflow of [ci, full]) {
-    assert.match(workflow.jobs['mutation-tests'].strategy.matrix, /mutation-matrix/)
-    assert.match(
-      workflow.jobs['mutation-tests'].steps.find(step =>
-        step.name?.includes('mutation-quality ratchet')
-      ).run,
-      /--partition/
+    const caller = workflow.jobs['mutation-tests']
+    assert.equal(caller.strategy['max-parallel'], 1)
+    assert.equal(caller.strategy['fail-fast'], false)
+    assert.match(caller.strategy.matrix, /mutation-batches/)
+    assert.match(workflow.jobs.prepare.outputs['mutation-matrix'], /mutation-matrix/)
+    assert.equal(caller.with['execution-matrix'], '${{ toJSON(matrix.executionMatrix) }}')
+    assert.equal(caller.with['execution-batch'], '${{ matrix.batch }}')
+    assert.equal(
+      caller.with['matrix-digest'],
+      '${{ needs.prepare.outputs.mutation-matrix-digest }}'
     )
+    assert.equal(caller.with.identity, '${{ needs.prepare.outputs.mutation-execution-identity }}')
   }
+  const profile = executor.steps.find(
+    step => step.name === 'Require the original caller evidence profile'
+  )
+  assert.match(profile.run, /ci:diagnostic\|qualification:diagnostic\|qualification:full/)
+  assert.match(profile.run, /SOURCE_SHA.*GITHUB_SHA/)
+  assert.match(profile.run, /SOURCE_RUN_ID.*GITHUB_RUN_ID/)
+  assert.match(profile.run, /SOURCE_RUN_ATTEMPT.*GITHUB_RUN_ATTEMPT/)
+  assert.match(
+    profile.run,
+    /ARTIFACT_NAME.*mutation-build-outputs-\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT/
+  )
+  const checkout = executor.steps.find(step => step.uses?.startsWith('actions/checkout@'))
+  assert.equal(checkout.with.ref, '${{ fromJSON(inputs.identity).sourceSha }}')
+  assert.equal(checkout.with['persist-credentials'], false)
+  const archive = executor.steps.find(step => step.uses?.startsWith('actions/download-artifact@'))
+  assert.equal(archive.with['artifact-ids'], '${{ fromJSON(inputs.identity).artifactId }}')
+  const verify = executor.steps.findIndex(
+    step => step.name === 'Verify complete immutable batch and archive before extraction'
+  )
+  assert.ok(
+    verify >= 0 && verify < executor.steps.findIndex(step => step.name === 'Restore build outputs')
+  )
+  assert.match(executor.steps[verify].run, /mutation-execution-batches\.mjs verify-execution/)
   const gate = full.jobs['mutation-quality']
   const script = gate.steps.find(step => step.name === 'Verify the campaign').run
   for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
@@ -264,6 +321,7 @@ test('PR partial execution cannot qualify when canonical aggregate selection is 
         MUTATION_TARGETS: JSON.stringify(targets),
         MUTATION_CLASSIFICATION: '{"deferred":[]}',
         MUTATION_MATRIX: JSON.stringify(matrix),
+        MUTATION_BATCHES: JSON.stringify(mutationExecutionBatches(matrix)),
         PARTITION_TARGETS: selection,
         GITHUB_STEP_SUMMARY: '/dev/null'
       }
@@ -279,9 +337,54 @@ test('PR partial execution cannot qualify when canonical aggregate selection is 
       MUTATION_TARGETS: '[]',
       MUTATION_CLASSIFICATION: '{"deferred":[]}',
       MUTATION_MATRIX: '{"include":[]}',
+      MUTATION_BATCHES: '{"include":[]}',
       PARTITION_TARGETS: '[]',
       GITHUB_STEP_SUMMARY: '/dev/null'
     }
   })
   assert.equal(empty.status, 0)
+})
+
+test('the installed PR gate rejects missing, stale and malformed execution batches', async () => {
+  const { parse } = await import('yaml')
+  const ci = parse(readFileSync(CI_PATH, 'utf8'))
+  const script = ci.jobs['mutation-quality'].steps.find(
+    step => step.name === 'Verify the affected mutation targets'
+  ).run
+  const matrix = { include: [{ target: 'sdk-auth-http', partition: 'core' }] },
+    batches = mutationExecutionBatches(matrix)
+  const execute = value =>
+    spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: {
+        PATH: process.env.PATH,
+        PREPARE_RESULT: 'success',
+        MUTATION_RESULT: 'success',
+        MUTATION_TARGETS: '["sdk-auth-http"]',
+        MUTATION_CLASSIFICATION: '{"deferred":[]}',
+        MUTATION_MATRIX: JSON.stringify(matrix),
+        PARTITION_TARGETS: '["sdk-auth-http"]',
+        GITHUB_STEP_SUMMARY: '/dev/null',
+        ...(value === undefined ? {} : { MUTATION_BATCHES: value })
+      },
+      encoding: 'utf8'
+    })
+  assert.equal(execute(JSON.stringify(batches)).status, 0)
+  for (const value of [
+    undefined,
+    '',
+    'null',
+    '{"include":[]}',
+    JSON.stringify({ ...batches, unknown: true }),
+    JSON.stringify({ include: [...batches.include, ...batches.include] }),
+    JSON.stringify({ include: [{ batch: 2, executionMatrix: matrix }] }),
+    JSON.stringify({
+      include: [
+        {
+          batch: 1,
+          executionMatrix: { include: [{ target: 'sdk-auth-http', partition: 'stale' }] }
+        }
+      ]
+    })
+  ])
+    assert.notEqual(execute(value).status, 0)
 })

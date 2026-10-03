@@ -613,6 +613,16 @@ jobs:
           pattern: mutation-root-eviction-records-*
           path: .mutation-parts/root-eviction-records
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'root-eviction-journal')
+        with:
+          pattern: mutation-root-eviction-journal-*
+          path: .mutation-parts/root-eviction-journal
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'root-eviction-storage')
+        with:
+          pattern: mutation-root-eviction-storage-*
+          path: .mutation-parts/root-eviction-storage
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'output-knowledge-proposal-core')
         with:
           pattern: mutation-output-knowledge-proposal-core-*
