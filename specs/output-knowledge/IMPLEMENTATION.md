@@ -4139,3 +4139,24 @@ complete baseline passed. Those failures remain unqualified. The unchanged
 actual local binding part has passed its complete 263-test baseline in 118
 seconds and continues under its original supervisor bound. No causal claim is
 made from the difference between local and hosted elapsed times.
+
+### Actual remote analyzer profile correction
+
+The pushed `c67a14e13` head passes hosted cheap health and the mandatory
+installed-tool integration step, but its actual Sonar profile reports four
+findings in the new installed regression file: three explicit awaits inside
+loops and one default lexical sort. The remote PR analysis and all four
+findings are retained. The prior local recommended-rule comparison did not
+include every remote rule and was not a substitute for that gate.
+
+The correction uses serial async generators consumed with `for await` for
+target inventories, execution-part inventories and serialized Jest project
+reads. A generator waits for each yielded promise before invoking the next
+read; instrumentation and configuration normalization remain serial. Explicit
+UTF-16 lexical comparison with nonmutating `toSorted` preserves the original
+stable tuple order. Every original count, complete-union, settings-identity,
+future-source, matrix and child-project assertion remains. A typed 102-source
+JavaScript analysis independently reproduces all four original findings under
+the corresponding actual rules and reports zero on the corrected file. The
+complete four-file installed/control suite passes all 96 tests without skips.
+Final-head remote reanalysis and complete campaign evidence remain required.

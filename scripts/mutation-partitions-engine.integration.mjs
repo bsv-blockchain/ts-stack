@@ -27,20 +27,35 @@ const mutantIdentity = mutant =>
     mutant.ignored ?? null
   ])
 
+function compare(left, right) {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
+// Yielding each promise waits for its result before starting another read. The
+// pinned instrumenter and project normalizer retain serial resource ownership.
+async function* serialResults(values, read) {
+  for (const value of values) yield read(value)
+}
+
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [495, 989, 521, 1428, 173]
-  for (const [index, id] of semanticTargets.entries()) {
+  const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
     const original = targets[id],
       sources = targetSources(REPOSITORY_ROOT, original),
       directory = path.join(REPOSITORY_ROOT, original.packageDirectory),
-      canonical = await canonicalInventory(directory, sources, original.mutate),
-      parts = partitionMutationTarget(id, original),
+      canonical = await canonicalInventory(directory, sources, original.mutate)
+    return { index, id, original, directory, canonical }
+  })
+  for await (const { index, id, original, directory, canonical } of inventories) {
+    const parts = partitionMutationTarget(id, original),
       observed = []
     assert.equal(canonical.length, expectedCounts[index])
     assert.ok(parts.length > 1)
     assert.equal(new Set(parts.map(part => part.id)).size, parts.length)
-    for (const part of parts) {
+    const partInventories = serialResults(parts, async part => {
       assert.deepEqual(
         { ...part.target, mutate: original.mutate },
         original,
@@ -53,10 +68,16 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
         targetSources(REPOSITORY_ROOT, part.target),
         part.target.mutate
       )
+      return { part, inventory }
+    })
+    for await (const { part, inventory } of partInventories) {
       assert.ok(inventory.length > 0, `${id}/${part.id} has no executable inventory`)
       observed.push(...inventory)
     }
-    assert.deepEqual(observed.map(mutantIdentity).sort(), canonical.map(mutantIdentity).sort())
+    assert.deepEqual(
+      observed.map(mutantIdentity).toSorted(compare),
+      canonical.map(mutantIdentity).toSorted(compare)
+    )
     assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
     assert.equal(selectedMutationPartition(id, original), original)
   }
@@ -78,8 +99,10 @@ test('serialized mutation configuration preserves both original overlay module p
     REPOSITORY_ROOT,
     'node_modules/@stryker-mutator/jest-runner/dist/src/jest-plugins/jest-environment-generic.cjs'
   )
-  for (const [id, target] of Object.entries(buildMutationTargets(REPOSITORY_ROOT))) {
-    if (target.packageDirectory !== 'packages/overlays/overlay-express') continue
+  const selectedTargets = Object.entries(buildMutationTargets(REPOSITORY_ROOT)).filter(
+    ([, target]) => target.packageDirectory === 'packages/overlays/overlay-express'
+  )
+  const projects = serialResults(selectedTargets, async ([id, target]) => {
     const selected = target.runnerOptions.jest.config
     const serialized = {
       ...base,
@@ -103,6 +126,9 @@ test('serialized mutation configuration preserves both original overlay module p
       },
       [packageDirectory]
     )
+    return { id, selected, configs }
+  })
+  for await (const { id, selected, configs } of projects) {
     assert.equal(configs.length, 2, id)
     for (const project of configs) {
       const original = selected.projects.find(item => item.displayName === project.displayName.name)
