@@ -18,6 +18,23 @@ const targets = {
   two: { packageDirectory: 'packages/two' }
 }
 
+test('every core overlay profile fingerprints its canonical and native fixture inputs', () => {
+  for (const target of Object.values(buildMutationTargets(REPOSITORY_ROOT))) {
+    if (target.packageDirectory !== 'packages/overlays/overlay') continue
+    for (const input of ['jest.config.js', 'jest.projects.mjs'])
+      assert.ok(target.additionalInputs.includes(input), `${target.propertyTest}: ${input}`)
+    for (const input of [
+      'src/__tests/mongo/**',
+      'src/__tests/*Fixture.ts',
+      'src/__tests/admission/**'
+    ])
+      assert.ok(
+        target.additionalInputs.includes(input) || target.additionalInputs.includes('src/**'),
+        `${target.propertyTest}: ${input}`
+      )
+  }
+})
+
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
   assert.equal(Object.keys(configured).length, 141)

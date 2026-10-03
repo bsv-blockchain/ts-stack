@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { Binary, type CommandStartedEvent, type Document } from 'mongodb'
@@ -18,6 +17,9 @@ import {
   type MongoTransactionRequest
 } from '../../storage/mongo/MongoTransactionRunner.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
+
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
 
 describe('Mongo transaction boundary on three data-bearing WiredTiger members', () => {
   let fixture: MongoReplicaFixture

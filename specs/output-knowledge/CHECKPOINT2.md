@@ -86,6 +86,8 @@ These receipts establish concrete progress, but the unchecked rows continue to
 require their complete published-source and final qualification evidence. The native protected recipient-context and complete two-root SHIP/SLAP serving,
 spend and GASP-history compositions now pass, including separate-owner grant
 revocation and pre-effect writer fencing. Their final source qualification,
-non-final producer/client integration, complete mutation campaign and exact-head
-hosted gates remain open. No component
+The native non-final producer/client integration also passes active, finalizing,
+finalized restart recovery and explicit host-expiry delivery without another Open.
+Interactive/browser proposal demonstration, complete mutation campaign and
+exact-head hosted gates remain open. No component
 or synthetic local-chain receipt announces production or checkpoint readiness.

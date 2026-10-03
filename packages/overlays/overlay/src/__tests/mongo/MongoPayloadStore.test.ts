@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { Binary, GridFSBucket } from 'mongodb'
@@ -11,6 +10,9 @@ import {
 } from '../../storage/mongo/MongoSchema.js'
 import { MongoPayloadStore } from '../../storage/mongo/MongoPayloadStore.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
+
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
 
 const bytes = async function* (
   value: Uint8Array,

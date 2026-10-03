@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import { randomUUID } from 'node:crypto'
 import type { ClientSession, Db } from 'mongodb'
 import {
@@ -25,6 +24,9 @@ import {
   MongoTransactionRunner,
   type MongoTransactionRequest
 } from '../../storage/mongo/MongoTransactionRunner.js'
+
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
 
 const scope: StorageScope = {
   network: 'testnet',

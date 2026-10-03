@@ -11,6 +11,7 @@ import {
   CompletedProtoWallet,
   LockingScript,
   OUTPUT_PROFILES,
+  OUTPUT_LOOKUP_PROFILE,
   OutputProposalTransport,
   OutputProtocolError,
   outputPacketDigest,
@@ -35,6 +36,7 @@ import {
   ProposalScheduler,
   ProposalService,
   ProposalTransitions,
+  proposalChannelKey,
   SDKProposalEvidence,
   type ProposalAdmissionOutcome,
   type ProposalServiceOptions
@@ -43,12 +45,19 @@ import { SQLiteProposalJournal } from '@bsv/output-knowledge/proposals/sqlite'
 import { SQLiteProposalChannelStore } from '@bsv/output-knowledge/proposals/channels-sqlite'
 import {
   LookupProviderContracts,
+  LookupProviderService,
+  LookupResponseDisclosure,
   LookupQueryRegistry,
   LookupSessionCodec,
+  lookupServingEpochExtension,
   type LookupIndexFeed
 } from '@bsv/output-knowledge/lookup'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createProposalRouter } from '@bsv/overlay-express/proposals'
+import { createOutputLookupRouter } from '@bsv/overlay-express/output-lookup'
+import { SQLiteJournal } from '@bsv/output-knowledge/sqlite'
+import { SQLiteOperationStateStore } from '@bsv/output-knowledge/operations/sqlite'
+import { createReferenceProposalClient } from '../src/referenceProposalClient.js'
 import { Engine, type TopicManager } from '@bsv/overlay'
 import { OverlayProposalAdmission } from '@bsv/overlay/proposal-admission'
 import { MongoOverlayStorage } from '@bsv/overlay/storage/mongo/MongoOverlayStorage'
@@ -72,6 +81,9 @@ const providerKey = new PrivateKey(71),
 const provider = providerKey.toPublicKey().toString(),
   author = authorKey.toPublicKey().toString()
 const serviceName = 'tm_reference_documents',
+  // Version one proposal observations keep the signed service scope. Capability
+  // discovery distinguishes the topic and lookup by (kind, name).
+  lookupServiceName = serviceName,
   baseURL = 'https://proposal.example.test/api'
 const policies = new ProposalPolicyRegistry([
   { policy: new AuthorDocumentPolicy(), parameters: { maxTextBytes: 128 } }
@@ -166,6 +178,8 @@ it.each(['standalone', 'compound'] as const)(
       loseReceipt: true
     }
     let committedOutcome: ProposalAdmissionOutcome | undefined
+    let client: Awaited<ReturnType<typeof createReferenceProposalClient>> | undefined
+    let lookupOpens = 0
     const decided = vi.fn<TopicManager['identifyAdmissibleOutputs']>(async beef => {
       const tx = Transaction.fromBEEF(beef),
         output = tx.outputs[0]
@@ -208,21 +222,21 @@ it.each(['standalone', 'compound'] as const)(
         if (failures.length) throw new AggregateError(failures, 'Reference proposal cleanup failed')
       }
       closes.push(close)
+      let currentManifest = manifest
+      const queries = new LookupQueryRegistry([
+        { policy: new ProposalChannelHeadsQuery(policies), parameters: { policy } }
+      ])
       const lookupContracts = new LookupProviderContracts(
         {
           baseURL,
           identity: provider,
           chain: fixtureChain,
-          service: serviceName,
+          service: lookupServiceName,
           maximumAgeSeconds: '100',
           clockSkewSeconds: '2'
         },
-        new LookupQueryRegistry([
-          { policy: new ProposalChannelHeadsQuery(policies), parameters: { policy } }
-        ]),
-        () => {
-          throw new Error('This producer integration does not advertise lookup sessions')
-        }
+        queries,
+        () => currentManifest
       )
       const storageOptions = {
         path,
@@ -233,18 +247,54 @@ it.each(['standalone', 'compound'] as const)(
         sessionCodec: new LookupSessionCodec(lookupContracts.recoveryTrust()),
         now: () => state.now
       }
-      const compound =
-        storageKind === 'compound'
-          ? create
-            ? SQLiteProposalChannelStore.create(storageOptions)
-            : SQLiteProposalChannelStore.open(storageOptions)
-          : undefined
+      const compound = openCompound()
+      function openCompound() {
+        if (storageKind !== 'compound') return undefined
+        return create
+          ? SQLiteProposalChannelStore.create(storageOptions)
+          : SQLiteProposalChannelStore.open(storageOptions)
+      }
       const journal =
         compound?.journal ??
         (create
           ? SQLiteProposalJournal.create(path, 'proposal-pipeline', provider, lifecycle)
           : SQLiteProposalJournal.open(path, 'proposal-pipeline', provider, lifecycle))
       owned.push(() => (compound ? compound.close() : journal.close()))
+      if (compound) {
+        const epoch = await compound.sessions.createEpoch()
+        if (create) await compound.sessions.initializeGuard('reference-proposal-serving')
+        currentManifest = signOutputPacket(
+          'capabilities',
+          {
+            ...manifest.body,
+            services: [
+              ...manifest.body.services,
+              {
+                name: lookupServiceName,
+                kind: 'lookup',
+                ...queries.describe()[0],
+                profiles: [
+                  {
+                    id: OUTPUT_LOOKUP_PROFILE,
+                    authentication: 'brc103',
+                    payment: 'none',
+                    maxRequestBytes: 1048576,
+                    maxResponseBytes: 4194304,
+                    parameters: {
+                      sessionSeconds: '3600',
+                      replaySeconds: '7200',
+                      maxObservations: 1024,
+                      maxWaitMs: 25000
+                    }
+                  }
+                ]
+              }
+            ],
+            extensions: lookupServingEpochExtension([{ service: lookupServiceName, epoch }])
+          },
+          providerKey
+        )
+      }
       const overlay = new MongoOverlayStorage(replica.db, scope, {
         retainAdmissionHistory: true
       })
@@ -276,7 +326,7 @@ it.each(['standalone', 'compound'] as const)(
         now: () => state.now,
         manifest: () => {
           if (!state.discovery) throw new Error('Capability discovery is offline')
-          return manifest
+          return currentManifest
         },
         access: () => state.allowed,
         evidence,
@@ -305,17 +355,71 @@ it.each(['standalone', 'compound'] as const)(
         app = express()
       owned.push(() => rateStore.shutdown())
       app.use(rateLimit({ windowMs: 60000, limit: 2000, store: rateStore }))
+      // Both routers own one authenticated peer/session transport. Separate
+      // middleware instances cannot continue each other's BRC-103 handshake.
+      const authenticate = createAuthMiddleware({
+        wallet: new CompletedProtoWallet(providerKey),
+        allowUnauthenticated: true,
+        transportLimits: { requestTimeoutMs: 3000 }
+      })
+      if (compound) {
+        const authorize = async (input: { principal: string | null }) => {
+          if (!state.allowed || input.principal !== author)
+            throw new OutputProtocolError('unauthorized', 'Original private reader required')
+          const authorization = await compound.authorizeLookup(policy, {
+            principal: input.principal,
+            access: author,
+            guards: [
+              {
+                id: 'reference-proposal-serving',
+                revision: await compound.sessions.guard('reference-proposal-serving'),
+                failure: 'unauthorized'
+              }
+            ]
+          })
+          return { access: authorization.access, guards: authorization.guards }
+        }
+        const lookup = new LookupProviderService({
+          index: compound.feed,
+          sessions: compound.sessions,
+          contracts: lookupContracts,
+          authorize,
+          now: () => state.now,
+          budgets: { pollMs: 10 }
+        })
+        const lookupDisclosure = new LookupResponseDisclosure({
+          sessions: compound.sessions,
+          contracts: lookupContracts,
+          authorize,
+          authorizeControl: () => true
+        })
+        app.use((req, _res, next) => {
+          if (req.path.endsWith('/lookup/open')) lookupOpens++
+          next()
+        })
+        app.use(
+          createOutputLookupRouter({
+            companion: lookup,
+            disclosure: lookupDisclosure,
+            service: lookupServiceName,
+            baseURL,
+            identity: provider,
+            chain: fixtureChain,
+            authentication: 'brc103',
+            authenticate,
+            manifest: () => currentManifest,
+            now: () => state.now,
+            allowedOrigins: []
+          })
+        )
+      }
       app.use(
         createProposalRouter({
           service,
           disclosure,
           journal,
           baseURL,
-          authenticate: createAuthMiddleware({
-            wallet: new CompletedProtoWallet(providerKey),
-            allowUnauthenticated: true,
-            transportLimits: { requestTimeoutMs: 3000 }
-          }),
+          authenticate,
           authorizeControl: () => true
         })
       )
@@ -339,6 +443,20 @@ it.each(['standalone', 'compound'] as const)(
         bridge,
         service,
         verify,
+        manifest: () => structuredClone(currentManifest),
+        refreshManifest: () => {
+          currentManifest = signOutputPacket(
+            'capabilities',
+            {
+              ...currentManifest.body,
+              issuedAt: state.now,
+              expiresAt: String(BigInt(state.now) + 100n)
+            },
+            providerKey
+          )
+          return structuredClone(currentManifest)
+        },
+        selected: compound ? retainOutputCapability(currentManifest, trust).record : selected,
         origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
         close
       }
@@ -405,7 +523,7 @@ it.each(['standalone', 'compound'] as const)(
       }
       let host = await install(true)
       const common = () => ({
-        contract: selected,
+        contract: host.selected,
         trust,
         wallet: new CompletedProtoWallet(authorKey),
         now: () => state.now,
@@ -420,7 +538,7 @@ it.each(['standalone', 'compound'] as const)(
           })
         }) as typeof fetch
       })
-      const original = JSON.parse(JSON.stringify({ contract: selected, request })) as Pick<
+      const original = JSON.parse(JSON.stringify({ contract: host.selected, request })) as Pick<
         OutputProposalTransportOptions<'finalize'>,
         'contract' | 'request'
       >
@@ -431,6 +549,51 @@ it.each(['standalone', 'compound'] as const)(
       }).send()
       expect(acknowledgement.proposalId).toBe(proposalId)
       await assertFeed(host.feed, proposal, 'active', '1')
+      async function startClient(first: boolean) {
+        client = await createReferenceProposalClient({
+          journal: new SQLiteJournal(join(directory, 'client.sqlite'), 'native-proposal-client'),
+          identityKey: authorKey,
+          host: {
+            id: 'native-proposal-host',
+            baseURL,
+            identity: provider,
+            service: lookupServiceName
+          },
+          controls: async (namespace, binding, initial) =>
+            initial
+              ? SQLiteOperationStateStore.create(
+                  join(directory, 'client-controls.sqlite'),
+                  namespace,
+                  binding,
+                  initial.value,
+                  initial.limits
+                )
+              : SQLiteOperationStateStore.open(
+                  join(directory, 'client-controls.sqlite'),
+                  namespace,
+                  binding
+                ),
+          now: () => Number(state.now) * 1000,
+          fetch: common().fetch
+        })
+        const manifest = first ? host.manifest() : undefined
+        await Promise.all([client!.connect(manifest), client!.connect(manifest)])
+      }
+      if (storageKind === 'compound') {
+        await startClient(true)
+        await vi.waitFor(
+          async () => {
+            expect(client!.failures()).toEqual([])
+            expect((await client!.readCurrent()).sources[0]).toMatchObject({
+              complete: true,
+              consistent: true,
+              channels: [{ proposalId, state: { status: 'active' }, activeIntent: true }]
+            })
+          },
+          { timeout: 10000, interval: 25 }
+        )
+        await client!.disconnect()
+      }
       expect(decided).not.toHaveBeenCalled()
       expect(await host.overlay.findOutput(request.txid, 0, serviceName)).toBeNull()
       expect(host.verify).not.toHaveBeenCalled()
@@ -485,6 +648,7 @@ it.each(['standalone', 'compound'] as const)(
       expect((await host.journal.getProposal(proposalId))?.record.state.status).toBe('active')
       expect(host.verify).toHaveBeenCalledTimes(1)
       await assertFeed(host.feed, proposal, 'active', '1')
+      if (client) await client.connect()
       await expect(
         new OutputProposalTransport({
           ...common(),
@@ -499,6 +663,16 @@ it.each(['standalone', 'compound'] as const)(
       expect(committedOutcome?.status).toBe('admitted')
       expect((await host.journal.getProposal(proposalId))?.record.state.status).toBe('finalizing')
       await assertFeed(host.feed, proposal, 'finalizing', '2')
+      if (client)
+        await vi.waitFor(
+          async () => {
+            expect(client!.failures()).toEqual([])
+            expect((await client!.readCurrent()).sources[0].channels[0].state.status).toBe(
+              'finalizing'
+            )
+          },
+          { timeout: 10000, interval: 25 }
+        )
       expect(await host.overlay.findOutput(request.txid, 0, serviceName)).toMatchObject({
         txid: request.txid,
         outputIndex: 0,
@@ -511,6 +685,8 @@ it.each(['standalone', 'compound'] as const)(
         id: context().id,
         view: { chain: fixtureChain }
       })
+      await client?.close()
+      client = undefined
       await host.close()
       Object.assign(state, {
         now: '1200',
@@ -542,6 +718,44 @@ it.each(['standalone', 'compound'] as const)(
           committedOutcome?.status === 'admitted' ? committedOutcome.assessmentContextId : undefined
       })
       state.allowed = true
+      if (storageKind === 'compound') {
+        const originalOpens = lookupOpens
+        await startClient(false)
+        await vi.waitFor(
+          async () => {
+            expect(client!.failures()).toEqual([])
+            expect((await client!.readCurrent()).sources[0]).toMatchObject({
+              complete: true,
+              consistent: true,
+              channels: [
+                {
+                  proposalId,
+                  state: { status: 'finalized', txid: request.txid },
+                  intent: 'expired',
+                  activeIntent: false
+                }
+              ]
+            })
+          },
+          { timeout: 10000, interval: 25 }
+        )
+        expect(lookupOpens).toBe(originalOpens)
+        const received = await client!.core.inspect()
+        expect(
+          received.entries.some(
+            row =>
+              row.body.kind === 'receive' &&
+              row.body.batch.provenance.authentication === 'brc103' &&
+              row.body.batch.groups.some(group =>
+                group.observations.some(
+                  observation =>
+                    observation.kind === 'proposal-state' &&
+                    observation.payload.state.status === 'finalized'
+                )
+              )
+          )
+        ).toBe(true)
+      }
       const recovered = await new OutputProposalTransport({
         ...common(),
         ...original,
@@ -554,7 +768,69 @@ it.each(['standalone', 'compound'] as const)(
         (await host.journal.getOperation(author, serviceName, request.operationId))?.state
       ).toEqual(saved.state)
       expect(submit).not.toHaveBeenCalled()
+      if (client) {
+        // A separately authorized new off-chain head proves actual host expiry
+        // through the same native session. It never starts a Bitcoin effect.
+        state.discovery = true
+        const freshManifest = host.refreshManifest(),
+          freshContract = retainOutputCapability(freshManifest, {
+            ...trust,
+            now: state.now
+          }).record,
+          expiring = signOutputPacket(
+            'proposal',
+            {
+              ...proposal.body,
+              channel: '22'.repeat(32),
+              anchors: [],
+              issuedAt: state.now,
+              expiresAt: String(BigInt(state.now) + 10n)
+            },
+            authorKey
+          ),
+          expiringId = outputPacketDigest('proposal', expiring.body)
+        await new OutputProposalTransport({
+          ...common(),
+          contract: freshContract,
+          operation: 'put',
+          request: { version: 1, proposal: expiring }
+        }).send()
+        await vi.waitFor(
+          async () => {
+            expect(client!.failures()).toEqual([])
+            expect(
+              (await client!.readCurrent()).sources[0].channels.find(
+                row => row.proposalId === expiringId
+              )
+            ).toMatchObject({ state: { status: 'active' }, activeIntent: true })
+          },
+          { timeout: 10000, interval: 25 }
+        )
+        state.now = expiring.body.expiresAt
+        await host.service.expire(proposalChannelKey(expiring.body))
+        await vi.waitFor(
+          async () => {
+            expect(client!.failures()).toEqual([])
+            expect(
+              (await client!.readCurrent()).sources[0].channels.find(
+                row => row.proposalId === expiringId
+              )
+            ).toMatchObject({
+              state: { status: 'expired' },
+              intent: 'expired',
+              activeIntent: false
+            })
+          },
+          { timeout: 10000, interval: 25 }
+        )
+        expect(submit).not.toHaveBeenCalled()
+        expect(host.verify).not.toHaveBeenCalled()
+        expect(
+          (await host.journal.getChannel(proposalChannelKey(expiring.body)))?.state.status
+        ).toBe('expired')
+      }
     } finally {
+      await client?.close()
       for (const close of closes.reverse()) await close()
       rmSync(directory, { recursive: true, force: true })
     }

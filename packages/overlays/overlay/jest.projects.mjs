@@ -9,11 +9,14 @@ const shared = {
   modulePathIgnorePatterns: ['<rootDir>/dist/', String.raw`<rootDir>/\.stryker-tmp/`],
   moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' }
 }
+// Preserve the canonical Jest defaults, including future JS/spec files. Explicit
+// mutation selections are supplied independently and retain their original union.
+export const coreOverlayTestMatch = [
+  '**/__tests__/**/*.?([mc])[jt]s?(x)',
+  '**/?(*.)+(spec|test).?([mc])[jt]s?(x)'
+]
 /** Preserve legacy semantics and run the complete native selection with its real ESM driver. */
-export function createCoreOverlayTestProjects(
-  testMatch = ['**/__tests/**/*.test.ts'],
-  options = {}
-) {
+export function createCoreOverlayTestProjects(testMatch = coreOverlayTestMatch, options = {}) {
   return [
     {
       ...shared,
@@ -28,6 +31,7 @@ export function createCoreOverlayTestProjects(
       ...shared,
       ...options,
       displayName: 'native-mongo-esm',
+      setupFilesAfterEnv: ['<rootDir>/src/__tests/NativeJestFixture.ts'],
       testMatch,
       testPathIgnorePatterns: [...coreOverlayTestIgnorePatterns, `^(?!.*${nativeTests}).*$`],
       extensionsToTreatAsEsm: ['.ts'],

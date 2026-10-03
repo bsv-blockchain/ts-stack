@@ -112,6 +112,26 @@ adapters and recovers the original receipt without a new submission. Recovery
 also works with discovery/evidence access unavailable and the original manifest
 expired. Restoring caller authorization is still required to disclose the result.
 
+The compound profile now also runs the opt-in client in
+`src/referenceProposalClient.ts` through the actual authenticated lookup router.
+It receives an accepted private proposal, follows the durable finalizing state
+after an actual Engine/Mongo commit whose reply is lost, then reopens both its
+native client stores and the provider. It receives the recovered finalized state
+through its original lookup session without another Open, even after the original
+capability and proposal intent have expired. Discovery and the evidence resolver
+remain offline during admission recovery. The same live session observes another
+proposal become active and then expire at its exclusive lifetime boundary; this
+expiry makes no Engine submission or evidence resolver call. A host's finalized assertion remains
+separate from Bitcoin mining evidence and current unspentness.
+
+This client accepts the same durable journal/control adapter interfaces as the
+ordinary client, so SQLite and IndexedDB implementations can be installed
+explicitly. Version-one proposal observations retain the signed proposal service
+name; capability discovery distinguishes its topic and lookup roles by
+`(kind,name)`. The combined HTTP routers share one authentication session owner.
+The interactive page still presents the final-output producer; the proposal
+composition above is an automated native application demonstration.
+
 `pnpm --filter output-knowledge-reference-app test:browser` builds the production
 bundles and runs both producer modes in Chrome/Chromium with native IndexedDB,
 two actual local providers, two clients, page-close recovery and independent

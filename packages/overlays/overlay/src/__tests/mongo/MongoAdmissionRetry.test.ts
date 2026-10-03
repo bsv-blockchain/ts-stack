@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import type { Db } from 'mongodb'
 import {
   admissionSemanticDigest,
@@ -17,6 +16,9 @@ import type { MongoTransactionRunner } from '../../storage/mongo/MongoTransactio
 import { encodeMongoUint64 } from '../../storage/mongo/MongoSchema.js'
 import { admissionPlan } from '../admission/AdmissionStorageContract.js'
 import { referenceScope } from '../admission/ReferenceAdmissionStorage.js'
+
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
 
 const dummyDb = { collection: () => ({}) } as unknown as Db
 

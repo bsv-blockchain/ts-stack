@@ -2,9 +2,9 @@
 id: output-knowledge-workbench
 title: 'Running the Output Knowledge Workbench'
 kind: guide
-version: '1.1.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '1.2.0'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, overlay, application, recovery, sqlite, indexeddb]
@@ -197,8 +197,33 @@ This test runs real HTTP message authentication through an explicit mapping
 from the fixture HTTPS origin to its loopback listener. TLS termination is not
 part of its evidence. It also does not restart the Mongo replica processes or
 claim recovery from destroyed storage; separate native persistence tests exercise
-those failure boundaries. The interactive browser producer and its lookup index
+those failure boundaries. The interactive browser producer and its final-output lookup index
 are still separate from this proposal admission pipeline.
+
+The compound profile additionally attaches the reusable
+`createReferenceProposalClient` from the application's source. It uses the real
+core, native SQLite journal and operation custody, `LiveLookupSource` and
+`ProposalChannelHeadsSource` through an authenticated lookup provider. Its
+published current-channel projection receives the accepted author-signed head,
+then the provider's durable finalizing assertion after the actual Engine commit.
+Closing and reopening both native owners retains the same original capability,
+session and cursor. After recovery it receives the original finalized state by
+replay without another Open, despite proposal intent and manifest expiry. A
+retired serving epoch can preserve existing sessions while refusing new Opens.
+The same authenticated live session also follows a new proposal from active to
+expired at its exclusive lifetime boundary. This retirement makes no Engine
+submission or evidence verification call. The client retains its live-source owner
+across reconnects, preserving physical request ownership and resource limits.
+
+This is an explicit non-final installation; the ordinary workbench client keeps
+its existing final-output behavior. The two service roles retain the proposal's
+signed name and are distinguished by `(kind,name)` in capability discovery.
+Compose their HTTP routes with one authentication middleware/session owner.
+Lookup authorization returns only its closed `{access,guards}` contract; the
+authenticated principal comes from the transport rather than that return value.
+The client publishes accepted source history separately from Bitcoin facts. A
+host's finalized assertion is not evidence of mining, current unspentness or
+authority to start a wallet action.
 
 Private publication, paid acquisition, covenant authority and wallet composition,
 STEAK/POTATOES release, LCH integration, root-host serving fences and native
@@ -212,6 +237,7 @@ Custom workers can opt into the runtime's pure `nextInvalidation(input)` hook
 for non-Bitcoin state. It schedules worker work and closes projection publication
 at an exclusive deadline; the worker still must commit the invalidation. Existing
 Bitcoin assessment behavior is unchanged. See the [runtime contract](../packages/application/output-knowledge.md#publication-deadlines).
-This workbench does not yet claim private proposal projection or UI expiry:
-those require installed proposal acceptance, durable replay meaning and explicit
-retirement of previously displayed activity when a tab resumes.
+The native proposal composition above installs acceptance and durable current-head
+projection. Interactive/browser proposal expiry still needs explicit retirement
+of previously displayed activity when a tab resumes; the final-output interactive
+page does not yet demonstrate that additional mode.

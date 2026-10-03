@@ -3350,6 +3350,15 @@ export function buildMutationTargets(repositoryRoot) {
     mutate: ['src/private/PrivatePublicationLookupContext.ts']
   }
   for (const target of Object.values(targets)) {
+    if (target.packageDirectory === 'packages/overlays/overlay')
+      target.additionalInputs = [
+        ...(target.additionalInputs ?? []),
+        'jest.projects.mjs',
+        'jest.config.js',
+        'src/__tests/mongo/**',
+        'src/__tests/*Fixture.ts',
+        'src/__tests/admission/**'
+      ]
     if (
       target.packageDirectory === 'packages/application/output-knowledge' &&
       target.additionalInputs?.includes('test/private-purchase-contract.fixture.ts')

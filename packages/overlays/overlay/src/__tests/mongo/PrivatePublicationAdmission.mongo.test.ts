@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import { Engine } from '../../Engine.js'
 import { OverlayPrivatePublicationAdmission } from '../../PrivatePublicationAdmission.js'
 import { MongoOverlayStorage } from '../../storage/mongo/MongoOverlayStorage.js'
@@ -15,6 +14,9 @@ import {
 } from '../ProposalAdmissionFixture.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
 import type { Transaction } from '@bsv/sdk'
+
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
 
 describe('private publication admission with an actual Engine and three-member Mongo replica set', () => {
   let replica: MongoReplicaFixture

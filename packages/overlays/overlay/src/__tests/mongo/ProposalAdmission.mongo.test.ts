@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import { Engine } from '../../Engine.js'
 import { OverlayProposalAdmission } from '../../ProposalAdmission.js'
 import type { TopicManager } from '../../TopicManager.js'
@@ -14,6 +13,9 @@ import {
   transaction
 } from '../ProposalAdmissionFixture.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
+
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
 
 describe('proposal recovery through an actual Engine and three-member Mongo replica set', () => {
   let replica: MongoReplicaFixture

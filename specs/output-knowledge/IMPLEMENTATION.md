@@ -3485,3 +3485,37 @@ campaign. The complete retained-public-BEEF module now has 100 percent statement
 branches, functions and lines with 73 passing cases across five suites. All 62
 compiled examples pass against 24 exact package tarballs. These source-level
 receipts do not complete the final mutation campaign or exact-head hosted gates.
+
+The canonical core runner now uses disjoint legacy-commonjs and native-mongo-esm
+projects under ACK18729140. Discovery preserves all 52 ordinary suites exactly
+(33 legacy plus 19 native). Each of the five core mutation profiles also retains
+its full pre-split set without duplicates: 27, 31, 29, 28 and 25 suites respectively.
+Their native selections include all original Mongo tests and the actual root host
+integration. All 83 companion governance assertions pass. The required strict
+typecheck exposed undeclared direct Jest globals imports. A proposed importer-only
+addition was rejected by semantic graph comparison because pnpm also changed a
+transitive edge. Instead, the native test sandbox installs Jest's documented
+`import.meta.jest` object for shared contract fixtures, and native Mongo tests use
+that same object directly. The existing declared Jest types describe the original
+mock contracts. Strict core compilation now passes without any dependency or lock
+change. The initial typing and resolver failures remain retained. The native setup
+fixture belongs to every core target's complete fixture fingerprint closure.
+
+The reference application's compound proposal profile now composes its actual
+Engine/Mongo admission with the reusable opt-in proposal client, authenticated
+lookup provider and native session/disclosure owner. It observes active and
+finalizing states, reopens the client and host stores after a lost admission reply,
+then receives the original finalized state without another Open after intent and
+capability expiry. Both original pipeline cases pass in 20.57 seconds, including simultaneous
+connection attempts joining the same original operation, and the
+two changed TypeScript files have zero local analysis findings. Initial composed
+authentication-owner, signed-service-scope and closed authorization-return-shape
+failures are retained; the example corrects the adapters without changing the
+protocol, production defaults or existing assertion/deadline requirements.
+The same live client also observes a separately submitted active proposal expire
+at its exclusive lifetime boundary, with no Engine submission or evidence resolver
+call. The reusable client retains its live source across reconnects, preserving
+physical request ownership and limits. Strict application typing and both changed
+TypeScript files pass local analysis without findings. Interactive/browser proposal
+demonstration and final published-source qualification remain required before
+checkpoint two.

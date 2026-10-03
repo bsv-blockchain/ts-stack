@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import { Binary } from 'mongodb'
 import {
   admissionSemanticDigest,
@@ -20,6 +19,9 @@ import { admissionPlan } from '../admission/AdmissionStorageContract.js'
 import { referenceScope } from '../admission/ReferenceAdmissionStorage.js'
 import { MongoAdmissionHarness } from './MongoAdmissionHarness.js'
 import { createMongoReplicaFixture, type MongoReplicaFixture } from './MongoReplicaFixture.js'
+
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
 
 const operationKey = (plan: AdmissionCommit) =>
   mongoRecordKey(

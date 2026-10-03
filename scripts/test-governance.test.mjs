@@ -169,8 +169,16 @@ test('overlay discovery excludes generated children while preserving its own mut
 
 test('overlay Engine discovery excludes generated children while preserving its own mutation root', async () => {
   const { default: config } = await import('../packages/overlays/overlay/jest.config.js')
+  const { coreOverlayTestIgnorePatterns } =
+    await import('../packages/overlays/overlay/jest.projects.mjs')
+  for (const project of config.projects)
+    for (const pattern of coreOverlayTestIgnorePatterns)
+      assert.ok(project.testPathIgnorePatterns.includes(pattern))
   for (const root of ['/overlay', '/overlay/.stryker-tmp/sandbox-one']) {
-    for (const selected of [config.testPathIgnorePatterns, config.modulePathIgnorePatterns]) {
+    for (const selected of [
+      coreOverlayTestIgnorePatterns,
+      ...config.projects.map(project => project.modulePathIgnorePatterns)
+    ]) {
       const patterns = selected.map(
         pattern =>
           new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
@@ -183,7 +191,7 @@ test('overlay Engine discovery excludes generated children while preserving its 
       assert.equal(ignored('dist/src/__tests/example.test.ts'), true)
       assert.equal(ignored('xstryker-tmp/src/__tests/example.test.ts'), false)
     }
-    const tests = config.testPathIgnorePatterns.map(
+    const tests = coreOverlayTestIgnorePatterns.map(
       pattern =>
         new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     )
@@ -712,6 +720,11 @@ test('proposal admission retains its complete source and generated provenance te
     'src/EngineAdmission.ts',
     'src/storage/AdmissionStorage.ts',
     'src/__tests/ProposalAdmissionFixture.ts',
+    'jest.projects.mjs',
+    'jest.config.js',
+    'src/__tests/mongo/**',
+    'src/__tests/*Fixture.ts',
+    'src/__tests/admission/**',
     ...retainedBeefSourceClosure
   ])
   const mutationPolicy = JSON.parse(
@@ -744,6 +757,11 @@ test('private publication admission retains both complete sources and original p
     'src/ProposalAdmission.ts',
     'src/__tests/ProposalAdmissionFixture.ts',
     'src/__tests/PrivatePublicationAdmissionFixture.ts',
+    'jest.projects.mjs',
+    'jest.config.js',
+    'src/__tests/mongo/**',
+    'src/__tests/*Fixture.ts',
+    'src/__tests/admission/**',
     ...retainedBeefSourceClosure
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
