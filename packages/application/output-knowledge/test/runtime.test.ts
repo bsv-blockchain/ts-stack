@@ -136,22 +136,29 @@ describe('runtime orchestration and publication ports', () => {
         await commitRelease.promise
         return commit(...args)
       })
-    let changed: Promise<void> | undefined
+    let changed: Promise<unknown> | undefined, pending: Promise<unknown> | undefined
     try {
-      const pending = fixture.runtime.readProjection()
+      pending = fixture.runtime.readProjection().then(
+        value => value,
+        error => error
+      )
       await entered.promise
-      changed = fixture.runtime.setContext({ ...context(), id: 'context-after-held-read' })
+      changed = fixture.runtime.setContext({ ...context(), id: 'context-after-held-read' }).then(
+        () => undefined,
+        error => error
+      )
       await commitEntered.promise
       release.resolve()
       expect(await pending).toBeUndefined()
       commitRelease.resolve()
-      await changed
+      expect(await changed).toBeUndefined()
       await fixture.runtime.flush()
       expect((await fixture.runtime.readProjection())?.contextId).toBe('context-after-held-read')
     } finally {
       release.resolve()
       commitRelease.resolve()
       await changed
+      await pending
       readSpy.mockRestore()
       commitSpy.mockRestore()
       await fixture.runtime.close()
@@ -233,30 +240,38 @@ describe('runtime orchestration and publication ports', () => {
     const { runtime } = await open(noWork, projector)
     const events = runtime.events()[Symbol.asyncIterator]()
     hold = true
-    const flushing = runtime.flush()
-    await entered.promise
-    expect((await events.next()).value.kind).toBe('knowledge')
-    const next = context()
-    next.id = 'verification-new'
-    next.generation = '1'
-    await runtime.setContext(next)
-    expect(await runtime.readProjection()).toBeUndefined()
-    release.resolve()
-    await flushing
-    expect(await runtime.readProjection()).toMatchObject({
-      generation: '1',
-      contextId: 'verification-new'
-    })
-    expect((await events.next()).value).toMatchObject({
-      kind: 'knowledge',
-      input: { context: { id: 'verification-new' } }
-    })
-    expect((await events.next()).value).toMatchObject({
-      kind: 'projection',
-      projection: { contextId: 'verification-new' }
-    })
-    await events.return?.()
-    await runtime.close()
+    const flushing = runtime.flush().then(
+      () => undefined,
+      error => error
+    )
+    try {
+      await entered.promise
+      expect((await events.next()).value.kind).toBe('knowledge')
+      const next = context()
+      next.id = 'verification-new'
+      next.generation = '1'
+      await runtime.setContext(next)
+      expect(await runtime.readProjection()).toBeUndefined()
+      release.resolve()
+      expect(await flushing).toBeUndefined()
+      expect(await runtime.readProjection()).toMatchObject({
+        generation: '1',
+        contextId: 'verification-new'
+      })
+      expect((await events.next()).value).toMatchObject({
+        kind: 'knowledge',
+        input: { context: { id: 'verification-new' } }
+      })
+      expect((await events.next()).value).toMatchObject({
+        kind: 'projection',
+        projection: { contextId: 'verification-new' }
+      })
+    } finally {
+      release.resolve()
+      await flushing
+      await events.return?.()
+      await runtime.close()
+    }
   })
 
   it('does not mark a failed projection current and can rebuild it idempotently', async () => {
@@ -1368,10 +1383,8 @@ describe('pending context publication barrier', () => {
       const seen: Projection[] = [],
         iterator = f.runtime.events(new AbortController().signal)[Symbol.asyncIterator]()
       const observing = (async () => {
-        for (;;) {
-          const event = await iterator.next()
-          if (event.done) return
-          if (event.value.kind === 'projection') seen.push(event.value.projection)
+        for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
+          if (event.kind === 'projection') seen.push(event.projection)
         }
       })().then(
         () => undefined,
@@ -1383,7 +1396,7 @@ describe('pending context publication barrier', () => {
         await commitRelease.promise
         return commit(...args)
       })
-      let changed: Promise<void> | undefined
+      let changed: Promise<unknown> | undefined
       let flushing: Promise<unknown> | undefined
       try {
         holdWork()
@@ -1392,14 +1405,17 @@ describe('pending context publication barrier', () => {
           error => error
         )
         await entered.promise
-        changed = f.runtime.setContext({ ...context(), id: 'after-pending-context' })
+        changed = f.runtime.setContext({ ...context(), id: 'after-pending-context' }).then(
+          () => undefined,
+          error => error
+        )
         await committing.promise
         release.resolve()
         expect(await flushing).toBeUndefined()
         expect(await f.runtime.readProjection()).toBeUndefined()
         expect(seen).toEqual([])
         commitRelease.resolve()
-        await changed
+        expect(await changed).toBeUndefined()
         await f.runtime.flush()
         expect((await f.runtime.readProjection())?.contextId).toBe('after-pending-context')
         expect(seen.map(value => value.contextId)).toEqual(['after-pending-context'])
@@ -1746,15 +1762,16 @@ describe('runtime lifecycle release and recovery', () => {
       const seen: Projection[] = []
       const iterator = f.runtime.events(new AbortController().signal)[Symbol.asyncIterator]()
       const observing = (async () => {
-        for (;;) {
-          const item = await iterator.next()
-          if (item.done) return
-          if (item.value.kind === 'projection') {
-            seen.push(item.value.projection)
+        for await (const item of { [Symbol.asyncIterator]: () => iterator }) {
+          if (item.kind === 'projection') {
+            seen.push(item.projection)
             published.resolve()
           }
         }
-      })()
+      })().then(
+        () => undefined,
+        error => error
+      )
       const spy = jest.spyOn(f.store, 'commit').mockImplementationOnce(async () => {
         committing.resolve()
         await commitRelease.promise
@@ -1791,8 +1808,8 @@ describe('runtime lifecycle release and recovery', () => {
         await flushing
         spy.mockRestore()
         await iterator.return?.()
-        await observing
         await f.runtime.close()
+        expect(await observing).toBeUndefined()
       }
     }
   )

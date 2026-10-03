@@ -4375,3 +4375,32 @@ valid-mutant score of 91.14 percent. The two invalid mutants correctly fail the
 zero-invalid policy. The abort assertion and cleanup counterexample therefore
 have not resolved complete runtime qualification; both reports require further
 diagnosis. This partial diagnostic cannot issue full-registry qualification.
+
+### Held-projector and pending-context fixture cleanup
+
+The two reported guard tuples are killed normally by a local, isolated
+pinned-engine diagnostic over their source region with the original full
+117-test baseline and runner settings. That twelve-mutant diagnostic does not
+reproduce the hosted late runtime error and cannot qualify the whole target.
+It is retained separately from the complete hosted failure.
+
+A standalone full-selection counterexample with the guard forced false exposes
+a cleanup gap. It finishes the test suites in 5.665 seconds with 23 failing and
+94 passing tests, but the process takes 16.880 seconds and warns about open
+asynchronous handles. The held-projector case creates an unobserved flush and
+can fail before releasing it or closing the runtime. The corrected fixture
+observes rejection immediately, retains every assertion, checks the successful
+outcome explicitly, and releases and drains the work in `finally` before closing
+the observer and runtime. Held projection reads and pending context changes also
+have immediate outcome observation and unconditional draining. The observer
+fixtures pull the same existing iterator with `for await`, retaining event order
+and their final success assertions.
+
+The same false-guard counterexample still fails the same 23 tests after the
+change, but exits promptly without the open-handle warning. The outside draft
+exits in 5.785 seconds; the canonical correction exits in 4.572 seconds. The
+unmodified runtime passes all 117 tests with original 300-case property strength,
+seed, replay and time limits, and unchanged recorded source/configuration inputs.
+Production code, mutation inventory and runner settings are unchanged. This
+establishes meaningful fixture cleanup; a complete hosted replay of all 431
+mutants must still establish that no late error contaminates another mutation.
