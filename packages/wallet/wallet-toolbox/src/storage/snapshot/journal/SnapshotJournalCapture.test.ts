@@ -13,17 +13,20 @@ import { copySnapshotJournalBootstrapPage } from './SnapshotJournalBootstrap'
 import { readSnapshotJournalReceipt } from './SnapshotJournalReceipt'
 import { snapshotJournalRevision } from './SnapshotJournalRevision'
 import { SnapshotJournalConnectionCleanupError } from './SnapshotJournalConnections'
-import type { SnapshotJournalSource } from './SnapshotJournalCapture'
+import type { SnapshotJournalCaptureRequest, SnapshotJournalSource } from './SnapshotJournalCapture'
 import * as Closure from '../archive/KnexSnapshotArchiveClosure'
 import * as Backend from './SnapshotJournalCaptureBackend'
 import * as Receipts from './SnapshotJournalReceipt'
 import { snapshotArchiveTables } from '../archive/KnexSnapshotArchiveStore'
 
 const identity = '02' + '11'.repeat(32)
-const request = {
-  ceiling: snapshotJournalRevision('1000000'),
-  receiptPolicy: { receiptLimit: 128, receiptLifetimeMs: 600000 }
-}
+let request: SnapshotJournalCaptureRequest
+beforeEach(() => {
+  request = {
+    ceiling: snapshotJournalRevision('1000000'),
+    receiptPolicy: { receiptLimit: 128, receiptLifetimeMs: 600000 }
+  }
+})
 function gate() {
   let resolve!: () => void
   const promise = new Promise<void>(yes => {

@@ -6,7 +6,7 @@ import { StorageKnex } from '../../StorageKnex'
 import { StorageProvider } from '../../StorageProvider'
 import { seedArchiveClosure } from '../../../../test/utils/snapshotArchiveFixtures'
 import { maintainSnapshotJournal, type SnapshotJournalMaintenanceRequest } from './SnapshotJournalMaintenance'
-import { snapshotJournalRevision } from './SnapshotJournalRevision'
+import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
 import * as Sqlite from './SnapshotJournalSqliteGeneration'
 import * as Mysql from './SnapshotJournalMysqlGeneration'
 import * as Backend from './SnapshotJournalCaptureBackend'
@@ -15,8 +15,11 @@ import * as Fence from './SnapshotJournalMaintenanceFence'
 import * as Receipts from './SnapshotJournalReceipt'
 import { copySnapshotJournalBootstrapPage } from './SnapshotJournalBootstrap'
 
-const identity = '02' + '11'.repeat(32),
+const identity = '02' + '11'.repeat(32)
+let ceiling: SnapshotJournalRevision
+beforeEach(() => {
   ceiling = snapshotJournalRevision('1000000')
+})
 const receiptPolicy = { receiptLimit: 128, receiptLifetimeMs: 600000 }
 const epoch = '00000000-0000-4000-8000-000000000000'
 const input = (id = epoch): SnapshotJournalMaintenanceRequest => ({
