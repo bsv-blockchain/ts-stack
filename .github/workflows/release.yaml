@@ -261,21 +261,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_DIGEST: ${{ github.sha }}
           SOURCE_REF: ${{ github.ref }}
+        # Every tarball and predicate is verified independently; xargs fails the
+        # step if any single verification fails.
         run: |
+          verify() {
+            gh attestation verify "$1" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+              --source-digest "$SOURCE_DIGEST" \
+              --source-ref "$SOURCE_REF" \
+              --predicate-type "$2"
+          }
+          export -f verify
           for artifact in release-artifacts/packages/*.tgz; do
-            gh attestation verify "$artifact" \
-              --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
-              --source-digest "$SOURCE_DIGEST" \
-              --source-ref "$SOURCE_REF" \
-              --predicate-type https://slsa.dev/provenance/v1
-            gh attestation verify "$artifact" \
-              --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
-              --source-digest "$SOURCE_DIGEST" \
-              --source-ref "$SOURCE_REF" \
-              --predicate-type https://cyclonedx.org/bom
-          done
+            printf '%s\0%s\0' "$artifact" https://slsa.dev/provenance/v1
+            printf '%s\0%s\0' "$artifact" https://cyclonedx.org/bom
+          done | xargs -0 -n 2 -P 8 bash -c 'verify "$1" "$2"' _
 
       - name: Collect offline attestation bundles
         env:
