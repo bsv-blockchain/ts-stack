@@ -15,7 +15,7 @@ tags: [utxo, private-overlays, purchase, custody, recovery]
 The optional `@bsv/output-knowledge/private/node` entry provides
 `PrivatePurchaseContracts`, `PrivatePurchaseCoordinator`, `PrivatePurchaseAccess`,
 `PrivatePurchaseDisclosure`, the purchase progress functions and
-`SQLitePrivatePurchaseStore` for the proposed BRC-196 companion. Compose them with
+`SQLitePrivatePurchaseStore` and `SQLitePrivatePurchaseEvidence` for the proposed BRC-196 companion. Compose them with
 independent domain and release verification, the actual topic admission owner and
 optional authenticated HTTP routes. Installing the native components alone does
 not enable an endpoint or change ordinary overlay submission.
@@ -66,8 +66,8 @@ the exact transaction, complete lineage, Script, original request association
 and installed domain before calling it. A representation parser or valid seller
 signature is insufficient. The store atomically retains one candidate and its
 deterministic admission operation. Same-transaction retries recover the first
-candidate; another transaction conflicts. New proof variants require an
-explicit evidence/reconciliation owner and cannot overwrite these first bytes.
+candidate; another transaction conflicts. New proof variants use the separately installed cumulative evidence owner and
+cannot overwrite these first bytes.
 
 An admission intent is not STEAK. Only actual retained topical processing may
 advance it to `admitted-delivery-pending`. Save the original selected-topic
@@ -93,6 +93,65 @@ POTATOES and release evidence. A private delivery failure retains the already
 accepted STEAK. A local rejection never establishes a global Bitcoin outcome.
 An unconstructed preparation may expire; a pinned or admitted obligation remains
 recoverable after its original deadline.
+
+## Retain cumulative proof separately
+
+For the complete BRC-196 reference profile, install `SQLitePrivatePurchaseEvidence`
+on the same original `PrivateServiceDomain` and contracts, and supply it as the
+coordinator's `evidence` option before the first preparation. Explicitly configure
+`maximumCandidateBytes`, `maximumUpdates`, `maximumTransactions` and
+`maximumDependencies`. The byte ceiling is at most 4194304; updates are 1 through
+64, including the first retained proof. The transaction and dependency ceilings
+are at most 4096 and 16384. Choose limits that fit the original advertised request
+and the native domain's aggregate reserved capacity. A representation ceiling
+alone does not establish sufficient physical storage.
+
+Preparation reserves a native encrypted header and enough bounded chunks for
+all future candidate bytes and update revisions before any payable terms leave
+the host. Each data chunk reserves 197632 bytes and the header reserves 8192;
+the number of chunks is `ceil(ceil(maximumCandidateBytes / 3) * 4 / 196608)`.
+Include these reservations alongside the immutable purchase store's own originals,
+candidate, result and completion capacity. Reservation and original preparation
+are staged native transactions. A failure between them may leave a reserved proof
+slot without an exposed preparation; do not silently reclaim it or substitute new
+signed terms. Preserve its original identity for explicit operator reconciliation.
+A database or configuration that cannot hold the complete promise refuses work.
+
+Submission independently verifies the incoming complete evidence, proposes a
+bounded union with the retained proof, and independently verifies that combined
+view under the original domain and selected chain. It then pins the first immutable
+financial candidate and retains the proof. Same-transaction proof variants must
+name byte-identical target and shared raw transactions. The union preserves newly
+supplied BEEF transactions and shared Merkle rows; it may use plain BEEF with the
+same explicit target transaction ID. This does not make added rows truthful:
+independent complete Script, genesis, chain and domain checks remain required.
+Exact duplicates use no additional reserved update. Exhaustion refuses new proof
+without discarding an already retained valid view.
+
+Admission, release assessment and issuance receive the current durable combined
+candidate, while financial intent, operation IDs and the first signed delivered
+result retain their original bytes. The exact native proof revision is checked
+again at the admission effect, after asynchronous release/issuance work and at
+result commit. A changed view fails closed. Once delivered, additional valid proof
+never repeats admission or issuance or replaces the first result.
+
+A lost financial-pin reply can leave the original reserved proof empty. Recovery
+may populate that existing slot only from the exact already retained financial
+candidate, after independent incoming and combined validation. A lost proof-commit
+reply recovers the original committed view without consuming another duplicate
+update. Reads, preparation retries and recovery never create a missing namespace.
+Close or reopen both owners with the same persistent identity and limits. The
+optional owner is additive: omitted-companion calls preserve the earlier behavior,
+but do not claim cumulative-proof support. Existing obligations require their
+original custody owner; installing a new empty owner is not an automatic upgrade.
+
+Native storage and coordinator tests exercise large multi-chunk evidence, richer
+same-target proofs, native reopening, competing writers, exhausted capacity and
+updates, lost replies at both stages, immutable delivered results and proof changes
+across admission/release/signing. Their controlled lifecycle domain ports establish
+these orchestration boundaries; they do not establish chain truth or real topical
+admission. The separate complete domain and host demonstration supplies those
+premises.
 
 ## Native disclosure and recovery
 

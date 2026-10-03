@@ -476,6 +476,39 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'private-purchase-evidence': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-purchase-evidence.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/private-purchase*.ts',
+        '../../sdk/src/**',
+        '../../sdk/package.json'
+      ],
+      mutate: [
+        'src/private/PrivatePurchaseEvidence.ts',
+        'src/private/SQLitePrivatePurchaseEvidence.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-purchase-contract.test.ts',
+          '<rootDir>/test/private-purchase-contract.property.test.ts',
+          '<rootDir>/test/private-purchase-progress.test.ts',
+          '<rootDir>/test/private-purchase-store.test.ts',
+          '<rootDir>/test/private-purchase-state.property.test.ts',
+          '<rootDir>/test/private-purchase-coordinator.test.ts',
+          '<rootDir>/test/private-purchase-coordination.property.test.ts',
+          '<rootDir>/test/private-purchase-disclosure.test.ts',
+          '<rootDir>/test/private-purchase-disclosure.property.test.ts',
+          '<rootDir>/test/private-purchase-evidence.test.ts',
+          '<rootDir>/test/private-purchase-evidence.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
     'private-purchase-coordination': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',
@@ -483,6 +516,9 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/application/output-knowledge/test/private-purchase-coordination.property.test.ts',
       additionalInputs: [
         'src/**',
+        'src/private/PrivatePurchaseEvidence.ts',
+        'src/private/SQLitePrivatePurchaseEvidence.ts',
+        'test/private-purchase-evidence.fixture.ts',
         'test/private-purchase*.ts',
         '../../sdk/src/**',
         '../../sdk/package.json'
@@ -492,7 +528,9 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/private-purchase-coordinator.test.ts',
-          '<rootDir>/test/private-purchase-coordination.property.test.ts'
+          '<rootDir>/test/private-purchase-coordination.property.test.ts',
+          '<rootDir>/test/private-purchase-evidence.test.ts',
+          '<rootDir>/test/private-purchase-evidence.property.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )

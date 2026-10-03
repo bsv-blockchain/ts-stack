@@ -71,12 +71,15 @@ failures while preserving status/dependencies; it is not a wire or global verdic
 
 The `private/node` entry also exports `PrivatePurchaseContracts`, `PrivatePurchaseCoordinator`,
 `PrivatePurchaseAccess`, `PrivatePurchaseDisclosure`, purchase progress functions
-and `SQLitePrivatePurchaseStore`. They retain the exact preparation,
+`SQLitePrivatePurchaseStore` and `SQLitePrivatePurchaseEvidence`. They retain the exact preparation,
 one native admission intent and first signed result, with reserved completion
 capacity and current recipient checks at enqueue. They do not themselves verify
 a purchase, perform topic admission, satisfy a release policy or issue a licence.
 See [original purchase custody](../../../docs/guides/private-purchase-custody.md)
-before installing the separately composed host and domain owners.
+before installing the separately composed host and domain owners. The complete
+cumulative-proof profile installs the evidence owner before preparation, verifies
+incoming and combined proof independently and preserves original financial and
+delivered-result bytes. Omitted-companion behavior remains available.
 
 The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,
 `privatePurchaseBuyerBinding` and `PRIVATE_PURCHASE_BUYER_INITIAL`. The separate

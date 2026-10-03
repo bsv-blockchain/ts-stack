@@ -1386,6 +1386,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-evidence",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-evidence.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded native cumulative same-transaction proof custody with original financial intent, reserved completion capacity and exact selected-context writer guards",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

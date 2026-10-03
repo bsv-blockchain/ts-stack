@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 137)
+  assert.equal(Object.keys(configured).length, 138)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -1190,5 +1190,46 @@ test('covenant buyer and native payment retain whole entries and complete origin
       target.runnerOptions.buildCommand,
       'pnpm --filter @bsv/wallet-toolbox build && pnpm build'
     )
+  }
+})
+
+test('cumulative purchase proof owns full modules and retains every original lifecycle suite', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    proof = configured['private-purchase-evidence']
+  assert.deepEqual(proof.mutate, [
+    'src/private/PrivatePurchaseEvidence.ts',
+    'src/private/SQLitePrivatePurchaseEvidence.ts'
+  ])
+  for (const name of [
+    'contract',
+    'contract.property',
+    'progress',
+    'store',
+    'state.property',
+    'coordinator',
+    'coordination.property',
+    'disclosure',
+    'disclosure.property',
+    'evidence',
+    'evidence.property'
+  ])
+    assert.ok(
+      proof.runnerOptions.jest.config.testMatch.includes(
+        `<rootDir>/test/private-purchase-${name}.test.ts`
+      )
+    )
+  for (const target of Object.values(configured).filter(
+    target =>
+      target.packageDirectory === proof.packageDirectory &&
+      target.mutate.includes('src/private/PrivatePurchaseCoordinator.ts')
+  )) {
+    for (const name of ['evidence', 'evidence.property'])
+      assert.ok(
+        target.runnerOptions.jest.config.testMatch.includes(
+          `<rootDir>/test/private-purchase-${name}.test.ts`
+        )
+      )
+    for (const file of proof.mutate) assert.ok(target.additionalInputs.includes(file))
+    assert.ok(target.additionalInputs.includes('test/private-purchase-evidence.fixture.ts'))
   }
 })

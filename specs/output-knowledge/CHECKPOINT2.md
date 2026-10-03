@@ -35,6 +35,8 @@ checkpoint requires every item below, demonstrated on the published PR commit.
       retirement transactions. Exercise their scripts and economic refusals.
 - [ ] Durably merge independently verified alternate BEEF proofs for the same raw
       transaction without replacing original custody, payment, admission or delivery.
+      Native cumulative custody and all controlled lifecycle boundaries pass127 tests;
+      the independent Script/domain/actual-host composition still needs demonstration.
 - [ ] Demonstrate authenticated topic submission returning bound STEAK and
       POTATOES, with retained original admission and release-policy recovery. Show
       that admission alone does not establish mining or decryption.

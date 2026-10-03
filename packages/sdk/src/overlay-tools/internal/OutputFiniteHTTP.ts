@@ -199,6 +199,30 @@ export class OutputFiniteHTTP {
     }
   }
 
+  private async checkRecipient(
+    recipient: string,
+    signal: AbortSignal,
+    acquisition?: AcquisitionExchange
+  ): Promise<void> {
+    outputAssert(
+      this.wallet !== undefined &&
+        typeof this.walletIdentity === 'function' &&
+        this.wallet.getPublicKey === this.walletIdentity,
+      acquisition
+        ? 'Paid lookup wallet capability changed'
+        : 'Private HTTP wallet capability changed',
+      'context-changed'
+    )
+    const identity = await this.walletIdentity.call(this.wallet, { identityKey: true })
+    signal.throwIfAborted()
+    outputAssert(
+      this.wallet.getPublicKey === this.walletIdentity && identity.publicKey === recipient,
+      acquisition
+        ? 'Paid lookup authentication wallet differs from original buyer'
+        : 'Private HTTP wallet differs from original recipient',
+      'unauthorized'
+    )
+  }
   private async request(
     url: string,
     body: string,
@@ -207,26 +231,7 @@ export class OutputFiniteHTTP {
     acquisition?: AcquisitionExchange
   ): Promise<OutputFiniteHTTPResponse> {
     const recipient = acquisition?.buyer ?? this.recipient
-    if (recipient !== undefined) {
-      outputAssert(
-        this.wallet !== undefined &&
-          typeof this.walletIdentity === 'function' &&
-          this.wallet.getPublicKey === this.walletIdentity,
-        acquisition
-          ? 'Paid lookup wallet capability changed'
-          : 'Private HTTP wallet capability changed',
-        'context-changed'
-      )
-      const identity = await this.walletIdentity.call(this.wallet, { identityKey: true })
-      signal.throwIfAborted()
-      outputAssert(
-        this.wallet.getPublicKey === this.walletIdentity && identity.publicKey === recipient,
-        acquisition
-          ? 'Paid lookup authentication wallet differs from original buyer'
-          : 'Private HTTP wallet differs from original recipient',
-        'unauthorized'
-      )
-    }
+    if (recipient !== undefined) await this.checkRecipient(recipient, signal, acquisition)
     const headers = {
       'content-type': 'application/json',
       ...this.selection.headers,

@@ -1684,6 +1684,19 @@
           "Lost finalization resolves to the same original transaction and immutable original bytes, without broadcast or another signature.",
           "Changed construction, asynchronous guards and inadequate complete-submission capacity refuse new signing."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-evidence.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded native cumulative same-transaction proof custody with original financial intent, reserved completion capacity and exact selected-context writer guards",
+        "target": "At least 300 deterministic native reopen, duplicate, richer-proof, authority and historical-context histories",
+        "invariants": [
+          "Native reopening preserves the complete accumulated proof and the original raw target transaction.",
+          "Independent incoming and combined validation precede proof retention and all admission/release effects.",
+          "Missing proof custody is never initialized during recovery, and exact duplicates consume no reserved update.",
+          "Richer proof cannot replace the first financial candidate or the first delivered result."
+        ]
       }
     ],
     "exclusions": [

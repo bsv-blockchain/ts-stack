@@ -1993,6 +1993,8 @@ import {
   PrivatePurchaseCoordinator,
   PrivatePurchaseAccess,
   PrivatePurchaseDisclosure,
+  SQLitePrivatePurchaseEvidence,
+  type PrivatePurchaseEvidenceLimits,
   type PrivatePurchaseCoordinatorOptions,
   type PrivateServiceDomain,
   type ProtectedLedgerView
@@ -2001,21 +2003,23 @@ import type { OutputPurchasePrepare as CoordinatedPurchasePrepare } from '@bsv/s
 
 function installPurchase(
   custody: PrivateServiceDomain,
-  options: Omit<PrivatePurchaseCoordinatorOptions, 'access'>,
+  options: Omit<PrivatePurchaseCoordinatorOptions, 'access' | 'evidence'>,
   permission: (
     request: CoordinatedPurchasePrepare,
     buyer: string,
     mode: 'initial' | 'retained',
     view: ProtectedLedgerView
   ) => boolean,
-  controlPermission: (buyer: string) => boolean
+  controlPermission: (buyer: string) => boolean,
+  evidenceLimits: PrivatePurchaseEvidenceLimits
 ) {
   const access = new PrivatePurchaseAccess(
     custody,
     options.contracts.configuration().topic,
     permission
   )
-  const coordinator = new PrivatePurchaseCoordinator({ ...options, access })
+  const evidence = new SQLitePrivatePurchaseEvidence(custody, options.contracts, evidenceLimits)
+  const coordinator = new PrivatePurchaseCoordinator({ ...options, access, evidence })
   const disclosure = new PrivatePurchaseDisclosure(
     custody,
     options.store,

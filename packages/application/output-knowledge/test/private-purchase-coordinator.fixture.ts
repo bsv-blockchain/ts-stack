@@ -4,16 +4,17 @@ import {
   type PrivatePurchaseCoordinatorOptions
 } from '../src/private/PrivatePurchaseCoordinator.js'
 import type { PrivatePurchaseAdmissionOutcome } from '../src/private/PrivatePurchasePorts.js'
+import type { PrivatePurchaseEvidence } from '../src/private/PrivatePurchaseEvidence.js'
 import { purchaseStoreFixture } from './private-purchase-store.fixture.js'
 
 /** Actual native custody, controlled installed-premise ports and disclosed
  * lifecycle-only candidate bytes. This is not Bitcoin/admission proof.
  */
 export function purchaseCoordinatorFixture(
-  options: Partial<PrivatePurchaseCoordinatorOptions> = {}
+  options: Partial<PrivatePurchaseCoordinatorOptions> = {},
+  f = purchaseStoreFixture()
 ) {
-  const f = purchaseStoreFixture(),
-    contract = f.f.f
+  const contract = f.f.f
   let authorized = true,
     domainCurrent = true,
     available = true,
@@ -147,12 +148,13 @@ export function purchaseCoordinatorFixture(
     prepare: () => coordinator.prepare(contract.request, caller),
     submit: () => coordinator.submit(f.candidate, caller),
     recover: () => coordinator.recover(f.id, caller),
-    reopen: async () => {
+    reopen: async (evidence?: (domain: typeof activeDomain) => PrivatePurchaseEvidence) => {
       await coordinator.stop()
       f.close(activeDomain)
       const reopened = f.open()
       activeDomain = reopened.domain
       owner.store = reopened.store
+      if (evidence) owner.evidence = evidence(reopened.domain)
       coordinator = new PrivatePurchaseCoordinator(owner)
     },
     dispose: async () => {

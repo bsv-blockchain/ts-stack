@@ -96,7 +96,7 @@ export class OutputPurchaseTransport<Operation extends OutputPurchaseOperation> 
     if ('candidate' in options && options.candidate !== undefined) {
       this.candidate = parseOutputPurchaseSubmit(options.candidate)
       outputAssert(
-        this.terms !== undefined && this.candidate.acquisitionId === this.terms.body.acquisitionId,
+        this.candidate.acquisitionId === this.terms?.body.acquisitionId,
         'Purchase candidate differs from original acquisition',
         'context-changed'
       )
@@ -108,12 +108,10 @@ export class OutputPurchaseTransport<Operation extends OutputPurchaseOperation> 
         this.candidate !== undefined,
         'Purchase submit requires the original signed transaction'
       )
-    const request =
-      this.operation === 'prepare'
-        ? this.original
-        : this.operation === 'submit'
-          ? this.candidate
-          : { version: 1, acquisitionId: this.terms!.body.acquisitionId }
+    let request: unknown = this.original
+    if (this.operation === 'submit') request = this.candidate
+    else if (this.operation !== 'prepare')
+      request = { version: 1, acquisitionId: this.terms!.body.acquisitionId }
     this.body = canonicalOutputJSON(request, {
       bytes: Math.min(4194304, this.selection.profile.maxRequestBytes)
     })

@@ -13,7 +13,8 @@ import {
   parseOutputPurchaseSubmit,
   type OutputCapabilitySelection,
   type OutputJSONObject,
-  type OutputPurchasePrepare
+  type OutputPurchasePrepare,
+  type OutputPurchaseSubmit
 } from '@bsv/sdk'
 import { BoundedOutputWork, checkOutputWork } from '../internal/BoundedOutputWork.js'
 import type {
@@ -32,6 +33,11 @@ import {
 } from './PrivatePurchasePorts.js'
 import type { ProtectedLedgerGuard } from './ProtectedLedgerCodec.js'
 import type {
+  PrivatePurchaseEvidence,
+  PrivatePurchaseEvidencePlan,
+  PrivatePurchaseEvidenceView
+} from './PrivatePurchaseEvidence.js'
+import type {
   PrivatePurchaseLoaded,
   SQLitePrivatePurchaseStore
 } from './SQLitePrivatePurchaseStore.js'
@@ -43,6 +49,9 @@ export interface PrivatePurchaseCoordinatorOptions {
   domain: PrivatePurchaseDomain
   admission: PrivatePurchaseAdmission
   release: PrivatePurchaseRelease
+  /** Install before preparation for cumulative BRC-196 proof retention.
+   * Existing acquisitions must retain their original custody owner. */
+  evidence?: PrivatePurchaseEvidence
   validationPolicy: { id: string; digest: string }
   sign(
     type: 'purchase-terms' | 'potatoes',
@@ -101,6 +110,22 @@ export class PrivatePurchaseCoordinator {
       pin(options.admission, 'recover'),
       pin(options.release, 'assess')
     ]
+    if (options.evidence) {
+      const evidence = options.evidence,
+        id = outputHex32(evidence.id)
+      for (const key of ['reserve', 'read', 'propose'] as const)
+        outputAssert(
+          evidence[key].constructor.name !== 'AsyncFunction',
+          'Purchase evidence custody must be synchronous'
+        )
+      this.unchanged = [
+        ...this.unchanged,
+        pin(evidence, 'reserve'),
+        pin(evidence, 'read'),
+        pin(evidence, 'propose'),
+        () => evidence.id === id
+      ]
+    }
     for (const fn of [options.clock, options.manifest, options.sign])
       outputAssert(typeof fn === 'function', 'Purchase installation callback is required')
     this.work = new BoundedOutputWork(
@@ -147,6 +172,7 @@ export class PrivatePurchaseCoordinator {
           'Purchase request differs from its original preparation',
           'conflict'
         )
+        if (this.ports.evidence) this.readProof(prior, initial)
         return id
       }
       const selected = this.ports.contracts.retain(this.ports.manifest(), this.ports.clock())
@@ -175,6 +201,13 @@ export class PrivatePurchaseCoordinator {
       validation()
       const original = this.ports.contracts.authenticate(contract, signed)
       const guard = this.guard(id, caller, signal, original, request)
+      const preparedGuard: ProtectedLedgerGuard = view => {
+        guard(view)
+        validation()
+        this.ports.contracts.retain(selected.record.manifest, view.observedAt)
+      }
+      if (this.ports.evidence)
+        synchronous(this.ports.evidence.reserve(original, this.ports.clock, preparedGuard))
       this.ports.store.prepare(
         {
           format: 'private-purchase-custody/1',
@@ -185,11 +218,7 @@ export class PrivatePurchaseCoordinator {
           material: owned.material
         },
         this.ports.clock,
-        view => {
-          guard(view)
-          validation()
-          this.ports.contracts.retain(selected.record.manifest, view.observedAt)
-        }
+        preparedGuard
       )
       return id
     })
@@ -204,28 +233,28 @@ export class PrivatePurchaseCoordinator {
         'Purchase is reserved for another transaction',
         'conflict'
       )
-      // Even a same-txid alternate proof must be independently checked; no new
-      // bytes replace the first retained candidate or create a second effect.
-      const validation = this.validation(
-        await this.ports.domain.verify(
-          structuredClone(candidate),
-          structuredClone(loaded.custody),
-          signal
-        )
-      )
+      const validation = await this.verifyCandidate(candidate, loaded, caller, signal)
       this.requireCurrent(caller, signal)
       const guard = this.guard(candidate.acquisitionId, caller, signal, loaded.custody.original)
+      const proof = this.ports.evidence
+        ? await this.proofPlan(loaded, candidate, caller, signal, guard)
+        : undefined
+      const validated: ProtectedLedgerGuard = view => {
+        guard(view)
+        validation()
+        proof?.checkCurrent(view)
+      }
+      // Retain the first financial candidate before proof custody. A lost
+      // reply can then heal only its existing reserved proof slot on recovery.
       this.ports.store.pin(
         candidate.acquisitionId,
         caller.buyer,
         loaded.row.revision,
         candidate,
         this.ports.clock,
-        view => {
-          guard(view)
-          validation()
-        }
+        validated
       )
+      proof?.retain(this.ports.clock, validated)
       await this.progress(candidate.acquisitionId, caller, signal)
       return candidate.acquisitionId
     })
@@ -286,75 +315,106 @@ export class PrivatePurchaseCoordinator {
         )
       return true
     }
-    if (progress.status === 'admission-pending') {
-      outputAssert(loaded.candidate, 'Original purchase candidate is unavailable', 'unavailable')
-      const validation = this.validation(
-        await this.ports.domain.verify(
-          structuredClone(loaded.candidate),
-          structuredClone(loaded.custody),
-          signal
-        )
+    // Delivered and terminal results stay immutable; proof updates never cause
+    // another admission or secret issuance.
+    if (progress.status !== 'admission-pending' && progress.status !== 'admitted-delivery-pending')
+      return true
+    const proof = this.ports.evidence
+      ? await this.currentProof(loaded, caller, signal, guard)
+      : { candidate: loaded.candidate, checkCurrent: () => {} }
+    const currentGuard: ProtectedLedgerGuard = view => {
+      guard(view)
+      proof.checkCurrent(view)
+    }
+    return progress.status === 'admission-pending'
+      ? this.admit(loaded, proof, currentGuard, caller, signal)
+      : this.deliver(loaded, proof, currentGuard, caller, signal)
+  }
+  private async admit(
+    loaded: PrivatePurchaseLoaded,
+    proof: PrivatePurchaseEvidenceView,
+    currentGuard: ProtectedLedgerGuard,
+    caller: PrivatePurchaseCaller,
+    signal: AbortSignal
+  ): Promise<boolean> {
+    const progress = loaded.progress,
+      id = progress.acquisitionId
+    outputAssert(proof.candidate, 'Original purchase candidate is unavailable', 'unavailable')
+    const validation = this.validation(
+      await this.ports.domain.verify(
+        structuredClone(proof.candidate),
+        structuredClone(loaded.custody),
+        signal
       )
-      this.requireCurrent(caller, signal)
-      validation()
-      const outcome = ownPrivatePurchaseAdmissionOutcome(
-        await this.ports.admission.recover(
-          {
-            operationId: progress.operationId!,
-            original: structuredClone(loaded.custody.original),
-            candidate: structuredClone(loaded.candidate)
-          },
-          signal,
-          {
-            checkCurrent: () => {
-              this.requireCurrent(caller, signal)
-              const current = this.ports.store.load(id, caller.buyer, this.ports.clock, view => {
-                guard(view)
-                validation()
-              })
-              outputAssert(
-                current?.row.revision === loaded.row.revision,
-                'Purchase intent changed before external admission',
-                'conflict'
-              )
-              this.requireCurrent(caller, signal)
-            }
+    )
+    this.requireCurrent(caller, signal)
+    validation()
+    const outcome = ownPrivatePurchaseAdmissionOutcome(
+      await this.ports.admission.recover(
+        {
+          operationId: progress.operationId!,
+          original: structuredClone(loaded.custody.original),
+          candidate: structuredClone(proof.candidate)
+        },
+        signal,
+        {
+          checkCurrent: () => {
+            this.requireCurrent(caller, signal)
+            const current = this.ports.store.load(id, caller.buyer, this.ports.clock, view => {
+              currentGuard(view)
+              validation()
+            })
+            outputAssert(
+              current?.row.revision === loaded.row.revision,
+              'Purchase intent changed before external admission',
+              'conflict'
+            )
+            this.requireCurrent(caller, signal)
           }
-        )
-      )
-      this.requireCurrent(caller, signal)
-      outputAssert(
-        outcome.operationId === progress.operationId && outcome.txid === progress.txid,
-        'Retained purchase admission names another operation/transaction',
-        'context-changed'
-      )
-      if (outcome.status === 'unresolved') return true
-      this.ports.store.advance(
-        id,
-        caller.buyer,
-        loaded.row.revision,
-        outcome.status === 'admitted'
-          ? {
-              type: 'admitted',
-              steak: outcome.steak,
-              acceptedAt: outcome.acceptedAt,
-              assessmentContextId: outcome.assessmentContextId
-            }
-          : { type: 'admission-rejected', reason: outcome.reason, evidence: outcome.evidence },
-        this.ports.clock,
-        view => {
-          guard(view)
-          validation()
         }
       )
-      return false
-    }
-    if (progress.status !== 'admitted-delivery-pending') return true
-    outputAssert(loaded.candidate, 'Original purchase candidate is unavailable', 'unavailable')
+    )
+    this.requireCurrent(caller, signal)
+    outputAssert(
+      outcome.operationId === progress.operationId && outcome.txid === progress.txid,
+      'Retained purchase admission names another operation/transaction',
+      'context-changed'
+    )
+    if (outcome.status === 'unresolved') return true
+    this.ports.store.advance(
+      id,
+      caller.buyer,
+      loaded.row.revision,
+      outcome.status === 'admitted'
+        ? {
+            type: 'admitted',
+            steak: outcome.steak,
+            acceptedAt: outcome.acceptedAt,
+            assessmentContextId: outcome.assessmentContextId
+          }
+        : { type: 'admission-rejected', reason: outcome.reason, evidence: outcome.evidence },
+      this.ports.clock,
+      view => {
+        currentGuard(view)
+        validation()
+      }
+    )
+    return false
+  }
+  private async deliver(
+    loaded: PrivatePurchaseLoaded,
+    proof: PrivatePurchaseEvidenceView,
+    currentGuard: ProtectedLedgerGuard,
+    caller: PrivatePurchaseCaller,
+    signal: AbortSignal
+  ): Promise<boolean> {
+    const progress = loaded.progress,
+      id = progress.acquisitionId
+    outputAssert(proof.candidate, 'Original purchase candidate is unavailable', 'unavailable')
     const assessment = await this.ports.release.assess(
       structuredClone(loaded.custody),
       structuredClone(progress),
-      structuredClone(loaded.candidate),
+      structuredClone(proof.candidate),
       signal
     )
     this.requireCurrent(caller, signal)
@@ -368,16 +428,18 @@ export class PrivatePurchaseCoordinator {
       })
     canonicalOutputJSON(releaseEvidence, { bytes: 131072 })
     checkRelease()
+    if (this.ports.evidence) this.ports.store.load(id, caller.buyer, this.ports.clock, currentGuard)
     const secret = await this.ports.domain.issue(
       structuredClone(loaded.custody),
       structuredClone(progress),
       structuredClone(releaseEvidence),
       signal,
-      structuredClone(loaded.candidate)
+      structuredClone(proof.candidate)
     )
     this.requireCurrent(caller, signal)
     decodeOutputBytes(secret, loaded.custody.maximumSecretBytes)
     checkRelease()
+    if (this.ports.evidence) this.ports.store.load(id, caller.buyer, this.ports.clock, currentGuard)
     const potatoesBody = {
       version: 1,
       acquisitionId: id,
@@ -419,11 +481,131 @@ export class PrivatePurchaseCoordinator {
       },
       this.ports.clock,
       view => {
-        guard(view)
+        currentGuard(view)
         checkRelease()
       }
     )
     return false
+  }
+  private async verifyCandidate(
+    candidate: OutputPurchaseSubmit,
+    loaded: PrivatePurchaseLoaded,
+    caller: PrivatePurchaseCaller,
+    signal: AbortSignal
+  ): Promise<() => void> {
+    const check = this.validation(
+      await this.ports.domain.verify(
+        structuredClone(candidate),
+        structuredClone(loaded.custody),
+        signal
+      )
+    )
+    this.requireCurrent(caller, signal)
+    check()
+    return check
+  }
+  private readProof(
+    loaded: PrivatePurchaseLoaded,
+    guard: ProtectedLedgerGuard
+  ): PrivatePurchaseEvidenceView {
+    const proof = this.ports.evidence!.read(loaded.custody.original, this.ports.clock, guard)
+    synchronous(proof, false)
+    const candidate = proof.candidate === null ? null : parseOutputPurchaseSubmit(proof.candidate)
+    outputAssert(
+      candidate === null ||
+        (candidate.acquisitionId === loaded.progress.acquisitionId &&
+          candidate.txid === loaded.progress.txid),
+      'Retained purchase proof differs from original financial intent',
+      'context-changed'
+    )
+    return { candidate, checkCurrent: this.proofGuard(proof) }
+  }
+  private proofGuard(proof: PrivatePurchaseEvidenceView): ProtectedLedgerGuard {
+    const check = proof.checkCurrent
+    outputAssert(
+      typeof check === 'function' && check.constructor.name !== 'AsyncFunction',
+      'Purchase evidence guard must be synchronous'
+    )
+    return view => {
+      outputAssert(
+        proof.checkCurrent === check,
+        'Purchase evidence guard changed',
+        'context-changed'
+      )
+      synchronous(check.call(proof, view))
+    }
+  }
+  private async proofPlan(
+    loaded: PrivatePurchaseLoaded,
+    incoming: OutputPurchaseSubmit,
+    caller: PrivatePurchaseCaller,
+    signal: AbortSignal,
+    guard: ProtectedLedgerGuard
+  ): Promise<PrivatePurchaseEvidencePlan> {
+    const proof = this.ports.evidence!.propose(
+      loaded.custody.original,
+      structuredClone(incoming),
+      this.ports.clock,
+      guard
+    )
+    synchronous(proof, false)
+    const candidate = parseOutputPurchaseSubmit(proof.candidate),
+      check = this.proofGuard(proof),
+      retain = proof.retain
+    outputAssert(
+      candidate.acquisitionId === incoming.acquisitionId && candidate.txid === incoming.txid,
+      'Combined purchase proof differs from original transaction',
+      'context-changed'
+    )
+    outputAssert(
+      typeof retain === 'function' && retain.constructor.name !== 'AsyncFunction',
+      'Purchase evidence retention must be synchronous'
+    )
+    const validation = await this.verifyCandidate(candidate, loaded, caller, signal),
+      current: ProtectedLedgerGuard = view => {
+        check(view)
+        validation()
+      }
+    return {
+      candidate,
+      checkCurrent: current,
+      retain: (clock, authorized) => {
+        outputAssert(
+          proof.retain === retain,
+          'Purchase evidence retention changed',
+          'context-changed'
+        )
+        outputAssert(
+          canonicalOutputJSON(proof.candidate) === canonicalOutputJSON(candidate),
+          'Validated combined purchase proof changed',
+          'context-changed'
+        )
+        synchronous(
+          retain.call(proof, clock, view => {
+            authorized(view)
+            current(view)
+          })
+        )
+      }
+    }
+  }
+  private async currentProof(
+    loaded: PrivatePurchaseLoaded,
+    caller: PrivatePurchaseCaller,
+    signal: AbortSignal,
+    guard: ProtectedLedgerGuard
+  ): Promise<PrivatePurchaseEvidenceView> {
+    const proof = this.readProof(loaded, guard)
+    if (proof.candidate !== null) return proof
+    outputAssert(loaded.candidate, 'Original purchase candidate is unavailable', 'unavailable')
+    const validation = await this.verifyCandidate(loaded.candidate, loaded, caller, signal),
+      plan = await this.proofPlan(loaded, loaded.candidate, caller, signal, guard)
+    plan.retain(this.ports.clock, view => {
+      guard(view)
+      validation()
+      proof.checkCurrent(view)
+    })
+    return this.readProof(loaded, guard)
   }
   private load(
     id: string,
@@ -572,4 +754,13 @@ function permitted(value: unknown): boolean {
     return false
   }
   return value === true
+}
+function synchronous(value: unknown, empty = true): void {
+  if (value instanceof Promise) void value.catch(() => undefined)
+  outputAssert(
+    !(value instanceof Promise) &&
+      (empty ? value === undefined : value !== null && typeof value === 'object'),
+    'Purchase evidence operation must complete synchronously',
+    'context-changed'
+  )
 }

@@ -170,3 +170,13 @@ export {
   type PrivatePurchaseAdmissionOutcome,
   type PrivatePurchaseRelease
 } from './PrivatePurchasePorts.js'
+
+export type {
+  PrivatePurchaseEvidence,
+  PrivatePurchaseEvidenceView,
+  PrivatePurchaseEvidencePlan
+} from './PrivatePurchaseEvidence.js'
+export {
+  SQLitePrivatePurchaseEvidence,
+  type PrivatePurchaseEvidenceLimits
+} from './SQLitePrivatePurchaseEvidence.js'

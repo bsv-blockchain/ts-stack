@@ -3225,11 +3225,51 @@ unexcluded audit reports zero findings. The reviewed Metro String.raw correction
 preserves the installed watcher oracle. These source repairs do not publish or
 deploy images.
 
-Checkpoint two remains open. In particular, same-transaction alternate valid BEEF
-proofs are independently checked but the current coordinator retains only its
-first candidate. BRC-196 requires cumulative proof merging; a bounded durable
-evidence owner and its integration are still required before this boundary is
-complete. Actual retained Engine/Mongo admission, authenticated native-wallet and
-LCH playback composition, the remaining reference workflows, complete affected
-mutation campaign and successful exact-head hosted qualification also remain
-required.
+Checkpoint two remains open. This component batch originally retained only its
+first candidate after verifying alternate BEEF; the following implementation
+adds the required separate cumulative custody. Actual retained Engine/Mongo
+admission, authenticated native-wallet and LCH playback composition, the remaining
+reference workflows, complete affected mutation campaign and successful exact-head
+hosted qualification also remain required.
+
+### Cumulative purchase proof custody
+
+`SQLitePrivatePurchaseEvidence` is a separate optional native owner on the original
+private domain. It reserves complete future encrypted chunks and update capacity
+before preparation leaves the host. It binds the complete original signed request,
+terms and capability, and retains a bounded same-raw-transaction BEEF union. Shared
+raw transaction bytes must agree; the explicit target remains fixed. Plain BEEF
+serialization preserves added shared proof rows that target-only Atomic BEEF
+serialization discarded in the first test attempt. That initial failed assertion
+is retained; neither the fixture nor the verifier claims chain truth from structure.
+
+The optional coordinator independently checks incoming and combined views, pins
+the first financial candidate, then retains proof. Recovery can populate an
+already reserved empty slot from that exact original candidate after validation.
+It never creates missing custody. Native proof-generation guards protect admission,
+release, issuance and result commit. All first original candidate, operation,
+STEAK and delivered-result bytes remain immutable; duplicate proof consumes no
+update and delivered replay issues nothing again. Missing or changed configuration,
+exhausted reservation and competing writers fail closed. The guide describes staged
+reservation failure and explicit operator reconciliation rather than automatic
+repair or replacement payment. Omitted-companion behavior remains compatible.
+
+The complete prior contract/state/coordinator/disclosure union plus the new native
+unit and 300-case property passes127 tests across11 suites in95.787 seconds. Both
+complete implementations have100 percent statement, branch and line coverage;
+the evidence implementation also has100 percent function coverage. The coordinator
+retains its pre-existing unused initialization no-op. Tests cover large encrypted
+multi-chunk storage, richer shared-Merkle proof, native reopen, full reservation,
+capacity/update exhaustion, lost financial/proof replies, stale proof at every
+physical boundary and first-result replay. Lifecycle ports in these tests are
+controlled premises, not actual Script, selected-chain or topical-admission proof;
+the complete reference composition remains an acceptance requirement.
+
+The exact coordinated whole-source registration derives138 targets, preserves all
+prior unions and appends complete proof coverage to the existing coordinator target.
+All previous thresholds,300-case floor, seed/path controls, workers, test/campaign
+bounds and full-campaign-only policy remain. The three owned SDK analyzer fixes
+preserve finite deadlines and existing request selection. Their full old/new HTTP
+union passes225 tests across13 suites. The nine scoped watcher analyzer corrections
+still await the active owner's acknowledgement or qualified handoff; no analysis
+waiver is used.
