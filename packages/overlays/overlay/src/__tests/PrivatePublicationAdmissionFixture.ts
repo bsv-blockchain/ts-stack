@@ -115,9 +115,11 @@ export function privateAdmissionFixture(
   const read = jest
     .fn<Promise<AdmissionHistoryResult>, [AdmissionHistoryQuery]>()
     .mockResolvedValue({ state: 'unresolved' })
-  const submit = jest.fn<ReturnType<Engine['submit']>, Parameters<Engine['submit']>>(async () => ({
-    [topic]: { outputsToAdmit: [], coinsToRetain: [] }
-  }))
+  const submit = jest.fn<ReturnType<Engine['submit']>, Parameters<Engine['submit']>>(() =>
+    Promise.resolve({
+      [topic]: { outputsToAdmit: [], coinsToRetain: [] }
+    })
+  )
   const engine = {
     storage: {
       admissionScope: { ...scope },

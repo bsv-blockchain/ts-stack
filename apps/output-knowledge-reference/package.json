@@ -7,14 +7,16 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && vite build --ssr src/nodeServer.ts --outDir dist-server && node scripts/copy-notices.mjs",
+    "build": "tsc --noEmit && vite build && vite build --ssr src/nodeServer.ts --outDir dist-server && vite build --ssr src/proposalNodeServer.ts --outDir dist-proposals && node scripts/copy-notices.mjs",
     "serve": "node dist-server/nodeServer.js",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src test --deny-warnings",
     "format:check": "pnpm --workspace-root exec prettier --check \"apps/output-knowledge-reference/**/*.{css,html,json,md,mjs,ts}\"",
     "test": "vitest run",
-    "test:browser": "pnpm build && node scripts/check-browser.mjs && node scripts/check-admission-browser.mjs",
-    "test:browser:admission": "pnpm build && node scripts/check-admission-browser.mjs"
+    "test:browser": "pnpm build && node scripts/check-browser.mjs && node scripts/check-admission-browser.mjs && node scripts/check-proposal-browser.mjs",
+    "test:browser:admission": "pnpm build && node scripts/check-admission-browser.mjs",
+    "serve:proposals": "node dist-proposals/proposalNodeServer.js",
+    "test:browser:proposals": "pnpm build && node scripts/check-proposal-browser.mjs"
   },
   "dependencies": {
     "@bsv/auth-express-middleware": "workspace:^",

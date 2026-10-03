@@ -1,4 +1,4 @@
-import { createCoreOverlayTestProjects } from './jest.projects.mjs'
+import { createCoreOverlayTestProjects } from './jest-projects.config.mjs'
 
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {

@@ -1,4 +1,5 @@
 import express from 'express'
+import { rateLimit } from 'express-rate-limit'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import {
@@ -64,6 +65,7 @@ export async function nativeRootServingFixture(protocol: 'SHIP' | 'SLAP') {
   const rootKey = new PrivateKey(82),
     rootIdentity = rootKey.toPublicKey().toString()
   const app = express()
+  app.use(rateLimit({ windowMs: 60000, limit: 600 }))
   server.removeAllListeners('request')
   server.on('request', app)
   await new Promise<void>((resolve, reject) => {

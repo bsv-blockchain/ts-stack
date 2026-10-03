@@ -170,7 +170,7 @@ test('overlay discovery excludes generated children while preserving its own mut
 test('overlay Engine discovery excludes generated children while preserving its own mutation root', async () => {
   const { default: config } = await import('../packages/overlays/overlay/jest.config.js')
   const { coreOverlayTestIgnorePatterns } =
-    await import('../packages/overlays/overlay/jest.projects.mjs')
+    await import('../packages/overlays/overlay/jest-projects.config.mjs')
   for (const project of config.projects)
     for (const pattern of coreOverlayTestIgnorePatterns)
       assert.ok(project.testPathIgnorePatterns.includes(pattern))
@@ -696,7 +696,7 @@ const retainedBeefTestClosure = [
 ]
 const retainedBeefSourceClosure = [
   'src/**',
-  'jest.projects.mjs',
+  'jest-projects.config.mjs',
   'jest.config.js',
   '../../sdk/src/**',
   '../../application/output-knowledge/src/**',
@@ -720,7 +720,7 @@ test('proposal admission retains its complete source and generated provenance te
     'src/EngineAdmission.ts',
     'src/storage/AdmissionStorage.ts',
     'src/__tests/ProposalAdmissionFixture.ts',
-    'jest.projects.mjs',
+    'jest-projects.config.mjs',
     'jest.config.js',
     'src/__tests/mongo/**',
     'src/__tests/*Fixture.ts',
@@ -757,7 +757,7 @@ test('private publication admission retains both complete sources and original p
     'src/ProposalAdmission.ts',
     'src/__tests/ProposalAdmissionFixture.ts',
     'src/__tests/PrivatePublicationAdmissionFixture.ts',
-    'jest.projects.mjs',
+    'jest-projects.config.mjs',
     'jest.config.js',
     'src/__tests/mongo/**',
     'src/__tests/*Fixture.ts',

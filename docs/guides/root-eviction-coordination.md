@@ -803,6 +803,9 @@ remain live checks. This changes no wire packet, stored record or permission.
 
 ## Compose native lookup and root serving
 
+Import the portable serving helpers explicitly from
+`@bsv/output-knowledge/root-eviction/serving`. This isolates transaction parsing
+from the original small coordination entry and its unchanged browser budget.
 `RootAdvertisementServing` is an optional adapter over the actual native
 `SQLiteRootEvictionStore` gate. It captures the root's revision before asynchronous
 lookup/hydration/signing and binds the complete response bytes and exact positive
@@ -876,7 +879,7 @@ HTTP intake tests qualify their separate interfaces. A deployment advertising th
 full profile must install those interfaces and every serving writer together.
 
 Use Mongo's explicit public-ancestry retention and GASP historical-read options
-in the [Overlay README](../../../packages/overlays/overlay/README.md) when original
+in the [Overlay README](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/packages/overlays/overlay/README.md) when original
 proof history must survive current serving removal. The
 history port supplies evidence for verification; it grants no lookup membership,
 restoration, current unspentness or administrative authority.

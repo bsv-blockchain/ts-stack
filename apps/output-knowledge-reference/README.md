@@ -32,8 +32,10 @@ repairs its original bounded groups after a lost admission or projection reply.
 Source withdrawal does not spend the output, and this producer cannot reintroduce
 an output its admission store already knows was spent. A separate automated
 proposal pipeline composes non-final reservation, ordinary admission and receipt
-recovery. Private publication, paid acquisition, protected release, covenant
-purchase flows and root-host eviction remain further workbench integrations.
+recovery. The optional private-state page additionally installs author-signed proposal
+publication and recipient-authorized live lookup with local intent deadlines. Paid
+acquisition, protected release, covenant purchases and root-host eviction have
+separate native integration demonstrations and are not enabled by that page.
 
 ## Fixture provenance
 
@@ -129,17 +131,19 @@ ordinary client, so SQLite and IndexedDB implementations can be installed
 explicitly. Version-one proposal observations retain the signed proposal service
 name; capability discovery distinguishes its topic and lookup roles by
 `(kind,name)`. The combined HTTP routers share one authentication session owner.
-The interactive page still presents the final-output producer; the proposal
-composition above is an automated native application demonstration.
+The original interactive page retains its final-output producer. The additional
+`proposal.html` page installs this same proposal client with native IndexedDB; see
+the private-state installation below.
 
 `pnpm --filter output-knowledge-reference-app test:browser` builds the production
-bundles and runs both producer modes in Chrome/Chromium with native IndexedDB,
+bundles and runs both final-output producer modes plus the private-state profile
+in Chrome/Chromium with native IndexedDB,
 two actual local providers, two clients, page-close recovery and independent
 source membership. Its admission run owns a fresh three-member Mongo fixture;
 it never contacts an operator's database. It requires
 free ports 4174 and 4175 and closes only the servers/profile it creates.
-The browser checks write review screenshots under `artifacts/reference-workbench/`
-and `artifacts/reference-workbench-admission/`. Run only the admission profile with
+The browser checks write review screenshots under `artifacts/reference-workbench/`,
+`artifacts/reference-workbench-admission/` and `artifacts/reference-workbench-proposals/`. Run only the admission profile with
 `pnpm --filter output-knowledge-reference-app test:browser:admission`.
 `test/referenceAdmission.test.ts` separately proves actual admission-driven
 progressive/live native recovery, both lost-reply boundaries, physical drain,
@@ -147,8 +151,8 @@ changed-subject refusal and missing-custody recovery refusal.
 
 The proposal test exercises ordinary Topic Manager admission on the pinned
 synthetic chain. It does not establish mining, current unspentness, protected
-content delivery, interactive private subscriptions or native mobile OS
-qualification. Those remain separate checkpoint work.
+content delivery or native mobile OS qualification. The separate private-state
+browser profile checks interactive private subscriptions and intent expiry.
 
 Both lookup hosts install `LookupResponseDisclosure` with the same current
 policy, durable sessions and physical work budget as their provider. Their actual
@@ -156,3 +160,53 @@ authenticated responses therefore recheck session/guard state after signing at
 native enqueue. This workbench's public fixture identities are demonstration
 inputs; the installed port is where a deployment supplies its own data and control
 access policy. The separate proposal admission/recovery test is unchanged.
+
+## Private-state browser installation
+
+Build as above. Install an isolated loopback Mongo replica set with a fresh database
+whose name begins `output_reference_`, a separate data directory, and a locally
+trusted TLS certificate/key for `127.0.0.1`. The certificate must be trusted by both
+the browser and Node; use `NODE_EXTRA_CA_CERTS` for a fixture CA if necessary. Set
+`REFERENCE_ADMISSION_URI`, `REFERENCE_ADMISSION_DATABASE`, `REFERENCE_DATA`,
+`REFERENCE_TLS_CERT` and `REFERENCE_TLS_KEY` to that installation, then run:
+
+```sh
+REFERENCE_CREATE=1 pnpm --filter output-knowledge-reference-app serve:proposals
+```
+
+Open `https://127.0.0.1:4176/proposal.html` in two tabs, choose Alice and Bob with
+the same workspace, and start their independent views. Publish a working document
+from Alice and observe automatic delivery to Bob. Take Bob offline, publish another
+document, then reconnect him through his original retained subscription. Each
+fixture publication creates a new channel containing at most 128 UTF-8 payload
+bytes, with both fixture participants as recipients and a 15-second author-intent
+lifetime. It neither spends nor finalizes a Bitcoin transaction.
+
+Hide Bob's tab past the intent deadline, then return. The UI clears its activity
+indication immediately on visibility loss and re-evaluates before displaying
+activity again. Durable host expiry and locally valid intent appear separately.
+The bounded presentation timer is not a source of Bitcoin facts or wallet authority.
+Close the tab and use **Resume saved view** with the same account/workspace. Stop
+and restart the provider with the same Mongo database, SQLite file, identity and
+TLS installation, omitting `REFERENCE_CREATE`, then resume again. Saved lookup
+contracts and sessions are recovered without another Open or capability discovery.
+The host scheduler observes and durably retires expired heads; missing or inconsistent
+custody refuses recovery. Drain its physical work before closing either store.
+
+Before the first publication request the client saves the exact signed request and
+selected contract in a separate IndexedDB outbox. **Retry saved request** retries
+that operation; an unanswered attempt blocks creating a replacement until its
+original acknowledgement is retained. This outbox uses its original sealed capacities
+on both creation and reopening. Public fixture keys provide no production confidentiality
+or authentication. Replace the installed author/recipient policy, key custody, TLS
+and chain context deliberately for a production application.
+
+`pnpm --filter output-knowledge-reference-app test:browser:proposals` builds and
+runs this profile alone. Its harness owns a fresh MongoDB 8.2.6 replica set, a
+one-day loopback TLS certificate, the private provider process and two native
+IndexedDB clients. Only that isolated fixture browser accepts its generated TLS
+certificate; there is no global TLS bypass. It checks live delivery, missed-state
+reconnect, hidden-tab expiry, page-close recovery and provider restart, requiring
+exactly the two original Opens and no browser exceptions. It closes its processes
+and removes its temporary files. Ordinary finite lookup, public state and BRC-170
+behavior retain their existing defaults.

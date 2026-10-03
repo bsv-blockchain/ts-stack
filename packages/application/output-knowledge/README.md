@@ -15,9 +15,10 @@ acceptance verifies exact signed envelopes and retains local receipt decisions.
 Optional current-channel queries, authenticated source grammar and independent
 provider/generation projection are available. The optional compound SQLite
 proposal/current-feed/session owner is implemented with atomic visibility fences,
-future-event reservations and bounded expiry. Complete publication/acquisition,
-serving-path integration, platform qualification and downstream application
-adoption remain incomplete.
+future-event reservations and bounded expiry. Concrete native examples now compose private publication/acquisition, licensed
+purchase and independent root serving with real Engine/Mongo and authenticated
+HTTP. Final package/platform and complete campaign qualification remain pending;
+downstream application adoption follows the second review checkpoint.
 The internal [native private-publication foundation](../../../docs/guides/private-publication-storage.md)
 now binds protected material, permanent request fences and ordered durable phases.
 The optional `@bsv/output-knowledge/private/node` entry now composes verified
@@ -126,7 +127,12 @@ full BRC-192–199 reference application.
 `@bsv/output-knowledge/root-eviction` supplies portable journal types and
 `RootEvictionContracts` for exact signed capability selection and original-contract
 recovery. The helper enforces the stricter advertised/profile limits; a coordinator
-must still retain its record atomically with request intake. The separate
+must still retain its record atomically with request intake. The separate `@bsv/output-knowledge/root-eviction/serving` entry supplies
+`RootAdvertisementServing`, positive inventory derivation and
+`RootLookupServingDisclosure` for native physical enqueue. Its independently
+measured portable graph contains transaction parsing; the original small root
+coordination entry preserves its existing browser limits.
+The separate
 `@bsv/output-knowledge/root-eviction/evidence` entry supplies `SDKRootEvictionEvidence`
 for current SHIP/SLAP authentication, owner attribution and exact consuming
 transactions against an installed immutable chain view. Verified facts remain

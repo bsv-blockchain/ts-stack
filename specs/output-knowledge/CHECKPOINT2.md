@@ -72,8 +72,8 @@ does not authorize package publication, deployment, funded operations or merge.
 
 The native two-host reference application now demonstrates progressive pages and
 live ingestion together, source-local withdrawal, a verified spend, durable
-contradiction rejection and recovery of the original journals/cursors. All 19 app
-tests and both actual Chrome/IndexedDB profiles pass; the admission profile uses
+contradiction rejection and recovery of the original journals/cursors. All 20 app
+tests and the original two actual Chrome/IndexedDB profiles pass; the admission profile uses
 actual Engine/Mongo. The native licensed-purchase composition now exercises real
 wallet funding/reopen, authenticated HTTP, original retained admission, private
 custody and recipient-bound LCH decryption, including lost replies and concurrent
@@ -82,12 +82,68 @@ also execute with full authorized genesis/lineage, unanimous amendment, retained
 remainders and exact final top-up/payout. See the implementation record and the
 purchase custody guide for commands and assurance limits.
 
-These receipts establish concrete progress, but the unchecked rows continue to
-require their complete published-source and final qualification evidence. The native protected recipient-context and complete two-root SHIP/SLAP serving,
-spend and GASP-history compositions now pass, including separate-owner grant
-revocation and pre-effect writer fencing. Their final source qualification,
-The native non-final producer/client integration also passes active, finalizing,
+These receipts establish concrete progress, but unchecked rows continue to require
+complete published-source and final qualification evidence. Native protected
+recipient-context and complete two-root SHIP/SLAP serving, spend and GASP-history
+compositions pass, including separate-owner grant revocation and pre-effect writer
+fencing. Native non-final producer/client integration passes active, finalizing,
 finalized restart recovery and explicit host-expiry delivery without another Open.
-Interactive/browser proposal demonstration, complete mutation campaign and
-exact-head hosted gates remain open. No component
-or synthetic local-chain receipt announces production or checkpoint readiness.
+The additional owned-HTTPS private-state browser profile passes live delivery,
+missed-state reconnect, hidden-tab expiry, native IndexedDB reopen and provider
+restart, with exactly two original Opens and no browser exceptions. Both original final-output browser profiles also pass with the additional entry.
+Provider shutdown joins the same drain promise; the native admission suite now
+passes ten cases. Final source qualification is still required.
+Complete mutation campaigns, final package/platform checks and exact-head hosted
+gates remain open. No local synthetic-chain receipt announces production or
+checkpoint readiness.
+
+## Reproduce the reference compositions
+
+Use the repository's frozen toolchain and build the owning workspace dependencies
+before running these selectors. The examples use public fixture keys, isolated
+local databases and synthetic header chains; they do not broadcast or spend real
+funds. Passing a selector establishes that workflow's local evidence, not the
+complete campaign or final PR gate.
+
+- Progressive and live final-output discovery, source-local withdrawals, verified
+  spends and restart: run `pnpm --filter output-knowledge-reference-app test` and
+  `pnpm --filter output-knowledge-reference-app test:browser`. The latter preserves
+  both original producer profiles and adds native IndexedDB private-state delivery,
+  offline catch-up, hidden-tab expiry and provider restart. Follow the
+  [workbench guide](../../docs/guides/output-knowledge-workbench.md) for manual use.
+- Non-final finalization and uncertain admission: the application's
+  `test/proposalPipeline.test.ts` composes real Engine/Mongo, authenticated HTTP,
+  original topic receipts and the current-head live client. It reopens both owners
+  and recovers finalization after lost delivery without another Open or submission.
+  The [proposal guide](../../docs/guides/non-final-proposals.md) specifies the
+  separate intent, provider-state and Bitcoin-evidence boundaries.
+- Private off-chain values and request-local context: run the Overlay Express
+  `src/__tests__/PrivatePublicationLookup.integration.test.ts` selector. It uses
+  real admission and protected custody, current recipient grants, separate writers,
+  authenticated native-send guards and public lookup/replay/GASP non-disclosure.
+  See [private lookup context](../../docs/guides/private-publication-lookup-context.md).
+- Paid lookup acquisition and domain playback: run the Overlay Express
+  `src/__tests__/PrivateBuyerHTTP.integration.test.ts` and
+  `src/__tests__/PrivateBuyerLCH.integration.test.ts` selectors. The
+  [buyer guide](../../docs/guides/durable-private-lookup-buyer.md) and
+  [acquisition recovery guide](../../docs/guides/private-acquisition-recovery.md)
+  explain original quote, wallet and result custody and explicit usability checks.
+- Covenant acquisition, topical STEAK/POTATOES and licensed decryption: run
+  Overlay Express `src/__tests__/PrivatePurchaseNative.integration.test.ts`.
+  For all six native economic routes, run output-knowledge
+  `test/private-purchase-wallet-routes.test.ts`. Follow the
+  [purchase custody guide](../../docs/guides/private-purchase-custody.md) for
+  exact commands, full lineage/authority premises, retained remainders, unanimous
+  recipient amendment and externally funded exact final payout.
+- Independent root serving and retained public history: run Overlay Express
+  `src/__tests__/PrivateOverlayHostRootServing.integration.test.ts` for both SHIP
+  and SLAP. It composes actual Engine/Mongo, two independent root journals, finite
+  and live lookup, replay, caches, pre-effect spend fences, restoration/projection
+  and GASP history. See [root coordination](../../docs/guides/root-eviction-coordination.md).
+
+Use each owning package's ordinary `test --runInBand --runTestsByPath` invocation
+for the explicit Jest selectors above; keep the complete package suites in final
+qualification. [Compiled package examples](../../docs/guides/compiled-package-examples.md)
+are checked against exact tarballs. Final acceptance also requires all affected
+native/browser/mobile profiles, complete governed mutation qualification and
+terminal successful hosted checks on the final published head.

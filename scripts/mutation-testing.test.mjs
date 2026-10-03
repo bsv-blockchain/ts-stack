@@ -21,7 +21,7 @@ const targets = {
 test('every core overlay profile fingerprints its canonical and native fixture inputs', () => {
   for (const target of Object.values(buildMutationTargets(REPOSITORY_ROOT))) {
     if (target.packageDirectory !== 'packages/overlays/overlay') continue
-    for (const input of ['jest.config.js', 'jest.projects.mjs'])
+    for (const input of ['jest.config.js', 'jest-projects.config.mjs'])
       assert.ok(target.additionalInputs.includes(input), `${target.propertyTest}: ${input}`)
     for (const input of [
       'src/__tests/mongo/**',
@@ -1000,7 +1000,7 @@ test('host qualification preserves complete selected unions in disjoint legacy a
     assert.equal(ignores(privateProject, legacy), true)
     assert.equal(ignores(ordinary, privatePath), true)
     assert.equal(ignores(privateProject, privatePath), false)
-    assert.ok(target.additionalInputs.includes('jest.projects.mjs'))
+    assert.ok(target.additionalInputs.includes('jest-projects.config.mjs'))
   }
 })
 

@@ -1,4 +1,5 @@
 import express, { type Request, type Response } from 'express'
+import { rateLimit } from 'express-rate-limit'
 import { afterAll, beforeAll, expect, it } from '@jest/globals'
 import { guardAuthenticatedResponse } from '@bsv/auth-express-middleware'
 import {
@@ -118,6 +119,7 @@ it('proves original off-chain plumbing, authorized legacy context, native restar
       // The shared public Engine registry never acquires the request-local context.
       app.post(
         '/private-context/lookup',
+        rateLimit({ windowMs: 60000, limit: 600 }),
         express.raw({ type: 'application/json', limit: 1048576, inflate: false }),
         authenticate,
         (req: Request, res: Response) => {

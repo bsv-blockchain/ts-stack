@@ -151,9 +151,11 @@ export function fixture(maximumOutcomeBytes?: number) {
   const read = jest
     .fn<Promise<AdmissionHistoryResult>, [unknown]>()
     .mockResolvedValue({ state: 'unresolved' })
-  const submit = jest.fn<ReturnType<Engine['submit']>, Parameters<Engine['submit']>>(async () => ({
-    [topic]: { outputsToAdmit: [], coinsToRetain: [] }
-  }))
+  const submit = jest.fn<ReturnType<Engine['submit']>, Parameters<Engine['submit']>>(() =>
+    Promise.resolve({
+      [topic]: { outputsToAdmit: [], coinsToRetain: [] }
+    })
+  )
   const engine = {
     storage: {
       admissionScope: { ...scope },

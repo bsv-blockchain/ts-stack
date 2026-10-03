@@ -3519,3 +3519,97 @@ physical request ownership and limits. Strict application typing and both change
 TypeScript files pass local analysis without findings. Interactive/browser proposal
 demonstration and final published-source qualification remain required before
 checkpoint two.
+
+### Native private-state browser composition (2026-10-03)
+
+The additional opt-in private-state page now installs the composed proposal client
+with native IndexedDB, durable exact-request outbox, authenticated HTTPS lookup,
+compound SQLite private journal/feed/sessions, current recipient policy, real Mongo
+admission port and bounded expiry/recovery scheduler. It keeps the existing
+final-output page unchanged. The isolated Chrome profile passes automatic private
+live delivery, offline catch-up through the original session, hidden-tab intent
+retirement, page-close reopening and provider-process restart. It retains exactly
+two Opens and reports zero browser exceptions. The first reopening attempt exposed
+an outbox caller using default capacities rather than its sealed creation limits;
+the caller now reopens with the original limits, without changing schemas or tests.
+
+Public fixture author keys, payloads and synthetic chain are examples only. Each
+15-second publication creates a new channel and makes no financial effect. Actual
+finalization/lost-admission recovery remains demonstrated by the separate compound
+native pipeline. Screenshots accompany protocol/custody assertions; they are not
+qualification substitutes. Complete existing browser regressions, full mutation
+campaigns and final exact-head hosted gates are still required before checkpoint two.
+
+The new multi-entry production browser build preserves both original producer
+modes; both pass their complete authenticated two-host/two-client native IndexedDB,
+live Script/SPV, offline replay, reload and independent-membership assertions. The
+ordinary `test:browser` command now runs all three profiles without dropping either
+original selector. The additional private profile passes exactly two Opens and zero
+page exceptions. The private provider shares one physical work budget between
+lookup preparation and native disclosure, rechecks its local serving lifetime at
+physical data enqueue, and coalesces repeated close calls through the same drain
+promise. A new native regression holds physical custody close pending and proves
+that a second close cannot settle early; all ten admission-suite cases pass. Local
+new TypeScript analysis reports zero findings, strict typing and application format
+pass, and the docs-site validates all 153 documents/links. Final build/platform,
+complete mutation and exact-head hosted qualification remain required.
+
+Published `0f993801df5cc35aa2f69d01d3bfe785e0150349` hosted coverage job
+[111186508800](https://github.com/bsv-blockchain/ts-stack/actions/runs/37117151558/job/111186508800)
+now completes successfully within the unchanged job bound. Output-knowledge passes
+all 3,158 cases in 226 suites; complete new `PrivatePublicationLookupContext`,
+`RootAdvertisementServing` and `RootLookupServingDisclosure` modules measure 100%
+statement/branch/function/line coverage. The original 300-case purchase-buyer
+property completes in 100.787 seconds under its unchanged 150-second deadline.
+Earlier timeout receipts remain retained. This is coverage qualification for that
+published source, not final-head or full mutation qualification. Four identified
+CI findings remain queued for the next coherent source batch: two async fixture
+arrows, two fixture listener rate limiters, one documentation link and the root
+entry browser graph (the analyzer findings are separate checks). The newly
+introduced serving helpers will move into an explicitly selected portable entry
+with an independently measured budget, preserving the original small coordination
+entry and every earlier limit, under shared-region ACK18729907.
+
+The same head's aggregate patch check measures 97.03% (29,961/30,879 changed
+line/branch points) above the unchanged 90% floor, but fails two missing-LCOV
+configuration modules: the new core and Express `jest.projects.mjs` factories.
+Their runner configuration executes before instrumentation. The planned correction
+uses the existing canonical `*.config.mjs` naming convention without changing the
+coverage classifier or adding exclusions. It must preserve both factories' behavior,
+complete native/legacy selection, original input fingerprints through their renamed
+paths and all policy controls. Exact shared-control coordination is pending before
+that edit. Coverage collection success therefore does not imply aggregate or final
+CI success.
+
+### Final package and source checks for the private-state browser batch
+
+The original overlay union passes 1,036 tests in 51 suites with its one governed
+skip (207.762 seconds). Discovery independently reproduces the original five
+critical selection digests and their 27/31/29/28/25 suite counts, with disjoint
+legacy/native projects and no duplicate execution. The two renamed project
+configuration factories retain byte-identical contents; every former fingerprint
+path is replaced by the canonical configuration filename, without changing the
+coverage classifier or any selection. All 101 control companions pass.
+
+All six browser artifact profiles and the native browser runtime pass. The new
+explicit serving entry measures Vite 372956/101595/85345 and esbuild
+285255/92599/79824 raw/gzip/Brotli bytes. Its separate rounded ceilings retain at
+least ten percent headroom; the complete original root budget, its eight
+additional entries and every original ceiling are unchanged. Packed conditional
+exports, strict clean consumers and all 62 documentation examples against 24
+exact package tarballs pass. The security audit finds no known vulnerabilities;
+conformance parses all vector files successfully.
+
+The retained-BEEF local whole-target attempt on published 0f993801d stops with
+exit 124 at its original 2700-second deadline. Its initial full 345-test run
+passes, but no complete mutant score or qualification receipt exists. The own
+process group and Mongo children drain before covered source corrections. This
+failed attempt is retained as local feedback, not full hosted evidence. No
+selector, static mutant, property floor, seed, concurrency, reuse limit or
+deadline is relaxed. Complete exact-head hosted qualification remains open.
+
+The final rendered-site check catches two repository-only README links. Those
+links now identify the published implementation branch explicitly, so the
+repository and rendered documentation have the same usable destination. Both
+failed rendered-site outputs remain retained; a passing source-link check alone
+is not claimed as a successful site build.

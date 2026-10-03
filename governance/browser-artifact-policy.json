@@ -158,6 +158,13 @@
       "budget": "packages/application/output-knowledge/browser-purchase-buyer-budget.json",
       "entry": "./private/purchase-buyer",
       "splittingDisposition": "The optional durable covenant buyer and Script/lineage-aware native payment construction use distinct ./private/purchase-buyer and ./private/purchase-wallet entries. The full exact-tarball buyer graph measures Vite346431/96207/81422 and esbuild274311/89256/77368 raw/gzip/Brotli bytes; the wallet graph measures Vite448929/121170/101214 and esbuild346370/111091/95241. Each is one chunk with only output-knowledge and SDK. Both retain the existing buyer-style size ceilings without increases and exclude Node/paid owners and cross-entry orchestration. The prior ./private/buyer remains unchanged and measures Vite534399/139650/116705; every earlier profile and budget remains intact."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-root-serving-budget.json",
+      "entry": "./root-eviction/serving",
+      "splittingDisposition": "The new optional native root-serving helpers isolate bounded public BEEF parsing and complete positive-inventory binding in ./root-eviction/serving. The original root entry, its eight additional entries and every prior ceiling remain unchanged. The complete exact-tarball Vite graph measures 372956/101595/85345 and esbuild 285255/92599/79824 raw/gzip/Brotli bytes. Each contains one chunk and only output-knowledge and SDK, with no transitive Node modules or native SQLite. Independent rounded ceilings retain at least10% headroom in every dimension. The entry contains current byte/inventory binding, not coordinator authority, wallet funding or network effects."
     }
   ]
 }

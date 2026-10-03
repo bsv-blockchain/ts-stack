@@ -1,5 +1,5 @@
-import { createCoreOverlayTestProjects } from '../../packages/overlays/overlay/jest.projects.mjs'
-import { createOverlayTestProjects } from '../../packages/overlays/overlay-express/jest.projects.mjs'
+import { createCoreOverlayTestProjects } from '../../packages/overlays/overlay/jest-projects.config.mjs'
+import { createOverlayTestProjects } from '../../packages/overlays/overlay-express/jest-projects.config.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -1058,7 +1058,7 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/overlays/overlay-express/src/__tests__/RootEvictionResponseGuard.property.test.ts',
       mutate: ['src/RootEvictionResponseGuard.ts'],
       additionalInputs: [
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests__/setup.ts',
         'src/__tests__/RootEvictionResponseGuard.fixture.ts',
@@ -1093,7 +1093,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/ProposalHTTPPorts.ts'
       ],
       additionalInputs: [
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests__/setup.ts',
         'src/__tests__/ProposalRoutes.fixture.ts',
@@ -1135,7 +1135,7 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/overlays/overlay-express/src/__tests__/RootEvictionRoutes.property.test.ts',
       mutate: ['src/RootEvictionRoutes.ts', 'src/RootEvictionHTTPPolicy.ts'],
       additionalInputs: [
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests__/setup.ts',
         'src/__tests__/RootEvictionRoutes.fixture.ts',
@@ -1179,7 +1179,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/OutputLookupResponseGuard.ts'
       ],
       additionalInputs: [
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests__/setup.ts',
         '../../application/output-knowledge/src/lookup/**',
@@ -1497,7 +1497,7 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts',
       additionalInputs: [
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests__/setup.ts',
         'src/__tests__/PrivatePublication*.ts',
@@ -1543,7 +1543,7 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/overlays/overlay-express/src/__tests__/PrivatePurchaseRoutes.property.test.ts',
       additionalInputs: [
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests__/setup.ts',
         'src/__tests__/PrivatePublication*.ts',
@@ -1611,7 +1611,7 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/overlays/overlay-express/src/__tests__/PrivateAcquisitionRoutes.property.test.ts',
       additionalInputs: [
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests__/setup.ts',
         'src/__tests__/PrivatePublication*.ts',
@@ -2788,7 +2788,7 @@ export function buildMutationTargets(repositoryRoot) {
     'reorg-stream': {
       packageDirectory: 'packages/overlays/overlay-express',
       manifest: 'packages/overlays/overlay-express/package.json',
-      additionalInputs: ['jest.projects.mjs', 'jest.config.js', 'src/__tests__/setup.ts'],
+      additionalInputs: ['jest-projects.config.mjs', 'jest.config.js', 'src/__tests__/setup.ts'],
       propertyTest: 'packages/overlays/overlay-express/src/__tests/ReorgStream.property.test.ts',
       mutate: ['src/ReorgStream.ts'],
       ...overlayJestTarget(
@@ -3353,7 +3353,7 @@ export function buildMutationTargets(repositoryRoot) {
     if (target.packageDirectory === 'packages/overlays/overlay')
       target.additionalInputs = [
         ...(target.additionalInputs ?? []),
-        'jest.projects.mjs',
+        'jest-projects.config.mjs',
         'jest.config.js',
         'src/__tests/mongo/**',
         'src/__tests/*Fixture.ts',
@@ -3378,7 +3378,7 @@ export function buildMutationTargets(repositoryRoot) {
   ]
   const retainedInputs = [
     'src/**',
-    'jest.projects.mjs',
+    'jest-projects.config.mjs',
     'jest.config.js',
     '../../sdk/src/**',
     '../../application/output-knowledge/src/**',

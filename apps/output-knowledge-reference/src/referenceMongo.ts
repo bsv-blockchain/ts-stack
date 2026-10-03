@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb'
+import type { Engine } from '@bsv/overlay'
 import {
   canonicalOutputJSON,
   outputAssert,
@@ -21,7 +22,7 @@ export async function openReferenceMongo(options: {
   identity: string
   role: string
   create: boolean
-}): Promise<{ producer: ReferenceProducerFactory; close(): Promise<void> }> {
+}): Promise<{ engine: Engine; producer: ReferenceProducerFactory; close(): Promise<void> }> {
   outputAssert(options.uri.length <= 2048, 'Invalid reference Mongo endpoint')
   let uri: URL
   try {
@@ -76,6 +77,7 @@ export async function openReferenceMongo(options: {
     const installed = storage
     const engine = await createReferenceEngine(installed)
     return {
+      engine,
       producer: context =>
         createReferenceAdmissionProducer(context, { engine, storage: installed }),
       async close() {

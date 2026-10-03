@@ -2220,7 +2220,7 @@ import {
   RootAdvertisementServing,
   RootLookupServingDisclosure,
   type RootAdvertisementServingGate
-} from '@bsv/output-knowledge/root-eviction'
+} from '@bsv/output-knowledge/root-eviction/serving'
 
 function composeRootLookup(
   provider: LookupResponseDisclosure,

@@ -2,7 +2,7 @@
 id: output-knowledge-workbench
 title: 'Running the Output Knowledge Workbench'
 kind: guide
-version: '1.2.0'
+version: '1.3.0'
 last_updated: '2026-10-03'
 last_verified: '2026-10-03'
 review_cadence_days: 30
@@ -151,7 +151,8 @@ between a withdrawal and a spend. The production-bundle browser check uses
 two provider processes and Chrome/Chromium's native IndexedDB. It closes a tab
 without an application shutdown hook, resumes its saved view, and verifies
 the independent source memberships without losing spend knowledge. The ordinary
-`test:browser` script runs both producer modes. The additional admission run owns
+`test:browser` script runs both final-output producer modes and the private-state
+profile described below. The additional admission run owns
 a fresh three-member Mongo replica set and verifies the actual interactive topic
 path; `test:browser:admission` selects only that profile. Separate native cases
 cover lost admission/projection replies, missing custody and stalled physical work.
@@ -197,8 +198,9 @@ This test runs real HTTP message authentication through an explicit mapping
 from the fixture HTTPS origin to its loopback listener. TLS termination is not
 part of its evidence. It also does not restart the Mongo replica processes or
 claim recovery from destroyed storage; separate native persistence tests exercise
-those failure boundaries. The interactive browser producer and its final-output lookup index
-are still separate from this proposal admission pipeline.
+those failure boundaries. The original browser producer retains its final-output
+lookup index; the additional private-state page installs the shared proposal
+client and current-head provider separately.
 
 The compound profile additionally attaches the reusable
 `createReferenceProposalClient` from the application's source. It uses the real
@@ -225,11 +227,11 @@ The client publishes accepted source history separately from Bitcoin facts. A
 host's finalized assertion is not evidence of mining, current unspentness or
 authority to start a wallet action.
 
-Private publication, paid acquisition, covenant authority and wallet composition,
-STEAK/POTATOES release, LCH integration, root-host serving fences and native
-mobile qualification remain separate implementation work. This demonstration
-is evidence for the live lookup and durable client composition, not approval of
-the complete BRC-192–199 package or a production deployment.
+Paid acquisition, covenant authority, wallet composition, STEAK/POTATOES release,
+LCH integration and root-host serving fences have separate native examples; this
+page does not enable them. The browser demonstration establishes the private
+live-lookup and durable client composition, not approval of the complete package,
+a production deployment or native mobile qualification.
 
 ## Additional local publication deadlines
 
@@ -238,6 +240,42 @@ for non-Bitcoin state. It schedules worker work and closes projection publicatio
 at an exclusive deadline; the worker still must commit the invalidation. Existing
 Bitcoin assessment behavior is unchanged. See the [runtime contract](../packages/application/output-knowledge.md#publication-deadlines).
 The native proposal composition above installs acceptance and durable current-head
-projection. Interactive/browser proposal expiry still needs explicit retirement
-of previously displayed activity when a tab resumes; the final-output interactive
-page does not yet demonstrate that additional mode.
+projection. The private-state page also retires previously displayed activity
+when hidden or past its deadline and re-evaluates before publication on resume.
+Host status and current author intent remain separate; expiry does not change
+verified Bitcoin history.
+
+## Follow private working state in the browser
+
+The opt-in `proposal.html` page uses the same core proposal client with native
+IndexedDB and an actual authenticated private lookup provider. Its author-signed
+working documents have both fixture participants as recipients and a 15-second
+intent lifetime. Each publication starts a new channel; the page does not offer
+finalization or perform a wallet action. Its provider installs the compound SQLite
+journal/feed/session owner, guarded recipient policy, actual Mongo admission port,
+response disclosure and a bounded expiry/recovery scheduler.
+
+Follow the [application README](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/apps/output-knowledge-reference/README.md#private-state-browser-installation)
+for explicit isolated Mongo and loopback TLS installation. The additional server
+uses `https://127.0.0.1:4176/proposal.html`, requires explicit certificate/key files,
+and refuses missing original stores on restart. Start Alice and Bob in separate
+tabs with the same workspace. Publishing from Alice reaches Bob live. Taking Bob
+offline and reconnecting recovers missed private state through his original
+subscription. Closing and reopening his tab or restarting the private provider
+preserves that session, capability selection and native IndexedDB cursor.
+
+Leave Bob hidden past the author deadline. His local activity indication is
+retired immediately when hidden and must pass current evaluation before it can
+return. The provider separately publishes durable expiry. These two indications
+are not mining or unspentness evidence. A saved publication outbox precedes HTTP;
+retry uses its exact signed request and selected contract, and an unknown result
+never creates a replacement document.
+
+Run `pnpm --filter output-knowledge-reference-app test:browser:proposals` for this
+production-bundle example alone, or `test:browser` for all three profiles. The
+isolated harness owns its Mongo replica set, HTTPS certificate and provider,
+checks native IndexedDB, exactly two Opens, live delivery, disconnect/reconnect,
+hidden-tab expiry and recovery across both page and provider restart. It does not
+contact an operator's database or alter machine TLS trust. The screenshot is
+secondary evidence; protocol, retained-custody and UI deadline assertions decide
+the result.

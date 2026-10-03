@@ -19,6 +19,7 @@ import {
   REFERENCE_TOPIC
 } from '../src/referenceAdmissionProducer.js'
 import { openReferenceMongo } from '../src/referenceMongo.js'
+import { createReferenceProposalProvider } from '../src/referenceProposalProvider.js'
 import { fixtureChain, referenceEvidence } from '../src/fixtureChain.js'
 import {
   createMongoReplicaFixture,
@@ -343,4 +344,47 @@ it('opens only explicit isolated Mongo custody and refuses replacement after a m
   await expect(openReferenceMongo({ ...options, create: false })).rejects.toMatchObject({
     code: 'reset-required'
   })
+}, 30000)
+
+it('joins private provider shutdown while physical custody close is still pending', async () => {
+  const f = await fixture(),
+    provider = await createReferenceProposalProvider({
+      path: join(f.directory, 'private-proposals.sqlite'),
+      create: true,
+      baseURL: 'https://127.0.0.1:4176/api',
+      identityKey: new PrivateKey(71),
+      admissionEngine: f.engine
+    })
+  cleanups.push(() => provider.close())
+  const original = provider.owner.close.bind(provider.owner)
+  let entered!: () => void, release!: () => void
+  const started = new Promise<void>(resolve => {
+      entered = resolve
+    }),
+    gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+  vi.spyOn(provider.owner, 'close').mockImplementation(async () => {
+    entered()
+    await gate
+    await original()
+  })
+  const first = provider.close()
+  await started
+  const second = provider.close()
+  expect(second).toBe(first)
+  expect(provider.current(new PrivateKey(91).toPublicKey().toString())).toBe(false)
+  expect(() => provider.manifest()).toThrow('stopped')
+  let settled = false
+  void second.then(() => {
+    settled = true
+  })
+  try {
+    await Promise.resolve()
+    expect(settled).toBe(false)
+  } finally {
+    release()
+    await first
+  }
+  expect(settled).toBe(true)
 }, 30000)
