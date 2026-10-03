@@ -29,6 +29,18 @@ test('mutation metrics follow Stryker valid-mutant semantics', () => {
   assert.equal(metrics.undetected, 2)
   assert.equal(metrics.valid, 4)
   assert.equal(metrics.score, 50)
+  assert.equal(metrics.unexecuted, 0)
+})
+
+test('mutation metrics count survivors whose runner executed no tests', () => {
+  const metrics = calculateMutationMetrics([
+    { status: 'Survived', testsCompleted: 0, coveredBy: ['0'] },
+    { status: 'Survived', testsCompleted: 2, coveredBy: ['0'] },
+    { status: 'Killed', testsCompleted: 0 },
+    { status: 'NoCoverage', testsCompleted: 0 }
+  ])
+
+  assert.equal(metrics.unexecuted, 1)
 })
 
 test('mutation command parsing rejects missing values and conflicting modes', () => {
@@ -136,6 +148,7 @@ test('mutation report evaluation ratchets score, coverage, and invalid outcomes'
       'one',
       {
         score: 74.99,
+        unexecuted: 1,
         counts: { Killed: 3, Survived: 1, NoCoverage: 1, RuntimeError: 1 }
       },
       policy
@@ -143,6 +156,7 @@ test('mutation report evaluation ratchets score, coverage, and invalid outcomes'
     [
       'one mutation score 74.99 is below 75',
       'one has 1 no-coverage mutants; maximum is 0',
+      'one has 1 survived mutants that ran no tests; the test runner selected nothing, so the score is not evidence',
       'one has 1 invalid mutants; maximum is 0'
     ]
   )
