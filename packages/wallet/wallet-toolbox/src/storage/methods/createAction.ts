@@ -445,10 +445,11 @@ async function buildSdkInputFromOutput(
   unlockLen: number | undefined
 ): Promise<StorageCreateTransactionSdkInput> {
   if (i == null && !unlockLen) throw new WERR_INTERNAL(`vin ${vin} non-fixedInput without unlockLen`)
-  const sourceTransaction =
+  const sourceRawTx =
     vargs.includeAllSourceTransactions && vargs.isSignAction
       ? await storage.getRawTxOfKnownValidTransaction(o.txid)
       : undefined
+  const sourceTransaction = sourceRawTx == null ? undefined : Uint8Array.from(sourceRawTx)
   return {
     vin,
     sourceTxid: o.txid!,
@@ -504,7 +505,7 @@ async function createNewInputs(
     if (doubleSpendTxid) {
       const beef = await getCompetingBeefForReview(storage, doubleSpendTxid)
       throw new WERR_REVIEW_ACTIONS(
-        [{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toBinary() }],
+        [{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toUint8Array() }],
         []
       )
     }
