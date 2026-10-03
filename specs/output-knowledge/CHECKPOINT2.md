@@ -35,8 +35,9 @@ checkpoint requires every item below, demonstrated on the published PR commit.
       retirement transactions. Exercise their scripts and economic refusals.
 - [ ] Durably merge independently verified alternate BEEF proofs for the same raw
       transaction without replacing original custody, payment, admission or delivery.
-      Native cumulative custody and all controlled lifecycle boundaries pass127 tests;
-      the independent Script/domain/actual-host composition still needs demonstration.
+      Native cumulative custody, controlled lifecycle boundaries and the richer
+      complete Script/domain/actual-host composition pass; final published-source
+      campaign and hosted qualification remain required.
 - [ ] Demonstrate authenticated topic submission returning bound STEAK and
       POTATOES, with retained original admission and release-policy recovery. Show
       that admission alone does not establish mining or decryption.
@@ -83,7 +84,6 @@ purchase custody guide for commands and assurance limits.
 
 These receipts establish concrete progress, but the unchecked rows continue to
 require their complete published-source and final qualification evidence. In
-particular, cumulative proof custody still needs the richer alternate-proof
-composition with actual Script/domain/host checks; the private public-serving and
+particular, the private public-serving and
 root/GASP compositions and complete mutation campaign remain open. No component
 or synthetic local-chain receipt announces production or checkpoint readiness.

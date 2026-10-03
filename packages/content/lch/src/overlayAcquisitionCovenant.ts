@@ -481,7 +481,7 @@ export class LCHOverlayCovenantDomain {
       target = raw.findTxid(candidate.txid)?.tx
     lchAssert(
       candidate.acquisitionId === challenge.body.acquisitionId &&
-        (raw.atomicTxid ?? raw.txs.at(-1)?.txid) === candidate.txid &&
+        (raw.atomicTxid === undefined || raw.atomicTxid === candidate.txid) &&
         target?.id('hex') === candidate.txid,
       'ERR_LCH_PAYMENT',
       'Original wallet transaction differs from the purchased subject'

@@ -1,5 +1,6 @@
 import { expect, it } from '@jest/globals'
-import { canonicalOutputJSON } from '@bsv/sdk'
+import { canonicalOutputJSON, Utils } from '@bsv/sdk'
+import { ATOMIC_BEEF } from '@bsv/sdk/transaction/Beef'
 import { WalletBRC78KeyDelivery, signObject, type KeyGrant } from '../src/index.js'
 import { LCHOverlayCovenantDomain } from '../src/overlayAcquisitionCovenant.js'
 import { lchNativeCovenantFixture } from './overlay-acquisition-covenant-native.fixture.js'
@@ -15,6 +16,34 @@ it('executes complete authorized Bitcoin and covenant purchase evidence before r
   expect(await f.domain.usable(f.delivered, signal)).toBe(true)
   expect(await f.domain.playback(f.delivered, signal)).toEqual(f.plaintext)
   expect(f.counts).toEqual({ preparation: 1, purchase: 1, release: 1 })
+}, 60000)
+
+it('retains playable rights after independently checking a complete plain BEEF purchase whose proof changes record order', async () => {
+  const f = await lchNativeCovenantFixture({ provenPurchase: true }),
+    signal = new AbortController().signal,
+    packet = f.purchaseBEEF()
+  expect(packet.atomicTxid).toBeUndefined()
+  expect(packet.txs.at(-1)!.txid).not.toBe(f.submission.txid)
+  expect(packet.findTransactionForSigning(f.submission.txid)!.toHex()).toBe(f.purchased.toHex())
+  expect(packet.findAtomicTransaction(f.submission.txid)!.merklePath?.blockHeight).toBe(101)
+  const wrongMarker = new Utils.Writer()
+    .writeUInt32LE(ATOMIC_BEEF)
+    .write(Utils.toArray('aa'.repeat(32), 'hex').reverse())
+    .write(Utils.toArray(f.submission.beef, 'base64'))
+    .toArray()
+  await expect(
+    f.domain.verify(
+      f.prepare,
+      f.prepared,
+      { ...f.submission, beef: Utils.toBase64(wrongMarker) },
+      f.delivered,
+      signal
+    )
+  ).rejects.toThrow('Original wallet transaction')
+  expect(f.counts).toEqual({ preparation: 0, purchase: 0, release: 0 })
+  await f.domain.verify(f.prepare, f.prepared, f.submission, f.delivered, signal)
+  expect(f.counts).toEqual({ preparation: 0, purchase: 1, release: 1 })
+  expect(await f.domain.playback(f.delivered, signal)).toEqual(f.plaintext)
 }, 60000)
 
 it('owns prepared terms and wallet submission before the first asynchronous boundary', async () => {

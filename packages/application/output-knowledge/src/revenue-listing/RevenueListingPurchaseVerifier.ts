@@ -165,7 +165,7 @@ export class RevenueListingPurchaseVerifier {
   ): { package: RevenueListingLineagePackage; previousSatoshis: string } {
     const part = Beef.fromBinaryStrict(decodeOutputBytes(purchase.beef, limits.bytes))
     requireLineage(
-      (part.atomicTxid ?? part.txs.at(-1)?.txid) === purchase.txid &&
+      (part.atomicTxid === undefined || part.atomicTxid === purchase.txid) &&
         part.findTxid(purchase.txid)?.tx !== undefined,
       'Purchase BEEF target differs'
     )

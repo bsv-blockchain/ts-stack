@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
 import { createHash } from 'node:crypto'
-import { Beef, Hash, PrivateKey, signOutputPacket, Utils, type Transaction } from '@bsv/sdk'
+import {
+  Beef,
+  Hash,
+  MerklePath,
+  PrivateKey,
+  signOutputPacket,
+  Utils,
+  type Transaction
+} from '@bsv/sdk'
 import { BEEF_V2 } from '@bsv/sdk/transaction/Beef'
 import { RevenueListing } from '@bsv/sdk/script/templates/RevenueListing'
 import type { RevenueListingLineagePackage } from '../src/revenue-listing/LineagePackage.js'
@@ -47,13 +55,14 @@ function mineHeader(raw: Uint8Array): void {
     if (BigInt('0x' + hash) <= 0x7fffffn << 232n) return
   }
 }
-function makeHeaders(mined?: string): { hash: string; merkleRoot: string }[] {
+function makeHeaders(mined?: string, minedHeight = 1): { hash: string; merkleRoot: string }[] {
   const selected: { hash: string; merkleRoot: string }[] = []
   let raw = Uint8Array.from(Utils.toArray(manifest.chainCheckpoint.header, 'hex'))
   for (let height = 0; height <= 101; height++) {
     if (height > 0) {
       raw = raw.slice()
-      if (height === 1 && mined !== undefined) raw.set(Utils.toArray(mined, 'hex').reverse(), 36)
+      if (height === minedHeight && mined !== undefined)
+        raw.set(Utils.toArray(mined, 'hex').reverse(), 36)
       raw.set(Utils.toArray(selected[height - 1].hash, 'hex').reverse(), 4)
       new DataView(raw.buffer).setUint32(68, initialTime + height * 600, true)
       mineHeader(raw)
@@ -104,9 +113,33 @@ function resolver(selected = headers): ChainViewResolver {
   }
 }
 export const chains = resolver()
-export function minedChain(txid: string) {
-  const selected = makeHeaders(txid)
+export function minedChain(txid: string, height = 1) {
+  const selected = makeHeaders(txid, height)
   return { context: context(selected), chains: resolver(selected) }
+}
+
+/** Preserve every supplied raw/proof record, with a proved explicit target first.
+ * A plain BEEF has no implicit subject. The supplied synthetic header view still
+ * has to verify this path; serialization alone provides no trust.
+ */
+export function purchaseProof(txid: string, height = 101): MerklePath {
+  // A normal purchase cannot occupy coinbase position zero. This disclosed
+  // sibling commits a synthetic header tree, not an independently validated block body.
+  return new MerklePath(height, [
+    [
+      { offset: 0, hash: '01'.repeat(32) },
+      { offset: 1, hash: txid, txid: true }
+    ]
+  ])
+}
+export function plainProvedEvidence(part: Beef, txid: string, height = 101): number[] {
+  const raw = part.findTransactionForSigning(txid)!.toBinary(),
+    bump = part.mergeBump(purchaseProof(txid, height))
+  part.mergeRawTx(raw, bump)
+  part.txs = [part.findTxid(txid)!, ...part.txs.filter(item => item.txid !== txid)]
+  const writer = new Utils.Writer()
+  part.toWriter(writer)
+  return writer.toArray()
 }
 
 /** Preserve exact raw transactions while deduplicating declared listing ancestors. */

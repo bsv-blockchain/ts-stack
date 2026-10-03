@@ -37,7 +37,10 @@ import {
   chains,
   completeGenesis,
   context as bitcoinContext,
-  family
+  family,
+  minedChain,
+  plainProvedEvidence,
+  purchaseProof
 } from '../../../application/output-knowledge/test/revenue-lineage-fixture.js'
 import { lchCovenantFixture } from './overlay-acquisition-covenant.fixture.js'
 import { WalletBRC78KeyDelivery, type KeyGrant, type SignedObject } from '../src/index.js'
@@ -64,6 +67,7 @@ afterEach(async () => {
 export async function lchNativeCovenantFixture(
   fixtureOptions: {
     detached?: boolean
+    provenPurchase?: boolean
     maximumRequestBytes?: number
     maximumResponseBytes?: number
     revocations?: NonNullable<LCHOverlayCovenantDomainOptions['revocations']>
@@ -163,10 +167,19 @@ export async function lchNativeCovenantFixture(
   purchased.inputs[1].sourceTransaction = genesis
   purchased.inputs[1].unlockingScriptTemplate = new P2PKH().unlock(f.buyerKey)
   await purchased.sign()
+  const originalBeef = Beef.fromBinaryStrict(purchased.toAtomicBEEF()),
+    selected =
+      fixtureOptions.provenPurchase === true
+        ? minedChain(purchaseProof(purchased.id('hex')).computeRoot(), 101)
+        : undefined
+  const purchaseBytes =
+    fixtureOptions.provenPurchase === true
+      ? plainProvedEvidence(originalBeef, purchased.id('hex'))
+      : purchased.toAtomicBEEF()
   const purchase = {
       txid: purchased.id('hex'),
       outputIndex: 0,
-      beef: Utils.toBase64(purchased.toAtomicBEEF())
+      beef: Utils.toBase64(purchaseBytes)
     },
     submission: OutputPurchaseSubmit = {
       version: 1,
@@ -292,9 +305,11 @@ export async function lchNativeCovenantFixture(
   let now = '22',
     allowed = true
   const counts = { preparation: 0, purchase: 0, release: 0 },
-    lineageVerifier = new RevenueListingLineageVerifier(family, chains),
-    purchaseVerifier = new RevenueListingPurchaseVerifier(family, chains),
-    releaseVerifier = new SDKPrivateReleaseEvidence(chains),
+    selectedChains = selected?.chains ?? chains,
+    selectedContext = () => selected?.context ?? bitcoinContext(),
+    lineageVerifier = new RevenueListingLineageVerifier(family, selectedChains),
+    purchaseVerifier = new RevenueListingPurchaseVerifier(family, selectedChains),
+    releaseVerifier = new SDKPrivateReleaseEvidence(selectedChains),
     guard = () => {
       outputAssert(allowed, 'Fixture context changed', 'context-changed')
     },
@@ -314,7 +329,7 @@ export async function lchNativeCovenantFixture(
           const packageInput = parseRevenueListingLineagePackage(
               Uint8Array.from(decodeOutputBytes(packet.body.domainEvidence.bytes, 2097152))
             ),
-            verified = await lineageVerifier.verify(packageInput, bitcoinContext(), signal)
+            verified = await lineageVerifier.verify(packageInput, selectedContext(), signal)
           outputAssert(
             verified.status === 'verified' &&
               canonicalOutputJSON(verified.target) === canonicalOutputJSON(request.listing) &&
@@ -329,7 +344,7 @@ export async function lchNativeCovenantFixture(
           const verified = await purchaseVerifier.verify(
             evidence.purchase,
             selected,
-            bitcoinContext(),
+            selectedContext(),
             signal
           )
           outputAssert(

@@ -14,7 +14,7 @@ import {
   parseRevenueListingLineagePackage,
   REVENUE_LISTING_LINEAGE_LIMITS
 } from '../src/revenue-listing/LineagePackage.js'
-import { completeGenesis, lineage } from './revenue-lineage-fixture.js'
+import { completeGenesis, lineage, plainProvedEvidence } from './revenue-lineage-fixture.js'
 
 afterEach(() => {
   jest.restoreAllMocks()
@@ -116,6 +116,26 @@ it('requires each declared BEEF target raw transaction and its exact atomic iden
   const only = new Beef()
   only.mergeTxidOnly(packet.target.txid)
   packet.transactions[0].beef = Utils.toBase64(only.toBinaryAtomic(packet.target.txid))
+  expect(() =>
+    assembleLineage(parseRevenueListingLineagePackage(packet), lineageLimits({}))
+  ).toThrow('BEEF target raw bytes required')
+})
+
+it('binds a declared plain BEEF entry to its exact present raw target independently of proof order', () => {
+  const packet = genesisPackage(),
+    part = Beef.fromBinaryStrict(Utils.toArray(packet.transactions[0].beef, 'base64')),
+    tx = part.findTransactionForSigning(packet.target.txid)!,
+    raw = tx.toHex()
+  packet.transactions[0].beef = Utils.toBase64(plainProvedEvidence(part, packet.target.txid))
+  const parsed = Beef.fromBinaryStrict(Utils.toArray(packet.transactions[0].beef, 'base64'))
+  expect(parsed.atomicTxid).toBeUndefined()
+  expect(parsed.txs.at(-1)!.txid).not.toBe(packet.target.txid)
+  const assembly = assembleLineage(parseRevenueListingLineagePackage(packet), lineageLimits({}))
+  expect(assembly.transactions.get(packet.target.txid)!.toHex()).toBe(raw)
+  // Assembly is bounded byte collection, never independent proof or lineage trust.
+  const only = new Beef()
+  only.mergeTxidOnly(packet.target.txid)
+  packet.transactions[0].beef = Utils.toBase64(only.toBinary())
   expect(() =>
     assembleLineage(parseRevenueListingLineagePackage(packet), lineageLimits({}))
   ).toThrow('BEEF target raw bytes required')

@@ -60,6 +60,10 @@ import {
 } from '../../../../application/output-knowledge/src/revenue-listing/RevenueListingPurchaseVerifier.js'
 import { SQLiteProtectedOperationObjectStore } from '../../../../application/output-knowledge/src/operations/SQLiteProtectedOperationObjectStore.js'
 import { nativePurchaseWalletFixture } from '../../../../application/output-knowledge/test/private-purchase-wallet-native.fixture.js'
+import type {
+  ChainViewResolver,
+  VerificationContext
+} from '../../../../application/output-knowledge/src/index.js'
 import {
   completeGenesis,
   chains,
@@ -84,7 +88,10 @@ afterEach(async () => {
  * keys only. This does not broadcast or establish a live-chain/mined outcome.
  * Both roles independently inspect the selected host's real retained history.
  */
-export async function privatePurchaseNativeFixture() {
+export async function privatePurchaseNativeFixture(verification?: {
+  chains: ChainViewResolver
+  view(): VerificationContext
+}) {
   const resources: (() => Promise<void>)[] = []
   let disposed = false
   const dispose = async () => {
@@ -140,8 +147,13 @@ export async function privatePurchaseNativeFixture() {
   const directory = mkdtempSync(join(tmpdir(), 'private-purchase-native-'))
   track(() => rmSync(directory, { recursive: true, force: true }))
   asset.prepare.listing = native.prepare.listing
-  const view = () => {
-      const selected = context()
+  const verificationChains = verification?.chains ?? chains,
+    view = () => {
+      const selected = structuredClone(verification?.view() ?? context())
+      outputAssert(
+        selected.view.chain.genesisHash === chain.genesisHash,
+        'Unselected fixture genesis'
+      )
       selected.view.chain = chain
       return selected
     },
@@ -149,35 +161,39 @@ export async function privatePurchaseNativeFixture() {
   await bootstrapMongoOverlay(replica.db, scope)
   const storage = new MongoOverlayStorage(replica.db, scope, { retainAdmissionHistory: true })
   track(() => storage.close())
-  const selected = await chains.resolve(view().view, new AbortController().signal),
-    engine = new Engine(
-      {
-        [asset.prepare.topic]: {
-          identifyAdmissibleOutputs: async beef => {
-            const tx = Transaction.fromBEEF(beef)
-            // The independently validated listing policy admits only this original
-            // listing and its exact-script successors; Engine verifies every Script.
-            return {
-              outputsToAdmit: tx.outputs.flatMap((output, index) =>
-                output.lockingScript.toHex() === family.lock(asset.descriptor).toHex()
-                  ? [index]
-                  : []
-              ),
-              coinsToRetain: []
-            }
-          },
-          getDocumentation: async () => 'Disclosed synthetic licensed listing',
-          getMetaData: async () => ({
-            name: 'Licensed listing',
-            shortDescription: 'Reference covenant topic'
-          })
-        }
-      },
-      {},
-      storage,
-      selected.tracker
-    ),
-    installation = {
+  const counts = { admission: 0, issuance: 0 },
+    selected = await verificationChains.resolve(view().view, new AbortController().signal)
+  const engine = new Engine(
+    {
+      [asset.prepare.topic]: {
+        identifyAdmissibleOutputs: async beef => {
+          const tx = Transaction.fromBEEF(beef)
+          // The independently validated listing policy admits only this original
+          // listing and its exact-script successors; Engine verifies every Script.
+          return {
+            outputsToAdmit: tx.outputs.flatMap((output, index) =>
+              output.lockingScript.toHex() === family.lock(asset.descriptor).toHex() ? [index] : []
+            ),
+            coinsToRetain: []
+          }
+        },
+        getDocumentation: async () => 'Disclosed synthetic licensed listing',
+        getMetaData: async () => ({
+          name: 'Licensed listing',
+          shortDescription: 'Reference covenant topic'
+        })
+      }
+    },
+    {},
+    storage,
+    selected.tracker
+  )
+  const submit = engine.submit.bind(engine)
+  engine.submit = (...args) => {
+    counts.admission++
+    return submit(...args)
+  }
+  const installation = {
       chain,
       seller: asset.body.identity,
       baseURL: asset.body.baseURL,
@@ -230,9 +246,9 @@ export async function privatePurchaseNativeFixture() {
       maximumTransactions: 4096,
       maximumDependencies: 16384
     },
-    lineage = new RevenueListingLineageVerifier(family, chains),
-    purchase = new RevenueListingPurchaseVerifier(family, chains),
-    release = new SDKPrivateReleaseEvidence(chains),
+    lineage = new RevenueListingLineageVerifier(family, verificationChains),
+    purchase = new RevenueListingPurchaseVerifier(family, verificationChains),
+    release = new SDKPrivateReleaseEvidence(verificationChains),
     trust: OutputCapabilityRecoveryRequest = {
       identity: asset.body.identity,
       baseURL: asset.body.baseURL,
@@ -255,20 +271,45 @@ export async function privatePurchaseNativeFixture() {
     checked = () => {
       outputAssert(current(), 'Reference recipient/context changed', 'context-changed')
     },
+    verificationGuard = (selected: VerificationContext) => {
+      const binding = canonicalOutputJSON({
+        partition: selected.partition,
+        generation: selected.generation,
+        view: selected.view,
+        policyDigest: selected.policyDigest
+      })
+      return () => {
+        checked()
+        const active = view()
+        outputAssert(
+          binding ===
+            canonicalOutputJSON({
+              partition: active.partition,
+              generation: active.generation,
+              view: active.view,
+              policyDigest: active.policyDigest
+            }),
+          'Independent selected view changed',
+          'context-changed'
+        )
+      }
+    },
     validateLineage = async (
       input: Parameters<typeof lineage.verify>[0],
       expected: { request: typeof asset.prepare; descriptor: typeof asset.descriptor },
       signal: AbortSignal
     ) => {
-      const result = await lineage.verify(input, view(), signal)
+      const selectedView = view(),
+        result = await lineage.verify(input, selectedView, signal),
+        stillCurrent = verificationGuard(selectedView)
       outputAssert(
         result.status === 'verified' &&
           canonicalOutputJSON(result.target) === canonicalOutputJSON(expected.request.listing) &&
           canonicalOutputJSON(result.descriptor) === canonicalOutputJSON(expected.descriptor),
         'Complete selected lineage refused: ' + canonicalOutputJSON(result)
       )
-      checked()
-      return { checkCurrent: checked }
+      stillCurrent()
+      return { checkCurrent: stillCurrent }
     },
     validatePurchase = async (
       ...args: [
@@ -277,20 +318,23 @@ export async function privatePurchaseNativeFixture() {
         AbortSignal
       ]
     ) => {
-      const result = await purchase.verify(args[0], args[1], view(), args[2])
+      const selectedView = view(),
+        result = await purchase.verify(args[0], args[1], selectedView, args[2]),
+        stillCurrent = verificationGuard(selectedView)
       outputAssert(
         result.status === 'verified',
         'Complete selected purchase refused: ' + canonicalOutputJSON(result)
       )
-      checked()
-      return { checkCurrent: checked }
+      stillCurrent()
+      return { checkCurrent: stillCurrent }
     },
     releaseAssessment = async (
       evidence: Parameters<typeof release.verify>[0],
       expected: Parameters<typeof release.verify>[1],
       signal: AbortSignal
     ) => {
-      const id = native.terms.body.acquisitionId,
+      const stillCurrent = verificationGuard(view()),
+        id = native.terms.body.acquisitionId,
         loaded = active.store.load(id, asset.prepare.recipient, clock, checked)
       outputAssert(
         loaded?.candidate && loaded.progress.txid === expected.txid,
@@ -318,7 +362,14 @@ export async function privatePurchaseNativeFixture() {
       return release.verify(
         evidence,
         expected,
-        { now: clock(), localAcceptedAt: originalAdmission.acceptedAt, current },
+        {
+          now: clock(),
+          localAcceptedAt: originalAdmission.acceptedAt,
+          current: () => {
+            stillCurrent()
+            return true
+          }
+        },
         signal
       )
     },
@@ -366,6 +417,11 @@ export async function privatePurchaseNativeFixture() {
       admittedOutputIndex: 0,
       maximumRequestBytes: 524288
     })
+  const issue = seller.issue.bind(seller)
+  seller.issue = (...args) => {
+    counts.issuance++
+    return issue(...args)
+  }
   function install(create: boolean) {
     const domain = PrivateServiceDomain[create ? 'create' : 'open'](
         join(directory, 'seller.sqlite'),
@@ -616,6 +672,8 @@ export async function privatePurchaseNativeFixture() {
   }
   return {
     openBuyer,
+    counts,
+    view,
     failures,
     asset,
     native,

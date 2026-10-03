@@ -3363,3 +3363,51 @@ selector, threshold, case floor and deadline. The six-route unit demonstration
 joins both existing native-payment dependent selections. This repairs registration;
 it does not qualify the full campaign or weaken its zero-uncovered/invalid/
 unexecuted requirements.
+
+### Same-raw proof composition and hosted follow-up, October 3
+
+The complete application suite at published bfd3a15452036ea357a1f47d691e6f01a488d335
+passes 3,132 tests in 223 suites, 1,042.188 seconds. Both complete native ledger
+and purchase-store implementations retain 100 percent statements, branches,
+functions and lines. This receipt predates the following explicit-target fix.
+
+The genuinely richer-proof host composition exposed domain checks that inferred
+a plain BEEF subject from its last record. Revenue purchase, lineage assembly
+and LCH wallet material now select the declared explicit txid and require that
+exact raw transaction. Any Atomic BEEF marker must still match it. Existing empty,
+txid-only, mislabeled-marker, capacity, dependency, economic, Script and authorized
+genesis refusals remain. New complete plain-BEEF tests retain all original raw
+and proof records while placing the proved declared subject before other rows.
+No Bitcoin verification or listing-history predicate is replaced by this assembly.
+
+The first new inclusion fixture incorrectly used leaf zero at the new tip. The
+existing SDK correctly enforced its coinbase-position maturity requirement. The
+corrected fixture uses ordinary position one and the matching synthetic tree root
+in its separately hash/link/work checked selected header view. Its disclosed
+sibling is not a consensus-validated block body or evidence of real mining.
+The richer transaction is independently verified through the actual authenticated
+HTTP, Script/domain, retained admission and cumulative native custody composition.
+The cumulative owner retains the checked proof across seller restart; the first
+financial candidate, delivered bytes, licence and local-admission policy remain
+unchanged. Actual admission, issuance and wallet-action counters never advance.
+The focused revenue union passes 54 tests, LCH covenant 12, and the complete six
+native host scenarios pass under coverage in 146.655 seconds.
+
+Hosted bfd3 qualification found a genuine test scheduling issue: the concurrent
+buyer held the first physical response through additional validation and exhausted
+its unchanged 30-second deadline under coverage. The scenario now releases that
+response immediately after the second buyer recovers it. If the deadline has
+already fired, only that specific unavailable outcome is accepted and it must
+recover the same original delivered result without a second financial effect.
+All other failures remain failures. No deadline, retry, policy or capacity changes.
+The same hosted head reports one new Sonar S7737 fixture-default finding; an
+optional timeline with an internal per-call default preserves its previous
+semantics. All 11 authored TypeScript files have zero local analysis findings.
+
+The complete updated application suite passes 3,134 tests across 223 suites
+under coverage in 1,179.320 seconds. The full LCH suite passes 245 tests across
+37 suites in 82.236 seconds, including the mismatched Atomic-marker refusal.
+The complete host suite subsequently passes 879 tests across 49 suites under
+coverage in 158.872 seconds. The resulting published head's hosted gates remain
+required. Root/public serving compositions and the full
+canonical mutation campaign remain open; this batch does not complete checkpoint 2.

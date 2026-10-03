@@ -39,8 +39,9 @@ export async function lchOverlayFixture(
     maximumResponseBytes: number
   },
   embedCiphertext = true,
-  timeline = { now: 20 }
+  timeline?: { now: number }
 ) {
+  timeline ??= { now: 20 }
   chain ??= { network: 'fixture', genesisHash: '09'.repeat(32) }
   installation ??= {
     baseURL: 'https://seller.example/api',

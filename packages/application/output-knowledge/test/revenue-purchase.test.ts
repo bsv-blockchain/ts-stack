@@ -11,7 +11,15 @@ import {
 } from '@bsv/sdk'
 import { RevenueListingPurchaseVerifier } from '../src/revenue-listing/RevenueListingPurchaseVerifier.js'
 import { RevenueListing } from '@bsv/sdk/script/templates/RevenueListing'
-import { atListing, chains, context, family, minedChain } from './revenue-lineage-fixture.js'
+import {
+  atListing,
+  chains,
+  context,
+  family,
+  minedChain,
+  plainProvedEvidence,
+  purchaseProof
+} from './revenue-lineage-fixture.js'
 import { purchaseBEEF, purchaseFixture, transactionEvidence } from './revenue-purchase.fixture.js'
 
 it('verifies a real funded BRC-196 receipt and every covenant back to the authorized genesis', async () => {
@@ -389,6 +397,36 @@ it('supports complete classic BEEF and refuses empty, txid-only and mislabeled a
     expect(
       await verifier.verify({ ...f.purchase, beef: Utils.toBase64(bytes) }, f.original, context())
     ).toEqual({ status: 'invalid', dependencies: [], reason: 'Purchase BEEF target differs' })
+}, 30000)
+
+it('selects a proved purchase by its explicit txid in complete plain BEEF regardless of record order', async () => {
+  const f = await purchaseFixture(),
+    part = purchaseBEEF(f.purchase),
+    tx = part.findTransactionForSigning(f.purchase.txid)!,
+    raw = tx.toHex(),
+    selected = minedChain(purchaseProof(f.purchase.txid).computeRoot(), 101)
+  const bytes = plainProvedEvidence(part, f.purchase.txid),
+    parsed = Beef.fromBinaryStrict(bytes)
+  expect(parsed.atomicTxid).toBeUndefined()
+  expect(parsed.txs.at(-1)!.txid).not.toBe(f.purchase.txid)
+  expect(parsed.findTransactionForSigning(f.purchase.txid)!.toHex()).toBe(raw)
+  const verifier = new RevenueListingPurchaseVerifier(family, selected.chains)
+  expect(
+    (
+      await verifier.verify(
+        { ...f.purchase, beef: Utils.toBase64(bytes) },
+        f.original,
+        selected.context
+      )
+    ).status
+  ).toBe('verified')
+  expect(
+    await verifier.verify(
+      { ...f.purchase, txid: 'aa'.repeat(32), beef: Utils.toBase64(bytes) },
+      f.original,
+      selected.context
+    )
+  ).toEqual({ status: 'invalid', dependencies: [], reason: 'Purchase BEEF target differs' })
 }, 30000)
 
 it('refuses a purchase already included in the signed predecessor package', async () => {

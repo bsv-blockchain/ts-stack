@@ -146,7 +146,7 @@ export function assembleLineage(
   for (const entry of input.transactions) {
     const part = Beef.fromBinaryStrict(decodeOutputBytes(entry.beef, limits.bytes))
     requireLineage(
-      (part.atomicTxid ?? part.txs.at(-1)?.txid) === entry.txid,
+      part.txs.length > 0 && (part.atomicTxid === undefined || part.atomicTxid === entry.txid),
       'BEEF target mismatch'
     )
     const seen = new Set<string>()

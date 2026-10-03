@@ -378,6 +378,32 @@ cannot start either financial effect.
 The delivered bytes remain identical and decrypt the actual encrypted content
 after catalogue withdrawal; a current authorization change refuses usability.
 
+A sixth scenario submits a genuinely richer proof for the same already-delivered
+raw transaction through the authenticated host. It preserves every supplied raw
+transaction and proof record, adds an inclusion path at ordinary transaction
+position one, and checks that path against an explicitly selected, hash/link/work
+checked synthetic header view. Its synthetic sibling leaf is not proof of a
+consensus-valid block body or a live-chain inclusion. Complete authorized listing
+history and actual covenant execution remain required even for the proved purchase.
+The cumulative owner retains the additional checked proof across native seller
+restart, while the first financial candidate, original admission, delivered bytes,
+local-admission release policy and licence remain unchanged. Actual admission,
+issuance and wallet counters must not advance on either submission or recovery.
+
+Plain BEEF carries no Atomic BEEF subject marker. These domain adapters therefore
+select its target from the explicit purchase or lineage-entry txid and require
+that exact raw transaction. Proof changes can reorder records; the last record
+cannot supply a second implicit identity. An Atomic BEEF marker, when present,
+must still match the explicit target. Missing raw subjects, txid-only subjects and
+mislabeled atomic markers remain refusals, and all byte, dependency, Script,
+economic and authorized-genesis checks still apply. Ordinary BRC-170 use is unchanged.
+
+The concurrent-buyer scenario releases the physically held first reply as soon as
+the second buyer recovers it, before additional Script and playback work. A
+bounded request can nevertheless reach its unchanged deadline while held. That
+specific unavailable outcome must recover the same original delivered result;
+other errors fail the scenario. A deadline never authorizes another financial action.
+
 An optimistic clock or CAS conflict is an explicit refusal, not permission to
 replace a request or transaction. The demonstration performs a bounded retry
 through the original durable buyer. It preserves all existing commit guards and
