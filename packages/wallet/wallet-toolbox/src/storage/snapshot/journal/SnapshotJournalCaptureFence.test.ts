@@ -141,3 +141,187 @@ test('capture refuses ambient nontransaction, unsupported driver and busy-waitin
     await f.close()
   }
 })
+
+test.each(['missing-clock', 'invalid-enabled', 'zero-ceiling', 'revision-over-ceiling', 'disabled'] as const)(
+  'SQLite capture reads the exact persisted %s state before allocation',
+  async state => {
+    const f = await fixture()
+    try {
+      if (state === 'missing-clock') await f.writer('snapshot_journal_clock').delete()
+      else {
+        await f.writer.raw('PRAGMA ignore_check_constraints=ON')
+        if (state === 'invalid-enabled') await f.writer('snapshot_journal_clock').update({ enabled: 2 })
+        else if (state === 'zero-ceiling') await f.writer('snapshot_journal_clock').update({ ceiling: 0 })
+        else if (state === 'revision-over-ceiling')
+          await f.writer('snapshot_journal_clock').update({ revision: 2, ceiling: 1 })
+        else await f.writer('snapshot_journal_clock').update({ enabled: 0, reason: 'capacity-exhausted' })
+        await f.writer.raw('PRAGMA ignore_check_constraints=OFF')
+        await f.barrier.raw('PRAGMA ignore_check_constraints=ON')
+      }
+      if (state === 'disabled') expect(await f.barrier.transaction(reserveSnapshotJournalCaptureFence)).toBeUndefined()
+      else
+        await expect(f.barrier.transaction(reserveSnapshotJournalCaptureFence)).rejects.toThrow(
+          'Invalid snapshot journal capture barrier or clock'
+        )
+    } finally {
+      await f.close()
+    }
+  }
+)
+
+test.each(['no-clock', 'invalid-enabled', 'wrong-increment', 'over-ceiling'] as const)(
+  'SQLite capture refuses %s returned after the actual clock advance',
+  async fault => {
+    const f = await fixture('10')
+    try {
+      await f.barrier.raw('PRAGMA ignore_check_constraints=ON')
+      let effect: string
+      if (fault === 'no-clock') effect = 'DELETE FROM snapshot_journal_clock'
+      else if (fault === 'invalid-enabled') effect = 'UPDATE snapshot_journal_clock SET enabled=2'
+      else effect = 'UPDATE snapshot_journal_clock SET revision=' + (fault === 'wrong-increment' ? '0' : '11')
+      await f.writer.raw(
+        'CREATE TRIGGER corrupt_capture_clock AFTER UPDATE ON snapshot_journal_clock WHEN NEW.revision=1 BEGIN ' +
+          effect +
+          '; END'
+      )
+      await expect(f.barrier.transaction(reserveSnapshotJournalCaptureFence)).rejects.toThrow(
+        'Invalid snapshot journal capture barrier or clock'
+      )
+      expect((await f.writer('snapshot_journal_clock').first()).revision).toBe(0)
+    } finally {
+      await f.close()
+    }
+  }
+)
+
+test('SQLite capture supports the sqlite3 driver identity', async () => {
+  const f = await fixture()
+  try {
+    await f.barrier.transaction(async t => {
+      t.client.config.client = 'sqlite3'
+      expect(await reserveSnapshotJournalCaptureFence(t)).toBe('1')
+    })
+  } finally {
+    await f.close()
+  }
+})
+
+test('SQLite capture refuses native non-WAL admission before clock access', async () => {
+  const k = knex({
+    client: 'better-sqlite3',
+    connection: { filename: ':memory:' },
+    useNullAsDefault: true,
+    pool: { min: 0, max: 1 }
+  })
+  try {
+    await k.raw('PRAGMA busy_timeout=0')
+    await expect(k.transaction(reserveSnapshotJournalCaptureFence)).rejects.toThrow(
+      'Invalid snapshot journal capture barrier or clock'
+    )
+  } finally {
+    await k.destroy()
+  }
+})
+
+/** Real Knex MySQL compilation and response decoding, with only the native
+ * transport replaced. Actual isolation/locking is covered by the native cohort. */
+function mysqlTransport(ceiling: string, allocated: unknown, disabled = false, missing = false) {
+  const owner = knex({ client: 'mysql2', connection: { database: 'synthetic' }, pool: { min: 0, max: 1 } })
+  const queries: Array<{ sql: string; bindings: unknown[] }> = []
+  const invalidations: unknown[][] = []
+  jest.spyOn(owner.client, 'acquireConnection').mockResolvedValue({})
+  jest.spyOn(owner.client, 'releaseConnection').mockResolvedValue(undefined)
+  jest.spyOn(owner.client, 'query').mockImplementation(async (...args: unknown[]) => {
+    const query = args[1] as { sql: string; method: string; bindings: unknown[] }
+    queries.push({ sql: query.sql, bindings: query.bindings ?? [] })
+    let rows: unknown
+    if (
+      query.sql ===
+      'select CAST(`ceiling` AS CHAR) as `ceiling` from `snapshot_journal_clock` where `id` = ? limit ? for update nowait'
+    )
+      rows = missing ? [] : [{ ceiling }]
+    else if (query.sql === 'select `id` from `snapshot_journal_invalid` where `id` = ? limit ? for update nowait')
+      rows = disabled ? [{ id: 1 }] : []
+    else if (query.sql === 'insert into `snapshot_journal_events` () values ()') rows = { insertId: allocated }
+    else if (query.sql === 'SELECT CAST(LAST_INSERT_ID() AS CHAR) revision') rows = [{ revision: allocated }]
+    else if (query.sql === 'delete from `snapshot_journal_events` where `revision` = ?') rows = { affectedRows: 1 }
+    else if (query.sql === 'insert ignore into `snapshot_journal_invalid` (`id`, `reason`) values (?, ?)') {
+      invalidations.push(query.bindings)
+      rows = { insertId: 1 }
+    } else throw new Error('Unexpected capture SQL: ' + query.sql)
+    return { ...query, response: [rows, []] }
+  })
+  return {
+    k: Object.assign(owner, { isTransaction: true }),
+    queries,
+    invalidations,
+    close: async () => {
+      jest.restoreAllMocks()
+      await owner.destroy()
+    }
+  }
+}
+
+test.each(['mysql2', 'mysql'])('capture uses exact current NOWAIT reads and decimal allocation on %s', async client => {
+  const f = mysqlTransport(MAX_SNAPSHOT_JOURNAL_REVISION, '9007199254740993')
+  try {
+    f.k.client.config.client = client
+    expect(await reserveSnapshotJournalCaptureFence(f.k)).toBe('9007199254740993')
+    expect(f.queries.map(query => query.bindings)).toEqual([[1, 1], [1, 1], [], [], ['9007199254740993']])
+    expect(f.invalidations).toEqual([])
+  } finally {
+    await f.close()
+  }
+})
+
+test.each([
+  ['2', '2', undefined],
+  ['2', '3', 'capacity-exhausted'],
+  [MAX_SNAPSHOT_JOURNAL_REVISION, '9223372036854775808', 'revision-exhausted']
+] as const)('MySQL allocation %s/%s retains exact exhaustion identity', async (ceiling, allocated, reason) => {
+  const f = mysqlTransport(ceiling, allocated)
+  try {
+    expect(await reserveSnapshotJournalCaptureFence(f.k)).toBe(reason ? undefined : allocated)
+    expect(f.invalidations).toEqual(reason ? [[1, reason]] : [])
+    expect(f.queries[4]).toEqual({
+      sql: 'delete from `snapshot_journal_events` where `revision` = ?',
+      bindings: [allocated]
+    })
+  } finally {
+    await f.close()
+  }
+})
+
+test.each(['0', '01', '', 'x1', '1x', 1, undefined])(
+  'MySQL refuses malformed native allocation %p before deleting an event',
+  async allocated => {
+    const f = mysqlTransport('10', allocated)
+    try {
+      await expect(reserveSnapshotJournalCaptureFence(f.k)).rejects.toThrow(
+        'Invalid snapshot journal capture barrier or clock'
+      )
+      expect(f.queries).toHaveLength(4)
+      expect(f.invalidations).toEqual([])
+    } finally {
+      await f.close()
+    }
+  }
+)
+
+test.each(['disabled', 'missing', 'zero-ceiling'] as const)(
+  'MySQL %s state stops before event allocation',
+  async state => {
+    const f = mysqlTransport(state === 'zero-ceiling' ? '0' : '10', '1', state === 'disabled', state === 'missing')
+    try {
+      if (state === 'disabled') expect(await reserveSnapshotJournalCaptureFence(f.k)).toBeUndefined()
+      else
+        await expect(reserveSnapshotJournalCaptureFence(f.k)).rejects.toThrow(
+          'Invalid snapshot journal capture barrier or clock'
+        )
+      expect(f.queries).toHaveLength(state === 'disabled' ? 2 : 1)
+      expect(f.invalidations).toEqual([])
+    } finally {
+      await f.close()
+    }
+  }
+)

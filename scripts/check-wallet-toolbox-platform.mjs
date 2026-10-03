@@ -9,6 +9,7 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
+import { assertMetroWatcherContract } from './lib/metro-watcher-contract.mjs'
 
 const COMMAND_TIMEOUT_MS = 240_000
 const MAX_BUFFER_BYTES = 30 * 1024 * 1024
@@ -410,6 +411,10 @@ function hermesCompilerPath() {
 }
 
 async function checkMobile(consumerDirectory, budget) {
+  console.log(
+    'Verified Metro watcher contract:',
+    assertMetroWatcherContract(toolResolver('metro/package.json'))
+  )
   const entryPath = path.join(consumerDirectory, 'index.js')
   await fs.writeFile(entryPath, consumerEntry(expectedPackage))
   await fs.writeFile(

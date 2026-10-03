@@ -22,7 +22,7 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 26)
+  assert.equal(overrides.length, 27)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
@@ -36,6 +36,10 @@ test('dependency and release governance is internally complete', () => {
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml').length, 1)
   assert.equal(overrides.find(entry => entry.selector === 'lodash-es@<4.18.0')?.value, '4.18.1')
   assert.equal(overrides.filter(entry => entry.selector.includes('image-size')).length, 0)
+  assert.equal(
+    overrides.find(entry => entry.selector === 'metro-file-map@0.87.1>micromatch')?.value,
+    "'-'"
+  )
 })
 
 test('pnpm override parsing preserves scoped parent selectors', () => {

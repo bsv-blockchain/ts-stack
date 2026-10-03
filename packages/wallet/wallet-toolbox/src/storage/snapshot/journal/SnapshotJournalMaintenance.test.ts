@@ -6,6 +6,7 @@ import { StorageKnex } from '../../StorageKnex'
 import { StorageProvider } from '../../StorageProvider'
 import { seedArchiveClosure } from '../../../../test/utils/snapshotArchiveFixtures'
 import { maintainSnapshotJournal, type SnapshotJournalMaintenanceRequest } from './SnapshotJournalMaintenance'
+import * as Maintenance from './SnapshotJournalMaintenance'
 import { snapshotJournalRevision, type SnapshotJournalRevision } from './SnapshotJournalRevision'
 import * as Sqlite from './SnapshotJournalSqliteGeneration'
 import * as Mysql from './SnapshotJournalMysqlGeneration'
@@ -92,6 +93,100 @@ test('the provider uses owned WAL transactions for floor and bounded collection'
     expect(page).toMatchObject({ kind: 'collect', value: { examined: 2, removed: 0, complete: false } })
     expect(await f.k('snapshot_journal_receipts')).toHaveLength(0)
   } finally {
+    await f.close()
+  }
+})
+test('invalid maintenance input rejects with its cause and releases admission for a valid request', async () => {
+  const f = await fixture()
+  try {
+    await expect(f.storage.awaitSnapshotJournalMaintenanceCleanup()).resolves.toBeUndefined()
+    await expect(f.storage.maintainSnapshotJournal({ ...f.request, epoch: 'foreign' })).rejects.toThrow(
+      'Snapshot journal maintenance generation is unavailable or changed'
+    )
+    expect(await f.storage.maintainSnapshotJournal(f.request)).toMatchObject({ kind: 'floor', value: { floor: '0' } })
+    await f.storage.awaitSnapshotJournalMaintenanceCleanup()
+  } finally {
+    await f.close()
+  }
+})
+test('destruction fences pending maintenance configuration before database access', async () => {
+  const f = await fixture(),
+    entered = gate(),
+    release = gate(),
+    maintain = Maintenance.maintainSnapshotJournal,
+    acquire = jest.spyOn(f.k.client, 'acquireConnection')
+  let refused: unknown
+  jest.spyOn(Maintenance, 'maintainSnapshotJournal').mockImplementation((configure, ...rest) =>
+    maintain(
+      async () => {
+        entered.resolve()
+        await release.promise
+        try {
+          return await configure()
+        } catch (error) {
+          refused = error
+          throw error
+        }
+      },
+      ...rest
+    )
+  )
+  try {
+    const running = f.storage.maintainSnapshotJournal(f.request),
+      outcome = running.then(
+        value => ({ value }),
+        error => ({ error })
+      )
+    await entered.promise
+    const destruction = f.storage.destroy().then(
+      value => ({ value }),
+      error => ({ error })
+    )
+    release.resolve()
+    const destroyed = await destruction
+    expect(refused).toMatchObject({ message: 'Snapshot journal maintenance is unavailable after destruction begins' })
+    expect(destroyed).toHaveProperty('error', refused)
+    expect(await outcome).toHaveProperty('error')
+    expect(acquire).not.toHaveBeenCalled()
+  } finally {
+    release.resolve()
+    jest.restoreAllMocks()
+    await f.close()
+  }
+})
+test('provider destruction stops and drains active maintenance before closing the foreground pool', async () => {
+  const f = await fixture(),
+    entered = gate(),
+    release = gate(),
+    advance = Receipts.advanceSnapshotJournalFloor
+  jest.spyOn(Receipts, 'advanceSnapshotJournalFloor').mockImplementation(async (...args) => {
+    const value = await advance(...args)
+    entered.resolve()
+    await release.promise
+    return value
+  })
+  try {
+    const running = f.storage.maintainSnapshotJournal(f.request),
+      outcome = running.then(
+        value => ({ value }),
+        error => ({ error })
+      )
+    await entered.promise
+    let drained = false
+    const destruction = f.storage.destroy().then(() => {
+      drained = true
+    })
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(drained).toBe(false)
+    release.resolve()
+    await destruction
+    expect(await outcome).toMatchObject({
+      error: expect.objectContaining({ message: 'Snapshot journal maintenance is closed' })
+    })
+    await f.storage.awaitSnapshotJournalMaintenanceCleanup()
+    expect(drained).toBe(true)
+  } finally {
+    release.resolve()
     await f.close()
   }
 })

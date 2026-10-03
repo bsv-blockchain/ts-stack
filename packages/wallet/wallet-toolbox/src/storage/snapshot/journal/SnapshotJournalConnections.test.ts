@@ -1,4 +1,4 @@
-import { knex } from 'knex'
+import { knex, type Knex } from 'knex'
 import { withSnapshotJournalConnections, SnapshotJournalConnectionCleanupError } from './SnapshotJournalConnections'
 
 function deferred<T>() {
@@ -115,7 +115,8 @@ test.each(['writer', 'reader'] as const)(
         await allow.promise
         return await acquire()
       })
-      jest.spyOn(f[failed].client, 'acquireConnection').mockRejectedValue(new Error('acquire failed'))
+      const failure = new Error('acquire failed')
+      jest.spyOn(f[failed].client, 'acquireConnection').mockRejectedValue(failure)
       let settled = false
       const action = jest.fn(async () => 7)
       const operation = withSnapshotJournalConnections(f.writer, f.reader, () => undefined, action)
@@ -133,6 +134,7 @@ test.each(['writer', 'reader'] as const)(
       expect(action).not.toHaveBeenCalled()
       allow.resolve()
       await rejection
+      await expect(operation).rejects.toMatchObject({ errors: [failure] })
       expect(late.client.pool.numUsed()).toBe(0)
       expect(action).not.toHaveBeenCalled()
     } finally {
@@ -200,7 +202,10 @@ test('cleanup failure waits for the other release and preserves both failure cau
     release.resolve()
     await rejection
     await expect(operation).rejects.toMatchObject({
+      name: 'SnapshotJournalConnectionCleanupError',
+      message: 'Snapshot journal connection cleanup failed',
       cause: {
+        message: 'Snapshot connection ownership did not drain',
         errors: [
           expect.objectContaining({ message: 'read failed' }),
           expect.objectContaining({ message: 'writer release failed' })
@@ -211,6 +216,73 @@ test('cleanup failure waits for the other release and preserves both failure cau
   } finally {
     jest.restoreAllMocks()
     if (owned.length) await releaseWriter(owned[0])
+    await f.close()
+  }
+})
+
+test('distinct wrappers around the same client refuse before acquisition', async () => {
+  const f = await fixture()
+  try {
+    const alias = { ...f.reader, client: f.writer.client } as Knex
+    const acquire = jest.spyOn(f.writer.client, 'acquireConnection')
+    const action = jest.fn(async () => 1)
+    await expect(withSnapshotJournalConnections(f.writer, alias, () => undefined, action)).rejects.toThrow(
+      'Snapshot capture requires two independent owned connection pools'
+    )
+    expect(acquire).not.toHaveBeenCalled()
+    expect(action).not.toHaveBeenCalled()
+  } finally {
+    jest.restoreAllMocks()
+    await f.close()
+  }
+})
+
+test('two pools returning the same native handle release both reservations without running the barrier', async () => {
+  const f = await fixture()
+  const connection = await f.writer.client.acquireConnection()
+  const release = f.writer.client.releaseConnection.bind(f.writer.client)
+  try {
+    jest.spyOn(f.writer.client, 'acquireConnection').mockResolvedValue(connection)
+    jest.spyOn(f.reader.client, 'acquireConnection').mockResolvedValue(connection)
+    const drain = jest.fn(async () => undefined)
+    const action = jest.fn(async () => 1)
+    await expect(withSnapshotJournalConnections(f.writer, f.reader, () => undefined, action, drain)).rejects.toThrow(
+      'Snapshot pools returned the same native connection'
+    )
+    expect(action).not.toHaveBeenCalled()
+    expect(drain.mock.calls).toEqual([
+      [f.writer, connection],
+      [f.reader, connection]
+    ])
+  } finally {
+    jest.restoreAllMocks()
+    await release(connection)
+    await f.close()
+  }
+})
+
+test('a successful callback with failed release reports only the release failure', async () => {
+  const f = await fixture()
+  const failure = new Error('owned writer release failed')
+  try {
+    const operation = withSnapshotJournalConnections(
+      f.writer,
+      f.reader,
+      () => undefined,
+      async () => 42,
+      async (owner, connection) => {
+        await owner.client.releaseConnection(connection)
+        if (owner === f.writer) throw failure
+      }
+    )
+    await expect(operation).rejects.toMatchObject({
+      name: 'SnapshotJournalConnectionCleanupError',
+      message: 'Snapshot journal connection cleanup failed',
+      cause: { message: 'Snapshot connection ownership did not drain', errors: [failure] }
+    })
+    expect(f.writer.client.pool.numUsed()).toBe(0)
+    expect(f.reader.client.pool.numUsed()).toBe(0)
+  } finally {
     await f.close()
   }
 })

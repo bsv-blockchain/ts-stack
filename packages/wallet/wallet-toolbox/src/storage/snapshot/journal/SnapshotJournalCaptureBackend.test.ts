@@ -3,6 +3,7 @@ import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Duplex } from 'node:stream'
+import { createHash } from 'node:crypto'
 import {
   prepareSnapshotJournalCaptureBackend,
   bindSnapshotJournalCaptureBackend,
@@ -58,7 +59,12 @@ test('fresh independent SQLite pools bind one existing file and physically close
       },
       closeSnapshotJournalCapturePool
     )
-    expect(digest).toMatch(/^[0-9a-f]{64}$/)
+    expect(digest).toBe(
+      createHash('sha256')
+        .update('snapshot-journal-backend-v1\n')
+        .update(JSON.stringify(['sqlite', expected.kind === 'sqlite' ? expected.file : undefined]))
+        .digest('hex')
+    )
     expect(connections).toHaveLength(2)
     expect(connections.map(value => value.open)).toEqual([false, false])
     expect(f.writer.client.pool).toBeUndefined()
@@ -125,6 +131,9 @@ test.each([
   { client: 'pg', connection: { database: 'wallet' } },
   { client: 'mysql', connection: { database: 'wallet' } },
   { client: 'mysql2', connection: { database: 7 } },
+  { client: 'better-sqlite3', connection: { filename: '' } },
+  { client: 'better-sqlite3', connection: { filename: 1 } },
+  { client: 'mysql2', connection: 'synthetic' },
   { client: 'mysql2', connection: null }
 ])('unsupported backend configuration refuses before constructing an owned pool: %#', async config => {
   await expect(prepareSnapshotJournalCaptureBackend(config as Knex.Config)).rejects.toThrow('unavailable')
@@ -134,7 +143,8 @@ let nativeConnectionId = 0
 function mysqlIdentity(
   serverUuid: unknown,
   databaseName: unknown,
-  connectionId: unknown = String(++nativeConnectionId)
+  connectionId: unknown = String(++nativeConnectionId),
+  rows?: unknown[]
 ) {
   const owner = knex({
     client: 'mysql2',
@@ -142,7 +152,7 @@ function mysqlIdentity(
     pool: { min: 0, max: 1 }
   })
   const query = owner.raw('SELECT 1')
-  query.connection = jest.fn().mockReturnValue(Promise.resolve([[{ serverUuid, databaseName, connectionId }]]))
+  query.connection = jest.fn().mockReturnValue(Promise.resolve([rows ?? [{ serverUuid, databaseName, connectionId }]]))
   jest.spyOn(owner.client, 'raw').mockReturnValue(query)
   return owner
 }
@@ -153,7 +163,20 @@ test('MySQL binds the actual server and database returned by both exact reserved
     reader = mysqlIdentity(uuid, 'synthetic')
   try {
     const expected = await prepareSnapshotJournalCaptureBackend(writer.client.config)
-    expect(await bindSnapshotJournalCaptureBackend(writer, {}, reader, {}, expected)).toMatch(/^[0-9a-f]{64}$/)
+    const writerConnection = {},
+      readerConnection = {}
+    expect(await bindSnapshotJournalCaptureBackend(writer, writerConnection, reader, readerConnection, expected)).toBe(
+      createHash('sha256')
+        .update('snapshot-journal-backend-v1\n')
+        .update(JSON.stringify(['mysql', { serverUuid: uuid, database: 'synthetic' }]))
+        .digest('hex')
+    )
+    const sql =
+      'SELECT @@server_uuid AS serverUuid, DATABASE() AS databaseName, CAST(CONNECTION_ID() AS CHAR) AS connectionId'
+    expect(writer.client.raw).toHaveBeenCalledWith(sql)
+    expect(reader.client.raw).toHaveBeenCalledWith(sql)
+    expect(writer.client.raw(sql).connection).toHaveBeenCalledWith(writerConnection)
+    expect(reader.client.raw(sql).connection).toHaveBeenCalledWith(readerConnection)
   } finally {
     await writer.destroy()
     await reader.destroy()
@@ -166,6 +189,9 @@ test.each([
   ['different database', uuid, 'other'],
   ['invalid uuid', 'g'.repeat(36), 'synthetic'],
   ['missing uuid', undefined, 'synthetic'],
+  ['uuid prefix', 'x' + uuid, 'synthetic'],
+  ['uuid suffix', uuid + 'x', 'synthetic'],
+  ['nonstring database', uuid, 7],
   ['empty database', uuid, ''],
   ['oversized database', uuid, 'é'.repeat(129)]
 ])('MySQL actual identity refuses %s', async (_label, serverUuid, databaseName) => {
@@ -261,7 +287,7 @@ test('physical cleanup refusal is typed and retains both source and native relea
   }
 })
 
-test.each(['0', '01', 1, '18446744073709551616'])(
+test.each(['0', '01', 1, '18446744073709551616', '12x', 'x12', '1x'])(
   'MySQL refuses invalid actual native connection identity %p',
   async id => {
     const writer = mysqlIdentity(uuid, 'synthetic', id),
@@ -289,6 +315,102 @@ test('distinct pool objects cannot publish two handles addressing the same nativ
     jest.restoreAllMocks()
   }
 })
+
+test('backend preparation rejects a directory even when its pathname exists', async () => {
+  const f = await fixture()
+  try {
+    await expect(
+      prepareSnapshotJournalCaptureBackend({ client: 'better-sqlite3', connection: { filename: f.directory } })
+    ).rejects.toThrow('unavailable')
+  } finally {
+    await f.close()
+  }
+})
+
+test.each([
+  { rows: [] },
+  {
+    rows: [
+      { serverUuid: uuid, databaseName: 'synthetic', connectionId: '1' },
+      { serverUuid: uuid, databaseName: 'synthetic', connectionId: '2' }
+    ]
+  }
+])('MySQL refuses a non-singleton native identity result %#', async ({ rows }) => {
+  const writer = mysqlIdentity(uuid, 'synthetic', '3', rows),
+    reader = mysqlIdentity(uuid, 'synthetic', '4')
+  try {
+    await expect(bindSnapshotJournalCaptureBackend(writer, {}, reader, {}, { kind: 'mysql' })).rejects.toThrow(
+      'changed'
+    )
+  } finally {
+    jest.restoreAllMocks()
+    await Promise.all([writer.destroy(), reader.destroy()])
+  }
+})
+
+test('MySQL accepts exact 256 UTF8 database bytes and the unsigned64 connection boundary', async () => {
+  const database = 'é'.repeat(128)
+  const writer = mysqlIdentity(uuid, database, '18446744073709551615'),
+    reader = mysqlIdentity(uuid, database, '1')
+  try {
+    expect(await bindSnapshotJournalCaptureBackend(writer, {}, reader, {}, { kind: 'mysql' })).toBe(
+      createHash('sha256')
+        .update('snapshot-journal-backend-v1\n')
+        .update(JSON.stringify(['mysql', { serverUuid: uuid, database }]))
+        .digest('hex')
+    )
+  } finally {
+    jest.restoreAllMocks()
+    await Promise.all([writer.destroy(), reader.destroy()])
+  }
+})
+
+test('native pool destruction failures retain every cause and remove the close listener', async () => {
+  const owner = mysqlIdentity(uuid, 'synthetic')
+  const stream = new Duplex({
+    read() {},
+    write(_chunk, _encoding, callback) {
+      callback()
+    }
+  })
+  const destroyFailure = new Error('destroy failed'),
+    releaseFailure = new Error('release failed')
+  jest.spyOn(owner.client, 'destroy').mockRejectedValue(destroyFailure)
+  jest.spyOn(owner.client, 'releaseConnection').mockRejectedValue(releaseFailure)
+  try {
+    await expect(closeSnapshotJournalCapturePool(owner, { stream })).rejects.toMatchObject({
+      message: 'Snapshot capture pool did not close',
+      errors: [destroyFailure, releaseFailure]
+    })
+    expect(stream.listenerCount('close')).toBe(0)
+  } finally {
+    stream.destroy()
+    jest.restoreAllMocks()
+    await owner.destroy()
+  }
+})
+
+test.each(['better-sqlite3', 'mysql2'])(
+  'successful pool calls cannot claim an unclosed %s native handle',
+  async client => {
+    const owner = knex({
+      client,
+      connection: client === 'better-sqlite3' ? { filename: ':memory:' } : { database: 'synthetic' },
+      useNullAsDefault: true,
+      pool: { min: 0, max: 1 }
+    })
+    jest.spyOn(owner.client, 'destroy').mockResolvedValue(undefined)
+    jest.spyOn(owner.client, 'releaseConnection').mockResolvedValue(undefined)
+    try {
+      await expect(closeSnapshotJournalCapturePool(owner, { open: true })).rejects.toThrow(
+        'Snapshot capture native connection did not close'
+      )
+    } finally {
+      jest.restoreAllMocks()
+      await owner.destroy()
+    }
+  }
+)
 
 test('fresh native connection IDs do not change the durable backend binding', async () => {
   const pools = [

@@ -69,7 +69,9 @@ and generation, persists the receipt, and publishes after receipt commit and
 closure verification. It requires an existing file-backed WAL database with
 `better-sqlite3` or a static `mysql2` connection; other drivers refuse before pool
 construction. Physical cleanup retains provider admission, and an unproved close
-fences further sources. Run `pnpm test:snapshot-journal-crash` for the
+fences further sources. If source work and transaction cleanup both fail, the
+ownership error retains the original source failure and each rollback cause.
+Run `pnpm test:snapshot-journal-crash` for the
 SQLite process-loss fixture and `pnpm test:snapshot-journal-mysql` for the isolated
 MySQL client/server-process recovery fixtures. Internal floor transactions reserve
 the global writer clock before current receipt locks and cannot pass a live

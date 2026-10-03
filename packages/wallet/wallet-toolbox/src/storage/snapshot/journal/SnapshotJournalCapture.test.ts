@@ -13,11 +13,21 @@ import { copySnapshotJournalBootstrapPage } from './SnapshotJournalBootstrap'
 import { readSnapshotJournalReceipt } from './SnapshotJournalReceipt'
 import { snapshotJournalRevision } from './SnapshotJournalRevision'
 import { SnapshotJournalConnectionCleanupError } from './SnapshotJournalConnections'
+import * as Connections from './SnapshotJournalConnections'
 import type { SnapshotJournalCaptureRequest, SnapshotJournalSource } from './SnapshotJournalCapture'
+import * as Capture from './SnapshotJournalCapture'
 import * as Closure from '../archive/KnexSnapshotArchiveClosure'
 import * as Backend from './SnapshotJournalCaptureBackend'
 import * as Receipts from './SnapshotJournalReceipt'
 import { snapshotArchiveTables } from '../archive/KnexSnapshotArchiveStore'
+import { WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
+import { SnapshotResourceLimitError } from '../SnapshotResourceLimitError'
+import * as Archive from '../archive/KnexSnapshotArchiveSource'
+import * as MysqlGeneration from './SnapshotJournalMysqlGeneration'
+import * as Fence from './SnapshotJournalCaptureFence'
+import * as ArchiveSql from '../archive/SnapshotArchiveSql'
+import { createHash } from 'node:crypto'
+import { Duplex } from 'node:stream'
 
 const identity = '02' + '11'.repeat(32)
 let request: SnapshotJournalCaptureRequest
@@ -318,7 +328,10 @@ test('provider destruction drains an active captured view before closing the for
   const f = await fixture()
   try {
     const view = await f.storage.openSnapshotJournalSource(identity, request)
+    const detach = jest.spyOn(f.k, 'off')
     await f.storage.destroy()
+    for (const event of ['query', 'query-response', 'query-error'])
+      expect(detach).toHaveBeenCalledWith(event, expect.any(Function))
     expect(view.isOpen).toBe(false)
     await view.closed
     await expect(view.readPage('txLabels')).rejects.toThrow('closed')
@@ -328,9 +341,57 @@ test('provider destruction drains an active captured view before closing the for
   }
 })
 
+test('destruction fences a pending source configuration callback before database access', async () => {
+  const f = await fixture(),
+    entered = gate(),
+    release = gate(),
+    retain = Capture.retainSnapshotJournalCapture,
+    acquire = jest.spyOn(f.k.client, 'acquireConnection')
+  let refused: unknown
+  jest.spyOn(Capture, 'retainSnapshotJournalCapture').mockImplementation((chain, configure, ...rest) =>
+    retain(
+      chain,
+      async () => {
+        entered.resolve()
+        await release.promise
+        try {
+          return await configure()
+        } catch (error) {
+          refused = error
+          throw error
+        }
+      },
+      ...rest
+    )
+  )
+  try {
+    const opening = f.storage.openSnapshotJournalSource(identity, request),
+      outcome = opening.then(
+        value => ({ value }),
+        error => ({ error })
+      )
+    await entered.promise
+    const destruction = f.storage.destroy().then(
+      value => ({ value }),
+      error => ({ error })
+    )
+    release.resolve()
+    const destroyed = await destruction
+    expect(refused).toMatchObject({ message: 'Snapshot journal sources are unavailable after destruction begins' })
+    expect(destroyed).toHaveProperty('error', refused)
+    expect(await outcome).toHaveProperty('error')
+    expect(acquire).not.toHaveBeenCalled()
+  } finally {
+    release.resolve()
+    jest.restoreAllMocks()
+    await f.close()
+  }
+})
+
 test('public input is detached before asynchronous setup and invalid input does not reserve admission', async () => {
   const f = await fixture()
   try {
+    await expect(f.storage.awaitSnapshotJournalCaptureCleanup()).resolves.toBeUndefined()
     await expect(f.storage.openSnapshotJournalSource('foreign', request)).rejects.toThrow('identityKey')
     const input = { ...request, receiptPolicy: { ...request.receiptPolicy } }
     const opening = f.storage.openSnapshotJournalSource(identity, input)
@@ -358,6 +419,8 @@ test('source failure is retriable after physical cleanup; an unproved close fenc
     const config = jest.spyOn(f.k.client, 'acquireConnection').mockRejectedValue(fault)
     await expect(f.storage.openSnapshotJournalSource(identity, request)).rejects.toBe(fault)
     config.mockRestore()
+    await expect(f.storage.awaitSnapshotJournalCaptureCleanup()).rejects.toBe(fault)
+    await expect(f.storage.awaitSnapshotJournalCaptureCleanup()).rejects.toBe(fault)
     await expect(f.storage.openSnapshotJournalSource(identity, request)).rejects.toThrow('destruction')
     await expect(f.storage.destroy()).rejects.toBe(fault)
   } finally {
@@ -413,5 +476,391 @@ test('a source failure and owned-provider cleanup failure remain observable toge
     jest.restoreAllMocks()
     await f.storage.destroy().catch(() => undefined)
     await rm(f.directory, { recursive: true, force: true })
+  }
+})
+
+test.each(['02' + 'ab'.repeat(32) + 'x', 'x02' + 'ab'.repeat(32), '04' + 'ab'.repeat(32), '', undefined, 1])(
+  'invalid compressed identity %p refuses synchronously before configuration',
+  identityKey => {
+    const configure = jest.fn(async () => undefined)
+    expect(() => Capture.retainSnapshotJournalCapture('test', configure, identityKey as string, request)).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => Capture.retainSnapshotJournalCapture('test', configure, identityKey as string, request)).toThrow(
+      'identityKey'
+    )
+    expect(configure).not.toHaveBeenCalled()
+  }
+)
+
+test('zero revision ceiling refuses synchronously before configuration', () => {
+  const configure = jest.fn(async () => undefined)
+  expect(() =>
+    Capture.retainSnapshotJournalCapture('test', configure, identity, {
+      ...request,
+      ceiling: snapshotJournalRevision('0')
+    })
+  ).toThrow('generation or profile')
+  expect(configure).not.toHaveBeenCalled()
+})
+
+test('an unavailable static configuration retains its exact unsupported-provider refusal through cleanup', async () => {
+  const lifetime = Capture.retainSnapshotJournalCapture('test', async () => undefined, identity, request)
+  const error = await lifetime.opened.catch(value => value)
+  expect(error).toMatchObject({
+    name: 'WERR_NOT_IMPLEMENTED',
+    message: 'Snapshot journal capture requires file-backed SQLite WAL or static MySQL'
+  })
+  await expect(lifetime.closed).rejects.toBe(error)
+})
+
+test.each(['disabled', 'exhausted'] as const)(
+  'a native %s event clock commits refusal without a receipt or ordinary source failure',
+  async state => {
+    const f = await fixture()
+    try {
+      await f
+        .k('snapshot_journal_clock')
+        .update(state === 'disabled' ? { enabled: 0, reason: 'capacity-exhausted' } : { revision: request.ceiling })
+      const error = await f.storage.openSnapshotJournalSource(identity, request).catch(value => value)
+      expect(error).toBeInstanceOf(SnapshotResourceLimitError)
+      expect(error.message).toBe('Snapshot journal event window is exhausted or disabled')
+      expect(await f.k('snapshot_journal_clock').first('enabled', 'reason')).toEqual({
+        enabled: 0,
+        reason: 'capacity-exhausted'
+      })
+      expect(await f.k('snapshot_journal_receipts')).toEqual([])
+      await f.k('tx_labels').where('txLabelId', 1).update({ label: 'ordinary write after exhausted capture' })
+      expect((await f.k('tx_labels').where('txLabelId', 1).first()).label).toBe(
+        'ordinary write after exhausted capture'
+      )
+    } finally {
+      await f.close()
+    }
+  }
+)
+
+test('a mismatched generation ceiling rolls back its barrier and never publishes a receipt', async () => {
+  const f = await fixture()
+  try {
+    const before = await f.k('snapshot_journal_clock').first()
+    await expect(
+      f.storage.openSnapshotJournalSource(identity, { ...request, ceiling: snapshotJournalRevision('1000001') })
+    ).rejects.toThrow('generation or profile')
+    expect(await f.k('snapshot_journal_clock').first()).toEqual(before)
+    expect(await f.k('snapshot_journal_receipts')).toEqual([])
+  } finally {
+    await f.close()
+  }
+})
+
+test.each(['identity', 'chain'] as const)(
+  'a pinned %s header mismatch refuses before receipt publication',
+  async field => {
+    const f = await fixture(),
+      read = Archive.readKnexSnapshotArchiveHeader
+    jest.spyOn(Archive, 'readKnexSnapshotArchiveHeader').mockImplementation(async (...args) => {
+      const result = await read(...args)
+      if (field === 'identity') result.header.user.identityKey = '03' + '22'.repeat(32)
+      else result.header.sourceStorage.chain = 'main'
+      return result
+    })
+    try {
+      await expect(f.storage.openSnapshotJournalSource(identity, request)).rejects.toThrow('generation or profile')
+      expect(await f.k('snapshot_journal_receipts')).toEqual([])
+    } finally {
+      jest.restoreAllMocks()
+      await f.close()
+    }
+  }
+)
+
+test('a receipt failure and both actual transaction rollback failures retain all original causes after native drain', async () => {
+  const f = await fixture(),
+    connect = Connections.withSnapshotJournalConnections
+  const sourceError = new Error('receipt failed'),
+    rollbackErrors = [new Error('writer rollback failed'), new Error('reader rollback failed')]
+  jest.spyOn(Receipts, 'recordSnapshotJournalReceipt').mockRejectedValue(sourceError)
+  jest.spyOn(Connections, 'withSnapshotJournalConnections').mockImplementation(async (...args) => {
+    for (const [index, owner] of [args[0], args[1]].entries()) {
+      const transaction = owner.transaction.bind(owner)
+      Object.defineProperty(owner, 'transaction', {
+        ...Object.getOwnPropertyDescriptor(owner, 'transaction'),
+        writable: true
+      })
+      jest.spyOn(owner, 'transaction').mockImplementation(async (...parameters: unknown[]) => {
+        const trx = await transaction(parameters[0] as Knex.TransactionConfig),
+          query = trx.client.query.bind(trx.client)
+        jest.spyOn(trx.client, 'query').mockImplementation(async (...queryParameters: unknown[]) => {
+          const result: unknown = await query(queryParameters[0], queryParameters[1])
+          if (queryParameters[1] === 'ROLLBACK') throw rollbackErrors[index]
+          return result
+        })
+        return trx
+      })
+    }
+    return await connect(...args)
+  })
+  function causes(error: unknown): unknown[] {
+    return [
+      error,
+      ...(error instanceof AggregateError ? error.errors.flatMap(causes) : []),
+      ...(error instanceof Error && error.cause !== undefined ? causes(error.cause) : [])
+    ]
+  }
+  try {
+    const error = await f.storage.openSnapshotJournalSource(identity, request).catch(value => value)
+    expect(error).toBeInstanceOf(SnapshotJournalConnectionCleanupError)
+    expect(causes(error)).toEqual(expect.arrayContaining([sourceError, ...rollbackErrors]))
+    expect(await f.k('snapshot_journal_receipts')).toEqual([])
+    await expect(f.storage.awaitSnapshotJournalCaptureCleanup()).rejects.toBe(error)
+  } finally {
+    jest.restoreAllMocks()
+    await f.storage.destroy().catch(() => undefined)
+    await rm(f.directory, { recursive: true, force: true })
+  }
+})
+
+test('successful capture followed by an actual reader rollback failure reports exactly that cleanup cause', async () => {
+  const f = await fixture(),
+    connect = Connections.withSnapshotJournalConnections,
+    rollbackError = new Error('successful source reader rollback failed')
+  jest.spyOn(Connections, 'withSnapshotJournalConnections').mockImplementation(async (...args) => {
+    const reader = args[1],
+      transaction = reader.transaction.bind(reader)
+    Object.defineProperty(reader, 'transaction', {
+      ...Object.getOwnPropertyDescriptor(reader, 'transaction'),
+      writable: true
+    })
+    jest.spyOn(reader, 'transaction').mockImplementation(async (...parameters: unknown[]) => {
+      const trx = await transaction(parameters[0] as Knex.TransactionConfig),
+        query = trx.client.query.bind(trx.client)
+      jest.spyOn(trx.client, 'query').mockImplementation(async (...queryParameters: unknown[]) => {
+        const result: unknown = await query(queryParameters[0], queryParameters[1])
+        if (queryParameters[1] === 'ROLLBACK') throw rollbackError
+        return result
+      })
+      return trx
+    })
+    return await connect(...args)
+  })
+  const lifetime = Capture.retainSnapshotJournalCapture('test', async () => f.k.client.config, identity, request)
+  try {
+    const view = await lifetime.opened
+    expect((await view.readPage('txLabels')).rows.length).toBeGreaterThan(0)
+    const error = await lifetime.close().catch(value => value)
+    expect(error).toBeInstanceOf(SnapshotJournalConnectionCleanupError)
+    expect(error.cause).toMatchObject({
+      message: 'Snapshot capture transactions did not drain',
+      errors: [rollbackError]
+    })
+    await expect(lifetime.closed).rejects.toBe(error)
+    expect(await f.k('snapshot_journal_receipts')).toHaveLength(1)
+  } finally {
+    await lifetime.close().catch(() => undefined)
+    jest.restoreAllMocks()
+    await f.close()
+  }
+})
+
+test('successful capture followed by an owned-provider close failure reports exactly that cleanup cause', async () => {
+  const f = await fixture(),
+    cleanupError = new Error('successful source owned provider did not close'),
+    destroy = StorageKnex.prototype.destroy
+  jest.spyOn(StorageKnex.prototype, 'destroy').mockImplementation(async function (this: StorageKnex) {
+    await destroy.call(this)
+    if (this !== f.storage) throw cleanupError
+  })
+  const lifetime = Capture.retainSnapshotJournalCapture('test', async () => f.k.client.config, identity, request)
+  try {
+    const view = await lifetime.opened
+    expect((await view.readPage('txLabels')).rows.length).toBeGreaterThan(0)
+    const error = await lifetime.close().catch(value => value)
+    expect(error).toBeInstanceOf(SnapshotJournalConnectionCleanupError)
+    expect(error.cause).toMatchObject({
+      message: 'Snapshot capture owned providers did not close',
+      errors: [cleanupError]
+    })
+    await expect(lifetime.closed).rejects.toBe(error)
+    expect(await f.k('snapshot_journal_receipts')).toHaveLength(1)
+  } finally {
+    await lifetime.close().catch(() => undefined)
+    jest.restoreAllMocks()
+    await f.close()
+  }
+})
+
+test('uppercase caller identity selects the existing canonical profile and receipt key', async () => {
+  const f = await fixture(),
+    upper = '02' + 'AB'.repeat(32)
+  try {
+    await f.k('users').where('userId', 1).update({ identityKey: upper.toLowerCase() })
+    const view = await f.storage.openSnapshotJournalSource(upper, request)
+    try {
+      expect(view.user.identityKey).toBe(upper.toLowerCase())
+      expect(view.receiptBinding.identityKey).toBe(upper.toLowerCase())
+    } finally {
+      await view.close()
+    }
+  } finally {
+    await f.close()
+  }
+})
+
+test('MySQL capture configures both reserved pools before transactions, commits before verification and drains its pinned reader', async () => {
+  // This orchestration double checks exact pool/session/transaction boundaries.
+  // Native MySQL identity, isolation and thirteen-table data are separate fixtures.
+  const f = await fixture()
+  const header = await f.k.transaction(t => Archive.readKnexSnapshotArchiveHeader(f.storage, identity, t))
+  header.header.sourceStorage.dbtype = 'MySQL'
+  const sequence: string[] = [],
+    pools: Knex[] = [],
+    handles: Array<{ stream: Duplex }> = []
+  const factory = jest.requireActual<{ knex: typeof knex }>('knex'),
+    create = factory.knex
+  const createSource = Archive.createKnexSnapshotArchiveSource
+  jest.spyOn(factory, 'knex').mockImplementation((...args: unknown[]) => {
+    const config = args[0] as Knex.Config
+    expect(config.pool).toMatchObject({ min: 0, max: 1 })
+    expect(config.acquireConnectionTimeout).toBe(5000)
+    const role = pools.length === 0 ? 'writer' : 'reader',
+      owner = create(config)
+    const handle = {
+      stream: new Duplex({
+        read() {},
+        write(_chunk, _encoding, callback) {
+          callback()
+        }
+      })
+    }
+    pools.push(owner)
+    handles.push(handle)
+    jest.spyOn(owner.client, 'acquireConnection').mockResolvedValue(handle)
+    jest.spyOn(owner.client, 'releaseConnection').mockResolvedValue(undefined)
+    const destroy = owner.client.destroy.bind(owner.client)
+    jest.spyOn(owner.client, 'destroy').mockImplementation(async () => {
+      handle.stream.destroy()
+      await destroy()
+    })
+    const raw = owner.client.raw.bind(owner.client)
+    jest.spyOn(owner.client, 'raw').mockImplementation((...parameters: unknown[]) => {
+      expect(role).toBe('reader')
+      expect(parameters).toEqual(['SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY'])
+      sequence.push('reader session')
+      const query = raw('SELECT 1')
+      query.connection = jest.fn().mockImplementation(async connection => {
+        expect(connection).toBe(handle)
+      })
+      return query
+    })
+    Object.defineProperty(owner, 'transaction', {
+      ...Object.getOwnPropertyDescriptor(owner, 'transaction'),
+      writable: true
+    })
+    jest.spyOn(owner, 'transaction').mockImplementation(async (...parameters: unknown[]) => {
+      expect(parameters).toEqual([{ connection: handle }])
+      sequence.push('begin ' + role)
+      const completion = gate()
+      let completed = false
+      return {
+        client: owner.client,
+        isTransaction: true,
+        isCompleted: () => completed,
+        executionPromise: completion.promise,
+        commit: async () => {
+          expect(completed).toBe(false)
+          sequence.push('commit ' + role)
+          completed = true
+          completion.resolve()
+        },
+        rollback: async () => {
+          expect(completed).toBe(false)
+          sequence.push('rollback ' + role)
+          completed = true
+          completion.resolve()
+        }
+      } as unknown as Knex.Transaction
+    })
+    return owner
+  })
+  jest.spyOn(Backend, 'prepareSnapshotJournalCaptureBackend').mockResolvedValue({ kind: 'mysql' })
+  jest.spyOn(Backend, 'bindSnapshotJournalCaptureBackend').mockResolvedValue('b'.repeat(64))
+  jest.spyOn(Fence, 'reserveSnapshotJournalCaptureFence').mockImplementation(async () => {
+    sequence.push('fence')
+    return snapshotJournalRevision('7')
+  })
+  const generation = {
+    epoch: '00000000-0000-4000-8000-000000000000',
+    source: 'c'.repeat(64),
+    plan: 'd'.repeat(64),
+    nextObject: 1,
+    ceiling: request.ceiling,
+    complete: true,
+    enabled: true
+  }
+  jest
+    .spyOn(MysqlGeneration, 'readSnapshotJournalMysqlGeneration')
+    .mockImplementation(async (_view, ceiling, policy) => {
+      expect(ceiling).toBe(request.ceiling)
+      expect(policy).toEqual(request.receiptPolicy)
+      sequence.push('generation')
+      return generation
+    })
+  jest.spyOn(Archive, 'readKnexSnapshotArchiveHeader').mockImplementation(async () => {
+    sequence.push('header')
+    return header
+  })
+  jest.spyOn(ArchiveSql, 'snapshotArchiveDatabaseNow').mockResolvedValue(1000)
+  jest.spyOn(Receipts, 'recordSnapshotJournalReceipt').mockImplementation(async (_barrier, binding, value) => {
+    expect(binding.identityKey).toBe(identity)
+    sequence.push('receipt')
+    return { ...value, floor: snapshotJournalRevision('0'), binding: Receipts.snapshotJournalReceiptBinding(binding) }
+  })
+  jest.spyOn(Closure, 'assertKnexSnapshotArchiveClosure').mockImplementation(async () => {
+    sequence.push('verify')
+  })
+  jest.spyOn(Archive, 'createKnexSnapshotArchiveSource').mockImplementation((storage, ...rest) => {
+    expect(storage.getSettings()).toEqual(header.header.sourceStorage)
+    expect(storage.getSnapshotSync()).toBeUndefined()
+    return createSource(storage, ...rest)
+  })
+  let lifetime: Capture.SnapshotJournalCaptureLifetime | undefined
+  try {
+    lifetime = Capture.retainSnapshotJournalCapture(
+      'test',
+      async () => ({
+        client: 'mysql2',
+        connection: { database: 'synthetic' },
+        pool: { min: 2, max: 10 },
+        acquireConnectionTimeout: 50000
+      }),
+      identity,
+      request
+    )
+    const view = await lifetime.opened
+    expect(sequence).toEqual([
+      'reader session',
+      'begin writer',
+      'fence',
+      'begin reader',
+      'generation',
+      'header',
+      'receipt',
+      'commit writer',
+      'verify'
+    ])
+    expect(view.receipt).toMatchObject({ highWater: '7', expiresAt: 601000 })
+    expect(view.receiptBinding.schema).toBe(
+      createHash('sha256').update('snapshot-journal-schema-v1\n').update(header.header.sourceSchema).digest('hex')
+    )
+    await lifetime.close()
+    expect(sequence.at(-1)).toBe('rollback reader')
+    expect(handles).toHaveLength(2)
+    expect(handles.every(handle => handle.stream.closed)).toBe(true)
+  } finally {
+    await lifetime?.close().catch(() => undefined)
+    jest.restoreAllMocks()
+    await Promise.allSettled(pools.map(owner => owner.destroy()))
+    await f.close()
   }
 })

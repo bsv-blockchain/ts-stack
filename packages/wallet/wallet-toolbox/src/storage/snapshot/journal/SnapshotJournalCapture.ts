@@ -63,7 +63,7 @@ function ownedConfig(config: Knex.Config): Knex.Config {
     acquireConnectionTimeout: Math.min(config.acquireConnectionTimeout ?? 5000, 5000)
   }
 }
-async function endTransactions(transactions: Knex.Transaction[]): Promise<void> {
+async function endTransactions(transactions: Knex.Transaction[], failure?: { error: unknown }): Promise<void> {
   const settled = await Promise.allSettled(
     transactions.map(async trx => {
       if (!trx.isCompleted()) {
@@ -76,7 +76,7 @@ async function endTransactions(transactions: Knex.Transaction[]): Promise<void> 
   if (failed.length)
     throw new SnapshotJournalConnectionCleanupError(
       new AggregateError(
-        failed.map(result => result.reason),
+        [...(failure === undefined ? [] : [failure.error]), ...failed.map(result => result.reason)],
         'Snapshot capture transactions did not drain'
       )
     )
@@ -116,6 +116,7 @@ async function capture(options: CaptureOptions): Promise<void> {
   const { storage, writer, write, read, backend, identityKey, request, assertActive, hold } = options
   const reader = storage.knex,
     transactions: Knex.Transaction[] = []
+  let failure: { error: unknown } | undefined
   try {
     await prepareReader(writer, write, reader, read)
     assertActive()
@@ -174,8 +175,11 @@ async function capture(options: CaptureOptions): Promise<void> {
     await commit(barrier)
     assertActive()
     await hold(view, { header, receipt, binding })
+  } catch (error) {
+    failure = { error }
+    throw error
   } finally {
-    await endTransactions(transactions)
+    await endTransactions(transactions, failure)
   }
 }
 
