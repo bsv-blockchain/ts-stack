@@ -25,10 +25,12 @@ export class PayerWallet extends CompletedProtoWallet {
   }
 
   override createAction(args?: CreateActionArgs): Promise<CreateActionResult> {
-    // The executor turns a synchronous throw into a rejection, as an async method would.
-    return new Promise(resolve => {
-      resolve(this.buildAction(args))
-    })
+    // A synchronous throw becomes a rejection, as it would from an async method.
+    try {
+      return Promise.resolve(this.buildAction(args))
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+    }
   }
 
   private buildAction(args?: CreateActionArgs): CreateActionResult {
