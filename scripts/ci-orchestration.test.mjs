@@ -31,7 +31,7 @@ function assertWalletMutationTimeout(job, defaultMinutes) {
   const targets =
     '["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-journal","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'
   const expected = `    timeout-minutes: \${{ contains(fromJSON('${targets}'), matrix.target) && 90 || ${defaultMinutes} }}`
-  assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
+  assert.equal(job.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
 }
 
 test('CI downloads every canonical execution partition before verifying its complete union', () => {
@@ -53,7 +53,7 @@ test('CI downloads every canonical execution partition before verifying its comp
   assert.ok(verify > 0)
   const downloads = gate
     .slice(0, verify)
-    .split(/^      - /m)
+    .split(/^ {6}- /m)
     .filter(step => step.startsWith('uses: actions/download-artifact@'))
   for (const target of partitioned) {
     const selected = downloads.filter(step =>
@@ -193,11 +193,11 @@ test('wallet mutation allowances preserve other limits and complete campaign exe
     )
     assert.ok(job, path)
     assertWalletMutationTimeout(job, defaultMinutes)
-    assert.match(job.source, /^      fail-fast: false$/m)
+    assert.match(job.source, /^ {6}fail-fast: false$/m)
     assert.match(job.source, new RegExp(`^      max-parallel: ${maxParallel}$`, 'm'))
     assert.match(
       job.source,
-      /^        run: node scripts\/mutation-testing\.mjs --target "\$\{\{ matrix\.target \}\}" --partition "\$\{\{ matrix\.partition \}\}"$/m
+      /^ {8}run: node scripts\/mutation-testing\.mjs --target "\$\{\{ matrix\.target \}\}" --partition "\$\{\{ matrix\.partition \}\}"$/m
     )
   }
 })
@@ -418,7 +418,7 @@ function nativeWalletFixtureSteps() {
   const wallet = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
     job => job.name === 'coverage-wallet'
   ).source
-  const matches = [...wallet.matchAll(/^      - /gm)]
+  const matches = [...wallet.matchAll(/^ {6}- /gm)]
   const steps = matches.map((match, index) =>
     wallet.slice(match.index, matches[index + 1]?.index ?? wallet.length)
   )
@@ -429,28 +429,28 @@ function onlyFixtureStep(steps, command) {
   const matches = steps.filter(step => step.split('\n').includes(`        run: ${command}`))
   assert.equal(matches.length, 1)
   const step = matches[0]
-  assert.match(step, /^        if: matrix.id == 'shard-1'$/m)
-  assert.match(step, /^        working-directory: packages\/wallet\/wallet-toolbox$/m)
+  assert.match(step, /^ {8}if: matrix.id == 'shard-1'$/m)
+  assert.match(step, /^ {8}working-directory: packages\/wallet\/wallet-toolbox$/m)
   assert.doesNotMatch(step, /continue-on-error/)
   return steps.indexOf(step)
 }
 
 function assertNativeWalletJob(wallet) {
-  assert.match(wallet, /^    needs: prepare$/m)
-  assert.match(wallet, /^    timeout-minutes: 40$/m)
-  assert.match(wallet, /^    permissions:\n      contents: read\n    strategy:/m)
+  assert.match(wallet, /^ {4}needs: prepare$/m)
+  assert.match(wallet, /^ {4}timeout-minutes: 40$/m)
+  assert.match(wallet, /^ {4}permissions:\n {6}contents: read\n {4}strategy:/m)
   assert.doesNotMatch(wallet, /continue-on-error/)
   // This gate runs before dependency installation; validate the governed native
   // job's explicit matrix and service block without loading a workspace parser.
   assert.match(
     wallet,
-    /^    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - \{ id: shard-1, shard: 1 \}\n          - \{ id: shard-2, shard: 2 \}\n          - \{ id: shard-3, shard: 3 \}\n          - \{ id: shard-4, shard: 4 \}\n          - \{ id: sync-http-0, latency: 0 \}\n          - \{ id: sync-http-1000, latency: 1000 \}\n    services:$/m
+    /^ {4}strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}include:\n {10}- \{ id: shard-1, shard: 1 \}\n {10}- \{ id: shard-2, shard: 2 \}\n {10}- \{ id: shard-3, shard: 3 \}\n {10}- \{ id: shard-4, shard: 4 \}\n {10}- \{ id: sync-http-0, latency: 0 \}\n {10}- \{ id: sync-http-1000, latency: 1000 \}\n {4}services:$/m
   )
   assert.match(
     wallet,
-    /^      postgres:\n        image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef(?: #[^\n]*)?$/m
+    /^ {6}postgres:\n {8}image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef(?: #[^\n]*)?$/m
   )
-  assert.match(wallet, /^        ports:\n          - 5432:5432\n        options: >-$/m)
+  assert.match(wallet, /^ {8}ports:\n {10}- 5432:5432\n {8}options: >-$/m)
 }
 
 test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', () => {
@@ -474,11 +474,8 @@ test('native MySQL uses a bounded pinned fixture in the existing required wallet
   )
   const proof = onlyFixtureStep(steps, 'node test/storage/runSnapshotArchiveMysql.cjs')
   for (const index of [provision, proof]) {
-    assert.match(steps[index], /^        timeout-minutes: 5$/m)
-    assert.match(
-      steps[index],
-      /^        env:\n          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'\n        run:/m
-    )
+    assert.match(steps[index], /^ {8}timeout-minutes: 5$/m)
+    assert.match(steps[index], /^ {8}env:\n {10}TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'\n {8}run:/m)
   }
   const sqlite = onlyFixtureStep(steps, 'node test/storage/snapshotArchiveCrash.cjs')
   const coverage = steps.findIndex(step =>
@@ -533,9 +530,29 @@ test('journal native recovery remains mandatory alongside all archive fixture fa
   const coverage = steps.findIndex(step =>
     step.includes('name: Generate wallet-toolbox coverage shard')
   )
-  assert.match(steps[sqlite], /^        timeout-minutes: 3$/m)
-  assert.match(steps[mysql], /^        timeout-minutes: 10$/m)
+  assert.match(steps[sqlite], /^ {8}timeout-minutes: 3$/m)
+  assert.match(steps[mysql], /^ {8}timeout-minutes: 10$/m)
   assert.ok(steps[mysql].includes("TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'"))
   assert.ok(archive < sqlite && sqlite < mysql && mysql < coverage)
   assertNativeWalletJob(wallet)
+})
+
+test('actual pinned inventory runs as a required installed-tool regression before build reuse', () => {
+  const jobs = workflowJobBlocks(readFileSync(CI_PATH, 'utf8'))
+  const health = jobs.find(job => job.name === 'repository-health').source
+  const prepare = jobs.find(job => job.name === 'prepare').source
+  assert.ok(health.includes('node --test scripts/*.test.mjs'))
+  assert.ok(!health.includes('mutation-partitions-engine.integration.mjs'))
+  const install = prepare.indexOf('run: pnpm install --frozen-lockfile --ignore-scripts')
+  const verify = prepare.indexOf(
+    'run: node --test scripts/mutation-partitions-engine.integration.mjs'
+  )
+  const build = prepare.indexOf('- name: Build workspace')
+  assert.ok(install >= 0 && install < verify && verify < build)
+  const steps = prepare.split(/^ {6}- /m)
+  const selected = steps.filter(step =>
+    step.includes('run: node --test scripts/mutation-partitions-engine.integration.mjs')
+  )
+  assert.equal(selected.length, 1)
+  assert.ok(!selected[0].includes('if:') && !selected[0].includes('continue-on-error'))
 })
