@@ -1,9 +1,19 @@
 import { expect, it, jest } from '@jest/globals'
-import { Beef, LockingScript, Utils, canonicalOutputJSON, decodeOutputBytes } from '@bsv/sdk'
+import {
+  Beef,
+  Hash,
+  LockingScript,
+  Utils,
+  canonicalOutputJSON,
+  decodeOutputBytes,
+  outputPacketDigest,
+  Transaction
+} from '@bsv/sdk'
 import { PrivatePurchaseCoordinator } from '../src/private/PrivatePurchaseCoordinator.js'
 import { purchaseCoordinatorFixture } from './private-purchase-coordinator.fixture.js'
 import { SQLitePrivatePurchaseEvidence } from '../src/private/SQLitePrivatePurchaseEvidence.js'
 import { purchaseEvidenceFixture } from './private-purchase-evidence.fixture.js'
+import type { ProtectedLedgerRecord } from '../src/private/ProtectedLedgerCodec.js'
 
 it('reserves native proof custody, merges a same-transaction Merkle view and recovers its exact original bytes', () => {
   const f = purchaseEvidenceFixture(),
@@ -471,5 +481,333 @@ it('rejects a promised reservation before retaining any financial intent', async
   } finally {
     await coordinator.stop()
     await f.dispose()
+  }
+})
+
+/** Interpose on a native read at the installed port boundary, without changing durable custody. */
+function proofReadBoundary(retained = false) {
+  const f = purchaseEvidenceFixture(),
+    ledger = f.base.owner.domain.ledger,
+    native = ledger.read.bind(ledger)
+  let transform: (rows: Array<ProtectedLedgerRecord | undefined>) => void = () => {}
+  jest.spyOn(ledger, 'read').mockImplementation((...args) => {
+    const read = native(...args),
+      records = Array.from(read.records, record =>
+        record === undefined ? undefined : structuredClone(record)
+      )
+    transform(records)
+    return { ...read, records }
+  })
+  const owner = new SQLitePrivatePurchaseEvidence(
+    f.base.owner.domain,
+    f.base.f.f.contracts,
+    f.limits
+  )
+  owner.reserve(f.original, f.base.clock, f.base.guard)
+  if (retained) {
+    owner
+      .propose(f.original, f.candidate, f.base.clock, f.base.guard)
+      .retain(f.base.clock, f.base.guard)
+  }
+  return {
+    ...f,
+    owner,
+    alter: (next: typeof transform) => {
+      transform = next
+    }
+  }
+}
+
+it.each(['nonnumeric', 'fraction', 'negative', 'over-budget'])(
+  'rejects an inconsistent %s native completion count',
+  field => {
+    const f = proofReadBoundary(),
+      changes = { nonnumeric: '0', fraction: 0.5, negative: -1, 'over-budget': 5 }
+    f.alter(rows => {
+      rows[0]!.value.updates = changes[field as keyof typeof changes]
+    })
+    expect(() => f.owner.read(f.original, f.base.clock, f.base.guard)).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Invalid purchase proof update count'
+      })
+    )
+  }
+)
+
+it.each(['header-format', 'binding', 'missing-chunk', 'header-bytes', 'header-updates'])(
+  'rejects inconsistent native proof %s metadata before returning a candidate',
+  field => {
+    const f = proofReadBoundary()
+    f.alter(rows => {
+      const header = rows[0]!
+      if (field === 'header-format') header.value.format = 'another-proof'
+      if (field === 'binding') {
+        header.value.binding = {
+          ...(header.value.binding as object),
+          acquisitionId: 'ee'.repeat(32)
+        }
+      }
+      if (field === 'missing-chunk') rows[1] = undefined
+      if (field === 'header-bytes') header.reservedBytes++
+      if (field === 'header-updates') header.reservedUpdates--
+    })
+    let message = 'Purchase proof completion budget changed'
+    if (field === 'header-format' || field === 'binding') message = 'Purchase proof binding changed'
+    if (field === 'missing-chunk') message = 'Original purchase proof custody is missing'
+    const code =
+      field === 'header-format' || field === 'binding' ? 'context-changed' : 'unavailable'
+    expect(() => f.owner.read(f.original, f.base.clock, f.base.guard)).toThrow(
+      expect.objectContaining({ code, message })
+    )
+  }
+)
+
+it.each(['format', 'index', 'type', 'length', 'revision', 'updates', 'bytes'])(
+  'checks a restored native proof chunk %s against its complete generation',
+  field => {
+    const f = proofReadBoundary()
+    f.alter(rows => {
+      const chunk = rows[1]!
+      if (field === 'format') chunk.value.format = 'another-proof'
+      if (field === 'index') chunk.value.index = 0
+      if (field === 'type') chunk.value.data = []
+      if (field === 'length') chunk.value.data = 'x'.repeat(196609)
+      if (field === 'revision') chunk.revision = '2'
+      if (field === 'updates') chunk.reservedUpdates--
+      if (field === 'bytes') chunk.reservedBytes++
+    })
+    expect(() => f.owner.read(f.original, f.base.clock, f.base.guard)).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Purchase proof chunk differs from its native generation'
+      })
+    )
+  }
+)
+
+it.each(['data', 'txid', 'digest'])(
+  'refuses uncommitted %s in an empty proof reservation',
+  field => {
+    const f = proofReadBoundary()
+    f.alter(rows => {
+      if (field === 'data') rows[1]!.value.data = 'AA=='
+      if (field === 'txid') rows[0]!.value.txid = 'ee'.repeat(32)
+      if (field === 'digest') rows[0]!.value.digest = 'ee'.repeat(32)
+    })
+    expect(() => f.owner.read(f.original, f.base.clock, f.base.guard)).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Empty purchase proof custody differs'
+      })
+    )
+  }
+)
+
+it.each(['acquisition', 'txid', 'digest'])(
+  'binds every recovered candidate to its original %s commitment',
+  field => {
+    const f = proofReadBoundary(true)
+    f.alter(rows => {
+      const candidate = structuredClone(f.candidate)
+      if (field === 'acquisition') candidate.acquisitionId = 'ee'.repeat(32)
+      if (field === 'txid') candidate.txid = 'ee'.repeat(32)
+      const text = canonicalOutputJSON(candidate)
+      rows[1]!.value.data = Utils.toBase64(Utils.toArray(text, 'utf8'))
+      rows[0]!.value.digest =
+        field === 'digest' ? 'ee'.repeat(32) : Utils.toHex(Hash.sha256(Utils.toArray(text, 'utf8')))
+    })
+    expect(() => f.owner.read(f.original, f.base.clock, f.base.guard)).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Retained purchase proof differs from its commitment'
+      })
+    )
+  }
+)
+
+it('refuses partial native reservation without committing any replacement header', () => {
+  const f = purchaseEvidenceFixture(),
+    domain = f.base.owner.domain,
+    address = domain.identity.address('candidate', {
+      purpose: 'private-purchase-evidence/1',
+      acquisitionId: f.original.terms.body.acquisitionId,
+      index: 1
+    }),
+    read = domain.ledger.read([address], f.base.clock, f.base.guard)
+  domain.ledger.commit(
+    read.revision,
+    [
+      {
+        ...address,
+        expectedRevision: null,
+        reservedBytes: 197632,
+        reservedUpdates: f.limits.maximumUpdates,
+        value: { format: 'private-purchase-evidence/1', index: 1, data: '' }
+      }
+    ],
+    f.base.clock,
+    f.base.guard
+  )
+  const commit = jest.spyOn(domain.ledger, 'commit'),
+    owner = new SQLitePrivatePurchaseEvidence(domain, f.base.f.f.contracts, f.limits)
+  expect(() => owner.reserve(f.original, f.base.clock, f.base.guard)).toThrow(
+    'Purchase proof custody is partial'
+  )
+  expect(commit).not.toHaveBeenCalled()
+})
+
+it.each(['read', 'commit', 'address', 'original', 'id', 'ledger', 'identity'])(
+  'fences a replaced proof-owner %s before reading or retaining custody',
+  boundary => {
+    const f = purchaseEvidenceFixture(),
+      domain = f.base.owner.domain,
+      cases = {
+        read: [domain.ledger, 'read'],
+        commit: [domain.ledger, 'commit'],
+        address: [domain.identity, 'address'],
+        original: [f.base.f.f.contracts, 'original'],
+        id: [f.owner, 'id'],
+        ledger: [domain, 'ledger'],
+        identity: [domain, 'identity']
+      } as const,
+      [object, key] = cases[boundary as keyof typeof cases],
+      descriptor = Object.getOwnPropertyDescriptor(object, key),
+      value = Reflect.get(object, key)
+    let replacement: unknown = 'ee'.repeat(32)
+    if (typeof value === 'function') {
+      replacement = (...args: unknown[]) => Reflect.apply(value, object, args)
+    } else if (typeof value === 'object') replacement = new Proxy(value, {})
+    Object.defineProperty(object, key, { configurable: true, writable: true, value: replacement })
+    try {
+      expect(() => f.owner.read(f.original, f.base.clock, f.base.guard)).toThrow(
+        expect.objectContaining({
+          code: 'context-changed',
+          message: 'Purchase evidence installation changed'
+        })
+      )
+    } finally {
+      if (descriptor) Object.defineProperty(object, key, descriptor)
+      else Reflect.deleteProperty(object, key)
+    }
+  }
+)
+
+it('requires synchronous proof guards before opening native reads and drains a returned rejection', () => {
+  const f = purchaseEvidenceFixture()
+  for (const guard of [null, async () => {}]) {
+    expect(() => f.owner.reserve(f.original, f.base.clock, guard as never)).toThrow(
+      'Purchase proof guard must be synchronous'
+    )
+  }
+  expect(() =>
+    f.owner.reserve(f.original, f.base.clock, (() =>
+      Promise.reject(new Error('deferred proof reservation'))) as never)
+  ).toThrow(
+    expect.objectContaining({
+      code: 'context-changed',
+      message: 'Purchase proof guard did not complete synchronously'
+    })
+  )
+  expect(() => f.owner.read(f.original, f.base.clock, f.base.guard)).toThrow('missing')
+})
+
+it('requires the complete explicit target and all dependencies before proposing proof custody', () => {
+  const f = purchaseEvidenceFixture()
+  f.owner.reserve(f.original, f.base.clock, f.base.guard)
+  const targetOnly = Beef.fromBinaryStrict(f.first.toBinary())
+  targetOnly.txs = targetOnly.txs.filter(row => row.txid === f.candidate.txid)
+  const absent = new Beef()
+  absent.mergeTransaction(f.target.inputs[0].sourceTransaction!)
+  for (const beef of [targetOnly, absent]) {
+    expect(() =>
+      f.owner.propose(
+        f.original,
+        {
+          ...f.candidate,
+          beef: Utils.toBase64(beef.toBinary())
+        },
+        f.base.clock,
+        f.base.guard
+      )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Complete purchase proof is required'
+      })
+    )
+  }
+  expect(f.owner.read(f.original, f.base.clock, f.base.guard).candidate).toBeNull()
+})
+
+it('refuses a complete alternative transaction before merging its proof into an existing purchase', () => {
+  const f = purchaseEvidenceFixture()
+  f.owner.reserve(f.original, f.base.clock, f.base.guard)
+  f.owner
+    .propose(f.original, f.candidate, f.base.clock, f.base.guard)
+    .retain(f.base.clock, f.base.guard)
+  const transaction = Transaction.fromHex(f.target.toHex())
+  transaction.inputs[0].sourceTransaction = f.target.inputs[0].sourceTransaction
+  transaction.addOutput({ satoshis: 0, lockingScript: LockingScript.fromHex('51') })
+  const beef = new Beef()
+  beef.mergeTransaction(transaction)
+  expect(() =>
+    f.owner.propose(
+      f.original,
+      {
+        ...f.candidate,
+        txid: transaction.id('hex'),
+        beef: Utils.toBase64(beef.toBinaryAtomic(transaction.id('hex')))
+      },
+      f.base.clock,
+      f.base.guard
+    )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'conflict',
+      message: 'Purchase proofs name different transactions'
+    })
+  )
+  expect(f.owner.read(f.original, f.base.clock, f.base.guard).candidate).toEqual(f.candidate)
+})
+
+it('preserves the explicit evidence-owner format, scope and sealed limits in its identity', () => {
+  const f = purchaseEvidenceFixture()
+  expect(f.owner.id).toBe(
+    outputPacketDigest('purchase', {
+      purpose: 'private-purchase-evidence/1',
+      scope: f.base.owner.domain.scope,
+      limits: f.limits
+    })
+  )
+})
+
+it('binds retained proof to the complete original signed preparation even for the same acquisition', () => {
+  const f = purchaseEvidenceFixture()
+  f.owner.reserve(f.original, f.base.clock, f.base.guard)
+  const contract = f.base.f.f
+  contract.terms.purchaseUntil = '99'
+  const changed = contract.original()
+  expect(changed.terms.body.acquisitionId).toBe(f.original.terms.body.acquisitionId)
+  expect(changed.terms.body.requestDigest).toBe(f.original.terms.body.requestDigest)
+  expect(changed.terms.body.purchaseUntil).not.toBe(f.original.terms.body.purchaseUntil)
+  expect(() => f.owner.read(changed, f.base.clock, f.base.guard)).toThrow(
+    expect.objectContaining({ code: 'context-changed', message: 'Purchase proof binding changed' })
+  )
+  expect(f.owner.read(f.original, f.base.clock, f.base.guard).candidate).toBeNull()
+})
+
+it('requires callable evidence capabilities when installing the native owner', () => {
+  const f = purchaseEvidenceFixture(),
+    ledger = f.base.owner.domain.ledger,
+    descriptor = Object.getOwnPropertyDescriptor(ledger, 'read')
+  Object.defineProperty(ledger, 'read', { configurable: true, value: null })
+  try {
+    expect(
+      () => new SQLitePrivatePurchaseEvidence(f.base.owner.domain, f.base.f.f.contracts, f.limits)
+    ).toThrow('Purchase evidence capability required')
+  } finally {
+    if (descriptor) Object.defineProperty(ledger, 'read', descriptor)
+    else Reflect.deleteProperty(ledger, 'read')
   }
 })

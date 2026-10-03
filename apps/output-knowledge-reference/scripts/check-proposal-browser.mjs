@@ -19,6 +19,8 @@ const directory = fileURLToPath(new URL('../', import.meta.url)),
 let replica,
   server,
   browser,
+  phase = 'startup',
+  serverOutput = '',
   interrupted = false
 const stop = async child => {
   if (child?.exitCode !== null || child.signalCode !== null) return
@@ -73,6 +75,7 @@ async function start(create) {
     let output = ''
     server.stderr.on('data', bytes => {
       output = (output + bytes).slice(-8192)
+      serverOutput = output
     })
     server.once('error', error => {
       clearTimeout(timer)
@@ -184,6 +187,7 @@ try {
   const alice = await page('alice', true)
   let bob = await page('bob', true)
   assert.equal(receipt.opens, 2)
+  phase = 'initial live delivery'
   await publish(alice, 'First private working state')
   await bob.bringToFront()
   await bob.waitForFunction(() => document.querySelector('[data-active="true"]') !== null, {
@@ -192,6 +196,7 @@ try {
   await bob.click('#offline')
   await bob.waitForFunction(() => document.querySelector('#offline').disabled === true)
   await publish(alice, 'Missed while offline')
+  phase = 'original-session reconnect'
   await bob.bringToFront()
   await bob.click('#reconnect')
   await bob.waitForFunction(
@@ -210,22 +215,35 @@ try {
   // Hide Bob beyond both intent cutoffs. His first foreground render must retire
   // old activity, and the retained feed must deliver the durable host expiry.
   await alice.bringToFront()
-  await alice.waitForFunction(() => document.querySelector('[data-active="true"]') === null, {
-    timeout: 25000
-  })
+  phase = 'hidden intent retirement'
+  await alice.waitForFunction(
+    () => {
+      const cards = [...document.querySelectorAll('[data-proposal]')],
+        now = BigInt(Math.floor(Date.now() / 1000))
+      return (
+        cards.length === 2 &&
+        cards.every(card => now >= BigInt(card.dataset.expires)) &&
+        document.querySelector('[data-active="true"]') === null
+      )
+    },
+    { timeout: 25000 }
+  )
   await bob.bringToFront()
   await bob.waitForFunction(() => document.querySelector('[data-active="true"]') === null)
+  phase = 'durable host expiry'
   await bob.waitForFunction(
     () => document.querySelectorAll('[data-status="expired"]').length === 2,
     { timeout: 15000 }
   )
   await bob.close()
+  phase = 'page-close recovery'
   bob = await page('bob', false)
   await bob.waitForFunction(() => document.querySelectorAll('[data-status="expired"]').length === 2)
   assert.equal(receipt.opens, 2, 'Page-close recovery must retain original custody')
   await alice.close()
   await bob.close()
   await stop(server)
+  phase = 'provider restart'
   await start(false)
   bob = await page('bob', false)
   await bob.waitForFunction(
@@ -250,6 +268,24 @@ try {
       screenshot: 'artifacts/reference-workbench-proposals/private-proposals-recovered.png'
     })
   )
+} catch (error) {
+  const pages = browser ? await browser.pages() : []
+  const snapshots = await Promise.allSettled(
+    pages.map(current =>
+      current.evaluate(() => ({
+        status: document.querySelector('#status')?.textContent?.slice(0, 512),
+        revision: document.querySelector('#revision')?.textContent,
+        visibility: document.visibilityState,
+        cards: [...document.querySelectorAll('[data-proposal]')].map(card => ({
+          status: card.dataset.status,
+          active: card.dataset.active,
+          expires: card.dataset.expires
+        }))
+      }))
+    )
+  )
+  console.error(JSON.stringify({ phase, receipt, snapshots, serverOutput }))
+  throw error
 } finally {
   process.removeListener('SIGINT', interrupt)
   process.removeListener('SIGTERM', interrupt)

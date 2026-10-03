@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { createOverlayTestProjects } from '../packages/overlays/overlay-express/jest-projects.config.mjs'
 
 import {
   REPOSITORY_ROOT,
@@ -991,6 +992,24 @@ test('host qualification preserves complete selected unions in disjoint legacy a
     assert.deepEqual(privateProject.testMatch, options.testMatch)
     assert.deepEqual(ordinary.extensionsToTreatAsEsm, [])
     assert.deepEqual(privateProject.extensionsToTreatAsEsm, ['.ts', '.tsx'])
+    const transform = project => project.transform['^.+\\.tsx?$'][1]
+    assert.equal(transform(ordinary).useESM, false)
+    assert.equal(transform(ordinary).tsconfig, 'tsconfig.cjs.json')
+    const legacyConfiguration = JSON.parse(
+      readFileSync(
+        resolve(REPOSITORY_ROOT, 'packages/overlays/overlay-express/tsconfig.cjs.json'),
+        'utf8'
+      )
+    )
+    assert.equal(legacyConfiguration.compilerOptions.module, 'commonjs')
+    assert.equal(transform(privateProject).useESM, true)
+    assert.equal(transform(privateProject).tsconfig.module, 'ESNext')
+    for (const project of projects) {
+      for (const [pattern, replacement] of Object.entries(options.moduleNameMapper ?? {}))
+        assert.equal(project.moduleNameMapper[pattern], replacement)
+      assert.equal(project.moduleNameMapper['^(\\.{1,2}/.*)\\.js$'], '$1')
+      assert.equal(project.moduleNameMapper['^uuid$'], '<rootDir>/node_modules/uuid/dist/index.js')
+    }
     assert.deepEqual(target.runnerOptions.testRunnerNodeArgs, ['--experimental-vm-modules'])
     const legacy = '/fixture/src/__tests__/OverlayExpress.test.ts',
       privatePath = '/fixture/src/__tests__/PrivateBuyerHTTP.integration.test.ts',
@@ -1002,6 +1021,26 @@ test('host qualification preserves complete selected unions in disjoint legacy a
     assert.equal(ignores(privateProject, privatePath), false)
     assert.ok(target.additionalInputs.includes('jest-projects.config.mjs'))
   }
+})
+
+test('overlay project options reach both complete partitions without changing module semantics', () => {
+  const match = ['<rootDir>/src/__tests__/*.test.ts'],
+    projects = createOverlayTestProjects(match, {
+      testTimeout: 17000,
+      moduleNameMapper: { '^fixture-owner$': '<rootDir>/src/__tests__/Owner.fixture.ts' }
+    })
+  for (const project of projects) {
+    assert.deepEqual(project.testMatch, match)
+    assert.equal(project.testTimeout, 17000)
+    assert.equal(
+      project.moduleNameMapper['^fixture-owner$'],
+      '<rootDir>/src/__tests__/Owner.fixture.ts'
+    )
+    assert.equal(project.moduleNameMapper['^(\\.{1,2}/.*)\\.js$'], '$1')
+    assert.equal(project.moduleNameMapper['^uuid$'], '<rootDir>/node_modules/uuid/dist/index.js')
+  }
+  assert.deepEqual(projects[0].extensionsToTreatAsEsm, [])
+  assert.deepEqual(projects[1].extensionsToTreatAsEsm, ['.ts', '.tsx'])
 })
 
 test('prepared purchases qualify the complete verifier and full association suite without a source partition', () => {

@@ -1,6 +1,58 @@
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { purchaseBuyerFixture } from './private-purchase-buyer.fixture.js'
+type BuyerFixture = ReturnType<typeof purchaseBuyerFixture>
+type BuyerOwner = Awaited<ReturnType<BuyerFixture['open']>>
+
+async function applyOperation(
+  fixture: BuyerFixture,
+  owner: BuyerOwner,
+  operation: string
+): Promise<BuyerOwner> {
+  switch (operation) {
+    case 'advance':
+      await owner.buyer.advance()
+      break
+    case 'recover':
+      await owner.buyer.recover()
+      break
+    case 'reopen': {
+      const replacement = await fixture.open()
+      await fixture.close(owner)
+      return replacement
+    }
+    case 'expire':
+      fixture.setNow('200')
+      break
+    case 'validate':
+      await owner.buyer.validate()
+      break
+    default:
+      fixture.setAccess(false)
+      await expect(owner.buyer.recover()).rejects.toThrow('access')
+      fixture.setAccess(true)
+  }
+  return owner
+}
+
+async function assertHistoryStep(
+  fixture: BuyerFixture,
+  owner: BuyerOwner,
+  operation: string,
+  finishBefore: number,
+  previous: string,
+  expired: boolean
+): Promise<void> {
+  expect(fixture.counts.finish).toBeLessThanOrEqual(1)
+  if (operation === 'recover' || operation === 'reopen')
+    expect(fixture.counts.finish).toBe(finishBefore)
+  if (expired && ['ready', 'prepared'].includes(previous))
+    expect(fixture.counts.finish).toBe(finishBefore)
+  expect(fixture.server.counts.issue).toBeLessThanOrEqual(1)
+  expect(fixture.activeOwners()).toBe(1)
+  if ((await owner.buyer.status()) === 'usable') expect(fixture.counts.verify).toBeGreaterThan(0)
+}
+
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number(process.env.FAST_CHECK_NUM_RUNS),
   requestedSeed = Number(process.env.FAST_CHECK_SEED)
@@ -31,18 +83,8 @@ it('preserves one financial operation over 300 interrupted native buyer/seller h
             const count = f.counts.finish,
               previous = await owner.buyer.status()
             try {
-              if (operation === 'advance') await owner.buyer.advance()
-              else if (operation === 'recover') await owner.buyer.recover()
-              else if (operation === 'reopen') owner = await f.open()
-              else if (operation === 'expire') {
-                f.setNow('200')
-                expired = true
-              } else if (operation === 'validate') await owner.buyer.validate()
-              else {
-                f.setAccess(false)
-                await expect(owner.buyer.recover()).rejects.toThrow('access')
-                f.setAccess(true)
-              }
+              owner = await applyOperation(f, owner, operation)
+              if (operation === 'expire') expired = true
             } catch (error) {
               expect(error).toBeInstanceOf(Error)
               expect(operation === 'advance' || operation === 'validate').toBe(true)
@@ -52,14 +94,7 @@ it('preserves one financial operation over 300 interrupted native buyer/seller h
                     (error as Error).message.startsWith('Lost original')
                 ).toBe(true)
             }
-            expect(f.counts.finish).toBeLessThanOrEqual(1)
-            if (operation === 'recover' || operation === 'reopen')
-              expect(f.counts.finish).toBe(count)
-            if (expired && ['ready', 'prepared'].includes(previous))
-              expect(f.counts.finish).toBe(count)
-            expect(f.server.counts.issue).toBeLessThanOrEqual(1)
-            if ((await owner.buyer.status()) === 'usable')
-              expect(f.counts.verify).toBeGreaterThan(0)
+            await assertHistoryStep(f, owner, operation, count, previous, expired)
           }
           if (!expired) {
             try {

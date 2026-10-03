@@ -17,28 +17,27 @@ const shared = {
 }
 /** Both projects receive the complete selected union; their module partitions are disjoint. */
 export function createOverlayTestProjects(
-  testMatch = ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts']
+  testMatch = ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
+  options = {}
 ) {
   return [
     {
       ...shared,
+      ...options,
+      moduleNameMapper: { ...shared.moduleNameMapper, ...options.moduleNameMapper },
       displayName: 'legacy-commonjs',
       cacheDirectory: '<rootDir>/node_modules/.cache/jest-legacy-commonjs',
       testMatch,
       testPathIgnorePatterns: [...overlayTestIgnorePatterns, privateTests],
       extensionsToTreatAsEsm: [],
       transform: {
-        '^.+\\.tsx?$': [
-          'ts-jest',
-          {
-            useESM: true,
-            tsconfig: { target: 'ES2022', module: 'ESNext', moduleResolution: 'bundler' }
-          }
-        ]
+        '^.+\\.tsx?$': ['ts-jest', { useESM: false, tsconfig: 'tsconfig.cjs.json' }]
       }
     },
     {
       ...shared,
+      ...options,
+      moduleNameMapper: { ...shared.moduleNameMapper, ...options.moduleNameMapper },
       displayName: 'private-esm',
       cacheDirectory: '<rootDir>/node_modules/.cache/jest-private-esm',
       testMatch,

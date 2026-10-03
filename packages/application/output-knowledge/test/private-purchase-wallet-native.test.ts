@@ -1,8 +1,33 @@
-import { expect, it } from '@jest/globals'
-import { canonicalOutputJSON, Utils, type OutputJSONObject } from '@bsv/sdk'
+import { expect, it, jest } from '@jest/globals'
+import { Beef, canonicalOutputJSON, Utils, type OutputJSONObject } from '@bsv/sdk'
 import { WalletToolboxPurchasePayment } from '../src/private/WalletToolboxPurchasePayment.js'
 import { nativePurchaseWalletFixture } from './private-purchase-wallet-native.fixture.js'
 const signal = () => new AbortController().signal
+it('passes owned native bytes while retaining the original base64 plan and recovery identity', async () => {
+  const f = await nativePurchaseWalletFixture(),
+    active = signal(),
+    recover = jest.spyOn(f.actions, 'recover'),
+    payment = new WalletToolboxPurchasePayment(f.paymentOptions),
+    plan = await payment.plan('70'.repeat(32), f.prepare, f.terms, active),
+    before = canonicalOutputJSON(plan, { bytes: 4194304 })
+  expect(await payment.recover(plan, active)).toEqual({ state: 'absent' })
+  const request = recover.mock.calls[0][1],
+    bytes = request.inputBEEF!
+  expect(bytes).toBeInstanceOf(Uint8Array)
+  expect(Utils.toBase64(bytes)).toBe((plan.request as OutputJSONObject).inputBEEF)
+  expect(Array.from(bytes)).toEqual(
+    Beef.fromBinaryStrict(bytes).toBinaryAtomic(f.prepare.listing.txid)
+  )
+  bytes[0] ^= 255
+  expect(canonicalOutputJSON(plan, { bytes: 4194304 })).toBe(before)
+  const candidate = await payment.finish(plan, () => {}, active)
+  expect(await f.verify(candidate)).toMatchObject({ status: 'verified' })
+  const reopened = await f.reopen()
+  expect(await reopened.payment.recover(plan, active)).toEqual({ state: 'finalized', candidate })
+  expect(f.counts.prepare).toBe(1)
+  expect(f.counts.finalize).toBe(1)
+  expect(f.native.broadcast).not.toHaveBeenCalled()
+})
 it('constructs, funds, signs and recovers an actual native purchase with full selected-chain Script/genesis verification', async () => {
   const f = await nativePurchaseWalletFixture(),
     active = signal(),

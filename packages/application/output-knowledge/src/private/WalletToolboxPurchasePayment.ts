@@ -197,7 +197,7 @@ export class WalletToolboxPurchasePayment implements PrivatePurchaseBuyerPayment
       plan = spend.plan(),
       request: CreateActionArgs = {
         description: 'Original private covenant purchase',
-        inputBEEF: assembly.beef.toBinaryAtomic(lineage.target.txid),
+        inputBEEF: assembly.beef.toUint8ArrayAtomic(lineage.target.txid),
         inputs: plan.inputs.map((input, index) => ({
           outpoint: `${input.txid}.${input.outputIndex}`,
           inputDescription: 'Original listing predecessor',

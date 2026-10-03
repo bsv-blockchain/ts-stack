@@ -1,19 +1,20 @@
-import { expect, it } from '@jest/globals'
-import { Utils } from '@bsv/sdk'
+import { expect, it, jest } from '@jest/globals'
+import { canonicalOutputJSON, Utils } from '@bsv/sdk'
 import { ProposalJournalState } from '../src/proposals/ProposalJournalState.js'
 import {
   ProposalTransitions,
   type ProposalTransition
 } from '../src/proposals/ProposalTransitions.js'
 import { proposalChannelKey } from '../src/proposals/ProposalPolicyRegistry.js'
+import type { ProposalJournalLimits } from '../src/proposals/ProposalJournal.js'
 import { author, signed, scope, createRegistry, finalize } from './proposal-client-fixture.js'
 
-function setup() {
+function setup(limits: Partial<ProposalJournalLimits> = {}) {
   const lifecycle = new ProposalTransitions(createRegistry(), scope, {
     maxLifetimeSeconds: '100',
     futureSkewSeconds: '2'
   })
-  const state = new ProposalJournalState(lifecycle, author)
+  const state = new ProposalJournalState(lifecycle, author, limits)
   const first = lifecycle.put(undefined, signed(), author, '10')
   const apply = (target: ProposalJournalState, transition: ProposalTransition) => {
     const prepared = target.prepare(transition, { local: 'retained' })
@@ -93,4 +94,133 @@ it('retains admission reservations and exact operation identities while independ
   expect(copy.operation(author, scope.service, operationId)?.state.status).toBe('finalized')
   expect(state.operation(author, scope.service, operationId)?.state.status).toBe('finalizing')
   expect(copy.fork().read('0', 256)).toEqual(copy.read('0', 256))
+})
+
+it('refuses a staged copy when the installed lifecycle configuration changes', () => {
+  const { state, lifecycle } = setup(),
+    before = state.head(),
+    configuration = lifecycle.configuration(),
+    changed = jest.spyOn(lifecycle, 'configuration').mockReturnValue({
+      ...configuration,
+      clock: { ...configuration.clock, maxLifetimeSeconds: '101' }
+    })
+  try {
+    expect(() => state.fork()).toThrow(
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Proposal journal configuration changed'
+      })
+    )
+    expect(state.head()).toEqual(before)
+  } finally {
+    changed.mockRestore()
+  }
+  expect(state.fork().read('0', 256)).toEqual(state.read('0', 256))
+})
+
+it('retains the versioned journal identity and complete installed lifecycle configuration', () => {
+  const { state, lifecycle } = setup()
+  expect(state.configuration).toBe(
+    canonicalOutputJSON({
+      format: 'proposal-journal/1',
+      identity: author,
+      ...lifecycle.configuration()
+    })
+  )
+})
+
+it.each([
+  { unrecognized: 1 },
+  { entries: 0 },
+  { entries: 1.5 },
+  { bytes: '1' },
+  { channels: Number.NaN },
+  { channelsPerAuthor: Number.POSITIVE_INFINITY },
+  { entryBytes: 4194305 }
+])('rejects malformed or unknown retention limits before staging (%p)', limits => {
+  expect(() => setup(limits as Partial<ProposalJournalLimits>)).toThrow(
+    expect.objectContaining({ code: 'invalid', message: 'Invalid proposal journal limit' })
+  )
+})
+
+it.each([{ bytes: 1 }, { channels: 1 }])(
+  'requires coherent byte and principal capacities (%p)',
+  limits => {
+    expect(() => setup(limits)).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Inconsistent proposal journal limits' })
+    )
+  }
+)
+
+it.each([0, 257, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+  'rejects malformed read bounds without advancing retained history (%p)',
+  maximum => {
+    const { state } = setup(),
+      before = state.head()
+    expect(() => state.read('0', maximum)).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Invalid proposal journal read bound' })
+    )
+    expect(state.head()).toEqual(before)
+  }
+)
+
+it.each(['short', '!abcdefghijklmnop', 'abcdefghijklmnop!', 'abcdefghijklmnop\n'])(
+  'requires a fully framed operation identifier (%p)',
+  operationId => {
+    const { state } = setup()
+    expect(() => state.operation(author, scope.service, operationId)).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Invalid proposal operation identifier' })
+    )
+  }
+)
+
+it('includes an exact byte-boundary page and leaves the first omitted entry available', () => {
+  const { lifecycle, first } = setup(),
+    scratch = new ProposalJournalState(lifecycle, author),
+    expired = lifecycle.expire(first.next, '100'),
+    firstPlan = scratch.prepare(first),
+    expiredPlan = scratch.prepare(expired),
+    state = new ProposalJournalState(lifecycle, author, {
+      entryBytes: firstPlan.bytes + expiredPlan.bytes
+    })
+  state.apply(state.prepare(first), '1')
+  state.apply(state.prepare(expired), '2')
+  const other = lifecycle.put(undefined, signed({ channel: 'ff'.repeat(32) }), author, '11')
+  state.apply(state.prepare(other), '3')
+  expect(state.read('0', 256).map(entry => entry.revision)).toEqual(['1', '2'])
+  expect(state.read('2', 256).map(entry => entry.revision)).toEqual(['3'])
+  expect(state.read('0', 1).map(entry => entry.revision)).toEqual(['1'])
+})
+
+it('charges a channel once across its revisions while enforcing the exact principal limit', () => {
+  const { state, lifecycle, first, apply } = setup({ channels: 2, channelsPerAuthor: 2 }),
+    updated = lifecycle.put(
+      first.next,
+      signed({ revision: '1', previous: first.next.proposalId }),
+      author,
+      '11'
+    ),
+    second = lifecycle.put(undefined, signed({ channel: 'ee'.repeat(32) }), author, '12'),
+    third = lifecycle.put(undefined, signed({ channel: 'ff'.repeat(32) }), author, '13')
+  apply(state, updated)
+  expect(state.head().channels).toBe(1)
+  apply(state, second)
+  expect(state.head().channels).toBe(2)
+  expect(state.plan(state.prepare(third))).toEqual({
+    status: 'limited',
+    reason: 'Proposal retention limit; retain terminal fences and pending work'
+  })
+  expect(state.channel(proposalChannelKey(updated.next.proposal.body))).toEqual(updated.next)
+})
+
+it('checks the exact revision before applying a staged transition', () => {
+  const { state, lifecycle, first } = setup(),
+    before = state.head(),
+    transition = state.prepare(lifecycle.expire(first.next, '100'))
+  expect(() => state.apply(transition, '3')).toThrow(
+    expect.objectContaining({ code: 'unavailable', message: 'Invalid proposal journal history' })
+  )
+  expect(state.head()).toEqual(before)
+  state.apply(transition, '2')
+  expect(state.head().revision).toBe('2')
 })

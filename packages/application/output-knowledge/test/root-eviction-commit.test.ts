@@ -271,27 +271,26 @@ it.each(['retain', 'evaluate', 'assess', 'result'])(
       body = request('fixture_checked_denied')
     const before = await f.store.head()
     const denied = guard({ authorize: () => false })
-    const work =
-      operation === 'retain'
-        ? f.store.retainChecked(signed(body), requester, clock, denied)
-        : operation === 'evaluate'
-          ? f.store.evaluateChecked(
-              { requestDigest: '88'.repeat(32), expectedRevision: '0', targets: [] },
-              denied
-            )
-          : operation === 'assess'
-            ? f.store.assessChecked(
-                {
-                  operationId: 'fixture_checked_denied_assessment',
-                  expectedRevision: '0',
-                  target: selected(body),
-                  eligible: true,
-                  evidenceDigest: '77'.repeat(32),
-                  reasonCode: 'verified-local'
-                },
-                denied
-              )
-            : f.store.resultChecked(requester, body.requestId, denied)
+    let work: Promise<unknown>
+    if (operation === 'retain') work = f.store.retainChecked(signed(body), requester, clock, denied)
+    else if (operation === 'evaluate')
+      work = f.store.evaluateChecked(
+        { requestDigest: '88'.repeat(32), expectedRevision: '0', targets: [] },
+        denied
+      )
+    else if (operation === 'assess')
+      work = f.store.assessChecked(
+        {
+          operationId: 'fixture_checked_denied_assessment',
+          expectedRevision: '0',
+          target: selected(body),
+          eligible: true,
+          evidenceDigest: '77'.repeat(32),
+          reasonCode: 'verified-local'
+        },
+        denied
+      )
+    else work = f.store.resultChecked(requester, body.requestId, denied)
     await expect(work).rejects.toMatchObject({ code: 'not-found' })
     expect(await f.store.head()).toEqual(before)
     expect(await f.store.get(requester, body.requestId)).toBeUndefined()
@@ -367,7 +366,15 @@ it('samples the clock only after a separate SQLite writer releases the actual ga
     })
     const started = performance.now()
     const sample = jest.fn(() => (performance.now() - started >= 100 ? '200' : '199'))
+    const scheduled = new Promise<void>((resolve, reject) => {
+      child.once('message', message => {
+        if (message === 'release-scheduled') resolve()
+        else reject(new Error('Unexpected root writer release acknowledgement'))
+      })
+      child.once('exit', code => reject(new Error('Root writer exited before release: ' + code)))
+    })
     child.send('release-after-wait')
+    await scheduled
     await expect(
       f.store.retainChecked(signed(body), requester, clock, guard({ clock: sample }))
     ).rejects.toMatchObject({ code: 'invalid' })

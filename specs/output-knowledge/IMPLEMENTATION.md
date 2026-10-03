@@ -3674,3 +3674,68 @@ uncovered, invalid or unexecuted mutations. Runtime code, wire formats,
 selection, coverage treatment, thresholds and deadlines are unchanged. This
 local receipt is diagnostic evidence; final readiness still requires the
 complete hosted campaign and all applicable checks on the new published head.
+
+## Private disclosure, proof boundaries and native expiry follow-up
+
+The immutable DA3 full campaign found private contract, disclosure and proof scores
+below the existing 90 percent floor. The original reports remain retained. The
+published contract boundary batch reaches 95.40 percent in complete local feedback.
+Additional actual-native disclosure tests now reach 92.61 percent across the same
+284 mutants, with no uncovered, invalid or unexecuted mutants. Complete proof
+follow-up reaches 92.31 percent across the same 338 mutants: 311 killed, 26
+surviving and one timeout, with no uncovered, invalid or unexecuted mutants.
+It covers exact error codes, callable native proof readers and complete original
+signed-preparation association, including equal semantic digests with different
+signed lifetimes.
+These working-tree diagnostics do not qualify a hosted commit or checkpoint.
+
+The private Chrome expiry scenario could observe the visibility handler's safe
+interim inactive labels before the two proposal cutoffs. Its original 25-second
+wait now requires both exact timestamps and inactive cards together. Actual Chrome,
+IndexedDB and owned HTTPS pass with the same two original Opens, no browser errors,
+missed-state reconnect, page-close recovery and provider restart. Bounded failure
+metadata exposes status and lifecycle timing without private payloads.
+
+Complete root diagnostics preserve all 32 original suites and 308 cases. The
+fixture now acknowledges the release command's asynchronous IPC receipt before
+the parent enters a synchronous SQLite wait. Complete ordinary tests pass in
+111.634 seconds, and complete local root-commit feedback kills all 30 mutants,
+with no uncovered, invalid or unexecuted mutants. The two failed CPU-profiled
+runs and initial setup failures remain retained separately; the unprofiled
+passing run does not reinterpret them as qualification. Original lock duration,
+observation assertions and time limits remain unchanged. Production database
+behavior is unchanged; exact-head hosted qualification remains required.
+
+The hosted campaign also exposed legacy mock semantics in the Overlay Express
+mutation environment. Its declared legacy CommonJS project still requested an ESM
+transform. The shared factory now uses the existing legacy `tsconfig.cjs.json`
+and applies caller source mappings to each child project. Private ESM remains
+unchanged. BotBoard acknowledgements 18731353, 18731561 and 18731614 cover the
+correction and complete strict test typing, including both historical test
+directory spellings. All 141 target inventories, source/test/input unions and
+bounds remain unchanged. Complete ordinary Overlay Express validation passes
+51 suites and 882 cases; 48 shared configuration regressions and all eight
+affected target discovery comparisons preserve full selection.
+
+Additional journal boundary tests cover exact fork capacities, original request
+association and principal accounting. Fourteen additive native wallet signer
+tests cover custom input guards, exact byte and sequence boundaries, synchronous
+callbacks, and real single-key derivation when the optional bulk port is absent.
+Complete wallet recovery validation passes the original 223 cases plus these
+14 cases. Production wallet code and cryptographic behavior are unchanged.
+
+The purchase adapter supplies the SDK's already-supported owned `Uint8Array`
+atomic BEEF representation to the native wallet. It retains the identical
+canonical base64 recovery plan, bytes, schema and transaction identity. The
+native regression checks both representations independently, mutates the
+caller's owned argument, and verifies original-plan recovery and Script validity.
+Sequential reopened native-wallet and buyer histories now close superseded
+owners. The buyer property asserts one active owner; tests that intentionally
+exercise simultaneous owners retain their behavior. Both properties retain
+all 300 histories, their replay seed, operations, assertions and 150-second
+interruption limit. No database durability or cryptographic work is substituted.
+
+These results are local working-tree feedback. Checkpoint 2 still requires the
+complete hosted campaign and all applicable checks on the final published head.
+No threshold, deadline, case floor, dependency, wire, authorization or production
+contract is relaxed.

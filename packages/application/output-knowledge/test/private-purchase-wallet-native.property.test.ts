@@ -36,51 +36,57 @@ it('preserves one lost-reply native purchase over 300 generated restart and reco
         }),
         async history => {
           const owner = await f.reopen()
-          for (const step of history) {
-            if (step === 'cancel') {
-              const cancelled = new AbortController()
-              cancelled.abort()
-              await expect(owner.payment.recover(plan, cancelled.signal)).rejects.toThrow(
-                'cancelled'
-              )
-            } else if (step === 'tamper') {
-              const wrong = JSON.parse(
-                canonicalOutputJSON(plan, { bytes: 4194304 })
-              ) as OutputJSONObject
-              ;(wrong.request as OutputJSONObject).options = { noSend: false }
-              await expect(owner.payment.recover(wrong, signal)).rejects.toThrow(
-                'construction changed'
-              )
-            } else {
-              if (step === 'historical') f.setAccess(false)
-              try {
-                const recovered =
-                  step === 'recover'
-                    ? await owner.payment.recover(plan, signal)
-                    : {
-                        state: 'finalized',
-                        candidate: await owner.payment.finish(
-                          plan,
-                          () => {
-                            throw new Error('Recovery cannot authorize new financial work')
-                          },
-                          signal
-                        )
-                      }
-                expect(recovered.state).toBe('finalized')
-                if (recovered.state !== 'finalized')
-                  throw new Error('Native finalized intent disappeared')
-                // Exact original bytes preserve the independently verified history;
-                // no verification result is substituted for changed evidence.
-                expect(canonicalOutputJSON(recovered.candidate)).toBe(originalBytes)
-                recovered.candidate.beef = 'AA=='
-              } finally {
-                f.setAccess(true)
+          try {
+            for (const step of history) {
+              if (step === 'cancel') {
+                const cancelled = new AbortController()
+                cancelled.abort()
+                await expect(owner.payment.recover(plan, cancelled.signal)).rejects.toThrow(
+                  'cancelled'
+                )
+              } else if (step === 'tamper') {
+                const wrong = JSON.parse(
+                  canonicalOutputJSON(plan, { bytes: 4194304 })
+                ) as OutputJSONObject
+                ;(wrong.request as OutputJSONObject).options = { noSend: false }
+                await expect(owner.payment.recover(wrong, signal)).rejects.toThrow(
+                  'construction changed'
+                )
+              } else {
+                if (step === 'historical') f.setAccess(false)
+                try {
+                  const recovered =
+                    step === 'recover'
+                      ? await owner.payment.recover(plan, signal)
+                      : {
+                          state: 'finalized',
+                          candidate: await owner.payment.finish(
+                            plan,
+                            () => {
+                              throw new Error('Recovery cannot authorize new financial work')
+                            },
+                            signal
+                          )
+                        }
+                  expect(recovered.state).toBe('finalized')
+                  if (recovered.state !== 'finalized')
+                    throw new Error('Native finalized intent disappeared')
+                  // Exact original bytes preserve the independently verified history;
+                  // no verification result is substituted for changed evidence.
+                  expect(canonicalOutputJSON(recovered.candidate)).toBe(originalBytes)
+                  recovered.candidate.beef = 'AA=='
+                } finally {
+                  f.setAccess(true)
+                }
               }
+              expect(f.counts.prepare).toBe(1)
+              expect(f.counts.finalize).toBe(1)
+              expect(f.native.broadcast).not.toHaveBeenCalled()
             }
-            expect(f.counts.prepare).toBe(1)
-            expect(f.counts.finalize).toBe(1)
-            expect(f.native.broadcast).not.toHaveBeenCalled()
+          } finally {
+            // Each history is an independent reopened native owner; release its
+            // actual pool before opening the next history against durable state.
+            await owner.owner.close()
           }
         }
       )

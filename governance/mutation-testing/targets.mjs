@@ -51,7 +51,7 @@ function overlayJestTarget(testMatch, options = {}) {
   return jestTarget('jest.config.js', testMatch, {
     ...options,
     esm: true,
-    config: { ...options.config, projects: createOverlayTestProjects(testMatch) }
+    config: { ...options.config, projects: createOverlayTestProjects(testMatch, options.config) }
   })
 }
 

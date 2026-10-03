@@ -5,6 +5,8 @@ closeSync(openSync('root.db', 'r+'))
 const database = new DatabaseSync('root.db')
 database.exec('BEGIN IMMEDIATE')
 process.once('message', () => {
+  // Acknowledge receipt before the parent enters its synchronous SQLite wait.
+  process.send('release-scheduled')
   setTimeout(() => {
     database.exec('COMMIT')
     database.close()

@@ -8,6 +8,8 @@
   },
   "files": [],
   "include": [
+    "src/__tests__/**/*.ts",
+    "src/__tests/**/*.ts",
     "src/Proposal*.ts",
     "src/__tests__/Proposal*.ts",
     "src/PrivatePublication*.ts",

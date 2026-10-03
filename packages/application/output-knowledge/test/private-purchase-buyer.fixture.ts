@@ -198,6 +198,16 @@ export function purchaseBuyerFixture() {
       }
       return result as OutputSignedPurchaseTerms
     })
+  async function close(owner: Awaited<ReturnType<typeof open>>) {
+    await owner.buyer.stop()
+    await owner.state.close()
+    await owner.objects.close()
+    const buyerIndex = buyers.indexOf(owner.buyer),
+      storeIndex = stores.findIndex(store => store.state === owner.state)
+    outputAssert(buyerIndex >= 0 && storeIndex >= 0, 'Unknown buyer fixture owner')
+    buyers.splice(buyerIndex, 1)
+    stores.splice(storeIndex, 1)
+  }
   const dispose = async () => {
     send.mockRestore()
     await buyers.reduce((sequence, buyer) => sequence.then(() => buyer.stop()), Promise.resolve())
@@ -222,6 +232,8 @@ export function purchaseBuyerFixture() {
     binding,
     directory,
     open,
+    close,
+    activeOwners: () => buyers.length,
     dispose,
     send: { mockRestore: () => send.mockRestore() },
     lose: (value: typeof lost) => {

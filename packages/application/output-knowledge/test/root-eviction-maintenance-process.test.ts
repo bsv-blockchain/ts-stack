@@ -98,7 +98,15 @@ it('samples expiry time only after an independent writer releases the root gate'
     })
     const started = performance.now()
     const sample = jest.fn(() => (performance.now() - started >= 100 ? '200' : '199'))
+    const scheduled = new Promise<void>((resolve, reject) => {
+      holder.once('message', message => {
+        if (message === 'release-scheduled') resolve()
+        else reject(new Error('Unexpected root writer release acknowledgement'))
+      })
+      holder.once('exit', code => reject(new Error('Root writer exited before release: ' + code)))
+    })
     holder.send('release-after-wait')
+    await scheduled
     const result = await worker.expirePending(retained.digest, {
       clock: sample,
       authorize: () => true
