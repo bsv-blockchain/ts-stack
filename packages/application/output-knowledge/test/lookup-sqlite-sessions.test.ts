@@ -22,7 +22,10 @@ import {
   OutputProtocolError
 } from '@bsv/sdk'
 import { SQLiteLookupIndex } from '../src/lookup/SQLiteLookupIndex.js'
-import { SQLiteLookupSessions } from '../src/lookup/SQLiteLookupSessions.js'
+import {
+  SQLiteLookupSessions,
+  sqliteLookupSessionComposition
+} from '../src/lookup/SQLiteLookupSessions.js'
 import { LookupSessionCodec, type LookupSessionOpening } from '../src/lookup/LookupSessionCodec.js'
 import { SQLiteLookupDisclosure } from '../src/lookup/SQLiteLookupDisclosure.js'
 import { LookupCursorCodec } from '../src/lookup/LookupCursorCodec.js'
@@ -43,6 +46,10 @@ const original = (value: LookupSessionOpening) => ({
   open: value.open,
   manifestDigest: outputPacketDigest('capabilities', value.contract.manifest.body)
 })
+const originalRequest = (value: LookupSessionOpening) => {
+  const { principal, open, manifestDigest } = original(value)
+  return { principal, open, manifestDigest }
+}
 const auth = (value: LookupSessionOpening) => ({
   principal: value.principal,
   access: value.access,
@@ -103,9 +110,65 @@ afterEach(async () => {
 })
 
 describe('durable original lookup sessions', () => {
+  it('commits and releases an actual SQL savepoint on the supported legacy bridge', async () => {
+    const { index, codec, clock, value } = await fixture(),
+      bridge = index[sqliteLookupBridge]()
+    delete bridge.savepoint
+    const sessions = SQLiteLookupSessions[sqliteLookupSessionComposition](
+      bridge,
+      codec,
+      () => clock.now,
+      {},
+      false
+    )
+    const transaction = bridge.transaction
+    bridge.transaction = work =>
+      transaction(() => {
+        const result = work()
+        // Probe before the outer COMMIT can automatically release a leaked
+        // nested savepoint. A successful operation must already have released it.
+        expect(() => bridge.database.exec('ROLLBACK TO lookup_session_work')).toThrow(
+          'no such savepoint'
+        )
+        return result
+      })
+    expect(await sessions.commit(value)).toEqual(value)
+    expect(await sessions.session(value.session, null)).toEqual(value)
+    expect((await index.head()).retained.pins).toBe(1)
+  })
+
+  it('rolls back rejected legacy SQL work while retaining its successfully observed clock', async () => {
+    const { index, codec, clock, value, path } = await fixture(),
+      bridge = index[sqliteLookupBridge]()
+    delete bridge.savepoint
+    const sessions = SQLiteLookupSessions[sqliteLookupSessionComposition](
+      bridge,
+      codec,
+      () => clock.now,
+      {},
+      false
+    )
+    bridge.database.exec(
+      "CREATE TRIGGER reject_legacy_open BEFORE INSERT ON output_lookup_sessions BEGIN SELECT RAISE(ABORT,'legacy opening failure'); END"
+    )
+    clock.now = '1001'
+    await expect(sessions.commit(value)).rejects.toThrow('legacy opening failure')
+    expect((await index.head()).retained.pins).toBe(0)
+    bridge.database.exec('DROP TRIGGER reject_legacy_open')
+    expect(await sessions.recover(original(value))).toBeNull()
+    const reopened = SQLiteLookupIndex.open(path, 'records', binding)
+    stores.push(reopened)
+    const past = SQLiteLookupSessions.open(reopened, codec, () => '1000')
+    await expect(past.createEpoch()).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Lookup session clock moved backwards'
+    })
+    expect(await sessions.commit(value)).toEqual(value)
+  })
+
   it('recovers the original wire selector across manifest rotation and restart', async () => {
     const { sessions, value, peer, clock } = await fixture()
-    const { epoch: _epoch, ...request } = original(value)
+    const request = originalRequest(value)
     expect(await sessions.recoverOriginal(request)).toBeNull()
     await sessions.commit(value)
     await sessions.createEpoch()
@@ -124,7 +187,7 @@ describe('durable original lookup sessions', () => {
   it('does not interpret a lost original opening fence as a fresh wire request', async () => {
     const { path, sessions, value } = await fixture()
     await sessions.commit(value)
-    const { epoch: _epoch, ...request } = original(value)
+    const request = originalRequest(value)
     const sql = new DatabaseSync(path)
     try {
       sql.exec('DELETE FROM output_lookup_sessions; DELETE FROM output_lookup_openings')

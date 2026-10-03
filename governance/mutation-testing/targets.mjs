@@ -55,6 +55,25 @@ function overlayJestTarget(testMatch, options = {}) {
   })
 }
 
+function mutationBuildCommand(repositoryRoot, dependencies) {
+  // Stryker uses execaCommand without a shell. Its tokenizer accepts escaped
+  // spaces, and the helper executes each prerequisite with explicit argv.
+  const script = resolve(repositoryRoot, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')
+  return ['node', script, ...dependencies.flatMap(name => ['--dependency', name])].join(' ')
+}
+
+function appendMutationBuildInputs(repositoryRoot, targets) {
+  const buildHelper = resolve(repositoryRoot, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')
+  for (const target of Object.values(targets)) {
+    if (target.runnerOptions?.buildCommand?.startsWith('node ' + buildHelper + ' ')) {
+      target.additionalInputs = [
+        ...(target.additionalInputs ?? []),
+        '../../../scripts/mutation-build.mjs'
+      ]
+    }
+  }
+}
+
 function vitestTarget(configFile) {
   return {
     testRunner: 'vitest',
@@ -1585,8 +1604,10 @@ export function buildMutationTargets(repositoryRoot) {
         {
           esm: true,
           maxTestRunnerReuse: 8,
-          buildCommand:
-            'pnpm --filter @bsv/wallet-toolbox build && pnpm --filter @bsv/output-knowledge build && pnpm build',
+          buildCommand: mutationBuildCommand(repositoryRoot, [
+            '@bsv/wallet-toolbox',
+            '@bsv/output-knowledge'
+          ]),
           config: {
             moduleNameMapper: {
               [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
@@ -1649,8 +1670,10 @@ export function buildMutationTargets(repositoryRoot) {
         {
           esm: true,
           maxTestRunnerReuse: 8,
-          buildCommand:
-            'pnpm --filter @bsv/wallet-toolbox build && pnpm --filter @bsv/output-knowledge build && pnpm build',
+          buildCommand: mutationBuildCommand(repositoryRoot, [
+            '@bsv/wallet-toolbox',
+            '@bsv/output-knowledge'
+          ]),
           config: {
             moduleNameMapper: {
               [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
@@ -1836,7 +1859,7 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         {
           esm: true,
-          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          buildCommand: mutationBuildCommand(repositoryRoot, ['@bsv/wallet-toolbox']),
           maxTestRunnerReuse: 8
         }
       )
@@ -2135,7 +2158,7 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         {
           esm: true,
-          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          buildCommand: mutationBuildCommand(repositoryRoot, ['@bsv/wallet-toolbox']),
           maxTestRunnerReuse: 8
         }
       )
@@ -2188,7 +2211,7 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         {
           esm: true,
-          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          buildCommand: mutationBuildCommand(repositoryRoot, ['@bsv/wallet-toolbox']),
           maxTestRunnerReuse: 8
         }
       )
@@ -2237,7 +2260,7 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         {
           esm: true,
-          buildCommand: 'pnpm --filter @bsv/wallet-toolbox build && pnpm build',
+          buildCommand: mutationBuildCommand(repositoryRoot, ['@bsv/wallet-toolbox']),
           maxTestRunnerReuse: 8
         }
       )
@@ -3439,5 +3462,6 @@ export function buildMutationTargets(repositoryRoot) {
     config.roots = [...native.roots]
     config.moduleNameMapper = { ...native.moduleNameMapper, ...config.moduleNameMapper }
   }
+  appendMutationBuildInputs(repositoryRoot, targets)
   return targets
 }

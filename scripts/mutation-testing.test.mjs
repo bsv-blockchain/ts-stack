@@ -780,7 +780,7 @@ test('acquisition coordination preserves every source, canonical state test and 
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.equal(
     target.runnerOptions.buildCommand,
-    'pnpm --filter @bsv/wallet-toolbox build && pnpm build'
+    `node ${resolve(REPOSITORY_ROOT, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')} --dependency @bsv/wallet-toolbox`
   )
   for (const input of [
     '../../wallet/wallet-toolbox/src/**',
@@ -809,7 +809,7 @@ test('acquisition HTTP retains complete modules, native dependencies and every p
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
   assert.equal(
     target.runnerOptions.buildCommand,
-    'pnpm --filter @bsv/wallet-toolbox build && pnpm --filter @bsv/output-knowledge build && pnpm build'
+    `node ${resolve(REPOSITORY_ROOT, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')} --dependency @bsv/wallet-toolbox --dependency @bsv/output-knowledge`
   )
   for (const input of [
     'src/OverlayExpress.ts',
@@ -921,7 +921,7 @@ test('durable buyer qualifies every complete owner and retains native one-action
   ])
   assert.equal(
     buyer.runnerOptions.buildCommand,
-    'pnpm --filter @bsv/wallet-toolbox build && pnpm build'
+    `node ${resolve(REPOSITORY_ROOT, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')} --dependency @bsv/wallet-toolbox`
   )
   assert.equal(buyer.runnerOptions.maxTestRunnerReuse, 8)
   for (const input of [
@@ -1041,6 +1041,39 @@ test('overlay project options reach both complete partitions without changing mo
   }
   assert.deepEqual(projects[0].extensionsToTreatAsEsm, [])
   assert.deepEqual(projects[1].extensionsToTreatAsEsm, ['.ts', '.tsx'])
+})
+
+test('compound private builds retain every dependency and append the sequential helper input', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    helper = resolve(REPOSITORY_ROOT, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ '),
+    expected = {
+      'private-purchase-http': ['@bsv/wallet-toolbox', '@bsv/output-knowledge'],
+      'private-acquisition-http': ['@bsv/wallet-toolbox', '@bsv/output-knowledge'],
+      'private-acquisition-coordination': ['@bsv/wallet-toolbox'],
+      'private-lookup-buyer': ['@bsv/wallet-toolbox'],
+      'wallet-purchase-payment': ['@bsv/wallet-toolbox'],
+      'private-purchase-buyer': ['@bsv/wallet-toolbox']
+    }
+  const changed = Object.entries(configured)
+    .filter(([, target]) => target.runnerOptions?.buildCommand?.startsWith('node ' + helper))
+    .map(([id]) => id)
+  assert.deepEqual(changed.sort(), Object.keys(expected).sort())
+  for (const [id, dependencies] of Object.entries(expected)) {
+    const target = configured[id]
+    assert.equal(
+      target.runnerOptions.buildCommand,
+      ['node', helper, ...dependencies.flatMap(name => ['--dependency', name])].join(' ')
+    )
+    assert.equal(
+      target.additionalInputs.filter(input => input === '../../../scripts/mutation-build.mjs')
+        .length,
+      1
+    )
+  }
+  assert.deepEqual(
+    selectAffectedMutationTargets(configured, ['scripts/mutation-build.mjs']),
+    Object.keys(configured)
+  )
 })
 
 test('prepared purchases qualify the complete verifier and full association suite without a source partition', () => {
@@ -1277,7 +1310,7 @@ test('covenant buyer and native payment retain whole entries and complete origin
     assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
     assert.equal(
       target.runnerOptions.buildCommand,
-      'pnpm --filter @bsv/wallet-toolbox build && pnpm build'
+      `node ${resolve(REPOSITORY_ROOT, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')} --dependency @bsv/wallet-toolbox`
     )
   }
 })

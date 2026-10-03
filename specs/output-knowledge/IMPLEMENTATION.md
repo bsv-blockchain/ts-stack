@@ -3739,3 +3739,31 @@ These results are local working-tree feedback. Checkpoint 2 still requires the
 complete hosted campaign and all applicable checks on the final published head.
 No threshold, deadline, case floor, dependency, wire, authorization or production
 contract is relaxed.
+
+### Sequential mutation builds and legacy session coverage
+
+The complete immutable campaign exposes a harness error before private consumer
+tests run: Stryker 9.6.1 calls `execaCommand` without a shell, so compound build
+commands pass `&&` and subsequent commands as arguments to the first build.
+The sequential helper replaces only the six affected compound commands. It
+retains their ordered dependency builds and final instrumented sandbox build,
+uses explicit child arguments, and stops on a child error, nonzero exit or signal.
+Single-command targets remain unchanged. Each affected input closure includes
+the helper, and changing that shared control selects the complete inventory.
+BotBoard acknowledgement 18731850 covers this exact region.
+
+Eight helper regressions, including actual child success, failure and signal
+handling, plus 49 configuration regressions pass. The actual
+Wallet Toolbox, output-knowledge and Overlay Express dependency/build sequence
+also passes. Existing 141 target identities, source/test unions, partitions,
+property settings, worker/reuse limits and deadlines remain unchanged.
+
+The full session target's three uncovered mutations belong to the supported
+legacy bridge without an optional savepoint hook. Additive real SQLite tests
+exercise successful savepoint release before outer commit, failed opening
+rollback, exact retry, retained observed clock and independent reopen. All
+63 original and additive session tests pass. The purchase admission tests now
+also exercise exact capacity bounds, missing declarations, synchronous context
+identity across awaits, original signed preparation and manifest alternatives,
+explicit BEEF targets and installed history identities; all 58 unit cases pass.
+These local checks remain feedback pending complete exact-head qualification.

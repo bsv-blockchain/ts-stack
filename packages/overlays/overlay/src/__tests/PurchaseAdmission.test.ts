@@ -3,6 +3,63 @@ import { purchaseAdmissionFixture as fixture } from './PurchaseAdmissionFixture.
 import { topic, scope, transaction } from './ProposalAdmissionFixture.js'
 import { overlayAdmissionContextDigest } from '../EngineAdmission.js'
 import { admissionSemanticDigest } from '../storage/AdmissionStorage.js'
+import {
+  Beef,
+  canonicalOutputJSON,
+  OUTPUT_PROFILES,
+  outputPacketDigest,
+  retainOutputCapability,
+  signOutputPacket,
+  Utils,
+  type OutputCapabilities,
+  type OutputRetainedCapability
+} from '@bsv/sdk'
+import { key, identity, chain, rules } from './ProposalAdmissionFixture.js'
+
+function resignTerms(f: ReturnType<typeof fixture>) {
+  const request = f.job.original.request,
+    acquisitionId = outputPacketDigest('purchase', {
+      chain: request.listing.chain,
+      seller: identity,
+      recipient: request.recipient,
+      topic: request.topic,
+      requestId: request.requestId
+    })
+  f.job.original.terms = signOutputPacket(
+    'purchase-terms',
+    {
+      ...f.job.original.terms.body,
+      acquisitionId,
+      requestDigest: outputPacketDigest('purchase-request', request),
+      topic: request.topic,
+      listing: request.listing
+    },
+    key
+  )
+  f.job.candidate.acquisitionId = acquisitionId
+}
+
+function replaceCapability(
+  f: ReturnType<typeof fixture>,
+  change: (body: OutputCapabilities) => void
+) {
+  const body = structuredClone(
+    (f.job.original.capability as OutputRetainedCapability).manifest.body
+  )
+  change(body)
+  f.job.original.capability = retainOutputCapability(signOutputPacket('capabilities', body, key), {
+    baseURL: f.installation.baseURL,
+    identity,
+    chain,
+    service: topic,
+    kind: 'topic',
+    profile: OUTPUT_PROFILES.purchase,
+    now: '20',
+    maximumAgeSeconds: '100',
+    clockSkewSeconds: '1',
+    rules: new Map([[rules.id, () => {}]])
+  }).record
+}
 
 test('recovers original selected-topic admission without resubmitting or disclosing other topics', async () => {
   const f = fixture()
@@ -160,4 +217,241 @@ test('an asynchronous local guard is refused and a returned rejected promise is 
     Promise.reject(new Error('async guard'))) as never)
   await expect(f.run()).rejects.toMatchObject({ code: 'context-changed' })
   expect(f.read).not.toHaveBeenCalled()
+})
+
+test.each([
+  ['domainProfile', 'prefix urn:test:purchase', 'Purchase domain profile requires an absolute IRI'],
+  ['domainProfile', '1urn:test:purchase', 'Purchase domain profile requires an absolute IRI'],
+  ['admittedOutputIndex', 4294967296, 'Invalid purchase admission output index'],
+  ['admittedOutputIndex', 0.5, 'Invalid purchase admission output index'],
+  ['admittedOutputIndex', Number.NaN, 'Invalid purchase admission output index'],
+  ['maximumRequestBytes', 0, 'Invalid purchase admission request allowance'],
+  ['maximumRequestBytes', -1, 'Invalid purchase admission request allowance'],
+  ['maximumRequestBytes', 0.5, 'Invalid purchase admission request allowance'],
+  ['maximumRequestBytes', Number.NaN, 'Invalid purchase admission request allowance'],
+  ['maximumRequestBytes', Number.POSITIVE_INFINITY, 'Invalid purchase admission request allowance'],
+  ['maximumRequestBytes', 4194305, 'Invalid purchase admission request allowance'],
+  ['maximumOutcomeBytes', 131073, 'Invalid purchase admission outcome allowance']
+])('rejects the malformed installed %s boundary (%p)', (field, value, message) => {
+  const f = fixture()
+  expect(() => new OverlayPurchaseAdmission({ ...f.installation, [field]: value })).toThrow(
+    expect.objectContaining({ code: 'invalid', message })
+  )
+  expect(f.read).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test.each([
+  { admittedOutputIndex: 4294967295 },
+  { maximumRequestBytes: 1 },
+  { maximumRequestBytes: 4194304 },
+  { maximumOutcomeBytes: 128 },
+  { maximumOutcomeBytes: 131072 }
+])('accepts the exact installed numeric boundary without scheduling a purchase (%p)', options => {
+  const f = fixture()
+  expect(() => new OverlayPurchaseAdmission({ ...f.installation, ...options })).not.toThrow()
+  expect(f.read).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test.each([null, {}])(
+  'refuses a missing synchronous request context before any read (%p)',
+  async context => {
+    const f = fixture()
+    await expect(
+      f.bridge.recover(f.job, new AbortController().signal, context as never)
+    ).rejects.toMatchObject({
+      code: 'invalid',
+      message: 'Purchase admission needs a synchronous original-context guard'
+    })
+    expect(f.read).not.toHaveBeenCalled()
+    expect(f.submit).not.toHaveBeenCalled()
+  }
+)
+
+test('observes a rejected context promise before refusing asynchronous authority', async () => {
+  const f = fixture(),
+    result = Promise.reject(new Error('Deferred original purchase authority')),
+    observed = jest.spyOn(result, 'catch')
+  f.context.checkCurrent.mockImplementation((() => result) as never)
+  await expect(f.run()).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Purchase admission context changed'
+  })
+  expect(observed).toHaveBeenCalledTimes(1)
+  expect(f.read).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test('pins the original synchronous context across the awaited history read', async () => {
+  const f = fixture()
+  f.read.mockImplementation(async () => {
+    f.context.checkCurrent = jest.fn()
+    return { state: 'unresolved' }
+  })
+  await expect(f.run()).rejects.toMatchObject({
+    code: 'context-changed',
+    message: 'Purchase admission context guard changed'
+  })
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test.each(['storage', 'manager', 'history-reader', 'scope', 'admission'])(
+  'rejects a replaced installed %s before touching original history',
+  async boundary => {
+    const f = fixture(),
+      storage = f.engine.storage as unknown as {
+        admissionScope: typeof scope
+        admission: { history: { read: typeof f.read } }
+      }
+    if (boundary === 'storage') f.engine.storage = { ...f.engine.storage }
+    if (boundary === 'manager') f.engine.managers[topic] = { ...f.engine.managers[topic] }
+    if (boundary === 'history-reader') storage.admission.history.read = jest.fn(f.read)
+    if (boundary === 'scope') storage.admissionScope.nodeId = 'different-original-host'
+    if (boundary === 'admission') storage.admission = { ...storage.admission }
+    await expect(f.run()).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Purchase admission installation changed'
+    })
+    expect(f.read).not.toHaveBeenCalled()
+    expect(f.submit).not.toHaveBeenCalled()
+  }
+)
+
+test('rejects an unknown retained history result before a second provider effect', async () => {
+  const f = fixture()
+  f.read.mockResolvedValue({ state: 'another-state' } as never)
+  await expect(f.run()).rejects.toMatchObject({
+    code: 'invalid',
+    message: 'Invalid purchase admission history result'
+  })
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test.each(['host', 'history', 'topic'])(
+  'requires the actual installed %s declaration when constructing admission',
+  missing => {
+    const f = fixture(),
+      storage = f.engine.storage as unknown as { admission: object }
+    if (missing === 'host') Reflect.deleteProperty(storage, 'admissionScope')
+    if (missing === 'history') Reflect.deleteProperty(storage.admission, 'history')
+    if (missing === 'topic') delete f.engine.managers[topic]
+    expect(() => new OverlayPurchaseAdmission(f.installation)).toThrow(
+      expect.objectContaining({
+        code: 'unsupported',
+        message:
+          missing === 'topic'
+            ? 'Purchase topic is not installed'
+            : 'Original timed admission history is required'
+      })
+    )
+    expect(f.read).not.toHaveBeenCalled()
+    expect(f.submit).not.toHaveBeenCalled()
+  }
+)
+
+test.each(['topic', 'domain', 'chain'])(
+  'independently rejects a validly signed preparation with another installed %s premise',
+  async field => {
+    const f = fixture()
+    if (field === 'topic') f.job.original.request.topic = 'tm_another'
+    if (field === 'domain') f.job.original.terms.body.domainProfile = 'urn:test:another-domain'
+    if (field === 'chain')
+      f.job.original.request.listing.chain = { ...chain, network: 'another-chain' }
+    resignTerms(f)
+    await expect(f.run()).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Purchase admission differs from the original prepared transaction'
+    })
+    expect(f.read).not.toHaveBeenCalled()
+    expect(f.submit).not.toHaveBeenCalled()
+  }
+)
+
+test.each(['domains', 'policies'])(
+  'requires the original selected %s alongside independently signed terms',
+  async field => {
+    const f = fixture()
+    replaceCapability(f, body => {
+      const parameters = body.services[0].profiles[0].parameters
+      if (field === 'domains') parameters.domainProfiles = ['urn:test:another-domain']
+      else parameters.releasePolicies = [{ kind: 'mined', confirmations: 1 }]
+    })
+    await expect(f.run()).rejects.toMatchObject({
+      code: 'context-changed',
+      message: 'Purchase domain or release policy is absent from the original capability'
+    })
+    expect(f.read).not.toHaveBeenCalled()
+    expect(f.submit).not.toHaveBeenCalled()
+  }
+)
+
+test('allows independently advertised policy alternatives rather than requiring them all to match', async () => {
+  const f = fixture()
+  replaceCapability(f, body => {
+    body.services[0].profiles[0].parameters.releasePolicies = [
+      { kind: 'mined', confirmations: 1 },
+      { kind: 'local-admission' }
+    ]
+  })
+  expect(await f.run()).toMatchObject({ status: 'unresolved' })
+  expect(f.submit).toHaveBeenCalledTimes(1)
+})
+
+test('rejects another explicit atomic BEEF target before consulting retained history', async () => {
+  const f = fixture(),
+    beef = Beef.fromBinary(transaction.toBEEF()),
+    parent = transaction.inputs[0].sourceTransaction!
+  f.job.candidate.beef = Utils.toBase64(beef.toBinaryAtomic(parent.id('hex')))
+  await expect(f.run()).rejects.toMatchObject({
+    code: 'invalid',
+    message: 'Purchase BEEF target differs'
+  })
+  expect(f.read).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
+})
+
+test('retains optional local original-owner metadata without extending its wire shape', async () => {
+  const f = fixture()
+  Object.assign(f.job.original, { format: 'retained-original/1', createdAt: '20' })
+  expect(await f.run()).toMatchObject({ status: 'unresolved' })
+  expect(f.submit).toHaveBeenCalledTimes(1)
+})
+
+test('checks the exact maximum complete topical receipt capacity before any provider work', async () => {
+  const original = fixture(),
+    allowance = canonicalOutputJSON({
+      status: 'admitted',
+      operationId: original.job.operationId,
+      txid: original.job.candidate.txid,
+      acceptedAt: '18446744073709551615',
+      assessmentContextId: 'overlay-topic-admission-v1:' + 'f'.repeat(64),
+      steak: {
+        [topic]: {
+          outputsToAdmit: [0],
+          coinsToRetain: [0],
+          coinsRemoved: [0]
+        }
+      }
+    }),
+    exact = fixture({ maximumOutcomeBytes: allowance.length }),
+    short = fixture({ maximumOutcomeBytes: allowance.length - 1 })
+  expect(await exact.run()).toMatchObject({ status: 'unresolved' })
+  expect(exact.submit).toHaveBeenCalledTimes(1)
+  await expect(short.run()).rejects.toMatchObject({
+    code: 'limited',
+    message: 'Output JSON byte limit'
+  })
+  expect(short.read).not.toHaveBeenCalled()
+  expect(short.submit).not.toHaveBeenCalled()
+})
+
+test('refuses the otherwise valid retained capability of a different installed rules digest', async () => {
+  const f = fixture({ rulesDigest: 'aa'.repeat(32) })
+  await expect(f.run()).rejects.toMatchObject({
+    code: 'unauthorized',
+    message: 'Purchase retained capability differs from installation'
+  })
+  expect(f.read).not.toHaveBeenCalled()
+  expect(f.submit).not.toHaveBeenCalled()
 })
