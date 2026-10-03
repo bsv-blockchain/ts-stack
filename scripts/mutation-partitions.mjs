@@ -1,4 +1,6 @@
 import path from 'node:path'
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const partitionFile = specification => specification.replace(/:\d+(?:-\d+)?$/, '')
 const plans = new Map([
@@ -232,9 +234,174 @@ const plans = new Map([
   ]
 ])
 
-// Keep each file's complete original range union in exactly one execution part.
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
+// Boundaries lie between complete functions or class members. Each part retains
+// the original range union intersected with these consecutive source bands.
+// The pinned-engine regression and final canonical gate reject lost or repeated
+// mutants when future source changes move a mutable node across a boundary.
+const rangePlans = new Map(
+  [
+    [
+      'lch-overlay-covenant-terms',
+      [
+        [
+          'src/overlayAcquisitionCovenantTerms.ts',
+          {
+            label: 'terms',
+            starts: [1, 136, 338]
+          }
+        ],
+        [
+          'src/overlayAcquisitionConsent.ts',
+          {
+            label: 'consent',
+            starts: [1]
+          }
+        ]
+      ]
+    ],
+    [
+      'private-purchase-state',
+      [
+        [
+          'src/private/PrivatePurchaseProgress.ts',
+          {
+            label: 'progress',
+            starts: [1, 137, 155, 272, 297, 392]
+          }
+        ],
+        [
+          'src/private/SQLitePrivatePurchaseStore.ts',
+          {
+            label: 'store',
+            starts: [1, 178, 271, 400, 604, 800]
+          }
+        ]
+      ]
+    ],
+    [
+      'private-purchase-coordination',
+      [
+        [
+          'src/private/PrivatePurchaseCoordinator.ts',
+          {
+            label: 'coordinator',
+            starts: [1, 226, 333, 538, 688]
+          }
+        ],
+        [
+          'src/private/PrivatePurchasePorts.ts',
+          {
+            label: 'ports',
+            starts: [1]
+          }
+        ]
+      ]
+    ],
+    [
+      'private-purchase-native-clock',
+      [
+        [
+          'src/private/SQLiteProtectedLedger.ts',
+          {
+            label: 'ledger',
+            starts: [1, 203, 316, 410, 519, 633]
+          }
+        ],
+        [
+          'src/private/SQLitePrivatePurchaseStore.ts',
+          {
+            label: 'store',
+            starts: [1, 178, 271, 400, 604, 800]
+          }
+        ],
+        [
+          'src/private/PrivatePurchaseProgress.ts',
+          {
+            label: 'progress',
+            starts: [1, 137, 155, 272, 297, 392]
+          }
+        ]
+      ]
+    ],
+    [
+      'revenue-listing-purchase',
+      [
+        [
+          'src/revenue-listing/RevenueListingPurchaseVerifier.ts',
+          {
+            label: 'verifier',
+            starts: [1, 160]
+          }
+        ]
+      ]
+    ]
+  ].map(([id, files]) => [id, new Map(files)])
+)
+
+function specificationRange(specification, lines) {
+  const match = /:(\d+)(?:-(\d+))?$/.exec(specification)
+  const start = match ? Number(match[1]) : 1
+  const end = match ? Number(match[2] ?? match[1]) : lines
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start)
+    throw new Error('Invalid canonical mutation source range')
+  return { start, end }
+}
+
+function rangeGroups(target, file, specifications, plan) {
+  const directory = path.resolve(ROOT, target.packageDirectory)
+  const location = fs.realpathSync(path.join(directory, file))
+  if (!location.startsWith(`${fs.realpathSync(ROOT)}${path.sep}`))
+    throw new Error('Mutation partition source escapes repository')
+  const lines = fs.readFileSync(location, 'utf8').split('\n').length
+  if (
+    plan.starts[0] !== 1 ||
+    plan.starts.some(
+      (start, i) =>
+        !Number.isSafeInteger(start) || start < 1 || (i > 0 && start <= plan.starts[i - 1])
+    )
+  )
+    throw new Error('Invalid semantic mutation partition boundaries')
+  return plan.starts.flatMap((start, i) => {
+    const end = i + 1 < plan.starts.length ? plan.starts[i + 1] - 1 : lines
+    const mutate = specifications.flatMap(specification => {
+      const original = specificationRange(specification, lines)
+      const low = Math.max(start, original.start),
+        high = Math.min(end, original.end)
+      return high < low ? [] : [`${file}:${low}-${high}`]
+    })
+    return mutate.length ? [{ id: `${plan.label}-${i + 1}`, target: { ...target, mutate } }] : []
+  })
+}
+
+function semanticPartitions(target, plan) {
+  const files = new Map()
+  for (const specification of target.mutate) {
+    const file = partitionFile(specification)
+    if (/[!*?{}[\]]/.test(file) || path.posix.isAbsolute(file) || file.split('/').includes('..'))
+      throw new Error('Mutation partition requires explicit canonical source paths')
+    const specifications = files.get(file) ?? []
+    specifications.push(specification)
+    files.set(file, specifications)
+  }
+  if (!files.size) throw new Error('Empty canonical mutation source union')
+  const parts = [],
+    future = []
+  for (const [file, specifications] of files) {
+    const sourcePlan = plan.get(file)
+    if (sourcePlan) parts.push(...rangeGroups(target, file, specifications, sourcePlan))
+    else future.push(...specifications)
+  }
+  if (future.length) parts.push({ id: 'remaining', target: { ...target, mutate: future } })
+  if (!parts.length) throw new Error('Empty canonical mutation range union')
+  return parts
+}
+
+// Existing file-based plans keep each original range union in one execution part.
 // New canonical files join the target's fallback; a future helper cannot disappear.
 export function partitionMutationTarget(targetId, target) {
+  const ranges = rangePlans.get(targetId)
+  if (ranges) return semanticPartitions(target, ranges)
   const plan = plans.get(targetId)
   if (!plan) return [{ id: 'whole', target }]
   const groups = new Map()

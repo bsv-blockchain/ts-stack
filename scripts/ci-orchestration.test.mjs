@@ -20,7 +20,7 @@ const WALLET_MOBILE_COVERAGE_PATH = join(
 test('the shared build archive carries application browser and server bundles', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const archiveStep = workflow.match(
-    /- name: Archive build outputs\n        run: \|\n([\s\S]*?)\n      - name:/
+    /- name: Archive build outputs\n {8}run: \|\n([\s\S]*?)\n {6}- name:/
   )?.[1]
   assert.ok(archiveStep, 'the actual archive command must be exercised')
   const directory = mkdtempSync(join(tmpdir(), 'stack-build-archive-'))
@@ -44,8 +44,8 @@ test('the shared build archive carries application browser and server bundles', 
       mkdirSync(dirname(join(directory, path)), { recursive: true })
       writeFileSync(join(directory, path), path)
     }
-    execFileSync('bash', ['-e', '-o', 'pipefail', '-c', archiveStep], { cwd: directory })
-    const entries = execFileSync('tar', ['-tzf', 'build-outputs.tar.gz'], {
+    execFileSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', archiveStep], { cwd: directory })
+    const entries = execFileSync('/usr/bin/tar', ['-tzf', 'build-outputs.tar.gz'], {
       cwd: directory,
       encoding: 'utf8'
     }).split('\n')
@@ -65,6 +65,35 @@ function workflowJobBlocks(workflow) {
     source: jobs.slice(match.index, matches[index + 1]?.index ?? jobs.length)
   }))
 }
+
+test('installed engine regressions run unconditionally after frozen installation and before build or reuse', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const prepare = workflowJobBlocks(workflow).find(job => job.name === 'prepare').source
+  const steps = prepare.split(/\n {6}- /)
+  const installed = steps.findIndex(step =>
+    step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')
+  )
+  const engine = steps.findIndex(step =>
+    step.startsWith('name: Test installed mutation engine controls\n')
+  )
+  const rebuild = steps.findIndex(step =>
+    step.startsWith('name: Rebuild the audited workspace build tool\n')
+  )
+  const build = steps.findIndex(step => step.startsWith('name: Build workspace\n'))
+  assert.ok(installed >= 0 && engine > installed && rebuild > engine && build > engine)
+  assert.match(
+    steps[engine],
+    /run: node --test scripts\/mutation-partitions-engine\.integration\.mjs(?:\n|$)/
+  )
+  assert.doesNotMatch(steps[engine], /(?:if:|continue-on-error:)/)
+  assert.equal(
+    workflow.match(/node --test scripts\/mutation-partitions-engine\.integration\.mjs/g)?.length,
+    1
+  )
+  const health = workflowJobBlocks(workflow).find(job => job.name === 'repository-health').source
+  assert.match(health, /node --test scripts\/\*\.test\.mjs/)
+  assert.doesNotMatch(health, /mutation-partitions-engine\.integration|pnpm install/)
+})
 
 test('CI shares one audited build across coverage and browser consumer lanes', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
@@ -166,7 +195,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   for (const job of jobs) {
     if (job.name === 'mutation-tests') {
       const expected = `    timeout-minutes: \${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}`
-      assert.equal(job.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
+      assert.equal(job.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
       const dedicated = readFileSync(
         join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'),
         'utf8'
@@ -174,7 +203,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
       const dedicatedJob = workflowJobBlocks(dedicated).find(
         candidate => candidate.name === 'mutation-tests'
       )
-      assert.equal(dedicatedJob?.source.match(/^    timeout-minutes: .+$/m)?.[0], expected)
+      assert.equal(dedicatedJob?.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
     } else {
       assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
     }
@@ -436,19 +465,31 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
   assert.notEqual(failedBuild.status, 0)
 })
 
-test('every selected application execution part is downloaded before canonical aggregation', () => {
+test('every selected application and LCH execution part is downloaded before canonical aggregation', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const application = Object.keys(targets).filter(
     id => targets[id].packageDirectory === 'packages/application/output-knowledge'
   )
-  const selected = partitionedMutationTargets(application, targets)
+  const selected = partitionedMutationTargets(
+    [...application, 'lch-overlay-covenant-terms'],
+    targets
+  )
   assert.ok(selected.includes('output-knowledge-proposal-core'))
   assert.ok(selected.includes('proposal-journal-send'))
   assert.ok(selected.includes('proposal-channel-storage'))
+  for (const id of [
+    'lch-overlay-covenant-terms',
+    'private-purchase-state',
+    'private-purchase-coordination',
+    'private-purchase-native-clock',
+    'revenue-listing-purchase'
+  ]) {
+    assert.ok(selected.includes(id), id)
+  }
   const aggregate = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
     job => job.name === 'mutation-quality'
   ).source
-  const steps = aggregate.split(/\n      - /)
+  const steps = aggregate.split(/\n {6}- /)
   for (const id of selected) {
     const downloads = steps.filter(
       step =>
@@ -486,7 +527,7 @@ test('wallet recovery encoding downloads both complete execution parts before ca
     job => job.name === 'mutation-quality'
   ).source
   const downloads = aggregate
-    .split(/\n      - /)
+    .split(/\n {6}- /)
     .filter(
       step =>
         step.startsWith('uses: actions/download-artifact@') &&
@@ -508,7 +549,7 @@ test('protected ledger aggregation requires selected complete execution artifact
     job => job.name === 'mutation-quality'
   ).source
   const downloads = aggregate
-    .split(/\n      - /)
+    .split(/\n {6}- /)
     .filter(
       step =>
         step.startsWith('uses: actions/download-artifact@') &&
@@ -534,7 +575,7 @@ test('private publication aggregation requires selected complete execution artif
     job => job.name === 'mutation-quality'
   ).source
   const downloads = aggregate
-    .split(/\n      - /)
+    .split(/\n {6}- /)
     .filter(
       step =>
         step.startsWith('uses: actions/download-artifact@') &&
@@ -560,7 +601,7 @@ test('lineage graph aggregation requires selected complete execution artifacts',
     job => job.name === 'mutation-quality'
   ).source
   const downloads = aggregate
-    .split(/\n      - /)
+    .split(/\n {6}- /)
     .filter(
       step =>
         step.startsWith('uses: actions/download-artifact@') &&
@@ -586,7 +627,7 @@ test('verified publication service aggregation requires selected complete execut
     job => job.name === 'mutation-quality'
   ).source
   const downloads = aggregate
-    .split(/\n      - /)
+    .split(/\n {6}- /)
     .filter(
       step =>
         step.startsWith('uses: actions/download-artifact@') &&
@@ -612,7 +653,7 @@ test('private publication coordination aggregation requires selected complete ex
     job => job.name === 'mutation-quality'
   ).source
   const downloads = aggregate
-    .split(/\n      - /)
+    .split(/\n {6}- /)
     .filter(
       step =>
         step.startsWith('uses: actions/download-artifact@') &&
@@ -638,7 +679,7 @@ test('private publication HTTP aggregation requires selected complete execution 
     job => job.name === 'mutation-quality'
   ).source
   const downloads = aggregate
-    .split(/\n      - /)
+    .split(/\n {6}- /)
     .filter(
       step =>
         step.startsWith('uses: actions/download-artifact@') &&
@@ -673,7 +714,7 @@ test('acquisition and proposal HTTP aggregation require every selected part arti
       job => job.name === 'mutation-quality'
     ).source
     const downloads = aggregate
-      .split(/\n      - /)
+      .split(/\n {6}- /)
       .filter(
         step =>
           step.startsWith('uses: actions/download-artifact@') &&

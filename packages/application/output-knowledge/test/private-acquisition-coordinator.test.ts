@@ -223,19 +223,30 @@ it('retains physical capacity after cancellation and drains the exact wallet eff
   await f.quote()
   const abort = new AbortController(),
     work = f.coordinator.acquire(f.request, f.payment, { ...f.caller, signal: abort.signal })
-  await entered
-  abort.abort()
-  await expect(work).rejects.toMatchObject({ code: 'cancelled' })
-  await expect(f.recover()).rejects.toMatchObject({ code: 'limited' })
-  let drained = false
-  const stopping = f.coordinator.stop().then(() => {
-    drained = true
-  })
-  await Promise.resolve()
-  expect(drained).toBe(false)
-  release()
-  await stopping
-  expect(f.current()!.state.progress.phase).toBe('funding-pending')
+  try {
+    await Promise.race([
+      entered,
+      work.then(() => {
+        throw new Error('Acquisition settled before its held wallet effect was entered')
+      })
+    ])
+    abort.abort()
+    await expect(work).rejects.toMatchObject({ code: 'cancelled' })
+    await expect(f.recover()).rejects.toMatchObject({ code: 'limited' })
+    let drained = false
+    const stopping = f.coordinator.stop().then(() => {
+      drained = true
+    })
+    await Promise.resolve()
+    expect(drained).toBe(false)
+    release()
+    await stopping
+    expect(f.current()!.state.progress.phase).toBe('funding-pending')
+  } finally {
+    release()
+    await f.coordinator.stop()
+    await work.catch(() => undefined)
+  }
   const resumed = new PrivateAcquisitionCoordinator(f.options)
   try {
     await resumed.recover(f.f.id, f.caller)

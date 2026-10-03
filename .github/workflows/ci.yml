@@ -257,6 +257,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Test installed mutation engine controls
+        run: node --test scripts/mutation-partitions-engine.integration.mjs
+
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
 
@@ -703,6 +706,31 @@ jobs:
         with:
           pattern: mutation-private-lookup-buyer-*
           path: .mutation-parts/private-lookup-buyer
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'lch-overlay-covenant-terms')
+        with:
+          pattern: mutation-lch-overlay-covenant-terms-*
+          path: .mutation-parts/lch-overlay-covenant-terms
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-state')
+        with:
+          pattern: mutation-private-purchase-state-*
+          path: .mutation-parts/private-purchase-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-coordination')
+        with:
+          pattern: mutation-private-purchase-coordination-*
+          path: .mutation-parts/private-purchase-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-native-clock')
+        with:
+          pattern: mutation-private-purchase-native-clock-*
+          path: .mutation-parts/private-purchase-native-clock
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'revenue-listing-purchase')
+        with:
+          pattern: mutation-revenue-listing-purchase-*
+          path: .mutation-parts/revenue-listing-purchase
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:

@@ -1168,7 +1168,11 @@ a wallet action.
 ## Validation during implementation
 
 Run `pnpm --filter @bsv/sdk build:ts`, then this package's `build`, `typecheck`,
-`lint` and `test` commands. Journal contract tests exercise all three adapters,
+`lint` and `test` commands. `test:coverage` runs the complete same test discovery
+with two workers and a 1 GB idle-worker recycling limit. Jest combines every
+suite into the original global coverage thresholds; ordinary `test` remains
+serial, and mutation concurrency and its property settings are independent.
+Journal contract tests exercise all three adapters,
 parallel compare-and-swap, equivocation, replay, retention, independent partitions
 and commit-before-reply recovery. The SQLite test exits an actual child process
 immediately after commit and recovers that receipt after reopening the database.

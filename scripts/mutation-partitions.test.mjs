@@ -3,6 +3,7 @@ import test from 'node:test'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 import { parseArguments } from './mutation-testing.mjs'
+import { readFileSync } from 'node:fs'
 import {
   partitionMutationTarget,
   selectedMutationPartition,
@@ -20,6 +21,88 @@ const target = {
   ],
   runnerOptions: { jest: { config: { testMatch: ['all-original-tests'] } } }
 }
+
+const semanticTargets = [
+  'lch-overlay-covenant-terms',
+  'private-purchase-state',
+  'private-purchase-coordination',
+  'private-purchase-native-clock',
+  'revenue-listing-purchase'
+]
+test('semantic execution ranges retain the complete source line union and every original setting without installed tools', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const sourceLines = (target, specifications) =>
+    new Set(
+      specifications.flatMap(specification => {
+        const file = specification.replace(/:\d+(?:-\d+)?$/, '')
+        const match = /:(\d+)(?:-(\d+))?$/.exec(specification)
+        const lines = readFileSync(
+          new URL(`../${target.packageDirectory}/${file}`, import.meta.url),
+          'utf8'
+        ).split('\n').length
+        const start = match ? Number(match[1]) : 1
+        const end = match ? Number(match[2] ?? match[1]) : lines
+        return Array.from({ length: end - start + 1 }, (_, index) => `${file}:${start + index}`)
+      })
+    )
+  for (const id of semanticTargets) {
+    const original = targets[id],
+      parts = partitionMutationTarget(id, original)
+    assert.ok(parts.length > 1)
+    assert.equal(new Set(parts.map(part => part.id)).size, parts.length)
+    assert.deepEqual(
+      sourceLines(
+        original,
+        parts.flatMap(part => part.target.mutate)
+      ),
+      sourceLines(original, original.mutate)
+    )
+    for (const part of parts) {
+      assert.deepEqual(
+        { ...part.target, mutate: original.mutate },
+        original,
+        `${id}/${part.id} changed an original target setting`
+      )
+      assert.equal(part.target.runnerOptions, original.runnerOptions)
+      assert.equal(part.target.additionalInputs, original.additionalInputs)
+    }
+    assert.equal(selectedMutationPartition(id, original), original)
+  }
+  assert.equal(Object.keys(targets).length, 141)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 236)
+})
+
+test('semantic ranges retain future files and the exact original overlapping line union', () => {
+  const original = buildMutationTargets(REPOSITORY_ROOT)['private-purchase-state'],
+    file = 'src/private/PrivatePurchaseProgress.ts',
+    future = 'src/private/FuturePurchaseHelper.ts',
+    selected = { ...original, mutate: [`${file}:120-160`, `${file}:150-180`, future] },
+    parts = partitionMutationTarget('private-purchase-state', selected)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['progress-1', 'progress-2', 'progress-3', 'remaining']
+  )
+  assert.deepEqual(
+    parts.flatMap(part => part.target.mutate),
+    [
+      `${file}:120-136`,
+      `${file}:137-154`,
+      `${file}:150-154`,
+      `${file}:155-160`,
+      `${file}:155-180`,
+      future
+    ]
+  )
+  for (const part of parts) assert.equal(part.target.runnerOptions, original.runnerOptions)
+  for (const mutate of [
+    [],
+    ['src/**/*.ts'],
+    ['../outside.ts'],
+    [`${file}:10-5`],
+    [`${file}:9007199254740992`]
+  ])
+    assert.throws(() => partitionMutationTarget('private-purchase-state', { ...original, mutate }))
+})
 test('execution partitions preserve complete original specifications and identical full test configuration', () => {
   const parts = partitionMutationTarget('sdk-auth-http', target)
   assert.deepEqual(
@@ -243,9 +326,7 @@ for (const [targetId, fallback, expected] of [
     assert.deepEqual(union.slice().sort(), canonical.mutate.slice().sort())
     assert.equal(new Set(union).size, union.length)
     for (const part of parts) {
-      const { mutate: _part, ...rest } = part.target
-      const { mutate: _whole, ...original } = canonical
-      assert.deepEqual(rest, original)
+      assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
       assert.equal(part.target.runnerOptions, canonical.runnerOptions)
       assert.equal(part.target.additionalInputs, canonical.additionalInputs)
     }
@@ -267,9 +348,7 @@ test('protected ledger parts preserve every complete file and all canonical conf
   )
   assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
   for (const part of parts) {
-    const { mutate: _partial, ...actual } = part.target
-    const { mutate: _whole, ...original } = canonical
-    assert.deepEqual(actual, original)
+    assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
   }
   const future = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
   assert.ok(
@@ -288,9 +367,7 @@ test('private publication parts preserve every complete file and all canonical c
   )
   assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
   for (const part of parts) {
-    const { mutate: _partial, ...actual } = part.target
-    const { mutate: _whole, ...original } = canonical
-    assert.deepEqual(actual, original)
+    assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
   }
   const future = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
   assert.ok(
@@ -309,9 +386,7 @@ test('lineage graph parts retain complete layout and transition code and all can
   )
   assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
   for (const part of parts) {
-    const { mutate: _partial, ...actual } = part.target
-    const { mutate: _whole, ...original } = canonical
-    assert.deepEqual(actual, original)
+    assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
   }
   const future = {
     ...canonical,
@@ -333,9 +408,7 @@ test('verified publication service parts preserve every full module and canonica
   )
   assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
   for (const part of parts) {
-    const { mutate: _part, ...actual } = part.target
-    const { mutate: _whole, ...expected } = canonical
-    assert.deepEqual(actual, expected)
+    assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
   }
   const extended = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
   assert.ok(
@@ -352,9 +425,7 @@ test('private publication coordination and HTTP partitions retain complete canon
     assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
     assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
     for (const part of parts) {
-      const { mutate: _actual, ...actual } = part.target
-      const { mutate: _expected, ...expected } = canonical
-      assert.deepEqual(actual, expected)
+      assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
     }
     const extended = {
       ...canonical,
@@ -392,9 +463,7 @@ test('paid acquisition and proposal HTTP parts preserve exact whole-source/test 
     assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
     assert.equal(new Set(parts.flatMap(part => part.target.mutate)).size, canonical.mutate.length)
     for (const part of parts) {
-      const { mutate: _actual, ...actual } = part.target
-      const { mutate: _expected, ...original } = canonical
-      assert.deepEqual(actual, original)
+      assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
     }
   }
 })

@@ -3961,3 +3961,181 @@ all 20 tests in five files, retaining the progressive/live lookup, native
 admission, proposal recovery and Bitcoin evidence demonstrations. These results
 are local feedback for the authored batch; fresh exact-head remote checks and
 the complete canonical mutation campaign remain mandatory.
+
+### Complete workload bounds after the pushed follow-up
+
+The authored follow-up is pushed as `6d7005f18771f57e8184b1f8ae830119c3899bdd`.
+Its CodeQL workflow passes. Ordinary CI stops at the original 35-minute
+coverage-other deadline; the native buyer property reports interruption after
+252 of its required 300 histories at its unchanged 150-second limit. This is a
+failed qualification, not a smaller accepted property workload. The original
+seed, replay support, case floor and interruption-as-failure remain mandatory.
+
+The new exact-head local LCH terms and publication-access replays also stop at
+the original 2,700-second bounds. Their complete 89- and 363-test baselines
+pass in 77 and 213 seconds, but neither produces a complete mutation report.
+Both owned process groups are drained, and their receipts and logs are retained.
+Finite worker reuse and held-test cleanup alone did not resolve these limits.
+The complete hosted campaign continues on that immutable head; cancelled jobs
+remain failures, and an individual passing target never qualifies the campaign.
+
+One additional acquisition test formerly released held wallet work only after
+its assertions. Its corrected `finally` path releases, stops and observes the
+same physical operation while retaining all original assertions. All 15 original
+cases pass. A controlled copied-fixture comparison proves the old forced failure
+also times out its teardown hook, while the corrected forced failure exits
+without that hook timeout or open handles. The positive copied fixture also
+passes all 15 cases. Production wallet behavior is unchanged.
+
+Ordinary package coverage now uses two Jest workers and a 1 GB idle-worker
+recycling limit. Original and new discovery both enumerate exactly the same
+227 suites. The configuration retains every original transform, source selector,
+exclusion and global coverage threshold. Ordinary serial tests and governed
+mutation settings remain independent. The complete actual run passes all 3,347 tests in all 227 suites in 568.65
+seconds. Global statements, branches, functions and lines are 98.17%, 96.56%,
+98.44% and 98.78%, preserving their original thresholds. Every native property
+retains its 300-case floor, seed 3242026, replay support and unchanged interruption
+limit. All 3,691 package and dependency/configuration input hashes remain
+unchanged through terminal drain. Fresh exact-head hosted validation is still
+required; this local result does not establish the cause of the hosted deadline
+or a production-memory diagnosis.
+
+Five previously whole mutation targets now have source-range execution plans:
+LCH covenant terms, purchase state, purchase coordination, native purchase clock
+and revenue purchase verification. Boundaries fall between complete functions
+or class members. Every original line selection is intersected with consecutive
+source bands, and future source files retain a complete fallback. The target
+registry, its 141 identities and every original whole source/test/input union
+remain unchanged. All prior file-based partition plans remain unchanged.
+
+Pinned Stryker 9.6.1 replay verifies exact canonical inventories of 495, 989,
+521, 1,428 and 173 mutants across those five targets, without a missing or
+repeated tuple. Each execution part retains the entire original test selection,
+property settings, concurrency, baseline and supervisor bounds. The complete
+matrix has 236 execution entries, below the existing 256-entry platform limit.
+Same-file reports aggregate only when their full source bytes agree. All raw
+receipts remain bound to source/run/configuration and property settings; the
+final global gate still requires exact complete canonical inventory and the
+original denominator and score. Duplicate or missing tuples cannot be hidden
+by part IDs. These changes require actual full-part and final campaign execution;
+inventory replay and synthetic aggregate regressions alone establish no score.
+
+### Preserve module partitions through mutation-runner normalization
+
+The complete immutable hosted campaign exposes additional Overlay Express
+baseline failures. The actual governed proposal guard baseline reproduces the
+same missing CommonJS Jest globals on Node 24.18. The direct file-configured
+driver passes, but that is not a substitute for the mutation runner.
+
+Pinned Jest normalization explains the difference: Stryker passes its combined
+configuration as serialized JSON, which overwrites each child project's ignore
+selectors with a redundant parent selector. This makes ordinary CommonJS tests
+also execute in the private ESM project. Removing only the redundant parent
+selector preserves both complete child projects, all original module semantics,
+full source/test unions and every root coverage setting. No production
+authentication, queue or disclosure check changes.
+
+The existing shared-control regression now exercises actual pinned serialized
+Jest normalization for every Overlay Express target. It fails on the original
+configuration and passes with the correction, including both disjoint selectors,
+complete caller selections and Stryker's coverage environment. A copied corrected
+full guard run passes all 224 baseline cases and all 86 mutants with 84 killed,
+two surviving, 97.67% score and zero uncovered, invalid or unexecuted mutants in
+138.765 seconds. The original failure and an ineffective undefined-option draft
+are retained. That external copied configuration is diagnostic; the corrected
+actual governed execution and final exact-head campaign remain required.
+
+All five new semantic target artifact streams are explicitly downloaded before
+ordinary CI's canonical aggregation. Every previous downloader, condition and
+gate remains. Complete repository health passes all 458 then-current controls
+with zero contract or control findings. The extended orchestration file
+initially has the same 59 full-file local analyzer findings as the last pushed
+head. Comparing against the intended PR base identifies 15 findings in earlier
+additions from this program; the last-head comparison alone is not zero-new
+evidence. Equivalent whitespace quantifiers and two explicit archive executable
+paths correct those owned test findings while preserving all assertions and the
+actual archive command body. The final file has 44 findings already present on
+`origin/main`, with zero introduced findings against the intended base; all ten
+other authored code files have zero full-file findings. No findings are
+suppressed or accepted. The discovery companion retains all original cases and
+checks the unchanged common ignores in both child projects. All 459 repository
+controls and required root health, lint, formatting and strict types pass.
+Hosted zero-new Sonar and CodeQL remain required.
+
+The actual governed corrected proposal guard execution also completes: all 224
+baseline cases pass and its complete 86-mutant execution part produces 84 killed,
+two surviving and 97.67%, with zero uncovered, invalid or unexecuted mutants in
+142.002 seconds. The entire root response guard target separately completes all
+83 mutants with 81 killed, two surviving and 97.59% in 56.104 seconds. Complete
+ordinary Overlay Express coverage passes all 882 tests in 51 suites in 285.359
+seconds, preserving every original source/coverage selector; its process group
+is independently verified drained. These working-tree diagnostics do not replace
+final exact-head hosted qualification or the complete proposal target aggregate.
+
+The hosted lookup-service target initially produces 248 mutants and 97.15%, but
+two invalid runtime results are unqualified. A pending physical operation can
+reject on its timer after an earlier test assertion fails. The revised held-work
+fixtures attach rejection ownership immediately, race operation entry against
+early completion, and release/observe all physical operations in `finally`.
+Every original assertion, all 18 cases and the 300-case generated cancellation
+property remain. No production work, quota, deadline or cancellation behavior
+changes. A copied negative comparison preserves the original failure: the old
+fixture leaks its timer and exits after 30.438 seconds with a late unhandled
+rejection, while the revised identical assertion failure exits in 0.605 seconds.
+The revised copied full selection passes all 18 original cases.
+
+After the complete coverage reader drains, the authored lookup-service union
+passes all 68 tests in four suites. The actual governed complete 248-mutant target
+then passes in 69.125 seconds, with 234 killed, six timeouts, eight survivors,
+96.77% and zero uncovered, invalid or unexecuted mutants. The active LCH semantic
+measurement does not consume this independent lookup-work test: its entire
+original declared source/test/input union plus complete LCH and SDK packages
+contains 936 hashed inputs, verified unchanged before and after this test-only
+edit. Its broader initial diagnostic snapshot also contains unconsumed
+application tests; that extra path change must remain visible and must not be
+misrepresented as a changed consumed LCH input or exact-head qualification.
+
+The earlier complete 227-suite package coverage result predates this independent
+lookup-work cleanup. Its application implementation and coverage configuration
+remain unchanged; the new complete affected union and mutation result supply
+additional feedback. Final-head complete hosted coverage, all 141 canonical
+mutation targets and every execution part remain required. The largest new LCH
+295-mutant part is still under its original bounded measurement; the immutable
+hosted campaign also retains wallet-codec and wallet-JSON deadline failures.
+Neither partial progress nor a cancelled target completes checkpoint two.
+
+### Installed-tool controls retain their required execution stage
+
+The hosted peer feedback exposed a separate ordering problem before this
+follow-up was pushed: the early repository-health job deliberately has no
+installed dependencies. The new actual pinned-instrumenter inventory regression
+and actual serialized Jest normalization regression require the frozen installed
+tools. Both complete test blocks were relocated unchanged to
+`scripts/mutation-partitions-engine.integration.mjs`; a before/after SHA-256
+receipt confirms byte-for-byte preservation. Their execution is unconditional in
+CI prepare immediately after the existing frozen, scripts-disabled installation,
+before audited rebuild or workspace build. A required orchestration control
+proves that ordering and rejects conditional or non-blocking execution. The cheap
+controls retain all previous checks and additionally prove the complete source
+line union, every original configuration setting and future-file fallback
+without loading installed engines. No dependency was added to the early gate.
+
+An isolated 5,207-file authored-source fixture with no `node_modules` passes all
+459 cheap controls with zero skips. The first fixture attempt lacked Git metadata
+required by existing repository inventory tests and failed eight such controls;
+that initial result is retained. Adding isolated detached read-only base/main
+references and an isolated index, backed by a read-only object-store alternate,
+made the full original discovery runnable without changing the source checkout
+or installing dependencies. The complete four-file installed/control union
+passes all 96 tests, including both unchanged actual-tool regressions. Strict
+application test-fixture compilation and explicit new-file formatting also pass.
+These checks address execution ordering; they do not replace final-head hosted
+qualification.
+
+The immutable `6d7005f` full campaign additionally reached the existing
+five-minute baseline limit for `private-publication-service/binding` and the
+existing execution limit for `overlay-proposal-admission/whole` after its
+complete baseline passed. Those failures remain unqualified. The unchanged
+actual local binding part has passed its complete 263-test baseline in 118
+seconds and continues under its original supervisor bound. No causal claim is
+made from the difference between local and hosted elapsed times.

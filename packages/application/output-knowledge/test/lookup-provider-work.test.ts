@@ -30,22 +30,33 @@ describe('bounded physical provider work and notification ownership', () => {
       abort = new AbortController()
     const pending = deferred<string>(),
       started = deferred<void>()
-    const task = work.run(null, abort.signal, async () => {
-      started.resolve()
-      return await pending.promise
-    })
-    await started.promise
-    abort.abort()
-    await expect(task).rejects.toMatchObject({
-      code: 'cancelled',
-      message: 'Lookup request cancelled'
-    })
-    await expect(work.run(null, undefined, async () => 'too soon')).rejects.toMatchObject({
-      code: 'limited',
-      message: 'Lookup physical work capacity is full'
-    })
-    pending.reject(new Error('late physical failure'))
-    for (let step = 0; step < 8; step++) await Promise.resolve()
+    const task = observed(
+      work.run(null, abort.signal, async () => {
+        started.resolve()
+        return await pending.promise
+      })
+    )
+    try {
+      await Promise.race([
+        started.promise,
+        task.then(() => {
+          throw new Error('Physical work completed before entry')
+        })
+      ])
+      abort.abort()
+      await expect(task).rejects.toMatchObject({
+        code: 'cancelled',
+        message: 'Lookup request cancelled'
+      })
+      await expect(work.run(null, undefined, async () => 'too soon')).rejects.toMatchObject({
+        code: 'limited',
+        message: 'Lookup physical work capacity is full'
+      })
+    } finally {
+      pending.reject(new Error('late physical failure'))
+      await task.catch(() => {})
+      for (let step = 0; step < 8; step++) await Promise.resolve()
+    }
     expect(await work.run(null, undefined, async () => 'recovered')).toBe('recovered')
   })
 
@@ -54,37 +65,50 @@ describe('bounded physical provider work and notification ownership', () => {
       a = deferred<void>(),
       b = deferred<void>()
     const identity = new PrivateKey(2).toPublicKey().toString()
-    const first = work.run(null, undefined, async () => await a.promise)
-    await expect(work.run(null, undefined, async () => {})).rejects.toMatchObject({
-      code: 'limited'
-    })
-    const second = work.run(identity, undefined, async () => await b.promise)
-    await expect(
-      work.run(new PrivateKey(3).toPublicKey().toString(), undefined, async () => {})
-    ).rejects.toMatchObject({ code: 'limited' })
-    a.resolve()
-    b.resolve()
-    await Promise.all([first, second])
-    expect(await work.run(null, undefined, async () => 1)).toBe(1)
+    const first = observed(work.run(null, undefined, async () => await a.promise))
+    let second: Promise<void> | undefined
+    try {
+      await expect(work.run(null, undefined, async () => {})).rejects.toMatchObject({
+        code: 'limited'
+      })
+      second = observed(work.run(identity, undefined, async () => await b.promise))
+      await expect(
+        work.run(new PrivateKey(3).toPublicKey().toString(), undefined, async () => {})
+      ).rejects.toMatchObject({ code: 'limited' })
+      a.resolve()
+      b.resolve()
+      await Promise.all([first, second])
+      expect(await work.run(null, undefined, async () => 1)).toBe(1)
+    } finally {
+      a.resolve()
+      b.resolve()
+      await Promise.allSettled([first, ...(second ? [second] : [])])
+    }
   })
 
   it('bounds caller time without releasing a non-cancellable physical request', async () => {
     jest.useFakeTimers()
     const work = new LookupProviderWork(1, 1, 20),
       physical = deferred<void>()
-    const task = work.run(null, undefined, async () => await physical.promise)
-    const checked = expect(task).rejects.toMatchObject({
-      code: 'unavailable',
-      retryable: true,
-      message: 'Lookup request deadline reached'
-    })
-    await jest.advanceTimersByTimeAsync(20)
-    await checked
-    await expect(work.run(null, undefined, async () => {})).rejects.toMatchObject({
-      code: 'limited'
-    })
-    physical.resolve()
-    await jest.advanceTimersByTimeAsync(0)
+    const task = observed(work.run(null, undefined, async () => await physical.promise))
+    try {
+      const checked = observed(
+        expect(task).rejects.toMatchObject({
+          code: 'unavailable',
+          retryable: true,
+          message: 'Lookup request deadline reached'
+        })
+      )
+      await jest.advanceTimersByTimeAsync(20)
+      await checked
+      await expect(work.run(null, undefined, async () => {})).rejects.toMatchObject({
+        code: 'limited'
+      })
+    } finally {
+      physical.resolve()
+      await task.catch(() => {})
+      await jest.advanceTimersByTimeAsync(0)
+    }
     expect(await work.run(null, undefined, async () => 'done')).toBe('done')
     expect(jest.getTimerCount()).toBe(0)
   })
@@ -180,16 +204,27 @@ it('retains exactly the configured physical slots over generated cancellation sc
               (error: unknown) => ({ ok: false, error })
             )
         )
-        await Promise.all(started.map(x => x.promise))
-        for (let i = 0; i < cancellations.length; i++) if (cancellations[i]) controllers[i].abort()
-        await expect(work.run(null, undefined, async () => 0)).rejects.toMatchObject({
-          code: 'limited'
-        })
-        for (let i = 0; i < physical.length; i++) physical[i].resolve(i)
-        const results = await Promise.all(settled)
-        for (let i = 0; i < results.length; i++) expect(results[i].ok).toBe(!cancellations[i])
-        for (let i = 0; i < 8; i++) await Promise.resolve()
-        expect(await work.run(null, undefined, async () => 'recovered')).toBe('recovered')
+        try {
+          await Promise.race([
+            Promise.all(started.map(x => x.promise)),
+            Promise.race(settled).then(() => {
+              throw new Error('Physical work completed before entry')
+            })
+          ])
+          for (let i = 0; i < cancellations.length; i++)
+            if (cancellations[i]) controllers[i].abort()
+          await expect(work.run(null, undefined, async () => 0)).rejects.toMatchObject({
+            code: 'limited'
+          })
+          for (let i = 0; i < physical.length; i++) physical[i].resolve(i)
+          const results = await Promise.all(settled)
+          for (let i = 0; i < results.length; i++) expect(results[i].ok).toBe(!cancellations[i])
+          for (let i = 0; i < 8; i++) await Promise.resolve()
+          expect(await work.run(null, undefined, async () => 'recovered')).toBe('recovered')
+        } finally {
+          for (let i = 0; i < physical.length; i++) physical[i].resolve(i)
+          await Promise.all(settled)
+        }
       }
     )
   )

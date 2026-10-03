@@ -142,8 +142,13 @@ test('auth discovery excludes generated children while preserving its own mutati
 
 test('overlay discovery excludes generated children while preserving its own mutation root', async () => {
   const { default: config } = await import('../packages/overlays/overlay-express/jest.config.js')
+  const { overlayTestIgnorePatterns } =
+    await import('../packages/overlays/overlay-express/jest-projects.config.mjs')
+  for (const project of config.projects)
+    for (const pattern of overlayTestIgnorePatterns)
+      assert.ok(project.testPathIgnorePatterns.includes(pattern))
   for (const root of ['/overlay', '/overlay/.stryker-tmp/sandbox-one']) {
-    for (const selected of [config.testPathIgnorePatterns, config.modulePathIgnorePatterns]) {
+    for (const selected of [overlayTestIgnorePatterns, config.modulePathIgnorePatterns]) {
       const patterns = selected.map(
         pattern =>
           new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
@@ -156,7 +161,7 @@ test('overlay discovery excludes generated children while preserving its own mut
       assert.equal(ignored('dist/src/__tests/example.test.ts'), true)
       assert.equal(ignored('xstryker-tmp/src/__tests/example.test.ts'), false)
     }
-    const tests = config.testPathIgnorePatterns.map(
+    const tests = overlayTestIgnorePatterns.map(
       pattern =>
         new RegExp(pattern.replace('<rootDir>', root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     )

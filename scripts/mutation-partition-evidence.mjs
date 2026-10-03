@@ -75,11 +75,15 @@ function checkedPartition(identity, targetId, expected, seen, packet, policy, mo
 }
 function addPartitionFiles(files, partitionId, reportBytes) {
   for (const [file, value] of Object.entries(JSON.parse(reportBytes).files)) {
-    if (Object.hasOwn(files, file)) throw new Error('Partition source files overlap')
-    files[file] = {
-      ...value,
-      mutants: value.mutants.map(mutant => ({ ...mutant, id: `${partitionId}/${mutant.id}` }))
-    }
+    const mutants = value.mutants.map(mutant => ({
+      ...mutant,
+      id: `${partitionId}/${mutant.id}`
+    }))
+    if (Object.hasOwn(files, file)) {
+      if (files[file].source !== value.source)
+        throw new Error('Repeated partition source bytes differ')
+      files[file].mutants.push(...mutants)
+    } else files[file] = { ...value, mutants }
   }
 }
 
@@ -127,7 +131,14 @@ export function combinePartitionEvidence(
     framework: { name: 'StrykerJS', version: '9.6.1' },
     projectRoot: canonical.projectRoot,
     config: canonical.config,
-    files: Object.fromEntries(Object.entries(files).sort(([left], [right]) => compare(left, right)))
+    files: Object.fromEntries(
+      Object.entries(files)
+        .sort(([left], [right]) => compare(left, right))
+        .map(([file, value]) => [
+          file,
+          { ...value, mutants: value.mutants.sort((left, right) => compare(left.id, right.id)) }
+        ])
+    )
   })
   bindings.sort((left, right) => compare(left.partitionId, right.partitionId))
   const executionBytes = JSON.stringify({
