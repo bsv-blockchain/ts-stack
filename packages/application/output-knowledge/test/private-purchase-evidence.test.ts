@@ -235,7 +235,7 @@ it.each(['pin', 'proof'] as const)(
   }
 )
 it('independently rejects combined evidence before pinning or retaining incoming bytes', async () => {
-  const { e, f, reopen } = coordinatedEvidence()
+  const { f, reopen } = coordinatedEvidence()
   let verifying = 0
   const original = f.owner.domain.verify
   f.owner.domain.verify = async (...args) => {
