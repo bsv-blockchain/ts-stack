@@ -7,8 +7,8 @@ const { bus } = require('nodemon/lib/utils')
 const { rulesToMonitor } = require('nodemon/lib/monitor/match')
 
 function unix(value) {
-  const slashes = value.replace(/\\/g, '/')
-  return (slashes.startsWith('//') ? '/' : '') + slashes.replace(/\/{2,}/g, '/')
+  const slashes = value.replaceAll(/\\/g, '/')
+  return (slashes.startsWith('//') ? '/' : '') + slashes.replaceAll(/\/{2,}/g, '/')
 }
 function normalizeIgnored(value, cwd) {
   if (typeof value !== 'string') return value

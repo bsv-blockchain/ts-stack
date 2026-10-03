@@ -3273,3 +3273,15 @@ preserve finite deadlines and existing request selection. Their full old/new HTT
 union passes225 tests across13 suites. The nine scoped watcher analyzer corrections
 still await the active owner's acknowledgement or qualified handoff; no analysis
 waiver is used.
+
+### Scoped watcher analyzer correction
+
+The active source owner acknowledged the nine findings repeated across the three
+standalone watcher copies. The canonical adapter retains its existing global
+regular expressions and uses `replaceAll`; native polling uses an equivalent
+bounded asynchronous retry with all400 predicates and the final25ms failure wait;
+graceful stop uses the optional child guard. The existing synchronizer copies both
+files to the other two services. All six isolated native watcher assertions and
+all three service lints pass on the unchanged frozen installed graphs. No analysis
+setting, dependency, startup recipe or acceptance threshold changes. Hosted
+qualification of the resulting published commit remains a separate requirement.

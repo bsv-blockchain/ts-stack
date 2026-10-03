@@ -75,14 +75,13 @@ test(
       errors = '',
       forced = false
     const starts = () => [...output.matchAll(/READY:(\d+):(\d+)/g)]
-    async function waitFor(predicate, description) {
-      for (let i = 0; i < 400; i++) {
-        if (predicate()) return
-        if (child.exitCode !== null || child.signalCode !== null)
-          throw new Error(`Watcher exited during ${description}: ${errors}`)
-        await delay(25)
-      }
-      throw new Error(`Watcher did not ${description}: ${output}\n${errors}`)
+    async function waitFor(predicate, description, remaining = 400) {
+      if (remaining === 0) throw new Error(`Watcher did not ${description}: ${output}\n${errors}`)
+      if (predicate()) return
+      if (child.exitCode !== null || child.signalCode !== null)
+        throw new Error(`Watcher exited during ${description}: ${errors}`)
+      await delay(25)
+      return waitFor(predicate, description, remaining - 1)
     }
     try {
       await fs.mkdir(path.join(directory, 'src/node_modules'), { recursive: true })
@@ -177,7 +176,7 @@ test(
       }
       assert.equal([...output.matchAll(/PRELOAD:/g)].length, starts().length)
     } finally {
-      if (child && child.exitCode === null && child.signalCode === null) {
+      if (child?.exitCode === null && child.signalCode === null) {
         process.kill(-child.pid, 'SIGTERM')
         const escalation = setTimeout(() => {
           forced = true
