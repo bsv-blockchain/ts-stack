@@ -152,6 +152,10 @@ TypeScript and env extensions, manual `rs` and graceful shutdown regressions
 run before each service's ordinary tests. The service-copy policy keeps both
 adapter and native regression identical across all three service contexts.
 
+The adapter normalizes every backslash and repeated slash without changing its
+ignore matching. Native watcher polling permits 400 predicate attempts, with a
+25 ms wait after every failed attempt, and preserves early process-exit errors.
+
 The three new registered substitutions bring the combined retained count to 30. Remove them and the adapter together after a compatible official Nodemon
 release resolves the dependency path natively and all watcher, frozen audit,
 service and protected Linux image gates pass. These standalone development

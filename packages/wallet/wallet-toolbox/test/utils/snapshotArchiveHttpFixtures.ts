@@ -125,8 +125,8 @@ export async function snapshotHttpFixture(snapshotSync = true, seedClosure = tru
   } catch (error) {
     try {
       await close()
-    } catch (cleanup) {
-      throw new AggregateError([error, cleanup], 'Snapshot HTTP fixture setup and cleanup failed')
+    } catch (error_) {
+      throw new AggregateError([error, error_], 'Snapshot HTTP fixture setup and cleanup failed')
     }
     throw error
   }
