@@ -10,6 +10,21 @@ import {
   mutationExecutionMatrix
 } from './mutation-partitions.mjs'
 
+function lexicalCompare(left, right) {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
+async function* inventories(directory, parts) {
+  for (const part of parts)
+    yield canonicalInventory(
+      directory,
+      targetSources(REPOSITORY_ROOT, part.target),
+      part.target.mutate
+    )
+}
+
 test('primary sync execution retains every original file/range, full configuration and future helper', async () => {
   const canonical = buildMutationTargets(REPOSITORY_ROOT)['wallet-snapshot-sync']
   const parts = partitionMutationTarget('wallet-snapshot-sync', canonical)
@@ -17,7 +32,10 @@ test('primary sync execution retains every original file/range, full configurati
     parts.map(part => part.id),
     ['session', 'checkpoint', 'copy', 'storage', 'primary']
   )
-  assert.deepEqual(parts.flatMap(part => part.target.mutate).sort(), [...canonical.mutate].sort())
+  assert.deepEqual(
+    parts.flatMap(part => part.target.mutate).toSorted(lexicalCompare),
+    [...canonical.mutate].toSorted(lexicalCompare)
+  )
   const owners = new Map()
   const tuples = []
   const directory = join(REPOSITORY_ROOT, canonical.packageDirectory)
@@ -36,22 +54,14 @@ test('primary sync execution retains every original file/range, full configurati
       assert.ok(!owners.has(file) || owners.get(file) === part.id)
       owners.set(file, part.id)
     }
-    tuples.push(
-      ...(
-        await canonicalInventory(
-          directory,
-          targetSources(REPOSITORY_ROOT, part.target),
-          part.target.mutate
-        )
-      ).map(tuple)
-    )
   }
+  for await (const mutants of inventories(directory, parts)) tuples.push(...mutants.map(tuple))
   const original = (
     await canonicalInventory(directory, targetSources(REPOSITORY_ROOT, canonical), canonical.mutate)
   ).map(tuple)
   assert.ok(original.length > 0)
   assert.equal(new Set(tuples).size, tuples.length)
-  assert.deepEqual(tuples.sort(), original.sort())
+  assert.deepEqual(tuples.toSorted(lexicalCompare), original.toSorted(lexicalCompare))
   assert.equal(owners.get('src/storage/WalletStorageManager.ts'), 'primary')
   assert.equal(owners.get('src/storage/StorageKnex.ts'), 'storage')
   assert.equal(owners.get('src/storage/snapshot/SnapshotSync.ts'), 'session')
