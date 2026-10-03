@@ -29,6 +29,9 @@ export function isOutputPlainObject(value: object): boolean {
 }
 
 function limitsFor(limits: Partial<OutputJSONLimits>): OutputJSONLimits {
+  // The default is already immutable and validated by its fixed declaration.
+  // Custom limits still pass every original resource check below.
+  if (limits === OUTPUT_JSON_LIMITS) return OUTPUT_JSON_LIMITS
   const result = { ...OUTPUT_JSON_LIMITS, ...limits }
   for (const key of Object.keys(result) as (keyof OutputJSONLimits)[]) {
     outputAssert(
@@ -55,7 +58,7 @@ function wellFormed(value: string): void {
  */
 export function parseOutputJSON(
   input: Uint8Array | string,
-  limits: Partial<OutputJSONLimits> = {}
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): OutputJSON {
   const bounds = limitsFor(limits)
   let source: string
@@ -99,21 +102,31 @@ class OutputJSONParser {
   private string(): string {
     outputAssert(this.source[this.offset] === '"', 'Expected JSON string')
     const start = this.offset++
-    let escaped = false
-    while (this.offset < this.source.length) {
-      const character = this.source[this.offset++]
-      if (!escaped && character === '"') {
-        let decoded: string
-        try {
-          decoded = JSON.parse(this.source.slice(start, this.offset)) as string
-        } catch {
-          throw new OutputProtocolError('invalid', 'Malformed JSON string')
-        }
-        wellFormed(decoded)
-        return decoded
+    // A backslash skips exactly one following UTF-16 code unit.
+    // JSON.parse still validates every escape/control;
+    // the decoded Unicode check and duplicate-key checks remain independent.
+    const delimiters = /["\\]/g
+    delimiters.lastIndex = this.offset
+    for (
+      let match = delimiters.exec(this.source);
+      match !== null;
+      match = delimiters.exec(this.source)
+    ) {
+      if (match[0] === '\\') {
+        delimiters.lastIndex = match.index + 2
+        continue
       }
-      escaped = !escaped && character === '\\'
+      this.offset = match.index + 1
+      let decoded: string
+      try {
+        decoded = JSON.parse(this.source.slice(start, this.offset)) as string
+      } catch {
+        throw new OutputProtocolError('invalid', 'Malformed JSON string')
+      }
+      wellFormed(decoded)
+      return decoded
     }
+    this.offset = this.source.length
     throw new OutputProtocolError('invalid', 'Unterminated JSON string')
   }
 
@@ -191,7 +204,7 @@ class OutputJSONParser {
 /** RFC 8785 serialization with the additional BRC-192 integer and size rules. */
 export function canonicalOutputJSON(
   value: unknown,
-  limits: Partial<OutputJSONLimits> = {}
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): string {
   const bounds = limitsFor(limits)
   const chunks: string[] = []

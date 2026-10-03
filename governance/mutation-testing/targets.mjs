@@ -58,12 +58,18 @@ function overlayJestTarget(testMatch, options = {}) {
 function mutationBuildCommand(repositoryRoot, dependencies) {
   // Stryker uses execaCommand without a shell. Its tokenizer accepts escaped
   // spaces, and the helper executes each prerequisite with explicit argv.
-  const script = resolve(repositoryRoot, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')
+  const script = resolve(repositoryRoot, 'scripts/mutation-build.mjs').replaceAll(
+    ' ',
+    String.raw`\ `
+  )
   return ['node', script, ...dependencies.flatMap(name => ['--dependency', name])].join(' ')
 }
 
 function appendMutationBuildInputs(repositoryRoot, targets) {
-  const buildHelper = resolve(repositoryRoot, 'scripts/mutation-build.mjs').replaceAll(' ', '\\ ')
+  const buildHelper = resolve(repositoryRoot, 'scripts/mutation-build.mjs').replaceAll(
+    ' ',
+    String.raw`\ `
+  )
   for (const target of Object.values(targets)) {
     if (target.runnerOptions?.buildCommand?.startsWith('node ' + buildHelper + ' ')) {
       target.additionalInputs = [

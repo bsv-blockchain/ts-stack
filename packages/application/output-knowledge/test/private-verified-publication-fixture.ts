@@ -82,6 +82,16 @@ export function verifiedFixture(payloads?: NodeProtectedPayloadCodec) {
     store,
     selected,
     stage,
+    retainedOwners: () => owners.length,
+    readReopened<T>(read: (store: SQLitePrivatePublicationStore) => T): T {
+      const reader = domain(false)
+      try {
+        return read(new SQLitePrivatePublicationStore(reader, limits(), service))
+      } finally {
+        reader.close()
+        owners.splice(owners.indexOf(reader), 1)
+      }
+    },
     reopen() {
       return new SQLitePrivatePublicationStore(domain(false), limits(), service)
     },

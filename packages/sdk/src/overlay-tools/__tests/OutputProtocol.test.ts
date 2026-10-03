@@ -24,6 +24,7 @@ import {
 import PrivateKey from '../../primitives/PrivateKey.js'
 import { toHex, toBase64 } from '../../primitives/utils.js'
 import * as SignedMessage from '../../messages/SignedMessage.js'
+import { OUTPUT_JSON_LIMITS } from '../OutputProtocolJSON.js'
 
 describe('BRC-192 representation boundary', () => {
   // Unmodified independent Python digest corpus from BRCs 9dade70.
@@ -38,6 +39,82 @@ describe('BRC-192 representation boundary', () => {
       expect(toHex(outputPacketPreimage(vector.domain, fixture.body))).toBe(vector.preimage)
       expect(outputPacketDigest(vector.domain, fixture.body)).toBe(vector.sha256)
     }
+  })
+
+  it('preserves independently encoded long strings, escape parity and exact UTF-8 fences', () => {
+    for (let slashes = 0; slashes <= 32; slashes++) {
+      const text = 'A'.repeat(16384) + '\\'.repeat(slashes) + '"é😀\n\0end',
+        encoded = JSON.stringify(text),
+        size = new TextEncoder().encode(encoded).length
+      expect(parseOutputJSON(encoded, { bytes: size })).toBe(JSON.parse(encoded))
+      expect(parseOutputJSON(new TextEncoder().encode(encoded), { bytes: size })).toBe(text)
+      expect(canonicalOutputJSON(text, { bytes: size })).toBe(encoded)
+      expect(() => parseOutputJSON(encoded, { bytes: size - 1 })).toThrow(
+        expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+      )
+    }
+  })
+
+  it('retains duplicate decoded-key checks through differently escaped delimiters and Unicode', () => {
+    for (const key of ['quote"', 'backslash\\', 'control\n', 'é😀', 'A'.repeat(16384)]) {
+      const escaped =
+          '"' +
+          key
+            .split('')
+            .map(unit => String.raw`\u` + unit.charCodeAt(0).toString(16).padStart(4, '0'))
+            .join('') +
+          '"',
+        body = '{' + JSON.stringify(key) + ':1,' + escaped + ':2}'
+      expect(() => parseOutputJSON(body)).toThrow(
+        expect.objectContaining({ code: 'invalid', message: 'Duplicate decoded JSON key' })
+      )
+    }
+  })
+
+  it('preserves exact string refusal errors for long raw controls and unfinished escape runs', () => {
+    const prefix = 'A'.repeat(16384)
+    for (let code = 0; code < 32; code++)
+      expect(() => parseOutputJSON('"' + prefix + String.fromCharCode(code) + '"')).toThrow(
+        expect.objectContaining({ code: 'invalid', message: 'Malformed JSON string' })
+      )
+    for (let slashes = 0; slashes <= 32; slashes++) {
+      const unfinished = '"' + prefix + '\\'.repeat(slashes)
+      expect(() => parseOutputJSON(unfinished)).toThrow(
+        expect.objectContaining({ code: 'invalid', message: 'Unterminated JSON string' })
+      )
+      if (slashes % 2 === 1)
+        expect(() => parseOutputJSON(unfinished + '"')).toThrow(
+          expect.objectContaining({ code: 'invalid', message: 'Unterminated JSON string' })
+        )
+    }
+  })
+
+  it('preserves explicit limits, their one-time reads and default function arity', () => {
+    expect(parseOutputJSON).toHaveLength(1)
+    expect(canonicalOutputJSON).toHaveLength(1)
+    expect(Object.isFrozen(OUTPUT_JSON_LIMITS)).toBe(true)
+    expect(OUTPUT_JSON_LIMITS).toEqual({
+      bytes: 4194304,
+      depth: 32,
+      arrayElements: 4096,
+      mapKeys: 256
+    })
+    expect(parseOutputJSON('{"a":1}', OUTPUT_JSON_LIMITS)).toEqual({ a: 1 })
+    expect(canonicalOutputJSON({ a: 1 }, OUTPUT_JSON_LIMITS)).toBe('{"a":1}')
+    let reads = 0
+    const limits = {
+      get bytes() {
+        reads++
+        return 7
+      }
+    }
+    expect(parseOutputJSON('{"a":1}', limits)).toEqual({ a: 1 })
+    expect(reads).toBe(1)
+    expect(canonicalOutputJSON({ a: 1 }, limits)).toBe('{"a":1}')
+    expect(reads).toBe(2)
+    expect(() => parseOutputJSON('[1,2]', { arrayElements: 1 })).toThrow('JSON array limit')
+    expect(() => parseOutputJSON('{"a":1,"b":2}', { mapKeys: 1 })).toThrow('JSON map limit')
+    expect(() => parseOutputJSON('{"a":{"b":1}}', { depth: 2 })).toThrow('JSON depth limit')
   })
 
   it('normalizes integer spellings without imposing a canonical input spelling', () => {

@@ -98,7 +98,9 @@ it('keeps native original contracts and lookup activation atomic through 300 res
               }
             }
             if (schedule[index].revoked) {
-              const before = f.reopen().loadVerified(state.publicationId, now, allow)!
+              const before = f.readReopened(reader =>
+                reader.loadVerified(state.publicationId, now, allow)!
+              )
               let gates = 0
               expect(() =>
                 apply(() => {
@@ -106,7 +108,9 @@ it('keeps native original contracts and lookup activation atomic through 300 res
                     throw new Error('revoked at native commit')
                 })
               ).toThrow('revoked at native commit')
-              const after = f.reopen().loadVerified(state.publicationId, now, allow)!
+              const after = f.readReopened(reader =>
+                reader.loadVerified(state.publicationId, now, allow)!
+              )
               expect(after.fence).toEqual(before.fence)
               expect(after.binding).toEqual(before.binding)
               expect(after.record.revision).toBe(before.record.revision)
@@ -114,7 +118,9 @@ it('keeps native original contracts and lookup activation atomic through 300 res
               expect(after.revision).toBe(before.revision)
             }
             expect(apply(allow).progress.phase).toBe(phases[index])
-            const durable = f.reopen().loadVerified(state.publicationId, now, allow)!
+            const durable = f.readReopened(reader =>
+              reader.loadVerified(state.publicationId, now, allow)!
+            )
             expect(durable.request).toEqual(request)
             expect(durable.original).toEqual(original)
             expect(durable.fence.state.progress.phase).toBe(phases[index])

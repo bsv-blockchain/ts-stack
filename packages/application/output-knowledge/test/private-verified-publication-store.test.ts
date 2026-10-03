@@ -41,6 +41,27 @@ function reserveAndAdmit(f: ReturnType<typeof verifiedFixture>, state: ReturnTyp
     allow
   )
 }
+it('closes independently reopened transient readers after both successful and failed reads', () => {
+  const f = verifiedFixture(),
+    state = f.stage(),
+    retained = f.retainedOwners()
+  const result = f.readReopened(reader => {
+    expect(reader).not.toBe(f.store)
+    expect(f.retainedOwners()).toBe(retained + 1)
+    return reader.loadVerified(state.publicationId, () => '20', allow)!
+  })
+  expect(result.fence.state).toEqual(state)
+  expect(result.original).toEqual(f.contract.record)
+  expect(f.retainedOwners()).toBe(retained)
+  expect(() =>
+    f.readReopened(reader => {
+      expect(reader.loadVerified(state.publicationId, () => '20', allow)).not.toBeNull()
+      throw new Error('Transient read failed')
+    })
+  ).toThrow('Transient read failed')
+  expect(f.retainedOwners()).toBe(retained)
+  expect(f.store.loadVerified(state.publicationId, () => '20', allow)!.fence.state).toEqual(state)
+})
 it('atomically stores blob, original verified fence and inactive lookup binding across independent reopen', () => {
   const f = verifiedFixture(),
     state = f.stage()

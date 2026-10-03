@@ -3767,3 +3767,76 @@ also exercise exact capacity bounds, missing declarations, synchronous context
 identity across awaits, original signed preparation and manifest alternatives,
 explicit BEEF targets and installed history identities; all 58 unit cases pass.
 These local checks remain feedback pending complete exact-head qualification.
+
+### Bounded JSON processing and independent native readers
+
+The sequential-build/admission batch is published at `808ea43d6`. Its complete
+purchase-admission baseline passes 551 tests across 31 suites in 223.177 seconds.
+Local full-module lookup-session mutation feedback then passes 92.84%
+(467 killed, 36 survived), with all 503 mutations executed and zero uncovered or
+invalid mutations. The legacy bridge's three previously uncovered cases are
+exercised by the actual SQL savepoint/rollback tests. Reports and execution
+receipts are retained separately from hosted qualification.
+
+The verified-publication property CPU profile spans the actual 64-second
+process. Repeated bounded JSON work is a material cost. A source-external
+comparison checks 40,028 string/UTF-8 outcomes and 16,016 explicit-limit outcomes
+against the original implementation, including exact errors and null-prototype
+maps. The implementation now scans quote/backslash delimiters using native
+matching, while `JSON.parse` continues validating escapes and control characters.
+Decoded Unicode validation, duplicate decoded keys, canonical bytes and every
+byte/depth/array/map fence remain unchanged. Only the already frozen default
+limits are reused; custom limits retain every original validation and one-time
+getter read. Function arity and public declarations remain compatible.
+
+Four additive tests exercise long strings, escape parity, differently encoded
+duplicate keys, raw controls, unfinished escapes, exact UTF-8 limits and custom
+limit behavior. The original complete JSON selection passes 66 tests; its full
+361-mutation target passes 92.24% (328 killed, 28 survived, 5 timeouts), with zero
+uncovered, invalid or unexecuted mutations. The complete SDK suite passes all
+8,285 tests in 256 suites. The first local invocation used an incompatible ESM
+mode for an existing `__dirname` fixture; the retained retry uses the unchanged
+governed SDK profile. No transform, dependency, selector or test is weakened.
+
+The native publication fixture now closes independently opened temporary readers
+after both successful and failed reads. Every original reopen, actor connection,
+authorization schedule, durability setting and assertion remains. This lifecycle
+change alone establishes no speed-up. With the current parser and fixtures, the
+complete publication-service selection passes 263 tests/16 suites in 108.495
+seconds, including all three original 300-history properties. Its verified
+property takes 54.389 seconds locally; hardware, profiling and contention limit
+comparison with earlier measurements and do not establish hosted performance.
+
+Nine additive acquisition-state cases independently check the original digest,
+opaque address domains, default extension path, exact refusal identities and
+retained-state byte ceiling. All 21 state-file tests pass. Eight changed code
+files have zero local analysis findings. The two hosted `String.raw` findings in
+the sequential helper's registry are corrected with identical command bytes;
+all eight helper and 49 configuration regressions still pass.
+
+The complete native buyer/payment selection passes all 55 tests in eight suites
+in 240.879 seconds, including its original three 300-history properties. The
+complete runtime mutation replay passes 91.18% (310 killed, 38 survived, 83
+timeouts), with all 431 mutations accounted for and zero uncovered, invalid or
+unexecuted mutations. Its unchanged original cancellation guard is exercised;
+this local result does not establish a universal resolution of the earlier
+hosted interrupted-work diagnostic.
+
+Twenty-three additive access cases cover synchronous policy/context declarations,
+strict-true authority before any ledger read, rejected promise observation,
+independent retained topic and publication bindings, malformed ownership state,
+exact identity diagnostics and owned critical-extension semantics. All 31 access
+tests pass. Damaged-port tests begin with genuine native records and complement
+the unchanged actual SQLite staging/read/rollback tests; they do not substitute
+for them. Initial local attempts exposed fixture typing and invocation errors,
+which remain recorded rather than presented as passing evidence.
+The complete publication-coordination selection then passes all 363 tests in
+25 suites in 230.237 seconds, including the original native and authenticated
+HTTP integrations and every property history. Required root health, lint,
+formatting and strict typing checks also pass for the coherent batch.
+
+These receipts remain local feedback. Checkpoint two requires the final
+exact-head hosted checks and complete 141-target campaign;
+previous heads, partial runs and component scores cannot certify it. Every
+original union, case floor, seed, worker/reuse bound, deadline and quality gate is
+preserved.
