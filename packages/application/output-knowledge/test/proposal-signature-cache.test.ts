@@ -48,14 +48,27 @@ it('verifies a distinct valid signature for the same body before caching its exa
   expect(verify).toHaveBeenCalledTimes(2)
 })
 
-it('does not share positive results across registries', () => {
+it('does not share policy acceptance across registries using the same mathematical fact', () => {
   const proposal = signed(),
-    left = createRegistry(),
-    right = createRegistry()
-  const verify = jest.spyOn(PublicKey.prototype, 'verify')
+    leftPolicy = new AuthorDocumentPolicy(),
+    rightPolicy = new AuthorDocumentPolicy(),
+    left = new ProposalPolicyRegistry([{ policy: leftPolicy, parameters: { maxTextBytes: 32 } }]),
+    right = new ProposalPolicyRegistry([{ policy: rightPolicy, parameters: { maxTextBytes: 32 } }])
+  const verify = jest.spyOn(PublicKey.prototype, 'verify'),
+    leftValidate = jest.spyOn(leftPolicy, 'validate'),
+    rightValidate = jest.spyOn(rightPolicy, 'validate')
   left.validate(proposal, scope)
   right.validate(proposal, scope)
-  expect(verify).toHaveBeenCalledTimes(2)
+  expect(leftValidate).toHaveBeenCalledTimes(1)
+  expect(rightValidate).toHaveBeenCalledTimes(1)
+  expect(verify).toHaveBeenCalledTimes(1)
+  rightValidate.mockImplementation(() => {
+    throw new Error('independent registry policy rejects')
+  })
+  expect(() => right.validate(proposal, scope)).toThrow('independent registry policy rejects')
+  expect(left.validate(proposal, scope)).toEqual(proposal)
+  expect(leftValidate).toHaveBeenCalledTimes(2)
+  expect(rightValidate).toHaveBeenCalledTimes(2)
 })
 
 it('continues checking current policy and scope on a cached signature', () => {
