@@ -16,7 +16,7 @@ afterEach(() => {
   jest.restoreAllMocks()
 })
 
-it('reuses only an exact authenticated request and re-verifies after reopening', async () => {
+it('rechecks native bindings after reopening while sharing only signature mathematics', async () => {
   const f = await fixture()
   try {
     const packet = signed()
@@ -24,12 +24,29 @@ it('reuses only an exact authenticated request and re-verifies after reopening',
     const retained = await f.store.retain(packet, requester, clock)
     expect(verify).toHaveBeenCalledTimes(1)
     await f.store.retain(structuredClone(packet), requester, clock)
-    await f.store.result(requester, packet.body.requestId, clock.now)
+    const publicResult = await f.store.result(requester, packet.body.requestId, clock.now)
     expect(verify).toHaveBeenCalledTimes(1)
     retained.request.body.reason = 'owned-return-only'
     expect((await f.store.retain(packet, requester, clock)).request).toEqual(packet)
-    await f.reopen().result(requester, packet.body.requestId, clock.now)
-    expect(verify).toHaveBeenCalledTimes(2)
+    const reopened = f.reopen()
+    expect(await reopened.result(requester, packet.body.requestId, clock.now)).toEqual(publicResult)
+    expect(verify).toHaveBeenCalledTimes(1)
+    const db = new DatabaseSync(f.path)
+    try {
+      const corrupt = structuredClone(packet)
+      corrupt.body.reason = 'changed persisted meaning after reopen'
+      db.prepare('UPDATE root_requests SET packet=?').run(canonicalOutputJSON(corrupt))
+      await expect(reopened.result(requester, packet.body.requestId, clock.now)).rejects.toThrow(
+        'signature'
+      )
+      expect(verify).toHaveBeenCalledTimes(2)
+      await expect(reopened.result(requester, packet.body.requestId, clock.now)).rejects.toThrow(
+        'signature'
+      )
+      expect(verify).toHaveBeenCalledTimes(3)
+    } finally {
+      db.close()
+    }
   } finally {
     await f.cleanup()
   }

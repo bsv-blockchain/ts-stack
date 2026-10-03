@@ -2833,6 +2833,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/overlayAcquisitionCodec.ts',
         'src/overlayAcquisitionPolicy.ts',
         'src/overlayAcquisitionTerms.ts',
+        'src/overlayAcquisitionConsent.ts',
         'src/overlayAcquisitionAuthority.ts',
         'src/overlayAcquisitionSettlement.ts',
         'src/overlayAcquisitionCustody.ts',
@@ -2841,6 +2842,24 @@ export function buildMutationTargets(repositoryRoot) {
         'src/overlayAcquisitionSeller.ts',
         'src/overlayAcquisitionVerification.ts'
       ],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
+        esm: true,
+        buildCommand: 'pnpm --filter @bsv/output-knowledge build && pnpm build'
+      })
+    },
+    'lch-overlay-covenant-terms': {
+      packageDirectory: 'packages/content/lch',
+      manifest: 'packages/content/lch/package.json',
+      propertyTest: 'packages/content/lch/test/overlay-acquisition-covenant-terms.property.test.ts',
+      additionalInputs: [
+        'src/**',
+        'test/overlay-acquisition*.ts',
+        '../../application/output-knowledge/src/**',
+        '../../application/output-knowledge/test/evidence-fixture.ts',
+        '../../application/output-knowledge/test/fixtures/evidence/**',
+        '../../sdk/src/overlay-tools/**'
+      ],
+      mutate: ['src/overlayAcquisitionCovenantTerms.ts', 'src/overlayAcquisitionConsent.ts'],
       ...jestTarget('jest.config.js', ['<rootDir>/test/overlay-acquisition*.test.ts'], {
         esm: true,
         buildCommand: 'pnpm --filter @bsv/output-knowledge build && pnpm build'

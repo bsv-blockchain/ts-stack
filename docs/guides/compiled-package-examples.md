@@ -2002,3 +2002,34 @@ const purchaseRoutes = (options: PrivatePurchaseRouteOptions) =>
   createPrivatePurchaseRouter(options)
 export { purchaseAdmission, purchaseRoutes }
 ```
+
+## Standing Offer consent and original recovery promise
+
+This optional LCH adapter checks terms before constructing a wallet action.
+Its caller must install independent lineage, purchase, role and release
+verification before payment, licensing or playback.
+
+```ts compile
+// example-id: lch-standing-offer-terms
+import {
+  validateLCHOverlayCovenantTerms,
+  validateLCHOverlayCovenantWindow,
+  validateLCHOverlayCovenantPromise,
+  type LCHOverlayCovenantTermsInput
+} from '@bsv/lch/overlay-acquisition'
+import type { OutputSignedPurchaseTerms as StandingPurchaseTerms } from '@bsv/sdk'
+
+async function checkStandingOffer(
+  input: LCHOverlayCovenantTermsInput,
+  originalTerms: StandingPurchaseTerms,
+  now: string
+) {
+  const terms = await validateLCHOverlayCovenantTerms(input)
+  validateLCHOverlayCovenantWindow(terms, originalTerms, now)
+  return {
+    terms,
+    original: validateLCHOverlayCovenantPromise(terms, originalTerms)
+  }
+}
+export { checkStandingOffer }
+```

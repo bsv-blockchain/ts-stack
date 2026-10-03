@@ -10,14 +10,14 @@ import {
   type OutputPaidLookupChallenge
 } from '@bsv/sdk'
 import { snapshotBytes, snapshotLCHRecord, snapshotSignedObject } from './boundary.js'
-import { decodeDeterministicCbor, encodeDeterministicCbor } from './cbor.js'
+import { decodeDeterministicCbor } from './cbor.js'
 import { LCH_IRI, LCH_MECHANISMS, LCH_PROFILES, LCH_LIMITS } from './constants.js'
 import { LCHReader, validateOffer, type InspectedLCH } from './core.js'
 import { validateLicenseRequest } from './acquisition.js'
 import { validateEncryptionDescriptor } from './encryption.js'
 import { lchAssert } from './errors.js'
 import { objectId, toHex } from './hash.js'
-import { validatePolicyReference } from './policy.js'
+import { validateLCHOverlayAcceptedPolicy } from './overlayAcquisitionConsent.js'
 import { PublicBRC77Verifier } from './signatures.js'
 import {
   decodeLCHOverlayBinding,
@@ -300,57 +300,7 @@ export async function validateLCHOverlayPaidTerms(
     'ERR_LCH_LICENSE',
     'Outer acquisition differs from signed LCH consent'
   )
-  const reference = await validatePolicyReference(offer.body.policy)
-  equalBytes(request.body.acceptedPolicyDigest, reference.digest, 'Accepted Policy')
-  const human = Array.isArray(offer.body.humanTerms) ? offer.body.humanTerms : [],
-    accepted = request.body.acceptedHumanTermDigests ?? []
-  lchAssert(
-    Array.isArray(accepted) && accepted.length === human.length,
-    'ERR_LCH_TERMS',
-    'Human terms consent differs'
-  )
-  await Array.from(human).reduce(
-    (sequence, term) =>
-      sequence.then(async () => {
-        const ref = await validatePolicyReference(term, { mediaType: undefined })
-        lchAssert(
-          accepted.some(value => value instanceof Uint8Array && toHex(value) === toHex(ref.digest)),
-          'ERR_LCH_TERMS',
-          'A human term was not accepted'
-        )
-      }),
-    Promise.resolve()
-  )
-  const selected = map(request.body.selection, 'Request Selection')
-  closed(selected, ['type'])
-  lchAssert(
-    selected.type === 'all',
-    'ERR_LCH_PROFILE_UNSUPPORTED',
-    'This fixed-render adapter requires whole-Asset Selection'
-  )
-  if (request.body.mechanismChoices !== undefined) {
-    const choices = map(request.body.mechanismChoices, 'Request mechanisms'),
-      expected = {
-        usageProfile: offer.body.usageProfile,
-        payment: payment.protocol,
-        keyDelivery: keyDelivery.mechanism,
-        encryption: LCH_MECHANISMS.encryption,
-        enforcement: enforcement.class
-      }
-    lchAssert(
-      Object.entries(choices).every(
-        ([name, value]) =>
-          Object.hasOwn(expected, name) && expected[name as keyof typeof expected] === value
-      ),
-      'ERR_LCH_PROFILE_UNSUPPORTED',
-      'Request mechanism choices differ from Offer'
-    )
-  }
-  lchAssert(
-    toHex(encodeDeterministicCbor(request as unknown as LCHValue)) === toHex(requestBytes),
-    'ERR_LCH_CBOR',
-    'License Request is not byte-stable deterministic CBOR'
-  )
+  const reference = await validateLCHOverlayAcceptedPolicy(offer, request, requestBytes)
   const encryption = map(
     inspected.representation.encryption,
     'Asset encryption'

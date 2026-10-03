@@ -269,3 +269,17 @@ buyer custody and plays actual encrypted content after expiry/catalogue withdraw
 with one payment and one credit. Covenant purchase and the complete operator
 workbench demonstrations remain checkpoint-two work. Ordinary BRC-170 imports and `CORE_CAPABILITIES`
 do not advertise these optional profiles.
+
+`validateLCHOverlayCovenantTerms` authenticates the optional standing-Offer
+collector profile before wallet construction. It requires the exact topic
+capability, installed E/C/S/family mechanisms, one buyer-free standing
+requirement, an open Offer policy assignee, and the complete initial revenue
+schedule. The individual signed License Request supplies the buyer; the
+Offer and descriptor remain reusable. The derived Agreement fixes that buyer
+while retaining every accepted prohibition. `validateLCHOverlayCovenantWindow`
+checks new work; `validateLCHOverlayCovenantPromise` checks frozen original
+seller-signed purchase terms during recovery after catalogue/Offer expiry.
+These terms checks do not execute Bitcoin Script, authenticate complete
+lineage, assess release, issue a License or authorize playback. Compose the
+independent verifiers before financial work; the complete covenant licensing
+and application demonstration remain checkpoint-two work.

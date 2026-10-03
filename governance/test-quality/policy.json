@@ -1588,6 +1588,18 @@
           "Wrong recipients receive fixed not-found controls.",
           "Legacy submit, acquisition, publication and lookup behavior remains preserved."
         ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant-terms.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Reusable standing Offer, exact collector economics, individual authenticated consent and frozen covenant recovery promise before wallet construction",
+        "target": "At least 300 signed individual buyer and frozen purchase/recovery histories against one unchanged standing Offer",
+        "invariants": [
+          "Distinct buyers retain the same Offer ID and initial revenue schedule while consent and Agreements remain recipient-bound.",
+          "Original CBOR Request bytes and outer request/acquisition digests cannot be replaced under one purchase.",
+          "The complete Offer/capability recovery floor applies to the original cutoff; recovery never opens a new expired Offer."
+        ]
       }
     ],
     "exclusions": [

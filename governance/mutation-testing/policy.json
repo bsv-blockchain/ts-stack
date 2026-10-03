@@ -1306,6 +1306,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-terms",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-terms.property.test.ts",
+      "risk": "critical",
+      "boundary": "Reusable standing Offer, exact collector economics, individual authenticated consent and frozen covenant recovery promise before wallet construction",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

@@ -2957,3 +2957,53 @@ capability tests pass 63 cases. The previously failing 300-case acquisition
 property completes in 60.647s under coverage without changing its deadline; the
 partial-only coverage invocation itself does not meet whole-package percentage
 thresholds. Full package/hosted coverage and exact-head CI remain required.
+
+## Standing Offer consent and frozen covenant terms, 2026-10-03
+
+Published native/HTTP purchase composition at `79807477c` after all four root
+gates passed; remote SHA matches. The exact-head hosted run is blocked by the
+new high braces advisory in the unchanged mobile Metro graph. The dependency
+owner is qualifying a narrowly scoped removal of that closure; no audit waiver
+or dependency mutation was applied here.
+
+The optional LCH entry now authenticates the critical E/C/S standing Offer,
+individual signed Request, exact seller/anchor/Asset/Offer/initial revenue,
+registered family and administrative rules, installed topic mechanisms and
+release policy. Its derived Agreement binds the individual buyer while the
+Offer and descriptor remain unchanged. Frozen original purchase promises retain
+the maximum of one day, advertised recovery and the Offer recovery period.
+Paid and covenant adapters share accepted-policy/human-term/mechanism and exact
+Request-byte checks; ordinary BRC-170 imports and capabilities remain unchanged.
+These terms stages do not substitute for complete Script/lineage, role,
+release, License or key validation.
+
+The complete LCH coverage selection passes 211 tests/29 suites in 23.106s,
+with 96.30% statements, 89.96% branches, 94.69% functions and 97.26% lines.
+The complete optional cryptographic selection passes 54 tests/11 suites,
+including two 300-case properties; new terms/consent measured coverage is
+99.12% statements, 94.05% branches and 100% functions/lines. The initial focused
+selection lacked human-term/mechanism coverage and failed its function floor;
+meaningful consent and mutation-during-await tests now cover those paths. A
+foreign-realm structuredClone test fixture was corrected to use real decoded
+CBOR ownership. The initial property registration used the wrong replay names;
+its corrected test honors all governed FAST_CHECK controls and the 300 floor.
+No score, source union, deadline or coverage threshold changed.
+
+All 55 compiled examples pass against 24 exact tarballs; the LCH packed ESM,
+strict types, referenced maps, publint and installed executable pass. Its
+ordinary browser graph remains byte-identical; the optional entry, including
+all covenant terms exports, measures Vite 304150/88392/74500 and esbuild
+254925/84162/72781 raw/gzip/Brotli bytes. Both retain one LCH/SDK chunk and pass
+every existing byte ceiling unchanged. No Node/native custody enters the graph.
+The exact ACKed critical inventory is now 130, with complete prior LCH, wallet
+and host source/test unions retained. Named/full mutation qualification remains
+required; these unit/coverage/browser receipts do not establish it.
+
+Complete application coverage v2 exercised 3062 tests/213 suites in 888.867s
+with 97.93% statements, 96.26% branches, 98.17% functions and 98.60% lines. One
+legacy repeated-mathematics assertion failed. It now checks reopened native
+request bindings and rejects persisted signature tampering, including repeated
+negative checks; all 13 cache-boundary regressions pass. The complete current
+application gate is being rerun. The earlier failure remains a failed receipt,
+not a qualified whole-package result. Covenant licensing/buyer orchestration,
+actual complete reference flows and the final campaign/hosted C2 gate remain open.

@@ -201,3 +201,42 @@ custody reopen before unpaid recovery after Offer expiry and catalogue withdrawa
 Exactly one payment header and one seller credit remain. The fixture uses signed
 synthetic funding and isolated loopback HTTP, never broadcasts, and does not qualify
 TLS, production publication or the unfinished operator/workbench demonstrations.
+
+## Reusable standing Offer and individual covenant consent
+
+The optional covenant terms adapter separates the reusable Offer from each
+buyer. Install `LCH_OVERLAY_COVENANT_MECHANISMS` explicitly, then call
+`validateLCHOverlayCovenantTerms` with complete original Header, Offer and signed
+Request bytes, the outer BRC-196 preparation, exact listing descriptor, bounded
+reader and independently selected authenticated topic capability. E, C, S,
+the fixed-render/encryption/key mechanisms and the registered BRC-197 family
+must all be installed and advertised. The payment endpoint names the selected
+base plus `/overlay/v1/purchases/prepare`; this flow has no BRC-105 charge.
+
+The sole standing requirement must omit the buyer. Its policy must leave the
+assignee open; the actual Request authenticates and fixes the individual
+buyer. Two buyers can therefore consent to one unchanged Offer/descriptor and
+receive distinct Agreements without modifying that Offer. The adapter compares
+the exact anchor, seller/collector, Asset/Offer IDs, price and complete initial
+revenue schedule. It requires all administrative routes under seller-v1,
+unanimous current-recipient amendments, retained remainders and externally
+funded exact retirement. It rejects payout-less listings and incompatible
+immediate separate-payee duties. A schedule representation is not genesis or
+Script proof.
+
+`validateLCHOverlayCovenantWindow(terms, signedTerms, now)` applies the current
+Offer and purchase cutoff only to new work. For an already retained obligation,
+`validateLCHOverlayCovenantPromise` checks the exact signed original preparation,
+selected release policy, BRC-197 domain/schema and recovery interval. The floor
+is the maximum of one day, the original capability promise and the Offer's
+payment recovery period. Neither function redirects an outstanding purchase to
+a new listing or opens an expired Offer. Retain the original Request signature
+bytes; re-signing the same body changes its outer request digest.
+
+The accepted-policy checks are shared with the existing paid adapter. Human
+term digests, explicit mechanism choices, full-Asset Selection and deterministic
+Request bytes retain the same rules. Standing-offer terms alone do not establish
+role authority, complete Bitcoin lineage, exact actual purchase increment,
+retained topical admission, release-policy satisfaction, license validity or
+usable keys. Those independent proof and issuance stages remain required for
+the full covenant reference flow.

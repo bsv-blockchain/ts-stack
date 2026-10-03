@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 129)
+  assert.equal(Object.keys(configured).length, 130)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -901,6 +901,7 @@ test('optional LCH acquisition qualifies every whole module and its complete cry
     'src/overlayAcquisitionCodec.ts',
     'src/overlayAcquisitionPolicy.ts',
     'src/overlayAcquisitionTerms.ts',
+    'src/overlayAcquisitionConsent.ts',
     'src/overlayAcquisitionAuthority.ts',
     'src/overlayAcquisitionSettlement.ts',
     'src/overlayAcquisitionCustody.ts',
@@ -1004,4 +1005,26 @@ test('private purchase preparation and native state retain complete qualificatio
     'test/revenue-authority-fixture.ts'
   ])
     assert.ok(configured['private-acquisition-coordination'].additionalInputs.includes(fixture))
+})
+
+test('standing covenant terms retain complete modes, consent and prior cryptographic qualification', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT),
+    target = configured['lch-overlay-covenant-terms']
+  assert.deepEqual(target.mutate, [
+    'src/overlayAcquisitionCovenantTerms.ts',
+    'src/overlayAcquisitionConsent.ts'
+  ])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/overlay-acquisition*.test.ts'
+  ])
+  assert.equal(
+    target.propertyTest,
+    'packages/content/lch/test/overlay-acquisition-covenant-terms.property.test.ts'
+  )
+  assert.deepEqual(target.additionalInputs, configured['lch-overlay-acquisition'].additionalInputs)
+  assert.ok(
+    selectAffectedMutationTargets(configured, [
+      'packages/content/lch/src/overlayAcquisitionConsent.ts'
+    ]).includes('lch-overlay-covenant-terms')
+  )
 })

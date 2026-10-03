@@ -32,7 +32,11 @@
         "LCHOverlayPaidSeller",
         "LCHOverlayPaidCustody",
         "validateLCHOverlayPaidTerms",
-        "decodeUnverifiedLCHOverlayContext"
+        "decodeUnverifiedLCHOverlayContext",
+        "LCH_OVERLAY_COVENANT_MECHANISMS",
+        "validateLCHOverlayCovenantTerms",
+        "validateLCHOverlayCovenantPromise",
+        "validateLCHOverlayCovenantWindow"
       ],
       "prohibitedExports": ["SQLiteProtectedOperationObjectStore", "NodeProtectedPayloadCodec"],
       "maximumBytes": {
