@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import {
   canonicalOutputJSON,
   outputString,
+  outputU64,
   OutputProtocolError,
   parseOutputJSON,
   type Transaction,
@@ -16,6 +17,34 @@ import {
 
 const INPUT_LIMIT = 1048576
 const ASSESSMENT_PREFIX = 'overlay-topic-admission-v1:'
+
+/** Stronger optional companion premise. An old provider without an original
+ * timestamp is unavailable; a new read cannot repair its missing provenance.
+ */
+export function timedRetainedTopicAdmission(
+  input: RetainedAdmission,
+  query: AdmissionHistoryQuery,
+  tx: Transaction
+): { steak: STEAK; assessmentContextId: string; acceptedAt: string } {
+  const owned = JSON.parse(canonicalOutputJSON(input, { bytes: INPUT_LIMIT })) as RetainedAdmission
+  const original = retainedTopicAdmission(owned, query, tx)
+  if (owned.acceptedAt === undefined)
+    throw new OutputProtocolError(
+      'unavailable',
+      'Original admission acceptance time is unavailable'
+    )
+  const acceptedAt = outputU64(owned.acceptedAt).toString()
+  return {
+    ...original,
+    acceptedAt,
+    assessmentContextId:
+      ASSESSMENT_PREFIX +
+      createHash('sha256')
+        .update(ASSESSMENT_PREFIX + '\0timed\0')
+        .update(canonicalOutputJSON({ original: original.assessmentContextId, acceptedAt }))
+        .digest('hex')
+  }
+}
 
 /** Trusted history still needs exact provenance and selected-topic projection. */
 export function retainedTopicAdmission(

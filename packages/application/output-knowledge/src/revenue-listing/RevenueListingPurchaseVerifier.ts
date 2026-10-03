@@ -48,7 +48,12 @@ export type RevenueListingPurchaseResult =
       previousSatoshis: string
       increment: string
     }
-  | Exclude<RevenueListingLineageResult, { status: 'verified' }>
+  | (Exclude<RevenueListingLineageResult, { status: 'verified' }> & {
+      /** Bounded local diagnostic for preparation/ABI refusals. Not a wire
+       * decision, global conflict verdict or replacement for status/dependencies.
+       */
+      reason?: string
+    })
 
 /** Verify the exact prepared BRC-196 purchase, not a seller's claimed increment.
  * This validates Bitcoin/family/history/request association. It does not establish
@@ -216,8 +221,10 @@ function purchaseFailure(
   error: unknown
 ): Exclude<RevenueListingPurchaseResult, { status: 'verified' }> {
   if (error instanceof OutputProtocolError) {
+    const reason = error.message.slice(0, 512)
     if (error.code === 'context-changed' || error.code === 'cancelled' || error.code === 'limited')
-      return { status: error.code, dependencies: [] }
+      return { status: error.code, dependencies: [], reason }
+    return { status: 'invalid', dependencies: [], reason }
   }
-  return { status: 'invalid', dependencies: [] }
+  return { status: 'invalid', dependencies: [], reason: 'Purchase representation is invalid' }
 }

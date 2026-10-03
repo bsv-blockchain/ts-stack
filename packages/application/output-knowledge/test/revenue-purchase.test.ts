@@ -1,8 +1,10 @@
 import { expect, it } from '@jest/globals'
 import {
+  Beef,
   canonicalOutputJSON,
   MerklePath,
   outputPacketDigest,
+  OutputProtocolError,
   PrivateKey,
   signOutputPacket,
   Utils
@@ -10,7 +12,7 @@ import {
 import { RevenueListingPurchaseVerifier } from '../src/revenue-listing/RevenueListingPurchaseVerifier.js'
 import { RevenueListing } from '@bsv/sdk/script/templates/RevenueListing'
 import { atListing, chains, context, family, minedChain } from './revenue-lineage-fixture.js'
-import { purchaseFixture, transactionEvidence } from './revenue-purchase.fixture.js'
+import { purchaseBEEF, purchaseFixture, transactionEvidence } from './revenue-purchase.fixture.js'
 
 it('verifies a real funded BRC-196 receipt and every covenant back to the authorized genesis', async () => {
   const f = await purchaseFixture(),
@@ -159,15 +161,13 @@ it('preserves cancellation and caller/installed work limits', async () => {
     cancelled = new AbortController()
   cancelled.abort()
   expect(
-    (
-      await new RevenueListingPurchaseVerifier(family, chains).verify(
-        f.purchase,
-        f.original,
-        context(),
-        cancelled.signal
-      )
-    ).status
-  ).toBe('cancelled')
+    await new RevenueListingPurchaseVerifier(family, chains).verify(
+      f.purchase,
+      f.original,
+      context(),
+      cancelled.signal
+    )
+  ).toEqual({ status: 'cancelled', dependencies: [] })
   expect(
     (
       await new RevenueListingPurchaseVerifier(family, chains, { listingTransactions: 1 }).verify(
@@ -180,9 +180,8 @@ it('preserves cancellation and caller/installed work limits', async () => {
   const small = context()
   small.limits.bytes = 1024
   expect(
-    (await new RevenueListingPurchaseVerifier(family, chains).verify(f.purchase, f.original, small))
-      .status
-  ).toBe('limited')
+    await new RevenueListingPurchaseVerifier(family, chains).verify(f.purchase, f.original, small)
+  ).toEqual({ status: 'limited', dependencies: [], reason: 'Decoded byte limit' })
 })
 
 it('refuses a successor evidence index or alternate BEEF target without adopting it', async () => {
@@ -269,3 +268,236 @@ it('refuses malformed binary evidence without replacing the original acquisition
   ).toBe('invalid')
   expect((await verifier.verify(f.purchase, f.original, context())).status).toBe('verified')
 }, 30000)
+
+function resign(original: Awaited<ReturnType<typeof purchaseFixture>>['original'], key = 41) {
+  const request = original.request
+  const body = {
+    ...original.terms.body,
+    seller: original.seller,
+    recipient: request.recipient,
+    listing: request.listing,
+    assetId: request.assetId,
+    termsDigest: request.termsDigest,
+    requestDigest: outputPacketDigest('purchase-request', request),
+    acquisitionId: outputPacketDigest('purchase', {
+      chain: request.listing.chain,
+      seller: original.seller,
+      recipient: request.recipient,
+      topic: request.topic,
+      requestId: request.requestId
+    })
+  }
+  original.terms = signOutputPacket('purchase-terms', body, new PrivateKey(key))
+}
+
+it('cancels before reading any untrusted purchase or preparation representation', async () => {
+  const stop = new AbortController()
+  stop.abort()
+  const inaccessible = new Proxy(
+    {},
+    {
+      ownKeys() {
+        throw new Error('Cancelled input was read')
+      }
+    }
+  )
+  expect(
+    await new RevenueListingPurchaseVerifier(family, chains).verify(
+      inaccessible,
+      inaccessible as never,
+      context(),
+      stop.signal
+    )
+  ).toEqual({ status: 'cancelled', dependencies: [] })
+})
+
+it.each(['listing', 'index', 'chain-view', 'seller', 'asset', 'terms'])(
+  'identifies a signed %s mismatch before inspecting purchase ancestry',
+  async field => {
+    const f = await purchaseFixture(),
+      original = structuredClone(f.original),
+      snapshot = context()
+    if (field === 'listing') original.request.listing.txid = '01'.repeat(32)
+    if (field === 'index') original.request.listing.outputIndex = 1
+    if (field === 'chain-view') snapshot.view.chain.network = 'another-valid-network'
+    if (field === 'seller') original.seller = new PrivateKey(45).toPublicKey().toString()
+    if (field === 'asset') original.request.assetId = '46'.repeat(32)
+    if (field === 'terms') original.request.termsDigest = '47'.repeat(32)
+    resign(original, field === 'seller' ? 45 : 41)
+    let calls = 0
+    const verifier = new RevenueListingPurchaseVerifier(family, {
+      async resolve() {
+        calls++
+        throw new Error('Prepared mismatch must precede ancestry work')
+      }
+    })
+    expect(await verifier.verify(f.purchase, original, snapshot)).toEqual({
+      status: 'invalid',
+      dependencies: [],
+      reason: 'Prepared listing, chain, seller, asset or terms differ'
+    })
+    expect(calls).toBe(0)
+  }
+)
+
+it.each(['domainProfile', 'schema', 'jcs', 'index', 'binary'])(
+  'preserves a bounded local diagnostic for %s without exposing a wire decision',
+  async field => {
+    const f = await purchaseFixture(),
+      original = structuredClone(f.original)
+    let purchase = f.purchase
+    if (field === 'domainProfile') original.terms.body.domainProfile = 'urn:unsupported:domain'
+    if (field === 'schema') original.terms.body.domainEvidence.schema = 'urn:unsupported:schema'
+    if (field === 'jcs')
+      original.terms.body.domainEvidence.bytes = Utils.toBase64(
+        new TextEncoder().encode(' ' + canonicalOutputJSON(f.prepared))
+      )
+    if (field === 'index') purchase = { ...purchase, outputIndex: 1 }
+    if (field === 'binary') purchase = { ...purchase, beef: 'AA==' }
+    resign(original)
+    expect(
+      await new RevenueListingPurchaseVerifier(family, chains).verify(purchase, original, context())
+    ).toEqual({
+      status: 'invalid',
+      dependencies: [],
+      reason: {
+        domainProfile: 'Prepared purchase domain differs',
+        schema: 'Prepared purchase domain differs',
+        jcs: 'Prepared lineage must use exact JCS bytes',
+        index: 'Purchase evidence must select successor zero',
+        binary: 'Purchase representation is invalid'
+      }[field]
+    })
+  }
+)
+
+it('supports complete classic BEEF and refuses empty, txid-only and mislabeled atomic targets', async () => {
+  const f = await purchaseFixture(),
+    classic = purchaseBEEF(f.purchase).toBinary()
+  expect(Beef.fromBinaryStrict(classic).atomicTxid).toBeUndefined()
+  expect(Beef.fromBinaryStrict(classic).txs.at(-1)!.txid).toBe(f.purchase.txid)
+  const verifier = new RevenueListingPurchaseVerifier(family, chains)
+  expect(
+    (await verifier.verify({ ...f.purchase, beef: Utils.toBase64(classic) }, f.original, context()))
+      .status
+  ).toBe('verified')
+  const only = new Beef()
+  only.mergeTxidOnly(f.purchase.txid)
+  const atomic = Utils.toArray(f.purchase.beef, 'base64')
+  atomic.splice(4, 32, ...Utils.toArray(f.prepared.target.txid, 'hex').reverse())
+  for (const bytes of [new Beef().toBinary(), only.toBinary(), atomic])
+    expect(
+      await verifier.verify({ ...f.purchase, beef: Utils.toBase64(bytes) }, f.original, context())
+    ).toEqual({ status: 'invalid', dependencies: [], reason: 'Purchase BEEF target differs' })
+}, 30000)
+
+it('refuses a purchase already included in the signed predecessor package', async () => {
+  const f = await purchaseFixture(),
+    original = structuredClone(f.original)
+  const prepared = {
+    ...f.prepared,
+    transactions: [
+      ...f.prepared.transactions,
+      { txid: f.purchase.txid, beef: f.purchase.beef }
+    ].sort((a, b) => a.txid.localeCompare(b.txid, 'en'))
+  }
+  original.terms.body.domainEvidence.bytes = Utils.toBase64(
+    new TextEncoder().encode(canonicalOutputJSON(prepared))
+  )
+  resign(original)
+  expect(
+    await new RevenueListingPurchaseVerifier(family, chains).verify(f.purchase, original, context())
+  ).toEqual({
+    status: 'invalid',
+    dependencies: [],
+    reason: 'Purchase already appears in predecessor history'
+  })
+})
+
+it.each(['transactions', 'dependencies'] as const)(
+  'enforces the caller %s ceiling before chain verification',
+  async field => {
+    const f = await purchaseFixture(),
+      snapshot = context()
+    snapshot.limits[field] = 1
+    let calls = 0
+    const verifier = new RevenueListingPurchaseVerifier(family, {
+      async resolve() {
+        calls++
+        throw new Error('Dependency budget must precede chain work')
+      }
+    })
+    expect(await verifier.verify(f.purchase, f.original, snapshot)).toEqual({
+      status: 'limited',
+      dependencies: [],
+      reason: 'Lineage dependency limit'
+    })
+    expect(calls).toBe(0)
+  }
+)
+
+it.each(['one-input', 'admin-route', 'predecessor-index', 'amount', 'script'])(
+  'identifies an invalid purchase %s before Bitcoin/chain work',
+  async field => {
+    const f = await purchaseFixture()
+    if (field === 'one-input') f.completed.inputs.splice(1)
+    if (field === 'admin-route') f.completed.inputs[0].unlockingScript!.chunks[2].op = 0x52
+    if (field === 'predecessor-index') f.completed.inputs[0].sourceOutputIndex = 1
+    if (field === 'amount') f.completed.outputs[0].satoshis!--
+    if (field === 'script')
+      f.completed.outputs[1].lockingScript = f.completed.outputs[0].lockingScript
+    const result = await new RevenueListingPurchaseVerifier(family, chains).verify(
+      transactionEvidence(f),
+      f.original,
+      context()
+    )
+    expect(result).toEqual({
+      status: 'invalid',
+      dependencies: [],
+      reason: {
+        'one-input': 'Listing dimensions exceed profile',
+        'admin-route': 'Administrative transition is not a purchase',
+        'predecessor-index': 'Purchase consumed another prepared listing',
+        amount: 'Purchase successor increment/state or recipient-bound receipt differs',
+        script: 'Purchase successor increment/state or recipient-bound receipt differs'
+      }[field]
+    })
+  }
+)
+
+it('refuses unavailable raw predecessor evidence before constructing a purchase plan', async () => {
+  const f = await purchaseFixture(),
+    original = structuredClone(f.original)
+  const prepared = { ...f.prepared, target: { ...f.prepared.target, txid: '01'.repeat(32) } }
+  original.request.listing = prepared.target
+  original.terms.body.domainEvidence.bytes = Utils.toBase64(
+    new TextEncoder().encode(canonicalOutputJSON(prepared))
+  )
+  resign(original)
+  expect(
+    await new RevenueListingPurchaseVerifier(family, chains).verify(f.purchase, original, context())
+  ).toEqual({
+    status: 'invalid',
+    dependencies: [],
+    reason: 'Purchase/predecessor raw evidence is unavailable'
+  })
+})
+
+it('preserves installed-decoder cancellation as a qualified negative outcome', async () => {
+  const f = await purchaseFixture(),
+    local = new RevenueListing(family.lock(f.prepared.descriptor).toBinary().slice(428))
+  local.decode = () => {
+    throw new OutputProtocolError('cancelled', 'Installed family operation cancelled')
+  }
+  expect(
+    await new RevenueListingPurchaseVerifier(local, chains).verify(
+      f.purchase,
+      f.original,
+      context()
+    )
+  ).toEqual({
+    status: 'cancelled',
+    dependencies: [],
+    reason: 'Installed family operation cancelled'
+  })
+})

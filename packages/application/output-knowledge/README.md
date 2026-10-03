@@ -66,6 +66,16 @@ increment/state and recipient-bound receipt, then verifies the complete successo
 history and every covenant. The result does not establish currentness, asset
 permission, admission, private release or usability. See the history guide's
 prepared-purchase section before composing it with a wallet or host.
+Its optional bounded local refusal reason helps distinguish preparation and ABI
+failures while preserving status/dependencies; it is not a wire or global verdict.
+
+The `private/node` entry also exports `PrivatePurchaseContracts`, purchase progress
+functions and `SQLitePrivatePurchaseStore`. They retain the exact preparation,
+one native admission intent and first signed result, with reserved completion
+capacity and current recipient checks at enqueue. They do not themselves verify
+a purchase, perform topic admission, satisfy a release policy or issue a licence.
+See [original purchase custody](../../../docs/guides/private-purchase-custody.md)
+before installing the separately composed host and domain owners.
 
 ## Durable progressive and live provider
 

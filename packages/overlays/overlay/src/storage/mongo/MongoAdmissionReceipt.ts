@@ -1,10 +1,20 @@
 import { Binary } from 'mongodb'
 import {
   admissionSemanticDigest,
+  asStorageUint64,
   type AdmissionIdentity,
   type AdmissionReceipt,
   type RetainedAdmission
 } from '../AdmissionStorage.js'
+
+/** Server time written with the original committed operation, never the recovery clock. */
+export function mongoAdmissionAcceptedAt(
+  input: unknown
+): NonNullable<RetainedAdmission['acceptedAt']> {
+  if (!(input instanceof Date) || !Number.isSafeInteger(input.getTime()) || input.getTime() < 0)
+    throw new Error('Corrupt Mongo admission acceptance timestamp')
+  return asStorageUint64(String(Math.floor(input.getTime() / 1000)))
+}
 
 export function copyReceipt(receipt: AdmissionReceipt): AdmissionReceipt {
   if (

@@ -443,3 +443,14 @@ source retains score90, zero uncovered/invalid/unexecuted, four workers and the
 existing deadline/seed policy. It has no source partition; a named feedback run
 is diagnostic, while the final complete campaign remains mandatory. Existing
 wallet, application, LCH and administrative-route target unions remain intact.
+
+`private-purchase-contract` qualifies the complete original-preparation contract
+module with its full unit suite, disclosed fixture and separate 300-case seeded
+property suite. `private-purchase-state` qualifies both complete progress and
+SQLite custody modules with their full unit/fixture union and 300 actual native
+interruption/reopen histories. Both critical targets require score90 and zero
+uncovered, invalid or unexecuted mutants, preserving existing seeds, workers,
+deadlines and complete-campaign-only qualification. Neither has a source partition
+or an excluded source region. Their registrations are additional obligations;
+passing component tests does not establish admission, release or full campaign
+completion.

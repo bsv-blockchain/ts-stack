@@ -21,6 +21,7 @@ import {
   copyReceipt,
   decodeMongoAdmissionReceipt,
   encodeMongoAdmissionReceipt,
+  mongoAdmissionAcceptedAt,
   retainedMongoAdmission
 } from './MongoAdmissionReceipt.js'
 
@@ -441,7 +442,13 @@ export class MongoTransactionRunner {
       const retained = retainedMongoAdmission(operation.receipt, operationId, operation.semanticDigest, operation.txid)
       if (retained !== undefined && mongoNodeKey(retained.identity.scope) !== mongoNodeKey(this.scope))
         throw new Error('Corrupt Mongo admission-history scope')
-      return retained
+      // Committed operations never mutate again. updatedAt was written using
+      // Mongo $currentDate in the same transaction as the original receipt.
+      // Keep it out of ordinary receipt bytes and never substitute Date.now().
+      return retained === undefined ? undefined : {
+        ...retained,
+        acceptedAt: mongoAdmissionAcceptedAt(operation.updatedAt)
+      }
     } finally {
       this.calls -= 1
       budget.close()

@@ -7,6 +7,7 @@ import {
   Utils
 } from '@bsv/sdk'
 import { OverlayProposalAdmission } from '../ProposalAdmission.js'
+import { retainedTopicAdmission, timedRetainedTopicAdmission } from '../RetainedTopicAdmission.js'
 import { admissionSemanticDigest, type RetainedAdmission } from '../storage/AdmissionStorage.js'
 import {
   fixture,
@@ -25,6 +26,36 @@ const protocolFailure = {
   code: expect.stringMatching(/^(invalid|unauthorized|unsupported|context-changed)$/),
   message: expect.stringMatching(/\S/)
 }
+
+test('timed recovery preserves selected-topic history and requires its original acceptance time', () => {
+  const original = retained()
+  const query = {
+    scope,
+    txid: transaction.id('hex'),
+    topic,
+    policyId: 'overlay-engine-submit-v1',
+    contextDigest: original.identity.contextDigest
+  }
+  const ordinary = retainedTopicAdmission(original, query, transaction)
+  expect(() => timedRetainedTopicAdmission(original, query, transaction)).toThrow(
+    expect.objectContaining({ code: 'unavailable' })
+  )
+  const dated = { ...original, acceptedAt: '30' as never }
+  const timed = timedRetainedTopicAdmission(dated, query, transaction)
+  expect(timed.acceptedAt).toBe('30')
+  expect(timed.steak).toEqual(ordinary.steak)
+  expect(Object.keys(timed.steak)).toEqual([topic])
+  expect(retainedTopicAdmission(dated, query, transaction)).toEqual(ordinary)
+  expect(timedRetainedTopicAdmission(structuredClone(dated), query, transaction)).toEqual(timed)
+  expect(timed.assessmentContextId).not.toBe(ordinary.assessmentContextId)
+  expect(
+    timedRetainedTopicAdmission({ ...dated, acceptedAt: '31' as never }, query, transaction)
+      .assessmentContextId
+  ).not.toBe(timed.assessmentContextId)
+  expect(() =>
+    timedRetainedTopicAdmission({ ...dated, acceptedAt: '-1' as never }, query, transaction)
+  ).toThrow(expect.objectContaining({ code: 'invalid' }))
+})
 
 test('requires actual retained-history capability and an installed topic', () => {
   const f = fixture()

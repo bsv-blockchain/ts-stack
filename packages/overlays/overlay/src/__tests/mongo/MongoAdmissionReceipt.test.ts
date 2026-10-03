@@ -9,6 +9,7 @@ import {
   copyReceipt,
   decodeMongoAdmissionReceipt,
   encodeMongoAdmissionReceipt,
+  mongoAdmissionAcceptedAt,
   retainedMongoAdmission
 } from '../../storage/mongo/MongoAdmissionReceipt.js'
 
@@ -37,6 +38,11 @@ const stored = () => ({
 })
 
 describe('bounded optional Mongo admission provenance', () => {
+  test('uses the retained atomic server timestamp and rejects absent or corrupt time', () => {
+    expect(mongoAdmissionAcceptedAt(new Date(1790986779123))).toBe('1790986779')
+    for (const invalid of [undefined, '1790986779', 1790986779123, new Date(-1), new Date(NaN)])
+      expect(() => mongoAdmissionAcceptedAt(invalid)).toThrow('acceptance timestamp')
+  })
   test('default writes preserve exact legacy JSON bytes and public receipt shape', () => {
     const bytes = encodeMongoAdmissionReceipt(receipt, identity)
     expect(Buffer.from(bytes.value()).toString()).toBe(JSON.stringify(receipt))

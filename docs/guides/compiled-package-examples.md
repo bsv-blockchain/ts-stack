@@ -1867,3 +1867,49 @@ export async function inspectPreparedPurchase(
   return await verifier.verify(purchase, original, context, signal)
 }
 ```
+
+## Original native purchase preparation
+
+The installed domain verifies the listing, domain and private readiness before
+this reservation. An independently selected signer signs the frozen body. This
+example reserves original custody and enqueues payable terms; it does not fund,
+admit or release a purchase. The caller supplies current authenticated authority
+to the native guard and separately signs the complete HTTP response.
+
+```ts compile
+// example-id: original-private-purchase-custody
+import type { OutputSignedPurchaseTerms as OriginalPurchaseTerms } from '@bsv/sdk'
+import {
+  PrivatePurchaseContracts as OriginalPurchaseContracts,
+  SQLitePrivatePurchaseStore as OriginalPurchaseStore,
+  type PrivatePurchasePreparedContract as OriginalPreparedPurchase,
+  type PrivatePurchaseCustody as OriginalPurchaseCustody,
+  type ProtectedLedgerGuard as OriginalPurchaseGuard
+} from '@bsv/output-knowledge/private/node'
+
+export function reserveOriginalPurchase(
+  store: OriginalPurchaseStore,
+  contracts: OriginalPurchaseContracts,
+  prepared: OriginalPreparedPurchase,
+  signedTerms: OriginalPurchaseTerms,
+  custody: Omit<OriginalPurchaseCustody, 'original'>,
+  clock: () => string,
+  guard: OriginalPurchaseGuard
+) {
+  const original = contracts.authenticate(prepared, signedTerms)
+  return store.prepare({ ...custody, original }, clock, guard).progress.acquisitionId
+}
+
+export function enqueueOriginalPayableTerms(
+  store: OriginalPurchaseStore,
+  acquisitionId: string,
+  authenticatedRecipient: string,
+  clock: () => string,
+  guard: OriginalPurchaseGuard,
+  send: (terms: OriginalPurchaseTerms) => void
+) {
+  const retained = store.load(acquisitionId, authenticatedRecipient, clock, guard)
+  if (!retained) throw new Error('Original purchase is unavailable')
+  store.discloseTerms(retained, authenticatedRecipient, clock, guard, send)
+}
+```

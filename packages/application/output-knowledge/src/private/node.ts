@@ -127,3 +127,27 @@ export type {
   PrivateAcquisitionWallet,
   PrivateAcquisitionWalletOutcome
 } from './PrivateAcquisitionWallet.js'
+
+export {
+  PrivatePurchaseContracts,
+  type PrivatePurchaseInstallation,
+  type PrivatePurchaseTrust,
+  type PrivatePurchasePreparationTerms,
+  type PrivatePurchasePreparedContract,
+  type PrivatePurchaseOriginal
+} from './PrivatePurchaseContracts.js'
+export {
+  createPrivatePurchaseProgress,
+  advancePrivatePurchaseProgress,
+  parsePrivatePurchaseProgress,
+  privatePurchaseEnvelope,
+  privatePurchaseOperation,
+  type PrivatePurchaseProgress,
+  type PrivatePurchaseEvent
+} from './PrivatePurchaseProgress.js'
+export {
+  SQLitePrivatePurchaseStore,
+  type PrivatePurchaseCustody,
+  type PrivatePurchaseStoreLimits,
+  type PrivatePurchaseLoaded
+} from './SQLitePrivatePurchaseStore.js'

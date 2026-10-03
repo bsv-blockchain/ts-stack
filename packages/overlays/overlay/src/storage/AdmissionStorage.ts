@@ -171,12 +171,16 @@ export interface RetainedAdmission {
   /** Exact original identity, including its original mode and all newly admitted topics. */
   identity: AdmissionIdentity
   receipt: AdmissionReceipt
+  /** Optional original atomic acceptance record time in Unix seconds. A
+   * timestamp required by a companion cannot be inferred from a later read.
+   * Ordinary public receipt bytes and legacy providers remain unchanged.
+   */
+  acceptedAt?: StorageUint64
 }
 
 /** Missing provenance is unresolved, never evidence that admission failed. */
 export type AdmissionHistoryResult =
-  | { state: 'committed'; admission: RetainedAdmission }
-  | { state: 'unresolved' }
+  { state: 'committed'; admission: RetainedAdmission } | { state: 'unresolved' }
 
 /**
  * Trusted local history access, not a public lookup or current-state assertion.

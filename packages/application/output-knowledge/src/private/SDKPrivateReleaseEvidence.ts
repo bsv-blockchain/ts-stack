@@ -153,7 +153,7 @@ export class SDKPrivateReleaseEvidence {
       'Mined release differs from installed ancestry',
       'context-changed'
     )
-    const bytes = decodeOutputBytes(block.beef, Math.min(65536, snapshot.limits.bytes))
+    const bytes = decodeOutputBytes(block.beef, snapshot.limits.bytes)
     const verified = await this.verifier.verify(
       {
         chain: evidence.chain,

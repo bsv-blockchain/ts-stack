@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 123)
+  assert.equal(Object.keys(configured).length, 125)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -973,4 +973,34 @@ test('prepared purchases qualify the complete verifier and full association suit
       'packages/application/output-knowledge/test/revenue-purchase.fixture.ts'
     ]).includes('revenue-listing-purchase')
   )
+})
+
+test('private purchase preparation and native state retain complete qualification unions', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  const contract = configured['private-purchase-contract']
+  assert.deepEqual(contract.mutate, ['src/private/PrivatePurchaseContracts.ts'])
+  assert.deepEqual(contract.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-purchase-contract.test.ts',
+    '<rootDir>/test/private-purchase-contract.property.test.ts'
+  ])
+  const state = configured['private-purchase-state']
+  assert.deepEqual(state.mutate, [
+    'src/private/PrivatePurchaseProgress.ts',
+    'src/private/SQLitePrivatePurchaseStore.ts'
+  ])
+  assert.deepEqual(state.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/test/private-purchase-progress.test.ts',
+    '<rootDir>/test/private-purchase-store.test.ts',
+    '<rootDir>/test/private-purchase-state.property.test.ts'
+  ])
+  assert.equal(
+    state.propertyTest,
+    'packages/application/output-knowledge/test/private-purchase-state.property.test.ts'
+  )
+  for (const fixture of [
+    'test/revenue-purchase.fixture.ts',
+    'test/revenue-lineage-fixture.ts',
+    'test/revenue-authority-fixture.ts'
+  ])
+    assert.ok(configured['private-acquisition-coordination'].additionalInputs.includes(fixture))
 })

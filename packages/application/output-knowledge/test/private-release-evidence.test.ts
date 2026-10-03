@@ -11,6 +11,68 @@ import { SDKPrivateReleaseEvidence } from '../src/private/SDKPrivateReleaseEvide
 import { context, corpus, resolver, chain, candidate } from './evidence-fixture.js'
 const signal = () => new AbortController().signal
 const txid = corpus.transactions[corpus.inclusion.name].txid
+
+it('accepts actual covenant purchase inclusion beyond 64 KiB while preserving the complete envelope and caller limits', async () => {
+  const { purchaseFixture } = await import('./revenue-purchase.fixture.js'),
+    { minedChain } = await import('./revenue-lineage-fixture.js'),
+    { MerklePath } = await import('@bsv/sdk'),
+    f = await purchaseFixture(),
+    selected = minedChain(f.purchase.txid)
+  f.completed.merklePath = new MerklePath(1, [[{ offset: 0, hash: f.purchase.txid, txid: true }]])
+  const beef = f.completed.toAtomicBEEF(),
+    view = await selected.chains.resolve(selected.context.view, signal()),
+    header = await view.header(1, signal()),
+    evidence: OutputReleaseEvidence = {
+      chain: f.original.request.listing.chain,
+      txid: f.purchase.txid,
+      policy: { kind: 'mined', confirmations: 100 },
+      acceptedAt: '20',
+      blockEvidence: {
+        blockHash: header.hash,
+        height: '1',
+        tipHash: selected.context.view.tipHash,
+        tipHeight: selected.context.view.tipHeight,
+        beef: Utils.toBase64(beef),
+        contextId: selected.context.id,
+        chainPolicyDigest: selected.context.view.chainPolicyDigest
+      }
+    },
+    expected = { chain: evidence.chain, txid: evidence.txid, policy: evidence.policy },
+    verifier = new SDKPrivateReleaseEvidence(selected.chains)
+  expect(beef.length).toBeGreaterThan(65536)
+  expect(Buffer.byteLength(canonicalOutputJSON(evidence))).toBeLessThan(131072)
+  let current = true
+  const assessment = await verifier.verify(
+    evidence,
+    expected,
+    {
+      now: '30',
+      verification: selected.context,
+      current: () => current
+    },
+    signal()
+  )
+  expect(assessment.evidence).toEqual(evidence)
+  assessment.checkCurrent()
+  current = false
+  expect(() => assessment.checkCurrent()).toThrow(
+    expect.objectContaining({ code: 'context-changed' })
+  )
+  const narrowed = structuredClone(selected.context)
+  narrowed.limits.bytes = beef.length - 1
+  await expect(
+    verifier.verify(
+      evidence,
+      expected,
+      {
+        now: '30',
+        verification: narrowed,
+        current: () => true
+      },
+      signal()
+    )
+  ).rejects.toThrow(expect.objectContaining({ code: 'limited' }))
+}, 30000)
 function local() {
   const evidence = { chain, txid, policy: { kind: 'local-admission' as const }, acceptedAt: '20' }
   const expected = { chain, txid, policy: evidence.policy }

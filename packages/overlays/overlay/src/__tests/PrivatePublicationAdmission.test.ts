@@ -1,6 +1,6 @@
 import { OverlayPrivatePublicationAdmission } from '../PrivatePublicationAdmission.js'
 import { privateAdmissionFixture as fixture } from './PrivatePublicationAdmissionFixture.js'
-import { retainedTopicAdmission } from '../RetainedTopicAdmission.js'
+import { retainedTopicAdmission, timedRetainedTopicAdmission } from '../RetainedTopicAdmission.js'
 import { transaction, scope, topic, key, service } from './ProposalAdmissionFixture.js'
 import {
   Utils,
@@ -16,6 +16,36 @@ import {
 import { getOverlayAdmissionHost, overlayAdmissionContextDigest } from '../EngineAdmission.js'
 
 describe('private publication admission bridge', () => {
+  test('requires original acceptance time for a timed companion without changing ordinary history projection', () => {
+    const f = fixture(),
+      original = f.original(),
+      query = {
+        scope,
+        txid: transaction.id('hex'),
+        topic,
+        policyId: 'overlay-engine-submit-v1',
+        contextDigest: overlayAdmissionContextDigest([1, 2, 3])
+      }
+    const ordinary = retainedTopicAdmission(original, query, transaction)
+    expect(() => timedRetainedTopicAdmission(original, query, transaction)).toThrow(
+      expect.objectContaining({ code: 'unavailable' })
+    )
+    const retained = { ...original, acceptedAt: '30' as never }
+    const timed = timedRetainedTopicAdmission(retained, query, transaction)
+    expect(timed.acceptedAt).toBe('30')
+    expect(timed.steak).toEqual(ordinary.steak)
+    expect(retainedTopicAdmission(retained, query, transaction)).toEqual(ordinary)
+    expect(timedRetainedTopicAdmission(structuredClone(retained), query, transaction)).toEqual(
+      timed
+    )
+    expect(
+      timedRetainedTopicAdmission({ ...retained, acceptedAt: '31' as never }, query, transaction)
+        .assessmentContextId
+    ).not.toBe(timed.assessmentContextId)
+    expect(() =>
+      timedRetainedTopicAdmission({ ...retained, acceptedAt: '-1' as never }, query, transaction)
+    ).toThrow()
+  })
   test('honors the complete original request-byte limit before reading or submitting', async () => {
     const f = fixture({}, 65536, 128)
     await expect(f.run()).rejects.toMatchObject({

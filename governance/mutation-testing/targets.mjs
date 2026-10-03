@@ -476,6 +476,54 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'private-purchase-state': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-purchase-state.property.test.ts',
+      additionalInputs: [
+        'src/private/**',
+        'src/storage/**',
+        'test/private-purchase-contract.fixture.ts',
+        'test/private-purchase-progress.fixture.ts',
+        'test/private-purchase-store.fixture.ts',
+        '../../sdk/src/**',
+        '../../sdk/package.json'
+      ],
+      mutate: [
+        'src/private/PrivatePurchaseProgress.ts',
+        'src/private/SQLitePrivatePurchaseStore.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-purchase-progress.test.ts',
+          '<rootDir>/test/private-purchase-store.test.ts',
+          '<rootDir>/test/private-purchase-state.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    },
+    'private-purchase-contract': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest:
+        'packages/application/output-knowledge/test/private-purchase-contract.property.test.ts',
+      additionalInputs: [
+        '../../sdk/src/**',
+        '../../sdk/package.json',
+        'test/private-purchase-contract.fixture.ts'
+      ],
+      mutate: ['src/private/PrivatePurchaseContracts.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/private-purchase-contract.test.ts',
+          '<rootDir>/test/private-purchase-contract.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'revenue-lineage-package': lineageTarget(
       'LineagePackage',
       'revenue-lineage-package.property.test.ts'
@@ -1457,6 +1505,9 @@ export function buildMutationTargets(repositoryRoot) {
         'test/private-acquisition-store.fixture.ts',
         'test/private-acquisition-coordinator.fixture.ts',
         'test/private-acquisition-wallet.fixture.ts',
+        'test/revenue-purchase.fixture.ts',
+        'test/revenue-lineage-fixture.ts',
+        'test/revenue-authority-fixture.ts',
         '../../wallet/wallet-toolbox/src/**',
         '../../wallet/wallet-toolbox/package.json',
         '../../wallet/wallet-toolbox/tsconfig*.json',

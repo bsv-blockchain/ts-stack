@@ -1246,6 +1246,26 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-contract",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-contract.property.test.ts",
+      "risk": "critical",
+      "boundary": "Immutable selected-host BRC-196 preparation, original signed request/domain/release terms and reserved recovery intervals",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-state.property.test.ts",
+      "risk": "critical",
+      "boundary": "Native BRC-196 original preparation, one admission intent, immutable STEAK/POTATOES custody and guarded disclosure across interruption/reopen",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

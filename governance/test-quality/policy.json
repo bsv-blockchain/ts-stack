@@ -1515,6 +1515,31 @@
           "Receipt acquisition, original request digest and recipient must all match the retained terms.",
           "Conclusive association failures do not invoke chain I/O or reserve an admission effect."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-contract.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Immutable selected-host BRC-196 preparation, original signed request/domain/release terms and reserved recovery intervals",
+        "target": "At least 300 original request/recipient/deadline and full retained-capability ownership histories",
+        "invariants": [
+          "The exact complete request and selected seller authenticate the frozen preparation.",
+          "The retained recovery deadline preserves the larger advertised and domain obligation.",
+          "Caller mutation cannot replace the original request, signed body, capability or retained promise."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-state.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Native BRC-196 original preparation, one admission intent, immutable STEAK/POTATOES custody and guarded disclosure across interruption/reopen",
+        "target": "At least 300 deterministic native interruption/reopen and terminal-outcome histories",
+        "invariants": [
+          "Native reopening retains the exact signed preparation and its original protected material.",
+          "An acquisition permanently pins one transaction; a stale writer cannot replace it.",
+          "Private result bytes appear only after retained admission and delivered-result custody; pending and negative responses contain no POTATOES.",
+          "Every original completion reservation and request fence survives interruptions and early terminal outcomes."
+        ]
       }
     ],
     "exclusions": [

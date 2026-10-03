@@ -2793,7 +2793,6 @@ campaign passes 46 suites/863 tests in 139.252 seconds, preserving the original
 still verify this batch. No deadline, source union, case floor, coverage threshold
 or mutation requirement is changed.
 
-
 Main 729ad70e0 (#764) is reconciled before the next reference integration. Its
 full-campaign parallelism, zero-test survivor rejection, scoped Vitest 4.1.11
 holds and protected same-run release orchestration remain intact. The only merge
@@ -2866,3 +2865,53 @@ complete-campaign-only policy. Named local mutation feedback and hosted checks
 remain pending qualifications rather than completed checkpoint evidence. The
 three new analyzer findings on published 4f1a57515 are addressed without altering
 the workbench's input, ownership or shutdown semantics.
+
+### October 2 original private purchase custody and admission time
+
+The native private-service entry now exposes the BRC-196 preparation contracts,
+progress model and AEAD SQLite purchase store. It reserves the original signed
+request, terms, policy/material custody, permanent request fence and future
+candidate/result capacity before returning payable terms. Guarded preparation
+and result disclosure read protected originals while the physical ledger gate
+is held. Late disclosure cannot issue new payable terms after the original
+exclusive cutoff. One transaction remains pinned across retries; a lost commit
+reply, expiry or absent database cannot select a replacement obligation.
+
+The complete application batch passes 132 tests in eight suites in 117.871
+seconds, including three separate 300-case property suites. The native state
+property actually closes and reopens SQLite across generated interruptions.
+The focused store and complete purchase-verifier union passes 54 tests with
+100% statement, branch, function and line coverage for both modules. Preparation
+and progress primitives were also measured with complete coverage. These are
+component results, not a completed topic-submission/release coordinator.
+
+The purchase verifier now returns bounded local protocol diagnostics while
+preserving its qualified result status and dependencies. Specific tests exercise
+original request/recipient/terms binding, executable purchase routes, complete
+classic BEEF, missing ancestors, caller work limits and cancellation. The previous
+whole-source mutation diagnostic failed at 61.68% with 62 surviving and two
+uncovered mutants; it remains failed evidence. Its workers have drained. The
+stronger assertions still require a fresh complete-source diagnostic and the
+final complete campaign; no gate or source selection is relaxed.
+
+Actual revenue purchases exposed an arbitrary 64-KiB inner decoding limit in
+release validation. Removing that inner limit preserves the selected caller
+byte budget and the existing 131072-byte complete release envelope. An actual
+signed covenant purchase larger than 64 KiB now verifies against independently
+checked synthetic headers, while a smaller caller budget and changed context
+remain refused. These fixed public fixtures do not establish live mining.
+
+Retained Mongo admission now supplies optional original server-commit time as
+local metadata. Ordinary receipt bytes and legacy projection stay unchanged.
+The stronger timed projection requires this provenance and binds its assessment
+to that original time; a later recovery clock cannot manufacture it. The complete
+proposal/private-admission and native Mongo receipt/history union passes 181
+tests, including both complete shared-helper consumers. Neither admission time
+nor STEAK establishes a release condition or permission to disclose a key.
+
+The clean package consumer check passes for the new native exports; all 52
+compiled documentation examples pass against 22 exact package tarballs. The two
+new complete critical registrations bring this branch's inventory to 125,
+retaining full source/test unions, 300-case floors and full-campaign-only policy.
+All checkpoint-two end-to-end rows remain open pending their own composition
+and final published-head qualification.

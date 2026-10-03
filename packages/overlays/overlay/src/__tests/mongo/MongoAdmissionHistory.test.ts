@@ -124,6 +124,11 @@ describe('retained admission history on a real three-member replica set', () => 
     if (result.state !== 'committed') throw new Error('expected committed admission')
     expect(result.receipt).toEqual(admissionReceiptFor(plan, []))
     expect(result.receipt).not.toHaveProperty('admissionHistory')
+    expect(result.receipt).not.toHaveProperty('acceptedAt')
+    const committed = await fixture.db
+      .collection(MongoCollectionNames.submissionOperations)
+      .findOne({ _id: operationKey(plan) })
+    const acceptedAt = String(Math.floor(committed!.updatedAt.getTime() / 1000))
     const before = await harness.snapshot()
     await adapter.close()
     adapter = new MongoAdmissionStorage(fixture.db, referenceScope, {
@@ -141,9 +146,15 @@ describe('retained admission history on a real three-member replica set', () => 
     })
     const expected = {
       state: 'committed',
-      admission: { identity: plan.identity, receipt: result.receipt }
+      admission: { identity: plan.identity, receipt: result.receipt, acceptedAt }
     }
     expect(await adapter.history!.read(queryFor(plan))).toEqual(expected)
+    expect(await adapter.commitAdmission(plan)).toEqual(result)
+    expect(
+      (await fixture.db
+        .collection(MongoCollectionNames.submissionOperations)
+        .findOne({ _id: operationKey(plan) }))!.updatedAt
+    ).toEqual(committed!.updatedAt)
     expect(
       await adapter.history!.read({ ...queryFor(plan), topic: 'tm_second', policyId: 'policy-2' })
     ).toEqual(expected)
