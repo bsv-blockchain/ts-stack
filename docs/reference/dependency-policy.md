@@ -139,6 +139,25 @@ all three together when an official compatible release removes the affected
 path and the full compatibility, frozen graph, audit and platform checks pass.
 This build-tool repair does not change published wallet APIs or package versions.
 
+## Temporary standalone service watcher repair
+
+The basic and cloud UHRP services and WAB use Nodemon 3.1.14 with a parent-scoped
+Chokidar 4.0.3 substitution, removing the same affected braces closure without
+an advisory exclusion. Nodemon already resolves watched globs to literal
+directories; the source-owned adapter retains the old anymatch 3 ignore
+semantics, including recursive literal directories, custom cwd, dotfiles,
+regex and function options. WAB replaces ts-node-dev with this same CLI.
+The existing Node/ts-node/telemetry execution paths remain intact, with explicit
+TypeScript and env extensions, manual `rs` and graceful shutdown regressions
+run before each service's ordinary tests. The service-copy policy keeps both
+adapter and native regression identical across all three service contexts.
+
+The three new registered substitutions bring the combined retained count to 30. Remove them and the adapter together after a compatible official Nodemon
+release resolves the dependency path natively and all watcher, frozen audit,
+service and protected Linux image gates pass. These standalone development
+tools change no public npm candidate version, service HTTP API, production
+startup or persisted schema; deployed images require separate promotion.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:
@@ -219,7 +238,7 @@ compatibility checks, not a throughput or memory benchmark. No public npm
 version or consumer migration changes; protected Linux image and exact-head
 analysis gates still qualify the eventual service artifacts before promotion.
 
-The root workspace carries 26 audited dependency overrides, including:
+The combined workspace and standalone registries carry 30 audited dependency overrides, including:
 
 - Jest 30.5.1 and Stryker still constrain parts of their reporting and coverage graphs to
   minimatch releases with older `brace-expansion` ranges. The follow-up
