@@ -26,9 +26,11 @@ import { canonicalizeAtomicBeef } from '../../utility/canonicalizeAtomicBeef'
 import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone } from '../../utility/utilityHelpers'
 import { TransactionStatus } from '../../sdk/types'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
-import { blockHash } from '../../services/chaintracker/chaintracks/util/blockHeaderUtilities'
+import { blockHash, deserializeBaseBlockHeader } from '../../services/chaintracker/chaintracks/util/blockHeaderUtilities'
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
 import { isManagedChangeOutput } from './managedChange'
+import { requireFunding } from '../fundingRecovery/FundingRecoveryProtocol'
+import type { FundingRecoveryCommit } from '../fundingRecovery/FundingRecoveryCommit'
 
 /**
  * Record of a spent-input transition this internalize call performed.
@@ -177,9 +179,18 @@ export async function restoreInputsToSpendable(
 export async function internalizeAction(
   storage: StorageProvider,
   auth: AuthId,
-  args: InternalizeActionArgs
+  args: InternalizeActionArgs,
+  recovery?: FundingRecoveryCommit
 ): Promise<StorageInternalizeActionResult> {
+  if (recovery !== undefined) requireFunding(recovery.protocol === 'wallet-funding-recovery-v1', 'Unsupported funding recovery protocol')
   const ctx = new InternalizeActionContext(storage, auth, args)
+  if (recovery !== undefined) {
+    // Verification/header I/O occurs before the short ownership transaction.
+    // The caller has already retained the operation intent durably.
+    await ctx.setupEvidence()
+    await ctx.prepareRecoveryProof()
+    return await recovery.commit(async trx => await ctx.internalizeAtomically(trx))
+  }
   await ctx.asyncSetup()
 
   if (ctx.isMerge) await ctx.mergedInternalize()
@@ -326,13 +337,14 @@ class InternalizeActionContext {
     })
   }
 
-  private async loadExistingTransaction(): Promise<void> {
+  private async loadExistingTransaction(trx?: TrxToken): Promise<void> {
     this.etx = verifyOneOrNone(
       await this.storage.findTransactions({
-        partial: { userId: this.userId, txid: this.txid }
+        partial: { userId: this.userId, txid: this.txid }, trx
       })
     )
     const allowedStatuses: TransactionStatus[] = ['completed', 'unproven', 'sending', 'nosend']
+    if (trx !== undefined) allowedStatuses.push('unprocessed')
     if (this.etx != null && !allowedStatuses.includes(this.etx.status)) {
       throw new WERR_INVALID_PARAMETER(
         'tx',
@@ -342,10 +354,10 @@ class InternalizeActionContext {
     this.isMerge = this.etx != null
   }
 
-  private async linkExistingOutputs(): Promise<void> {
+  private async linkExistingOutputs(trx?: TrxToken): Promise<void> {
     if (!this.isMerge) return
     this.eos = await this.storage.findOutputs({
-      partial: { userId: this.userId, txid: this.txid }
+      partial: { userId: this.userId, txid: this.txid }, trx
     })
     for (const existing of this.eos) {
       const basket = this.basketInsertions.find(candidate => candidate.vout === existing.vout)
@@ -376,11 +388,12 @@ class InternalizeActionContext {
    * (`findOutputBaskets`) so that a request which is then rejected never
    * creates the named basket as a side effect.
    */
-  private async validateBasketMerges(): Promise<void> {
+  private async validateBasketMerges(trx?: TrxToken): Promise<void> {
     if (!this.isMerge) return
-    for (const basket of this.basketInsertions) {
+    await this.basketInsertions.reduce<Promise<void>>(async (previous, basket) => {
+      await previous
       const eo = basket.eo
-      if (eo == null) continue
+      if (eo == null) return
       // Widened so the type guard's false branch does not narrow `eo` to never.
       if (isManagedChangeOutput(eo as TableOutput | undefined)) {
         throw new WERR_INVALID_PARAMETER(
@@ -389,9 +402,9 @@ class InternalizeActionContext {
         )
       }
       const currentBasketId = eo.basketId
-      if (currentBasketId == null || currentBasketId === this.changeBasket.basketId) continue
+      if (currentBasketId == null || currentBasketId === this.changeBasket.basketId) return
       const requestedBasket = verifyOneOrNone(
-        await this.storage.findOutputBaskets({ partial: { userId: this.userId, name: basket.basket } })
+        await this.storage.findOutputBaskets({ partial: { userId: this.userId, name: basket.basket }, trx })
       )
       if (requestedBasket?.basketId !== currentBasketId) {
         throw new WERR_INVALID_PARAMETER(
@@ -402,7 +415,7 @@ class InternalizeActionContext {
       // Same basket already: cache it so mergeBasketInsertionForOutput's later
       // getBasket call reuses this lookup instead of repeating it.
       this.baskets[basket.basket] = requestedBasket
-    }
+    }, Promise.resolve())
   }
 
   private computeWalletPaymentBalance(): void {
@@ -419,21 +432,85 @@ class InternalizeActionContext {
     }
   }
 
-  async asyncSetup(): Promise<void> {
+  async setupEvidence(): Promise<void> {
     ;({ ab: this.ab, tx: this.tx, txid: this.txid } = await this.validateAtomicBeef(this.args.tx))
-
     for (const output of this.vargs.outputs) this.classifyRequestedOutput(output)
+  }
 
-    this.changeBasket = verifyOne(
-      await this.storage.findOutputBaskets({
-        partial: { userId: this.userId, name: 'default' }
-      })
-    )
+  private async setupStorage(trx?: TrxToken): Promise<void> {
+    this.changeBasket = verifyOne(await this.storage.findOutputBaskets({ partial: { userId: this.userId, name: 'default' }, trx }))
     this.baskets = {}
-    await this.loadExistingTransaction()
-    await this.linkExistingOutputs()
-    await this.validateBasketMerges()
+    await this.loadExistingTransaction(trx)
+    await this.linkExistingOutputs(trx)
+    await this.validateBasketMerges(trx)
     this.computeWalletPaymentBalance()
+  }
+
+  async asyncSetup(): Promise<void> {
+    await this.setupEvidence()
+    await this.setupStorage()
+  }
+
+  private recoveryProven?: TableProvenTx
+
+  async prepareRecoveryProof(): Promise<void> {
+    const bump = this.ab.findBump(this.txid)
+    if (bump === undefined) return
+    const header = await this.storage.getServices().getHeaderForHeight(bump.blockHeight)
+    const merkleRoot = bump.computeRoot(this.txid)
+    const index = bump.path[0].find(entry => entry.hash === this.txid)?.offset
+    requireFunding(header !== undefined && deserializeBaseBlockHeader(header).merkleRoot === merkleRoot && index !== undefined, 'Funding recovery header does not match inclusion proof')
+    const now = new Date()
+    this.recoveryProven = { created_at: now, updated_at: now, provenTxId: 0, txid: this.txid, height: bump.blockHeight, index, merklePath: bump.toBinary(), rawTx: this.tx.toBinary(), blockHash: blockHash(header), merkleRoot }
+  }
+
+  /**
+   * Opt-in atomic receipt path. All wallet reads are refreshed under the journal's
+   * SQLite write guard. An unmined transaction is queued for the existing monitor;
+   * the receipt proves ownership, not broadcast or mining. No network I/O occurs here.
+   */
+  async internalizeAtomically(trx: TrxToken): Promise<StorageInternalizeActionResult> {
+    await this.setupStorage(trx)
+    const existing = this.etx
+    const total = (existing?.satoshis ?? 0) + this.satoshis
+    requireFunding(Number.isSafeInteger(total), 'Funding recovery transaction balance is not a safe integer')
+    let proven: TableProvenTx | undefined
+    if (this.recoveryProven !== undefined) proven = (await this.storage.findOrInsertProvenTx(this.recoveryProven, trx)).proven
+    this.etx = await this.findOrInsertTargetTransaction(this.satoshis, proven, trx)
+    const transactionId = this.etx.transactionId
+    await this.markInputsSpent(transactionId, trx)
+    await this.addLabels(transactionId, trx)
+    await this.mergeWalletPayments(transactionId, trx)
+    await this.mergeBasketInsertions(transactionId, trx)
+    if (proven !== undefined) await this.completeRecoveryProof(proven, trx)
+    else await this.queueRecoveryMonitoring(existing, transactionId, trx)
+    return this.r
+  }
+
+  private async completeRecoveryProof(proven: TableProvenTx, trx: TrxToken): Promise<void> {
+    const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid, trx)
+    if (req !== undefined && req.status !== 'completed') {
+      req.provenTxId = proven.provenTxId
+      req.status = 'completed'
+      req.addHistoryNote({ what: 'fundingRecovery-proof', userId: this.userId })
+      await req.updateStorageDynamicProperties(this.storage, trx)
+    }
+  }
+
+  private async queueRecoveryMonitoring(existing: TableTransaction | undefined, transactionId: number, trx: TrxToken): Promise<void> {
+    const request = EntityProvenTxReq.fromTxid(this.txid, this.tx.toBinary(), this.ab.toBinaryAtomic(this.txid))
+    request.status = 'unsent'
+    request.addHistoryNote({ what: 'fundingRecovery-queued', userId: this.userId })
+    request.addNotifyTransactionId(transactionId)
+    const known = await this.storage.getProvenOrReq(this.txid, request.toApi(), trx)
+    if (known.proven !== undefined) {
+      await this.storage.updateTransaction(transactionId, { provenTxId: known.proven.provenTxId, status: 'completed' }, trx)
+    } else {
+      requireFunding(existing?.status !== 'completed' && known.req?.status !== 'completed', 'Funding recovery completed state lacks a retained proof')
+      requireFunding(known.req !== undefined && !['invalid', 'doubleSpend', 'unfail'].includes(known.req.status), 'Funding recovery broadcast record cannot be accepted')
+      if (known.req.status === 'nosend') await this.storage.updateProvenTxReq(known.req.provenTxReqId, { status: 'unsent' }, trx)
+      if (existing === undefined || existing.status === 'nosend') await this.storage.updateTransaction(transactionId, { status: 'unprocessed' }, trx)
+    }
   }
 
   /**

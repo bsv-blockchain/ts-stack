@@ -188,7 +188,11 @@ test('partition jobs cannot replace each original canonical global gate or the f
         PATH: process.env.PATH,
         PREPARE_RESULT: 'success',
         MUTATION_RESULT: 'success',
-        PARTITION_TARGETS: JSON.stringify(['sdk-auth-http', 'wallet-retained-snapshot']),
+        PARTITION_TARGETS: JSON.stringify([
+          'sdk-auth-http',
+          'wallet-retained-snapshot',
+          'root-eviction-records'
+        ]),
         PARTITION_RESULT: result
       }
     })
@@ -209,7 +213,7 @@ test('partition jobs cannot replace each original canonical global gate or the f
   )
   assert.deepEqual(full.jobs['partition-aggregate'].needs, ['prepare', 'mutation-tests'])
   assert.match(full.jobs['partition-aggregate'].strategy.matrix.target, /partition-targets/)
-  for (const id of ['sdk-auth-http', 'wallet-retained-snapshot']) {
+  for (const id of ['sdk-auth-http', 'wallet-retained-snapshot', 'root-eviction-records']) {
     const download = ci.jobs['mutation-quality'].steps.find(
       step => step.with?.pattern === `mutation-${id}-*`
     )
@@ -237,7 +241,7 @@ test('PR partial execution cannot qualify when canonical aggregate selection is 
   const script = ci.jobs['mutation-quality'].steps.find(
     step => step.name === 'Verify the affected mutation targets'
   ).run
-  const targets = ['sdk-auth-http', 'wallet-retained-snapshot']
+  const targets = ['sdk-auth-http', 'wallet-retained-snapshot', 'root-eviction-records']
   const matrix = {
     include: targets.flatMap(target =>
       ['first', 'second'].map(partition => ({ target, partition }))
@@ -248,6 +252,7 @@ test('PR partial execution cannot qualify when canonical aggregate selection is 
     '[]',
     'null',
     '["sdk-auth-http"]',
+    '["sdk-auth-http","wallet-retained-snapshot"]',
     '["sdk-auth-http","sdk-auth-http"]',
     JSON.stringify(targets)
   ]) {

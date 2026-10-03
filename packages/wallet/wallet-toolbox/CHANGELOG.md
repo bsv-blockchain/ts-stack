@@ -4,6 +4,19 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.0 (source candidate)
+
+- Add opt-in local SQLite action recovery for atomic allocation, exact prepared
+  and signed `noSend` transactions, and durable processing reconciliation.
+- Add local BRC-29 funding recovery with unique outpoint ownership, atomic wallet
+  credit, deferred monitor work and retained receipts. Deep imports require
+  explicit installation; ordinary calls, root exports and BRC-100 RPCs are unchanged.
+- Preserve whole wallet databases and keys for these auxiliary journals. Legacy
+  entity backup/sync, browser/mobile wrappers, IndexedDB and remote providers do
+  not transport or implement them. Reconcile pending operations before rollback.
+- The previously recorded 2.14.5 no-send ownership corrections remain included.
+  This candidate has not been published and does not complete private acquisition.
+
 ## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference

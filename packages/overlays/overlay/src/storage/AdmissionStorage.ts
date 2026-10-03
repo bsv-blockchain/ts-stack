@@ -132,8 +132,8 @@ export type AdmissionCommitResult =
 export type AdmissionReconcileResult = AdmissionCommitResult | { state: 'aborted' }
 
 /**
- * Optional v1 contract, separate from legacy CRUD Storage. No current adapter or
- * Engine call path implements it. A provider must atomically revalidate reads,
+ * Optional v1 contract, separate from legacy CRUD Storage. The opt-in Mongo
+ * adapter and Engine path implement it. A provider must atomically revalidate reads,
  * fences, conditional spends and ready-payload pins, and save every effect plus
  * the receipt. Matching retries return the saved receipt before checking stale
  * reads; conflicting semantic digests reject. Do not run verification, uploads,
@@ -150,11 +150,53 @@ export type AdmissionReconcileResult = AdmissionCommitResult | { state: 'aborted
  */
 export interface AdmissionStorage {
   readonly protocol: 'overlay-admission-v1'
+  /** Optional retained-history reader; legacy commit/reconcile providers need not implement it. */
+  readonly history?: AdmissionHistory
   commitAdmission: (plan: AdmissionCommit) => Promise<AdmissionCommitResult>
   reconcileAdmission: (
     key: AdmissionOperationKey,
     attemptId?: string
   ) => Promise<AdmissionReconcileResult>
+}
+
+export interface AdmissionHistoryQuery {
+  scope: StorageScope
+  txid: string
+  topic: string
+  policyId: string
+  contextDigest: string
+}
+
+export interface RetainedAdmission {
+  /** Exact original identity, including its original mode and all newly admitted topics. */
+  identity: AdmissionIdentity
+  receipt: AdmissionReceipt
+  /** Optional original atomic acceptance record time in Unix seconds. A
+   * timestamp required by a companion cannot be inferred from a later read.
+   * Ordinary public receipt bytes and legacy providers remain unchanged.
+   */
+  acceptedAt?: StorageUint64
+}
+
+/** Missing provenance is unresolved, never evidence that admission failed. */
+export type AdmissionHistoryResult =
+  { state: 'committed'; admission: RetainedAdmission } | { state: 'unresolved' }
+
+/**
+ * Trusted local history access, not a public lookup or current-state assertion.
+ * Resolve a topic's retained applied record to its original committed operation,
+ * validate scope, txid, topic/policy and context against retained identity, and
+ * return the original receipt. A STEAK key alone does not prove topic admission:
+ * receipts can include duplicate topics outside the committed identity.
+ *
+ * Missing, pending, legacy/unbound or mismatching history is unresolved; corrupt
+ * storage and transport failures throw. Results may contain other private topics
+ * in that same operation. The caller must authorize and project any disclosure.
+ * Serving eviction, output spending and reorgs do not erase historical admission.
+ */
+export interface AdmissionHistory {
+  readonly protocol: 'overlay-admission-history-v1'
+  read: (query: AdmissionHistoryQuery) => Promise<AdmissionHistoryResult>
 }
 
 /** External projection delivery may be retried only with both capabilities. */
@@ -178,6 +220,14 @@ export function getAdmissionStorage(storage: unknown): AdmissionStorage | undefi
   if (!('reconcileAdmission' in candidate) || typeof candidate.reconcileAdmission !== 'function')
     return undefined
   return candidate as AdmissionStorage
+}
+
+/** A declaration check only; an atomic receipt alone does not imply retained provenance. */
+export function getAdmissionHistory(storage: unknown): AdmissionHistory | undefined {
+  const history = getAdmissionStorage(storage)?.history
+  return history?.protocol === 'overlay-admission-history-v1' && typeof history.read === 'function'
+    ? history
+    : undefined
 }
 
 export function isReplaySafeProjection(projection: unknown): projection is ReplaySafeProjection {

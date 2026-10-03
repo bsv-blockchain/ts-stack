@@ -5,6 +5,13 @@ BRC-104 HTTP transport. It handles the public handshake endpoint, verifies
 authenticated application requests, signs responses, and optionally exchanges
 verifiable certificates.
 
+The unpublished 2.3.0 candidate adds optional final response admission after
+BRC-104 signing. Existing routes retain their transport behavior, peer ranges and
+wire format. Routes needing a durable send fence explicitly install
+`guardAuthenticatedResponse`; no consumer migration is required for ordinary
+responses. The candidate also retains the development-only rate limiter used by
+bounded local HTTP integration fixtures.
+
 The current release preserves BRC-100 byte fields across supported JSON and
 byte-array forms, snapshots handshake messages before asynchronous work, and
 rejects parsed bodies that cannot be represented without losing semantics.
@@ -144,6 +151,64 @@ const auth = createAuthMiddleware({
   the embedding service enforces an equivalent response budget.
 
 Invalid option types fail during startup.
+
+## Final authenticated response admission
+
+`guardAuthenticatedResponse(res, guard)` is an opt-in boundary for services that
+must recheck authorization or output eligibility after asynchronous response
+signing. Install it in an authenticated handler before sending the response. It
+rejects unauthenticated requests, repeated registration and late registration.
+
+The guard receives an owned candidate containing the authenticated caller,
+BRC-104 transport request ID, attempt number, status, response headers and body
+bytes. Logical application operation IDs remain separate. Headers include the
+BRC-104 authentication metadata and normalized content length; Node may add its
+ordinary Date/connection metadata. Signature coverage remains BRC-104's existing
+status/body and selected-header rules; ordinary CORS/cache headers do not become
+cryptographically signed merely because they appear in this snapshot. It may await
+acquisition of the application's durable send fence. While holding that fence,
+recheck current authorization and every disclosed target, then call `enqueue()`
+synchronously. The callback queues the already signed bytes through Node's native
+HTTP response methods. It never signs, waits for a database, or authorizes the
+caller itself. A handler-level lock around `res.send()` is insufficient because
+signing happens later. The application's writers must use the paired fence,
+including writers in other processes.
+
+If the candidate became stale, return a complete replacement with `statusCode`,
+`headers` and `body: Uint8Array` without calling `enqueue()`. The middleware
+discards the first signed candidate and signs the replacement for the same
+request and session. The guard runs again with `attempt: 1`; it must recheck
+current access and enqueue this response or fail closed. Only one replacement is
+allowed. Its body plus UTF-8 header names and values may total at most 64 KiB, and
+its body must also fit the configured response-body limit. Include required CORS,
+service capability and error-profile headers explicitly: discarded candidate
+headers are not inherited. Never copy confidential candidate headers into a
+public error.
+
+Both signing attempts and guard acquisition share the configured response
+timeout. Disconnect or timeout aborts the supplied signal, closes the response
+and invalidates retained enqueue callbacks. A guard must honor cancellation and
+release its own acquired resources. Calling enqueue twice, calling it after the
+guard returns, returning without a decision, or failing after bytes were queued
+cannot append an unsigned fallback. Failure may close the connection without an
+HTTP error; clients should recover through their durable operation protocol.
+
+This mode supports native Node HTTP/1 responses, including HTTPS, with no
+compression, deferred encoding, or replacement response/header methods before
+or after authentication. Unsupported composition is rejected. Configure the
+route outside such middleware and qualify the complete transport stack.
+`content-encoding` may be absent or `identity`; transfer framing and exact
+content length belong to the native transport. Guarded responses send their
+explicit bytes and status without Express's automatic ETag, conditional-response
+or body transformations. HEAD, 204, 205 and 304 responses must already have empty
+signed bodies. In particular, [HTTP 205 Reset Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-205-reset-content)
+prohibits response content; the guard rejects it before signing rather than
+letting a client discard signed bytes. Ordinary routes keep their existing Express behavior.
+
+The guard provides the transport boundary, not a root-eviction policy, shared
+database, access policy, or index projection adapter. Those components must be
+installed and tested together. See the [root coordination guide](../../../docs/guides/root-eviction-coordination.md)
+and the [compiled interface example](../../../docs/guides/compiled-package-examples.md).
 
 ## Horizontally scaled services
 
@@ -332,3 +397,8 @@ Current TS Stack changes are licensed under the Open BSV License Version 6; see
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+Guarded responses and replacements own their byte snapshots, including Node
+`Buffer` inputs. Subsequent caller mutation does not change the bytes selected for
+signing or enqueue. Durable guard callbacks still must check current application
+authorization and enqueue synchronously; owned bytes do not supply that authority.

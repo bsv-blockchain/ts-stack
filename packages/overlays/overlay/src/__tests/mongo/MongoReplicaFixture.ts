@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
 import { MongoClient, type Db, type Document, type MongoClientOptions } from 'mongodb'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
-import type { StorageScope } from '../../storage/AdmissionStorage.js'
+import type { StorageScope } from '@bsv/overlay'
 
 /** Owns only randomly named databases, ports and temporary mongod files. */
 export interface MongoReplicaFixture {
@@ -30,12 +30,7 @@ export async function createMongoReplicaFixture(): Promise<MongoReplicaFixture> 
       count: 3,
       storageEngine: 'wiredTiger',
       ip: '127.0.0.1',
-      args: [
-        '--setParameter',
-        'enableTestCommands=1',
-        '--wiredTigerCacheSizeGB',
-        '0.25'
-      ],
+      args: ['--setParameter', 'enableTestCommands=1', '--wiredTigerCacheSizeGB', '0.25'],
       configSettings: { electionTimeoutMillis: 2000, heartbeatIntervalMillis: 500 }
     },
     instanceOpts: [{ launchTimeout: 60000 }, { launchTimeout: 60000 }, { launchTimeout: 60000 }]

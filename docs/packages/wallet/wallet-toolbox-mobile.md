@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.14.5'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+version: '2.15.0'
+last_updated: '2026-09-30'
+last_verified: '2026-09-30'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -66,6 +66,16 @@ endpoint.
 The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
+
+## Local recovery capability boundary
+
+The coordinated 2.15.0 candidate preserves this wrapper's ordinary API and SDK
+peer range. The core package's new SQLite action/funding controllers are separate
+Node deep imports. This wrapper does not expose them or grant IndexedDB, mobile
+or remote storage a durable operation journal. If a host separately adopts core
+recovery, preserve its complete wallet database and keys and reconcile outstanding
+operations before rollback; ordinary entity export/sync omits that auxiliary state.
+See [local action recovery](../../guides/local-action-recovery.md).
 
 ## Backup and recovery
 

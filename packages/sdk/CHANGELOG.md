@@ -214,6 +214,32 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added (3.0.0 candidate)
+
+- Add opt-in `OutputPurchaseTransport` for exact retained BRC-196 prepare/submit/recover exchanges, original recipient/domain/release/transaction binding and authenticated errors without HTTP payment. Its optional wallet identity fence shares the existing finite deadline; durable custody, new-work authorization, Script validation and usable private material remain separate. Existing transport APIs and defaults are preserved.
+
+- Add opt-in `OutputProposalTransport` for exact saved BRC-194 put/get/finalize operations, signed author and selected policy bindings, active expiry, explicit prior-reservation identity and authenticated unpaid error handling. It never discovers, persists, funds, signs a proposal or starts automatic retries.
+
+- Add bounded BRC-199 signed request/result and status representations, direct authenticated requester/root/chain bindings, exact decision identities and restoration-basis checks. New-request clocks are separate from historical recovery. Evidence, local authority, durable decisions and all-path serving guards remain separate; existing discovery behavior is unchanged.
+- Add bounded BRC-195 payment-header parsing and exact single BRC-29 funding-output inspection with proof-independent wallet operation identifiers. Callers retain responsibility for independently derived payment keys, chain acceptance, acquisition reservation and durable idempotent wallet credit.
+
+- Add bounded BRC-195 private-publication and paid-lookup representations, publication semantic digests, frozen quote bindings and exact amount/recovery checks. Protected storage, authenticated transport, payment validation/internalization and usable secret delivery remain separate. Existing BRC-105 and lookup-context behavior is unchanged.
+- Add closed BRC-196 purchase preparation, signed terms, submission, uncharged recovery and STEAK/POTATOES envelopes. Explicit verification binds the original selected seller/request and retained acquisition/transaction/private result; legacy STEAK is unchanged. Domain, release-policy, durable admission and recipient usability checks remain independent.
+- Add bounded BRC-195/196 release-policy and evidence representations, independently selected chain/transaction/policy binding, and exact registered BRC-77 processor-attestation verification. Parsing declared confirmation depth does not establish mining; acquisition durability, selected-chain verification and private delivery remain separate. Existing APIs and encodings are unchanged.
+- Construct protocol JSON maps with explicit own data fields, retaining accepted keys, null prototypes and ordinary property attributes. Add full-source mutation and generated round-trip/byte-bound qualification; existing JSON encodings and parser limits remain unchanged.
+- Add opt-in `RevenueListingPlan` and `RevenueListingSpend` entries for all six BRC-197 routes, exact mandatory outputs, retained remainders, explicit retirement top-up, per-input seller/unanimous consent signatures, funded snapshot ownership and final-layout checks. They never acquire keys, fund or broadcast. Complete lineage, BRC-100 wallet and fulfillment integration remain separate.
+- Add the separate `@bsv/sdk/script/templates/RevenueListing` codec for the frozen BRC-197 executable, exact descriptors and canonical 305-byte revenue schedules. Program bytes are explicitly supplied and authenticated; no root bundle, existing API or storage migration is required. Lineage, spend construction, wallet integration and fulfillment remain separate obligations.
+
+- Add `OutputLookupTransport` for retained-contract BRC-193 HTTP open/read/close, explicit peer and signed contract binding, bounded original response bytes, unpaid error recovery and cancellation. Reads validate scope, limits, fixed deadlines and snapshot/live continuity without automatically persisting or advancing a cursor. Existing SDK defaults and endpoints remain unchanged. Callers must persist opening identity and atomically commit received groups with each checkpoint; this client component does not claim a complete durable service.
+
+- Add per-request `requireMutualAuth` and `expectedIdentityKey` to AuthFetch. Required authentication disables ordinary HTTP fallback; a canonical peer pin authenticates the handshake before application dispatch and checks matched response senders. Restrictions survive stale-session recovery and caller option changes. Existing defaults, wire formats and payment behavior remain unchanged.
+
+- Add opt-in BRC-192–194 output observation, proposal, progressive lookup, endpoint and signed capability representations, bounded canonical JSON parsing, domain-separated digests and identity-bound packet verification. These utilities do not change existing lookup, submission, wallet or transaction verification behavior. Durable application orchestration is provided by the separate `@bsv/output-knowledge` package. No existing API or stored-data migration is required.
+- Add closed BRC-194 proposal put/get/finalize request and response codecs. Author signature and policy checks, authenticated provider state, Bitcoin evidence and topical admission remain separate responsibilities; parsing never authorizes an action.
+- Add `retainOutputCapability` and `restoreOutputCapability` for bounded local retention of the original signed manifest, selector and freshness policy. Recovery revalidates the original selection without substituting current discovery or treating manifest expiry as loss of an existing obligation. Local storage integrity, current authorization and operation deadlines remain required. No existing API or stored encoding changes.
+- Add bounded common packet-service error parsing and exact BRC-193 HTTP mappings, including `not-found` responses and explicit capacity minimums. Errors cannot carry successful cursors or trigger automatic payment; local cancellation and storage revision failures retain their existing behavior.
+- Add `AuthFetch.fetch(..., { allowPayments: false })` to disable automatic BRC-105 payment for unpaid authenticated requests. The opt-out survives authentication recovery and caller option mutation; omission or `true` preserves existing payment behavior. Ordinary HTTP fallback errors are unchanged. No migration is required for existing callers.
+
 ### Removed (3.0.0 candidate)
 
 - Remove the legacy `identity/DIDTokenValidation` module and its

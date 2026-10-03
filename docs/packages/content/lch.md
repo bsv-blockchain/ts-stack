@@ -4,7 +4,7 @@ title: '@bsv/lch'
 kind: package
 domain: content
 npm: '@bsv/lch'
-version: '0.2.1'
+version: '0.3.0'
 last_updated: '2026-09-18'
 last_verified: '2026-09-18'
 review_cadence_days: 30
@@ -303,5 +303,6 @@ implementation contract.
 - [Published BRC-170](https://bsv.brc.dev/apps/0170)
 - [BRC-170 source](https://github.com/bsv-blockchain/BRCs/blob/master/apps/0170.md)
 - [Production CHIRP and LCH guide](../../guides/chirp-lch-production.md)
+- [Optional LCH overlay acquisition](../../guides/lch-overlay-acquisition.md)
 - [Reference application](https://github.com/bsv-blockchain/ts-stack/tree/main/apps/lch-reference)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch)

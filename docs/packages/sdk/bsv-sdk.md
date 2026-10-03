@@ -15,11 +15,99 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The isolated SDK3 retirement candidate removes the obsolete serial-DID token
+The separately approved SDK3 retirement removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.
 Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
 qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+The 3.0.0 source candidate adds explicitly selected BRC-192–194 output observation,
+lookup, proposal put/get/finalize and signed capability representations, bounded protocol JSON and packet
+verification. Existing lookup, submit and wallet interfaces retain their behavior.
+Stateful orchestration is provided by the separate
+[output-knowledge package](../application/output-knowledge.md). The candidate is
+not a package publication.
+
+The optional `OutputRootEvictionProtocol` entry adds BRC-199 signed request/result
+bindings, status parsing, exact root-local decision identities and a separate
+new-request clock check. An authenticated request does not authorize suppression;
+durable serving guards, evidence/currentness and local policy remain separate.
+See [root coordination](../../guides/root-eviction-coordination.md).
+
+Proposal endpoint parsers preserve the author-signed envelope separately from the
+provider's lifecycle state. They validate closed schemas and intrinsic proposal
+constraints, including predecessor shape and selected critical extensions. Signature,
+installed-policy, current authorization and evidence verification remain required
+before any storage, admission or application effect.
+
+`retainOutputCapability` captures a verified selection as bounded local replay
+material to persist atomically with an operation. `restoreOutputCapability`
+revalidates that signed manifest at its original selection time and requires the
+same endpoint, provider identity, chain, service/profile and installed rules.
+Recovery can outlive manifest expiry, but current authorization and the operation's
+recovery deadline still govern access. Never accept this local record from a remote
+caller or use it to initiate a new operation with an expired manifest. These pure
+helpers do not persist, fetch, pay or submit anything.
+
+`OutputLookupTransport` composes that retained contract with bounded BRC-193
+HTTP open/read/close. It pins the selected BRC-103 peer, validates signed selection
+headers, refuses automatic payments and redirects, and preserves the advertised
+base path. Public unauthenticated profiles remain explicitly selected. Request
+and response bodies, observable HTTP headers, negotiated limits, session scope,
+fixed deadlines and snapshot/live continuity are checked. Signed bodies are
+strictly decoded as UTF-8 JSON independently of the unsigned MIME label, including
+the existing middleware's `application/octet-stream` responses. Browser-hidden or
+runtime-added headers still require the server/proxy's complete wire-header limit.
+
+Save the fresh contract and high-entropy opening ID with the normalized request
+before first use. Supply only a durably committed prior batch to `read`, then
+commit its whole returned groups and cursor atomically before requesting more.
+The transport cannot enforce that local storage obligation and does not advance
+cursors itself. Original operations can recover after manifest expiry while
+their session remains usable; expired contracts cannot initiate new operations.
+Verified `OutputLookupServiceError` values retain bounded retry/limit hints.
+Errors and unknown continuity never become empty successful batches.
+
+For compact recovery, `outputLookupCheckpoint(batch)` copies the complete core
+continuity metadata without duplicating evidence. Save it atomically with the
+received groups, validate it with `parseOutputLookupCheckpoint` on recovery, then
+call `readCheckpoint`. Parsing never proves authentication or persistence; retain
+any extension-specific local state alongside the core boundary.
+The separate 64 KiB checkpoint allowance includes worst-case JSON escaping of
+all valid bounded scope, session and cursor strings. Wire response limits remain
+unchanged.
+
+Cancellation and the configurable total deadline cover authentication and body
+consumption. One call, including late non-cancellable work, occupies each instance.
+Authenticated calls use isolated sessions so cancellation cannot affect a different
+call; no existing AuthFetch default changes. Nine actual local signed-HTTP tests
+cover snapshot/live/close, identity pinning, payment refusal, altered bytes,
+contract echoes, independent error bounds and cancelled-poll recovery. The fixture
+is not a durable provider or client journal; full service integration remains open.
+
+`parseOutputServiceError` validates bounded common error bodies, including capacity
+details within the BRC-193 hard maxima. `outputServiceErrorHTTPStatus` provides the
+specified status mapping. Verify authenticated errors before changing trusted
+state; errors never contain a successful cursor or authorize automatic payment.
+The independent 4,096-byte error allowance still applies when a requested page
+budget is too small for a successful response.
+
+Unpaid authenticated requests can set `AuthFetch.fetch`'s `allowPayments: false`.
+Authenticated 402 responses then reach the caller without creating payment; the
+decision survives authentication recovery and later caller option changes. Existing
+calls still allow automatic BRC-105 handling, and ordinary HTTP fallback failures
+keep their previous behavior.
+
+Set `requireMutualAuth: true` to disable ordinary HTTP fallback. An
+`expectedIdentityKey` (a canonical compressed public key) implies this requirement,
+pins the BRC-103 handshake before dispatching application data, and checks the
+matched request's authenticated response sender. A conflicting cached identity is
+rejected without replacing it. These restrictions are captured before asynchronous
+work and survive session recovery and subsequent caller option changes. Combine
+the pin with `allowPayments: false` for private, unpaid service requests. Omitted
+options preserve existing behavior. Use HTTPS for confidentiality; BRC-103/104
+mutual authentication does not encrypt the body. Applications must separately
+verify selected capability/profile bindings and authorize operations.
 
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact
@@ -516,3 +604,27 @@ Explicitly configured substrate `responseTimeout` values remain enforced, and
 response validation and origin checks are unchanged. No API or wire migration
 is needed. Applications affected by the timeout defect can update their bundled
 SDK; a wallet release alone cannot replace code served by a web application.
+
+### Root coordination source candidate
+
+The optional `OutputRootEvictionTransport` executes authenticated submit/status
+requests for one retained BRC-199 operation. It preserves the original signed
+request, capability and independently retained evaluation policy, with finite
+header/body/deadline limits and physical I/O ownership after cancellation.
+`OutputRootEvictionServiceError` exposes only a validated service error. Existing
+lookup transport behavior remains unchanged. See the [root coordination
+guide](../../guides/root-eviction-coordination.md) for durable ownership, authority
+and currentness boundaries; these helpers do not activate root policy or serving
+adapters automatically.
+
+### Retained proposal client
+
+The optional `OutputProposalTransport` owns one saved BRC-194 put/get/finalize
+request and retained capability. Each explicit `send` repeats those original
+bytes through bounded mutually authenticated HTTPS with payment disabled.
+Acknowledgements bind the original publication; retrieved author data retains
+signature, policy/channel and active-expiry checks. Finalization exposes
+`matchesRequest` to distinguish an already-reserved operation or transaction.
+`OutputProposalServiceError` represents only authenticated validated provider
+errors; local transport failures remain distinct. Follow the [proposal guide](../../guides/non-final-proposals.md)
+for persistence, freshness, recovery and independent application/evidence checks.

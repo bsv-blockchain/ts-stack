@@ -18,7 +18,52 @@ An opinionated but configurable Overlay Services deployment system:
 
 Built-in discovery overflow probes use deterministic pages of at most 1000 rows. The configured engine result ceiling and extra-row overflow error remain enforced, including standard and high-throughput profiles.
 
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This package keeps its existing behavior and does not enable history retention automatically. No consumer or database migration is required.
+
+The optional `@bsv/overlay-express/private-publication` entry exposes verified
+private publication and publisher status through the shared BRC-103/104
+authentication instance. Supply the same durable service and disclosure owner;
+mount before generic parsers and response transformations. It checks original
+selection and current record authority again after signing, sends only bounded
+public projections and fixed errors, and preserves credential-free CORS by
+default. It never mounts automatically or installs a payment handler. See the
+[private publication guide](../../../docs/guides/verified-private-publication.md).
+
 ## Requirements and installation
+
+The unpublished 2.8.0 candidate also provides the optional
+`@bsv/overlay-express/root-eviction-response` companion. With middleware 2.3.0,
+SDK 3.0.0 and a shared root journal, `guardRootAdvertisementResponse` checks current
+access and every disclosed advertisement after signing and queues the native HTTP
+response under the journal's gate. Stale responses are replaced in full by a
+separately authorized signed reset. Capture the revision before hydration and
+supply the complete target inventory and safe control-response headers. The
+[root coordination guide](../../../docs/guides/root-eviction-coordination.md)
+explains storage, policy and all-path integration obligations. Existing routes
+remain unchanged; importing this companion does not enable the BRC-199 profile.
+
+The optional `@bsv/overlay-express/root-eviction` entry composes a shared
+`RootEvictionService` with exact authenticated request/status routes. It preserves
+received UTF-8 byte limits and checks the observed revision and current access
+again at native enqueue after packet and HTTP signing. Mount before generic
+parsers with the same origin authentication middleware and durable journal.
+Credential-free wildcard CORS is the default; exact origins are opt-in. It does
+not publish capabilities or install a decision scheduler or serving adapters.
+Call `configureRootEviction` before `start()` for native host integration. The
+configured root identity must match the server wallet; root, authenticated lookup
+and admin routes share authentication and host request capacity. Omitted root
+origins inherit the host's edge policy, and byte limits cannot exceed host limits.
+The injected journal and workers retain application ownership. See the root
+coordination guide for installation and remaining obligations.
+
+The optional lookup router and `configureOutputLookup` accept a structural
+`disclosure` companion for a final current-session check after HTTP signing.
+`LookupResponseDisclosure` from `@bsv/output-knowledge/lookup` composes that port
+with durable SQLite sessions. It can replace an ineligible data response once
+with a freshly authorized signed error, or close without a body when control
+access is denied. Omitting the option preserves existing behavior. See the
+[durable lookup guide](../../../docs/guides/durable-live-lookup.md#check-again-after-signing)
+for the shared writer gate, current policy, physical work and callback obligations.
 
 Overlay Express requires Node.js 22 or newer and a separately installed
 `@bsv/sdk` peer dependency.
@@ -433,3 +478,69 @@ under the Open BSV License Version 4. Redistributors must preserve
 [`LICENSES/`](./LICENSES/).
 
 Thank you for being a part of the BSV Blockchain Overlay Express Project. Let's build the future of BSV Blockchain together!
+
+## Optional progressive and live lookup
+
+Call `configureOutputLookup` before `start`, or import `createOutputLookupRouter`
+from `@bsv/overlay-express/output-lookup` for standalone Express composition. The
+new adapter requires SDK 3.0.0, a durable provider companion, a signed matching
+capability manifest, current authorization and explicit browser origins. The
+legacy root loads this adapter only when enabled. Existing finite lookup routes
+and default startup remain unchanged.
+
+The host shares its authentication instance, verifies the serving wallet identity
+and clamps advertised byte budgets to its existing edge limits. Provider storage
+lifecycle remains with the caller. See the [provider guide](../../../docs/guides/durable-live-lookup.md)
+for initialization, exact retry recovery, disclosure guards, multi-process wakeups,
+retention and standalone router ordering. The candidate is unpublished and the
+complete BRC-192–199 integration remains under qualification.
+
+## Optional authenticated proposals
+
+`configureProposals` before `start` or the separate
+`@bsv/overlay-express/proposals` router composes the durable proposal service,
+service-owned disclosure validator and shared journal/native-enqueue gate.
+This entry requires SDK 3.0 and auth middleware 2.3; legacy root peer floors and
+routes remain unchanged. A current channel read differs from recovery of a
+retained publication ACK. Both require current authorization and original
+contract bounds after response signing. One sanitized replacement error may be
+signed, with independently checked control permission before native enqueue.
+
+The host shares authentication and handshake ownership with lookup/root companions,
+keeps physical service work counted through settlement, clamps byte limits and
+inherits host CORS policy unless explicitly overridden. Storage, capability
+publication, verified recovery, expiry and admission workers remain host-owned.
+See the [proposal guide](../../../docs/guides/non-final-proposals.md) for composition and recovery contracts.
+
+### Private acquisition and publication
+
+Explicit `configurePrivateAcquisition` and `configurePrivatePublication` methods
+compose the installed private services with the host's single authenticated
+wallet/session. Private acquisition routes precede publication's namespace
+fallback and ordinary body parsers. The default public CORS policy remains
+credential-free; explicit origins and host byte ceilings are preserved.
+Acquisition-configured listeners alone select a bounded 128-KiB HTTP header
+allowance for BRC-105 payment evidence. Standalone applications can import
+`createPrivateAcquisitionRouter` from `@bsv/overlay-express/private-acquisition`.
+The application owns durable custody, permissions, wallet recovery and worker
+shutdown. See [acquisition and recovery](../../../docs/guides/private-acquisition-recovery.md)
+for composition, original-obligation semantics, payment/recovery requests and
+proxy limits. These opt-in profiles need the new SDK output APIs; legacy startup
+retains its supported SDK floor.
+
+### Covenant purchase companions
+
+`configurePrivatePurchase` or the optional
+`@bsv/overlay-express/private-purchase` router adds the proposed BRC-196
+`/overlay/v1/purchases/prepare`, `/submit` and `/recover` operations under the
+configured base path. These use the shared host authentication wallet, exact
+selected capability and native physical disclosure owner. Covenant payment
+occurs in the independently validated transaction; these routes reject HTTP
+payment headers and do not introduce a second BRC-105 charge.
+
+Purchase, acquisition and publication share one handshake owner and preserve
+ordinary `/submit`/lookup behavior, request ceilings and credential-free CORS.
+The application owns original protected custody, full domain/release validation
+and stopping/draining the coordinator before closing its native domain. See
+[purchase custody](../../../docs/guides/private-purchase-custody.md) for the
+component boundaries and remaining end-to-end qualification requirements.

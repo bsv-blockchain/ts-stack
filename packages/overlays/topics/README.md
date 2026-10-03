@@ -7,6 +7,8 @@ Canonical topic managers and lookup services for the BSV overlay network. Bundle
 
 UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
 
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This dependency addition does not enable history retention automatically or migrate data. The separately approved DID retirement below has its own migration requirements.
+
 ## DID overlay retirement (2.0 candidate)
 
 The proposed 2.0 release removes `DIDTopicManager`, `createDIDLookupService`,

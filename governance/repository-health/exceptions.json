@@ -73,9 +73,9 @@
     {
       "id": "brace-expansion-jest-override",
       "category": "override",
-      "target": "pnpm-workspace.yaml brace-expansion@<5.0.11 and four standalone Jest service manifests pinning brace-expansion 5.0.12",
+      "target": "pnpm-workspace.yaml brace-expansion@<5.0.12 and four standalone Jest service manifests pinning brace-expansion 5.0.12",
       "owner": "ts-stack-maintainers",
-      "reason": "Jest 30.4.2 and Stryker still constrain reporting and coverage paths to minimatch releases that admit older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8, GHSA-rgw5-rvv9-x895 required 5.0.9, GHSA-6j4f-fj2g-mc7p requires 5.0.10, and GHSA-qhr7-859c-m2p7 requires 5.0.11. GHSA-q2hr-2g5m-vwhr affects every release below 5.0.12, so the four standalone Jest service manifests pin 5.0.12. The workspace substitution remains 5.0.11.",
+      "reason": "Jest 30.4.2 and Stryker still constrain reporting and coverage paths to minimatch releases that admit older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8, GHSA-rgw5-rvv9-x895 required 5.0.9, GHSA-6j4f-fj2g-mc7p requires 5.0.10, and GHSA-qhr7-859c-m2p7 requires 5.0.12. GHSA-q2hr-2g5m-vwhr affects every release below 5.0.12, so the four standalone Jest service manifests pin 5.0.12. The implementation branch and standalone service substitutions all remain 5.0.12.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
@@ -86,7 +86,7 @@
         "infra/wab/package.json#overrides",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
-        "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324",
         "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
         "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
@@ -246,7 +246,7 @@
       "category": "override",
       "target": "tools/codegen/node/package.json overrides for @redocly/openapi-core@1.34.17",
       "owner": "ts-stack-maintainers",
-      "reason": "The latest openapi-typescript release still depends on Redocly 1.x ranges that resolve vulnerable js-yaml and minimatch paths, so the isolated codegen lock substitutes compatible patched releases and verifies the generated output byte-for-byte.",
+      "reason": "The latest openapi-typescript release still depends on Redocly 1.x ranges that resolve vulnerable js-yaml and minimatch paths, so the isolated codegen lock substitutes compatible patched releases and verifies the generated output byte-for-byte. Review on 2026-09-30 advances only the existing nested brace-expansion substitution to 5.0.12 for the three follow-up advisories, preserving exports, types and the Node engine range.",
       "evidence": [
         "tools/codegen/node/package.json#overrides",
         "tools/codegen/node/package-lock.json",
@@ -255,10 +255,14 @@
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
         "https://github.com/openapi-ts/openapi-typescript/blob/openapi-typescript%407.13.0/packages/openapi-typescript/package.json",
-        "https://github.com/advisories/GHSA-2883-xcg3-v3hh"
+        "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+        "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+        "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+        "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+        "https://github.com/juliangruber/brace-expansion/compare/v5.0.9...v5.0.12"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-09-25",
+      "reviewBy": "2026-10-30",
       "removeWhen": "Remove when a supported openapi-typescript release natively resolves non-vulnerable js-yaml, minimatch, and brace-expansion versions, then regenerate and compare every committed output."
     },
     {
@@ -409,6 +413,44 @@
       "created": "2026-10-02",
       "reviewBy": "2026-11-02",
       "removeWhen": "Remove when a released @stryker-mutator/vitest-runner supports Vitest 5 test-name chains, the governed Stryker pin is moved to it, and fund-wallet-cli and payment-402 meet their policy floors on Vitest 5 with zero survived mutants reporting testsCompleted 0."
+    },
+    {
+      "id": "metro-file-map-picomatch-advisory-repair",
+      "category": "override",
+      "target": "pnpm-workspace.yaml exact metro-file-map@0.87.1>micromatch removal, Picomatch2.3.2 package extension and paired watcher patch",
+      "owner": "ts-stack-maintainers",
+      "reason": "No patched braces release or compatible Metro/file-map/micromatch upgrade is available for high GHSA-vfj7-8cjw-p6xm. Metro-file-map0.87.1 only consumes micromatch.some(), which already delegates to Picomatch2.3.2. The source/distribution patch retains that exact loop and adds the same exact direct matcher dependency, permitting scoped removal of micromatch and its unused vulnerable braces closure. All other package versions/importers and installation controls are preserved. This is a temporary dependency repair, not an advisory exclusion.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        "https://github.com/micromatch/braces/pull/72",
+        "patches/metro-file-map@0.87.1.patch",
+        "scripts/lib/metro-watcher-contract.mjs",
+        "scripts/lib/fixtures/metro-watcher-contract.json",
+        "scripts/check-wallet-toolbox-platform.mjs",
+        "https://github.com/bsv-blockchain/ts-stack/discussions/757"
+      ],
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-01",
+      "removeWhen": "Remove the patch, exact-version package extension and scoped removal together after an official compatible Metro/file-map release removes the affected dependency path; require the complete watcher oracle, fresh unexcluded audit, frozen graph and packed Metro/Hermes platform checks before retirement."
+    },
+    {
+      "id": "standalone-nodemon-chokidar-advisory-repair",
+      "category": "override",
+      "target": "Nodemon-parent chokidar4.0.3 in infra/uhrp-server-basic, infra/uhrp-server-cloud-bucket and infra/wab",
+      "owner": "ts-stack-maintainers",
+      "reason": "No compatible released Nodemon update removes high GHSA-vfj7-8cjw-p6xm from its Chokidar3/braces graph. Nodemon already expands watch globs into literal directories. A source-owned adapter restores the former anymatch3 ignore predicate, including literal-directory recursion, custom cwd, regex/functions and dotfile behavior, while retaining the actual CLI, manual restart, Node/ts-node preloads and shutdown. WAB replaces ts-node-dev with the same tested watcher instead of forcing its unsupported glob API through Chokidar4. Only each Nodemon parent receives the substitution; production service startup and storage/HTTP contracts are unchanged. This is a temporary dependency repair, not an advisory exclusion.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        "https://github.com/paulmillr/chokidar/releases/tag/4.0.3",
+        "https://github.com/remy/nodemon/blob/v3.1.14/bin/nodemon.js",
+        "infra/uhrp-server-basic/dev/bin/nodemon.js",
+        "infra/uhrp-server-basic/dev/check-watch.cjs",
+        "governance/service-runtime-copy-policy.json",
+        "https://github.com/bsv-blockchain/ts-stack/discussions/757"
+      ],
+      "created": "2026-10-03",
+      "reviewBy": "2026-11-03",
+      "removeWhen": "Remove all three scoped substitutions and the compatibility adapter together after an official compatible Nodemon release removes the affected dependency closure and preserves the full ignore/restart/preload/manual-restart/shutdown contract; require fresh frozen unexcluded audits, complete service builds/tests and protected Linux image qualification before retirement."
     }
   ]
 }

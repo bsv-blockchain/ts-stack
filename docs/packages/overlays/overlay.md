@@ -4,9 +4,9 @@ title: '@bsv/overlay'
 kind: package
 domain: overlays
 npm: '@bsv/overlay'
-version: '2.6.3'
-last_updated: '2026-09-26'
-last_verified: '2026-09-26'
+version: '2.7.0'
+last_updated: '2026-09-29'
+last_verified: '2026-09-29'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay'
 status: stable
@@ -20,6 +20,15 @@ a coordinated proposal; see the [qualification and migration limits](../../guide
 before adopting it.
 
 > Core library defining the Overlay Services Engine for UTXO-based systems on BSV.
+
+The optional `@bsv/overlay/proposal-admission` entry supplies
+`OverlayProposalAdmission` for a durably reserved proposal service. With SDK 3.0
+or newer and explicit retained-history storage, it recovers the original ordinary
+topic receipt, projects only that topic's STEAK and preserves uncertainty after
+duplicate or failed submissions. It bounds physical concurrency and result
+capacity before new admission. Existing root imports and older SDK consumers
+remain compatible. See the [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/overlays/overlay/README.md#optional-proposal-admission-bridge)
+for installation, trust boundaries and recovery obligations.
 
 ## Install
 
@@ -86,18 +95,29 @@ The package exports an additive `AdmissionStorage` capability, semantic identity
 helpers and recovery fence/cursor predicates. `storageHasAdmission` reports
 whether the optional `Storage.admission` field is present; `getAdmissionStorage`
 additionally requires the v1 protocol and both commit and reconciliation
-methods. These define the local durable receipt and pending index/propagation
-boundary for future adapters. Current `Engine.submit`, its early STEAK callback
-and Knex storage do not use the capability. See the [persistence v1
-specification](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/persistence-v1.md)
-for the shared fixtures and explicit limits. No consumer migration is required.
+methods. The opt-in Mongo adapter and Engine submit path use this boundary for
+majority-committed receipts, separate from index visibility and propagation.
+Knex and legacy storage retain their existing behavior; the legacy early callback
+is not a durable receipt. See the [persistence v1
+specification](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/persistence-v1.md).
+
+`getAdmissionHistory(storage)` detects the optional retained-history companion.
+Explicit Mongo `retainAdmissionHistory: true` preserves original scope, txid,
+mode, topics/policies and private-context digest inside new bounded receipts.
+Its trusted `read` resolves applied history to the original operation, returning
+committed history or unresolved when binding material is absent or mismatched.
+It never infers admission from an empty duplicate STEAK, rewrites older receipts,
+or equates historical admission with current unspentness or serving permission.
+Private multi-topic results require caller authorization and projection before
+network disclosure. The [package guide](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/overlays/overlay/README.md#optional-retained-admission-history)
+details migration, bounds and the unchanged default behavior.
 
 ## Optional Mongo foundation
 
 The package also contains an opt-in MongoDB foundation for schema bootstrap,
 content-addressed payload publication, reference guards, and payload collection.
-It is not an Engine integration, an `AdmissionStorage` implementation, or a
-default storage selection; importing `@bsv/overlay` does not load MongoDB.
+It includes an explicit `AdmissionStorage` implementation and Engine adapter,
+while retaining existing default storage selection; importing `@bsv/overlay` does not load MongoDB.
 
 Applications using a Mongo deep entry point install the optional peer first:
 

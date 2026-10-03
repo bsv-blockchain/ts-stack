@@ -21,6 +21,7 @@ const IGNORED_DIRECTORIES = new Set([
   '.next',
   '.pagefind',
   '.ssr',
+  '.stryker-tmp',
   '.venv',
   'coverage',
   'dist',

@@ -1,0 +1,259 @@
+{
+  "name": "@bsv/output-knowledge",
+  "version": "0.1.0",
+  "description": "Durable BRC-192 application output knowledge and interchangeable source adapters",
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "sqlite": [
+        "dist/storage/SQLiteJournal.d.ts"
+      ],
+      "sources": [
+        "dist/sources/index.d.ts"
+      ],
+      "sources/live-lookup": [
+        "dist/sources/live-lookup.d.ts"
+      ],
+      "proposals": [
+        "dist/proposals/index.d.ts"
+      ],
+      "proposals/sqlite": [
+        "dist/proposals/SQLiteProposalJournal.d.ts"
+      ],
+      "operations": [
+        "dist/operations/index.d.ts"
+      ],
+      "operations/sqlite": [
+        "dist/operations/SQLiteOperationStateStore.d.ts"
+      ],
+      "lookup": [
+        "dist/lookup/index.d.ts"
+      ],
+      "lookup/sqlite": [
+        "dist/lookup/sqlite.d.ts"
+      ],
+      "revenue-listing": [
+        "dist/revenue-listing/index.d.ts"
+      ],
+      "root-eviction": [
+        "dist/root-eviction/index.d.ts"
+      ],
+      "root-eviction/sqlite": [
+        "dist/root-eviction/SQLiteRootEvictionStore.d.ts"
+      ],
+      "root-eviction/evidence": [
+        "dist/root-eviction/SDKRootEvictionEvidence.d.ts"
+      ],
+      "proposals/channels-sqlite": [
+        "dist/proposals/SQLiteProposalChannelStore.d.ts"
+      ],
+      "private/node": [
+        "dist/private/node.d.ts"
+      ],
+      "operations/protected": [
+        "dist/operations/protected.d.ts"
+      ],
+      "operations/objects": [
+        "dist/operations/objects.d.ts"
+      ],
+      "operations/objects/sqlite": [
+        "dist/operations/objects-sqlite.d.ts"
+      ],
+      "private/buyer": [
+        "dist/private/buyer.d.ts"
+      ],
+      "private/purchase-buyer": [
+        "dist/private/purchase-buyer.d.ts"
+      ],
+      "private/purchase-wallet": [
+        "dist/private/purchase-wallet.d.ts"
+      ],
+      "root-eviction/serving": [
+        "dist/root-eviction/serving.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./sources": {
+      "types": "./dist/sources/index.d.ts",
+      "import": "./dist/sources/index.js",
+      "default": "./dist/sources/index.js"
+    },
+    "./sources/live-lookup": {
+      "types": "./dist/sources/live-lookup.d.ts",
+      "import": "./dist/sources/live-lookup.js",
+      "default": "./dist/sources/live-lookup.js"
+    },
+    "./sqlite": {
+      "types": "./dist/storage/SQLiteJournal.d.ts",
+      "import": "./dist/storage/SQLiteJournal.js",
+      "default": "./dist/storage/SQLiteJournal.js"
+    },
+    "./proposals": {
+      "types": "./dist/proposals/index.d.ts",
+      "import": "./dist/proposals/index.js",
+      "default": "./dist/proposals/index.js"
+    },
+    "./proposals/sqlite": {
+      "types": "./dist/proposals/SQLiteProposalJournal.d.ts",
+      "import": "./dist/proposals/SQLiteProposalJournal.js",
+      "default": "./dist/proposals/SQLiteProposalJournal.js"
+    },
+    "./operations": {
+      "types": "./dist/operations/index.d.ts",
+      "import": "./dist/operations/index.js",
+      "default": "./dist/operations/index.js"
+    },
+    "./operations/sqlite": {
+      "types": "./dist/operations/SQLiteOperationStateStore.d.ts",
+      "import": "./dist/operations/SQLiteOperationStateStore.js",
+      "default": "./dist/operations/SQLiteOperationStateStore.js"
+    },
+    "./lookup": {
+      "types": "./dist/lookup/index.d.ts",
+      "import": "./dist/lookup/index.js",
+      "default": "./dist/lookup/index.js"
+    },
+    "./lookup/sqlite": {
+      "types": "./dist/lookup/sqlite.d.ts",
+      "import": "./dist/lookup/sqlite.js",
+      "default": "./dist/lookup/sqlite.js"
+    },
+    "./revenue-listing": {
+      "types": "./dist/revenue-listing/index.d.ts",
+      "import": "./dist/revenue-listing/index.js",
+      "default": "./dist/revenue-listing/index.js"
+    },
+    "./root-eviction": {
+      "types": "./dist/root-eviction/index.d.ts",
+      "import": "./dist/root-eviction/index.js",
+      "default": "./dist/root-eviction/index.js"
+    },
+    "./root-eviction/sqlite": {
+      "types": "./dist/root-eviction/SQLiteRootEvictionStore.d.ts",
+      "import": "./dist/root-eviction/SQLiteRootEvictionStore.js",
+      "default": "./dist/root-eviction/SQLiteRootEvictionStore.js"
+    },
+    "./root-eviction/evidence": {
+      "types": "./dist/root-eviction/SDKRootEvictionEvidence.d.ts",
+      "import": "./dist/root-eviction/SDKRootEvictionEvidence.js",
+      "default": "./dist/root-eviction/SDKRootEvictionEvidence.js"
+    },
+    "./proposals/channels-sqlite": {
+      "types": "./dist/proposals/SQLiteProposalChannelStore.d.ts",
+      "import": "./dist/proposals/SQLiteProposalChannelStore.js",
+      "default": "./dist/proposals/SQLiteProposalChannelStore.js"
+    },
+    "./private/node": {
+      "types": "./dist/private/node.d.ts",
+      "import": "./dist/private/node.js",
+      "default": "./dist/private/node.js"
+    },
+    "./operations/protected": {
+      "types": "./dist/operations/protected.d.ts",
+      "import": "./dist/operations/protected.js",
+      "default": "./dist/operations/protected.js"
+    },
+    "./operations/objects": {
+      "types": "./dist/operations/objects.d.ts",
+      "import": "./dist/operations/objects.js",
+      "default": "./dist/operations/objects.js"
+    },
+    "./operations/objects/sqlite": {
+      "types": "./dist/operations/objects-sqlite.d.ts",
+      "import": "./dist/operations/objects-sqlite.js",
+      "default": "./dist/operations/objects-sqlite.js"
+    },
+    "./private/buyer": {
+      "types": "./dist/private/buyer.d.ts",
+      "import": "./dist/private/buyer.js",
+      "default": "./dist/private/buyer.js"
+    },
+    "./private/purchase-buyer": {
+      "types": "./dist/private/purchase-buyer.d.ts",
+      "import": "./dist/private/purchase-buyer.js",
+      "default": "./dist/private/purchase-buyer.js"
+    },
+    "./private/purchase-wallet": {
+      "types": "./dist/private/purchase-wallet.d.ts",
+      "import": "./dist/private/purchase-wallet.js",
+      "default": "./dist/private/purchase-wallet.js"
+    },
+    "./root-eviction/serving": {
+      "types": "./dist/root-eviction/serving.d.ts",
+      "import": "./dist/root-eviction/serving.js",
+      "default": "./dist/root-eviction/serving.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/application/output-knowledge/**/*.{json,md,ts,mjs,html}\"",
+    "lint": "oxlint src test --deny-warnings",
+    "test": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/journal.property.test.ts test/lookup-framing.test.ts test/lookup-state.test.ts test/lookup-index-codec.test.ts test/lookup-query.test.ts test/lookup-batch.test.ts test/lookup-provider-work.test.ts test/lookup-session.test.ts test/lookup-sqlite-index.test.ts test/lookup-retention.test.ts test/lookup-provider.property.test.ts test/lookup-session-records.property.test.ts test/lookup-disclosure.property.test.ts test/revenue-lineage.property.test.ts test/revenue-lineage-package.property.test.ts test/revenue-lineage-graph.property.test.ts test/revenue-authority.property.test.ts test/root-eviction.property.test.ts test/root-advertisement-evidence.property.test.ts test/root-eviction-records.property.test.ts test/root-eviction-storage.property.test.ts test/root-eviction-commit.property.test.ts test/root-contract.property.test.ts test/root-eviction-coordination.property.test.ts test/root-eviction-maintenance.property.test.ts test/root-eviction-codec.property.test.ts test/revenue-lineage-traversal.property.test.ts test/root-eviction-service.property.test.ts test/root-eviction-scheduler.property.test.ts test/root-eviction-local-rules.property.test.ts test/proposal-send.property.test.ts test/proposal-disclosure.property.test.ts test/proposal-maintenance.property.test.ts test/lookup-send.property.test.ts test/runtime-publication.property.test.ts test/proposal-client-verification.property.test.ts test/proposal-core.property.test.ts test/proposal-current.property.test.ts test/proposal-channel.property.test.ts test/proposal-storage-channel.property.test.ts test/protected-ledger.property.test.ts test/private-publication.property.test.ts test/private-verified-publication.property.test.ts test/private-publication-coordination.property.test.ts test/private-acquisition.property.test.ts test/private-acquisition-state.property.test.ts test/private-acquisition-coordination.property.test.ts test/protected-operation.property.test.ts test/protected-operation-object.property.test.ts test/private-lookup-buyer.property.test.ts test/revenue-purchase.property.test.ts test/private-purchase-contract.property.test.ts test/private-purchase-state.property.test.ts test/private-purchase-native-clock.property.test.ts test/private-purchase-coordination.property.test.ts test/private-purchase-disclosure.property.test.ts test/private-purchase-buyer.property.test.ts test/private-purchase-wallet-native.property.test.ts test/private-purchase-evidence.property.test.ts test/private-publication-lookup.property.test.ts",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs . && node ../../../scripts/check-browser-package.mjs . --budget browser-protected-budget.json && node ../../../scripts/check-browser-package.mjs . --budget browser-objects-budget.json && node ../../../scripts/check-browser-package.mjs . --budget browser-buyer-budget.json && node ../../../scripts/check-browser-package.mjs . --budget browser-purchase-buyer-budget.json && node ../../../scripts/check-browser-package.mjs . --budget browser-root-serving-budget.json && node test/browser/test.mjs",
+    "test:browser:runtime": "pnpm build && node test/browser/test.mjs",
+    "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --config jest.coverage.config.js --watchman=false",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports OutputKnowledge,BitcoinKnowledge,MemoryJournal,IndexedDBJournal,parseSourceCurrentnessRules --entry-exports \"./proposals=ProposalChannelHeadsQuery|proposalChannelIndexKey|ProposalChannelHeadsContract|ProposalChannelHeadsSource|ProposalCurrentChannels|ProposalSourcePolicy|ProposalPolicyRegistry|ProposalCapabilityContracts|ProposalService|ProposalJournalMaintenance|ProposalScheduler|ProposalResponseDisclosure|SDKProposalEvidence|AuthorDocumentPolicy|proposalChannelKey|validateProposalWindow|ProposalTransitions|proposalRecordToken|MemoryProposalJournal|proposalCommitKey|appendProposalWithRecovery;./proposals/sqlite=SQLiteProposalJournal;./proposals/channels-sqlite=SQLiteProposalChannelStore;./operations=MemoryOperationStateStore|IndexedDBOperationStateStore|DEFAULT_OPERATION_STATE_LIMITS;./operations/protected=ProtectedOperationStateStore|WalletProtectedOperationPayload|protectedOperationBinding|PROTECTED_OPERATION_INITIAL;./operations/objects=IndexedDBProtectedOperationObjectStore;./operations/objects/sqlite=SQLiteProtectedOperationObjectStore|NodeProtectedPayloadCodec;./operations/sqlite=SQLiteOperationStateStore;./sources/live-lookup=LiveLookupSource|prepareLiveLookupSource|liveLookupSourceBinding;./lookup=LookupResponseDisclosure|LookupProviderService|LookupProviderContracts|LookupProviderWork|LookupWake|LookupQueryRegistry|CollectionOutputQueryPolicy|LookupSessionCodec|LookupIndexCodec|lookupServingEpochExtension;./lookup/sqlite=SQLiteLookupIndex|SQLiteLookupSessions;./revenue-listing=RevenueListingAuthority|createSoftwareRevenueListingAuthority|RevenueListingLineageVerifier|RevenueListingPurchaseVerifier|REVENUE_LISTING_PURCHASE_PROFILE|REVENUE_LISTING_LINEAGE_SCHEMA|parseRevenueListingLineagePackage|REVENUE_LISTING_LINEAGE_LIMITS;./root-eviction=RootEvictionContracts|RootEvictionService|RootEvictionScheduler;./root-eviction/serving=RootAdvertisementServing|RootLookupServingDisclosure|rootAdvertisementServingTarget|rootLookupAdvertisementTargets;./root-eviction/sqlite=SQLiteRootEvictionStore|SQLiteRootEvictionMaintenance|SQLiteRootEvictionLocalRules;./root-eviction/evidence=SDKRootEvictionEvidence|SDKRootAdvertisementEvidence;./private/node=PrivatePublicationLookupContext|PrivateServiceDomain|PrivateServiceIdentity|NodeProtectedPayloadCodec|SQLitePrivatePublicationStore|PrivatePublicationContracts|SDKPrivatePublicationEvidence|PrivatePublicationVerificationLeases|PrivatePublicationAccess|PrivatePublicationCoordinator|PrivatePublicationDisclosure|PrivatePublicationWork|PrivatePublicationReconciler|SQLitePrivateAcquisitionStore|PrivateAcquisitionContracts|PrivateAcquisitionAccess|PrivateAcquisitionCoordinator|PrivateAcquisitionDisclosure|PrivateAcquisitionWork|PrivateAcquisitionReconciler|SDKPrivateAcquisitionFunding|SDKPrivateReleaseEvidence|WalletToolboxAcquisitionFunding|PrivatePurchaseContracts|SQLitePrivatePurchaseStore|createPrivatePurchaseProgress|advancePrivatePurchaseProgress|parsePrivatePurchaseProgress|privatePurchaseEnvelope|privatePurchaseOperation|PrivatePurchaseCoordinator|SQLitePrivatePurchaseEvidence|PrivatePurchaseAccess|PrivatePurchaseDisclosure|ownPrivatePurchasePreparation|ownPrivatePurchaseAdmissionOutcome;./private/buyer=PrivateLookupBuyer|privateLookupBuyerBinding|PRIVATE_LOOKUP_BUYER_INITIAL|WalletToolboxBuyerPayment;./private/purchase-buyer=PrivatePurchaseBuyer|privatePurchaseBuyerBinding|PRIVATE_PURCHASE_BUYER_INITIAL;./private/purchase-wallet=WalletToolboxPurchasePayment\"",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^3.0.0"
+  },
+  "devDependencies": {
+    "@bsv/sdk": "workspace:^",
+    "@jest/globals": "^30.4.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
+    "jest": "^30.4.2",
+    "oxlint": "^1.76.0",
+    "ts-jest": "^29.4.12",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "fake-indexeddb": "^6.2.5",
+    "puppeteer-core": "^25.4.0",
+    "vite": "^8.1.5",
+    "@bsv/wallet-toolbox": "workspace:^"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/application/output-knowledge"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "keywords": [
+    "bsv",
+    "brc-192",
+    "utxo",
+    "overlay",
+    "application-state"
+  ]
+}

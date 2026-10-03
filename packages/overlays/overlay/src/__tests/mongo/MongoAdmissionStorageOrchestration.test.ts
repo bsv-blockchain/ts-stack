@@ -6,6 +6,9 @@ import type { MongoTransactionRunner } from '../../storage/mongo/MongoTransactio
 import { admissionPlan } from '../admission/AdmissionStorageContract.js'
 import { referenceScope } from '../admission/ReferenceAdmissionStorage.js'
 
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
+
 // These tests exercise MongoAdmissionStorage's own orchestration logic --
 // write-conflict retry exhaustion, the pending-wait poll loop, and its
 // classification of thrown errors -- entirely through the injected

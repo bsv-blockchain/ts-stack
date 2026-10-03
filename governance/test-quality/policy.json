@@ -43,7 +43,8 @@
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
       "packages/network/chirp/package.json",
-      "packages/content/lch/package.json"
+      "packages/content/lch/package.json",
+      "packages/application/output-knowledge/package.json"
     ],
     "suites": [
       {
@@ -464,6 +465,728 @@
         ]
       },
       {
+        "path": "packages/application/output-knowledge/test/journal.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable receipt identities and compare-and-swap ordering across duplicate and stale commit attempts",
+        "target": "Idempotent replay and exact contiguous journal revisions under arbitrary bounded retry schedules",
+        "invariants": [
+          "A repeated mutation returns its original committed revision even when the expected revision is stale.",
+          "A stale new mutation cannot advance either journal revision.",
+          "Every committed distinct mutation occupies exactly one contiguous receipt position."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-framing.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Whole lookup response framing, exact durable core receipt guards and physical work capacity through cancellation and deadlines",
+        "target": "Canonical receipt framing preserves whole groups and checkpoint scope under escaped provider metadata",
+        "invariants": [
+          "Every valid snapshot or live batch preserves its complete groups and exact continuity metadata.",
+          "Complete source framing fits within its reserved wire-plus-envelope budget for escaped identifiers.",
+          "Local resets contain no observations or successful cursor and retain the exact predecessor scope."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-state.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Original live lookup identity, durable state and orchestration across restart, concurrent workers and continuity reset",
+        "target": "Original opening and exact durable receipt remain stable across arbitrary cursors and source journal minima",
+        "invariants": [
+          "No captured response can advance before an exact durable core receipt exists.",
+          "Retrying one captured operation preserves its original opening, cursor, receipt and job increment.",
+          "Advancement retains the greater of the existing source minimum and committed core receipt position."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-index-codec.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Whole-domain lookup version predicates, original mutation identity, encrypted cursor binding and fresh storage-epoch selection",
+        "target": "Complete domain groups conserve predicates, exact U64 successor revisions and original retry identity under arbitrary row histories",
+        "invariants": [
+          "Every changed row receives exactly the next U64 revision; the complete before/after group remains indivisible.",
+          "Any changed existence or version predicate rejects the whole change before a commit.",
+          "Reconstructing a group preserves the exact original operation; changing event data changes its retry identity."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-provider.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Retained snapshot/live session history, whole query groups, original request fences and final current disclosure authorization",
+        "target": "Progressive snapshots and following domain changes across varying page sizes, authentication, connection restart and selector rotation",
+        "invariants": [
+          "Rows committed after the opening watermark never leak into its fixed snapshot.",
+          "Each following domain change remains one complete group with stable identity across independent readers.",
+          "Original response bytes survive selector rotation and reconnection, but current disclosure guard changes stop both reads and original retries."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-query.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Installed query identity and coherent observations across immutable access scopes",
+        "target": "Installed query identity and coherent observations across immutable access scopes under at least 300 generated histories",
+        "invariants": [
+          "Equivalent query views preserve group and observation identities independently of response limits.",
+          "Complete generated observation groups preserve order, scope and owned payloads."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-batch.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded progressive snapshot framing and atomic transition to live history",
+        "target": "Bounded progressive snapshot framing and atomic transition to live history under at least 300 generated histories",
+        "invariants": [
+          "Every selected snapshot row appears once in canonical order under varying page sizes.",
+          "The last snapshot boundary precedes live continuation even when the snapshot is empty."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-provider-work.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Physical provider capacity and cancellation ownership across authenticated callers",
+        "target": "Physical provider capacity and cancellation ownership across authenticated callers under at least 300 generated histories",
+        "invariants": [
+          "Cancelled callers cannot release capacity while their physical work is still running.",
+          "All slots become reusable only after actual work settles; results retain cancellation outcomes."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-session.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Private retained session framing and original capability restoration",
+        "target": "Private retained session framing and original capability restoration under at least 300 generated histories",
+        "invariants": [
+          "Retained request identities and exact U64 guard revisions round trip without changing original response bytes.",
+          "Returned records are owned and cannot rewrite the saved private opening."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-sqlite-index.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic lookup row predicates and exact commit acknowledgement recovery",
+        "target": "Atomic lookup row predicates and exact commit acknowledgement recovery under at least 300 generated histories",
+        "invariants": [
+          "The durable row map matches every generated atomic update or deletion.",
+          "Lost-ack retries return the original group without allocating another revision."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-retention.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Pinned historical lookup baselines and bounded compaction continuity",
+        "target": "Pinned historical lookup baselines and bounded compaction continuity under at least 300 generated histories",
+        "invariants": [
+          "Compaction preserves the exact pinned baseline and every later group.",
+          "Expired pins may advance the floor but cannot allow a successful read of discarded history."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-disclosure.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable disclosure guard ordering across external policy changes and exact operation retries",
+        "target": "Durable disclosure guard ordering across external policy changes and exact operation retries under at least 300 generated histories",
+        "invariants": [
+          "A persisted block precedes release, and every change advances an exact guard revision.",
+          "Only the same external operation can release a block, with exact retries returning the original revision."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/OutputLookupRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated lookup HTTP selection, bounded framing and non-disclosing error/CORS policy",
+        "target": "Bounded public classification and exact configured origins under arbitrary private diagnostics and audience sets",
+        "invariants": [
+          "Public errors preserve only validated codes and retryability, never private exception text.",
+          "Configured origin sets are owned, exact, unique HTTP(S) origins; a path or repeated authority is invalid."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-session-records.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic original lookup payload identity, bounded record framing and whole-record rollback",
+        "target": "At least 300 complete SQLite original-record histories retain query, first response and exact identity while rolling back every part together",
+        "invariants": [
+          "Every stored original query and first batch retain their exact identity and content.",
+          "Fence lookup and session lookup identify the same complete original record.",
+          "An aborted record transaction leaves no partial fence, payload or capacity accounting."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListing.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 exact descriptor, frozen executable and revenue-state encoding",
+        "target": "At least 300 valid U64 revision and one-to-eight-recipient schedules with independent byte assertions",
+        "invariants": [
+          "The encoded state is exactly 305 bytes with little-endian U64 revision and U32 weights.",
+          "Canonical compressed recipients retain byte ordering and exact integer payout quanta.",
+          "Unused slots are zero and any nonzero padding is rejected."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListingPlan.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 six-route output, revenue conservation and retirement planning",
+        "target": "At least 300 bounded construction and value-preservation cases",
+        "invariants": [
+          "Mandatory listing, receipt and payout outputs match frozen route transactions.",
+          "Payout quanta retain all indivisible remainders.",
+          "Retirement preserves exact shares with an explicit bounded external top-up."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListingSpend.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+        "target": "At least 300 bounded construction and value-preservation cases",
+        "invariants": [
+          "Every input and output is bound before requesting transaction signatures.",
+          "Seller and all old-recipient signatures authorize their exact listing input.",
+          "Prepared snapshots are owned and final wallet layouts preserve all committed fields."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-192 bounded canonical JSON and explicit own-data map construction",
+        "target": "At least 300 map round trips and exact byte-limit cases",
+        "invariants": [
+          "Decoded maps preserve their null prototype and ordinary own data fields.",
+          "Canonical UTF-8 byte bounds admit exactly fitting values and reject overflow.",
+          "All permitted map keys retain their values and writable/configurable/enumerable attributes."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-lineage.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+        "target": "At least 300 owned genesis/context cases across representations, exact byte bounds and cancellation",
+        "invariants": [
+          "All accepted histories end at the exact seller-authorized genesis, including both merge parents.",
+          "Missing history remains unresolved and funded copied scripts do not establish lineage.",
+          "Owned context and evidence are unchanged by later caller mutation; local limits and cancellation cannot produce verification."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-lineage-package.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+        "target": "At least 300 generated representation, byte-bound and descriptor-binding cases",
+        "invariants": [
+          "All accepted histories end at the exact seller-authorized genesis, including both merge parents.",
+          "Missing history remains unresolved and funded copied scripts do not establish lineage.",
+          "Owned context and evidence are unchanged by later caller mutation; local limits and cancellation cannot produce verification."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-lineage-graph.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+        "target": "At least 300 generated authorized genesis layout and target cases",
+        "invariants": [
+          "All accepted histories end at the exact seller-authorized genesis, including both merge parents.",
+          "Missing history remains unresolved and funded copied scripts do not establish lineage.",
+          "Owned context and evidence are unchanged by later caller mutation; local limits and cancellation cannot produce verification."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListingFunding.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+        "target": "At least 300 bounded construction and value-preservation cases",
+        "invariants": [
+          "Every input and output is bound before requesting transaction signatures.",
+          "Seller and all old-recipient signatures authorize their exact listing input.",
+          "Prepared snapshots are owned and final wallet layouts preserve all committed fields."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListingUnlock.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+        "target": "At least 300 bounded construction and value-preservation cases",
+        "invariants": [
+          "Every input and output is bound before requesting transaction signatures.",
+          "Seller and all old-recipient signatures authorize their exact listing input.",
+          "Prepared snapshots are owned and final wallet layouts preserve all committed fields."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet local action recovery bounded canonical JSON and binary ownership",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Canonical owned maps preserve values and bytes independent of insertion order.",
+          "Changing caller-owned nested values cannot change an already encoded recovery record."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryDescriptors.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet local action recovery exact retained transaction descriptors and funding roots",
+        "target": "At least 300 generated retained descriptor plans",
+        "invariants": [
+          "Retained plans preserve every descriptor, original order and independent owned bytes.",
+          "Duplicate input identities and unrelated funding roots are rejected."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryStore.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet atomic local action allocation identity, record capacity and exact retained signing state",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Claims and plans roll back together or retain the first immutable funding result.",
+          "Reopening preserves exact identity and operation counts across generated commits and rollbacks."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryPlan.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet fixed-layout noSend recovery profile and atomic construction hooks",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Only fixed-layout full-evidence two-phase noSend requests enter the local recovery profile.",
+          "Unsupported broadcast, cache and expiry options remain rejected."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/RecoverableActionController.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet exact-action preparation, final Script verification and no-resign processing recovery",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Recovering an absent operation never allocates funds or invokes a signing key.",
+          "Exact retained actions are replayed without replacing the original transaction."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputReleaseProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-196 exact release-policy binding and attributable processor acceptance",
+        "target": "At least 300 exact-depth and owned-binding cases across U64 heights",
+        "invariants": [
+          "A response cannot select its own trusted processor, chain, transaction or release policy.",
+          "Mined representations preserve exact U64 arithmetic without claiming header or inclusion verification.",
+          "Processor acceptance binds its signed domain, identity, policy, transaction, chain and accepted time."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-196 closed purchase statuses and exact retained request, recipient, transaction and secret-envelope binding",
+        "target": "At least 300 signed selected-request and minimum-recovery cases",
+        "invariants": [
+          "Signed purchase terms bind the entire separately retained request and selected seller.",
+          "Private delivery retains original acquisition, recipient, transaction and release-evidence commitments.",
+          "Status-specific fields and historical recovery cannot manufacture global transaction failure."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPrivatePublicationProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-195 bounded protected publication and semantic request fences",
+        "target": "At least 300 generated representation and binding cases",
+        "invariants": [
+          "Proof variation changes only evidence bytes, not protected publication identity.",
+          "Protected values remain owned, bounded and bound to the exact declared output."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-195 frozen quote, exact amounts and status-dependent recovery bindings",
+        "target": "At least 300 generated representation and binding cases",
+        "invariants": [
+          "Paid lookup quotes use exact wallet-range amounts and checked U64 recovery promises.",
+          "Acquisition status cannot replace the original quote, chain or purchased output."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-authority.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Dedicated listing authority signing and asynchronous port boundaries",
+        "target": "Same-identity genesis/Script signatures and ownership across delayed or mutating signers",
+        "invariants": [
+          "Genesis signatures bind the original descriptor and outpoint to the selected seller.",
+          "Transaction signatures bind the original preimage and ALL|FORKID scope to the selected input authority.",
+          "Mutations by callers or signing ports cannot change retained signature verification inputs."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupFunding.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-195 bounded payment headers and exact single-output BRC-29 funding identity",
+        "target": "Complete output scanning and exact amount binding before any wallet effect",
+        "invariants": [
+          "Exactly one matching standard BRC-29 script must exist at any output position.",
+          "A duplicate matching script fails even if its amount differs.",
+          "The retained funding identity uses the exact target transaction and output rather than BEEF representation."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/FundingRecoveryProtocol.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Closed BRC-195 wallet operation identity, bounded bytes and exact funding amount",
+        "target": "Closed BRC-195 wallet operation identity, bounded bytes and exact funding amount",
+        "invariants": [
+          "Every semantic field remains bound to the operation; alternate proof encodings do not change identity.",
+          "Malformed and changed amounts or outpoints cannot become retained wallet effects."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/SQLiteFundingRecoveryStore.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Same-database durable funding reservation and no-effect rejection fences",
+        "target": "Same-database durable funding reservation and no-effect rejection fences",
+        "invariants": [
+          "One funding outpoint cannot belong to another operation.",
+          "Reopening preserves pending and rejected fences without duplicating a claim or adding an output."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/RecoverableFundingController.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Atomic BRC-29 ownership receipts and exact retry reconciliation",
+        "target": "Atomic BRC-29 ownership receipts and exact retry reconciliation",
+        "invariants": [
+          "A selected output is credited once and retries return the exact retained receipt.",
+          "Duplicate matching payment scripts are durably rejected with no wallet credit."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryInstallation.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet explicit local recovery installation, immutable owned capacity and operation identity",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Installation snapshots both capacity limits before asynchronous storage work.",
+          "Reopening and retries preserve the installed configuration and reject a different capacity."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryTransitions.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet exact retained preparation, final signing result and processed transition recovery",
+        "target": "At least 300 bounded recovery model cases",
+        "invariants": [
+          "Out-of-order transitions cannot prepare, finalize or process an incomplete allocation.",
+          "Reopened operations retain exact first final bytes and reject changed layouts or signing identities."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionProtocol.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "BRC-199 root-local signed request/result attribution, exact targets, bounded lifetimes and independent restoration bases",
+        "target": "At least 300 generated ordering, identity and deadline cases",
+        "invariants": [
+          "Signed root request identity includes every evidence byte and exact target.",
+          "Decisions bind the root, request, output and revision; one restoration cannot lift a different basis.",
+          "New requests expire at the exact deadline without preventing retained-outcome recovery."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable root request fences, independent suppression bases, policy-bound action history and final transport queue ordering",
+        "target": "At least 300 generated suppression, restoration, reassessment, projection and restart histories",
+        "invariants": [
+          "A restoration lifts exactly its named suppression; later currentness never edits a saved action.",
+          "Suppressed or unprojected advertisements never pass the final shared send gate.",
+          "Permanent request and assessment keys survive restart and cannot be reused."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-advertisement-evidence.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Current SHIP/SLAP advertisement authentication, original transaction binding and exact consuming evidence under an immutable chain view",
+        "target": "At least 300 generated signed request identities, actions and advertisement evidence selections",
+        "invariants": [
+          "Verified advertisement bytes remain bound to the exact signed request and target.",
+          "Owner withdrawal requires the declared advertiser; spent evidence consumes the exact outpoint.",
+          "Verified evidence never asserts currentness or authority to lift a retained root decision."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-records.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Retained root partial-batch action history, request identity and expiry under restart",
+        "target": "At least 300 generated partial-batch outcomes and retained expiry histories",
+        "invariants": [
+          "Terminal actions remain immutable while remaining targets expire exactly once.",
+          "Retried retained identities bypass new-request clocks but changed bodies conflict."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-storage.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Root full-width durable revision encoding, atomic capacity reservation and projection acknowledgement",
+        "target": "At least 300 generated unsigned 64-bit revision and index acknowledgement cases",
+        "invariants": [
+          "Every counter survives lossless decimal and fixed-width hexadecimal encoding.",
+          "Assessments reserve their acknowledgement before commit and retry without consuming extra revisions."
+        ]
+      },
+      {
+        "path": "packages/middleware/auth-express-middleware/src/__tests/authenticatedResponseQueue.property.test.ts",
+        "manifest": "packages/middleware/auth-express-middleware/package.json",
+        "risk": "critical",
+        "boundary": "Final authenticated HTTP queue ownership, cancellation and bounded replacement after signing",
+        "target": "At least300 generated actual authenticated HTTP response exchanges",
+        "invariants": [
+          "Only the admitted owned bytes and status reach the native HTTP queue after signing.",
+          "One discarded candidate may be replaced by one newly authenticated response for the same request.",
+          "Cancellation, stale callbacks and unsupported buffering never fall through to an unsigned response."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/RootEvictionResponseGuard.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Actual authenticated root response enqueue under durable serving and current access fences",
+        "target": "At least 300 generated actual HTTP/SQLite signing and policy schedules",
+        "invariants": [
+          "A committed suppression or revoked access prevents the old candidate from reaching the native response queue.",
+          "A sanitized control replacement is separately authorized and checked under the current durable revision.",
+          "The root target inventory and permanent decision history survive each bounded fixture schedule."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-commit.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Current clock, access, installed policy and immutable-context selection inside the shared root commit gate",
+        "target": "At least 300 generated exact-U64 observations and independent access/policy/context decisions",
+        "invariants": [
+          "The trusted clock is sampled only after the physical journal gate is acquired.",
+          "Access denial does not reveal whether a request key exists or a selected policy is stale.",
+          "A captured evaluation cannot commit after its installed policy or external context changes."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-contract.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact retained root capability selection and fixed versus narrower advertised profile bounds",
+        "target": "At least 300 generated signed manifests and original-selection recovery cases",
+        "invariants": [
+          "Recovery uses the original retained selection and cannot silently alias a newer manifest.",
+          "A new operation requires a currently valid signed manifest and an installed rule contract.",
+          "Advertised limits can narrow but never expand the fixed BRC-199 bounds."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic original root capability/request retention, bounded selected obligations and explicit storage migration",
+        "target": "At least 300 generated capacity, original-selector and restart histories",
+        "invariants": [
+          "An operation atomically retains both its original contract and request, or neither record.",
+          "Original selectors and terminal actions survive expiry, retry and restart without current-discovery substitution.",
+          "Explicit format migration preserves history and fences already-open connections with older enforcement formats."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-maintenance.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded pending discovery, expiry, restart and immutable completion under root maintenance authority",
+        "target": "At least 300 generated bounded scans, exact expiry, retry and restart histories",
+        "invariants": [
+          "Complete local scan passes eventually visit every retained pending digest; restart can safely begin at the start.",
+          "Only still-pending targets expire, exactly at their deadline, with immutable completed actions and original requests.",
+          "Current maintenance authority is checked under the shared journal gate; expiry never grants peer suppression or serving authority."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-codec.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Sealed root configuration, finite capacities, canonical byte accounting and full-width revision representation",
+        "target": "At least 300 generated capacity, ownership, Unicode byte and U64 encoding cases",
+        "invariants": [
+          "Sealed configuration keeps exact root/chain/capacities without aliasing mutable caller data.",
+          "Default format1 and opted-in format2 retain their explicit canonical meanings.",
+          "Capacity validation and full-width revision encoding preserve finite exact bounds."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-lineage-traversal.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Complete listing ancestry traversal, both merge parents and exact missing-history frontier",
+        "target": "At least 300 generated entry-order and missing-parent histories through split and merge graphs",
+        "invariants": [
+          "Entry order cannot change the authenticated ancestry or omit either merge parent.",
+          "Missing listing history stays incomplete with the exact required parent outpoints.",
+          "A complete traversal includes the authorized genesis and each shared transaction once."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-service.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable root intake, exact observed-result signing and current final delivery authority",
+        "target": "At least 300 generated cancellation, signer alteration, policy revision and access-revocation schedules",
+        "invariants": [
+          "Intake precedes signing and never implies authority to apply a peer decision.",
+          "An authentic signature over a changed observation is rejected, and cancelled physical work remains bounded.",
+          "Only an unchanged observation with current access can enter the native final send queue."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/RootEvictionRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated root HTTP delivery through the actual durable SQLite decision/send gate",
+        "target": "At least 300 generated retry/status, padding, revision and access schedules across packet and BRC-104 signing",
+        "invariants": [
+          "A complete result is queued only under its observed revision and current requester/auditor authority.",
+          "A stale or revoked candidate becomes a separately authorized signed control error without original result bytes.",
+          "Exact retries retain the original capability and raw byte limits without new discovery or repeated decisions."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Finite authenticated root coordination client with immutable original operation/selection and physically bounded HTTP exchange",
+        "target": "At least 300 generated submit/status, original request, revision and evaluation-policy result schedules",
+        "invariants": [
+          "Every submit and status request remains bound to the original root, endpoint, requester/request ID and retained capability.",
+          "Signed results must bind the original request and independently retained evaluation policy.",
+          "Authentication requires the expected root identity and never permits payment."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-scheduler.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Recoverable root scheduling with independent expiry, installed policy and retained physical capacity through cancellation",
+        "target": "At least 300 generated cancellation, revocation, context, policy and expiry schedules",
+        "invariants": [
+          "Only the installed policy may evaluate the original retained operation under its captured revision.",
+          "Cancellation and changed access, context, policy or deadline cannot apply a stale decision.",
+          "Physical work remains owned until settlement, while independent expiry and bounded wrapping scans continue."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/root-eviction-local-rules.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable root-local rule administration, complete coverage fences and independent peer blockers",
+        "target": "At least 300 generated local-rule, peer-basis, currentness, projection, lifting and restart schedules",
+        "invariants": [
+          "Operator rules have root-issued durable records independent from peer request authority.",
+          "Eligibility requires complete current-epoch coverage, verified currentness and completed projection.",
+          "Lifting one basis cannot erase other blockers or replay an old assessment into current eligibility."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/ProposalAdmission.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Proposal admission recovery from original durable topic receipts with exact transaction, installation and selected-topic disclosure binding",
+        "target": "At least 300 generated private-topic, index-visibility and reservation-context recovery combinations",
+        "invariants": [
+          "Only the selected topic is disclosed from a bound original durable admission receipt.",
+          "A later reservation or index observation cannot relabel the historical topic assessment.",
+          "An already retained admission is recovered without a second topic submission."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/PrivatePublicationAdmission.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Private publication admission with exact original context, explicit public history reuse, selected-output membership and bounded recoverable Engine effects",
+        "target": "At least 300 generated private-value, output-membership and reservation recovery combinations",
+        "invariants": [
+          "Only a bound original receipt can establish the selected output admission; empty duplicate STEAK remains unresolved.",
+          "Retry preserves original assessment identity and discloses only the selected topic.",
+          "Matching private-values context and explicit public reuse remain distinct from protected lookup readiness."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-send.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable proposal record, authorization and actual native response enqueue under one cross-process writer gate",
+        "target": "At least 300 generated current/historical proposal, update, authorization and reopen schedules",
+        "invariants": [
+          "Native enqueue requires the exact selected retained record and current trusted authorization under the writer lock.",
+          "Unrelated channel changes do not invalidate an unchanged selected record.",
+          "Reopening preserves original records and send checks without inventing delivery rollback or rewriting history."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-disclosure.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact original proposal response binding, current caller authority, retained capability and exclusive expiry at native enqueue",
+        "target": "At least 300 generated caller, byte, authority and operation-specific deadline combinations",
+        "invariants": [
+          "A response is queued only for its original authenticated caller and unchanged canonical bytes.",
+          "Current installed policy and host access intersect with the original retained contract and its exclusive recovery deadline.",
+          "Active get responses stop at signed expiry, while retained publication acknowledgements remain recoverable through retention."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/ProposalRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Explicit authenticated proposal endpoints and exact retained-state/current-access native response enqueue",
+        "target": "At least 300 actual authenticated HTTP signing schedules over stable, revised, revoked and expired proposal state",
+        "invariants": [
+          "Actual native enqueue discloses only the original caller and the exact selected current or retained proposal response.",
+          "Changes during response signing withhold stale private state; sanitized controls require independent current authorization.",
+          "Historical publication retries recover original obligations without rewriting newer channel state or authorizing new admission."
+        ]
+      },
+      {
         "path": "packages/helpers/did/tests/brc202.property.test.ts",
         "manifest": "packages/helpers/did/package.json",
         "risk": "critical",
@@ -518,6 +1241,497 @@
         ],
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-10-04"
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputProposalTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Retained proposal operation, signed author and original capability binding, exact acknowledgement and explicit prior-finalization identity",
+        "target": "Generated publication, retrieval and finalization responses retain original operation identity and distinguish changed channel, expiry and reservation.",
+        "invariants": [
+          "Every retry sends the exact original request with mutual authentication and payment disabled.",
+          "Publication acknowledgements bind the original signed proposal; get binds its selected policy and channel and rejects active expiry.",
+          "A pre-existing finalization is explicitly distinguished from the requested operation and transaction."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-maintenance.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Private bounded retained-proposal inventory, explicit existing-state startup, expiry and physically owned recovery scheduling",
+        "target": "Generated native journal update/expiry/reservation/reopen schedules retain a finite eligible inventory; generated recovery schedules bound actual outstanding calls and preserve late failures.",
+        "invariants": [
+          "A captured high-water pass completes despite concurrent appends and returns only current active or reserved heads.",
+          "Existing-state open preserves namespace, identity, configuration, capacity and terminal operation fences.",
+          "Pending recovery calls are deduplicated and keep physical slots until settlement; shutdown returns every late failure."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/lookup-send.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Post-signing lookup disclosure under shared durable native-enqueue serialization",
+        "target": "Generated actual SQLite delivery schedules bind owned bytes, current authority, original session and exclusive expiry across capability rotation.",
+        "invariants": [
+          "Only the exact original authenticated response can enter the native queue.",
+          "Revocation, blocked or advanced durable guards, cancellation and exclusive session expiry withhold data.",
+          "Retained sessions restore their original selected contract without silently adopting current discovery."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/runtime-publication.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Application runtime publication deadlines and bounded source lifecycle",
+        "target": "At least 300 generated exclusive-deadline schedules preserve durable revision and publication boundaries",
+        "invariants": [
+          "No projection becomes current at or after its exclusive local deadline.",
+          "Only durable worker invalidation permits publication to resume; a late timer does not renew state.",
+          "Existing Bitcoin assessment expiry and omitted-hook behavior remain unchanged."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-client-verification.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Explicit source-policy permission, exact signed-envelope receipt qualification and sealed local proposal replay",
+        "target": "At least 300 generated duplicate, receipt-clock, exact-envelope and replay histories",
+        "invariants": [
+          "A verified proposal binds the exact source, reader, policy and signature variant.",
+          "Duplicate delivery cannot replace the first local receipt time or move a check to a different source generation.",
+          "Replayed local frames preserve exact authenticated decisions without accepting changed signatures or configuration."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-core.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Opt-in whole-group proposal acceptance, isolated Bitcoin evidence and durable exclusive expiry across local storage and runtime publication",
+        "target": "At least 300 generated receipt, bounded-worker, duplicate, restart and monotonic-expiry schedules",
+        "invariants": [
+          "Proposal-only input cannot create Bitcoin verification work or effects.",
+          "Count-limited work commits partial verification but publishes only complete source groups.",
+          "First local receipt times and accepted expiry survive duplicate receipt, storage reopen and clock rollback."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-current.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+        "target": "At least 300 generated valid histories, presentation orders and exclusive clocks",
+        "invariants": [
+          "Retained source order, not presentation order, selects the source-local current head.",
+          "Exclusive local expiry removes active intent without inventing a provider lifecycle or wallet effect."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-channel.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+        "target": "At least 300 generated atomic multi-channel rejection cases",
+        "invariants": [
+          "An invalid later member rejects a complete domain group without publishing its earlier changes.",
+          "A rejected domain group makes the source inconsistent and disables active intent while retaining its last coherent heads."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/proposal-storage-channel.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic private proposal/current-feed/session storage, reserved future events, truthful timer coverage and guarded visibility",
+        "target": "At least 300 native failure, replay, bounded-expiry and restart schedules",
+        "invariants": [
+          "A rejected member rolls back all journal entries, current rows and live groups in its domain change.",
+          "A partial expiry pass never advances the complete timer floor, including after restart; exact retries append no duplicate group."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/protected-ledger.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Protected private-service custody, authenticated inventory, atomic multi-record reservation, monotonic observation and current disclosure guards",
+        "target": "At least 300 native protected-record CAS, clock and restart schedules",
+        "invariants": [
+          "A rejected or stale operation cannot partially update a protected record group or discard a reserved completion.",
+          "Restart preserves exact private values, record versions, monotonic receipt time and every outstanding reservation."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-publication.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bound native private-service identity, protected publication bindings, permanent request fences and durable admission/readiness transitions",
+        "target": "At least 300 native shared-blob, independent-request, readiness, authorization-denial and restart schedules",
+        "invariants": [
+          "Each semantic request retains its original protected blob and operation fence; shared blobs never permit another request to replace private values.",
+          "Only an ordered durable admission and binding advances readiness; stale or denied operations cannot partially advance state or create another external-effect reservation."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-verified-publication.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact Bitcoin private publication evidence, original signed contracts, owned service policy and atomic native lookup binding",
+        "target": "At least 300 native verified-publication, protected-material, original-contract, authorization, binding and restart schedules",
+        "invariants": [
+          "A repeated publication preserves its original signed capability, verified transaction, policy and protected bytes; a legacy fence cannot manufacture missing original history.",
+          "Only the exact native admission and lookup-binding transaction can make a verified publication ready; revocation, stale revisions and crashes cannot partially activate it."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-publication-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Current private publication authority, bounded physical admission, durable original recovery, truthful availability and final native disclosure",
+        "target": "At least 300 native publication, authorization, cancellation, expiry, uncertain-admission and restart schedules",
+        "invariants": [
+          "An admitted publication preserves its original verified contract and protected material across retries and restarts.",
+          "Current owner and chain authority guard admission, readiness and physical disclosure; cancelled work retains its physical capacity until settlement."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-publication-lookup.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Native protected lookup context, current recipient entitlement and original publication binding through physical disclosure",
+        "target": "At least 300 native custody, reopen, recipient revocation, cancellation, readiness-loss and exact response-binding schedules",
+        "invariants": [
+          "Only current recipient policy may disclose the exact context of an originally admitted and actively bound publication; private bytes never enter public lookup or synchronization responses.",
+          "A separate native writer, restart, cancellation or altered response cannot bypass the protected revision and one synchronous physical enqueue; retries cannot issue a second response."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated private publication HTTP intake, exact signed selection, bounded work and current guarded native response",
+        "target": "At least 300 authenticated HTTP signing, revocation, readiness-loss and original-contract schedules",
+        "invariants": [
+          "Exact signed selection and original publication terms survive manifest expiry without authorizing a different publisher.",
+          "Authorization and protected readiness remain current after HTTP signing and at the single synchronous native enqueue; private diagnostics never enter control errors."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-acquisition.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Original paid lookup contracts, pinned payment recovery, exact BRC-29 Script/SPV evidence, globally unique native funding reservations and private result projection",
+        "target": "At least 300 payment receipt, deadline, exact funding, wallet outcome, delivery and restart schedules",
+        "invariants": [
+          "A candidate received before recovery expiry retains its original quote and validation obligation without another payment or invoice.",
+          "Wallet uncertainty never fabricates credit, funded undelivered work cannot expire, and each actual delivery retains at least one day of recovery."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-acquisition-state.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Atomic private acquisition quote/material/result reservations, original contract custody, permanent invoice prefixes, native funding association and guarded recovery disclosure",
+        "target": "At least 300 native quote, pin, funding, delivery, late processing and reopen histories",
+        "invariants": [
+          "Original quote, material and future response capacity commit together; failed capacity or authority checks leave no partial obligation.",
+          "A retained payment and its funding fence advance atomically, and delivery bytes commit with their state without changing original rights or charging again."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-acquisition-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Private paid acquisition coordination, current authorization, retained funding operations, actual native wallet receipt ownership, release evidence, final disclosure and local recovery workers",
+        "target": "At least 300 retained-quote, permission, cancellation, uncertain wallet, expiry and delivery histories",
+        "invariants": [
+          "The original acquisition and received payment survive interruption, catalogue withdrawal and recovery expiry without another quote or charge.",
+          "Only verified release evidence and the exact native wallet receipt permit delivery; current caller/domain authority and final native enqueue remain independently required."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/PrivateAcquisitionRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated private paid acquisition and recovery HTTP, original seller/buyer/quote binding, native final response ownership, bounded BRC-105 headers and opt-in shared host composition",
+        "target": "At least 300 authenticated response-signing, private-data/control permission and recovery histories",
+        "invariants": [
+          "A current original buyer recovers the same retained paid result without another payment or wallet credit.",
+          "Changed data authority withholds the private body; changed control authority closes without a replacement body, and recovery never emits payment headers."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Explicit authenticated selected-host paid lookup, original request/challenge/payment ownership and recovery without automatic payment",
+        "target": "At least 300 original-operation ownership, recovery and conflicting-caller histories",
+        "invariants": [
+          "Every operation remains bound to the original selected seller, buyer, request and retained explicit payment.",
+          "Recovery and authentication never construct another payment or reinterpret a changed challenge as original."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/protected-operation.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Wallet-protected durable workflow state, exact original binding, ciphertext capacity and lost-ack native/browser CAS recovery",
+        "target": "At least 300 original-operation ownership, recovery and conflicting-caller histories",
+        "invariants": [
+          "Only the original custody and complete namespace/configuration/revision binding recover retained private state.",
+          "A lost CAS acknowledgement can replay only the immediately following exact plaintext; competing later state remains a conflict."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/protected-operation-object.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Immutable protected original-operation requests, contracts and results with complete native/browser reservation and exact-first-object recovery",
+        "target": "At least 300 native and 300 browser original-object reservation, completion, retry and recovery histories",
+        "invariants": [
+          "Only original custody and exact role binding can recover retained immutable bytes.",
+          "All completion slots are reserved before financial effects; conflicts and lost acknowledgements never replace the first object.",
+          "Concurrent browser writers commit one authenticated inventory and complete chunk set atomically."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-lookup-buyer.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable original private acquisition, one payment and immutable protected result custody under interruption, expiry, conflict and reopen",
+        "target": "At least 300 original quote/payment/custody/validation/recovery histories",
+        "invariants": [
+          "Recovery never prepares, signs, dispatches payment or replaces the original request, seller or custody.",
+          "The first delivered result is immutable and received, independently validated and currently usable remain separate.",
+          "Current authority is required for new work and retained final bytes remain recoverable after expiry."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-codec.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Optional BRC-198 original consent, role authority, exact settlement, recipient-bound key delivery and protected retained entitlement before playback",
+        "target": "At least 300 deterministic typed-evidence and signed-envelope representation histories",
+        "invariants": [
+          "Complete CBOR and embedded JCS bytes remain unchanged across encoding and decoding.",
+          "Duplicate typed body IDs, unsupported fields and wrong-mode evidence fail closed.",
+          "Aggregate signature and finite typed-evidence budgets apply before authentication work."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-purchase.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact original BRC-196 preparation and recipient-bound purchase receipt composed with full Bitcoin/genesis/Script lineage",
+        "target": "At least 300 deterministic signed alternate-request, request-ID and recipient association refusals",
+        "invariants": [
+          "A Script-valid purchase cannot authorize delivery for another valid signed preparation.",
+          "Receipt acquisition, original request digest and recipient must all match the retained terms.",
+          "Conclusive association failures do not invoke chain I/O or reserve an admission effect."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-contract.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Immutable selected-host BRC-196 preparation, original signed request/domain/release terms and reserved recovery intervals",
+        "target": "At least 300 original request/recipient/deadline and full retained-capability ownership histories",
+        "invariants": [
+          "The exact complete request and selected seller authenticate the frozen preparation.",
+          "The retained recovery deadline preserves the larger advertised and domain obligation.",
+          "Caller mutation cannot replace the original request, signed body, capability or retained promise."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-state.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Native BRC-196 original preparation, one admission intent, immutable STEAK/POTATOES custody and guarded disclosure across interruption/reopen",
+        "target": "At least 300 deterministic native interruption/reopen and terminal-outcome histories",
+        "invariants": [
+          "Native reopening retains the exact signed preparation and its original protected material.",
+          "An acquisition permanently pins one transaction; a stale writer cannot replace it.",
+          "Private result bytes appear only after retained admission and delivered-result custody; pending and negative responses contain no POTATOES.",
+          "Every original completion reservation and request fence survives interruptions and early terminal outcomes."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable BRC-196 original intent, independent validation, retained admission and separately authorized secret issuance",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "One original preparation and first signed result survive native reopen and lost replies.",
+          "Unknown admission remains pending; another transaction cannot replace a pinned acquisition.",
+          "Catalogue withdrawal and elapsed construction deadlines do not erase an accepted private obligation."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-disclosure.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Recipient authorization and exact native BRC-196 response bytes at the physical private enqueue boundary",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "Permission and native record identity are checked after HTTP signing and before physical enqueue.",
+          "No revoked caller or stale snapshot can send private bytes.",
+          "Each prepared response has one synchronous enqueue attempt and never adds an HTTP charge."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/PurchaseAdmission.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Exact selected-host purchase admission with original retained receipt/time and no GASP-triggered release",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "A retained selected-topic receipt is recovered without double admission.",
+          "A lost or duplicate STEAK reply does not overwrite the original acceptance time.",
+          "Private material never enters ordinary submit or public retained admission history."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/PrivatePurchaseRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Explicit authenticated BRC-196 endpoints and bounded physical response disclosure with no HTTP payment",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "Malformed transport, request schemas and selectors cannot begin private effects.",
+          "Wrong recipients receive fixed not-found controls.",
+          "Legacy submit, acquisition, publication and lookup behavior remains preserved."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant-terms.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Reusable standing Offer, exact collector economics, individual authenticated consent and frozen covenant recovery promise before wallet construction",
+        "target": "At least 300 signed individual buyer and frozen purchase/recovery histories against one unchanged standing Offer",
+        "invariants": [
+          "Distinct buyers retain the same Offer ID and initial revenue schedule while consent and Agreements remain recipient-bound.",
+          "Original CBOR Request bytes and outer request/acquisition digests cannot be replaced under one purchase.",
+          "The complete Offer/capability recovery floor applies to the original cutoff; recovery never opens a new expired Offer."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant-settlement.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Original consent, portable genesis and complete covenant settlement/evidence commitments before independent Script, release and License verification",
+        "target": "At least 300 genuinely signed substituted commitments under genuine POTATOES",
+        "invariants": [
+          "A seller signature cannot authorize a different buyer, request, lineage, increment or release evidence.",
+          "The original complete preparation package and actual selected transaction remain immutable.",
+          "Representation and genesis-signature checks do not establish Script validity, release satisfaction or playable keys."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-license.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Exact paid or covenant License, Agreement, typed original authority evidence, persistent rights and recipient key grants before authenticated playback",
+        "target": "At least 300 genuinely signed substituted License commitments before buyer decryption",
+        "invariants": [
+          "Wrong Asset, Offer or Request IDs never reach buyer key recovery.",
+          "Covenant and paid settlement profiles remain distinct and preserve original Agreement and subject.",
+          "Plaintext requires authenticated selected content and validated key commitments; a signature alone does not authorize playback."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Independent complete purchase and release verification, protected original consent and immutable locally verified entitlement before recoverable covenant playback",
+        "target": "At least 300 generated expiry, cancellation and local access histories after a complete independently verified synthetic purchase",
+        "invariants": [
+          "Protected entitlement survives native restart and Offer expiry without another purchase or online proof.",
+          "Cancellation or inaccessible local custody cannot produce plaintext.",
+          "Restoring local access preserves the same verified original rights, transaction and recipient; no history starts a replacement financial operation."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant-seller.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Original covenant preparation, complete independent purchase and selected release checks before authorized collector settlement, License and protected recipient key issuance",
+        "target": "At least 300 generated catalogue withdrawal, expiry and original current-access histories after independently verified synthetic covenant purchases",
+        "invariants": [
+          "Preparation reserves complete finite protected key and delivery capacity before purchase.",
+          "Only the original request, actual independently verified purchase and selected release can authorize issuance.",
+          "Withdrawal and expiry preserve the original recovery promise without a replacement payment; loss of current access refuses disclosure."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseTransport.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Original authenticated covenant preparation, immutable recipient and transaction binding with bounded uncharged submission and read-only recovery",
+        "target": "At least 300 signed response, selected-contract and original transaction histories",
+        "invariants": [
+          "Every retry owns its original request, recipient, terms and transaction.",
+          "Signed replacement commitments cannot change the selected preparation or release terms.",
+          "Prepare, submit and recovery never authorize an HTTP payment or replacement financial operation."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-buyer.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable original covenant purchase with bounded protected custody, one original native action and separately verified usable rights",
+        "target": "At least 300 protected original purchase interruption, expiry, unknown-effect and restart histories",
+        "invariants": [
+          "No missing or unsupported original wallet outcome authorizes a replacement allocation, signature or transaction.",
+          "Six completion objects are reserved before signing and original delivered bytes cannot be replaced.",
+          "Logical cancellation retains physical work capacity until the underlying original work settles."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-wallet-native.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Original full lineage, actual native noSend covenant funding/signing and exact transaction recovery under immutable capacity and selected context",
+        "target": "At least 300 freshly reopened native original purchase recovery histories",
+        "invariants": [
+          "Independent full genesis and Script verification precedes funding and signing.",
+          "Lost finalization resolves to the same original transaction and immutable original bytes, without broadcast or another signature.",
+          "Changed construction, asynchronous guards and inadequate complete-submission capacity refuse new signing."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-evidence.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded native cumulative same-transaction proof custody with original financial intent, reserved completion capacity and exact selected-context writer guards",
+        "target": "At least 300 deterministic native reopen, duplicate, richer-proof, authority and historical-context histories",
+        "invariants": [
+          "Native reopening preserves the complete accumulated proof and the original raw target transaction.",
+          "Independent incoming and combined validation precede proof retention and all admission/release effects.",
+          "Missing proof custody is never initialized during recovery, and exact duplicates consume no reserved update.",
+          "Richer proof cannot replace the first financial candidate or the first delivered result."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Native purchase progress derived from the authorizing monotonic transaction observation with original profile, CAS, cutoff, capacity and recipient authority preserved",
+        "target": "At least 300 clock-advancing native interruption, original-profile reopening and immutable terminal-outcome histories",
+        "invariants": [
+          "A synchronous prepared plan uses exactly its authorizing native clock observation while preserving monotonic time on refusal.",
+          "Profile-bound native reopening retains the original signed preparation, one financial candidate and the first delivered result.",
+          "Current authority, exact cutoffs, native CAS and promised future completion capacity remain enforced before commit.",
+          "Default owners preserve their original timestamp refusals; another clock profile never silently migrates existing obligations."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/RetainedTransactionBEEF.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Bounded original raw subject and available dependency history under plain and Atomic BEEF plus separate current leaf evidence",
+        "target": "At least300 raw-subject, ancestry, leaf-proof, byte-budget and damaged-input histories",
+        "invariants": [
+          "Retained raw subjects and available parents remain byte-identical after leaf hydration; unrelated branches confer no authority.",
+          "Wrong Atomic subjects, absent raw targets, changed current raw bytes and complete input/output budget overflows fail closed."
+        ]
       }
     ],
     "exclusions": [

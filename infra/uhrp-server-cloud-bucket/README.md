@@ -409,3 +409,23 @@ route, and failure-path checks above pass.
 © 2025 – Feel free to adapt, improve, and PR!
 
 Advertisement, owner metadata and renewal operations use the same `GCP_STORAGE_CREDS`/`GCP_PROJECT_ID` identity as signed uploads. When credentials are explicitly configured, those operations must not fall back to the runtime metadata server. Unset credentials retain ADC for installations that intentionally use a runtime service account. Malformed configured credentials fail without logging their contents.
+
+## Development watcher
+
+`npm run dev` uses the locked Nodemon CLI with a source-owned Chokidar 4
+compatibility adapter. It watches TypeScript, existing JavaScript/JSON extensions,
+new source files and `.env`, retains the Node/ts-node telemetry preload, and
+supports manual `rs` restarts. Existing ignored glob, directory, regex and
+function options retain Chokidar 3 matching behavior. WAB replaces ts-node-dev
+with this same CLI; production startup, HTTP contracts and persisted data are
+unchanged. No public npm package version or consumer migration is required for
+these standalone service development tools.
+
+The parent-scoped Chokidar substitution removes the affected braces dependency
+without an advisory exclusion. The dated dependency registry owns its removal
+condition. `npm test` first runs the actual locked watcher regression, including
+clean shutdown, using the actual service development recipe. WAB also retains
+compiler-configuration restarts. The basic UHRP service owns the adapter and
+regression; the root service-copy generator synchronizes cloud UHRP and WAB.
+Protected Linux image and exact-head CI checks must qualify release candidates;
+source changes do not update deployed images.

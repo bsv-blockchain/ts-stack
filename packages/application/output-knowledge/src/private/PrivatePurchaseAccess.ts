@@ -1,0 +1,154 @@
+import {
+  canonicalOutputJSON,
+  closedOutputObject,
+  decodeOutputBytes,
+  outputAssert,
+  outputHex32,
+  outputIdentity,
+  outputPacketDigest,
+  outputString,
+  OutputProtocolError,
+  parseOutputJSON,
+  parseOutputPurchasePrepare,
+  type OutputPurchasePrepare
+} from '@bsv/sdk'
+import {
+  PrivateAcquisitionPayloads,
+  parsePrivateAcquisitionPayload
+} from './PrivateAcquisitionPayloads.js'
+import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
+import type { ProtectedLedgerGuard, ProtectedLedgerView } from './ProtectedLedgerCodec.js'
+
+/** Current permission shares native purchase custody. Match recipient ownership
+ * before reading original chunks; a lookup catalogue is not recovery authority.
+ */
+export class PrivatePurchaseAccess {
+  private readonly topic: string
+  private readonly payloads: PrivateAcquisitionPayloads
+  constructor(
+    private readonly domain: PrivateServiceDomain,
+    topic: string,
+    private readonly policy: (
+      request: OutputPurchasePrepare,
+      buyer: string,
+      mode: 'initial' | 'retained',
+      view: ProtectedLedgerView
+    ) => boolean
+  ) {
+    this.topic = outputString(topic)
+    outputAssert(
+      typeof policy === 'function' && policy.constructor.name !== 'AsyncFunction',
+      'Purchase access policy must be synchronous'
+    )
+    this.payloads = new PrivateAcquisitionPayloads(domain.identity)
+  }
+  guard(
+    idInput: string,
+    buyerInput: string,
+    current: () => boolean,
+    initial?: OutputPurchasePrepare
+  ): ProtectedLedgerGuard {
+    const id = outputHex32(idInput),
+      buyer = outputIdentity(buyerInput),
+      proposed = initial === undefined ? undefined : parseOutputPurchasePrepare(initial),
+      address = this.domain.identity.address('acquisition', {
+        purpose: 'private-purchase-state',
+        acquisitionId: id
+      })
+    outputAssert(
+      typeof current === 'function' && current.constructor.name !== 'AsyncFunction',
+      'Purchase request context must be synchronous'
+    )
+    if (proposed) this.check(proposed, id, buyer)
+    return view => {
+      if (!permitted(current())) throw missing()
+      const row = view.get(address)
+      let request: OutputPurchasePrepare, mode: 'initial' | 'retained'
+      if (row) {
+        if (row.value.recipient !== buyer) throw missing()
+        outputAssert(
+          row.value.format === 'private-purchase-state/1',
+          'Purchase access state differs',
+          'unavailable'
+        )
+        const descriptor = parsePrivateAcquisitionPayload(row.value.original)
+        outputAssert(
+          descriptor.acquisitionId === id && descriptor.purpose === 'material',
+          'Purchase original access binding differs',
+          'unavailable'
+        )
+        const custody = parseOutputJSON(
+          Uint8Array.from(
+            decodeOutputBytes(
+              this.payloads.read(
+                descriptor,
+                this.payloads.addresses(descriptor).map(item => view.get(item))
+              ),
+              descriptor.maximumBytes
+            )
+          ),
+          { bytes: descriptor.maximumBytes }
+        )
+        closedOutputObject(custody, [
+          'format',
+          'original',
+          'validationPolicy',
+          'schema',
+          'maximumSecretBytes',
+          'material'
+        ])
+        closedOutputObject(custody.original, [
+          'format',
+          'request',
+          'terms',
+          'capability',
+          'createdAt'
+        ])
+        request = parseOutputPurchasePrepare(custody.original.request)
+        outputAssert(
+          outputPacketDigest('purchase-request', request) === descriptor.requestDigest,
+          'Purchase retained access request differs',
+          'unavailable'
+        )
+        mode = 'retained'
+      } else {
+        if (!proposed) throw missing()
+        request = proposed
+        mode = 'initial'
+      }
+      this.check(request, id, buyer)
+      if (
+        !permitted(this.policy(structuredClone(request), buyer, mode, view)) ||
+        !permitted(current())
+      )
+        throw missing()
+    }
+  }
+  private check(request: OutputPurchasePrepare, id: string, buyer: string): void {
+    outputAssert(
+      request.recipient === buyer &&
+        request.topic === this.topic &&
+        canonicalOutputJSON(request.listing.chain) ===
+          canonicalOutputJSON(this.domain.scope.chain) &&
+        outputPacketDigest('purchase', {
+          chain: this.domain.scope.chain,
+          seller: this.domain.scope.seller,
+          recipient: buyer,
+          topic: this.topic,
+          requestId: request.requestId
+        }) === id,
+      'Purchase access request binding differs',
+      'unavailable'
+    )
+  }
+}
+function missing(): OutputProtocolError {
+  return new OutputProtocolError('not-found', 'Purchase not found')
+}
+function permitted(value: unknown): boolean {
+  if (value instanceof Promise) {
+    void value.catch(() => undefined)
+    return false
+  }
+  return value === true
+}

@@ -356,6 +356,16 @@
       "release": "none"
     },
     {
+      "path": "apps/output-knowledge-reference",
+      "name": "output-knowledge-reference-app",
+      "owner": "ts-stack-maintainers",
+      "area": "examples",
+      "profile": "examples",
+      "criticality": "tier-2",
+      "runtimeTargets": ["browser", "node"],
+      "release": "none"
+    },
+    {
       "path": "conformance/runner",
       "name": "@bsv/conformance-runner",
       "owner": "ts-stack-maintainers",
@@ -795,6 +805,17 @@
       "consumerProfiles": ["react-native-metro"],
       "criticality": "tier-1",
       "runtimeTargets": ["react-native"],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/application/output-knowledge",
+      "name": "@bsv/output-knowledge",
+      "owner": "ts-stack-maintainers",
+      "area": "application",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     }
   ]

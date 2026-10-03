@@ -370,6 +370,153 @@ wallet-derived locking key, and field signature before reading or spending it.
 
 - **Overlay Tools**: Advanced tools for overlay network management and optimization.
 
+  The proposed BRC-192–194 extensions add explicitly selected output observations,
+  progressive lookup representations, canonical protocol JSON, signed capability
+  validation and endpoint construction. `parseOutputProposalPut`,
+  `parseOutputProposalGet` and `parseOutputProposalFinalize`, with their respective
+  response parsers, enforce BRC-194's closed endpoint envelopes. Provider lifecycle
+  state remains separate from the author's unchanged signed proposal. Parsing a packet checks its representation;
+  it does not by itself authorize a source, validate a transaction or establish
+  unspentness. Stateful orchestration and durable storage are implemented in the
+  separate [`@bsv/output-knowledge` package](../application/output-knowledge/README.md).
+  Existing lookup and submission interfaces keep their current behavior.
+
+  BRC-195/196 release helpers preserve that distinction for private acquisitions.
+  `parseOutputReleaseEvidence` checks bounded representation and exact height
+  arithmetic; `bindOutputReleaseEvidence` matches independently selected chain,
+  transaction and policy. `verifyOutputProcessorAcceptance` verifies the registered
+  processor's exact BRC-77 statement. None proves mined inclusion, secret delivery
+  or usability. See the [release-evidence guide](../../docs/guides/private-overlay-release.md).
+  `OutputPurchaseProtocol` adds closed preparation, submission, recovery and
+  STEAK/POTATOES envelopes, seller-signed original-request terms and separately
+  authenticated private-result bindings. Persist the verified original contract
+  and exact transaction before dispatch; these codecs do not reserve, pay or
+  durably admit an acquisition.
+  `OutputPurchaseTransport` performs one explicitly selected authenticated
+  preparation, submission or recovery exchange, preserving the original signed
+  terms, recipient, topic, domain and transaction binding. It rejects HTTP payment
+  challenges. Restore the original durable owner before retrying; this finite
+  transport does not allocate, sign, broadcast or persist a purchase, validate
+  Script, or make delivered keys usable. See the
+  [purchase custody guide](../../docs/guides/private-purchase-custody.md).
+  `OutputPrivatePublicationProtocol` adds bounded protected-publication requests
+  and semantic digests that exclude only alternate BEEF proof bytes.
+  `OutputPaidLookupProtocol` adds frozen quote and recovery-state representations,
+  exact amount/deadline checks and bindings to the original request, selected
+  seller/rules and purchased output. Its unsigned quote and full response require
+  authenticated transport; parsing does not internalize a payment or release a key.
+
+  Protocol JSON maps have a null prototype and ordinary writable, configurable,
+  enumerable own data fields, including keys that resemble object builtins.
+  Parsing and canonical encoding enforce the same explicit byte and structural
+  bounds; callers still validate each endpoint's closed schema.
+
+  `retainOutputCapability(manifest, request)` validates a new selection and returns
+  `{ record, selection }` as independent owned copies. Atomically persist `record`
+  with the operation before any effect. `restoreOutputCapability(record, trust)`
+  verifies the saved signed manifest at its original selection time, with the
+  original freshness policy and caller-supplied endpoint, provider identity, chain,
+  service, profile and installed rule validators. Manifest expiry alone therefore
+  does not abandon an existing recovery obligation. It never substitutes today's
+  discovery contract or grants permission to start a new operation.
+
+  The `output-capability-retention/1` record is bounded local replay material, not
+  a network request or authorization token. Storage integrity protects its local
+  time and policy; the provider signature covers the manifest itself. Never accept
+  a caller-supplied record as saved host state. Recheck current caller access and
+  the operation's recovery/session deadline before disclosing data or performing
+  work. Endpoint/key migration needs separately verified authority. Neither helper
+  makes network requests, runs remote code, persists data or calls a wallet.
+
+  `OutputLookupTransport` executes BRC-193 `open`, `read` and `close` against one
+  retained contract. Construct it with `{ contract, trust, wallet }`; `trust` is
+  the same recovery binding used by `restoreOutputCapability`. A wallet is
+  required only for the selected `brc103` authentication mode. The transport owns
+  its contract and each request before asynchronous work. It appends endpoint
+  suffixes to the complete base path, refuses redirects and cookie credentials,
+  sets `Cache-Control: no-store`, pins the selected authentication identity and
+  verifies the signed capability/profile echoes. It never invokes BRC-105 payment
+  or downgrades authentication. Explicit public `none` profiles use ordinary HTTPS
+  and bind source scope to its origin. Local HTTP needs trusted development opt-in.
+
+  Capture a fresh capability and persist a randomly generated opening request ID
+  with the complete opening request before calling `open`. A retained contract
+  can retry that opening or continue its existing session after manifest expiry;
+  it does not authorize a new opening under an expired contract. For `read`, supply
+  the previous **durably committed** batch and requested limits. The transport
+  validates session, scope, fixed deadlines, negotiated limits and snapshot/live
+  continuity, but cannot inspect your checkpoint store. Commit every returned
+  observation group and its cursor together before issuing the next read. It
+  neither saves nor advances cursors automatically, and never converts a reset,
+  expiry, malformed response or service failure into empty successful data.
+
+  `outputLookupCheckpoint(batch)` creates an owned compact continuity boundary
+  containing the scope, phase, watermarks, session/cursor and fixed deadlines.
+  Store that boundary in the same transaction as the complete groups; it does
+  not replace their durable receipt. `parseOutputLookupCheckpoint` validates
+  restored metadata, and `readCheckpoint` resumes directly from it. This avoids
+  storing evidence twice or fabricating a previous wire response during recovery.
+  A valid checkpoint representation alone proves neither authentication nor a
+  storage commit. Extensions requiring additional local state must retain it too.
+
+  Complete transmitted UTF-8 bytes, including whitespace, count against response
+  limits before decoding. The separate 4 KiB error budget still applies to tiny
+  page requests. `OutputLookupServiceError.packet` preserves validated retry and
+  capacity hints. BRC-104 authenticates the body, not its MIME label: strict JSON
+  decoding also supports the existing middleware's `application/octet-stream`
+  response label. Content encoding must be absent or identity. The transport
+  checks 16 KiB of HTTP header fields exposed by Fetch; browsers can hide fields
+  and add their own, so the server/proxy must also enforce the complete wire-header
+  bound and expose the required authentication and selection headers through CORS.
+
+  Calls accept an `AbortSignal`. The total deadline covers authentication, HTTP
+  and body consumption (default 30 seconds, configurable up to 30 seconds).
+  One request is active per instance. Cancellation returns promptly, but a
+  non-cancellable wallet or injected Fetch operation keeps its capacity until it
+  settles; later work cannot silently accumulate or dispatch after cancellation.
+  Each authenticated call uses an isolated AuthFetch session. This trades another
+  handshake for independent cancellation and avoids changing existing AuthFetch
+  defaults. `close` remains available after session expiry once pending I/O ends.
+  This transport is a component, not a durable live service or checkpoint store;
+  their complete integration and application demonstration remain in progress.
+
+  `parseOutputServiceError` validates the common packet-service error envelope and
+  its separate 4,096-byte budget; `outputServiceErrorHTTPStatus` supplies the exact
+  BRC-193 status mapping. Capacity details are accepted only for `limited`, with
+  positive minimums bounded by the profile's hard maxima. Errors contain no
+  successful cursor. Verify selected response authentication before acting on an
+  error, and never interpret an unknown response or HTTP 402 as empty data or an
+  instruction to pay. Local cancellation and local `revision-unavailable` remain
+  local failures; a service reports lost replay continuity as `reset-required`.
+
+  For an unpaid authenticated request, pass `allowPayments: false` to
+  `AuthFetch.fetch`. It returns an authenticated 402 without creating a payment,
+  and retains the explicit opt-out across authentication recovery even if the
+  caller later changes its options. The default remains automatic BRC-105 payment
+  under the configured wallet's authorization policy. Ordinary HTTP fallback
+  failures retain their existing error behavior. This option controls payment;
+  it does not itself establish the required provider identity or profile selection.
+
+  For private requests, set `requireMutualAuth: true` to disable ordinary HTTP
+  fallback. When the provider is known, set `expectedIdentityKey` to its canonical
+  compressed public key; this implies required authentication, pins the handshake
+  before application data is sent, and checks the authenticated response sender.
+  A conflicting cached identity is rejected without silently rebinding the origin.
+  These restrictions survive session recovery and later caller option changes.
+  Omitted options preserve existing behavior. Mutual authentication does not
+  encrypt application data: use HTTPS in production. Pinning authenticates the
+  peer, not the application capability/profile; verify those bindings separately.
+
+  ```ts
+  const response = await authFetch.fetch(serviceUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(query),
+    expectedIdentityKey: selectedProviderIdentity,
+    allowPayments: false
+  })
+  ```
+
 - **Distributed Protocol and Certificate Registration**: Efficient systems for registering and managing distributed protocols and certificates.
 
 ## Documentation
@@ -533,3 +680,57 @@ These controls authenticate peers and protect message integrity and freshness;
 they do not encrypt the transport. Applications must use a confidential
 transport such as correctly verified TLS and must separately authorize the
 authenticated identity for every protected operation.
+
+## Revenue listing script codec
+
+The 3.0.0 candidate exposes `@bsv/sdk/script/templates/RevenueListing` as a
+separate portable entry point. Supply the frozen BRC-197 program bytes explicitly;
+the codec authenticates the executable and exact descriptor/revenue-state layout.
+Recognition does not establish lineage, currentness, valid spending or fulfillment.
+See the [codec guide](../../docs/guides/revenue-listing-codec.md) for its boundary
+and the remaining complete-family integration work. The separate
+`RevenueListingPlan` and `RevenueListingSpend` entries provide all six route plans,
+funded-layout checks and exact unlocking scripts with externally supplied seller
+and recipient signatures. See the [spend guide](../../docs/guides/revenue-listing-spends.md).
+Lineage, wallet integration and fulfillment are separate. Existing root imports remain unchanged.
+
+The optional overlay funding helpers parse bounded BRC-195 payment headers and inspect
+the exact single BRC-29 payment output against a retained quote and independently
+derived seller key. They return a proof-independent wallet operation identifier;
+chain acceptance, acquisition reservation and durable wallet credit remain separate.
+See the [private overlay release guide](../../docs/guides/private-overlay-release.md).
+
+The optional `OutputRootEvictionProtocol` helpers parse and authenticate BRC-199
+root requests/results, exact advertisement targets and independent restoration
+bases. Their new-request clock check is separate from retained-outcome recovery.
+They do not authorize suppression, verify BEEF, persist tombstones or guard
+serving paths. See the [root coordination guide](../../docs/guides/root-eviction-coordination.md).
+Existing SHIP/SLAP, lookup and GASP behavior remains unchanged.
+
+`OutputRootEvictionTransport` composes those contracts with bounded BRC-103/104
+HTTP. Supply an integrity-protected original capability/request record, separately
+retained policy digest, trusted root configuration and wallet. `submit()` retries
+only that signed operation and `status()` derives its original key. Both require
+the expected root identity, prohibit payment and validate results against the
+original selection. Cancellation retains physical capacity until pending I/O
+settles. Durable storage, polling, current server authority and serving decisions
+remain separate; existing lookup transport APIs and defaults are unchanged.
+
+The SDK3 candidate also adds `OutputProposalTransport` for one durably saved
+BRC-194 put/get/finalize operation. Retries retain the original selected capability
+and request, with mutual authentication, bounded delivery and no automatic payment.
+Finalization reports whether a returned reservation matches that saved operation
+and transaction. See the [proposal guide](../../docs/guides/non-final-proposals.md)
+before adopting it; storage, current authority, domain acceptance and Bitcoin
+verification remain separate responsibilities.
+
+### Explicit paid lookup operations
+
+`OutputPaidLookupTransport` performs one selected-host BRC-195 quote, explicit
+payment or original-acquisition recovery. It owns the original request and
+retained contract, disables automatic AuthFetch payments, checks authenticated
+challenge/result binding, and never constructs or persists a wallet action.
+`OutputPaidLookupServiceError` preserves a validated service error packet.
+Existing AuthFetch defaults are unchanged. See
+[paid lookup clients](../../docs/guides/paid-lookup-client.md) for response bounds,
+recovery, private custody and the separate durable buyer responsibilities.

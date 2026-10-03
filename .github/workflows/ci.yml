@@ -257,6 +257,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Test installed mutation engine controls
+        run: node --test scripts/mutation-partitions-engine.integration.mjs
+
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
 
@@ -414,6 +417,7 @@ jobs:
           {
             find packages -type d \( -name dist -o -name out \) -prune -print0
             find packages -type f -name '*.tsbuildinfo' -print0
+            find apps -type d \( -name node_modules -o -name .stryker-tmp \) -prune -o -type d \( -name dist -o -name dist-server -o -name dist-proposals \) -print0 -prune
           } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
 
       - name: Share build outputs
@@ -496,9 +500,9 @@ jobs:
       - prepare
       - sonar-zero-findings
     runs-on: ubuntu-latest
-    # The governed air-gap codec target currently instruments 352 mutants and
-    # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
+    # Preserve the full-source deadline allowances and complete canonical gates.
+    # Job time does not change individual mutant/test deadlines or worker counts.
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -602,6 +606,141 @@ jobs:
         with:
           pattern: mutation-wallet-retained-snapshot-*
           path: .mutation-parts/wallet-retained-snapshot
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'root-eviction-records')
+        with:
+          pattern: mutation-root-eviction-records-*
+          path: .mutation-parts/root-eviction-records
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'output-knowledge-proposal-core')
+        with:
+          pattern: mutation-output-knowledge-proposal-core-*
+          path: .mutation-parts/output-knowledge-proposal-core
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'proposal-journal-send')
+        with:
+          pattern: mutation-proposal-journal-send-*
+          path: .mutation-parts/proposal-journal-send
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'proposal-channel-storage')
+        with:
+          pattern: mutation-proposal-channel-storage-*
+          path: .mutation-parts/proposal-channel-storage
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-encoding')
+        with:
+          pattern: mutation-wallet-recovery-encoding-*
+          path: .mutation-parts/wallet-recovery-encoding
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'protected-ledger')
+        with:
+          pattern: mutation-protected-ledger-*
+          path: .mutation-parts/protected-ledger
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-state')
+        with:
+          pattern: mutation-private-publication-state-*
+          path: .mutation-parts/private-publication-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'revenue-lineage-graph')
+        with:
+          pattern: mutation-revenue-lineage-graph-*
+          path: .mutation-parts/revenue-lineage-graph
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-service')
+        with:
+          pattern: mutation-private-publication-service-*
+          path: .mutation-parts/private-publication-service
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-coordination')
+        with:
+          pattern: mutation-private-publication-coordination-*
+          path: .mutation-parts/private-publication-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-http')
+        with:
+          pattern: mutation-private-publication-http-*
+          path: .mutation-parts/private-publication-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-foundation')
+        with:
+          pattern: mutation-private-acquisition-foundation-*
+          path: .mutation-parts/private-acquisition-foundation
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-state')
+        with:
+          pattern: mutation-private-acquisition-state-*
+          path: .mutation-parts/private-acquisition-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-coordination')
+        with:
+          pattern: mutation-private-acquisition-coordination-*
+          path: .mutation-parts/private-acquisition-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-http')
+        with:
+          pattern: mutation-private-acquisition-http-*
+          path: .mutation-parts/private-acquisition-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'sdk-paid-lookup-http')
+        with:
+          pattern: mutation-sdk-paid-lookup-http-*
+          path: .mutation-parts/sdk-paid-lookup-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'protected-operation-state')
+        with:
+          pattern: mutation-protected-operation-state-*
+          path: .mutation-parts/protected-operation-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'protected-operation-objects')
+        with:
+          pattern: mutation-protected-operation-objects-*
+          path: .mutation-parts/protected-operation-objects
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-proposal-http')
+        with:
+          pattern: mutation-overlay-proposal-http-*
+          path: .mutation-parts/overlay-proposal-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-lookup-buyer')
+        with:
+          pattern: mutation-private-lookup-buyer-*
+          path: .mutation-parts/private-lookup-buyer
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'lch-overlay-covenant-terms')
+        with:
+          pattern: mutation-lch-overlay-covenant-terms-*
+          path: .mutation-parts/lch-overlay-covenant-terms
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-state')
+        with:
+          pattern: mutation-private-purchase-state-*
+          path: .mutation-parts/private-purchase-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-coordination')
+        with:
+          pattern: mutation-private-purchase-coordination-*
+          path: .mutation-parts/private-purchase-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-native-clock')
+        with:
+          pattern: mutation-private-purchase-native-clock-*
+          path: .mutation-parts/private-purchase-native-clock
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'revenue-listing-purchase')
+        with:
+          pattern: mutation-revenue-listing-purchase-*
+          path: .mutation-parts/revenue-listing-purchase
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-codec')
+        with:
+          pattern: mutation-wallet-recovery-codec-*
+          path: .mutation-parts/wallet-recovery-codec
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-proposal-admission')
+        with:
+          pattern: mutation-overlay-proposal-admission-*
+          path: .mutation-parts/overlay-proposal-admission
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:

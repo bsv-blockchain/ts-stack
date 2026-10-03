@@ -294,9 +294,11 @@ registration. Its source specifications are grouped by file into core validation
 and Peer, AuthFetch client, and SimplifiedFetchTransport. Every range of a file
 stays in one part; a new canonical helper defaults to core, and unsupported
 wildcard/unknown partition inputs fail. Each part retains the complete original
-Jest test selection, four workers and governed property inputs. The current pinned
-inventory replays to 95 + 137 + 91 = 323 mutants, exactly matching the unpartitioned
-canonical inventory.
+Jest test selection, four workers and governed property inputs. The original
+main-derived inventory replayed to 95 + 137 + 91 = 323 mutants. This branch's
+expanded SDK sources replay to 416 + 250 + 91 = 757, including the complete finite
+HTTP helper. Each union exactly matches its own unpartitioned canonical inventory;
+the earlier count does not qualify the newer sources.
 
 A part's score is diagnostic. It still requires complete actual source/config/
 mutant evidence and zero uncovered/invalid outcomes. Only the combined original
@@ -341,3 +343,30 @@ This source proof cannot qualify a newer wallet head: its owner must compare
 the full pinned inventory/configuration on the final source before adoption.
 Registry, runtime, assertions, workers, deadlines and thresholds remain owned
 and unchanged by the partition facility.
+
+### Root-record execution partitions
+
+`root-eviction-records` remains one canonical registration and one combined
+90%/zero-uncovered/zero-invalid gate. Its complete source files are assigned to
+request handling and serving records. Future canonical helpers join the request
+part; no new source can disappear from the union. Both parts retain every original
+root test, property input, fixture, runner setting and four-worker limit. The
+pinned instrumenter reproduces exactly 218 request plus 257 serving mutants,
+matching all 475 canonical tuples and their complete configuration. This is
+static inventory evidence, not executed qualification or measured savings.
+
+The previous unpartitioned run passed all 288 dry-run tests, then exceeded its
+90-minute bound after six worker out-of-memory restarts. It was stopped without a
+final report. That attempt remains incomplete, with no inferred passing score.
+Fresh complete part reports must satisfy the canonical aggregate, including its
+independent raw-part reconstruction. PR artifact downloads explicitly include
+both parts; missing parts cannot pass the final gate. The existing 90-minute job
+bound and every mutant/test deadline remain unchanged. Dry-run duplication,
+worker memory and the slower part's wall time must be measured before claiming
+an improvement.
+
+The separate `root-eviction-codec` target receives the same bounded 90-minute job
+allowance after its full 182-site run took 50m05s. That run achieved 97.80% with
+zero uncovered/invalid outcomes and unchanged dependency bytes. This is an
+execution allowance, not a reduced test set, score gate or worker constraint.
+All earlier target allowances and the 45-minute default are retained.

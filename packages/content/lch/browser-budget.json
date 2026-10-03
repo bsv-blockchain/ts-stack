@@ -13,7 +13,71 @@
   ],
   "prohibitedExports": [],
   "maximumBytes": {
-    "vite": { "raw": 750000, "gzip": 200000, "brotli": 160000 },
-    "esbuild": { "raw": 590000, "gzip": 180000, "brotli": 150000 }
-  }
+    "vite": {
+      "raw": 750000,
+      "gzip": 200000,
+      "brotli": 160000
+    },
+    "esbuild": {
+      "raw": 590000,
+      "gzip": 180000,
+      "brotli": 150000
+    }
+  },
+  "additionalEntries": [
+    {
+      "entry": "./overlay-acquisition",
+      "requiredExports": [
+        "LCHOverlayPaidDomain",
+        "LCHOverlayPaidSeller",
+        "LCHOverlayPaidCustody",
+        "validateLCHOverlayPaidTerms",
+        "decodeUnverifiedLCHOverlayContext",
+        "LCH_OVERLAY_COVENANT_MECHANISMS",
+        "validateLCHOverlayCovenantTerms",
+        "validateLCHOverlayCovenantPromise",
+        "validateLCHOverlayCovenantWindow"
+      ],
+      "prohibitedExports": ["SQLiteProtectedOperationObjectStore", "NodeProtectedPayloadCodec"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 308000,
+          "gzip": 92000,
+          "brotli": 78000
+        },
+        "esbuild": {
+          "raw": 259000,
+          "gzip": 87000,
+          "brotli": 77000
+        }
+      }
+    },
+    {
+      "entry": "./overlay-covenant",
+      "requiredExports": [
+        "LCHOverlayCovenantDomain",
+        "lchOverlayCovenantEntitlementDigest",
+        "bindLCHOverlayCovenantSettlement",
+        "decodeLCHOverlayCovenantPurchaseEvidence",
+        "validateLCHOverlayCovenantTerms"
+      ],
+      "prohibitedExports": [
+        "SQLiteProtectedOperationObjectStore",
+        "NodeProtectedPayloadCodec",
+        "RevenueListingPurchaseVerifier"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 550000,
+          "gzip": 160000,
+          "brotli": 140000
+        },
+        "esbuild": {
+          "raw": 430000,
+          "gzip": 140000,
+          "brotli": 120000
+        }
+      }
+    }
+  ]
 }

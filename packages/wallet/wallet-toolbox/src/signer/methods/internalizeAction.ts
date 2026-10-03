@@ -46,7 +46,8 @@ import { canonicalizeAtomicBeef } from '../../utility/canonicalizeAtomicBeef'
 export async function internalizeAction(
   wallet: Wallet,
   auth: AuthId,
-  args: InternalizeActionArgs
+  args: InternalizeActionArgs,
+  commit?: (args: InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
 ): Promise<StorageInternalizeActionResult> {
   const vargs = validateInternalizeActionArgs(args)
 
@@ -69,7 +70,7 @@ export async function internalizeAction(
     }
   }
 
-  const r: StorageInternalizeActionResult = await wallet.storage.internalizeAction({
+  const r: StorageInternalizeActionResult = await (commit ?? (async value => await wallet.storage.internalizeAction(value)))({
     ...args,
     tx: ab.toBinaryAtomic(txid)
   })

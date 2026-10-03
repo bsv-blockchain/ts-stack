@@ -25,6 +25,9 @@ import {
   type MongoTransactionRequest
 } from '../../storage/mongo/MongoTransactionRunner.js'
 
+// Jest provides the same test object to native ESM through import.meta.
+const jest = import.meta.jest
+
 const scope: StorageScope = {
   network: 'testnet',
   genesisHash: '11'.repeat(32),
@@ -353,7 +356,7 @@ describe('Mongo payload store input and operation guards', () => {
 
   test('idempotent and conflicting reference slots are decided from the existing row', async () => {
     const payloadId = mongoRecordKey(mongoChainKey(scope), 'outbox-data', digest)
-    const refs: { findOne: jest.Mock } = {
+    const refs: { findOne: ReturnType<typeof jest.fn> } = {
       findOne: jest.fn()
     }
     const payloads = {

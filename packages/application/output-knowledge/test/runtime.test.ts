@@ -1,0 +1,1793 @@
+import { getEventListeners } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { SQLiteJournal } from '../src/storage/SQLiteJournal.js'
+import { knowledgeMutation } from '../src/storage/Journal.js'
+import { describe, expect, it, jest } from '@jest/globals'
+import { Utils, OutputProtocolError } from '@bsv/sdk'
+import {
+  OutputKnowledge,
+  KnowledgeStore,
+  MemoryJournal,
+  runtimeLimits,
+  type AcceptedInput,
+  type DomainProjector,
+  type OutputKnowledgeWorker,
+  type Projection,
+  type Source,
+  type SourceBatch,
+  type SourceRequest
+} from '../src/index.js'
+import { RuntimeEvents } from '../src/RuntimeEvents.js'
+import { emptyReducer } from './empty-reducer.js'
+import { candidate, chain, context, partition } from './evidence-fixture.js'
+
+const scope = {
+  chain,
+  provider: 'test-source',
+  service: 'test-records',
+  queryDigest: '01'.repeat(32),
+  rulesDigest: '02'.repeat(32),
+  access: 'public',
+  epoch: 'epoch-0'
+}
+function request(): SourceRequest {
+  return { partition, generation: '0', scope, limits: runtimeLimits() }
+}
+function batch(id = 'one'): SourceBatch {
+  return {
+    provenance: {
+      partition,
+      generation: '0',
+      adapter: 'source',
+      scope,
+      authentication: 'configured-transport',
+      peer: scope.provider,
+      receivedAt: '1'
+    },
+    groups: [
+      {
+        id,
+        sequence: '0',
+        observations: [
+          { id, scope, kind: 'output', payload: { evidence: candidate('A').evidence } }
+        ]
+      }
+    ],
+    coverage: { scope, phase: 'finite', status: 'complete' }
+  }
+}
+function projection(input: AcceptedInput): Projection {
+  return {
+    acceptedRevision: input.revision.accepted,
+    generation: input.generation,
+    contextId: input.context.id,
+    records: [
+      {
+        id: 'record',
+        schema: 'urn:example:test-record',
+        value: Utils.toBase64(Utils.toArray(input.context.id, 'utf8'))
+      }
+    ],
+    conflicts: [],
+    unresolved: []
+  }
+}
+const noWork: OutputKnowledgeWorker = { advance: async () => {}, pendingBytes: async () => 0 }
+async function open(
+  worker = noWork,
+  projector?: DomainProjector,
+  limits?: Parameters<typeof runtimeLimits>[0]
+): Promise<{ runtime: OutputKnowledge; journal: MemoryJournal; store: KnowledgeStore }> {
+  const journal = new MemoryJournal('test'),
+    store = new KnowledgeStore(journal, emptyReducer(), { partition })
+  const runtime = new OutputKnowledge({ store, worker, projector, limits })
+  await runtime.setContext(context())
+  await runtime.flush()
+  return { runtime, journal, store }
+}
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>(done => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+describe('runtime orchestration and publication ports', () => {
+  it('does not return a retained projection after its publication gate changes during an asynchronous read', async () => {
+    const fixture = await open(noWork, {
+      policyDigest: 'ff'.repeat(32),
+      project: async input => projection(input)
+    })
+    const entered = deferred(),
+      release = deferred(),
+      commitEntered = deferred(),
+      commitRelease = deferred()
+    const read = fixture.store.read.bind(fixture.store)
+    const commit = fixture.store.commit.bind(fixture.store)
+    const readSpy = jest.spyOn(fixture.store, 'read').mockImplementationOnce(async (...args) => {
+      const saved = await read(...args)
+      entered.resolve()
+      await release.promise
+      return saved
+    })
+    const commitSpy = jest
+      .spyOn(fixture.store, 'commit')
+      .mockImplementationOnce(async (...args) => {
+        commitEntered.resolve()
+        await commitRelease.promise
+        return commit(...args)
+      })
+    let changed: Promise<void> | undefined
+    try {
+      const pending = fixture.runtime.readProjection()
+      await entered.promise
+      changed = fixture.runtime.setContext({ ...context(), id: 'context-after-held-read' })
+      await commitEntered.promise
+      release.resolve()
+      expect(await pending).toBeUndefined()
+      commitRelease.resolve()
+      await changed
+      await fixture.runtime.flush()
+      expect((await fixture.runtime.readProjection())?.contextId).toBe('context-after-held-read')
+    } finally {
+      release.resolve()
+      commitRelease.resolve()
+      await changed
+      readSpy.mockRestore()
+      commitSpy.mockRestore()
+      await fixture.runtime.close()
+    }
+  })
+
+  it('acknowledges a source yield only after a durable receipt, independently of verification completion', async () => {
+    const { runtime, journal } = await open()
+    let acknowledged = false
+    const source: Source = {
+      id: 'source',
+      async *open() {
+        yield batch()
+        const entries = await journal.read('1', 10)
+        expect(entries[0].body.kind).toBe('receive')
+        expect(entries[0].revision).toEqual({ received: '2', accepted: '1' })
+        acknowledged = true
+      }
+    }
+    await runtime.attach(source, request()).done
+    expect(acknowledged).toBe(true)
+    await runtime.flush()
+    await runtime.close()
+  })
+
+  it('does not acknowledge malformed scope or advance a cursor beyond pending capacity', async () => {
+    const { runtime, journal } = await open({
+      ...noWork,
+      pendingBytes: async () => 16 * 1024 * 1024
+    })
+    let afterYield = false
+    const source: Source = {
+      id: 'source',
+      async *open() {
+        yield batch()
+        afterYield = true
+      }
+    }
+    await expect(runtime.attach(source, request()).done).rejects.toMatchObject({
+      code: 'limited',
+      message: expect.stringMatching(/\S/)
+    })
+    expect(afterYield).toBe(false)
+    expect((await journal.head()).received).toBe('1')
+    await runtime.close()
+    const next = await open()
+    const wrong = batch()
+    wrong.groups[0].observations[0].scope = { ...scope, epoch: 'other' }
+    await expect(
+      next.runtime.attach(
+        {
+          id: 'source',
+          async *open() {
+            yield wrong
+          }
+        },
+        request()
+      ).done
+    ).rejects.toThrow('scope')
+    expect((await next.journal.head()).received).toBe('1')
+    await next.runtime.close()
+  })
+
+  it('discards a late projection after a context change and rebuilds under the new context', async () => {
+    const entered = deferred(),
+      release = deferred()
+    let hold = false
+    const projector: DomainProjector = {
+      policyDigest: 'ff'.repeat(32),
+      async project(input) {
+        if (hold) {
+          hold = false
+          entered.resolve()
+          await release.promise
+        }
+        return projection(input)
+      }
+    }
+    const { runtime } = await open(noWork, projector)
+    const events = runtime.events()[Symbol.asyncIterator]()
+    hold = true
+    const flushing = runtime.flush()
+    await entered.promise
+    expect((await events.next()).value.kind).toBe('knowledge')
+    const next = context()
+    next.id = 'verification-new'
+    next.generation = '1'
+    await runtime.setContext(next)
+    expect(await runtime.readProjection()).toBeUndefined()
+    release.resolve()
+    await flushing
+    expect(await runtime.readProjection()).toMatchObject({
+      generation: '1',
+      contextId: 'verification-new'
+    })
+    expect((await events.next()).value).toMatchObject({
+      kind: 'knowledge',
+      input: { context: { id: 'verification-new' } }
+    })
+    expect((await events.next()).value).toMatchObject({
+      kind: 'projection',
+      projection: { contextId: 'verification-new' }
+    })
+    await events.return?.()
+    await runtime.close()
+  })
+
+  it('does not mark a failed projection current and can rebuild it idempotently', async () => {
+    let fail = false
+    const projector: DomainProjector = {
+      policyDigest: 'ff'.repeat(32),
+      async project(input) {
+        if (fail) throw new Error('application parser failed')
+        return projection(input)
+      }
+    }
+    const { runtime } = await open(noWork, projector)
+    fail = true
+    const next = context()
+    next.id = 'changed'
+    await runtime.setContext(next)
+    await expect(runtime.flush()).rejects.toThrow('application parser failed')
+    expect(await runtime.readProjection()).toBeUndefined()
+    fail = false
+    await runtime.flush()
+    expect((await runtime.readProjection())?.contextId).toBe('changed')
+    await runtime.close()
+  })
+
+  it('closes an account partition before late source or projection work can publish', async () => {
+    const entered = deferred(),
+      release = deferred()
+    const { runtime, journal } = await open()
+    const source: Source = {
+      id: 'source',
+      async *open() {
+        entered.resolve()
+        await release.promise
+        yield batch()
+      }
+    }
+    const subscription = runtime.attach(source, request())
+    await entered.promise
+    await runtime.close()
+    release.resolve()
+    await subscription.done
+    await expect(runtime.readProjection()).rejects.toMatchObject({
+      code: 'cancelled',
+      message: expect.stringMatching(/\S/)
+    })
+    await expect(journal.head()).rejects.toThrow('closed')
+    const other = await open()
+    expect(() =>
+      other.runtime.attach(source, { ...request(), partition: { ...partition, account: 'bob' } })
+    ).toThrow('partition')
+    await other.runtime.close()
+  })
+
+  it('validates source requests before I/O and rejects malformed nested projections', async () => {
+    const { runtime } = await open()
+    let opened = false
+    const source: Source = {
+      id: 'source',
+      async *open() {
+        opened = true
+        yield batch()
+      }
+    }
+    expect(() => runtime.attach(source, { ...request(), generation: '-1' })).toThrow()
+    expect(opened).toBe(false)
+    const altered: Source = {
+      id: 'source',
+      async *open(selected) {
+        selected.scope.epoch = 'unselected-epoch'
+        const result = batch()
+        result.provenance.scope = selected.scope
+        result.coverage.scope = selected.scope
+        result.groups[0].observations[0].scope = selected.scope
+        yield result
+      }
+    }
+    await expect(runtime.attach(altered, request()).done).rejects.toThrow('scope')
+    await runtime.close()
+    const journal = new MemoryJournal('test'),
+      store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const malformed = new OutputKnowledge({
+      store,
+      worker: noWork,
+      projector: {
+        policyDigest: 'aa'.repeat(32),
+        async project(input) {
+          const result = projection(input)
+          result.records[0].value = 'not base64'
+          return result
+        }
+      }
+    })
+    await malformed.setContext(context())
+    await expect(malformed.flush()).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(/\S/)
+    })
+    expect(await malformed.readProjection()).toBeUndefined()
+    await malformed.close()
+  })
+
+  it('bounds projector time and suppresses a non-abortable late result', async () => {
+    const release = deferred()
+    const journal = new MemoryJournal('test'),
+      store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      worker: noWork,
+      limits: { deadlineMs: 10 },
+      projector: {
+        policyDigest: 'aa'.repeat(32),
+        async project(input) {
+          await release.promise
+          return projection(input)
+        }
+      }
+    })
+    await runtime.setContext(context())
+    await expect(runtime.flush()).rejects.toMatchObject({
+      code: 'limited',
+      message: expect.stringMatching(/\S/)
+    })
+    release.resolve()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(await runtime.readProjection()).toBeUndefined()
+    await runtime.close()
+  })
+
+  it('bounds event observers, closes slow consumers explicitly, and releases cancelled subscriptions', async () => {
+    const { runtime } = await open()
+    const aborts = Array.from({ length: 8 }, () => new AbortController())
+    for (const abort of aborts) runtime.events(abort.signal)
+    expect(() => runtime.events()).toThrow('capacity')
+    for (const abort of aborts) abort.abort()
+    const iterator = runtime.events()[Symbol.asyncIterator]()
+    await iterator.return?.()
+    const aborted = new AbortController()
+    aborted.abort()
+    expect(() => runtime.events(aborted.signal)).toThrow('cancelled')
+    await runtime.close()
+    let disposed = 0
+    const queue = new RuntimeEvents(new AbortController().signal, () => {
+      disposed++
+    })
+    for (let i = 0; i < 9; i++)
+      queue.push(
+        JSON.stringify({
+          kind: 'error',
+          code: 'unavailable',
+          message: 'source offline',
+          retryable: true
+        })
+      )
+    await expect(queue.next()).rejects.toMatchObject({
+      code: 'reset-required',
+      message: expect.stringMatching(/\S/)
+    })
+    expect(disposed).toBe(1)
+    const waiting = new RuntimeEvents(new AbortController().signal, () => {})
+    const pending = waiting.next()
+    await waiting.return()
+    expect(await pending).toEqual({ done: true, value: undefined })
+  })
+  it('delivers owned knowledge and projection events and reports a source error without private details', async () => {
+    const { runtime } = await open(noWork, {
+      policyDigest: 'ab'.repeat(32),
+      project: async input => projection(input)
+    })
+    const events = runtime.events()[Symbol.asyncIterator]()
+    await runtime.flush()
+    const knowledge = await events.next(),
+      projected = await events.next()
+    expect(knowledge.value?.kind).toBe('knowledge')
+    expect(projected.value?.kind).toBe('projection')
+    if (projected.value?.kind !== 'projection') throw new Error('Projection event missing')
+    projected.value.projection.records[0].value = 'AQ=='
+    expect((await runtime.readProjection())?.records[0].value).not.toBe('AQ==')
+    const failed: Source = {
+      id: 'source',
+      open() {
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                throw new Error('private transport diagnostics')
+              }
+            }
+          }
+        }
+      }
+    }
+    await expect(runtime.attach(failed, request()).done).rejects.toThrow(
+      'private transport diagnostics'
+    )
+    expect((await events.next()).value).toEqual({
+      kind: 'error',
+      source: 'source',
+      code: 'unavailable',
+      message: 'Output runtime unavailable',
+      retryable: true
+    })
+    await events.return?.()
+    await runtime.close()
+  })
+
+  it('rejects duplicate source attachments, excessive requested bounds and policy changes', async () => {
+    const release = deferred(),
+      entered = deferred()
+    let policy = 'ab'.repeat(32)
+    const projector: DomainProjector = {
+      get policyDigest() {
+        return policy
+      },
+      project: async input => projection(input)
+    }
+    const { runtime } = await open(noWork, projector, { observations: 1 })
+    const source: Source = {
+      id: 'source',
+      async *open() {
+        entered.resolve()
+        await release.promise
+        yield batch()
+      }
+    }
+    expect(() => runtime.attach(source, request())).toThrow('exceeds runtime')
+    const selected = { ...request(), limits: { ...runtime.limits } }
+    const attached = runtime.attach(source, selected)
+    await entered.promise
+    expect(() => runtime.attach(source, selected)).toThrow('already attached')
+    attached.close()
+    release.resolve()
+    await attached.done
+    policy = 'cd'.repeat(32)
+    expect(await runtime.readProjection()).toBeUndefined()
+    await expect(runtime.flush()).rejects.toMatchObject({
+      code: 'context-changed',
+      message: expect.stringMatching(/\S/)
+    })
+    await expect(
+      runtime.setContext({ ...context(), partition: { ...partition, access: 'private' } })
+    ).rejects.toMatchObject({ code: 'unauthorized', message: expect.stringMatching(/\S/) })
+    await runtime.close()
+  })
+
+  it('rejects a projector checkpoint change and reports protocol errors with their retry policy', async () => {
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      worker: noWork,
+      projector: {
+        policyDigest: 'ab'.repeat(32),
+        project: async input => ({ ...projection(input), acceptedRevision: '999' })
+      }
+    })
+    await runtime.setContext(context())
+    await expect(runtime.flush()).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(/\S/)
+    })
+    expect(await runtime.readProjection()).toBeUndefined()
+    const events = runtime.events()[Symbol.asyncIterator]()
+    const source: Source = {
+      id: 'source',
+      open() {
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              next: async () => {
+                throw new OutputProtocolError('unauthorized', 'private access data')
+              }
+            }
+          }
+        }
+      }
+    }
+    await expect(runtime.attach(source, request()).done).rejects.toMatchObject({
+      code: 'unauthorized'
+    })
+    expect((await events.next()).value).toMatchObject({
+      kind: 'error',
+      code: 'unauthorized',
+      retryable: false,
+      message: 'Output runtime unauthorized'
+    })
+    await runtime.close()
+  })
+
+  it('serializes observer reads, delivers pending events, and disposes cancellation once', async () => {
+    const abort = new AbortController()
+    let disposed = 0
+    const queue = new RuntimeEvents(abort.signal, () => {
+      disposed++
+    })
+    expect(queue[Symbol.asyncIterator]()).toBe(queue)
+    const waiting = queue.next()
+    await expect(queue.next()).rejects.toMatchObject({
+      code: 'conflict',
+      message: expect.stringMatching(/\S/)
+    })
+    const event = { kind: 'error', code: 'unavailable', message: 'offline', retryable: true }
+    queue.push(JSON.stringify(event))
+    expect(await waiting).toEqual({ done: false, value: event })
+    const next = queue.next()
+    abort.abort()
+    await expect(next).rejects.toMatchObject({
+      code: 'cancelled',
+      message: expect.stringMatching(/\S/)
+    })
+    queue.push(JSON.stringify(event))
+    queue.close()
+    expect(disposed).toBe(1)
+    const closed = new RuntimeEvents(new AbortController().signal, () => {})
+    await closed.return()
+    expect(await closed.next()).toEqual({ done: true, value: undefined })
+    const already = new AbortController()
+    already.abort()
+    const cancelled = new RuntimeEvents(already.signal, () => {})
+    await expect(cancelled.next()).rejects.toMatchObject({
+      code: 'cancelled',
+      message: expect.stringMatching(/\S/)
+    })
+  })
+})
+
+describe('exclusive projection publication windows', () => {
+  async function timed(companion: boolean, options: { hold?: () => Promise<void> } = {}) {
+    let clock = 1000
+    const original = context()
+    const journal = new MemoryJournal('test')
+    const base = emptyReducer()
+    const store = new KnowledgeStore(
+      journal,
+      {
+        async reduce(entries, signal) {
+          const value = await base.reduce(entries, signal)
+          if (!companion && value.context.id === original.id)
+            value.assessments = [
+              {
+                id: 'ab'.repeat(32),
+                outpoint: { chain, txid: 'cd'.repeat(32), outputIndex: 0 },
+                state: 'unknown',
+                contextId: original.id,
+                generation: original.generation,
+                policyDigest: original.policyDigest,
+                origin: { kind: 'local' },
+                evidenceIds: [],
+                expiresAt: '2'
+              }
+            ]
+          return value
+        }
+      },
+      { partition, now: () => clock }
+    )
+    const worker: OutputKnowledgeWorker = {
+      ...noWork,
+      ...(companion
+        ? {
+            nextInvalidation(input: AcceptedInput) {
+              // The runtime supplies an owned copy to this installed local hook.
+              const deadline = input.context.id === original.id ? '2' : undefined
+              input.context.id = 'attempt-to-change-owned-copy'
+              return deadline
+            }
+          }
+        : {}),
+      async advance() {
+        const input = await base.reduce(
+          (await store.inspect()).entries,
+          new AbortController().signal
+        )
+        if (clock < 2000 || input.context.id !== original.id) return
+        const next = { ...original, id: 'expired-state-revision' }
+        const result = await store.commit(
+          input.revision.received,
+          knowledgeMutation({ kind: 'context', context: next })
+        )
+        expect(result.status).toBe('committed')
+      }
+    }
+    const runtime = new OutputKnowledge({
+      store,
+      worker,
+      now: () => clock,
+      projector: {
+        policyDigest: 'ff'.repeat(32),
+        async project(input) {
+          await options.hold?.()
+          return projection(input)
+        }
+      }
+    })
+    await runtime.setContext(original)
+    await runtime.flush()
+    return {
+      runtime,
+      journal,
+      store,
+      original,
+      setClock: (value: number) => {
+        clock = value
+      }
+    }
+  }
+
+  it.each([false, true])(
+    'closes a saved projection at exclusive expiry before a delayed timer, companion=%s',
+    async companion => {
+      const fixture = await timed(companion)
+      try {
+        fixture.setClock(1999)
+        expect((await fixture.runtime.readProjection())?.contextId).toBe(fixture.original.id)
+        fixture.setClock(2000)
+        if (companion) expect(await fixture.runtime.readProjection()).toBeUndefined()
+        else
+          await expect(fixture.runtime.readProjection()).rejects.toMatchObject({
+            code: 'expired',
+            message: expect.stringMatching(/\S/)
+          })
+        await fixture.runtime.flush()
+        expect((await fixture.runtime.readProjection())?.contextId).toBe('expired-state-revision')
+        expect((await fixture.store.read()).revision.accepted).toBe('2')
+        expect((await fixture.journal.read('0', 10)).at(-1)?.body.kind).toBe('context')
+      } finally {
+        await fixture.runtime.close()
+      }
+    }
+  )
+
+  it('does not publish work that crosses a companion deadline during an asynchronous projector', async () => {
+    const entered = deferred(),
+      release = deferred()
+    let hold = false
+    const fixture = await timed(true, {
+      hold: async () => {
+        if (hold) {
+          hold = false
+          entered.resolve()
+          await release.promise
+        }
+      }
+    })
+    try {
+      hold = true
+      const outcome = fixture.runtime.flush().then(
+        () => undefined,
+        error => error
+      )
+      await entered.promise
+      fixture.setClock(2000)
+      release.resolve()
+      expect(await outcome).toMatchObject({ code: 'expired', message: expect.stringMatching(/\S/) })
+      expect(await fixture.runtime.readProjection()).toBeUndefined()
+      await fixture.runtime.flush()
+      expect((await fixture.runtime.readProjection())?.contextId).toBe('expired-state-revision')
+    } finally {
+      release.resolve()
+      await fixture.runtime.close()
+    }
+  })
+
+  it('does not spin a worker that leaves expired state unresolved', async () => {
+    let calls = 0
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      worker: {
+        ...noWork,
+        nextInvalidation: () => '1',
+        advance: async () => {
+          calls++
+        }
+      },
+      now: () => 1000,
+      projector: { policyDigest: 'ff'.repeat(32), project: async input => projection(input) }
+    })
+    try {
+      await runtime.setContext(context())
+      await expect(runtime.flush()).rejects.toMatchObject({
+        code: 'expired',
+        retryable: true,
+        message: expect.stringMatching(/\S/)
+      })
+      expect(await runtime.readProjection()).toBeUndefined()
+      expect(calls).toBe(1)
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it('uses its timer to commit invalidation without a new source message', async () => {
+    jest.useFakeTimers()
+    const fixture = await timed(true)
+    try {
+      // A wake before the installed clock reaches expiry cannot invalidate state.
+      await jest.advanceTimersByTimeAsync(1000)
+      expect((await fixture.journal.head()).accepted).toBe('1')
+      fixture.setClock(2000)
+      await jest.advanceTimersByTimeAsync(1000)
+      expect((await fixture.journal.head()).accepted).toBe('2')
+      expect((await fixture.runtime.readProjection())?.contextId).toBe('expired-state-revision')
+      expect((await fixture.journal.head()).accepted).toBe('2')
+    } finally {
+      await fixture.runtime.close()
+      jest.useRealTimers()
+    }
+  })
+
+  it('closes publication and emits a bounded error when the timer clock becomes invalid', async () => {
+    jest.useFakeTimers()
+    const fixture = await timed(true)
+    const events = fixture.runtime.events()[Symbol.asyncIterator]()
+    try {
+      fixture.setClock(Number.NaN)
+      await jest.advanceTimersByTimeAsync(1000)
+      expect((await events.next()).value).toEqual({
+        kind: 'error',
+        code: 'invalid',
+        message: 'Output runtime invalid',
+        retryable: false
+      })
+      expect(await fixture.runtime.readProjection()).toBeUndefined()
+      expect((await fixture.journal.head()).accepted).toBe('1')
+    } finally {
+      await events.return?.()
+      await fixture.runtime.close()
+      jest.useRealTimers()
+    }
+  })
+
+  it.each(['-1', '01', '18446744073709551616', 'x', ''])(
+    'rejects an invalid installed deadline %s',
+    async deadline => {
+      const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+      const runtime = new OutputKnowledge({
+        store,
+        now: () => 0,
+        worker: { ...noWork, nextInvalidation: () => deadline },
+        projector: { policyDigest: 'ff'.repeat(32), project: async input => projection(input) }
+      })
+      try {
+        await runtime.setContext(context())
+        await expect(runtime.flush()).rejects.toMatchObject({
+          code: 'invalid',
+          message: expect.stringMatching(/\S/)
+        })
+        expect(await runtime.readProjection()).toBeUndefined()
+      } finally {
+        await runtime.close()
+      }
+    }
+  )
+
+  it('accepts the full U64 deadline without converting it to an unsafe timer delay', async () => {
+    jest.useFakeTimers()
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      now: () => 1,
+      worker: { ...noWork, nextInvalidation: () => '18446744073709551615' },
+      projector: { policyDigest: 'ff'.repeat(32), project: async input => projection(input) }
+    })
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      await jest.advanceTimersByTimeAsync(120000)
+      expect((await runtime.readProjection())?.contextId).toBe(context().id)
+      expect(jest.getTimerCount()).toBe(1)
+    } finally {
+      await runtime.close()
+      jest.useRealTimers()
+    }
+  })
+})
+
+describe('bounded runtime intake and lifecycle recovery', () => {
+  const once: Source = {
+    id: 'source',
+    async *open() {
+      yield batch()
+    }
+  }
+
+  it.each([0, -1, 17, 1.5])(
+    'rejects invalid source concurrency %s before opening work',
+    maximumSources => {
+      const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+      expect(() => new OutputKnowledge({ store, worker: noWork, maximumSources })).toThrow(
+        'concurrency'
+      )
+    }
+  )
+
+  it('requires durable receipt storage when an adapter acknowledges durable work', async () => {
+    const { runtime } = await open()
+    try {
+      expect(() => runtime.attach({ ...once, requiredDurability: 'durable' }, request())).toThrow(
+        'durable'
+      )
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it('bounds concurrently attached sources without opening another adapter', async () => {
+    const { runtime } = await open()
+    const release = deferred()
+    const sources = Array.from({ length: 4 }, (_, index) =>
+      runtime.attach(
+        {
+          id: 'held-' + index,
+          async *open() {
+            await release.promise
+            const value = batch('held-' + index)
+            value.provenance.adapter = 'held-' + index
+            yield value
+          }
+        },
+        request()
+      )
+    )
+    try {
+      expect(() => runtime.attach(once, request())).toThrow('Source concurrency')
+    } finally {
+      release.resolve()
+      await Promise.all(sources.map(source => source.done))
+      await runtime.close()
+    }
+  })
+
+  it('retries receipt CAS on the same mutation and fails explicitly at its contention bound', async () => {
+    const f = await open()
+    const commit = jest.spyOn(f.store, 'commit')
+    try {
+      commit.mockResolvedValueOnce({ status: 'conflict', reason: 'synthetic competing writer' })
+      await f.runtime.attach(once, request()).done
+      expect(commit).toHaveBeenCalledTimes(2)
+      expect(commit.mock.calls[0][1]).toEqual(commit.mock.calls[1][1])
+      expect((await f.journal.head()).received).toBe('2')
+      commit.mockClear().mockResolvedValue({ status: 'conflict', reason: 'synthetic contention' })
+      await expect(
+        f.runtime.attach(
+          {
+            ...once,
+            async *open() {
+              yield batch('next')
+            }
+          },
+          request()
+        ).done
+      ).rejects.toMatchObject({ code: 'conflict', message: expect.stringMatching(/\S/) })
+      expect(commit).toHaveBeenCalledTimes(8)
+      expect((await f.journal.head()).received).toBe('2')
+      commit.mockResolvedValue({ status: 'limited', reason: 'synthetic storage bound' })
+      await expect(f.runtime.attach(once, request()).done).rejects.toMatchObject({
+        code: 'limited',
+        message: expect.stringMatching(/\S/)
+      })
+    } finally {
+      commit.mockRestore()
+      await f.runtime.close()
+    }
+  })
+
+  it('bounds context CAS and preserves the old journal on a failed transition', async () => {
+    const f = await open()
+    const commit = jest.spyOn(f.store, 'commit')
+    const next = { ...context(), id: 'next-context' }
+    try {
+      commit.mockResolvedValueOnce({ status: 'conflict', reason: 'synthetic competing writer' })
+      await f.runtime.setContext(next)
+      await f.runtime.flush()
+      expect(commit).toHaveBeenCalledTimes(2)
+      expect(commit.mock.calls[0][1]).toEqual(commit.mock.calls[1][1])
+      commit.mockClear().mockResolvedValue({ status: 'conflict', reason: 'synthetic contention' })
+      await expect(f.runtime.setContext({ ...next, id: 'never-committed' })).rejects.toMatchObject({
+        code: 'conflict'
+      })
+      expect(commit).toHaveBeenCalledTimes(8)
+      expect((await f.store.read()).context.id).toBe('next-context')
+      commit.mockResolvedValue({ status: 'limited', reason: 'synthetic storage bound' })
+      await expect(f.runtime.setContext({ ...next, id: 'limited-context' })).rejects.toMatchObject({
+        code: 'limited',
+        message: expect.stringMatching(/\S/)
+      })
+      expect((await f.store.read()).context.id).toBe('next-context')
+    } finally {
+      commit.mockRestore()
+      await f.runtime.close()
+    }
+  })
+
+  it('does not commit a source cancelled while its pending-work check awaits', async () => {
+    const entered = deferred(),
+      release = deferred()
+    const f = await open({
+      ...noWork,
+      pendingBytes: async () => {
+        entered.resolve()
+        await release.promise
+        return 0
+      }
+    })
+    const subscription = f.runtime.attach(once, request())
+    const outcome = subscription.done.then(
+      () => undefined,
+      error => error
+    )
+    try {
+      await entered.promise
+      subscription.close()
+      release.resolve()
+      expect(await outcome).toMatchObject({
+        code: 'cancelled',
+        message: expect.stringMatching(/\S/)
+      })
+      expect((await f.journal.head()).received).toBe('1')
+    } finally {
+      release.resolve()
+      await f.runtime.close()
+    }
+  })
+
+  it('removes a cancelled queued source without acknowledging its yield', async () => {
+    const entered = deferred(),
+      release = deferred(),
+      queued = deferred()
+    let calls = 0,
+      acknowledged = false
+    const f = await open({
+      ...noWork,
+      pendingBytes: async () => {
+        if (++calls === 1) {
+          entered.resolve()
+          await release.promise
+        }
+        return 0
+      }
+    })
+    const first = f.runtime.attach(once, request())
+    await entered.promise
+    const second = f.runtime.attach(
+      {
+        id: 'second',
+        async *open() {
+          queued.resolve()
+          const next = batch('second')
+          next.provenance.adapter = 'second'
+          yield next
+          acknowledged = true
+        }
+      },
+      request()
+    )
+    const outcome = second.done.then(
+      () => undefined,
+      error => error
+    )
+    try {
+      await queued.promise
+      // The first pending-work check owns the serialized receipt queue.
+      await Promise.resolve()
+      second.close()
+      release.resolve()
+      await first.done
+      expect(await outcome).toMatchObject({
+        code: 'cancelled',
+        message: expect.stringMatching(/\S/)
+      })
+      expect(acknowledged).toBe(false)
+      expect(calls).toBe(1)
+      expect((await f.journal.head()).received).toBe('2')
+    } finally {
+      release.resolve()
+      await f.runtime.close()
+    }
+  })
+
+  it('keeps physical worker capacity occupied through cancellation and closes observers', async () => {
+    const entered = deferred(),
+      release = deferred()
+    let hold = false
+    const f = await open(
+      {
+        ...noWork,
+        advance: async () => {
+          if (hold) {
+            entered.resolve()
+            await release.promise
+          }
+        }
+      },
+      undefined,
+      { verificationConcurrency: 1 }
+    )
+    const observer = f.runtime.events(new AbortController().signal)[Symbol.asyncIterator]()
+    hold = true
+    const work = f.runtime.flush().then(
+      () => undefined,
+      error => error
+    )
+    try {
+      await entered.promise
+      await expect(
+        f.runtime.attach(once, { ...request(), limits: { ...f.runtime.limits } }).done
+      ).rejects.toMatchObject({
+        code: 'limited',
+        message: expect.stringMatching(/\S/)
+      })
+      expect((await f.journal.head()).received).toBe('1')
+      expect((await observer.next()).value).toMatchObject({ kind: 'error', code: 'limited' })
+      await f.runtime.close()
+      expect(await work).toMatchObject({ code: 'cancelled', message: expect.stringMatching(/\S/) })
+      release.resolve()
+      expect((await observer.next()).done).toBe(true)
+    } finally {
+      release.resolve()
+      await observer.return?.()
+      await f.runtime.close()
+    }
+  })
+})
+
+describe('publication and bounded-source boundary regressions', () => {
+  it.each(['partition', 'generation', 'context', 'received', 'accepted'] as const)(
+    'withholds a cached projection when only the store %s checkpoint changes',
+    async field => {
+      const f = await open(noWork, {
+        policyDigest: 'ff'.repeat(32),
+        project: async input => projection(input)
+      })
+      const current = await f.store.read(),
+        altered = structuredClone(current)
+      if (field === 'partition') altered.partition.account = 'another-account'
+      if (field === 'generation') altered.generation = '9'
+      if (field === 'context') altered.context.id = 'another-context'
+      if (field === 'received') altered.revision.received = '9'
+      if (field === 'accepted') altered.revision.accepted = '9'
+      const read = jest.spyOn(f.store, 'read').mockResolvedValueOnce(altered)
+      try {
+        expect(await f.runtime.readProjection()).toBeUndefined()
+        expect((await f.runtime.readProjection())?.contextId).toBe(current.context.id)
+      } finally {
+        read.mockRestore()
+        await f.runtime.close()
+      }
+    }
+  )
+
+  it.each(['generation', 'contextId'] as const)(
+    'rejects an independently changed projector %s',
+    async field => {
+      const journal = new MemoryJournal('test'),
+        store = new KnowledgeStore(journal, emptyReducer(), { partition })
+      const runtime = new OutputKnowledge({
+        store,
+        worker: noWork,
+        projector: {
+          policyDigest: 'ff'.repeat(32),
+          project: async input => ({ ...projection(input), [field]: '9' })
+        }
+      })
+      try {
+        await runtime.setContext(context())
+        await expect(runtime.flush()).rejects.toMatchObject({
+          code: 'invalid',
+          message: expect.stringContaining('checkpoint')
+        })
+        expect(await runtime.readProjection()).toBeUndefined()
+      } finally {
+        await runtime.close()
+      }
+    }
+  )
+
+  it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects a malformed pending-byte count %s before committing receipt',
+    async pending => {
+      const f = await open({ ...noWork, pendingBytes: async () => pending })
+      try {
+        const result = f.runtime.attach(
+          {
+            id: 'source',
+            async *open() {
+              yield batch()
+            }
+          },
+          request()
+        )
+        await expect(result.done).rejects.toMatchObject({
+          code: 'limited',
+          message: expect.stringContaining('capacity')
+        })
+        expect((await f.journal.head()).received).toBe('1')
+      } finally {
+        await f.runtime.close()
+      }
+    }
+  )
+
+  it('accepts the inclusive pending-byte boundary and rejects its next byte', async () => {
+    const size = new TextEncoder().encode(JSON.stringify(batch())).length
+    // Canonicalization changes property order, not the encoded byte count of this fixture.
+    let pending = 16 * 1024 * 1024 - size
+    const f = await open({ ...noWork, pendingBytes: async () => pending })
+    try {
+      await f.runtime.attach(
+        {
+          id: 'source',
+          async *open() {
+            yield batch()
+          }
+        },
+        request()
+      ).done
+      expect((await f.journal.head()).received).toBe('2')
+      pending++
+      await expect(
+        f.runtime.attach(
+          {
+            id: 'source',
+            async *open() {
+              yield batch()
+            }
+          },
+          request()
+        ).done
+      ).rejects.toMatchObject({ code: 'limited', message: expect.stringContaining('capacity') })
+      expect((await f.journal.head()).received).toBe('2')
+    } finally {
+      await f.runtime.close()
+    }
+  })
+
+  it.each([1, 16])(
+    'accepts exactly %s sources when their aggregate capacity equals the bound',
+    async maximumSources => {
+      const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+      const runtime = new OutputKnowledge({
+        store,
+        worker: noWork,
+        maximumSources,
+        limits: { batchBytes: 4096, pendingBytes: maximumSources * 4096 }
+      })
+      try {
+        expect(runtime.limits.pendingBytes).toBe(maximumSources * 4096)
+      } finally {
+        await runtime.close()
+      }
+    }
+  )
+
+  it.each([
+    { maximumSources: 17, pendingBytes: 131072 },
+    { maximumSources: 3, pendingBytes: 8192 }
+  ])('rejects independent source-count and aggregate-capacity violations %j', async limits => {
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    try {
+      let failure: unknown
+      try {
+        new OutputKnowledge({
+          store,
+          worker: noWork,
+          maximumSources: limits.maximumSources,
+          limits: { batchBytes: 4096, pendingBytes: limits.pendingBytes }
+        })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toMatchObject({
+        code: 'invalid',
+        message: expect.stringContaining('concurrency')
+      })
+    } finally {
+      await store.close()
+    }
+  })
+
+  it.each([-1, 0.5, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid publication clock %s with a nonempty diagnostic',
+    async clock => {
+      const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+      const runtime = new OutputKnowledge({
+        store,
+        worker: { ...noWork, nextInvalidation: () => '2' },
+        now: () => clock,
+        projector: { policyDigest: 'ff'.repeat(32), project: async input => projection(input) }
+      })
+      try {
+        await runtime.setContext(context())
+        await expect(runtime.flush()).rejects.toMatchObject({
+          code: 'invalid',
+          message: expect.stringContaining('clock')
+        })
+        expect(await runtime.readProjection()).toBeUndefined()
+      } finally {
+        await runtime.close()
+      }
+    }
+  )
+
+  it.each([
+    { companion: '2', due: 2000 },
+    { companion: '6', due: 3000 }
+  ])(
+    'automatically commits the earliest live deadline across unordered assessments and a companion %j',
+    async ({ companion, due }) => {
+      jest.useFakeTimers()
+      let clock = 0,
+        calls = 0
+      const original = context(),
+        base = emptyReducer(),
+        journal = new MemoryJournal('test')
+      const assessments: AcceptedInput['assessments'] = ['5', '3', '4', '1', undefined].map(
+        (expiresAt, index) => ({
+          id: String(index + 1).repeat(64),
+          outpoint: { chain, txid: 'cd'.repeat(32), outputIndex: index },
+          state: index === 3 ? 'stale' : 'unknown',
+          contextId: original.id,
+          generation: original.generation,
+          policyDigest: original.policyDigest,
+          origin: { kind: 'local' },
+          evidenceIds: [],
+          ...(expiresAt === undefined ? {} : { expiresAt })
+        })
+      )
+      const store = new KnowledgeStore(
+        journal,
+        {
+          async reduce(entries, signal) {
+            const input = await base.reduce(entries, signal)
+            input.assessments = input.context.id === original.id ? structuredClone(assessments) : []
+            return input
+          }
+        },
+        { partition, now: () => clock }
+      )
+      const runtime = new OutputKnowledge({
+        store,
+        now: () => clock,
+        worker: {
+          pendingBytes: async () => 0,
+          nextInvalidation: input => (input.context.id === original.id ? companion : undefined),
+          async advance() {
+            calls++
+            const history = await store.inspect(),
+              input = await base.reduce(history.entries, new AbortController().signal)
+            if (clock >= due && input.context.id === original.id)
+              await store.commit(
+                history.revision.received,
+                knowledgeMutation({
+                  kind: 'context',
+                  context: { ...original, id: 'after-earliest' }
+                })
+              )
+          }
+        },
+        projector: { policyDigest: 'ff'.repeat(32), project: async input => projection(input) }
+      })
+      try {
+        await runtime.setContext(original)
+        await runtime.flush()
+        expect(calls).toBe(1)
+        clock = due - 1
+        await jest.advanceTimersByTimeAsync(due - 1)
+        expect(calls).toBe(1)
+        expect((await runtime.readProjection())?.contextId).toBe(original.id)
+        clock = due
+        await jest.advanceTimersByTimeAsync(1)
+        expect((await journal.head()).accepted).toBe('2')
+        expect(calls).toBe(2)
+        expect((await runtime.readProjection())?.contextId).toBe('after-earliest')
+      } finally {
+        await runtime.close()
+        jest.useRealTimers()
+      }
+    }
+  )
+})
+
+describe('pending context publication barrier', () => {
+  it.each(['worker', 'projector'])(
+    'keeps old in-flight %s work closed until a requested context commits',
+    async location => {
+      const entered = deferred(),
+        release = deferred(),
+        committing = deferred(),
+        commitRelease = deferred()
+      let hold = false
+      const pause = async () => {
+        if (hold) {
+          hold = false
+          entered.resolve()
+          await release.promise
+        }
+      }
+      const f = await open(
+        {
+          ...noWork,
+          advance: async () => {
+            if (location === 'worker') await pause()
+          }
+        },
+        {
+          policyDigest: 'ff'.repeat(32),
+          async project(input) {
+            if (location === 'projector') await pause()
+            return projection(input)
+          }
+        }
+      )
+      const seen: Projection[] = [],
+        iterator = f.runtime.events(new AbortController().signal)[Symbol.asyncIterator]()
+      const observing = (async () => {
+        for (;;) {
+          const event = await iterator.next()
+          if (event.done) return
+          if (event.value.kind === 'projection') seen.push(event.value.projection)
+        }
+      })().then(
+        () => undefined,
+        error => error
+      )
+      const commit = f.store.commit.bind(f.store)
+      const spy = jest.spyOn(f.store, 'commit').mockImplementationOnce(async (...args) => {
+        committing.resolve()
+        await commitRelease.promise
+        return commit(...args)
+      })
+      let changed: Promise<void> | undefined
+      let flushing: Promise<unknown> | undefined
+      try {
+        hold = true
+        flushing = f.runtime.flush().then(
+          () => undefined,
+          error => error
+        )
+        await entered.promise
+        changed = f.runtime.setContext({ ...context(), id: 'after-pending-context' })
+        await committing.promise
+        release.resolve()
+        expect(await flushing).toBeUndefined()
+        expect(await f.runtime.readProjection()).toBeUndefined()
+        expect(seen).toEqual([])
+        commitRelease.resolve()
+        await changed
+        await f.runtime.flush()
+        expect((await f.runtime.readProjection())?.contextId).toBe('after-pending-context')
+        expect(seen.map(value => value.contextId)).toEqual(['after-pending-context'])
+      } finally {
+        release.resolve()
+        commitRelease.resolve()
+        await changed
+        await flushing
+        spy.mockRestore()
+        await iterator.return?.()
+        await f.runtime.close()
+        expect(await observing).toBeUndefined()
+      }
+    }
+  )
+
+  it('keeps publication closed while any overlapping requested context remains uncommitted', async () => {
+    const firstEntered = deferred(),
+      secondEntered = deferred(),
+      firstRelease = deferred(),
+      secondRelease = deferred()
+    const f = await open(noWork, {
+      policyDigest: 'ff'.repeat(32),
+      project: async input => projection(input)
+    })
+    const commit = f.store.commit.bind(f.store)
+    const spy = jest.spyOn(f.store, 'commit').mockImplementation(async (...args) => {
+      const body = args[1].body
+      if (body.kind === 'context' && body.context.id === 'first-request') {
+        firstEntered.resolve()
+        await firstRelease.promise
+      }
+      if (body.kind === 'context' && body.context.id === 'second-request') {
+        secondEntered.resolve()
+        await secondRelease.promise
+      }
+      return commit(...args)
+    })
+    const first = f.runtime.setContext({ ...context(), id: 'first-request' }).then(
+      () => undefined,
+      error => error
+    )
+    await firstEntered.promise
+    const second = f.runtime.setContext({ ...context(), id: 'second-request' }).then(
+      () => undefined,
+      error => error
+    )
+    try {
+      await secondEntered.promise
+      firstRelease.resolve()
+      expect(await first).toBeUndefined()
+      await f.runtime.flush()
+      expect(await f.runtime.readProjection()).toBeUndefined()
+      secondRelease.resolve()
+      expect(await second).toBeUndefined()
+      await f.runtime.flush()
+      expect((await f.runtime.readProjection())?.contextId).toBe('second-request')
+      expect((await f.journal.head()).accepted).toBe('3')
+    } finally {
+      firstRelease.resolve()
+      secondRelease.resolve()
+      await first
+      await second
+      spy.mockRestore()
+      await f.runtime.close()
+    }
+  })
+})
+
+describe('runtime installed configuration and visible error contracts', () => {
+  it('retains the installed critical-extension set independently of caller array changes', async () => {
+    const extensions = ['urn:example:runtime-extension']
+    const item = batch()
+    item.groups[0].observations[0].extensions = { [extensions[0]]: true }
+    item.groups[0].observations[0].critical = [...extensions]
+    const journal = new MemoryJournal('test'),
+      store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({ store, worker: noWork, supportedExtensions: extensions })
+    extensions[0] = 'urn:example:not-installed'
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      await runtime.attach(
+        {
+          id: 'source',
+          async *open() {
+            yield item
+          }
+        },
+        request()
+      ).done
+      expect((await journal.head()).received).toBe('2')
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it('derives default source capacity from a smaller pending-byte budget', async () => {
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      worker: noWork,
+      limits: { batchBytes: 4096, pendingBytes: 8192 }
+    })
+    try {
+      expect(runtime.limits.pendingBytes).toBe(8192)
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it.each(['limited', 'unavailable', 'conflict', 'expired', 'invalid', 'unauthorized'] as const)(
+    'reports source %s with bounded public diagnostics and the correct retry policy',
+    async code => {
+      const f = await open(),
+        events = f.runtime.events()[Symbol.asyncIterator]()
+      const source: Source = {
+        id: 'source',
+        open() {
+          return {
+            [Symbol.asyncIterator]() {
+              return {
+                next: async () => {
+                  throw new OutputProtocolError(code, 'internal fixture-only diagnostic')
+                }
+              }
+            }
+          }
+        }
+      }
+      try {
+        await expect(f.runtime.attach(source, request()).done).rejects.toMatchObject({ code })
+        expect((await events.next()).value).toEqual({
+          kind: 'error',
+          source: 'source',
+          code,
+          message: 'Output runtime ' + code,
+          retryable: ['limited', 'unavailable', 'conflict', 'expired'].includes(code)
+        })
+      } finally {
+        await events.return?.()
+        await f.runtime.close()
+      }
+    }
+  )
+
+  it('acknowledges a durable source only after actual SQLite receipt commitment and reopens it', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'runtime-durable-source-'))
+    const path = join(directory, 'journal.sqlite')
+    const journal = new SQLiteJournal(path, 'test'),
+      store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({ store, worker: noWork })
+    let acknowledged = false
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      await runtime.attach(
+        {
+          id: 'source',
+          requiredDurability: 'durable',
+          async *open() {
+            yield batch()
+            expect((await journal.head()).received).toBe('2')
+            acknowledged = true
+          }
+        },
+        request()
+      ).done
+      expect(acknowledged).toBe(true)
+      await runtime.close()
+      const reopened = new SQLiteJournal(path, 'test')
+      try {
+        expect((await reopened.head()).received).toBe('2')
+        expect((await reopened.read('1', 8))[0].body.kind).toBe('receive')
+      } finally {
+        await reopened.close()
+      }
+    } finally {
+      await runtime.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('stable runtime error identities', () => {
+  const failure = (run: () => unknown) => {
+    try {
+      run()
+      return undefined
+    } catch (error) {
+      return error
+    }
+  }
+  const diagnostic = (code: string) => ({ code, message: expect.stringMatching(/\S/) })
+
+  it('preserves error codes and useful messages across attachment, partition, durability and observer bounds', async () => {
+    const f = await open(noWork, undefined, { observations: 1 })
+    const release = deferred(),
+      selected = { ...request(), limits: { ...f.runtime.limits } }
+    const source = (id: string): Source => ({
+      id,
+      async *open() {
+        await release.promise
+        const value = batch(id)
+        value.provenance.adapter = id
+        yield value
+      }
+    })
+    const subscriptions: ReturnType<OutputKnowledge['attach']>[] = []
+    try {
+      expect(failure(() => f.runtime.attach(source('one'), request()))).toMatchObject(
+        diagnostic('invalid')
+      )
+      expect(
+        failure(() =>
+          f.runtime.attach(source('one'), {
+            ...selected,
+            partition: { ...partition, account: 'different' }
+          })
+        )
+      ).toMatchObject(diagnostic('unauthorized'))
+      expect(
+        failure(() =>
+          f.runtime.attach({ ...source('one'), requiredDurability: 'durable' }, selected)
+        )
+      ).toMatchObject(diagnostic('unsupported'))
+      subscriptions.push(f.runtime.attach(source('one'), selected))
+      expect(failure(() => f.runtime.attach(source('one'), selected))).toMatchObject(
+        diagnostic('conflict')
+      )
+      for (const id of ['two', 'three', 'four'])
+        subscriptions.push(f.runtime.attach(source(id), selected))
+      expect(failure(() => f.runtime.attach(source('five'), selected))).toMatchObject(
+        diagnostic('limited')
+      )
+      const controllers = Array.from({ length: 8 }, () => new AbortController())
+      for (const controller of controllers) f.runtime.events(controller.signal)
+      expect(failure(() => f.runtime.events())).toMatchObject(diagnostic('limited'))
+      for (const controller of controllers) controller.abort()
+      expect(failure(() => f.runtime.events(controllers[0].signal))).toMatchObject(
+        diagnostic('cancelled')
+      )
+    } finally {
+      release.resolve()
+      await Promise.all(subscriptions.map(value => value.done))
+      await f.runtime.close()
+    }
+    expect(failure(() => f.runtime.events())).toMatchObject(diagnostic('cancelled'))
+    await expect(f.runtime.readProjection()).rejects.toMatchObject(diagnostic('cancelled'))
+  })
+})
+
+describe('runtime lifecycle release and recovery', () => {
+  it('detaches completed operation signals before later runtime cancellation', async () => {
+    const signals: AbortSignal[] = []
+    const f = await open({
+      ...noWork,
+      async advance(_store, signal) {
+        signals.push(signal)
+      }
+    })
+    try {
+      await f.runtime.flush()
+      expect(signals.length).toBeGreaterThan(0)
+      for (const signal of signals) {
+        expect(signal.aborted).toBe(false)
+        expect(getEventListeners(signal, 'abort')).toHaveLength(0)
+      }
+      await f.runtime.close()
+      // A completed task is detached, while active tasks still receive abort.
+      expect(signals.every(signal => !signal.aborted)).toBe(true)
+    } finally {
+      await f.runtime.close()
+    }
+  })
+
+  it('does not rerun worker or projector on an early timer wake', async () => {
+    jest.useFakeTimers()
+    let clock = 1000,
+      advances = 0,
+      projections = 0
+    const store = new KnowledgeStore(new MemoryJournal('test'), emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      now: () => clock,
+      worker: {
+        ...noWork,
+        nextInvalidation: () => '2',
+        async advance() {
+          advances++
+        }
+      },
+      projector: {
+        policyDigest: 'ff'.repeat(32),
+        async project(input) {
+          projections++
+          return projection(input)
+        }
+      }
+    })
+    try {
+      await runtime.setContext(context())
+      await runtime.flush()
+      expect([advances, projections]).toEqual([1, 1])
+      await jest.advanceTimersByTimeAsync(1000)
+      expect([advances, projections]).toEqual([1, 1])
+      expect((await runtime.readProjection())?.contextId).toBe(context().id)
+      clock = 2000
+      await jest.advanceTimersByTimeAsync(1000)
+      expect([advances, projections]).toEqual([2, 1])
+      expect(await runtime.readProjection()).toBeUndefined()
+      // An unresolved exclusive deadline cannot install another immediate timer.
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      await runtime.close()
+      jest.useRealTimers()
+    }
+  })
+
+  it.each(['worker', 'projector'])(
+    'automatically resumes publication after a pending context write fails during %s work',
+    async location => {
+      const entered = deferred(),
+        release = deferred(),
+        committing = deferred(),
+        commitRelease = deferred(),
+        published = deferred()
+      let hold = false
+      const pause = async () => {
+        if (hold) {
+          hold = false
+          entered.resolve()
+          await release.promise
+        }
+      }
+      const f = await open(
+        {
+          ...noWork,
+          async advance() {
+            if (location === 'worker') await pause()
+          }
+        },
+        {
+          policyDigest: 'ff'.repeat(32),
+          async project(input) {
+            if (location === 'projector') await pause()
+            return projection(input)
+          }
+        }
+      )
+      const seen: Projection[] = []
+      const iterator = f.runtime.events(new AbortController().signal)[Symbol.asyncIterator]()
+      const observing = (async () => {
+        for (;;) {
+          const item = await iterator.next()
+          if (item.done) return
+          if (item.value.kind === 'projection') {
+            seen.push(item.value.projection)
+            published.resolve()
+          }
+        }
+      })()
+      const spy = jest.spyOn(f.store, 'commit').mockImplementationOnce(async () => {
+        committing.resolve()
+        await commitRelease.promise
+        throw new OutputProtocolError('unavailable', 'Synthetic context write failure')
+      })
+      let changed: Promise<unknown> | undefined, flushing: Promise<unknown> | undefined
+      try {
+        hold = true
+        flushing = f.runtime.flush().then(
+          () => undefined,
+          error => error
+        )
+        await entered.promise
+        changed = f.runtime.setContext({ ...context(), id: 'uncommitted-context' }).then(
+          () => undefined,
+          error => error
+        )
+        await committing.promise
+        release.resolve()
+        expect(await flushing).toBeUndefined()
+        expect(await f.runtime.readProjection()).toBeUndefined()
+        expect(seen).toEqual([])
+        commitRelease.resolve()
+        expect(await changed).toMatchObject({ code: 'unavailable' })
+        // No new flush or source message: dirty work must resume automatically.
+        await published.promise
+        expect(seen.map(value => value.contextId)).toEqual([context().id])
+        expect((await f.journal.head()).accepted).toBe('1')
+        expect((await f.runtime.readProjection())?.contextId).toBe(context().id)
+      } finally {
+        release.resolve()
+        commitRelease.resolve()
+        await changed
+        await flushing
+        spy.mockRestore()
+        await iterator.return?.()
+        await observing
+        await f.runtime.close()
+      }
+    }
+  )
+})

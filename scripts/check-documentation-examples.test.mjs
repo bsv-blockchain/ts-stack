@@ -14,11 +14,22 @@ test('compiled examples are scoped through their first-party dependency closure'
   assert.deepEqual(
     selected.map(example => example.id),
     [
+      'root-advertisement-response',
+      'authenticated-response-admission',
       'sdk-and-simple',
       'credentials-and-identity',
       'middleware',
       'overlay-and-gasp',
-      'wallet-storage'
+      'wallet-storage',
+      'durable-lookup-provider',
+      'local-wallet-recovery',
+      'root-coordination-http',
+      'root-coordination-host',
+      'proposal-http-composition',
+      'private-publication-http-composition',
+      'private-acquisition-host',
+      'original-signing-authority',
+      'selected-host-purchase-companions'
     ]
   )
 })
@@ -27,4 +38,9 @@ test('an SDK change retains every compiled consumer example', async () => {
   const selected = await selectExamples(examples, new Set(['@bsv/sdk']))
 
   assert.deepEqual(selected, examples)
+})
+
+test('immutable original-object examples remain selected for their application package', async () => {
+  const selected = await selectExamples(examples, new Set(['@bsv/output-knowledge']))
+  assert.ok(selected.some(example => example.id === 'immutable-operation-objects'))
 })

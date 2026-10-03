@@ -87,7 +87,7 @@
       "path": "packages/content/lch",
       "budget": "packages/content/lch/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The browser entry contains protocol codecs, crypto, acquisition, composition, and storage adapters; the Node CLI and optional C2PA implementation remain outside the browser graph. The reviewed security candidate remains one chunk: Vite 665391/173167/140522 raw/gzip/Brotli bytes across 116 modules and two packages, and esbuild 520031/158613/131058 across 119 modules. The rounded limits retain roughly 13-15% headroom for maintenance of the approved trust-boundary snapshots without immediately reopening the growth decision."
+      "splittingDisposition": "The ordinary BRC-170 browser entry retains its protocol codecs, crypto, acquisition, composition and storage behavior; Node CLI and optional C2PA stay outside. Recipient-only BRC78 recovery is an internal common implementation and adds no ordinary capability or encryption privilege. Exact-tarball measurements are Vite 677532/176658/143332 and esbuild 528723/161582/133797 raw/gzip/Brotli bytes. The existing ./overlay-acquisition buyer/seller and standing-Offer entry measures Vite 304836/87706/74696 and esbuild 255572/83576/72917. All pre-existing entry ceilings remain unchanged. Optional ./overlay-covenant isolates complete original buyer consent, portable lineage/settlement, raw wallet transaction identity and protected entitlement playback from native storage and externally installed Bitcoin proof implementations. Its graph measures Vite 495356/132937/111491 and esbuild 388550/122763/105328, one chunk and only LCH/SDK. BEEF subject validation intentionally retains SDK transaction/proof code. Its distinct rounded ceilings provide at least 10 percent raw headroom without increasing any existing budget. No native SQLite, Node encryption or application verifier is included."
     },
     {
       "name": "@bsv/sdk",
@@ -123,6 +123,48 @@
       "budget": "packages/wallet/wallet-toolbox/client/platform-budget.json",
       "entry": ".",
       "splittingDisposition": "The dedicated browser export excludes Node storage, database adapters, and direct P2P. Its browser-safe fetch/SSE ChainTracks adapter and the SDK's wallet-result validation are intentional shared capabilities measured by the platform-specific exact-package gate. The reviewed security candidate remains one chunk: Vite 2186790/521169/397673 raw/gzip/Brotli bytes across 132 modules and five packages, and esbuild 1706073/471926/370405 across 204 modules. The rounded limits retain roughly 14-17% headroom for maintenance of those approved trust-boundary validators without immediately reopening the growth decision."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The browser root contains protocol orchestration, durable Bitcoin replay, Script/SPV evidence verification, reconciliation and IndexedDB. SQLite remains isolated in ./sqlite. Optional wallet, finite per-host lookup and direct-delivery adapters are isolated in ./sources, whose separate declared browser contract is checked from the same tarballs. The core measures Vite 495282/131597/110218 and esbuild 378418/119971/103048 raw/gzip/Brotli bytes; its original limits remain unchanged. The optional source entry measures Vite 565632/151022/125072 and esbuild 433287/137233/116584, retaining the existing SDK wallet-result and lookup validation. Each is one chunk with two first-party packages. Complete protocol qualification remains required before release. Optional ./operations exposes bounded workflow CAS storage and IndexedDB without protocol orchestration; Node-only SQLite stays in ./operations/sqlite. Its measured Vite payload is 61235/17956/15510 and esbuild 68637/22655/19724 raw/gzip/Brotli bytes, with separately declared rounded headroom; existing entry budgets remain unchanged. Optional ./lookup exports the backend-neutral provider and pure query/record codecs without Node storage. Its exact-tarball Vite graph measures 224093/68964/58720 and esbuild 184622/65773/57504 raw/gzip/Brotli bytes, one chunk and two packages; separately rounded limits retain roughly 12-15% headroom. ./lookup/sqlite alone loads the durable Node adapters. Existing entry limits are unchanged. Optional ./revenue-listing provides full-history verification and exact-family checks without Node storage or automatic wallet/network actions. Its exact-tarball Vite entry measures 420011/113237/94878 and esbuild 323512/104016/89228 raw/gzip/Brotli bytes, one chunk and two packages. Separate rounded budgets retain approximately 15-16% headroom; existing root and optional-entry limits remain unchanged. Optional ./root-eviction/evidence reuses current SDK advertisement authentication and bounded Script/SPV verification, isolated from Node-only root-eviction/sqlite and the existing root exports. Exact-tarball measurements are Vite 475651/128699/106826 and esbuild 366326/118073/100338 raw/gzip/Brotli bytes, one chunk and two packages. Separate rounded limits retain at least 10% headroom; every existing entry budget remains unchanged. The portable ./root-eviction entry adds original signed capability retention/recovery without Node storage or evidence verification. Its exact-tarball payload measures Vite 169709/54839/46557 and esbuild 131158/50825/43951 raw/gzip/Brotli bytes, one chunk and two packages. Separate rounded limits retain approximately 12-14% headroom; all pre-existing entry limits remain unchanged."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-protected-budget.json",
+      "entry": "./operations/protected",
+      "splittingDisposition": "Optional wallet-encrypted workflow custody is isolated in ./operations/protected from the original operations entry and every existing browser budget. Its complete exact-tarball export graph measures Vite 146597/48612/41007 and esbuild 130036/48181/42143 raw/gzip/Brotli bytes: one chunk and two first-party packages. The graph retains SDK hashing, identity validation and wallet-bound payload checks. Separate rounded limits retain at least 10% headroom in each dimension; native SQLite and private Node custody remain excluded. The original eight additional entries and all their limits are unchanged."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-objects-budget.json",
+      "entry": "./operations/objects",
+      "splittingDisposition": "The optional immutable operation-object entry isolates browser IndexedDB and complete object framing from Node SQLite and supplied custody. The complete exact-tarball export graph measures Vite 154945/50701/42963 and esbuild 136150/50027/44029 raw/gzip/Brotli bytes, each in one chunk and only the output-knowledge and SDK packages. Independent rounded limits retain at least 10% headroom; existing root, operations and protected entry limits remain unchanged."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-buyer-budget.json",
+      "entry": "./private/buyer",
+      "splittingDisposition": "The optional durable buyer entry exports original-obligation orchestration and a structural local-wallet adapter. Its complete exact-tarball graph measures Vite 532712/139158/116367 and esbuild 412901/127650/109218 raw/gzip/Brotli bytes, one chunk and only output-knowledge and SDK. Separate rounded limits retain at least 10% headroom. Native wallet storage, seller storage and Node custody remain outside this browser graph; existing entry budgets are unchanged."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-purchase-buyer-budget.json",
+      "entry": "./private/purchase-buyer",
+      "splittingDisposition": "The optional durable covenant buyer and Script/lineage-aware native payment construction use distinct ./private/purchase-buyer and ./private/purchase-wallet entries. The full exact-tarball buyer graph measures Vite346431/96207/81422 and esbuild274311/89256/77368 raw/gzip/Brotli bytes; the wallet graph measures Vite448929/121170/101214 and esbuild346370/111091/95241. Each is one chunk with only output-knowledge and SDK. Both retain the existing buyer-style size ceilings without increases and exclude Node/paid owners and cross-entry orchestration. The prior ./private/buyer remains unchanged and measures Vite534399/139650/116705; every earlier profile and budget remains intact."
+    },
+    {
+      "name": "@bsv/output-knowledge",
+      "path": "packages/application/output-knowledge",
+      "budget": "packages/application/output-knowledge/browser-root-serving-budget.json",
+      "entry": "./root-eviction/serving",
+      "splittingDisposition": "The new optional native root-serving helpers isolate bounded public BEEF parsing and complete positive-inventory binding in ./root-eviction/serving. The original root entry, its eight additional entries and every prior ceiling remain unchanged. The complete exact-tarball Vite graph measures 372956/101595/85345 and esbuild 285255/92599/79824 raw/gzip/Brotli bytes. Each contains one chunk and only output-knowledge and SDK, with no transitive Node modules or native SQLite. Independent rounded ceilings retain at least10% headroom in every dimension. The entry contains current byte/inventory binding, not coordinator authority, wallet funding or network effects."
     }
   ]
 }

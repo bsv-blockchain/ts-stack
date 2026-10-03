@@ -83,7 +83,7 @@ applications should prefer the root entry point wherever possible.
 
 ## Optional persistence capability
 
-`AdmissionStorage` defines an additive v1 atomic admission contract for future
+`AdmissionStorage` defines an additive v1 atomic admission contract for optional
 adapters. `storageHasAdmission(storage)` reports whether the optional
 `admission` field is present. `getAdmissionStorage(storage)` detects an explicit provider with both
 commit and reconciliation methods. Existing Knex and injected legacy adapters
@@ -126,6 +126,100 @@ the guarded payload row becomes `ready`; caller-session reference and GC
 operations share that row guard. See the [Mongo v1
 foundation](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/mongo-v1.md)
 for operational bounds, recovery rules, and the opt-in admission path.
+
+## Optional retained admission history
+
+Construct `MongoOverlayStorage` (or its admission adapter) with
+`{ retainAdmissionHistory: true }` to preserve the original immutable admission
+identity with **new** durable receipts. The default remains false.
+`getAdmissionHistory(storage)` detects the separate
+`overlay-admission-history-v1` capability; `history.read({ scope, txid, topic,
+policyId, contextDigest })` follows retained applied history to the original
+committed operation. It checks scope, transaction, policy and private-context
+digest against that operation's retained identity. A topic appearing only as a
+duplicate in STEAK is insufficient.
+
+A committed result contains `{ state: 'committed', admission: { identity,
+receipt } }`, retaining the original mode, exact STEAK JSON and index/propagation
+observation. Missing, pending, mismatching or older unbound history returns
+`{ state: 'unresolved' }`. Corrupt storage, invalid selectors and I/O failures
+throw. The reader does not retry admission, broadcast, resolve pending commit
+attempts or claim rejection. History survives serving eviction and output
+spending; it does not establish current unspentness, chain assessment, visibility
+or authorization.
+
+This is a **trusted local** interface. Its full receipt and identity can include
+other private topics admitted by the same operation. Authorize and project a
+response before exposing it to a client. One reader belongs to one node/chain
+scope; select that scope's adapter explicitly. Each of its two primary-majority
+reads has a five-second database deadline.
+
+The extra provenance uses a versioned member within the existing 1 MiB binary
+receipt field. The complete encoded record is bounded before operation claims
+or database effects; new collection fields, validators and schema migration are
+unnecessary. Default writes retain exact legacy bytes and every public receipt
+keeps its existing shape. Older readers ignore the added private member. Enabling
+retention does not rewrite or certify old receipts, even when a retry succeeds.
+Disable the option to return to default writes without erasing retained history.
+This capability is a building block for proposal/admission recovery; it does not
+by itself implement a BRC-194 service or durable negative admission decisions.
+
+## Optional proposal admission bridge
+
+`@bsv/overlay/proposal-admission` exports `OverlayProposalAdmission`, an optional
+Node adapter for `ProposalServiceAdmission` from `@bsv/output-knowledge/proposals`.
+This entry requires SDK 3.0 or newer. The existing root entry, SDK peer floor,
+ordinary submit signature and storage defaults are unchanged.
+
+Construct the bridge with an actual `Engine`, retained-history storage, the
+installed ordinary topic, proposal service name, provider identity and exact
+service-rules digest. The proposal service must authenticate the caller, verify
+the author's proposal and policy-specific transaction relation, completely
+verify BEEF/Script, and durably reserve the exact job and original verification
+context before recovery. This bridge is a trusted local component, not a public
+request handler or a replacement for those checks.
+
+Recovery first reads original topic admission history. If it is absent, the
+bridge checks the complete possible result against its reserved capacity before
+ordinary Engine submission, then reads history again even if submission throws.
+Only an original committed receipt whose identity includes the selected topic
+and ordinary Engine policy can finalize the proposal. Without that provenance,
+duplicate STEAK, missing legacy history and submission errors remain unresolved.
+Empty instructions do not override a valid retained identity in either direction.
+The bridge does not
+invent a durable rejection from an exception; an operator must reconcile such
+jobs through retained evidence.
+
+The result exposes only the selected topic's STEAK. Its assessment identifier
+binds the original admission identity, operation and selected instructions;
+later reservations, index visibility and propagation observations cannot
+relabel that assessment. Historical admission survives serving eviction and
+spending, without asserting present visibility, unspentness or mining finality.
+Proposal payloads are not silently submitted as private off-chain values.
+
+The canonical job and retained record each have a 1 MiB bound. Configure evidence
+acceptance so the combined BEEF, raw transaction and job metadata fit that job
+bound. `maximumOutcomeBytes` defaults to 1 MiB (128 bytes through 1 MiB), and the
+proposal service reserves that exact outcome budget before effects. Size both
+the journal entry limit and selected response limits to include their enclosing
+records in addition to this result budget. A result
+that cannot fit is rejected before new ordinary submission. The default four
+physical recovery calls can be configured from one through 64; stalled calls
+retain their capacity until they actually settle. Excess calls return retryable
+`limited` errors rather than accumulating a queue. The host owns recovery
+scheduling and transport deadlines.
+
+Drain recovery work before replacing the Engine's storage, admission/history
+provider, topic manager or scope. The bridge detects installation changes across
+history reads; configuration mutation during Engine execution is unsupported.
+Create a new bridge for an explicitly installed replacement. No database
+migration or retroactive certification of old receipts is performed.
+
+Tests include real Engine submission against a local three-member Mongo replica
+set, receipt recovery after adapter restart and serving eviction, concurrent
+submission, and loss of the response after actual commit. Synthetic header
+fixtures and disabled broadcast/advertising isolate this evidence from a public
+network; they do not certify a deployed service or the full BRC-194 HTTP path.
 
 ## Runtime and package formats
 
@@ -311,3 +405,82 @@ Current TS Stack changes are licensed under the Open BSV License Version 6; see
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+## Optional private publication admission bridge
+
+`@bsv/overlay/private-publication-admission` exports
+`OverlayPrivatePublicationAdmission`, an optional SDK3 adapter using the existing
+private off-chain values argument and original retained topic receipts. The caller
+first verifies publisher, schema and Bitcoin evidence and durably reserves the
+original request, contract/context and protected bytes. The adapter returns
+selected-output admission, definitive exclusion or unresolved work; none alone
+establishes a private lookup binding or ready publication. Explicitly configured
+reuse of an existing public admission still requires independent private validation.
+
+The [private publication admission guide](../../../docs/guides/private-publication-admission.md)
+covers exact contract binding, current guards, finite work/result limits, original
+receipt recovery, the public reuse policy and native Engine/Mongo validation.
+Existing root exports, public submissions, retained receipt bytes and proposal
+assessment identities remain unchanged. Installations that do not import or
+configure the new entry retain their existing behavior.
+
+## Optional selected-host purchase admission
+
+`@bsv/overlay/purchase-admission` exports `OverlayPurchaseAdmission` for the
+proposed BRC-196 companion. Configure the seller/topic/rules, base URL, domain
+profile and admitted successor index. It checks original selected contract and
+exact public transaction, recovers selected-topic retained history and its
+original commit time, then submits only when that history is absent. A duplicate
+or lost reply cannot substitute its later clock or empty duplicate STEAK for the
+original admission. No protected material enters Engine or GASP.
+
+Its caller must independently verify the full covenant/domain and reserve the
+original private intent before invoking the adapter. It does not issue POTATOES
+or establish mining. See [purchase custody and composition](../../../docs/guides/private-purchase-custody.md)
+for current guards, required time provenance, staged release, private disclosure
+and shutdown. Ordinary Engine submission and root exports remain unchanged.
+
+## Optional public BEEF ancestry and historical GASP reads
+
+Construct `MongoOverlayStorage` with
+`{ retainedBEEF: { maximumBytes: 4194304 } }` when the installed topic/history
+profile needs original raw ancestors after a leaf acquires a Merkle proof.
+The byte budget is an owned, sealed-in-the-instance positive safe integer at most
+4 MiB. Ordinary configurations keep their original admission payload and hydration
+behavior. This option adds a bounded `beef-manifest` to new atomic Engine admissions,
+checked before any payload publication. Hydration binds it to the exact stored raw
+subject and attaches a separately retained current leaf proof. It retains available
+raw ancestors below that proof and excludes unrelated transactions, using the
+existing BRC-95 Atomic header and BEEF encoding. It does not change SDK serialization
+defaults. Original off-chain values and lookup context are absent from this public
+manifest. Script, SPV, selected-chain and currentness verification remain separate.
+
+A missing manifest on an older transaction preserves the older read behavior;
+missing ancestry cannot be invented. A present but missing, malformed, oversized or
+contradictory manifest fails closed when BEEF is requested. Keep the selected budget
+and original payload custody available through recovery. This is an explicit
+storage profile, not an automatic migration of old transactions or a promise that
+alternate proofs have been independently verified.
+
+`Storage.findHistoricalOutput` is an optional separate audit/history port.
+`MongoOverlayStorage` implements it for an exact node/chain/topic/outpoint, including
+retained consumed or evicted rows. Its `spent` field reflects recorded spend
+knowledge; serving eviction alone does not become a spend. Ordinary output, UTXO
+and lookup queries still exclude evicted rows. Do not use a historical read as a
+current-membership or unspentness oracle.
+
+Construct `OverlayGASPStorage(topic, engine, maxNodes, maxBytes,
+{ historicalOutputs: true })` to use that installed port explicitly. Construction
+refuses a missing port; hydration pins and rechecks its owner and method and retains
+all original topic/raw/output binding checks. The original four-argument/default
+construction continues using ordinary `findOutput`. Public GASP nodes contain raw
+transaction/proof evidence without private context. Resynchronization still applies
+ordinary topic/spend validation and the host's independent root serving fences;
+retaining a historical node cannot reintroduce a spent or suppressed discovery row.
+
+The native SHIP/SLAP composition in Overlay Express exercises admission, physical
+lookup, spend, restart and public GASP replay together. Separate native Mongo tests
+cover ordinary defaults, bounded manifests, damaged custody, node/topic isolation
+and the difference between an evicted unspent row and a recorded spend. The
+[root integration guide](../../../docs/guides/root-eviction-coordination.md)
+describes the required pre-effect writer fence and projection acknowledgement.
