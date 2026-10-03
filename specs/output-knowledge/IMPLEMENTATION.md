@@ -3649,3 +3649,28 @@ immutable final qualification conditions. Its integration marks describe the
 actual runnable reference compositions. Final readiness remains governed by
 complete full-campaign receipts and applicable exact-head checks recorded in the
 PR; the source document cannot certify its own future commit or test run.
+
+### Purchase contract boundary qualification
+
+Published da3c3026a completes ordinary CI with 54 successful checks and two
+governed skips accepted by the merge gate. Changed coverage is 97.03 percent.
+The separate complete hosted mutation campaign 37122451630 finds a
+private-purchase-contract failure: 183 killed and 56 surviving mutations,
+76.57 percent against the unchanged 90-percent requirement. That original
+report remains retained; passing ordinary CI does not qualify the campaign.
+
+Additional tests exercise complete seller-signed originals with independently
+changed installation semantics and reservation intervals, exact request and
+signed-response capacity, signature framing, critical capability extensions,
+several advertised release policies, and the last U64 recovery deadline. The
+preparation chain-mismatch fixture now owns its changed chain instead of also
+changing the manifest's shared fixture object. It therefore checks request
+association independently of capability selection.
+
+The resulting full unit/property selection passes 46 tests, retaining the
+300-case property floor and replay seed. Local whole-module mutation feedback
+passes at 95.40 percent: 228 killed and 11 surviving mutations, with no
+uncovered, invalid or unexecuted mutations. Runtime code, wire formats,
+selection, coverage treatment, thresholds and deadlines are unchanged. This
+local receipt is diagnostic evidence; final readiness still requires the
+complete hosted campaign and all applicable checks on the new published head.

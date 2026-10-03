@@ -1,5 +1,12 @@
 import { expect, it } from '@jest/globals'
-import { canonicalOutputJSON, outputPacketDigest, PrivateKey, signOutputPacket } from '@bsv/sdk'
+import {
+  canonicalOutputJSON,
+  outputPacketDigest,
+  PrivateKey,
+  signOutputPacket,
+  type OutputPurchasePrepare,
+  type OutputPurchaseTerms
+} from '@bsv/sdk'
 import { PrivatePurchaseContracts } from '../src/private/PrivatePurchaseContracts.js'
 import { purchaseContractFixture } from './private-purchase-contract.fixture.js'
 
@@ -87,10 +94,14 @@ it.each(['topic', 'chain', 'schema', 'bytes'])(
   field => {
     const f = purchaseContractFixture()
     if (field === 'topic') f.request.topic = 'another-topic'
-    if (field === 'chain') f.request.listing.chain.network = 'another-chain'
+    if (field === 'chain') {
+      f.request.listing.chain = { ...f.chain, network: 'another-chain' }
+    }
     if (field === 'schema') f.terms.domainEvidence.schema = 'urn:other:schema'
     if (field === 'bytes') f.terms.domainEvidence.bytes = 'not base64'
-    expect(() => f.prepared()).toThrow()
+    expect(() => f.prepared()).toThrow(
+      expect.objectContaining({ code: field === 'bytes' ? 'invalid' : 'context-changed' })
+    )
   }
 )
 
@@ -173,4 +184,192 @@ it.each([
 ])('refuses invalid installation %j', change => {
   const f = purchaseContractFixture()
   expect(() => new PrivatePurchaseContracts({ ...f.installation, ...change }, f.trust)).toThrow()
+})
+
+it.each(['maximumRequestBytes', 'maximumResponseBytes'] as const)(
+  'accepts the exact maximum %s and rejects noninteger, nonnumeric and out-of-range allowances',
+  field => {
+    const f = purchaseContractFixture()
+    expect(
+      new PrivatePurchaseContracts(
+        { ...f.installation, [field]: 4194304 },
+        f.trust
+      ).configuration()[field]
+    ).toBe(4194304)
+    expect(
+      () => new PrivatePurchaseContracts({ ...f.installation, [field]: 0.5 }, f.trust)
+    ).toThrow('Protocol numbers must be safe integers')
+    for (const value of ['1', -1, 0, 4194305]) {
+      expect(
+        () => new PrivatePurchaseContracts({ ...f.installation, [field]: value }, f.trust)
+      ).toThrow('Invalid installed purchase envelope allowance')
+    }
+  }
+)
+
+it.each(['domainProfile', 'domainSchema'] as const)(
+  'requires %s to begin with its IRI scheme',
+  field => {
+    const f = purchaseContractFixture()
+    expect(
+      () => new PrivatePurchaseContracts({ ...f.installation, [field]: '1urn:test:value' }, f.trust)
+    ).toThrow('Purchase installation requires an absolute IRI')
+  }
+)
+
+it('accepts the minimum retention and rejects a zero freshness promise before discovery', () => {
+  const f = purchaseContractFixture({ maximumRecoverySeconds: '86400' })
+  expect(f.prepared().body.recoveryUntil).toBe('86500')
+  expect(
+    () => new PrivatePurchaseContracts(f.installation, { ...f.trust, maximumAgeSeconds: '0' })
+  ).toThrow('Invalid installed purchase retention or freshness interval')
+})
+
+it('owns supported critical extensions and accepts an installed policy among several advertised policies', () => {
+  const f = purchaseContractFixture(),
+    extension = 'urn:test:purchase-critical',
+    supportedExtensions = [extension],
+    contracts = new PrivatePurchaseContracts(f.installation, {
+      ...f.trust,
+      supportedExtensions
+    })
+  f.body.extensions = { [extension]: { version: 1 } }
+  f.body.critical = [extension]
+  const parameters = f.body.services[0].profiles[0].parameters
+  parameters.releasePolicies = [{ kind: 'mined', confirmations: 1 }, { kind: 'local-admission' }]
+  supportedExtensions.length = 0
+  const prepared = contracts.prepare(f.request, f.manifest(), f.terms, '20')
+  expect(contracts.restore(prepared.capability).profile.parameters.releasePolicies).toEqual(
+    parameters.releasePolicies
+  )
+  expect(() => f.prepared()).toThrow()
+})
+
+it('accepts the advertised recovery capacity exactly and diagnoses an excess', () => {
+  const f = purchaseContractFixture()
+  f.body.services[0].profiles[0].parameters.recoverySeconds = '172800'
+  expect(f.prepared().body.recoveryUntil).toBe('172900')
+  f.body.services[0].profiles[0].parameters.recoverySeconds = '172801'
+  expect(() => f.prepared()).toThrow('Purchase profile exceeds installed capacity')
+})
+
+it('checks the entire installation representation before parsing individual fields', () => {
+  const f = purchaseContractFixture(),
+    oversized = { ...f.installation, topic: 't'.repeat(16384) }
+  expect(() => new PrivatePurchaseContracts(oversized, f.trust)).toThrow(
+    expect.objectContaining({ code: 'limited' })
+  )
+})
+
+it('preserves U64 recovery arithmetic at the last representable deadline and rejects overflow', () => {
+  const f = purchaseContractFixture({ maximumRecoverySeconds: '18446744073709551615' }),
+    exact = { ...f.terms, minimumRecoverySeconds: '18446744073709551515' },
+    prepared = f.contracts.prepare(f.request, f.manifest(), exact, '20')
+  expect(prepared.body.recoveryUntil).toBe('18446744073709551615')
+  expect(() =>
+    f.contracts.prepare(
+      f.request,
+      f.manifest(),
+      { ...exact, minimumRecoverySeconds: '18446744073709551516' },
+      '20'
+    )
+  ).toThrow(
+    expect.objectContaining({ code: 'limited', message: 'Purchase recovery deadline exhausted' })
+  )
+})
+
+/** Sign a complete alternative, so restoration must check local installation semantics too. */
+function resignOriginal(
+  change: (request: OutputPurchasePrepare, body: OutputPurchaseTerms) => void,
+  advertisedRecovery = '86400'
+) {
+  const f = purchaseContractFixture()
+  f.body.services[0].profiles[0].parameters.recoverySeconds = advertisedRecovery
+  const original = f.original(),
+    request = structuredClone(original.request),
+    body = structuredClone(original.terms.body)
+  change(request, body)
+  Object.assign(body, {
+    topic: request.topic,
+    listing: request.listing,
+    acquisitionId: outputPacketDigest('purchase', {
+      chain: request.listing.chain,
+      seller: f.installation.seller,
+      recipient: request.recipient,
+      topic: request.topic,
+      requestId: request.requestId
+    }),
+    requestDigest: outputPacketDigest('purchase-request', request)
+  })
+  return {
+    f,
+    original: { ...original, request, terms: signOutputPacket('purchase-terms', body, f.key) }
+  }
+}
+
+it.each(['topic', 'chain', 'domain', 'schema', 'release'])(
+  'refuses a valid seller-signed original with a different installed %s',
+  field => {
+    const { f, original } = resignOriginal((request, body) => {
+      if (field === 'topic') request.topic = 'tm_another_topic'
+      if (field === 'chain') request.listing.chain.network = 'another-chain'
+      if (field === 'domain') body.domainProfile = 'urn:test:another-domain'
+      if (field === 'schema') body.domainEvidence.schema = 'urn:test:another-schema'
+      if (field === 'release') body.releasePolicy = { kind: 'mined', confirmations: 1 }
+    })
+    expect(() => f.contracts.original(original)).toThrow(
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Original purchase installation differs'
+      })
+    )
+  }
+)
+
+it.each(['construction', 'short-recovery', 'long-recovery'])(
+  'refuses a complete seller-signed original exceeding the reserved %s interval',
+  field => {
+    const { f, original } = resignOriginal(
+      (_request, body) => {
+        if (field === 'construction') {
+          body.purchaseUntil = '121'
+          body.recoveryUntil = '86521'
+        }
+        if (field === 'short-recovery') body.recoveryUntil = '86500'
+        if (field === 'long-recovery') body.recoveryUntil = '172901'
+      },
+      field === 'short-recovery' ? '172800' : '86400'
+    )
+    expect(() => f.contracts.original(original)).toThrow(
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Original purchase deadlines exceed its reservation'
+      })
+    )
+  }
+)
+
+it('reserves signature framing and rechecks request and signed-original capacity on restoration', () => {
+  const f = purchaseContractFixture(),
+    original = f.original(),
+    prepared = f.prepared(),
+    requestBytes = new TextEncoder().encode(canonicalOutputJSON(prepared.request)).length,
+    reservedBytes = new TextEncoder().encode(
+      canonicalOutputJSON({ body: prepared.body, signature: 'A'.repeat(232) })
+    ).length,
+    signedBytes = new TextEncoder().encode(canonicalOutputJSON(original.terms)).length,
+    profile = f.body.services[0].profiles[0]
+  profile.maxRequestBytes = requestBytes
+  profile.maxResponseBytes = reservedBytes
+  expect(f.prepared().body).toEqual(prepared.body)
+  profile.maxResponseBytes = reservedBytes - 1
+  expect(() => f.prepared()).toThrow(expect.objectContaining({ code: 'limited' }))
+  for (const field of ['request', 'response']) {
+    profile.maxRequestBytes = field === 'request' ? requestBytes - 1 : requestBytes
+    profile.maxResponseBytes = field === 'response' ? signedBytes - 1 : reservedBytes
+    const retained = f.contracts.retain(f.manifest(), '20')
+    expect(() => f.contracts.original({ ...original, capability: retained.record })).toThrow(
+      expect.objectContaining({ code: 'limited' })
+    )
+  }
 })
