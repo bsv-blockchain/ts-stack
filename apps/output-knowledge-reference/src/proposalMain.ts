@@ -86,7 +86,9 @@ if (bootstrap.fixture !== true || new URL(bootstrap.host.baseURL).origin !== loc
 const host = { ...bootstrap.host },
   clock = () => String(Math.floor(Date.now() / 1000)),
   alice = new PrivateKey(91).toPublicKey().toString(),
-  writers = [alice, new PrivateKey(92).toPublicKey().toString()].sort()
+  writers = [alice, new PrivateKey(92).toPublicKey().toString()].sort((left, right) =>
+    left.localeCompare(right, 'en')
+  )
 let client: Client | undefined,
   outbox: OperationStateStore | undefined,
   authorKey: PrivateKey | undefined,

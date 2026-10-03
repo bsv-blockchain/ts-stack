@@ -21,7 +21,7 @@ let replica,
   browser,
   interrupted = false
 const stop = async child => {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return
+  if (child?.exitCode !== null || child.signalCode !== null) return
   await new Promise(resolve => {
     const timer = setTimeout(() => child.kill('SIGKILL'), 10000)
     child.once('exit', () => {

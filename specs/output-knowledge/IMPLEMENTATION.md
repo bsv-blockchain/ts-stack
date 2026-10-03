@@ -3613,3 +3613,17 @@ links now identify the published implementation branch explicitly, so the
 repository and rendered documentation have the same usable destination. Both
 failed rendered-site outputs remain retained; a passing source-link check alone
 is not claimed as a successful site build.
+
+### Exact-head analyzer follow-up
+
+Published 93b946ea7 passes hosted conformance and rendered documentation. Sonar
+reports two new findings: explicit comparison for the two fixture writer keys
+(S2871) and optional chaining in the owned browser-child stop guard (S6582).
+Both are corrected directly, without suppressions or changed protocol behavior.
+The writer comparator specifies English collation for the fixed lowercase hex
+keys; the stop guard still returns for an absent or already exited child.
+
+Full hosted campaign 37120402535 selected the complete 141-target inventory and
+its partitions, but is stopped before superseding that head. Its retained
+partial results are not final qualification. The corrected source requires a
+new complete campaign and successful exact-head analyzer/CI checks.
