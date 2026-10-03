@@ -4,26 +4,6 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.15.0
-
-- `@bsv/wallet-toolbox` publishes an ESM build alongside the CommonJS build.
-  `import` of the package root, `./out/src/sdk`, or any `./out/src/*` deep path
-  resolves to `out/esm/src`; `require` resolves the same CommonJS files as
-  before. An ESM host that implements `WalletServices` now hands the toolbox a
-  `MerklePath` from the same `@bsv/sdk` build the toolbox validates against.
-  Before, the CommonJS toolbox loaded `@bsv/sdk`'s CommonJS build, so proof
-  validation rejected every `MerklePath` built by ESM services as not an
-  accessor-free data object and no proof was recorded.
-- Remote storage sends `createAction` and no-send-expiry `inputBEEF` and
-  `internalizeAction` AtomicBEEF as `Uint8Array`, using `Beef.toUint8Array()`
-  and `toUint8ArrayAtomic()`. Knex storage returns `listOutputs` BEEF,
-  `createAction` `sourceTransaction`, and double-spend `competingBeef` as
-  `Uint8Array`. Negotiated binary JSON now carries these, the largest storage
-  payloads, as base64 instead of JSON number arrays; legacy peers are unchanged.
-- A proof lookup that returns no Merkle path records the provider's error as a
-  `getMerklePathProvenError` history note, and canonical-path validation names
-  why each returned path was rejected.
-
 ## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference
