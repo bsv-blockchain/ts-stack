@@ -23,7 +23,15 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 27)
+  assert.equal(overrides.length, 30)
+  assert.deepEqual(
+    overrides.filter(entry => entry.selector === 'nodemon'),
+    ['uhrp-server-basic', 'uhrp-server-cloud-bucket', 'wab'].map(component => ({
+      source: `infra/${component}/package.json`,
+      selector: 'nodemon',
+      value: { chokidar: '4.0.3' }
+    }))
+  )
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)

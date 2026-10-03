@@ -46,7 +46,7 @@ export function assertMetroWatcherContract(metroPackagePath) {
     )
     assert.equal(common.typeFromStat(stat), expected)
   }
-  for (const file of ['a/b.ts', 'a\\b.ts']) {
+  for (const file of ['a/b.ts', String.raw`a\b.ts`]) {
     assert.equal(common.posixPathMatchesPattern(/\.ts$/, file), true)
     assert.equal(common.posixPathMatchesPattern(/\.js$/, file), false)
   }
