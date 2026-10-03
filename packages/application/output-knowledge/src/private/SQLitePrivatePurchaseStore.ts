@@ -342,8 +342,7 @@ export class SQLitePrivatePurchaseStore {
         row.reservedBytes === this.limits.maximumStateBytes &&
         row.reservedUpdates >= remaining(progress.status) &&
         row.reservedUpdates <= 3 &&
-        fence !== undefined &&
-        fence.reservedBytes === 1024 &&
+        fence?.reservedBytes === 1024 &&
         fence.reservedUpdates === 0 &&
         canonicalOutputJSON(fence.value) === canonicalOutputJSON(expectedFence),
       'Purchase native record/fence binding differs',
@@ -585,6 +584,12 @@ export class SQLitePrivatePurchaseStore {
         loaded.observedAt
       )
     if (canonicalOutputJSON(progress) === canonicalOutputJSON(loaded.progress)) return loaded
+    // Capacity promised before payment includes the entire retained admission
+    // or local-decision record, not just the top-level state object.
+    if (progress.admission !== null)
+      canonicalOutputJSON(progress.admission, { bytes: this.limits.maximumOutcomeBytes })
+    if (progress.decision !== null)
+      canonicalOutputJSON(progress.decision, { bytes: this.limits.maximumOutcomeBytes })
     this.commit(loaded, { ...loaded.state, progress }, [], clock, guard)
     return this.require(id, buyer, String(BigInt(expected) + 1n), clock, guard)
   }
@@ -777,8 +782,7 @@ export class SQLitePrivatePurchaseStore {
         const row = view.get(this.address(loaded.progress.acquisitionId)),
           current = row && this.restore(row, outputIdentity(buyer), view)
         outputAssert(
-          current &&
-            current.row.revision === loaded.row.revision &&
+          current?.row.revision === loaded.row.revision &&
             current.row.key === loaded.row.key &&
             current.row.kind === loaded.row.kind &&
             current.progress.requestDigest === loaded.progress.requestDigest,

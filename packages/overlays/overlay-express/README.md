@@ -527,3 +527,20 @@ shutdown. See [acquisition and recovery](../../../docs/guides/private-acquisitio
 for composition, original-obligation semantics, payment/recovery requests and
 proxy limits. These opt-in profiles need the new SDK output APIs; legacy startup
 retains its supported SDK floor.
+
+### Covenant purchase companions
+
+`configurePrivatePurchase` or the optional
+`@bsv/overlay-express/private-purchase` router adds the proposed BRC-196
+`/overlay/v1/purchases/prepare`, `/submit` and `/recover` operations under the
+configured base path. These use the shared host authentication wallet, exact
+selected capability and native physical disclosure owner. Covenant payment
+occurs in the independently validated transaction; these routes reject HTTP
+payment headers and do not introduce a second BRC-105 charge.
+
+Purchase, acquisition and publication share one handshake owner and preserve
+ordinary `/submit`/lookup behavior, request ceilings and credential-free CORS.
+The application owns original protected custody, full domain/release validation
+and stopping/draining the coordinator before closing its native domain. See
+[purchase custody](../../../docs/guides/private-purchase-custody.md) for the
+component boundaries and remaining end-to-end qualification requirements.

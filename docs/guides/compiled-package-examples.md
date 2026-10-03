@@ -1913,3 +1913,92 @@ export function enqueueOriginalPayableTerms(
   store.discloseTerms(retained, authenticatedRecipient, clock, guard, send)
 }
 ```
+
+## Original purchase coordination and physical private disclosure
+
+These installed ports compose the durable native owner. The caller must supply real
+domain and release verification; compiling the composition does not establish their
+premises or activate an endpoint.
+
+```ts compile
+// example-id: private-purchase-coordination
+import {
+  PrivatePurchaseCoordinator,
+  PrivatePurchaseAccess,
+  PrivatePurchaseDisclosure,
+  type PrivatePurchaseCoordinatorOptions,
+  type PrivateServiceDomain,
+  type ProtectedLedgerView
+} from '@bsv/output-knowledge/private/node'
+import type { OutputPurchasePrepare as CoordinatedPurchasePrepare } from '@bsv/sdk'
+
+function installPurchase(
+  custody: PrivateServiceDomain,
+  options: Omit<PrivatePurchaseCoordinatorOptions, 'access'>,
+  permission: (
+    request: CoordinatedPurchasePrepare,
+    buyer: string,
+    mode: 'initial' | 'retained',
+    view: ProtectedLedgerView
+  ) => boolean,
+  controlPermission: (buyer: string) => boolean
+) {
+  const access = new PrivatePurchaseAccess(
+    custody,
+    options.contracts.configuration().topic,
+    permission
+  )
+  const coordinator = new PrivatePurchaseCoordinator({ ...options, access })
+  const disclosure = new PrivatePurchaseDisclosure(
+    custody,
+    options.store,
+    options.contracts,
+    access,
+    options.clock,
+    controlPermission
+  )
+  return { coordinator, disclosure, stop: () => coordinator.stop() }
+}
+export { installPurchase }
+```
+
+## Selected-host covenant admission and HTTP companions
+
+The Engine companion receives only public transaction bytes. Its caller supplies
+independent original-domain validation and native intent checks. The optional HTTP
+router uses the same current physical disclosure owner and charges no HTTP fee.
+
+```ts compile
+// example-id: selected-host-purchase-companions
+import type { Engine as PurchaseEngine } from '@bsv/overlay'
+import { OverlayPurchaseAdmission } from '@bsv/overlay/purchase-admission'
+import {
+  createPrivatePurchaseRouter,
+  type PrivatePurchaseRouteOptions
+} from '@bsv/overlay-express/private-purchase'
+import type { PrivatePurchaseAdmission } from '@bsv/output-knowledge/private/node'
+import type { OutputCapabilityRequest } from '@bsv/sdk'
+
+function purchaseAdmission(
+  engine: PurchaseEngine,
+  identity: string,
+  baseURL: string,
+  topic: string,
+  rulesDigest: string,
+  rules: OutputCapabilityRequest['rules']
+): PrivatePurchaseAdmission {
+  return new OverlayPurchaseAdmission({
+    engine,
+    identity,
+    baseURL,
+    topic,
+    rulesDigest,
+    rules,
+    domainProfile: 'https://bsv.brc.dev/tokens/0197#listing-purchase-v1',
+    admittedOutputIndex: 0
+  })
+}
+const purchaseRoutes = (options: PrivatePurchaseRouteOptions) =>
+  createPrivatePurchaseRouter(options)
+export { purchaseAdmission, purchaseRoutes }
+```

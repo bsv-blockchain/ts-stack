@@ -4,6 +4,43 @@ import { PrivateKey, signOutputPacket } from '@bsv/sdk'
 import { SQLitePrivatePurchaseStore } from '../src/private/SQLitePrivatePurchaseStore.js'
 import { purchaseStoreFixture } from './private-purchase-store.fixture.js'
 
+it('enforces the full promised admission and decision allowance before changing native progress', () => {
+  const f = purchaseStoreFixture({ maximumOutcomeBytes: 128 }),
+    pinned = f.pin()
+  f.setNow('31')
+  expect(() =>
+    f.owner.store.advance(
+      f.id,
+      f.buyer,
+      pinned.row.revision,
+      {
+        type: 'admitted',
+        steak: f.f.steak,
+        acceptedAt: '30',
+        assessmentContextId: 'x'.repeat(128)
+      },
+      f.clock,
+      f.guard
+    )
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(() =>
+    f.owner.store.advance(
+      f.id,
+      f.buyer,
+      pinned.row.revision,
+      { type: 'admission-rejected', reason: 'x'.repeat(128), evidence: 'AQ==' },
+      f.clock,
+      f.guard
+    )
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+  expect(f.owner.store.load(f.id, f.buyer, f.clock, f.guard)!.row.revision).toBe(
+    pinned.row.revision
+  )
+  expect(f.owner.store.load(f.id, f.buyer, f.clock, f.guard)!.progress.status).toBe(
+    'admission-pending'
+  )
+})
+
 it('reserves original material and every completion slot, then recovers the exact delivered result after native reopen', () => {
   const f = purchaseStoreFixture(),
     delivered = f.deliver()

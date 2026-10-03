@@ -1,4 +1,4 @@
-const privateTests = String.raw`[/\\]src[/\\]__tests__[/\\]Private(?:Acquisition|Publication|OverlayHost|Buyer)[^/\\]*\.test\.ts$`
+const privateTests = String.raw`[/\\]src[/\\]__tests__[/\\]Private(?:Acquisition|Publication|Purchase|OverlayHost|Buyer)[^/\\]*\.test\.ts$`
 export const overlayTestIgnorePatterns = [
   '<rootDir>/dist/',
   '/node_modules/',

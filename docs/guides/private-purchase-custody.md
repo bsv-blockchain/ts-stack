@@ -1,12 +1,24 @@
+---
+id: private-purchase-custody
+title: 'Original Covenant Purchase Custody'
+kind: guide
+version: '1.0.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
+review_cadence_days: 30
+status: experimental
+tags: [utxo, private-overlays, purchase, custody, recovery]
+---
+
 # Original covenant-purchase custody
 
 The optional `@bsv/output-knowledge/private/node` entry provides
-`PrivatePurchaseContracts`, the purchase progress functions and
-`SQLitePrivatePurchaseStore` for the proposed BRC-196 companion. These are
-preparation and native custody components. Complete topic admission, selected
-release-policy assessment, domain issuance, authenticated HTTP disclosure and
-buyer recovery must be composed separately. Installing these components does
-not enable a purchase endpoint or change ordinary overlay submission.
+`PrivatePurchaseContracts`, `PrivatePurchaseCoordinator`, `PrivatePurchaseAccess`,
+`PrivatePurchaseDisclosure`, the purchase progress functions and
+`SQLitePrivatePurchaseStore` for the proposed BRC-196 companion. Compose them with
+independent domain and release verification, the actual topic admission owner and
+optional authenticated HTTP routes. Installing the native components alone does
+not enable an endpoint or change ordinary overlay submission.
 
 Unlike paid lookup acquisition, the purchase workflow pays through an actual
 listing covenant transaction. It does not reserve a seller wallet credit or
@@ -99,9 +111,51 @@ send decrypted `PrivatePurchaseLoaded` material directly from an earlier read.
 Current guards and enqueue ports must be synchronous. Drain physical verifier,
 admission and issuer work before closing the native domain.
 
+## Compose the optional workflow
+
+`PrivatePurchaseCoordinator.prepare` independently validates the installed domain,
+private readiness and current recipient, signs exact preparation terms, and commits
+their protected reservation. `submit` verifies the complete candidate before
+pinning it. `recover` consults the same original intent and advances only justified
+stages. Domain validation returns a locally installed synchronous `checkCurrent`
+guard; a caller-supplied boolean or serialized verdict cannot implement this port.
+The admission port receives an original-intent guard which it must check before
+external effects. Cancellation leaves physically outstanding work counted until it
+settles; `stop` aborts new work and drains those physical operations.
+
+`@bsv/overlay/purchase-admission` exports `OverlayPurchaseAdmission`. Install the
+Engine, seller, canonical base URL, topic, immutable rules, domain profile and
+required successor index explicitly. The bridge restores the original selected
+capability, checks exact target BEEF and topic association, reads actual retained
+history first and submits only the public transaction when needed. It never sends
+protected material to topic/lookup callbacks. A lost submit reply triggers a read
+of original history. Missing original commit time or an unknown operation leaves
+admission unresolved. This bridge requires prior independent covenant/domain
+verification and a reserved private intent; it does not supply those premises.
+
+`@bsv/overlay-express/private-purchase` supplies `createPrivatePurchaseRouter`.
+`OverlayExpress.configurePrivatePurchase` installs it using the host's shared
+authentication wallet and body ceilings. Mount a standalone router before body
+parsers. The explicitly selected routes are `POST /overlay/v1/purchases/prepare`,
+`submit` and `recover`, under the configured base path. Prepare returns the signed
+terms; submit/recover return the purchase envelope. Each response is authenticated
+and its exact bytes are rechecked through `PrivatePurchaseDisclosure` immediately
+before enqueue. Current recipient permission shares the native writer gate.
+Wrong recipients and missing custody use fixed not-found controls. Basic malformed
+transport can be refused before authentication and cannot begin private work.
+
+These endpoints reject HTTP payment headers, never return a BRC-105 challenge, and
+expose only authentication/selection headers through credential-free private CORS.
+Acquisition, publication and purchase can share one handshake owner; legacy routes
+remain available. The application owns closing the coordinator before its native
+domain and must preserve unknown public effects for original-operation recovery.
+
 These components have focused signature, progress, SQLite reopen, lost commit
 reply, reservation, stale-writer and disclosure tests, plus 300 generated native
 interruption histories. Lifecycle fixtures deliberately contain unproved
 candidate bytes; they establish custody behavior, not a Bitcoin or admission
-verdict. The complete reference purchase, authenticated host, domain/LCH and
-buyer demonstrations remain separate checkpoint requirements.
+verdict. The authenticated HTTP suites use actual BRC-103 middleware and native
+custody, with controlled domain/admission fixtures. They establish transport,
+recipient checks, staged responses and revoked physical disclosure, not chain
+truth. The complete reference covenant/domain/LCH and buyer demonstrations remain
+separate checkpoint requirements.

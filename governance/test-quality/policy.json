@@ -1540,6 +1540,54 @@
           "Private result bytes appear only after retained admission and delivered-result custody; pending and negative responses contain no POTATOES.",
           "Every original completion reservation and request fence survives interruptions and early terminal outcomes."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-coordination.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Durable BRC-196 original intent, independent validation, retained admission and separately authorized secret issuance",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "One original preparation and first signed result survive native reopen and lost replies.",
+          "Unknown admission remains pending; another transaction cannot replace a pinned acquisition.",
+          "Catalogue withdrawal and elapsed construction deadlines do not erase an accepted private obligation."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-disclosure.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Recipient authorization and exact native BRC-196 response bytes at the physical private enqueue boundary",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "Permission and native record identity are checked after HTTP signing and before physical enqueue.",
+          "No revoked caller or stale snapshot can send private bytes.",
+          "Each prepared response has one synchronous enqueue attempt and never adds an HTTP charge."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/PurchaseAdmission.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Exact selected-host purchase admission with original retained receipt/time and no GASP-triggered release",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "A retained selected-topic receipt is recovered without double admission.",
+          "A lost or duplicate STEAK reply does not overwrite the original acceptance time.",
+          "Private material never enters ordinary submit or public retained admission history."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests__/PrivatePurchaseRoutes.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Explicit authenticated BRC-196 endpoints and bounded physical response disclosure with no HTTP payment",
+        "target": "At least 300 deterministic generated interruption, authorization or request-boundary histories",
+        "invariants": [
+          "Malformed transport, request schemas and selectors cannot begin private effects.",
+          "Wrong recipients receive fixed not-found controls.",
+          "Legacy submit, acquisition, publication and lookup behavior remains preserved."
+        ]
       }
     ],
     "exclusions": [

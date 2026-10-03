@@ -3,7 +3,8 @@ import type {
   PrivateOverlayHost,
   PrivateOverlayHostOptions,
   PrivateAcquisitionHostOptions,
-  PrivatePublicationHostOptions
+  PrivatePublicationHostOptions,
+  PrivatePurchaseHostOptions
 } from './PrivateOverlayHost.js'
 import { Reader, Writer } from '@bsv/sdk/primitives/utils'
 import express, { type Request, type Response } from 'express'
@@ -1073,6 +1074,21 @@ export default class OverlayExpress {
     if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
       throw new TypeError('Private overlay origins must be an array')
     this.privateOverlayOptions.publication = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
+    }
+  }
+
+  /** Optional selected-host covenant purchases. The application owns durable
+   * preparation, exact transaction validation, release and physical disclosure.
+   */
+  configurePrivatePurchase(options: PrivatePurchaseHostOptions): void {
+    if (this.isListening) throw new Error('Configure private purchase before start')
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Private overlay origins must be an array')
+    this.privateOverlayOptions.purchase = {
       ...options,
       ...(options.allowedOrigins === undefined
         ? {}
@@ -2445,7 +2461,11 @@ export default class OverlayExpress {
     const rootEviction = this.rootEviction
     const proposalRoutes = this.proposalRoutes
     let privateOverlay: PrivateOverlayHost | undefined
-    if (this.privateOverlayOptions.acquisition || this.privateOverlayOptions.publication) {
+    if (
+      this.privateOverlayOptions.acquisition ||
+      this.privateOverlayOptions.publication ||
+      this.privateOverlayOptions.purchase
+    ) {
       const { PrivateOverlayHost } = await import('./PrivateOverlayHost.js')
       privateOverlay = new PrivateOverlayHost(this.privateOverlayOptions)
     }

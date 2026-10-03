@@ -219,8 +219,10 @@ export class PrivatePurchaseContracts {
     const advertised = outputU64(
         (retained.selection.profile.parameters as { recoverySeconds: string }).recoverySeconds
       ),
-      minimum = outputU64(terms.minimumRecoverySeconds),
-      recovery = advertised > minimum ? advertised : minimum
+      minimum = outputU64(terms.minimumRecoverySeconds)
+    // Both are U64 integers: converting to Number for Math.max loses precision.
+    let recovery = advertised
+    if (minimum > recovery) recovery = minimum
     outputAssert(
       recovery <= outputU64(this.installed.maximumRecoverySeconds),
       'Purchase domain recovery exceeds installed capacity',

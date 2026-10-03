@@ -1266,6 +1266,46 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-coordination",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-coordination.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable BRC-196 original intent, independent validation, retained admission and separately authorized secret issuance",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Recipient authorization and exact native BRC-196 response bytes at the physical private enqueue boundary",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-private-purchase-admission",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/PurchaseAdmission.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact selected-host purchase admission with original retained receipt/time and no GASP-triggered release",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/PrivatePurchaseRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit authenticated BRC-196 endpoints and bounded physical response disclosure with no HTTP payment",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

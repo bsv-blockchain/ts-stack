@@ -151,3 +151,22 @@ export {
   type PrivatePurchaseStoreLimits,
   type PrivatePurchaseLoaded
 } from './SQLitePrivatePurchaseStore.js'
+export { PrivatePurchaseAccess } from './PrivatePurchaseAccess.js'
+export { PrivatePurchaseDisclosure } from './PrivatePurchaseDisclosure.js'
+export {
+  PrivatePurchaseCoordinator,
+  type PrivatePurchaseCoordinatorOptions
+} from './PrivatePurchaseCoordinator.js'
+export {
+  ownPrivatePurchasePreparation,
+  ownPrivatePurchaseAdmissionOutcome,
+  type PrivatePurchaseCaller,
+  type PrivatePurchasePreparation,
+  type PrivatePurchaseValidation,
+  type PrivatePurchaseDomain,
+  type PrivatePurchaseAccessPort,
+  type PrivatePurchaseAdmission,
+  type PrivatePurchaseAdmissionJob,
+  type PrivatePurchaseAdmissionOutcome,
+  type PrivatePurchaseRelease
+} from './PrivatePurchasePorts.js'

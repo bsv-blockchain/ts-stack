@@ -423,3 +423,19 @@ receipt recovery, the public reuse policy and native Engine/Mongo validation.
 Existing root exports, public submissions, retained receipt bytes and proposal
 assessment identities remain unchanged. Installations that do not import or
 configure the new entry retain their existing behavior.
+
+## Optional selected-host purchase admission
+
+`@bsv/overlay/purchase-admission` exports `OverlayPurchaseAdmission` for the
+proposed BRC-196 companion. Configure the seller/topic/rules, base URL, domain
+profile and admitted successor index. It checks original selected contract and
+exact public transaction, recovers selected-topic retained history and its
+original commit time, then submits only when that history is absent. A duplicate
+or lost reply cannot substitute its later clock or empty duplicate STEAK for the
+original admission. No protected material enters Engine or GASP.
+
+Its caller must independently verify the full covenant/domain and reserve the
+original private intent before invoking the adapter. It does not issue POTATOES
+or establish mining. See [purchase custody and composition](../../../docs/guides/private-purchase-custody.md)
+for current guards, required time provenance, staged release, private disclosure
+and shutdown. Ordinary Engine submission and root exports remain unchanged.

@@ -14,6 +14,8 @@
     "src/__tests__/PrivatePublication*.ts",
     "src/PrivateAcquisition*.ts",
     "src/__tests__/PrivateAcquisition*.ts",
+    "src/PrivatePurchase*.ts",
+    "src/__tests__/PrivatePurchase*.ts",
     "src/PrivateOverlayHost.ts",
     "src/__tests__/PrivateOverlayHost*.ts",
     "src/__tests__/PrivateBuyer*.ts"

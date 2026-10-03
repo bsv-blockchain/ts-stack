@@ -2915,3 +2915,45 @@ new complete critical registrations bring this branch's inventory to 125,
 retaining full source/test unions, 300-case floors and full-campaign-only policy.
 All checkpoint-two end-to-end rows remain open pending their own composition
 and final published-head qualification.
+
+### October 2 staged purchase coordination and authenticated transport
+
+The complete whole-source listing-purchase diagnostic now passes 93.60%: 161
+killed and 11 surviving mutants, with zero uncovered, invalid or unexecuted
+mutants. It ran all 42 selected tests and all 172 mutants in 34m36s. The earlier
+61.68% receipt remains failed evidence. This named diagnostic is component
+feedback; final qualification still requires the complete current campaign.
+
+The native coordinator separates preparation, independent candidate verification,
+one admission intent, actual retained admission, separate release assessment and
+first-result issuance. Current original-intent guards reach the admission port
+before external effects. Private access matches recipient ownership before
+reading original chunks. Physical disclosure checks the current native head,
+exact signed response, original selector and current permission after HTTP
+signing. Outstanding canceled work occupies its physical slot until it settles.
+
+The native coordinator/disclosure/property union passes 32 tests including two
+300-case histories in 67.408s with targeted coverage: 97.11% statements, 95.20%
+branches, 94.36% functions and 98.26% lines. Three further tests pass for a
+concurrent native admission writer and returned authority promises. The actual
+selected-host admission adapter passes its complete 19 tests/300-case retained
+history suite. Actual BRC-103 HTTP middleware and native custody pass 21
+purchase/host tests, including 300 generated malformed request/selector refusals,
+delayed release, revoked physical disclosure and legacy route preservation.
+Lifecycle/domain fixtures remain controlled and do not establish Bitcoin truth.
+
+Four explicitly acknowledged complete critical source/property registrations
+bring this branch's inventory to 129. All previous unions, zero uncovered/invalid/
+unexecuted requirements, score90, four workers, seed3242026, deadlines and the
+300-case floor remain. Optional package exports and compiled composition examples
+are being qualified. No checkpoint-two acceptance row is completed by these
+component results alone.
+
+Successful BRC-77 mathematics and valid canonical curve points now have bounded
+process-local caches. Packet schemas, canonical preimages, full signatures and
+selected signers are still checked on every call. Private bodies and authorization,
+expiry, policy or chain-currentness verdicts are never retained. Protocol/retained
+capability tests pass 63 cases. The previously failing 300-case acquisition
+property completes in 60.647s under coverage without changing its deadline; the
+partial-only coverage invocation itself does not meet whole-package percentage
+thresholds. Full package/hosted coverage and exact-head CI remain required.

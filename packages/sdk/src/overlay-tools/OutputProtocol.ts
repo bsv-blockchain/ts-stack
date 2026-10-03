@@ -88,6 +88,16 @@ export type OutputDigestDomain = (typeof OUTPUT_DIGEST_DOMAINS)[number]
 
 const utf8 = new TextEncoder()
 const maximumU64 = 18446744073709551615n
+// Only immutable mathematical facts are retained. No packet body, signature,
+// private material, authorization, expiry or chain-currentness verdict is held.
+// A hostile stream cannot grow these process-local caches without bound.
+const mathematicalCacheEntries = 256
+const curvePoints = new Set<string>()
+const packetSignatures = new Set<string>()
+function rememberMathematicalFact(cache: Set<string>, key: string): void {
+  if (cache.size >= mathematicalCacheEntries) cache.delete(cache.values().next().value!)
+  cache.add(key)
+}
 
 export function outputU64(value: unknown): bigint {
   outputAssert(
@@ -134,6 +144,7 @@ export function outputIdentity(value: unknown): string {
     typeof value === 'string' && /^(02|03)[0-9a-f]{64}$/.test(value),
     'Expected compressed identity'
   )
+  if (curvePoints.has(value)) return value
   outputAssert(
     BigInt('0x' + value.slice(2)) <
       0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn,
@@ -145,6 +156,7 @@ export function outputIdentity(value: unknown): string {
   } catch {
     throw new OutputProtocolError('invalid', 'Invalid identity curve point')
   }
+  rememberMathematicalFact(curvePoints, value)
   return value
 }
 
@@ -284,7 +296,15 @@ export function verifyOutputPacket<T>(
     'unauthorized'
   )
   try {
-    return SignedMessage.verify(outputPacketPreimage(domain, packet.body), signature)
+    // Canonicalization and every representation/signer check still run on a
+    // repeated packet. The domain-separated preimage and complete signature
+    // both participate in this key; only successful BRC77 mathematics is cached.
+    const preimage = outputPacketPreimage(domain, packet.body),
+      key = toHex(sha256(preimage)) + ':' + toHex(sha256(signature))
+    if (packetSignatures.has(key)) return true
+    const verified = SignedMessage.verify(preimage, signature)
+    if (verified) rememberMathematicalFact(packetSignatures, key)
+    return verified
   } catch (error) {
     if (error instanceof OutputProtocolError) throw error
     throw new OutputProtocolError('invalid', 'Malformed BRC-77 output packet')

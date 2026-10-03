@@ -20,7 +20,7 @@ const targets = {
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 125)
+  assert.equal(Object.keys(configured).length, 129)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -761,6 +761,7 @@ test('acquisition HTTP retains complete modules, native dependencies and every p
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/src/__tests__/PrivateAcquisition*.test.ts',
     '<rootDir>/src/__tests__/PrivateOverlayHost*.test.ts',
+    '<rootDir>/src/__tests__/PrivatePurchase*.test.ts',
     '<rootDir>/src/__tests__/PrivatePublication*.test.ts'
   ])
   assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)

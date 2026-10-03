@@ -7,6 +7,7 @@ import type {
 } from '../PrivateOverlayHost.js'
 import type { PrivateAcquisitionRouteOptions } from '../PrivateAcquisitionHTTPPorts.js'
 import type { PrivatePublicationRouteOptions } from '../PrivatePublicationHTTPPorts.js'
+import type { PrivatePurchaseRouteOptions } from '../PrivatePurchaseHTTPPorts.js'
 
 const acquisition = jest
   .fn<(input: PrivateAcquisitionRouteOptions) => RequestHandler>()
@@ -18,11 +19,19 @@ const publication = jest
   .mockImplementation(() => (_req, _res, next) => {
     next()
   })
+const purchase = jest
+  .fn<(input: PrivatePurchaseRouteOptions) => RequestHandler>()
+  .mockImplementation(() => (_req, _res, next) => {
+    next()
+  })
 jest.unstable_mockModule('../PrivateAcquisitionRoutes.js', () => ({
   createPrivateAcquisitionRouter: acquisition
 }))
 jest.unstable_mockModule('../PrivatePublicationRoutes.js', () => ({
   createPrivatePublicationRouter: publication
+}))
+jest.unstable_mockModule('../PrivatePurchaseRoutes.js', () => ({
+  createPrivatePurchaseRouter: purchase
 }))
 const { PrivateOverlayHost } = await import('../PrivateOverlayHost.js')
 const identity = new PrivateKey(104).toPublicKey().toString()
@@ -58,6 +67,7 @@ function options() {
   }
   acquisition.mockClear()
   publication.mockClear()
+  purchase.mockClear()
   return { acquire, publish, auth }
 }
 it.each(['none', 'acquisition', 'publication', 'both'] as const)(
@@ -163,3 +173,58 @@ it('refuses invalid profile identities, origins and mismatched server wallets', 
   ).toThrow('array')
   expect(() => new PrivateOverlayHost({}).requireIdentity('invalid')).toThrow()
 })
+
+it.each(['purchase', 'with-acquisition', 'with-publication', 'all'] as const)(
+  'composes optional covenant %s with one shared handshake and preserved host ceilings',
+  mode => {
+    const f = options(),
+      hasA = mode === 'with-acquisition' || mode === 'all',
+      hasP = mode === 'with-publication' || mode === 'all',
+      origins = ['https://selected.example'],
+      selected = {
+        ...f.acquire,
+        allowedOrigins: origins,
+        maximumRequestBytes: 512,
+        maximumResponseBytes: 8192,
+        service: { prepare: async () => '', submit: async () => '', recover: async () => '' },
+        disclosure: {
+          prepare: () => {
+            throw new Error('Unused')
+          },
+          enqueueControl: (_input: unknown, _caller: unknown, send: () => void) => {
+            send()
+          }
+        }
+      }
+    const host = new PrivateOverlayHost({
+      purchase: selected,
+      ...(hasA ? { acquisition: f.acquire } : {}),
+      ...(hasP ? { publication: f.publish } : {})
+    })
+    origins.push('https://later.example')
+    selected.identity = new PrivateKey(108).toPublicKey().toString()
+    host.requireIdentity(identity)
+    const routes = host.routes(f.auth, true, { request: 1024, response: 2048 })
+    expect(routes).toEqual([
+      ...(hasA ? [acquisition.mock.results[0].value] : []),
+      purchase.mock.results[0].value,
+      ...(hasP ? [publication.mock.results[0].value] : [])
+    ])
+    expect(purchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity,
+        authenticate: f.auth,
+        handleHandshake: !hasA,
+        maximumRequestBytes: 512,
+        maximumResponseBytes: 2048,
+        allowedOrigins: ['https://selected.example']
+      })
+    )
+    expect(host.maximumHeaderBytes).toBe(hasA ? 131072 : undefined)
+    if (hasP)
+      expect(publication).toHaveBeenCalledWith(expect.objectContaining({ handleHandshake: false }))
+    expect(() => host.requireIdentity(new PrivateKey(109).toPublicKey().toString())).toThrow(
+      'must match'
+    )
+  }
+)

@@ -302,4 +302,64 @@ describe('BRC-192 representation boundary', () => {
       'Unregistered'
     )
   })
+
+  it('rechecks representations and exact signatures after repeated successful verification', () => {
+    const key = new PrivateKey(176),
+      identity = key.toPublicKey().toString()
+    const packet = signOutputPacket('purchase-terms', { version: 1, recipient: identity }, key)
+    for (let attempt = 0; attempt < 3; attempt++)
+      expect(verifyOutputPacket('purchase-terms', structuredClone(packet), identity)).toBe(true)
+    expect(verifyOutputPacket('potatoes', packet, identity)).toBe(false)
+    expect(
+      verifyOutputPacket(
+        'purchase-terms',
+        { ...packet, body: { ...packet.body, version: 2 } },
+        identity
+      )
+    ).toBe(false)
+    const different = signOutputPacket('purchase-terms', { ...packet.body, version: 2 }, key)
+    expect(
+      verifyOutputPacket('purchase-terms', { ...packet, signature: different.signature }, identity)
+    ).toBe(false)
+    expect(() =>
+      verifyOutputPacket('purchase-terms', { ...packet, extra: true } as never, identity)
+    ).toThrow('Unknown')
+    const hidden = Object.defineProperty({ ...packet }, 'hidden', { value: true })
+    expect(() => verifyOutputPacket('purchase-terms', hidden, identity)).toThrow()
+    expect(() =>
+      verifyOutputPacket(
+        'purchase-terms',
+        { ...packet, signature: packet.signature + 'AAAA' },
+        identity
+      )
+    ).toThrow()
+    expect(() => verifyOutputPacket('purchase-terms', packet, identity.toUpperCase())).toThrow()
+    expect(() =>
+      verifyOutputPacket('purchase-terms', packet, new PrivateKey(177).toPublicKey().toString())
+    ).toThrow('signer')
+    expect(verifyOutputPacket('purchase-terms', packet, identity)).toBe(true)
+  })
+
+  it('preserves exact verification after more than a bounded cache of unrelated facts', () => {
+    const key = new PrivateKey(178),
+      identity = key.toPublicKey().toString(),
+      original = signOutputPacket('purchase-terms', { version: 1, sequence: 0 }, key)
+    expect(verifyOutputPacket('purchase-terms', original, identity)).toBe(true)
+    for (let sequence = 1; sequence <= 257; sequence++) {
+      const other = new PrivateKey(sequence + 1000).toPublicKey().toString()
+      expect(outputIdentity(other)).toBe(other)
+      const packet = signOutputPacket('purchase-terms', { version: 1, sequence }, key)
+      expect(verifyOutputPacket('purchase-terms', packet, identity)).toBe(true)
+    }
+    expect(outputIdentity(identity)).toBe(identity)
+    expect(verifyOutputPacket('purchase-terms', original, identity)).toBe(true)
+    expect(
+      verifyOutputPacket(
+        'purchase-terms',
+        { ...original, body: { version: 1, sequence: 1 } },
+        identity
+      )
+    ).toBe(false)
+    expect(() => outputIdentity('02' + 'ff'.repeat(32))).toThrow()
+  })
 })
