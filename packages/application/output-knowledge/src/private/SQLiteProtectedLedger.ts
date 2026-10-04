@@ -198,7 +198,7 @@ export class SQLiteProtectedLedger {
   }
   private saveHead(
     head: ProtectedLedgerHead,
-    insert = false,
+    insert: boolean,
     previous?: ProtectedHeadSnapshot
   ): void {
     this.domain.writing()
