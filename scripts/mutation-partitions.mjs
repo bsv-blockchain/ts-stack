@@ -249,6 +249,19 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const rangePlans = new Map(
   [
     [
+      'wallet-recovery-plan',
+      [
+        ['src/storage/actionRecovery/ActionRecoveryPlan.ts', { label: 'plan', starts: [1] }],
+        [
+          'src/storage/methods/createAction.ts',
+          {
+            label: 'construction',
+            markers: ['async function recordCreateActionFailure(']
+          }
+        ]
+      ]
+    ],
+    [
       'root-eviction-journal',
       [
         ['src/root-eviction/SQLiteRootEvictionStore.ts', { label: 'store', starts: [1, 275, 371] }],
@@ -530,6 +543,8 @@ const rangePlans = new Map(
               'private current(): void {',
               'private bindPrepared(',
               'private extend(',
+              'private extendHistory(',
+              'private bindTransaction(',
               'function purchaseFailure('
             ]
           }

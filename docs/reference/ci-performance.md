@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.5.0'
+version: '1.6.0'
 last_updated: '2026-10-04'
 last_verified: '2026-10-04'
 review_cadence_days: 30
@@ -39,6 +39,22 @@ expand only where their configuration really covers the whole package. Image
 jobs follow changed build contexts. Changes to the shared CI workflow validate
 all infrastructure build lanes; unrelated documentation workflow changes do not.
 Shared image/runtime contract inputs fan out to the registered consumers.
+
+Recovery-plan mutation execution retains its complete module and seven original
+construction ranges in three parts, separated at the existing failure-handler
+function boundary. Every part keeps the original complete test selection and
+qualification controls. The pinned engine independently proves that all 131
+canonical mutants occur exactly once across the parts; even the call-only range
+without an executable mutant remains in the source union. Complete qualification
+requires their combined original global gate. Neither smaller scheduling parts
+nor a successful initial test run substitute for the finished campaign.
+
+Revenue-purchase verification separates history extension from transaction binding
+at complete private-method boundaries. Original evidence association, validation
+order, mandatory outputs, full Script/history verification and all tests remain
+required. The new complete source inventory is independently replayed; preceding
+source scores cannot qualify the refactor. Original execution deadlines and global
+score requirements remain unchanged.
 
 The main CI workflow builds the selected graph once and shares immutable
 outputs with isolated test lanes, skips empty lanes, installs through the

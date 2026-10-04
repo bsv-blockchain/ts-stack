@@ -163,6 +163,16 @@ export class RevenueListingPurchaseVerifier {
     terms: OutputSignedPurchaseTerms,
     limits: Readonly<RevenueListingLineageLimits>
   ): { package: RevenueListingLineagePackage; previousSatoshis: string } {
+    const next = this.extendHistory(prepared, purchase, limits),
+      previousSatoshis = this.bindTransaction(prepared, purchase, terms, next, limits)
+    return { package: next, previousSatoshis }
+  }
+  /** Preserve original evidence association before assembling the successor. */
+  private extendHistory(
+    prepared: RevenueListingLineagePackage,
+    purchase: OutputEvidence,
+    limits: Readonly<RevenueListingLineageLimits>
+  ): RevenueListingLineagePackage {
     const part = Beef.fromBinaryStrict(decodeOutputBytes(purchase.beef, limits.bytes))
     requireLineage(
       (part.atomicTxid === undefined || part.atomicTxid === purchase.txid) &&
@@ -173,7 +183,7 @@ export class RevenueListingPurchaseVerifier {
       !prepared.transactions.some(entry => entry.txid === purchase.txid),
       'Purchase already appears in predecessor history'
     )
-    const next = parseRevenueListingLineagePackage(
+    return parseRevenueListingLineagePackage(
       {
         ...prepared,
         target: { ...prepared.target, txid: purchase.txid, outputIndex: 0 },
@@ -183,6 +193,15 @@ export class RevenueListingPurchaseVerifier {
       },
       limits
     )
+  }
+  /** Check the exact purchase layout and mandatory outputs before full Script/history verification. */
+  private bindTransaction(
+    prepared: RevenueListingLineagePackage,
+    purchase: OutputEvidence,
+    terms: OutputSignedPurchaseTerms,
+    next: RevenueListingLineagePackage,
+    limits: Readonly<RevenueListingLineageLimits>
+  ): string {
     const assembly = assembleLineage(next, limits),
       tx = assembly.beef.findTransactionForSigning(purchase.txid),
       previous = assembly.transactions.get(prepared.target.txid)
@@ -214,7 +233,7 @@ export class RevenueListingPurchaseVerifier {
     )
     // Full lineage verification executes the actual covenant even for a mined
     // purchase and independently verifies funding/ancestor Bitcoin evidence.
-    return { package: next, previousSatoshis: plan.inputs[0].satoshis }
+    return plan.inputs[0].satoshis
   }
 }
 function purchaseFailure(

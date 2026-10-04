@@ -30,6 +30,7 @@ const target = {
 }
 
 const semanticTargets = [
+  'wallet-recovery-plan',
   'lch-overlay-covenant-terms',
   'private-purchase-state',
   'private-purchase-coordination',
@@ -90,16 +91,38 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 141)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 376)
+  assert.equal(matrix.include.length, 380)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 120]
+    [256, 124]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
     matrix.include
   )
+})
+
+test('recovery plan partitions retain call-only ranges and future companion sources', () => {
+  const id = 'wallet-recovery-plan',
+    canonical = buildMutationTargets(REPOSITORY_ROOT)[id],
+    parts = partitionMutationTarget(id, canonical),
+    future = 'src/storage/actionRecovery/FuturePlan.ts',
+    extended = { ...canonical, mutate: [...canonical.mutate, future] },
+    next = partitionMutationTarget(id, extended)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['plan-1', 'construction-1', 'construction-2']
+  )
+  assert.equal(parts[0].target.mutate.length, 1)
+  assert.equal(parts[1].target.mutate.length, 5)
+  assert.equal(parts[2].target.mutate.length, 2)
+  assert.deepEqual(next.find(part => part.id === 'remaining').target.mutate, [future])
+  assert.equal(next.flatMap(part => part.target.mutate).filter(file => file === future).length, 1)
+  for (const part of next) {
+    assert.deepEqual({ ...part.target, mutate: extended.mutate }, extended)
+    assert.deepEqual(selectedMutationPartition(id, extended, part.id), part.target)
+  }
 })
 
 test('root storage keeps the entire companion module in its nonempty first database part', () => {

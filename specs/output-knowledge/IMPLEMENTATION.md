@@ -4951,3 +4951,94 @@ Complete local staged-source coverage passes both original suite shards: 1,703 t
 The subsequent published `4ed5e555e28853b15ece719d21a8a2c6171360b7` CI catches a real validation-placement gap before build: zero-install repository-health job `111466865344` cannot import Istanbul from the new test's module startup. Local installed controls did not model that early environment. Separate the unchanged dependency-free inventory/result/threshold validators from reporting orchestration; keep the first three unit controls in early health and execute the unchanged actual Istanbul merge/threshold integration unconditionally after frozen installation, before build. The source fingerprint includes the extracted validator module. The isolated no-node_modules fixture passes all three early controls, and all 31 scheduling/library/negative controls pass installed. An initial added placement assertion used an incorrect installer title; checking the actual frozen install command corrects that regression without weakening ordering. Application source, test discovery, shard selection, cases, properties, merge logic, thresholds and budgets remain unchanged. Fresh source/root/installed proofs and hosted final qualification remain required; no passing result is inferred from suppressed lanes on the failed head.
 
 Exact published-head Sonar for `0d06a9c06caf81ddf2385af7446a28f9059cbbfd` reports six new tooling findings: implicit/mutating array sorts and bare `NaN`. Correct them without classifying, accepting or suppressing findings. An explicit comparator preserves the original ECMAScript UTF-16 code-unit ordering across locales; `toSorted` preserves the caller's array. A regression pins punctuation, case, Unicode/surrogate and equal-value ordering plus original-array ownership. Coverage source inventories, test selection and all metric/threshold semantics remain unchanged; the negative metric fixture uses `Number.NaN`. Both current hosted application shards continue against their immutable source so their terminal execution/aggregation can be observed before the next source qualification; passing components cannot qualify the failed analyzer head.
+
+### Complete recovery-plan execution after the final-source CI gate
+
+Published source `778fe54b97499c230ce8f8c376465bba4e5650e4` passes CI
+`37215049525` with 42 successful jobs and only the two expected unselected/deferred
+jobs skipped. Sonar, CodeQL `37215049365`, conformance, container contracts,
+reproducible code generation, SDK 8,364/257, native reference 20, wallet mobile
+46/6, packed/documentation consumers and all three reference Chrome profiles
+pass. The private-state browser reports two Opens, no exceptions, native
+IndexedDB, owned HTTPS, producer restart and proposal expiry. Application
+coverage passes all 3,457 tests/229 suites, its original global thresholds and
+97.23% patch coverage against the unchanged 90% gate. All 13 review threads are
+resolved; final security reconciliation has no open CodeQL alerts and no new
+dismissal or classification.
+
+Full blank-selector mutation campaign `37216923166`, attempt 1, retains that
+source and the complete original 141-target/376-row inventory. Its build artifact
+`11308882407` has ZIP digest
+`895564034c9af018a1f08dae43b9bf05645c00046ea46a8efdc6043cb67d79c1`, internal
+archive digest `cde1911086ed9b7d63669f9efcde7325d6155d8ffaf2810400481585bc6d0b6f`
+and matrix digest `4f2e1edf42a02b0c9b3d4ab36b6faed52447316fb037d8a2801174c475e10961`.
+It is not qualified: job `111479481128`, the whole recovery-plan target, is
+cancelled at its original 45-minute limit after the initial 237 tests pass in
+138 seconds. There is no final mutation report or score. The terminal log and
+job receipt are retained; other partial passing rows do not supply qualification.
+
+The correction schedules the existing recovery-plan module and construction
+ranges in three parts, with a boundary at the existing complete failure-handler
+function. It changes no production source, canonical range, test selection,
+property case/seed/replay control, operator, worker, timeout, runner-reuse or
+score/invalid/uncovered/unexecuted rule. The complete module retains 62 mutants;
+the original construction and failure bands retain 35 and 34. Their independent
+pinned-engine replay must reproduce every original mutant tuple exactly once.
+The original call-only range with zero mutants remains attached to a nonempty
+construction part; it is not removed. Future companion sources remain selected.
+The complete source-line union and every original configuration setting remain
+covered by the controls. Global qualification independently replays and aggregates
+all three parts under the same original source/run/attempt before acceptance.
+
+The original inventory diagnostic passes with 131 canonical mutants and an exact
+duplicate-free union in 0.678 seconds. Its owned group 50934 is independently
+absent, and all captured authored inputs and 4,424 compiled paths remain fixed
+through drain. This is instrumenter evidence, not a passing mutation score or a
+runtime performance claim. The revised registry has 141 canonical targets and
+378 execution rows in ordered batches [256,122]. The original 45-minute execution
+budget and all full-campaign gates remain unchanged. Final-source CI and a new
+complete blank-selector campaign are required after the coherent correction is
+qualified and published; the preceding campaign cannot qualify changed source.
+
+The same campaign also cancels revenue-purchase job `111479481169` at its original
+45-minute limit. Its complete `extend` method has 69 mutants and the initial
+43 tests pass in 119 seconds. The reporter finishes at the boundary with
+62 killed/seven survived (89.86% for this part), but final qualification is
+cancelled. The retained report artifact `11310172292` has digest
+`9c564df5a181fb4778833b3835315d4a5e12a44ee9960769f13e9a82c05e47d6`.
+This does not establish either a passing global score or full target qualification.
+No survivor is reclassified and no score requirement is reduced.
+
+The private verifier method is decomposed into history extension and transaction
+binding. The existing evidence parsing/association, sorted unique history,
+assembly, layout, operation, predecessor and mandatory-output checks execute in
+the same order with the same arguments and errors. Full Script/history validation
+and installed family/resolver change guards remain in the existing public
+verification path. The public result still returns the same package and original
+predecessor value. There is no new cache, authority shortcut, public export or
+wire/persistence change. Complete original tests and 300-case property controls
+remain required. Complete-method scheduling now isolates the orchestration and
+two smaller validation methods; it does not split or discard a parent mutant.
+
+Independent pinned-engine replay of the revised complete source passes all 175
+canonical mutants exactly once across eight method bands, with inventories
+3/38/14/21/2/36/33/28. This is a new source inventory: the old 173-mutant result
+cannot qualify the refactor. Group58412 is independently absent and all captured
+inputs and 4,424 compiled paths remain fixed through drain. The preceding
+wallet-only coherent batch passes all root checks and501 installed controls in
+64.875 seconds; its receipts are retained separately. The final combined source
+requires fresh complete tests/root checks/compiled consumers and hosted gates.
+Its complete registry now has141 canonical targets/380 execution rows in ordered
+batches[256,124]. Original45/90-minute budgets, test/property/worker controls and
+all global/canonical gates remain unchanged. No runtime speedup or completed
+checkpoint is claimed by the instrumenter or decomposition evidence.
+
+The refactored package compiles through its original `tsc` build. The complete
+original purchase unit/property files and all six native economic routes pass
+44 actual Jest tests/three suites in93.345 seconds, with the original300-case
+minimum, seed3242026, blank replay and case timeouts. No test selection or
+assertion is changed. Build group58741 and test group58838 are independently
+absent; all captured authored inputs and, for the test reader,4,424 compiled
+paths remain fixed through drain. These local tests establish the unchanged
+purchase and economic behavior; complete final-source hosted profiles and the
+new full mutation campaign remain required.
