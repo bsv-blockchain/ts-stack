@@ -437,3 +437,62 @@ test.each([
   const original = await exportBRC38(source, identity, { requireSnapshot: true })
   expect(await archive(source, original.exportedAt)).toEqual(original)
 })
+
+test.each([
+  ['maximumPageRows', 1000],
+  ['maximumPageBytes', 16777216],
+  ['maximumRowAllocationBytes', 16777216],
+  ['maximumCertificateGroupBytes', 16777216],
+  ['maximumMetadataAllocationBytes', 65536]
+] as const)(
+  '%s validates every refusal boundary before acquisition and admits its exact maximum',
+  async (name, maximum) => {
+    const cause = new Error('Synthetic acquisition boundary'),
+      openReadSnapshot = jest.fn(async () => {
+        throw cause
+      }),
+      source = { openReadSnapshot } as unknown as StorageKnex
+    for (const value of [0, -1, 1.5, NaN, Infinity, maximum + 1])
+      await expect(openBrc38KnexSource(source, identity, { ...options, [name]: value })).rejects.toThrow(RangeError)
+    expect(openReadSnapshot).not.toHaveBeenCalled()
+    await expect(openBrc38KnexSource(source, identity, { ...options, [name]: maximum })).rejects.toBe(cause)
+    expect(openReadSnapshot).toHaveBeenCalledTimes(1)
+  }
+)
+test.each(['', '04' + '11'.repeat(32), '02' + '11'.repeat(31), '02' + 'gg'.repeat(32), identity + '0'])(
+  'invalid compressed identity refuses before acquiring a provider: %s',
+  async selected => {
+    const openReadSnapshot = jest.fn(),
+      source = { openReadSnapshot } as unknown as StorageKnex
+    await expect(openBrc38KnexSource(source, selected, options)).rejects.toThrow(/Compressed profile identity/)
+    expect(openReadSnapshot).not.toHaveBeenCalled()
+  }
+)
+test('pre-aborted ownership refuses acquisition with the exact original cancellation cause', async () => {
+  const cause = new Error('Synthetic pre-acquisition cancellation'),
+    controller = new AbortController(),
+    openReadSnapshot = jest.fn(),
+    source = { openReadSnapshot } as unknown as StorageKnex
+  controller.abort(cause)
+  await expect(openBrc38KnexSource(source, identity, { ...options, signal: controller.signal })).rejects.toBe(cause)
+  expect(openReadSnapshot).not.toHaveBeenCalled()
+})
+test('unknown table refusal keeps a real retained source available for its original table and idempotent close', async () => {
+  const { source } = await fixture(),
+    owner = await openBrc38KnexSource(source, identity, options)
+  try {
+    await expect(
+      owner
+        .rows('unknown' as Parameters<typeof owner.rows>[0])
+        [Symbol.asyncIterator]()
+        .next()
+    ).rejects.toThrow(/Unknown BRC-38 source table/)
+    const iterator = owner.rows('provenTxs')[Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(owner.rows('provenTxs')[Symbol.asyncIterator]().next()).rejects.toThrow(/one complete read/)
+    await expect(owner.validateCompleted()).rejects.toThrow(/did not complete/)
+  } finally {
+    await owner.release()
+    await owner.release()
+  }
+})

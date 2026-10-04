@@ -166,3 +166,93 @@ test('bounded framing agrees with SDK and native AES-GCM for a 32-byte nonce wit
   unauthenticated.setAuthTag(corrupt)
   expect(() => unauthenticated.final()).toThrow()
 })
+
+test.each([
+  ['maximumFileBytes', Number.MAX_SAFE_INTEGER],
+  ['maximumChunkBytes', 65536],
+  ['maximumIterations', 0xffffffff],
+  ['maximumMemoryKiB', 0xffffffff],
+  ['maximumParallelism', 255]
+] as const)('every %s policy rejects invalid values and accepts its exact upper bound', (name, maximum) => {
+  for (const value of [0, -1, 1.5, NaN, Infinity, maximum + 1])
+    expect(() => new Brc39StreamFrame({ ...policy, [name]: value })).toThrow(RangeError)
+  const frame = new Brc39StreamFrame({ ...policy, [name]: maximum })
+  expect(frame.header()).toBeUndefined()
+})
+test.each([
+  ['iterations', 0xffffffff],
+  ['memoryKiB', 0xffffffff],
+  ['parallelism', 255]
+] as const)('encoded %s preserves its exact valid boundary and refuses invalid work', (name, maximum) => {
+  const selected = { ...policy, maximumIterations: 0xffffffff, maximumMemoryKiB: 0xffffffff, maximumParallelism: 255 }
+  for (const value of [0, -1, 1.5, NaN, Infinity, maximum + 1])
+    expect(() =>
+      encodeBrc39StreamPrefix({ ...BRC39_STREAM_DEFAULT_KDF, [name]: value }, salt, nonce, selected)
+    ).toThrow(RangeError)
+  const kdf = { ...BRC39_STREAM_DEFAULT_KDF, [name]: maximum }
+  const prefix = encodeBrc39StreamPrefix(kdf, salt, nonce, selected)
+  const frame = new Brc39StreamFrame(selected)
+  frame.accept(prefix)
+  expect(frame.header()).toEqual({ ...kdf, salt, nonce })
+})
+test.each([31, 33])('export refuses salt and nonce length %i separately', length => {
+  expect(() => encodeBrc39StreamPrefix(BRC39_STREAM_DEFAULT_KDF, new Uint8Array(length), nonce, policy)).toThrow(
+    TypeError
+  )
+  expect(() => encodeBrc39StreamPrefix(BRC39_STREAM_DEFAULT_KDF, salt, new Uint8Array(length), policy)).toThrow(
+    TypeError
+  )
+})
+test('export refuses non-byte salt/nonce and invalid input terminates the frame', () => {
+  expect(() => encodeBrc39StreamPrefix(BRC39_STREAM_DEFAULT_KDF, [] as unknown as Uint8Array, nonce, policy)).toThrow(
+    TypeError
+  )
+  expect(() => encodeBrc39StreamPrefix(BRC39_STREAM_DEFAULT_KDF, salt, [] as unknown as Uint8Array, policy)).toThrow(
+    TypeError
+  )
+  const frame = new Brc39StreamFrame(policy)
+  expect(() => frame.accept([] as unknown as Uint8Array)).toThrow(TypeError)
+  expect(() => frame.header()).toThrow(/closed/)
+  expect(() => frame.finish()).toThrow(/closed/)
+})
+test('header stays absent at both incomplete boundaries and every salt/nonce result owns its bytes', () => {
+  const bytes = file(Buffer.from('owned ciphertext')),
+    frame = new Brc39StreamFrame(policy)
+  expect(frame.header()).toBeUndefined()
+  frame.accept(bytes.subarray(0, 32))
+  expect(frame.header()).toBeUndefined()
+  frame.accept(bytes.subarray(32, 96))
+  expect(frame.header()).toBeUndefined()
+  frame.accept(bytes.subarray(96, 97))
+  const first = frame.header()!,
+    second = frame.header()!
+  expect(first.salt).not.toBe(second.salt)
+  expect(first.nonce).not.toBe(second.nonce)
+  first.salt.fill(0)
+  first.nonce.fill(0)
+  bytes.fill(0, 33, 97)
+  expect(second.salt).toEqual(new Uint8Array(32).fill(42))
+  expect(second.nonce).toEqual(new Uint8Array(32).fill(42))
+  expect(frame.header()).toEqual(second)
+})
+test('minimum export extent includes one ciphertext byte and the complete trailing tag', () => {
+  expect(() =>
+    encodeBrc39StreamPrefix(BRC39_STREAM_DEFAULT_KDF, salt, nonce, { ...policy, maximumFileBytes: 113 })
+  ).toThrow(SnapshotResourceLimitError)
+  expect(
+    encodeBrc39StreamPrefix(BRC39_STREAM_DEFAULT_KDF, salt, nonce, { ...policy, maximumFileBytes: 114 })
+  ).toHaveLength(97)
+  expect(() => encodeBrc39StreamPrefix({ ...BRC39_STREAM_DEFAULT_KDF, iterations: 6 }, salt, nonce, policy)).toThrow(
+    /canonical/
+  )
+  expect(() =>
+    encodeBrc39StreamPrefix({ ...BRC39_STREAM_DEFAULT_KDF, memoryKiB: 131071 }, salt, nonce, policy)
+  ).toThrow(/canonical/)
+})
+test.each([22, 23, 24, 26, 27, 28, 29, 30, 31])('reserved byte %i is independently rejected', position => {
+  const bytes = file()
+  bytes[position] = 1
+  const frame = new Brc39StreamFrame(policy)
+  expect(() => frame.accept(bytes.subarray(0, 33))).toThrow(/reserved/)
+  expect(() => frame.header()).toThrow(/closed/)
+})
