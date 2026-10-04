@@ -9,17 +9,22 @@ import type { StorageScope } from '@bsv/overlay'
 export class SequentialMongoFixtureReplicaSet extends MongoMemoryReplSet {
   protected override async initAllServers(): Promise<void> {
     if (this.servers.length !== 0) {
-      for (const server of this.servers) await server.start(true)
-      return
+      return this.servers.reduce(
+        (pending, server) => pending.then(() => server.start(true)),
+        Promise.resolve()
+      )
     }
     const count = Math.max(this.instanceOpts.length, this.replSetOpts.count ?? 1)
-    for (let index = 0; index < count; index++) {
-      const server = this._initServer(this.getInstanceOpts(this.instanceOpts[index]))
-      this.servers.push(server)
-      // The next probe starts only after this owned mongod is listening. A
-      // rejected start has settled before the parent begins replica cleanup.
-      await server.start()
-    }
+    // Each original start must settle before the next probe or replica cleanup.
+    return Array.from({ length: count }, (_, index) => index).reduce(
+      (pending, index) =>
+        pending.then(() => {
+          const server = this._initServer(this.getInstanceOpts(this.instanceOpts[index]))
+          this.servers.push(server)
+          return server.start()
+        }),
+      Promise.resolve()
+    )
   }
 }
 
