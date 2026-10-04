@@ -245,6 +245,93 @@ test('concurrent append refuses instead of retaining queued buffers', async () =
   await stage.discard()
 })
 
+test.each([
+  { name: 'Uint8Array', make: (bytes: Uint8Array) => new Uint8Array(bytes) },
+  { name: 'Buffer', make: (bytes: Uint8Array) => Buffer.from(bytes) },
+  {
+    name: 'Buffer subview',
+    make: (bytes: Uint8Array) => Buffer.concat([Buffer.from([99]), bytes, Buffer.from([100])]).subarray(1, -1)
+  }
+])('append owns $name bytes before asynchronous writes', async ({ make }) => {
+  const handles = observeHandles()
+  const expected = new Uint8Array([11, 22, 33])
+  const stage = await createBrc39NodeFileQuarantine(
+    parent,
+    async chunks => {
+      expect(await collect(chunks)).toEqual(Buffer.from(expected))
+    },
+    policy
+  )
+  const writes = jest.spyOn(handles[0], 'write')
+  const input = make(expected)
+  const pending = stage.appendUntrusted(input)
+  expect(writes).toHaveBeenCalledTimes(1)
+  const written: unknown = writes.mock.calls[0][0]
+  if (!(written instanceof Uint8Array)) throw new Error('Missing owned write bytes')
+  expect(written.buffer).not.toBe(input.buffer)
+  input.fill(0)
+  expect(written).toEqual(expected)
+  await pending
+  await stage.validateAuthenticated()
+  expect(await stage.withAuthenticatedChunks(collect)).toEqual(Buffer.from(expected))
+  await stage.discard()
+  expect(await readdir(parent)).toEqual([])
+})
+
+test.each([2, 3])('intrinsic %s-byte admission does not call input overrides', async length => {
+  const input = new Uint8Array(length).fill(17)
+  const getLength = jest.fn(() => 1)
+  const slice = jest.fn(() => input)
+  const iterator = jest.fn(() => [0][Symbol.iterator]())
+  Object.defineProperties(input, {
+    length: { get: getLength },
+    slice: { value: slice },
+    [Symbol.iterator]: { value: iterator }
+  })
+  const expected = length === 2 ? Buffer.from([17, 17]) : Buffer.from([9])
+  const stage = await createBrc39NodeFileQuarantine(
+    parent,
+    async chunks => {
+      expect(await collect(chunks)).toEqual(expected)
+    },
+    { maximumFileBytes: 3, maximumChunkBytes: 2 }
+  )
+  if (length === 2) {
+    const pending = stage.appendUntrusted(input)
+    input.fill(0)
+    await pending
+  } else {
+    await expect(stage.appendUntrusted(input)).rejects.toThrow('byte policy')
+    await stage.appendUntrusted(new Uint8Array([9]))
+  }
+  expect(getLength).not.toHaveBeenCalled()
+  expect(slice).not.toHaveBeenCalled()
+  expect(iterator).not.toHaveBeenCalled()
+  await stage.validateAuthenticated()
+  await stage.discard()
+  expect(await readdir(parent)).toEqual([])
+})
+
+test('a detached input rejects without starting a write or closing admission', async () => {
+  const handles = observeHandles()
+  const stage = await createBrc39NodeFileQuarantine(
+    parent,
+    async chunks => {
+      expect(await collect(chunks)).toEqual(Buffer.from([9]))
+    },
+    policy
+  )
+  const input = new Uint8Array([1])
+  structuredClone(input.buffer, { transfer: [input.buffer] })
+  const writes = jest.spyOn(handles[0], 'write')
+  await expect(stage.appendUntrusted(input)).rejects.toMatchObject({ name: 'TypeError' })
+  expect(writes).not.toHaveBeenCalled()
+  await stage.appendUntrusted(new Uint8Array([9]))
+  await stage.validateAuthenticated()
+  await stage.discard()
+  expect(await readdir(parent)).toEqual([])
+})
+
 test('chunk and cumulative file bounds refuse before additional bytes reach disk', async () => {
   const stage = await createBrc39NodeFileQuarantine(
     parent,

@@ -26,7 +26,9 @@ remain available.
 The candidate adds `@bsv/wallet-toolbox/portable` for bounded BRC-38 codecs,
 private JSON staging and BRC-39 framing. The `/portable/node` entry adds a
 dedicated coherent SQL source, native encryption/decryption and private file
-quarantine. The legacy materialized APIs retain their contracts. Read the
+quarantine. File appends check intrinsic byte length before allocating their
+owned copy and detach Node Buffers and Buffer subviews before asynchronous
+writes. The legacy materialized APIs retain their contracts. Read the
 [portable streaming contract](wallet-data-portability.md#unpublished-bounded-streaming-entries)
 for explicit limits, semantic validation and cleanup requirements. These
 components do not advertise incremental synchronization or activate an imported

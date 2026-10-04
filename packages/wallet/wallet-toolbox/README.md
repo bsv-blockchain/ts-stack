@@ -69,7 +69,9 @@ unproved cleanup fails qualification. Other wallet shards do not start MySQL.
 The unpublished candidate adds optional `@bsv/wallet-toolbox/portable` and
 `@bsv/wallet-toolbox/portable/node` streaming entries. They require explicit
 resource ceilings, coherent source validation and private staging. They preserve
-the existing archive format and materialized APIs. See the
+the existing archive format and materialized APIs. Private-file appends check
+the actual byte length before copying and own the supplied bytes before
+asynchronous writes, including Node Buffers and Buffer subviews. See the
 [streaming contracts and remaining limits](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/#unpublished-bounded-streaming-entries)
 before integrating them. Full issue #544 production qualification remains open.
 

@@ -18,6 +18,9 @@ export interface Brc39NodeFileQuarantine extends Brc39StreamQuarantine {
   withAuthenticatedChunks: <T>(consume: Consume<T>) => Promise<T>
 }
 type State = 'writing' | 'validating' | 'validated' | 'failed' | 'discarding' | 'discarded'
+const typedArrayPrototype: object = Object.getPrototypeOf(Uint8Array.prototype)
+const byteLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength')!.get!
+const copyBytes = Uint8Array.prototype.set
 
 function combined(original: unknown, cleanup: unknown): AggregateError {
   return new AggregateError([original, cleanup], 'Private quarantine operation and cleanup failed', {
@@ -77,12 +80,19 @@ class PrivateFile {
   appendUntrusted(input: Uint8Array): Promise<void> {
     if (this.state !== 'writing') return Promise.reject(new Error('Private quarantine is not writable'))
     if (!(input instanceof Uint8Array)) return Promise.reject(new TypeError('Private quarantine requires bytes'))
-    if (input.length > this.policy.maximumChunkBytes || input.length > this.policy.maximumFileBytes - this.bytes)
-      return Promise.reject(new SnapshotResourceLimitError('Private quarantine exceeds the selected byte policy'))
-    if (this.busy) return Promise.reject(new Error('Private quarantine already owns an operation'))
-    // Detach before asynchronous ownership. Concurrent calls refuse rather than
-    // retaining an unbounded queue of detached buffers.
-    const bytes = input.slice()
+    let bytes: Uint8Array
+    try {
+      const length = Reflect.apply(byteLengthGetter, input, []) as number
+      if (length > this.policy.maximumChunkBytes || length > this.policy.maximumFileBytes - this.bytes)
+        return Promise.reject(new SnapshotResourceLimitError('Private quarantine exceeds the selected byte policy'))
+      if (this.busy) return Promise.reject(new Error('Private quarantine already owns an operation'))
+      // Check intrinsic size before allocating and copy without caller methods.
+      // Buffer.slice shares memory. Concurrent calls refuse before copying.
+      bytes = new Uint8Array(length)
+      Reflect.apply(copyBytes, bytes, [input])
+    } catch (error_) {
+      return Promise.reject(error_)
+    }
     return this.own(async () => {
       this.check()
       const writer = this.writer
