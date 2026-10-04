@@ -663,6 +663,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-payload-serialized.test.ts',
           '<rootDir>/test/protected-ledger-codec.test.ts',
           '<rootDir>/test/protected-ledger-integrity.test.ts',
           '<rootDir>/test/protected-ledger-boundaries.test.ts',
@@ -1822,6 +1823,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-acquisition-process.test.ts',
           '<rootDir>/test/private-acquisition-state.property.test.ts',
           '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-payload-serialized.test.ts',
           '<rootDir>/test/private-acquisition-progress.test.ts',
           '<rootDir>/test/private-acquisition-result.test.ts',
           '<rootDir>/test/private-acquisition-funding-index.test.ts',
@@ -1896,6 +1898,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-acquisition-process.test.ts',
           '<rootDir>/test/private-acquisition-state.property.test.ts',
           '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-payload-serialized.test.ts',
           '<rootDir>/test/private-acquisition-progress.test.ts',
           '<rootDir>/test/private-acquisition-result.test.ts',
           '<rootDir>/test/private-acquisition-funding-index.test.ts',
@@ -1943,6 +1946,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-payload-serialized.test.ts',
           '<rootDir>/test/protected-ledger-codec.test.ts',
           '<rootDir>/test/protected-ledger-integrity.test.ts',
           '<rootDir>/test/protected-ledger-boundaries.test.ts',
@@ -2351,7 +2355,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/protected-operation*.test.ts',
           '<rootDir>/test/operation-state*.test.ts',
           '<rootDir>/test/protected-ledger*.test.ts',
-          '<rootDir>/test/protected-payload.test.ts'
+          '<rootDir>/test/protected-payload.test.ts',
+          '<rootDir>/test/protected-payload-serialized.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )

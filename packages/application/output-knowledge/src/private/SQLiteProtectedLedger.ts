@@ -168,10 +168,7 @@ export class SQLiteProtectedLedger {
     }
   }
   private decode(binding: OutputJSONObject, envelope: string, maximum: number): ProtectedPlaintext {
-    const bytes = this.payloads.open(
-      binding,
-      parseOutputJSON(envelope, { bytes: this.envelopeBound(maximum) })
-    )
+    const bytes = this.payloads.openSerialized(binding, envelope, this.envelopeBound(maximum))
     try {
       outputAssert(
         bytes.byteLength <= maximum,

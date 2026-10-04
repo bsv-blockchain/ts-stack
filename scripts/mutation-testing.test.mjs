@@ -500,6 +500,7 @@ test('protected ledger retains complete storage and custody source with native c
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/protected-payload.test.ts',
+    '<rootDir>/test/protected-payload-serialized.test.ts',
     '<rootDir>/test/protected-ledger-codec.test.ts',
     '<rootDir>/test/protected-ledger-integrity.test.ts',
     '<rootDir>/test/protected-ledger-boundaries.test.ts',
@@ -746,6 +747,7 @@ test('acquisition state owns all four whole modules and preserves complete nativ
     '<rootDir>/test/private-acquisition-process.test.ts',
     '<rootDir>/test/private-acquisition-state.property.test.ts',
     '<rootDir>/test/protected-payload.test.ts',
+    '<rootDir>/test/protected-payload-serialized.test.ts',
     ...targets['private-acquisition-foundation'].runnerOptions.jest.config.testMatch
   ])
   assert.equal(
@@ -906,7 +908,8 @@ test('immutable operation objects qualify all native/browser modules and complet
     '<rootDir>/test/protected-operation*.test.ts',
     '<rootDir>/test/operation-state*.test.ts',
     '<rootDir>/test/protected-ledger*.test.ts',
-    '<rootDir>/test/protected-payload.test.ts'
+    '<rootDir>/test/protected-payload.test.ts',
+    '<rootDir>/test/protected-payload-serialized.test.ts'
   ])
   assert.equal(objects.runnerOptions.buildCommand, 'pnpm build')
   assert.equal(objects.runnerOptions.maxTestRunnerReuse, 8)

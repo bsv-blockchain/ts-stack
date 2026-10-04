@@ -36,7 +36,24 @@ missing old key cannot silently become an apparently empty store. Opening with a
 new active encryption key is allowed only while the custody provider can still
 resolve all required retained keys.
 
-The bounded parser returns an independent value and its validated canonical
+The Node-only custody codec additionally offers `openSerialized(binding, text,
+maximumEnvelopeBytes)` for retained envelope text. The caller supplies an exact
+serialized-byte ceiling no larger than the codec's base64 framing allowance.
+This path rejects duplicate decoded keys and malformed or oversized JSON before
+custody, validates the same closed six-field envelope, and executes the same
+fresh key resolution and authenticated decryption as `open`. For the six owned
+string fields, canonical encoding cannot exceed the bounded original text; no
+second canonical copy is required. Other shapes and field types retain the
+original canonicalization and error ordering. The existing object-based `open`
+API, accepted inputs and local persisted format remain unchanged. A subclass or
+instance/prototype override of that object reader is captured once before parsing
+and invoked with the original receiver and the same owned envelope; custom reader
+dispatch is preserved. Only the installed default reader takes the optimized path.
+This is local
+framing, not a new wire profile or a cache of custody or authentication.
+
+The ledger uses that serialized path within the original SQL read bound.
+The bounded plaintext parser returns an independent value and its validated canonical
 text for the current call. The ledger reuses those owned results for its shape
 and byte-length checks rather than serializing or copying the same plaintext
 again. Every later read authenticates and validates afresh.

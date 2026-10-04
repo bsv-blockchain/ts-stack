@@ -4,6 +4,7 @@ import {
   closedOutputObject,
   decodeOutputBytes,
   outputString,
+  parseOutputJSON,
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'
@@ -88,7 +89,45 @@ export class NodeProtectedPayloadCodec {
   }
 
   open(binding: OutputJSONObject, input: unknown): Uint8Array {
-    const envelope = parseEnvelope(input, this.maximumPlaintextBytes)
+    return this.decrypt(binding, parseEnvelope(input, this.maximumPlaintextBytes))
+  }
+
+  /** Own and validate serialized data locally; every call resolves custody afresh. */
+  openSerialized(
+    binding: OutputJSONObject,
+    input: string,
+    maximumEnvelopeBytes: number
+  ): Uint8Array {
+    if (typeof input !== 'string')
+      throw new OutputProtocolError('invalid', 'Protected payload must contain serialized JSON')
+    if (
+      !Number.isSafeInteger(maximumEnvelopeBytes) ||
+      maximumEnvelopeBytes < 1 ||
+      maximumEnvelopeBytes > Math.ceil(this.maximumPlaintextBytes / 3) * 4 + 1024
+    )
+      throw new OutputProtocolError('invalid', 'Invalid protected payload envelope capacity')
+    // Preserve the ledger's existing virtual reader, including one getter capture
+    // before text parsing. A custom reader receives the same owned envelope.
+    const reader = this.open
+    const owned = parseOutputJSON(input, { bytes: maximumEnvelopeBytes })
+    if (reader !== defaultObjectReader) return Reflect.apply(reader, this, [binding, owned])
+    const fields = ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag']
+    const stringsOnly =
+      owned !== null &&
+      typeof owned === 'object' &&
+      !Array.isArray(owned) &&
+      Object.keys(owned).length === fields.length &&
+      fields.every(name => typeof owned[name] === 'string')
+    // Six owned string fields have canonical JSON no larger than their bounded
+    // serialized input. Preserve the original canonicalization/error order for
+    // every malformed shape or nonstring field rather than broadening that path.
+    const envelope = stringsOnly
+      ? envelopeFields(owned)
+      : parseEnvelope(owned, this.maximumPlaintextBytes)
+    return this.decrypt(binding, envelope)
+  }
+
+  private decrypt(binding: OutputJSONObject, envelope: ProtectedPayloadEnvelope): Uint8Array {
     const aad = associatedData(binding, envelope.keyId)
     const key = this.key(envelope.keyId)
     const salt = bytes(envelope.salt, 32, 32)
@@ -126,6 +165,10 @@ export class NodeProtectedPayloadCodec {
   }
 }
 
+// Capture only a function identity; every operation still resolves the current
+// instance/prototype reader, binding, custody and authentication independently.
+const defaultObjectReader = NodeProtectedPayloadCodec.prototype.open
+
 function keyLabel(input: unknown): string {
   const value = outputString(input)
   if (!/^[A-Za-z0-9_.-]{1,128}$/.test(value))
@@ -154,6 +197,10 @@ function parseEnvelope(input: unknown, maximum: number): ProtectedPayloadEnvelop
   const value: unknown = JSON.parse(
     canonicalOutputJSON(input, { bytes: Math.ceil(maximum / 3) * 4 + 1024 })
   )
+  return envelopeFields(value)
+}
+
+function envelopeFields(value: unknown): ProtectedPayloadEnvelope {
   closedOutputObject(value, ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
   if (value.format !== FORMAT)
     throw new OutputProtocolError('unsupported', 'Unsupported protected payload format')

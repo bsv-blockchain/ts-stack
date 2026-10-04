@@ -55,7 +55,7 @@ async function* serialResults(values, read) {
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [
-    503, 996, 519, 1483, 173, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 650, 890
+    503, 996, 519, 1482, 173, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 650, 890
   ]
   const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
     const original = targets[id],
