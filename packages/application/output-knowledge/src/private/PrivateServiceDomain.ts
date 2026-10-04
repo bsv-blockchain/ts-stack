@@ -1,10 +1,4 @@
-import {
-  canonicalOutputJSON,
-  closedOutputObject,
-  outputString,
-  parseOutputJSON,
-  type OutputJSONObject
-} from '@bsv/sdk'
+import { ownOutputJSON, closedOutputObject, outputString, type OutputJSONObject } from '@bsv/sdk'
 import { NodeProtectedPayloadCodec } from './NodeProtectedPayloadCodec.js'
 import { SQLiteProtectedLedger } from './SQLiteProtectedLedger.js'
 import { type ProtectedLedgerConfiguration } from './ProtectedLedgerCodec.js'
@@ -42,7 +36,7 @@ export class PrivateServiceDomain {
     create: boolean
   ) {
     // Own configuration before any installed custody callback is invoked.
-    const config = parseOutputJSON(canonicalOutputJSON(input, { bytes: 32768 }))
+    const config = ownOutputJSON(input, { bytes: 32768 }).value
     closedOutputObject(config, ['identity', 'indexKeyId', 'capacity', 'application'])
     this.identity = new PrivateServiceIdentity(
       config.identity as unknown as PrivateServiceIdentityScope,

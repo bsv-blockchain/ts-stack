@@ -1,0 +1,274 @@
+import { runInNewContext } from 'node:vm'
+import { isDeepStrictEqual } from 'node:util'
+import * as s from '../OutputProtocolSchema.js'
+import { canonicalOutputJSON, ownOutputJSON, parseOutputJSON } from '../OutputProtocolJSON.js'
+const hex = '11'.repeat(32)
+const chain = { network: 'test', genesisHash: hex }
+const invalid = expect.objectContaining({ code: 'invalid' })
+function owned(value: unknown): void {
+  if (value === null || typeof value !== 'object') return
+  if (Array.isArray(value)) {
+    expect(Object.getPrototypeOf(value)).toBe(Array.prototype)
+    for (const child of value) owned(child)
+  } else {
+    expect(Object.getPrototypeOf(value)).toBeNull()
+    for (const key of Object.keys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)!
+      expect(descriptor).toEqual({
+        value: descriptor.value,
+        enumerable: true,
+        writable: true,
+        configurable: true
+      })
+      owned(descriptor.value)
+    }
+  }
+}
+test('captures independent nested data, own builtin-like keys and unchanged canonical bytes', () => {
+  const input = {
+    rows: [{ ['__proto__']: { constructor: ['é😀', null, -0, true] }, prototype: 'data' }]
+  }
+  const first = ownOutputJSON(input),
+    second = ownOutputJSON(input)
+  expect(first.text).toBe(canonicalOutputJSON(input))
+  expect(isDeepStrictEqual(first.value, parseOutputJSON(first.text))).toBe(true)
+  owned(first.value)
+  owned(second.value)
+  const copy = first.value as { rows: { __proto__: { constructor: unknown[] } }[] }
+  copy.rows[0].__proto__.constructor.push('changed')
+  expect(input.rows[0].__proto__.constructor).toHaveLength(4)
+  expect(isDeepStrictEqual(second.value, parseOutputJSON(second.text))).toBe(true)
+  expect(Object.is(copy.rows[0].__proto__.constructor[2], -0)).toBe(false)
+})
+test.each([null, true, false, 0, 'é😀', [], {}])('captures all JSON value kinds: %p', input => {
+  const result = ownOutputJSON(input)
+  expect(result.value).toStrictEqual(parseOutputJSON(result.text))
+  owned(result.value)
+})
+test('separates repeated caller references into independently owned JSON subtrees', () => {
+  const shared = { values: [1, 2] }
+  const result = ownOutputJSON({ left: shared, right: shared })
+  const value = result.value as { left: { values: number[] }; right: { values: number[] } }
+  expect(value.left).not.toBe(value.right)
+  expect(value.left.values).not.toBe(value.right.values)
+  value.left.values.push(3)
+  expect(value.right.values).toEqual([1, 2])
+  expect(shared.values).toEqual([1, 2])
+})
+test('retains refusal identities and never invokes input getters or changes input prototypes', () => {
+  let reads = 0
+  const getter = Object.defineProperty({}, 'value', {
+    enumerable: true,
+    get() {
+      reads++
+      return 1
+    }
+  })
+  const cyclic: { self?: unknown } = {}
+  cyclic.self = cyclic
+  for (const input of [
+    undefined,
+    getter,
+    cyclic,
+    NaN,
+    Infinity,
+    0.5,
+    '\uD800',
+    Object.assign([], { 2: 1 }),
+    { value: undefined },
+    { value: Symbol('data') },
+    new Date(0)
+  ]) {
+    const refusal = (fn: () => unknown) => {
+      try {
+        fn()
+      } catch (error) {
+        return error as Error & { code: string }
+      }
+      throw new Error('Unexpected acceptance')
+    }
+    const before = refusal(() => parseOutputJSON(canonicalOutputJSON(input)))
+    expect(refusal(() => ownOutputJSON(input))).toMatchObject({
+      name: before.name,
+      message: before.message,
+      code: before.code
+    })
+  }
+  expect(reads).toBe(0)
+  const input = { nested: { value: 1 } }
+  ownOutputJSON(input)
+  expect(Object.getPrototypeOf(input)).toBe(Object.prototype)
+  expect(Object.getPrototypeOf(input.nested)).toBe(Object.prototype)
+})
+test('retains exact byte, depth, element, map and custom-limit fences with one limit read', () => {
+  const input = { data: ['é😀'] },
+    bytes = new TextEncoder().encode(canonicalOutputJSON(input)).length
+  expect(ownOutputJSON(input, { bytes }).text).toBe(canonicalOutputJSON(input))
+  expect(() => ownOutputJSON(input, { bytes: bytes - 1 })).toThrow(
+    expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+  )
+  expect(() => ownOutputJSON(input, { depth: 2 })).toThrow('JSON depth limit')
+  expect(() => ownOutputJSON([1, 2], { arrayElements: 1 })).toThrow('JSON array limit')
+  expect(() => ownOutputJSON({ a: 1, b: 2 }, { mapKeys: 1 })).toThrow('JSON map limit')
+  for (const bounds of [{ bytes: 0 }, { depth: 33 }, { arrayElements: 4097 }, { mapKeys: 257 }])
+    expect(() => ownOutputJSON(input, bounds)).toThrow('Invalid output JSON resource limit')
+  let reads = 0
+  expect(
+    ownOutputJSON(input, {
+      get bytes() {
+        reads++
+        return bytes
+      }
+    }).text
+  ).toBe(canonicalOutputJSON(input))
+  expect(reads).toBe(1)
+  expect(ownOutputJSON).toHaveLength(1)
+})
+test('keeps raw text/byte duplicate evidence and applies schemas only after complete normalization', () => {
+  const source = '{"value":1,"value":2}'
+  expect(ownOutputJSON(source).value).toBe(source)
+  for (const input of [source, new TextEncoder().encode(source)])
+    expect(() => s.normalized(input, s.json)).toThrow('Duplicate decoded JSON key')
+  let called = false
+  expect(() =>
+    s.normalized(
+      { value: 1 },
+      value => {
+        called = true
+        return value
+      },
+      1
+    )
+  ).toThrow('byte limit')
+  expect(called).toBe(false)
+  const definition = s.object({ value: s.text }, { metadata: s.jsonMap })
+  const input = { value: 'hello', metadata: { rows: [{ value: true }] } }
+  const encoded = canonicalOutputJSON(input)
+  for (const source of [input, encoded, new TextEncoder().encode(encoded)]) {
+    const result = s.normalized(source, definition)
+    expect(result).toEqual(input)
+    owned(result)
+    expect(result.metadata).not.toBe(input.metadata)
+  }
+  expect(definition({ value: 'hello' })).toEqual({ value: 'hello' })
+  expect(Object.hasOwn(definition({ value: 'hello' }), 'metadata')).toBe(false)
+  for (const value of [{ metadata: {} }, { value: 1 }, { value: 'hello', extra: true }])
+    expect(() => definition(value)).toThrow(invalid)
+})
+test('enforces complete array, literal, nullable and own-tagged alternative contracts', () => {
+  expect(s.array(s.text)([])).toEqual([])
+  expect(s.array(s.text, 2, 1)(['a', 'b'])).toEqual(['a', 'b'])
+  for (const value of [[], ['a', 'b', 'c'], [1], 'a', null])
+    expect(() => s.array(s.text, 2, 1)(value)).toThrow(invalid)
+  for (const value of ['tag', 0, true, null])
+    expect(s.literal('tag', 0, true, null)(value)).toBe(value)
+  expect(() => s.literal('tag')('other')).toThrow(invalid)
+  expect(s.nullable(s.text)(null)).toBeNull()
+  expect(s.nullable(s.text)('data')).toBe('data')
+  expect(() => s.nullable(s.text)(1)).toThrow(invalid)
+  const tagged = s.tagged('kind', {
+    a: s.object({ kind: s.literal('a'), value: s.text }),
+    b: s.object({ kind: s.literal('b'), value: s.u32 })
+  })
+  expect(tagged({ kind: 'a', value: 'data' })).toEqual({ kind: 'a', value: 'data' })
+  expect(tagged({ kind: 'b', value: 2 })).toEqual({ kind: 'b', value: 2 })
+  for (const value of [
+    null,
+    [],
+    { kind: 'constructor' },
+    { kind: 1 },
+    { kind: 'missing' },
+    { kind: 'a', value: 1 },
+    { kind: 'b', value: 2, extra: true }
+  ])
+    expect(() => tagged(value)).toThrow(invalid)
+})
+test('checks every portable scalar and nested chain/scope/evidence/policy field', () => {
+  expect(s.bool(true)).toBe(true)
+  expect(s.bool(false)).toBe(false)
+  expect(() => s.bool(1)).toThrow(invalid)
+  expect(s.u32(4294967295)).toBe(4294967295)
+  expect(() => s.u32(4294967296)).toThrow(invalid)
+  expect(s.u64('18446744073709551615')).toBe('18446744073709551615')
+  for (const value of ['01', '18446744073709551616', -1])
+    expect(() => s.u64(value)).toThrow(invalid)
+  expect(s.hex(hex)).toBe(hex)
+  expect(() => s.hex('AA'.repeat(32))).toThrow(invalid)
+  const identity = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+  expect(s.identity(identity)).toBe(identity)
+  expect(() => s.identity('00')).toThrow(invalid)
+  expect(s.bytes('AQ==')).toBe('AQ==')
+  expect(() => s.bytes('!')).toThrow(invalid)
+  expect(s.chain(chain)).toEqual(chain)
+  expect(s.outpoint({ chain, txid: hex, outputIndex: 0 })).toEqual({
+    chain,
+    txid: hex,
+    outputIndex: 0
+  })
+  const scope = {
+    chain,
+    provider: 'provider',
+    service: 'service',
+    queryDigest: hex,
+    rulesDigest: hex,
+    access: 'public',
+    epoch: '1'
+  }
+  expect(s.scope(scope)).toEqual(scope)
+  expect(s.evidence({ txid: hex, outputIndex: 0, beef: 'AQ==' })).toEqual({
+    txid: hex,
+    outputIndex: 0,
+    beef: 'AQ=='
+  })
+  expect(s.policy({ id: 'urn:test:policy', digest: hex })).toEqual({
+    id: 'urn:test:policy',
+    digest: hex
+  })
+  for (const value of [null, [], 1]) expect(() => s.jsonMap(value)).toThrow(invalid)
+  const extensions = s.object({ value: s.json }, s.extensions)
+  expect(
+    extensions({ value: null, extensions: { data: true }, critical: ['urn:test:required'] })
+  ).toEqual({ value: null, extensions: { data: true }, critical: ['urn:test:required'] })
+  expect(() =>
+    extensions({ value: null, critical: Array.from({ length: 33 }, () => 'urn:test:required') })
+  ).toThrow(invalid)
+})
+test.each(['urn:test:x', 'https://example.invalid/path', 'a1+.-:data'])(
+  'accepts absolute IRI %s',
+  value => expect(s.iri(value)).toBe(value)
+)
+test.each(['relative/path', '1scheme:value', ':value', ''])('rejects invalid IRI %s', value =>
+  expect(() => s.iri(value)).toThrow(invalid)
+)
+test.each(['A'.repeat(16), '_-09AZaz'.repeat(16)])('accepts request identifier %s', value =>
+  expect(s.requestId(value)).toBe(value)
+)
+test.each(['A'.repeat(15), 'A'.repeat(129), 'A'.repeat(15) + '!', 0, null])(
+  'rejects request identifier %p',
+  value => expect(() => s.requestId(value)).toThrow(invalid)
+)
+test('matches independent UTF-8 ordering and requires strictly increasing unique adjacent values', () => {
+  const values = ['', 'a', 'aa', 'ab', 'é', 'è', '\uE000', '😀']
+  for (const a of values)
+    for (const b of values)
+      expect(Math.sign(s.compareUTF8(a, b))).toBe(
+        Math.sign(Buffer.compare(Buffer.from(a), Buffer.from(b)))
+      )
+  expect(s.compareUTF8('😀', '\uE000')).toBeGreaterThan(0)
+  for (const values of [[], [1], [1, 2, 3]])
+    expect(() => s.sortedUnique(values, (a, b) => a - b)).not.toThrow()
+  for (const values of [
+    [1, 1],
+    [2, 1],
+    [1, 3, 2]
+  ])
+    expect(() => s.sortedUnique(values, (a, b) => a - b)).toThrow('Expected sorted unique list')
+})
+
+test('accepts foreign-realm plain data while returning local independently owned records', () => {
+  const input: unknown = runInNewContext('({ value: [{ nested: "foreign" }] })')
+  const snapshot = ownOutputJSON(input)
+  expect(snapshot.value).toEqual({ value: [{ nested: 'foreign' }] })
+  owned(snapshot.value)
+  expect(snapshot.value).not.toBe(input)
+})

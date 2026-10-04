@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
@@ -7,7 +8,6 @@ import {
   outputHex32,
   outputIdentity,
   OutputProtocolError,
-  parseOutputJSON,
   Random,
   Utils,
   type OutputJSONObject,
@@ -191,7 +191,7 @@ function ownedBytes(input: unknown, maximum: number): number[] {
   return copy
 }
 function parseObject(input: unknown, bytes: number): OutputJSONObject {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes }), { bytes })
+  const value = ownOutputJSON(input, { bytes }).value
   outputAssert(
     value !== null && typeof value === 'object' && !Array.isArray(value),
     'Expected protected operation payload object'

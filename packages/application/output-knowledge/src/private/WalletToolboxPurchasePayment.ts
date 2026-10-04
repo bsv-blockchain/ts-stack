@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   Beef,
   Transaction,
   Utils,
@@ -10,7 +11,6 @@ import {
   outputIdentity,
   outputString,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPurchasePrepare,
   parseOutputPurchaseSubmit,
   verifyOutputPurchaseTerms,
@@ -86,7 +86,7 @@ export class WalletToolboxPurchasePayment implements PrivatePurchaseBuyerPayment
     return structuredClone(this.installed)
   }
   constructor(private readonly ports: WalletToolboxPurchasePaymentOptions) {
-    const b = parseOutputJSON(canonicalOutputJSON(ports.binding, { bytes: 4096 }))
+    const b = ownOutputJSON(ports.binding, { bytes: 4096 }).value
     closedOutputObject(b, ['wallet', 'storage', 'chain', 'originator', 'seller'])
     outputAssert(
       Number.isSafeInteger(ports.maximumCandidateBytes) &&
@@ -224,18 +224,11 @@ export class WalletToolboxPurchasePayment implements PrivatePurchaseBuyerPayment
     } as unknown as OutputJSONObject
   }
   private stored(plan: Plan): OutputJSONObject {
-    return parseOutputJSON(
-      canonicalOutputJSON(
-        { ...plan, request: this.requestObject(plan.request) },
-        { bytes: 4194304 }
-      ),
-      { bytes: 4194304 }
-    ) as OutputJSONObject
+    return ownOutputJSON({ ...plan, request: this.requestObject(plan.request) }, { bytes: 4194304 })
+      .value as OutputJSONObject
   }
   private parse(input: OutputJSONObject): Plan {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 4194304 }), {
-      bytes: 4194304
-    })
+    const value = ownOutputJSON(input, { bytes: 4194304 }).value
     closedOutputObject(value, ['format', 'operationId', 'binding', 'prepare', 'terms', 'request'])
     outputAssert(
       value.format === 'private-purchase-wallet/1' &&

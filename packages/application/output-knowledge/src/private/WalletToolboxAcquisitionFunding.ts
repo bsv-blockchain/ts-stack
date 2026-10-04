@@ -1,11 +1,11 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputIdentity,
   outputString,
   OutputProtocolError,
-  parseOutputJSON,
   type OutputJSONObject,
   type OutputWalletFundingOperation
 } from '@bsv/sdk'
@@ -37,7 +37,7 @@ export class WalletToolboxAcquisitionFunding implements PrivateAcquisitionWallet
     private readonly controller: RecoverableAcquisitionFundingController,
     identities: { wallet: string; storage: string }
   ) {
-    const value = parseOutputJSON(canonicalOutputJSON(identities, { bytes: 1024 }))
+    const value = ownOutputJSON(identities, { bytes: 1024 }).value
     closedOutputObject(value, ['wallet', 'storage'])
     this.wallet = outputIdentity(value.wallet)
     this.storage = outputString(value.storage)
@@ -115,7 +115,7 @@ export class WalletToolboxAcquisitionFunding implements PrivateAcquisitionWallet
     input: unknown,
     operation: OutputWalletFundingOperation
   ): PrivateAcquisitionWalletOutcome {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
+    const value = ownOutputJSON(input, { bytes: 16384 }).value
     closedOutputObject(value, ['state'], ['funding', 'receipt', 'reason'])
     if (value.state === 'absent' || value.state === 'unknown') {
       closedOutputObject(value, ['state'])

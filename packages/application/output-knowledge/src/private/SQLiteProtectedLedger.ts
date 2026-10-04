@@ -1,6 +1,7 @@
 import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   incrementOutputU64,
@@ -400,7 +401,7 @@ export class SQLiteProtectedLedger {
     })
   }
   private addresses(input: readonly ProtectedLedgerAddress[]): ProtectedLedgerAddress[] {
-    const owned = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
+    const owned = ownOutputJSON(input, { bytes: 16384 }).value
     outputAssert(
       Array.isArray(owned) && owned.length >= 1 && owned.length <= 64,
       'Protected ledger read batch must contain 1–64 addresses'
@@ -448,7 +449,7 @@ export class SQLiteProtectedLedger {
     return result
   }
   private ownCommitOptions(input: ProtectedLedgerCommitOptions): ProtectedLedgerCommitOptions {
-    const options = parseOutputJSON(canonicalOutputJSON(input, { bytes: 1024 }))
+    const options = ownOutputJSON(input, { bytes: 1024 }).value
     closedOutputObject(options, ['maximumBatchBytes'])
     return {
       maximumBatchBytes: protectedInteger(
@@ -521,9 +522,7 @@ export class SQLiteProtectedLedger {
     options?: ProtectedLedgerCommitOptions
   ) {
     const inputs =
-      options === undefined
-        ? parseOutputJSON(canonicalOutputJSON(changes))
-        : this.ownLocalBatch(changes, options)
+      options === undefined ? ownOutputJSON(changes).value : this.ownLocalBatch(changes, options)
     outputAssert(
       Array.isArray(inputs) && inputs.length >= 1 && inputs.length <= 64,
       'Protected ledger commit must contain 1–64 records'

@@ -1,10 +1,10 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,
   outputU64,
-  parseOutputJSON,
   type OutputJSONObject
 } from '@bsv/sdk'
 import { createHash } from 'node:crypto'
@@ -100,7 +100,7 @@ export function protectedInteger(value: unknown, maximum: number): number {
   return value
 }
 export function protectedAddress(value: unknown): ProtectedLedgerAddress {
-  const input = parseOutputJSON(canonicalOutputJSON(value, { bytes: 1024 }))
+  const input = ownOutputJSON(value, { bytes: 1024 }).value
   closedOutputObject(input, ['kind', 'key'])
   outputAssert(
     protectedLedgerKinds.includes(input.kind as ProtectedLedgerKind),
@@ -111,7 +111,7 @@ export function protectedAddress(value: unknown): ProtectedLedgerAddress {
 export function protectedConfiguration(
   value: ProtectedLedgerConfiguration
 ): ProtectedLedgerConfiguration {
-  const input = parseOutputJSON(canonicalOutputJSON(value, { bytes: 32768 }))
+  const input = ownOutputJSON(value, { bytes: 32768 }).value
   closedOutputObject(input, [
     'storeId',
     'binding',
@@ -135,8 +135,7 @@ export function protectedValue(
   value: unknown,
   maximum: number
 ): { text: string; value: OutputJSONObject } {
-  const text = canonicalOutputJSON(value, { bytes: maximum })
-  const owned = parseOutputJSON(text, { bytes: maximum })
+  const { text, value: owned } = ownOutputJSON(value, { bytes: maximum })
   outputAssert(
     owned !== null && typeof owned === 'object' && !Array.isArray(owned),
     'Protected ledger record must be an object'

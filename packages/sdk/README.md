@@ -411,6 +411,16 @@ wallet-derived locking key, and field signature before reading or spending it.
   Parsing and canonical encoding enforce the same explicit byte and structural
   bounds; callers still validate each endpoint's closed schema.
 
+  `ownOutputJSON(value, limits)` validates a program value and returns its
+  bounded canonical `text` and an independent `value` with those same data
+  properties and null-prototype records. Nested arrays and records belong to
+  the new copy. It applies every canonical representation and resource check
+  before copying. Use `parseOutputJSON` for incoming JSON text or bytes, where
+  duplicate decoded keys must still be detected; passing a string to
+  `ownOutputJSON` copies that string value. Ownership supplies neither a schema
+  decision nor authorization. Endpoint schemas and current capability checks
+  still apply to each operation.
+
   `retainOutputCapability(manifest, request)` validates a new selection and returns
   `{ record, selection }` as independent owned copies. Atomically persist `record`
   with the operation before any effect. `restoreOutputCapability(record, trust)`

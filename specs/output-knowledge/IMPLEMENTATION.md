@@ -4404,3 +4404,96 @@ seed, replay and time limits, and unchanged recorded source/configuration inputs
 Production code, mutation inventory and runner settings are unchanged. This
 establishes meaningful fixture cleanup; a complete hosted replay of all 431
 mutants must still establish that no late error contaminates another mutation.
+
+### Owned protocol values and unchanged wire parsing
+
+The subsequent exact-source runtime replay at `71be7336f` passes the complete
+431-mutant hosted report: 313 killed, 80 timeouts, 38 survivors, 91.18 percent
+and zero uncovered, invalid or unexecuted mutants. Hosted run `37158761804`
+retains the original complete baseline, source union and runner settings. The
+complete lookup-service replay `37159067332` also passes all 248 mutants at
+96.77 percent with the same zero gates. These are component receipts; the
+blank-selector campaign and complete final-source qualification remain required.
+
+Ordinary hosted CI `37158529525` remains failed. The full covenant-buyer
+property completed 247 of its required 300 cases before the original 150-second
+interruption, and the application coverage shard reached its original
+35-minute deadline after 202 of 227 suites passed. Full mutation campaign
+`37159615740` also retains deadline failures after successful initial baselines.
+No cancelled job, partial report or older component receipt qualifies that
+campaign or the final branch.
+
+Measured profiles identify redundant value-to-text-to-parser ownership work in
+the application and SDK schema paths. The additive SDK `ownOutputJSON` helper
+performs every existing canonical representation and resource check, parses
+only its own generated canonical text, and recursively gives the resulting
+owned records null prototypes. Arrays remain ordinary arrays; data descriptors,
+canonical text and separate copies of repeated caller references match the
+existing composition. Raw incoming text and bytes continue using the unchanged
+duplicate-aware parser. Packet schemas, fresh permission and capability checks,
+ciphertext, scripts, transaction bytes and persisted records remain unchanged.
+Application value-ownership compositions and the central SDK schema value path
+use the helper without adding a cache or reusing external authority.
+
+The original SDK JSON tests and properties remain. A complete schema test module
+and a 300-case nested ownership property add independent value, byte, prototype,
+descriptor and alias checks, all resource boundaries, invalid representation
+refusals and preserved raw duplicate evidence. The original `sdk-output-json`
+mutation target adds the whole schema source and test module; it retains the
+original JSON source and both full test selections, canonical target count,
+workers, reuse, strength, seed, replay, deadlines and qualification gates.
+
+The focused canonical SDK selection passes 97 tests in three suites. The clean
+original complete buyer baseline passes 55 tests in eight suites in 258.906
+seconds. The owned-value candidate also passes that complete selection, all
+native wallet routes and all 300-case properties in 297.588 seconds, with every
+recorded consumed input unchanged. Its profile shows reduced raw parsing time
+but substantially increased SQLite transaction wall time. The whole-selection
+result therefore does not demonstrate a runtime improvement. Both receipts
+remain diagnostic; full coverage, mutation, platform and exact-head hosted
+validation are still required, with all original durability and timing controls.
+
+The whole local SDK JSON mutation replay covers 498 mutants and all 97 baseline
+tests: 453 killed, six timeouts and 39 survivors, 92.17 percent, with zero
+uncovered, invalid or unexecuted mutants. The first complete run retained one
+Jest formatter runtime error when a deliberately wrong array prototype reached
+a direct Node assertion. The direct schema oracle now uses Node's independent
+strict comparison as a boolean assertion; the same complete 498 canonical
+mutants are retained and that tuple is killed normally. Production code and
+qualification settings are unchanged between those two runs. Both reports
+remain available; a passing retry does not erase the earlier invalid report.
+
+Complete local SDK coverage passes all 8,350 tests in 257 suites with its
+original thresholds. Complete application coverage passes all 3,347 tests in
+227 suites in 1,086.873 seconds: 98.17 percent statements, 96.56 branches,
+98.44 functions and 98.78 lines. Its original published serial configuration,
+300-case properties, seed, blank replay and time bounds remain unchanged. Each
+reader records unchanged consumed inputs through actual process drain. The SDK
+coverage reader uses serial local scheduling; it does not establish hosted
+worker qualification. These dirty-source local receipts validate the candidate
+batch and do not replace complete final-source hosted CI or the same-run full
+canonical mutation campaign.
+
+Exact-tarball SDK and application checks pass all existing conditional/wildcard
+exports, source maps, publint, strict type resolution and clean consumers. The
+SDK check additionally asserts the helper at root and the complete JSON entry.
+All original browser entry budgets and runtime checks pass. The complete native
+reference selection and all three original Chrome profiles pass on this batch:
+two final-output host profiles, including actual Engine/Mongo admission, and
+the private non-final profile. They demonstrate progressive and live updates,
+offline replay, source membership, reload, durable spent state, native IndexedDB
+reopen, provider restart and expiry with zero browser exceptions. The private
+profile retains exactly two original Opens. Each bounded reader records unchanged
+consumed inputs through actual drain.
+
+All 62 documentation examples compile against 24 exact package tarballs. The
+conformance runner parses 6,700 vectors in 77 files without structure errors;
+this structural check does not independently execute their cryptography or
+Script semantics. The unexcluded advisory audit finds no known vulnerabilities.
+Changed-code recommended and raw typed comparisons introduce zero findings.
+Fresh pinned inventories also catch moved function boundaries and three changed
+factual counts. Execution ranges are reconciled to complete function starts,
+with every current canonical tuple required exactly once. All original test,
+source, settings, nonempty, uniqueness and qualification assertions remain.
+The earlier failed inventory control remains evidence; neither its factual
+correction nor these local component results establishes final hosted readiness.

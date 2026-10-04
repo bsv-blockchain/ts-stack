@@ -1158,6 +1158,15 @@ for bounds, reports, current-state authority and operational limitations.
 
 ## Compatibility boundary
 
+JavaScript protocol values use `ownOutputJSON` from `@bsv/sdk` when a component
+needs both canonical text and an independent data-only copy. It retains the
+canonical serializer's representation and resource checks, then copies its own
+generated text into null-prototype records and ordinary arrays. Incoming text or
+UTF-8 bytes still use the duplicate-aware `parseOutputJSON` parser. Neither
+operation establishes a packet schema, current access or financial authority;
+the component continues checking those separately. Wire bytes, persisted records
+and capability selection are unchanged.
+
 The new protocols require explicit capability selection. Existing `/lookup`,
 `/submit`, Topic Manager and Lookup Service methods retain their finite and legacy
 semantics. Receiving an output does not establish unspentness; withdrawing a source
@@ -1169,7 +1178,7 @@ a wallet action.
 
 Run `pnpm --filter @bsv/sdk build:ts`, then this package's `build`, `typecheck`,
 `lint` and `test` commands. `test:coverage` runs the complete same test discovery
-with two workers and a 1 GB idle-worker recycling limit. Jest combines every
+with one worker and a 1 GB idle-worker recycling limit. Jest combines every
 suite into the original global coverage thresholds; ordinary `test` remains
 serial, and mutation concurrency and its property settings are independent.
 Journal contract tests exercise all three adapters,

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
@@ -7,7 +8,6 @@ import {
   outputPrivatePublicationRequestDigest,
   outputString,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPrivatePublish,
   type OutputChain,
   type OutputPrivatePublish
@@ -135,7 +135,7 @@ export class PrivatePublicationVerificationLeases {
 
   /** Install this callback as the Engine bridge's synchronous isCurrent guard. */
   isCurrent(input: PrivatePublicationVerificationReference): boolean {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
+    const value = ownOutputJSON(input, { bytes: 16384 }).value
     closedOutputObject(value, ['id', 'publisher', 'requestDigest', 'view'])
     closedOutputObject(value.view, ['chain'])
     const lease = this.active.get(outputString(value.id))

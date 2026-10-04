@@ -1,5 +1,6 @@
 import { readCurrentPrivatePublicationStatus } from './PrivatePublicationPorts.js'
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
@@ -11,7 +12,6 @@ import {
   outputString,
   outputU64,
   OutputProtocolError,
-  parseOutputJSON,
   parseOutputPrivatePublish,
   parseOutputPrivatePublicationStatus,
   type OutputCapabilitySelection,
@@ -78,16 +78,14 @@ export class PrivatePublicationCoordinator {
   constructor(options: PrivatePublicationCoordinatorOptions) {
     this.ports = Object.freeze({ ...options })
     this.installed = options.contracts.configuration()
-    const owned = parseOutputJSON(
-      canonicalOutputJSON(
-        {
-          policy: options.validationPolicy,
-          lookup: options.lookup,
-          extensions: options.supportedExtensions ?? []
-        },
-        { bytes: 16384 }
-      )
-    )
+    const owned = ownOutputJSON(
+      {
+        policy: options.validationPolicy,
+        lookup: options.lookup,
+        extensions: options.supportedExtensions ?? []
+      },
+      { bytes: 16384 }
+    ).value
     closedOutputObject(owned, ['policy', 'lookup', 'extensions'])
     closedOutputObject(owned.policy, ['id', 'digest'])
     closedOutputObject(owned.lookup, ['service', 'rulesDigest'])
@@ -435,9 +433,9 @@ export class PrivatePublicationCoordinator {
                 reference
               )
               this.requireCurrent(caller, signal)
-              const checked = parseOutputJSON(
-                canonicalOutputJSON(outcome, { bytes: this.ports.admission.maximumOutcomeBytes })
-              )
+              const checked = ownOutputJSON(outcome, {
+                bytes: this.ports.admission.maximumOutcomeBytes
+              }).value
               outputAssert(
                 checked !== null && typeof checked === 'object' && !Array.isArray(checked),
                 'Invalid private admission outcome'

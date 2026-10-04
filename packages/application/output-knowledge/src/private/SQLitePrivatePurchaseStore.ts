@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
@@ -130,7 +131,7 @@ export class SQLitePrivatePurchaseStore {
       'Unsupported purchase clock profile'
     )
     this.clockProfile = clockProfile
-    const value = parseOutputJSON(canonicalOutputJSON(limits, { bytes: 4096 }))
+    const value = ownOutputJSON(limits, { bytes: 4096 }).value
     closedOutputObject(value, [
       'maximumStateBytes',
       'maximumOriginalBytes',
@@ -176,10 +177,7 @@ export class SQLitePrivatePurchaseStore {
     })
   }
   private custody(input: unknown): PrivatePurchaseCustody {
-    const value = parseOutputJSON(
-      canonicalOutputJSON(input, { bytes: this.limits.maximumOriginalBytes }),
-      { bytes: this.limits.maximumOriginalBytes }
-    )
+    const value = ownOutputJSON(input, { bytes: this.limits.maximumOriginalBytes }).value
     closedOutputObject(value, [
       'format',
       'original',

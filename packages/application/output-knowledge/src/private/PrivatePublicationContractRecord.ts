@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
@@ -6,7 +7,6 @@ import {
   outputHex32,
   outputString,
   outputPrivatePublicationRequestDigest,
-  parseOutputJSON,
   parseOutputPrivatePublish,
   Transaction,
   Utils,
@@ -46,13 +46,13 @@ function parseOriginal(
     { ...reference, privateValues: '' },
     supportedExtensions
   )
-  const expectedPolicy = parseOutputJSON(canonicalOutputJSON(policy, { bytes: 4096 }))
+  const expectedPolicy = ownOutputJSON(policy, { bytes: 4096 }).value
   closedOutputObject(expectedPolicy, ['id', 'digest'])
   policy = {
     id: outputString(expectedPolicy.id),
     digest: outputHex32(expectedPolicy.digest)
   }
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 1048576 }))
+  const value = ownOutputJSON(input, { bytes: 1048576 }).value
   closedOutputObject(value, [
     'format',
     'publicationId',

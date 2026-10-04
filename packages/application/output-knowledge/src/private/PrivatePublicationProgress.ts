@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
@@ -10,7 +11,6 @@ import {
   outputU32,
   outputU64,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPrivatePublish,
   parseOutputPrivatePublicationResult,
   type OutputChain,
@@ -240,7 +240,7 @@ function progress(value: unknown, state: Base): Progress {
     : { phase, ...checked, reason: outputString(value.reason) }
 }
 export function parsePrivatePublicationProgress(input: unknown): PrivatePublicationProgress {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 65536 }))
+  const value = ownOutputJSON(input, { bytes: 65536 }).value
   closedOutputObject(value, BASE_FIELDS)
   outputAssert(
     value.format === 'private-publication-progress/1',
@@ -384,7 +384,7 @@ export function advancePrivatePublicationProgress(
 ): PrivatePublicationProgress {
   const state = parsePrivatePublicationProgress(input)
   const time = outputU64(now) > outputU64(state.updatedAt) ? now : state.updatedAt
-  const owned = parseOutputJSON(canonicalOutputJSON(event, { bytes: 65536 }))
+  const owned = ownOutputJSON(event, { bytes: 65536 }).value
   outputAssert(
     owned !== null && typeof owned === 'object' && !Array.isArray(owned),
     'Invalid publication event'

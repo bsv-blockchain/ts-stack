@@ -1,12 +1,11 @@
 import {
-  canonicalOutputJSON,
+  ownOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
   outputAssert,
   outputString,
   outputU64,
   parseOutputEvidence,
-  parseOutputJSON,
   type OutputCapabilitySelection,
   type OutputEvidence,
   type OutputPaidLookupAcquire
@@ -106,7 +105,7 @@ export function ownPrivateAcquisitionPreparation(
   }
   outputAssert(typeof material === 'string', 'Acquisition material must be encoded bytes')
   decodeOutputBytes(material, 4194304)
-  const owned = parseOutputJSON(canonicalOutputJSON(metadata))
+  const owned = ownOutputJSON(metadata).value
   closedOutputObject(
     owned,
     names.filter(name => name !== 'material')

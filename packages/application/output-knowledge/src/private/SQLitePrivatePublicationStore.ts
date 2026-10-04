@@ -1,11 +1,11 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,
   outputString,
-  outputU64,
-  parseOutputJSON
+  outputU64
 } from '@bsv/sdk'
 import {
   PrivatePublicationServiceRecords,
@@ -69,7 +69,7 @@ export class SQLitePrivatePublicationStore {
     input: Limits,
     service?: PrivatePublicationServiceInstallation
   ) {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
+    const value = ownOutputJSON(input, { bytes: 16384 }).value
     closedOutputObject(value, ['maximumBlobBytes', 'maximumFenceBytes', 'supportedExtensions'])
     outputAssert(
       Array.isArray(value.supportedExtensions) && value.supportedExtensions.length <= 32,
@@ -126,7 +126,7 @@ export class SQLitePrivatePublicationStore {
     stagedUntil: string
   ) {
     // Own the request and selection before any authorization or custody callback.
-    const choice = parseOutputJSON(canonicalOutputJSON(selected, { bytes: 16384 }))
+    const choice = ownOutputJSON(selected, { bytes: 16384 }).value
     closedOutputObject(choice, ['publisher', 'lookup'])
     return createPrivatePublicationRecords(
       request,
@@ -307,9 +307,7 @@ export class SQLitePrivatePublicationStore {
   ): PrivatePublicationProgress {
     const id = outputHex32(publicationId),
       revision = outputU64(expectedRecordRevision).toString()
-    const owned = parseOutputJSON(
-      canonicalOutputJSON(event, { bytes: 65536 })
-    ) as unknown as PrivatePublicationEvent
+    const owned = ownOutputJSON(event, { bytes: 65536 }).value as unknown as PrivatePublicationEvent
     const retained = this.load(id, clock, guard)
     outputAssert(retained !== undefined, 'Private publication is absent', 'not-found')
     outputAssert(retained.record.revision === revision, 'Private publication changed', 'conflict')

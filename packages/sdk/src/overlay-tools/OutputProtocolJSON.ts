@@ -281,3 +281,30 @@ export function canonicalOutputJSON(
   visit(value, 1)
   return chunks.join('')
 }
+
+/**
+ * Validate and capture a value as bounded canonical text and an independent
+ * data-only copy. This is value ownership, not parsing incoming JSON text.
+ * Every representation/resource check runs in canonicalOutputJSON before the
+ * native parse. Its generated text has unique keys and valid bounded values;
+ * normalize only the resulting owned records to the protocol's null prototype.
+ * Incoming text/bytes still require parseOutputJSON to retain duplicate evidence.
+ */
+export function ownOutputJSON(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { text: string; value: OutputJSON } {
+  const text = canonicalOutputJSON(input, limits)
+  const value = JSON.parse(text) as OutputJSON
+  function normalize(node: OutputJSON): void {
+    if (node === null || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const child of node) normalize(child)
+    } else {
+      Object.setPrototypeOf(node, null)
+      for (const key of Object.keys(node)) normalize(node[key])
+    }
+  }
+  normalize(value)
+  return { text, value }
+}

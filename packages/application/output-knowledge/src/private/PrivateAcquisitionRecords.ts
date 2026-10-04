@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   bindOutputPaidLookupChallenge,
   canonicalOutputJSON,
   closedOutputObject,
@@ -8,7 +9,6 @@ import {
   outputString,
   outputU32,
   outputU64,
-  parseOutputJSON,
   parseOutputPaidLookupAcquire,
   Transaction,
   type OutputEvidence,
@@ -54,16 +54,14 @@ export class PrivateAcquisitionRecords {
   private readonly contracts: PrivateAcquisitionContracts
   constructor(input: PrivateAcquisitionRecordInstallation) {
     this.contracts = input.contracts
-    const value = parseOutputJSON(
-      canonicalOutputJSON(
-        {
-          validationPolicy: input.validationPolicy,
-          maximumRecordBytes: input.maximumRecordBytes,
-          supportedExtensions: input.supportedExtensions ?? []
-        },
-        { bytes: 16384 }
-      )
-    )
+    const value = ownOutputJSON(
+      {
+        validationPolicy: input.validationPolicy,
+        maximumRecordBytes: input.maximumRecordBytes,
+        supportedExtensions: input.supportedExtensions ?? []
+      },
+      { bytes: 16384 }
+    ).value
     closedOutputObject(value, ['validationPolicy', 'maximumRecordBytes', 'supportedExtensions'])
     closedOutputObject(value.validationPolicy, ['id', 'digest'])
     this.policy = {
@@ -86,7 +84,7 @@ export class PrivateAcquisitionRecords {
   }
   restore(input: unknown) {
     const limits = { bytes: this.maximumRecordBytes }
-    const value = parseOutputJSON(canonicalOutputJSON(input, limits), limits)
+    const value = ownOutputJSON(input, limits).value
     closedOutputObject(value, [
       'format',
       'request',

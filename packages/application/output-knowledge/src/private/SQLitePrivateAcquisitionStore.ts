@@ -1,12 +1,12 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
   outputAssert,
   outputHex32,
   outputIdentity,
-  outputU64,
-  parseOutputJSON
+  outputU64
 } from '@bsv/sdk'
 import { PrivateAcquisitionFundingIndex } from './PrivateAcquisitionFundingIndex.js'
 import { PrivateAcquisitionPayloads } from './PrivateAcquisitionPayloads.js'
@@ -67,7 +67,7 @@ export class SQLitePrivateAcquisitionStore {
     limits: Limits,
     installation: PrivateAcquisitionRecordInstallation
   ) {
-    const input = parseOutputJSON(canonicalOutputJSON(limits, { bytes: 4096 }))
+    const input = ownOutputJSON(limits, { bytes: 4096 }).value
     closedOutputObject(input, ['maximumStateBytes', 'maximumMaterialBytes', 'maximumBatchBytes'])
     this.limits = {
       maximumStateBytes: protectedInteger(input.maximumStateBytes, 1048576),
@@ -251,9 +251,8 @@ export class SQLitePrivateAcquisitionStore {
     clock: () => string,
     guard: ProtectedLedgerGuard
   ): Loaded {
-    const owned = parseOutputJSON(
-      canonicalOutputJSON(event, { bytes: 262144 })
-    ) as unknown as PrivateAcquisitionEvent
+    const owned = ownOutputJSON(event, { bytes: 262144 })
+      .value as unknown as PrivateAcquisitionEvent
     outputAssert(
       owned.type !== 'delivered',
       'Acquisition completion requires retained result',

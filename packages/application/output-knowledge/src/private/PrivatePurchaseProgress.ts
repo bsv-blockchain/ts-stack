@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
+  ownOutputJSON,
   bindOutputReleaseEvidence,
   canonicalOutputJSON,
   closedOutputObject,
@@ -8,7 +9,6 @@ import {
   outputIdentity,
   outputString,
   outputU64,
-  parseOutputJSON,
   parseOutputPurchaseEnvelope,
   verifyOutputPurchaseEnvelope,
   type OutputPurchaseEnvelope,
@@ -47,7 +47,7 @@ export type PrivatePurchaseEvent =
   | { type: 'expire' }
 
 function ownedEvent(input: PrivatePurchaseEvent): PrivatePurchaseEvent {
-  const value = parseOutputJSON(canonicalOutputJSON(input))
+  const value = ownOutputJSON(input).value
   closedOutputObject(
     value,
     ['type'],
@@ -156,10 +156,7 @@ export function parsePrivatePurchaseProgress(
   input: unknown,
   original: PrivatePurchaseOriginal
 ): PrivatePurchaseProgress {
-  const value = parseOutputJSON(
-    canonicalOutputJSON(input, { bytes: PRIVATE_PURCHASE_PROGRESS_BYTES }),
-    { bytes: PRIVATE_PURCHASE_PROGRESS_BYTES }
-  )
+  const value = ownOutputJSON(input, { bytes: PRIVATE_PURCHASE_PROGRESS_BYTES }).value
   closedOutputObject(value, [
     'format',
     'acquisitionId',

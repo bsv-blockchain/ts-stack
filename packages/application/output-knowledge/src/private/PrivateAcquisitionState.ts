@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
-  outputHex32,
-  parseOutputJSON
+  outputHex32
 } from '@bsv/sdk'
 import type { PrivateServiceIdentity } from './PrivateServiceIdentity.js'
 import type { PrivateAcquisitionOriginal } from './PrivateAcquisitionRecords.js'
@@ -60,7 +60,7 @@ export function parsePrivateAcquisitionState(
   input: unknown,
   original: PrivateAcquisitionOriginal
 ): PrivateAcquisitionState {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 1048576 }))
+  const value = ownOutputJSON(input, { bytes: 1048576 }).value
   closedOutputObject(value, ['format', 'originalDigest', 'progress', 'material', 'result'])
   outputAssert(
     value.format === 'private-acquisition-state/1',

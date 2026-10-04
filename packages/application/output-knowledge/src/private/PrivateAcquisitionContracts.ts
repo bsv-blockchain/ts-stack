@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   OUTPUT_PROFILES,
   bindOutputPaidLookupChallenge,
   canonicalOutputBase,
@@ -11,7 +12,6 @@ import {
   outputString,
   outputU64,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPaidLookupAcquire,
   parseOutputReleasePolicy,
   retainOutputCapability,
@@ -61,7 +61,7 @@ export class PrivateAcquisitionContracts {
   private readonly installed: PrivateAcquisitionInstallation
   private readonly request: Omit<OutputCapabilityRequest, 'now'>
   constructor(input: PrivateAcquisitionInstallation, trust: PrivateAcquisitionTrust) {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
+    const value = ownOutputJSON(input, { bytes: 16384 }).value
     closedOutputObject(value, [
       'chain',
       'seller',
@@ -160,7 +160,7 @@ export class PrivateAcquisitionContracts {
     nowInput: string
   ) {
     const request = parseOutputPaidLookupAcquire(requestInput, this.request.supportedExtensions)
-    const terms = parseOutputJSON(canonicalOutputJSON(termsInput, { bytes: 4096 }))
+    const terms = ownOutputJSON(termsInput, { bytes: 4096 }).value
     closedOutputObject(terms, [
       'satoshis',
       'derivationPrefix',

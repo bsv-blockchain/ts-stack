@@ -1,10 +1,10 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,
-  outputString,
-  parseOutputJSON
+  outputString
 } from '@bsv/sdk'
 import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
 import { protectedInteger, protectedValue } from './ProtectedLedgerCodec.js'
@@ -45,18 +45,16 @@ export class PrivatePublicationServiceRecords {
     input: PrivatePublicationServiceInstallation
   ) {
     this.contracts = input.contracts
-    const value = parseOutputJSON(
-      canonicalOutputJSON(
-        {
-          validationPolicy: input.validationPolicy,
-          lookup: input.lookup,
-          maximumBindingBytes: input.maximumBindingBytes,
-          maximumOutcomeBytes: input.maximumOutcomeBytes,
-          supportedExtensions: input.supportedExtensions ?? []
-        },
-        { bytes: 16384 }
-      )
-    )
+    const value = ownOutputJSON(
+      {
+        validationPolicy: input.validationPolicy,
+        lookup: input.lookup,
+        maximumBindingBytes: input.maximumBindingBytes,
+        maximumOutcomeBytes: input.maximumOutcomeBytes,
+        supportedExtensions: input.supportedExtensions ?? []
+      },
+      { bytes: 16384 }
+    ).value
     closedOutputObject(value, [
       'validationPolicy',
       'lookup',
@@ -91,8 +89,8 @@ export class PrivatePublicationServiceRecords {
   }
 
   prepare(prepared: ReturnType<typeof createPrivatePublicationRecords>, input: unknown) {
-    const pair = parseOutputJSON(canonicalOutputJSON(prepared, { bytes: 4194304 }))
-    const originalInput = parseOutputJSON(canonicalOutputJSON(input, { bytes: 1048576 }))
+    const pair = ownOutputJSON(prepared, { bytes: 4194304 }).value
+    const originalInput = ownOutputJSON(input, { bytes: 1048576 }).value
     closedOutputObject(pair, ['blob', 'fence'])
     prepared = parsePrivatePublicationRecords(
       pair.fence,

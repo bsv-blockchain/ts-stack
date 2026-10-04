@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   bindOutputReleaseEvidence,
   canonicalOutputJSON,
   decodeOutputBytes,
@@ -6,7 +7,6 @@ import {
   outputAssert,
   outputU64,
   OutputProtocolError,
-  parseOutputJSON,
   Utils,
   verifyOutputProcessorAcceptance,
   type OutputReleaseBinding,
@@ -70,9 +70,7 @@ export class SDKPrivateReleaseEvidence {
     signal: AbortSignal
   ): Promise<PrivateReleaseAssessment> {
     const evidence = bindOutputReleaseEvidence(
-      parseOutputJSON(canonicalOutputJSON(input, { bytes: this.maximumEvidenceBytes }), {
-        bytes: this.maximumEvidenceBytes
-      }),
+      ownOutputJSON(input, { bytes: this.maximumEvidenceBytes }).value,
       expected
     )
     const now = outputU64(premises.now),

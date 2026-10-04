@@ -1,5 +1,5 @@
 import {
-  canonicalOutputJSON,
+  ownOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,
@@ -7,7 +7,6 @@ import {
   outputPacketDigest,
   outputString,
   OutputProtocolError,
-  parseOutputJSON,
   parseOutputPrivatePublish,
   type OutputPrivatePublish
 } from '@bsv/sdk'
@@ -89,7 +88,7 @@ export class PrivatePublicationAccess {
   }
 
   private reference(input: unknown): PrivatePublicationPublicReference {
-    const value = parseOutputJSON(canonicalOutputJSON(input))
+    const value = ownOutputJSON(input).value
     closedOutputObject(
       value,
       ['version', 'requestId', 'topic', 'evidence', 'assetId', 'schema'],

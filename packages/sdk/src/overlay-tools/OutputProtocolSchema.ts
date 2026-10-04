@@ -10,7 +10,7 @@ import {
   outputU64
 } from './OutputProtocol.js'
 import {
-  canonicalOutputJSON,
+  ownOutputJSON,
   parseOutputJSON,
   type OutputJSON,
   type OutputJSONObject
@@ -126,9 +126,7 @@ export function normalized<T>(input: unknown, schema: Schema<T>, maximumBytes = 
   const value =
     typeof input === 'string' || input instanceof Uint8Array
       ? parseOutputJSON(input, { bytes: maximumBytes })
-      : parseOutputJSON(canonicalOutputJSON(input, { bytes: maximumBytes }), {
-          bytes: maximumBytes
-        })
+      : ownOutputJSON(input, { bytes: maximumBytes }).value
   return schema(value)
 }
 

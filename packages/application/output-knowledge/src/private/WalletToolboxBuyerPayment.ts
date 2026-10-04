@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
@@ -8,7 +9,6 @@ import {
   outputIdentity,
   outputString,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPaidLookupChallenge,
   parseOutputPaidLookupPayment,
   P2PKH,
@@ -75,7 +75,7 @@ export class WalletToolboxBuyerPayment implements PrivateLookupBuyerPayment {
     private readonly wallet: Pick<WalletInterface, 'getPublicKey'>,
     binding: { wallet: string; storage: string; chain: OutputChain; originator: string }
   ) {
-    const owned = parseOutputJSON(canonicalOutputJSON(binding, { bytes: 4096 }))
+    const owned = ownOutputJSON(binding, { bytes: 4096 }).value
     closedOutputObject(owned, ['wallet', 'storage', 'chain', 'originator'])
     this.installed = {
       protocol: 'wallet-action-recovery-v1',
@@ -158,7 +158,7 @@ export class WalletToolboxBuyerPayment implements PrivateLookupBuyerPayment {
       sellerPaymentKey: outputIdentity(key.publicKey),
       request: this.request(challenge, suffix, key.publicKey)
     }
-    return parseOutputJSON(canonicalOutputJSON(plan, { bytes: 65536 })) as OutputJSONObject
+    return ownOutputJSON(plan, { bytes: 65536 }).value as OutputJSONObject
   }
   private request(
     challenge: OutputPaidLookupChallenge,
@@ -188,7 +188,7 @@ export class WalletToolboxBuyerPayment implements PrivateLookupBuyerPayment {
     }
   }
   private parse(input: OutputJSONObject): Plan {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 65536 }))
+    const value = ownOutputJSON(input, { bytes: 65536 }).value
     closedOutputObject(value, [
       'format',
       'operationId',

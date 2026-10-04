@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   Beef,
   canonicalOutputJSON,
   closedOutputObject,
@@ -213,7 +214,7 @@ export class PrivatePublicationLookupContext {
   }
 
   private reference(input: unknown): PrivatePublicationPublicReference {
-    const value = parseOutputJSON(canonicalOutputJSON(input))
+    const value = ownOutputJSON(input).value
     closedOutputObject(
       value,
       ['version', 'requestId', 'topic', 'evidence', 'assetId', 'schema'],

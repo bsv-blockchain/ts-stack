@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   Beef,
   canonicalOutputJSON,
   closedOutputObject,
@@ -69,7 +70,7 @@ export class SQLitePrivatePurchaseEvidence implements PrivatePurchaseEvidence {
     private readonly contracts: PrivatePurchaseContracts,
     limits: PrivatePurchaseEvidenceLimits
   ) {
-    const owned = parseOutputJSON(canonicalOutputJSON(limits))
+    const owned = ownOutputJSON(limits).value
     closedOutputObject(owned, [
       'maximumCandidateBytes',
       'maximumUpdates',

@@ -903,10 +903,14 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
       propertyTest: 'packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts',
-      mutate: ['src/overlay-tools/OutputProtocolJSON.ts'],
+      mutate: [
+        'src/overlay-tools/OutputProtocolJSON.ts',
+        'src/overlay-tools/OutputProtocolSchema.ts'
+      ],
       ...jestTarget('jest.config.js', [
         '<rootDir>/src/overlay-tools/__tests/OutputProtocol.test.ts',
-        '<rootDir>/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts'
+        '<rootDir>/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts',
+        '<rootDir>/src/overlay-tools/__tests/OutputProtocolSchema.test.ts'
       ])
     },
     'sdk-revenue-listing-plan': {

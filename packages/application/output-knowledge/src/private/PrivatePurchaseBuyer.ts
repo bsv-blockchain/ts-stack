@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   Hash,
   Utils,
   OUTPUT_PROFILES,
@@ -8,7 +9,6 @@ import {
   outputPacketDigest,
   outputString,
   outputU64,
-  parseOutputJSON,
   parseOutputPurchasePrepare,
   parseOutputPurchaseSubmit,
   restoreOutputCapability,
@@ -70,7 +70,7 @@ function digest(domain: string, value: unknown): string {
   )
 }
 function object(value: unknown, maximum: number): OutputJSONObject {
-  const parsed = parseOutputJSON(canonicalOutputJSON(value, { bytes: maximum }), { bytes: maximum })
+  const parsed = ownOutputJSON(value, { bytes: maximum }).value
   outputAssert(
     parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed),
     'Purchase buyer record must be an object'

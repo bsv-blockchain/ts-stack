@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   OUTPUT_PROFILES,
   canonicalOutputBase,
   canonicalOutputJSON,
@@ -10,7 +11,6 @@ import {
   outputString,
   outputU64,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPurchaseTerms,
   parseOutputPurchasePrepare,
   parseOutputReleasePolicy,
@@ -93,7 +93,7 @@ export class PrivatePurchaseContracts {
   private readonly installed: PrivatePurchaseInstallation
   private readonly request: Omit<OutputCapabilityRequest, 'now'>
   constructor(input: PrivatePurchaseInstallation, trust: PrivatePurchaseTrust) {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
+    const value = ownOutputJSON(input, { bytes: 16384 }).value
     closedOutputObject(value, [
       'chain',
       'seller',
@@ -186,7 +186,7 @@ export class PrivatePurchaseContracts {
     nowInput: string
   ): PrivatePurchasePreparedContract {
     const request = parseOutputPurchasePrepare(requestInput),
-      terms = parseOutputJSON(canonicalOutputJSON(termsInput)),
+      terms = ownOutputJSON(termsInput).value,
       now = outputU64(nowInput)
     closedOutputObject(terms, [
       'domainEvidence',
@@ -269,7 +269,7 @@ export class PrivatePurchaseContracts {
   }
   /** Verify the signer's exact returned body before the native owner retains it. */
   authenticate(preparedInput: unknown, signedInput: unknown): PrivatePurchaseOriginal {
-    const prepared = parseOutputJSON(canonicalOutputJSON(preparedInput))
+    const prepared = ownOutputJSON(preparedInput).value
     closedOutputObject(prepared, ['request', 'body', 'capability', 'createdAt'])
     const original = this.original({
       format: 'private-purchase-original/1',
@@ -287,7 +287,7 @@ export class PrivatePurchaseContracts {
   }
   /** Restore original obligations without applying today's catalogue/capability expiry. */
   original(input: unknown): PrivatePurchaseOriginal {
-    const value = parseOutputJSON(canonicalOutputJSON(input))
+    const value = ownOutputJSON(input).value
     closedOutputObject(value, ['format', 'request', 'terms', 'capability', 'createdAt'])
     outputAssert(
       value.format === 'private-purchase-original/1',

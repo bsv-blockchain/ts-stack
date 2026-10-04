@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
@@ -8,7 +9,6 @@ import {
   outputPacketDigest,
   outputPrivatePublicationRequestDigest,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPrivatePublish,
   decodeOutputBytes,
   type OutputChain,
@@ -86,7 +86,7 @@ export function createPrivatePublicationRecords(
   supportedExtensions: readonly string[] = []
 ): { blob: PrivatePublicationBlob; fence: PrivatePublicationFence } {
   const request = parseOutputPrivatePublish(input, supportedExtensions)
-  const choice = parseOutputJSON(canonicalOutputJSON(selected, { bytes: 16384 }))
+  const choice = ownOutputJSON(selected, { bytes: 16384 }).value
   closedOutputObject(choice, ['publisher', 'chain', 'lookup'])
   closedOutputObject(choice.lookup, ['service', 'rulesDigest'])
   const owned = {
@@ -122,7 +122,7 @@ export function createPrivatePublicationRecords(
 }
 
 export function parsePrivatePublicationBlob(input: unknown): PrivatePublicationBlob {
-  const blob = parseOutputJSON(canonicalOutputJSON(input, { bytes: 2 * 1024 * 1024 }))
+  const blob = ownOutputJSON(input, { bytes: 2 * 1024 * 1024 }).value
   closedOutputObject(blob, ['format', 'binding', 'privateValues'])
   outputAssert(
     blob.format === 'private-publication-blob/1',
@@ -152,7 +152,7 @@ export function parsePrivatePublicationFenceMetadata(
   identity: PrivateServiceIdentity,
   supportedExtensions: readonly string[] = []
 ): PrivatePublicationFence {
-  const value = parseOutputJSON(canonicalOutputJSON(fenceInput, { bytes: 2 * 1024 * 1024 }))
+  const value = ownOutputJSON(fenceInput, { bytes: 2 * 1024 * 1024 }).value
   closedOutputObject(value, ['format', 'reference', 'state'], ['original'])
   outputAssert(
     value.format === 'private-publication-fence/1' ||

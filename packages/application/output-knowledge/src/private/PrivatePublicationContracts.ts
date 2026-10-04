@@ -1,6 +1,6 @@
 import {
+  ownOutputJSON,
   canonicalOutputBase,
-  canonicalOutputJSON,
   closedOutputObject,
   OUTPUT_PROFILES,
   outputAssert,
@@ -9,7 +9,6 @@ import {
   outputString,
   outputU64,
   parseOutputChain,
-  parseOutputJSON,
   retainOutputCapability,
   restoreOutputCapability,
   type OutputCapabilityRequest,
@@ -38,7 +37,7 @@ export class PrivatePublicationContracts {
   private readonly installed: PrivatePublicationInstallation
 
   constructor(input: PrivatePublicationInstallation, trust: PrivatePublicationTrust) {
-    const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 16384 }))
+    const value = ownOutputJSON(input, { bytes: 16384 }).value
     closedOutputObject(value, [
       'chain',
       'seller',

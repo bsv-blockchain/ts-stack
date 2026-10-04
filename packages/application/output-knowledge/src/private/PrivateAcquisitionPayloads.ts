@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
   outputAssert,
   outputHex32,
-  parseOutputJSON,
   type OutputJSONObject
 } from '@bsv/sdk'
 import type { PrivateServiceIdentity } from './PrivateServiceIdentity.js'
@@ -24,7 +24,7 @@ export interface PrivateAcquisitionPayload {
 }
 
 export function parsePrivateAcquisitionPayload(input: unknown): PrivateAcquisitionPayload {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 4096 }))
+  const value = ownOutputJSON(input, { bytes: 4096 }).value
   closedOutputObject(value, [
     'format',
     'acquisitionId',

@@ -297,14 +297,14 @@ const rangePlans = new Map(
           'src/private/PrivatePurchaseProgress.ts',
           {
             label: 'progress',
-            starts: [1, 137, 155, 272, 297, 392]
+            starts: [1, 137, 155, 269, 294, 389]
           }
         ],
         [
           'src/private/SQLitePrivatePurchaseStore.ts',
           {
             label: 'store',
-            starts: [1, 178, 271, 400, 604, 800]
+            starts: [1, 179, 269, 398, 602, 798]
           }
         ]
       ]
@@ -335,21 +335,21 @@ const rangePlans = new Map(
           'src/private/SQLiteProtectedLedger.ts',
           {
             label: 'ledger',
-            starts: [1, 203, 316, 410, 519, 633]
+            starts: [1, 204, 317, 411, 520, 632]
           }
         ],
         [
           'src/private/SQLitePrivatePurchaseStore.ts',
           {
             label: 'store',
-            starts: [1, 178, 271, 400, 604, 800]
+            starts: [1, 179, 269, 398, 602, 798]
           }
         ],
         [
           'src/private/PrivatePurchaseProgress.ts',
           {
             label: 'progress',
-            starts: [1, 137, 155, 272, 297, 392]
+            starts: [1, 137, 155, 269, 294, 389]
           }
         ]
       ]
@@ -462,7 +462,7 @@ const refinedFileParts = new Map([
       [
         'access',
         new Map([
-          ['src/private/PrivatePublicationAccess.ts', { label: 'access', starts: [1, 125] }]
+          ['src/private/PrivatePublicationAccess.ts', { label: 'access', starts: [1, 124] }]
         ])
       ]
     ])

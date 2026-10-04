@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   bindOutputPaidLookupChallenge,
   bindOutputReleaseEvidence,
   canonicalOutputJSON,
@@ -10,7 +11,6 @@ import {
   outputString,
   outputU64,
   parseOutputChain,
-  parseOutputJSON,
   parseOutputPaidLookupChallenge,
   parseOutputPaidLookupAcquire,
   parseOutputPaidLookupPayment,
@@ -72,7 +72,7 @@ export interface PrivateAcquisitionProgress {
 }
 
 function owned(input: unknown, bytes: number): OutputJSONObject {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes }), { bytes })
+  const value = ownOutputJSON(input, { bytes }).value
   outputAssert(
     value !== null && typeof value === 'object' && !Array.isArray(value),
     'Expected acquisition record object'

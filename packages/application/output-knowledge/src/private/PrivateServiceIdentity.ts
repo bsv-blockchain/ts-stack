@@ -1,12 +1,12 @@
 import { createHmac, KeyObject } from 'node:crypto'
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputIdentity,
   outputString,
   OutputProtocolError,
   parseOutputChain,
-  parseOutputJSON,
   type OutputChain,
   type OutputJSONObject
 } from '@bsv/sdk'
@@ -47,7 +47,7 @@ export class PrivateServiceIdentity {
     private readonly custody: PrivateIdentityCustody,
     keyId: string
   ) {
-    const value = parseOutputJSON(canonicalOutputJSON(scope, { bytes: 4096 }))
+    const value = ownOutputJSON(scope, { bytes: 4096 }).value
     closedOutputObject(value, ['chain', 'seller'])
     this.scope = { chain: parseOutputChain(value.chain), seller: outputIdentity(value.seller) }
     this.keyId = outputString(keyId)
@@ -84,7 +84,7 @@ export class PrivateServiceIdentity {
     application: OutputJSONObject
   ): ProtectedLedgerConfiguration {
     // Closed parsing rejects accidental override/accessors without invoking them.
-    const value = parseOutputJSON(canonicalOutputJSON(capacity, { bytes: 4096 }))
+    const value = ownOutputJSON(capacity, { bytes: 4096 }).value
     closedOutputObject(value, [
       'storeId',
       'maximumRecords',

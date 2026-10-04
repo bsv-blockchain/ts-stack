@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
@@ -267,7 +268,7 @@ export class ProtectedOperationObjectCipher {
   }
 }
 function object(input: unknown, bytes: number): OutputJSONObject {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes }), { bytes })
+  const value = ownOutputJSON(input, { bytes }).value
   outputAssert(
     value !== null && typeof value === 'object' && !Array.isArray(value),
     'Expected protected object record'

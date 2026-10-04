@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   Hash,
   Utils,
   bindOutputPaidLookupAcquired,
@@ -11,7 +12,6 @@ import {
   outputU64,
   OutputPaidLookupTransport,
   OutputPaidLookupServiceError,
-  parseOutputJSON,
   parseOutputPaidLookupAcquire,
   parseOutputPaidLookupPayment,
   restoreOutputCapability,
@@ -73,7 +73,7 @@ function buyerDigest(domain: string, input: unknown): string {
   )
 }
 function object(input: unknown, maximum = 4194304): OutputJSONObject {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: maximum }), { bytes: maximum })
+  const value = ownOutputJSON(input, { bytes: maximum }).value
   outputAssert(
     value !== null && typeof value === 'object' && !Array.isArray(value),
     'Buyer record must be an object'

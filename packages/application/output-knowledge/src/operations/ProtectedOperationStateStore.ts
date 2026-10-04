@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   Hash,
@@ -29,7 +30,7 @@ export interface ProtectedOperationConfiguration {
   maximumValueBytes: number
 }
 function object(input: unknown, bytes: number): OutputJSONObject {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes }), { bytes })
+  const value = ownOutputJSON(input, { bytes }).value
   outputAssert(
     value !== null && typeof value === 'object' && !Array.isArray(value),
     'Expected protected operation object'

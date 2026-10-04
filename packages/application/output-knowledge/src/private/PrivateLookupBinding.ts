@@ -1,10 +1,10 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,
-  outputString,
-  parseOutputJSON
+  outputString
 } from '@bsv/sdk'
 import { parseOutputSTEAK } from '@bsv/sdk/overlay-tools/OutputObservation'
 import type { PrivateServiceIdentity } from './PrivateServiceIdentity.js'
@@ -38,7 +38,7 @@ export function createPrivateLookupBinding(
   identity: PrivateServiceIdentity
 ): PrivateLookupBinding {
   const blob = parsePrivatePublicationBlob(input)
-  const choice = parseOutputJSON(canonicalOutputJSON(selected, { bytes: 4096 }))
+  const choice = ownOutputJSON(selected, { bytes: 4096 }).value
   closedOutputObject(choice, ['service', 'rulesDigest'])
   return {
     format: 'private-lookup-binding/1',
@@ -56,7 +56,7 @@ export function privateLookupBindingAddress(
   identity: PrivateServiceIdentity,
   value: Pick<PrivateLookupBinding, 'blobKey' | 'lookup'>
 ) {
-  const lookup = parseOutputJSON(canonicalOutputJSON(value.lookup, { bytes: 4096 }))
+  const lookup = ownOutputJSON(value.lookup, { bytes: 4096 }).value
   closedOutputObject(lookup, ['service', 'rulesDigest'])
   return identity.address('publication', {
     purpose: 'private-lookup-binding',
@@ -72,7 +72,7 @@ export function parsePrivateLookupBinding(
   blob: PrivatePublicationBlob,
   identity: PrivateServiceIdentity
 ): PrivateLookupBinding {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 65536 }))
+  const value = ownOutputJSON(input, { bytes: 65536 }).value
   closedOutputObject(value, ['format', 'blobKey', 'binding', 'lookup', 'phase'], ['admission'])
   outputAssert(
     value.format === 'private-lookup-binding/1',

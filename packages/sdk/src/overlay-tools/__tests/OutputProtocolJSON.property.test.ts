@@ -1,5 +1,11 @@
 import fc from 'fast-check'
-import { canonicalOutputJSON, parseOutputJSON } from '../OutputProtocolJSON.js'
+import { deepStrictEqual } from 'node:assert/strict'
+import {
+  canonicalOutputJSON,
+  ownOutputJSON,
+  parseOutputJSON,
+  type OutputJSON
+} from '../OutputProtocolJSON.js'
 
 const MIN_PROPERTY_RUNS = 300
 const runs = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -79,4 +85,68 @@ test('every lone high and low surrogate is rejected even inside ASCII text', () 
     expect(canonicalOutputJSON(text)).toBe(JSON.stringify(text))
     expect(parseOutputJSON(JSON.stringify(text))).toBe(text)
   }
+})
+
+test('bounded ownership preserves nested canonical values, descriptors and independent copies over 300 cases', () => {
+  const data = fc.letrec<{ value: OutputJSON }>(tie => ({
+    value: fc.oneof(
+      { maxDepth: 4, depthSize: 'small' },
+      fc.constant(null),
+      fc.boolean(),
+      fc.integer({ min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
+      fc.string({ maxLength: 32 }),
+      fc.array(tie('value'), { maxLength: 8 }),
+      fc
+        .array(
+          fc.tuple(
+            fc.oneof(
+              fc.string({ maxLength: 16 }),
+              fc.constantFrom('constructor', 'prototype', '__proto__')
+            ),
+            tie('value')
+          ),
+          { maxLength: 8 }
+        )
+        .map(entries => Object.fromEntries(entries))
+    )
+  })).value
+  function independent(input: OutputJSON, value: OutputJSON): void {
+    if (value === null || typeof value !== 'object') return
+    expect(value).not.toBe(input)
+    if (Array.isArray(value)) {
+      expect(Array.isArray(input)).toBe(true)
+      expect(Object.getPrototypeOf(value)).toBe(Array.prototype)
+      for (let index = 0; index < value.length; index++)
+        independent((input as OutputJSON[])[index], value[index])
+    } else {
+      expect(Object.getPrototypeOf(value)).toBeNull()
+      for (const key of Object.keys(value)) {
+        expect(Object.getOwnPropertyDescriptor(value, key)).toEqual({
+          value: value[key],
+          enumerable: true,
+          writable: true,
+          configurable: true
+        })
+        independent((input as Record<string, OutputJSON>)[key], value[key])
+      }
+    }
+  }
+  fc.assert(
+    fc.property(data, input => {
+      const before = canonicalOutputJSON(input),
+        bytes = new TextEncoder().encode(before).length
+      const snapshot = ownOutputJSON(input, { bytes })
+      expect(snapshot.text).toBe(before)
+      deepStrictEqual(snapshot.value, parseOutputJSON(before, { bytes }))
+      independent(input, snapshot.value)
+      if (bytes > 1) expect(() => ownOutputJSON(input, { bytes: bytes - 1 })).toThrow('byte limit')
+      if (snapshot.value !== null && typeof snapshot.value === 'object') {
+        if (Array.isArray(snapshot.value)) snapshot.value.push('owned-only')
+        else snapshot.value['owned-only'] = true
+      }
+      expect(canonicalOutputJSON(input)).toBe(before)
+      deepStrictEqual(ownOutputJSON(input).value, parseOutputJSON(before))
+    }),
+    { interruptAfterTimeLimit: 150000, markInterruptAsFailure: true }
+  )
 })

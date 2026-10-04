@@ -1,4 +1,5 @@
 import {
+  ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
@@ -6,7 +7,6 @@ import {
   outputAssert,
   outputHex32,
   outputIdentity,
-  parseOutputJSON,
   Utils,
   type OutputJSONObject
 } from '@bsv/sdk'
@@ -32,7 +32,7 @@ function integer(value: unknown, maximum: number): number {
   return value
 }
 function object(value: unknown, maximum: number): OutputJSONObject {
-  const result = parseOutputJSON(canonicalOutputJSON(value, { bytes: maximum }), { bytes: maximum })
+  const result = ownOutputJSON(value, { bytes: maximum }).value
   outputAssert(
     result !== null && typeof result === 'object' && !Array.isArray(result),
     'Expected protected operation object object'

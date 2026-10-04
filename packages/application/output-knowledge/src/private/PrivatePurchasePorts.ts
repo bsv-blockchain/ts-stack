@@ -1,12 +1,11 @@
 import {
-  canonicalOutputJSON,
+  ownOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
   outputAssert,
   outputHex32,
   outputString,
   outputU64,
-  parseOutputJSON,
   type OutputCapabilitySelection,
   type OutputPurchasePrepare,
   type OutputPurchaseSubmit,
@@ -121,7 +120,7 @@ export interface PrivatePurchaseRelease {
 }
 
 export function ownPrivatePurchasePreparation(input: unknown): PrivatePurchasePreparation {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 4194304 }), { bytes: 4194304 })
+  const value = ownOutputJSON(input, { bytes: 4194304 }).value
   closedOutputObject(value, ['terms', 'schema', 'maximumSecretBytes', 'material'])
   closedOutputObject(value.terms, [
     'domainEvidence',
@@ -156,7 +155,7 @@ export function ownPrivatePurchasePreparation(input: unknown): PrivatePurchasePr
 export function ownPrivatePurchaseAdmissionOutcome(
   input: unknown
 ): PrivatePurchaseAdmissionOutcome {
-  const value = parseOutputJSON(canonicalOutputJSON(input, { bytes: 131072 }), { bytes: 131072 })
+  const value = ownOutputJSON(input, { bytes: 131072 }).value
   const common = ['status', 'operationId', 'txid']
   closedOutputObject(value, common, [
     'steak',
