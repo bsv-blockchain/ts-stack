@@ -5,6 +5,24 @@ import { MongoClient, type Db, type Document, type MongoClientOptions } from 'mo
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import type { StorageScope } from '@bsv/overlay'
 
+/** Serial startup for this fixture's unauthenticated, isolated replica members. */
+export class SequentialMongoFixtureReplicaSet extends MongoMemoryReplSet {
+  protected override async initAllServers(): Promise<void> {
+    if (this.servers.length !== 0) {
+      for (const server of this.servers) await server.start(true)
+      return
+    }
+    const count = Math.max(this.instanceOpts.length, this.replSetOpts.count ?? 1)
+    for (let index = 0; index < count; index++) {
+      const server = this._initServer(this.getInstanceOpts(this.instanceOpts[index]))
+      this.servers.push(server)
+      // The next probe starts only after this owned mongod is listening. A
+      // rejected start has settled before the parent begins replica cleanup.
+      await server.start()
+    }
+  }
+}
+
 /** Owns only randomly named databases, ports and temporary mongod files. */
 export interface MongoReplicaFixture {
   replicaSet: MongoMemoryReplSet
@@ -23,7 +41,7 @@ export interface MongoReplicaFixture {
 
 export async function createMongoReplicaFixture(): Promise<MongoReplicaFixture> {
   const appName = `overlay-s02-${randomUUID()}`
-  const replicaSet = new MongoMemoryReplSet({
+  const replicaSet = new SequentialMongoFixtureReplicaSet({
     binary: { version: '8.2.6' },
     replSet: {
       name: `s02-${randomUUID()}`,
