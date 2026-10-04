@@ -60,8 +60,8 @@ it('rejects decoded duplicate keys, trailing data, unpaired Unicode and a BOM be
     codec = new NodeProtectedPayloadCodec({ resolve }, 'key-a', 128)
   const source = JSON.stringify(codec.seal(binding, Uint8Array.of(1)))
   for (const text of [
-    source.replace('{', '{"keyId":"key-a",'),
-    source.replace('{', '{"\\u006beyId":"key-a",'),
+    '{"keyId":"key-a",' + source.slice(1),
+    '{"\\u006beyId":"key-a",' + source.slice(1),
     source + '{}',
     '\ufeff' + source,
     source.replace('key-a', '\\ud800'),
@@ -179,7 +179,7 @@ it('preserves subclass and instance object-reader dispatch with one capture befo
   expect(reader).toHaveBeenCalledTimes(1)
   expect(Object.getPrototypeOf(reader.mock.calls[0][1])).toBeNull()
   expect(() =>
-    instance.openSerialized(binding, source.replace('{', '{"keyId":"key-a",'), bound)
+    instance.openSerialized(binding, '{"keyId":"key-a",' + source.slice(1), bound)
   ).toThrow('Duplicate')
   expect(captures).toBe(2)
   expect(reader).toHaveBeenCalledTimes(1)
