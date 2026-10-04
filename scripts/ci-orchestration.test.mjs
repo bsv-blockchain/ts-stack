@@ -606,7 +606,7 @@ test('every selected application and LCH execution part is downloaded before can
   assert.ok(aggregate.includes('--target "$target" --directory ".mutation-parts/$target"'))
 })
 
-test('wallet recovery encoding downloads both complete execution parts before canonical aggregation', () => {
+test('wallet recovery encoding downloads all complete execution parts before canonical aggregation', () => {
   const id = 'wallet-recovery-encoding'
   const selected = partitionedMutationTargets([id], buildMutationTargets(REPOSITORY_ROOT))
   assert.deepEqual(selected, [id])

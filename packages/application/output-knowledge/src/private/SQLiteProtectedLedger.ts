@@ -38,6 +38,12 @@ export interface ProtectedLedgerCommitOptions {
   maximumBatchBytes: number
 }
 
+interface ProtectedHeadSnapshot {
+  head: ProtectedLedgerHead
+  text: string
+  keyId: string
+}
+
 const FORMAT = 'output-protected-ledger/1'
 const HEAD_BYTES = 16384
 const HEADER_COLUMNS = `CASE WHEN length(kind)<=32 THEN kind END AS kind,
@@ -186,22 +192,31 @@ export class SQLiteProtectedLedger {
   private envelopeBound(bytes: number): number {
     return Math.ceil(bytes / 3) * 4 + 1024
   }
-  private saveHead(head: ProtectedLedgerHead, insert = false): void {
+  private saveHead(
+    head: ProtectedLedgerHead,
+    insert = false,
+    previous?: ProtectedHeadSnapshot
+  ): void {
     this.domain.writing()
-    const envelope = this.encode(
-      this.binding('head', { revision: head.revision }),
-      canonicalOutputJSON(head, { bytes: HEAD_BYTES })
-    )
+    const text = canonicalOutputJSON(head, { bytes: HEAD_BYTES })
+    // Always seal: a no-op read still validates current write custody and honors rotation.
+    const envelope = this.encode(this.binding('head', { revision: head.revision }), text)
+    const sealed = parseOutputJSON(envelope, { bytes: this.envelopeBound(HEAD_BYTES) })
+    closedOutputObject(sealed, ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
     if (insert)
       this.database
         .prepare('INSERT INTO protected_head VALUES (1,?,?)')
         .run(head.revision, envelope)
-    else
+    else if (!previous || previous.text !== text || previous.keyId !== sealed.keyId)
       this.database
         .prepare('UPDATE protected_head SET revision=?,envelope=? WHERE id=1')
         .run(head.revision, envelope)
   }
   private head(): ProtectedLedgerHead {
+    return this.headSnapshot().head
+  }
+  /** Fresh authenticated metadata; never retained across transaction boundaries. */
+  private headSnapshot(): ProtectedHeadSnapshot {
     this.domain.reading()
     const row = this.database
       .prepare(
@@ -233,7 +248,14 @@ export class SQLiteProtectedLedger {
     )
     outputU64(value.observedAt)
     outputHex32(value.inventory)
-    return value as unknown as ProtectedLedgerHead
+    const envelope = parseOutputJSON(row.envelope, { bytes: this.envelopeBound(HEAD_BYTES) })
+    closedOutputObject(envelope, ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
+    outputAssert(typeof envelope.keyId === 'string', 'Invalid protected ledger custody label')
+    return {
+      head: value as unknown as ProtectedLedgerHead,
+      text: canonicalOutputJSON(value, { bytes: HEAD_BYTES }),
+      keyId: envelope.keyId
+    }
   }
   private headers(): ProtectedLedgerHeader[] {
     this.domain.reading()
@@ -329,7 +351,8 @@ export class SQLiteProtectedLedger {
     this.synchronous(clock)
     this.synchronous(guard)
     const result = this.domain.transaction(() => {
-      const head = this.head()
+      const previous = this.headSnapshot()
+      const head = previous.head
       this.inventory(head)
       const now = outputU64(clock())
       if (now > outputU64(head.observedAt)) head.observedAt = now.toString()
@@ -339,12 +362,12 @@ export class SQLiteProtectedLedger {
           this.authorize(draft, guard)
           const value = work(draft)
           // Metadata sealing/writing is part of the same rollback scope as every record.
-          this.saveHead(draft)
+          this.saveHead(draft, false, previous)
           return value
         })
         return { ok: true as const, value }
       } catch (error) {
-        this.saveHead(head)
+        this.saveHead(head, false, previous)
         return { ok: false as const, error }
       }
     })

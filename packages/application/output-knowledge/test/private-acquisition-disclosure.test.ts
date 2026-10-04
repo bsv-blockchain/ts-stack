@@ -157,3 +157,249 @@ it('does not issue another payment challenge for pinned work or an uncharged rec
   expect(pending.statusCode).toBe(200)
   expect(JSON.parse(pending.body)).toMatchObject({ status: 'quoted' })
 })
+
+const publicControl = {
+  version: 1,
+  error: { code: 'not-found', message: 'Private acquisition request not-found', retryable: false }
+}
+it.each([undefined, 0])(
+  'requires an installed disclosure clock (%s)',
+  async clock => {
+    const f = await fixture()
+    try {
+      expect(
+        () =>
+          new PrivateAcquisitionDisclosure(
+            f.f.owner.domain,
+            f.f.owner.store,
+            f.f.f.contracts,
+            f.options.access,
+            clock as unknown as () => string,
+            () => true
+          )
+      ).toThrow('Acquisition disclosure clock is required')
+    } finally {
+      await f.dispose()
+    }
+  },
+  30000
+)
+it.each([undefined, 0, async () => true])(
+  'requires synchronous control authority (%s)',
+  async authority => {
+    const f = await fixture()
+    try {
+      expect(
+        () =>
+          new PrivateAcquisitionDisclosure(
+            f.f.owner.domain,
+            f.f.owner.store,
+            f.f.f.contracts,
+            f.options.access,
+            f.f.clock,
+            authority as unknown as () => boolean
+          )
+      ).toThrow('Acquisition control authority must be synchronous')
+    } finally {
+      await f.dispose()
+    }
+  },
+  30000
+)
+it.each([undefined, async () => true])(
+  'requires synchronous current authentication (%s)',
+  async current => {
+    const f = await fixture()
+    try {
+      expect(() =>
+        f.disclosure.prepare(f.f.id, { ...f.caller, current: current as unknown as () => boolean })
+      ).toThrow('Acquisition disclosure requires current authentication')
+    } finally {
+      await f.dispose()
+    }
+  },
+  30000
+)
+it('refuses a profile selector different from the original retained contract', async () => {
+  const f = await fixture()
+  try {
+    expect(() =>
+      f.disclosure.prepare(f.f.id, { ...f.caller, profile: 'urn:other:profile' })
+    ).toThrow(
+      expect.objectContaining({
+        code: 'context-changed',
+        message: 'Original acquisition selection differs'
+      })
+    )
+  } finally {
+    await f.dispose()
+  }
+}, 30000)
+it.each(['caller', 'control'] as const)(
+  'refuses rejected promised %s authority without sending diagnostics or leaking a rejection',
+  async authority => {
+    const f = await fixture()
+    let sent = false
+    try {
+      const promised = (() =>
+        Promise.reject(
+          new Error('synthetic-private-authority-failure')
+        )) as unknown as () => boolean
+      const disclosure = new PrivateAcquisitionDisclosure(
+        f.f.owner.domain,
+        f.f.owner.store,
+        f.f.f.contracts,
+        f.options.access,
+        f.f.clock,
+        authority === 'control' ? promised : () => true
+      )
+      expect(() =>
+        disclosure.enqueueControl(
+          publicControl,
+          authority === 'caller' ? { ...f.caller, current: promised } : f.caller,
+          () => {
+            sent = true
+          }
+        )
+      ).toThrow(expect.objectContaining({ code: 'unauthorized' }))
+      await Promise.resolve()
+      expect(sent).toBe(false)
+    } finally {
+      await f.dispose()
+    }
+  },
+  30000
+)
+it.each(['number', 'promise'] as const)(
+  'consumes one body enqueue attempt when a synchronous callback violates its result contract (%s)',
+  async result => {
+    const f = await fixture()
+    let sent = 0
+    try {
+      const prepared = f.disclosure.prepare(f.f.id, f.caller)
+      expect(() =>
+        prepared.enqueue(() => {
+          sent++
+          return result === 'number' ? 1 : Promise.reject(new Error('synthetic-send-failed'))
+        })
+      ).toThrow('Acquisition response enqueue must finish synchronously')
+      await Promise.resolve()
+      expect(() =>
+        prepared.enqueue(() => {
+          sent++
+        })
+      ).toThrow('already attempted')
+      expect(sent).toBe(1)
+    } finally {
+      await f.dispose()
+    }
+  },
+  30000
+)
+it.each(['number', 'promise'] as const)(
+  'rejects an invalid control send result while retaining its observable failure (%s)',
+  async result => {
+    const f = await fixture()
+    let sent = 0
+    try {
+      expect(() =>
+        f.disclosure.enqueueControl(publicControl, f.caller, () => {
+          sent++
+          return result === 'number' ? 1 : Promise.reject(new Error('synthetic-send-failed'))
+        })
+      ).toThrow('Acquisition control enqueue must finish synchronously')
+      await Promise.resolve()
+      expect(sent).toBe(1)
+    } finally {
+      await f.dispose()
+    }
+  },
+  30000
+)
+it('refuses an asynchronous control callback before it starts', async () => {
+  const f = await fixture()
+  let sent = false
+  try {
+    expect(() =>
+      f.disclosure.enqueueControl(publicControl, f.caller, async () => {
+        sent = true
+      })
+    ).toThrow('Acquisition control enqueue must be synchronous')
+    expect(sent).toBe(false)
+  } finally {
+    await f.dispose()
+  }
+}, 30000)
+it.each([
+  'ledger',
+  'identity',
+  'address',
+  'read',
+  'ledger-disclose',
+  'load',
+  'store-disclose',
+  'restore',
+  'guard'
+] as const)(
+  'refuses prepared disclosure after its pinned %s ownership changes',
+  async name => {
+    const f = await fixture(),
+      prepared = f.disclosure.prepare(f.f.id, f.caller)
+    const key = name === 'ledger-disclose' || name === 'store-disclose' ? 'disclose' : name
+    const owners = {
+      ledger: f.f.owner.domain,
+      identity: f.f.owner.domain,
+      address: f.f.owner.domain.identity,
+      read: f.f.owner.domain.ledger,
+      'ledger-disclose': f.f.owner.domain.ledger,
+      load: f.f.owner.store,
+      'store-disclose': f.f.owner.store,
+      restore: f.f.f.contracts,
+      guard: f.options.access
+    }
+    const owner = owners[name]
+    const descriptor = Object.getOwnPropertyDescriptor(owner, key),
+      original: unknown = Reflect.get(owner, key)
+    let sent = false
+    try {
+      Object.defineProperty(owner, key, {
+        configurable: true,
+        writable: true,
+        value:
+          typeof original === 'function' ? original.bind(owner) : new Proxy(original as object, {})
+      })
+      expect(() =>
+        prepared.enqueue(() => {
+          sent = true
+        })
+      ).toThrow()
+      expect(sent).toBe(false)
+    } finally {
+      if (descriptor) Object.defineProperty(owner, key, descriptor)
+      else Reflect.deleteProperty(owner, key)
+      await f.dispose()
+    }
+  },
+  30000
+)
+it('refuses a projection that does not supply a prepared response', async () => {
+  const f = await fixture()
+  try {
+    const disclosure = new PrivateAcquisitionDisclosure(
+      f.f.owner.domain,
+      { load: f.f.owner.store.load.bind(f.f.owner.store), disclose() {} },
+      f.f.f.contracts,
+      f.options.access,
+      f.f.clock,
+      () => true
+    )
+    expect(() => disclosure.prepare(f.f.id, f.caller)).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Acquisition response is unavailable'
+      })
+    )
+  } finally {
+    await f.dispose()
+  }
+}, 30000)

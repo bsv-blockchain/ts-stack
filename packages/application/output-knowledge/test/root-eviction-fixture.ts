@@ -54,6 +54,25 @@ export const selected = (body = request()): RootEvictionServingTarget => ({
   outpoint: body.targets[0].outpoint,
   advertisementDigest: body.targets[0].advertisementDigest
 })
+/** Drain every owned resource in order, retaining every cleanup failure. */
+export async function closeRootFixtureResources(
+  actions: (() => void | Promise<void>)[]
+): Promise<void> {
+  const failures: unknown[] = []
+  await actions.reduce(
+    (closed, action) =>
+      closed.then(async () => {
+        try {
+          await action()
+        } catch (error) {
+          failures.push(error)
+        }
+      }),
+    Promise.resolve()
+  )
+  if (failures.length > 0) throw new AggregateError(failures, 'Root fixture cleanup failed')
+}
+
 export async function fixture(options: Partial<RootEvictionConfiguration> = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'root-eviction-'))
   const path = join(directory, 'root.db')
@@ -71,8 +90,10 @@ export async function fixture(options: Partial<RootEvictionConfiguration> = {}) 
       return next
     },
     async cleanup() {
-      await stores.reduce((closed, value) => closed.then(() => value.close()), Promise.resolve())
-      await rm(directory, { recursive: true, force: true })
+      await closeRootFixtureResources([
+        ...stores.map(value => () => value.close()),
+        () => rm(directory, { recursive: true, force: true })
+      ])
     }
   }
 }

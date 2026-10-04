@@ -151,12 +151,8 @@ function purchaseDelivery(
   return { digest: outputHex32(input.digest), issuedAt, schema: outputString(input.schema) }
 }
 
-/** Representation and transition checks only. Installed validators and effect owners establish the premises. */
-export function parsePrivatePurchaseProgress(
-  input: unknown,
-  original: PrivatePurchaseOriginal
-): PrivatePurchaseProgress {
-  const value = ownOutputJSON(input, { bytes: PRIVATE_PURCHASE_PROGRESS_BYTES }).value
+function purchaseProgressReservation(input: unknown, original: PrivatePurchaseOriginal) {
+  const value = input
   closedOutputObject(value, [
     'format',
     'acquisitionId',
@@ -192,6 +188,13 @@ export function parsePrivatePurchaseProgress(
     'Purchase progress clock differs from its reservation',
     'unavailable'
   )
+  return { value, body, createdAt, updatedAt }
+}
+
+function purchaseProgressPosition(
+  value: Record<string, unknown>,
+  original: PrivatePurchaseOriginal
+) {
   const status = value.status as PrivatePurchaseProgress['status'],
     unpinned = status === 'prepared' || status === 'expired',
     admitted =
@@ -216,6 +219,46 @@ export function parsePrivatePurchaseProgress(
     'Purchase admission operation differs',
     'unavailable'
   )
+  return { status, txid, operationId }
+}
+
+function validatePurchaseProgressResult(
+  progress: PrivatePurchaseProgress,
+  original: PrivatePurchaseOriginal
+): void {
+  const { status, txid, updatedAt, admission, delivery } = progress
+  if (status !== 'delivered') {
+    const checked = verifyOutputPurchaseEnvelope(
+      response(progress),
+      original.terms,
+      txid ?? undefined
+    )
+    if ('decision' in checked.result) {
+      outputAssert(
+        outputU64(checked.result.decision.decidedAt) === outputU64(updatedAt),
+        'Purchase decision clock differs',
+        'unavailable'
+      )
+      progress.decision = checked.result.decision
+    }
+  } else
+    outputAssert(
+      outputU64(progress.releaseEvidence!.acceptedAt) <= outputU64(delivery!.issuedAt) &&
+        (progress.releaseEvidence!.policy.kind !== 'local-admission' ||
+          progress.releaseEvidence!.acceptedAt === admission!.acceptedAt),
+      'Purchase release follows its delivery',
+      'unavailable'
+    )
+}
+
+/** Representation and transition checks only. Installed validators and effect owners establish the premises. */
+export function parsePrivatePurchaseProgress(
+  input: unknown,
+  original: PrivatePurchaseOriginal
+): PrivatePurchaseProgress {
+  const captured = ownOutputJSON(input, { bytes: PRIVATE_PURCHASE_PROGRESS_BYTES }).value
+  const { value, body, createdAt, updatedAt } = purchaseProgressReservation(captured, original)
+  const { status, txid, operationId } = purchaseProgressPosition(value, original)
   const admission = purchaseAdmission(value.admission, body.topic, createdAt, updatedAt),
     delivery = purchaseDelivery(value.delivery, admission, updatedAt)
   const progress: PrivatePurchaseProgress = {
@@ -241,28 +284,7 @@ export function parsePrivatePurchaseProgress(
           }),
     delivery
   }
-  if (status !== 'delivered') {
-    const checked = verifyOutputPurchaseEnvelope(
-      response(progress),
-      original.terms,
-      txid ?? undefined
-    )
-    if ('decision' in checked.result) {
-      outputAssert(
-        outputU64(checked.result.decision.decidedAt) === outputU64(updatedAt),
-        'Purchase decision clock differs',
-        'unavailable'
-      )
-      progress.decision = checked.result.decision
-    }
-  } else
-    outputAssert(
-      outputU64(progress.releaseEvidence!.acceptedAt) <= outputU64(delivery!.issuedAt) &&
-        (progress.releaseEvidence!.policy.kind !== 'local-admission' ||
-          progress.releaseEvidence!.acceptedAt === admission!.acceptedAt),
-      'Purchase release follows its delivery',
-      'unavailable'
-    )
+  validatePurchaseProgressResult(progress, original)
   return progress
 }
 

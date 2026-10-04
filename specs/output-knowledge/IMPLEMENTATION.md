@@ -110,9 +110,11 @@ submission and GASP behavior remains available to applications that do not opt i
 - An optional bounded Engine proposal-admission bridge, recovering original
   retained receipts and projecting only the selected topic. Actual Engine/Mongo
   restart and lost-response tests pass, and complete-source mutation passes
-  96.88%. The reference app now composes this bridge with actual SDK verification,
-  HTTP/service/SQLite state and Engine/Mongo admission recovery; interactive
-  projection remains separate.
+  96.88% on that historical component source. The reference app composes this
+  bridge with actual SDK verification, HTTP/service/SQLite state and Engine/Mongo
+  admission recovery. Its native client and private-state browser profile exercise
+  admission-driven live projection, expiry, finalization and restart. Complete
+  final-source qualification remains required.
 - Concrete SDK proposal evidence verification and signed PRP1/SQLite integration
   against pinned synthetic header ancestry, with ordinary admission kept separate.
 - The default Bitcoin reducer/worker, including recovery of accepted decisions
@@ -4497,3 +4499,237 @@ with every current canonical tuple required exactly once. All original test,
 source, settings, nonempty, uniqueness and qualification assertions remain.
 The earlier failed inventory control remains evidence; neither its factual
 correction nor these local component results establishes final hosted readiness.
+
+### Complete recovery ownership and native fixture lifecycle refinement
+
+The compatible owned-value batch was committed and pushed as
+`ab1a161bb6e3671e2c0ff8d556af87576427d159`; local, origin and PR #674 heads were
+read back as identical. Its complete installed controls pass 491 tests with no
+skips, and the final four required root gates drained at
+2026-10-04T01:23:29.470498Z with unchanged inputs. The fresh hosted ordinary run
+37168039858 has successful SDK/wallet coverage, packing, documentation,
+browser/mobile and unchanged zero-new-Sonar gates. CodeQL 37168039680,
+conformance 37168039677 and container contracts 37168039660 are terminal success;
+the PR alert query reports zero open CodeQL alerts. Application-related coverage
+was still pending at this observation. This is an intermediate published head,
+not final checkpoint-two qualification.
+
+The next local structural batch extracts wallet recovery scalar/array/record
+ownership into a fresh call-local internal context. The public encoder invokes
+one new context per call, retains its exact final UTF-8 byte check, and preserves
+all existing depth, item, Unicode, prototype, descriptor, cycle, key ordering,
+undefined-value and error rules. The whole helper is appended to the existing
+canonical encoding target; existing consuming recovery input globs include it.
+The original full source and test union is retained. Private purchase progress
+and native-record restoration use smaller internal helpers with the same ordered
+checks, local observation requirements and error identities. No authority is
+cached, no financial effect is introduced, and no wire or stored schema changes.
+
+Execution bands use unique source anchors at complete functions/class methods.
+Explicit old numeric plans remain supported. Ambiguous starts/markers, missing
+or repeated anchors and invalid bands fail closed. Full pinned-engine inventories
+prove every current canonical tuple appears once and every part is nonempty:
+141 canonical targets now produce 357 execution rows, scheduled as 256 and 101.
+Private purchase state has 996 mutants, native-clock composition 1435, and wallet
+recovery encoding 167. Other existing whole-source inventories and every original
+source/test/property/runner/reuse/deadline/score/zero/same-run gate remain. Moving
+source cannot borrow any earlier score. One factual overlapping-range assertion
+failed after the methods moved; the retained failure was corrected to the actual
+new boundaries. The full focused control set then passed 113 tests with no skips.
+
+The adopted complete native wallet baseline passes 237 tests in 21 suites and
+actually drained at 2026-10-04T01:37:31.994155Z in 65.863 seconds, with every
+consumed input unchanged. All original six selection patterns, 300-case strength,
+seed 3242026, blank replay and original limits remain. The independent outside
+candidate and the earlier harness failures remain separate diagnostic records.
+The recommended analyzer comparison covers 15 changed code files and introduces
+zero findings; root strict typecheck passes. Complete package and hosted final
+source qualification still follow these component results.
+
+Retained failed reports identify native root cleanup exceptions in a shared
+`afterAll` hook. Each complete SHIP/SLAP workflow now creates and closes its own
+fixture inside its original ordinary test and 90-second limit. Cleanup attempts
+every owned resource sequentially and reports all failures rather than abandoning
+later handles or swallowing errors. The full original root baseline passes
+308 tests in 32 suites, including both native Engine/Mongo/SQLite/authenticated
+serving compositions, and actually drained at 2026-10-04T01:39:36.071640Z in
+80.978 seconds with unchanged inputs. An additional real SQLite regression proves
+that a failed close acknowledgement still closes the reopened journal and removes
+its directory while retaining the failure. Every earlier workflow assertion is
+preserved. Independent signing of all 257 FIFO test packets is fixture preparation
+under the unchanged hook limit; its test still performs all original retains and
+258 real signature verifications. The complete baseline includes preparation cost;
+the FIFO body took 845 milliseconds. Neither a test limit nor a supervisor was
+increased.
+
+The retained proposal-admission report and private-publication retained-history
+report identify the same Mongo teardown cause: one rejected concurrent recovery
+made `Promise.all` return before the other requests settled. The fixture now
+unconditionally awaits all original requests before native teardown, preserving
+the original failure and every original assertion. The private-publication archive
+11290031644 has verified SHA-256
+`777e2075d940253f14c2aa5a885f86364be72125aeccabc03a3e82d62d61cb46`;
+its 16 runtime errors all point to that same teardown. No additional production
+admission change is inferred from this report. Full fresh affected mutation
+execution must still prove the correction; a failed receipt is not qualification.
+
+The complete unchanged serial application coverage command started at
+2026-10-04T01:42:41.790448Z with the full original selection plus the new native
+cleanup regression, original 300-case properties, seed, blank replay,
+150-second interruption and 2100-second supervisor. Its consumed source and
+controls remain frozen until actual drain. Its eventual outcome is recorded
+separately; this entry does not claim that pending coverage passed. Final hosted
+qualification, complete same-run canonical mutation and all reference/platform
+profiles remain mandatory before checkpoint-two review.
+
+The complete application coverage reader actually drained at
+2026-10-04T02:00:43.917129Z in 1082.005 seconds: all 3,348 tests across
+228 suites pass, with zero skips or runtime errors and all 2,523 captured
+inputs unchanged. Coverage is 98.17 percent statements, 96.56 branches,
+98.45 functions and 98.78 lines. After that drain, static feedback identified
+one introduced `no-await-in-loop` finding in the owned test-fixture cleanup
+helper. An equivalent ordered promise chain replaces that loop; it still
+attempts every resource and preserves every failure. The outside candidate
+introduces zero recommended/static findings. Fresh complete native-root and
+final source validation follow; the prior coverage receipt remains evidence
+for its exact earlier input bytes and does not certify this changed fixture.
+
+Type-aware analysis exposed two inherited wallet ownership findings on the
+new helper: mixed return sites and a redundant null comparison after the
+explicit null branch. A single result return and the logically equivalent
+object/cycle condition remove those findings while preserving the ordered
+validation, JSON value ownership and every stored byte/error rule. The
+outside helper passes strict checking across 641 program files and all raw
+recommended rules. Its initial compiler-host harness failed to resolve
+package-local Node/Jest types; that failed harness is retained, and the
+corrected host uses the original wallet package directory. The fresh pinned
+whole inventory has 167 encoding mutants (50 scalar/object-dispatch, 21 array,
+41 record, six wrapper and 49 binary), all present once across the same five
+nonempty parts. No canonical target or operator exclusion changes. The
+original complete native wallet selection and final type-aware comparison
+are rerun on this source before publication.
+
+The fresh canonical wallet selection passed all 237 tests in 21 suites and
+actually drained at 2026-10-04T02:09:03.007951Z; the fresh complete native root
+selection passed 309 tests in 33 suites and drained at
+2026-10-04T02:11:27.233452Z. The original full publication selection passed
+363 tests in 25 suites and drained at 2026-10-04T02:15:01.089925Z. Each
+receipt records unchanged inputs and original bounds. These component results
+remain separate from final whole-branch qualification.
+
+Published head `ab1a161` passed 49 hosted checks and four expected scope skips,
+but the application coverage shard failed its 150-second purchase property
+interruption after 270 of 300 cases and subsequently reached its 35-minute
+supervisor. The failed logs remain retained. No test strength or deadline changes.
+The updated native ledger still authenticates the current SQL head and inventory,
+checks current permission, and performs every original active-key seal, even for
+unchanged reads and rejected work. It avoids only a redundant SQL head update
+when the transaction's authenticated canonical plaintext and custody key label
+both match the newly sealed head. Rotation always writes; missing custody still
+fails; advancing observations remain durable on refusal. Comparison metadata
+exists only inside that one transaction. Locks, savepoints, FULL synchronization,
+commits, schemas and external-effect rules remain unchanged.
+
+Independent native SQLite regressions prove unchanged ciphertext after unchanged
+reads, fresh authorization and another handle's writes, durable refusal clocks,
+pure-read rotation of an unchanged empty head, and refusal when the active write
+key disappears. The outside full original buyer selection passed all 55 tests in
+eight suites, including both 300-case properties, and drained at
+2026-10-04T02:31:15.116378Z in 247.815 seconds. The outside complete native
+selection plus all three new regressions passed 54 tests in two suites and drained
+at 2026-10-04T02:33:07.438432Z. The earlier wrong SDK-entry harness failure and
+initial outside-root selection omission remain retained as failed/partial
+feedback. Compiled child implementations remained canonical in these outside
+checks and cannot qualify the changed native source. No causal or hosted speed
+improvement is claimed. Whole-branch validation on the adopted source follows.
+
+The final pinned engine inventories include every current tuple exactly once,
+with all parts nonempty: 141 canonical targets produce 358 execution rows
+(256 plus 102), and the updated native-clock composition has 1471 mutants.
+Only its complete new private method anchor and derived counts change; every
+existing canonical source and qualification setting remains.
+
+The original complete 650-mutation HTTP candidate passed all 109 original
+baseline tests, then reached the unchanged 2700-second supervisor. It ended at
+2026-10-04T04:03:25.677694Z with exit 124 and no final mutation report. Every
+captured source and configuration input remained fixed. Six native Mongo
+children briefly outlived the parent; its whole owned process group was observed
+absent at 2026-10-04T04:03:51.075724Z before any source edit. This is retained as
+failed qualification. Its baseline establishes ordinary initialization and the
+original selection, without establishing a mutation score or checkpoint readiness.
+
+The pinned sandbox copies inputs, builds and then links node_modules. Three
+incremental TypeScript metadata paths formerly created node_modules during that
+build, preventing the link. Only those metadata files move to .cache; all
+compiler and emit options remain unchanged. Both Jest projects use the installed
+default cache root and retain independent project identities and their original
+CommonJS/ESM transforms. Actual serialized normalization verifies original
+selections, ignores, instrumentation, exact peer aliases and local mutable
+sandbox routing. SDK, core Overlay and LCH peer modules stay independent captured
+inputs. Existing application and Mongo aliases precede the generic local-module
+fallback. Additive fixture and LCH fingerprints include dependencies already
+imported by the unchanged HTTP selections.
+
+The complete purchase HTTP target now has 15 complete-method execution parts
+with unchanged tests, properties, workers, reuse, original bounds and score and
+zero-error gates. The type-only ports remain in a nonempty part; future canonical
+files join the remaining full-source part. Independent pinned-engine replay
+passes at 2026-10-04T04:17:22.967260Z: every original 650 tuple appears exactly
+once and every part is nonempty. Fresh adopted installed controls pass all
+494 tests with zero skips at 2026-10-04T04:18:31.210556Z, in 4.452 seconds.
+They retain all 15 prior semantic inventories and add this complete HTTP inventory,
+with 141 canonical targets and 372 execution rows (256 plus 116). This schedules
+complete qualification; it does not substitute for the final same-run aggregate
+or final hosted checks.
+
+Fresh ordinary native recovery and reconciler boundaries pass all 72 cases at
+2026-10-04T04:14:47.409991Z in 3.895 seconds. Disclosure passes all 33 cases at
+2026-10-04T04:15:11.023744Z in 3.309 seconds. These preserve all original cases
+and cover synchronous authority, pinned methods, record classification,
+unavailable projections, retained funding phases, absent work, observer failures,
+bounded cursor wrap and native send ownership. An initial 71-of-72 run correctly
+rejected a fixture's reused invoice prefix. Only the second fresh quote's prefix
+was corrected; that failed receipt remains retained. No production fence changed.
+
+The retained prior SDK campaign also has a distinct failure: its core part had
+five runtime errors from an initial-response waiter timing out while transport
+send remained pending, and the known aggregate is below the original 90 percent
+gate. Immediate rejection observation still awaits the original response and
+preserves the original deadline, transport failure and exact session/listener
+cleanup. All six original-plus-slow-send cases pass at
+2026-10-04T04:15:22.581566Z in 1.735 seconds. The complete original lookup
+transport selection plus eight compatibility cases passes 61 cases at
+2026-10-04T04:16:44.253122Z in 3.907 seconds. Observable refusal reasons,
+identity encoding and inclusive checkpoint boundaries are exercised. Nullish fetch
+retains its platform fallback, and opening may omit its optional rules selector.
+An initial 60-of-61 attempt asserted a detailed reason on the outer authentication
+error. The corrected test observes the bounded fetch-stage reason while preserving
+the original normalized outer code; the initial failed receipt remains retained.
+No production transport policy, wire encoding, deadline or threshold changes.
+
+Every successful component receipt above records unchanged captured inputs and
+an independently empty owned process group before adoption. Complete adopted-source
+SDK/application coverage, native/platform/packed consumers, documentation, all
+three browser references and final exact-head security/source checks follow.
+No earlier receipt or ordinary component pass qualifies checkpoint two by itself.
+
+The coherent batch passed all four required root checks in 56.721 seconds at
+2026-10-04T04:22:56.667929Z. Additional raw analyzer feedback identified ten
+new test issues, then one callback-return issue. The tests now use explicit
+pinned-owner and refusal-message maps and separate observer functions. Assertions,
+cases, authority behavior and original limits are unchanged; no suppression or
+baseline alteration was introduced. Both failed analyzer receipts remain retained.
+Fresh raw recommended analysis reports zero introduced findings across 25 files
+at 2026-10-04T04:26:40.883625Z; typed analysis reports zero introduced findings
+across 17 files at 2026-10-04T04:26:17.502527Z.
+
+On the actual canonical source after those corrections, complete recovery and
+disclosure files pass all 105 cases in two suites at
+2026-10-04T04:29:36.603294Z, in 5.656 seconds. Complete SDK handshake-boundary
+and lookup-transport files pass all 67 cases in two suites at
+2026-10-04T04:29:50.140639Z, in 2.352 seconds. Original package configurations,
+deadlines and test unions remain; neither run skips a case. Captured inputs stayed
+unchanged and both process groups were verified empty. Required root checks are
+repeated on this final coherent authored batch before pushing. Whole-source,
+platform, documentation, browser-reference and exact-head hosted campaign gates
+remain pending, without transferring qualification from earlier source versions.

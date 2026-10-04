@@ -266,28 +266,7 @@ export class SQLitePrivatePurchaseStore {
   private payloadRows(payload: PrivateAcquisitionPayload, view: ProtectedLedgerView) {
     return this.payloads.addresses(payload).map(address => view.get(address))
   }
-  private restore(
-    row: ProtectedLedgerRecord,
-    buyer: string,
-    view: ProtectedLedgerView
-  ): PrivatePurchaseLoaded | undefined {
-    const value = row.value
-    closedOutputObject(
-      value,
-      ['format', 'recipient', 'progress', 'original', 'candidate', 'result'],
-      ['clockProfile']
-    )
-    outputAssert(
-      value.clockProfile === this.clockProfile,
-      'Purchase clock profile differs from original custody',
-      'context-changed'
-    )
-    outputAssert(
-      value.format === 'private-purchase-state/1',
-      'Unsupported purchase state',
-      'unavailable'
-    )
-    if (outputIdentity(value.recipient) !== buyer) return undefined
+  private restorePayloads(value: Record<string, unknown>, view: ProtectedLedgerView) {
     const originalPayload = parsePrivateAcquisitionPayload(value.original),
       candidatePayload = parsePrivateAcquisitionPayload(value.candidate),
       resultPayload = parsePrivateAcquisitionPayload(value.result),
@@ -297,8 +276,16 @@ export class SQLitePrivatePurchaseStore {
           this.limits.maximumOriginalBytes
         )
       ),
-      progress = parsePrivatePurchaseProgress(value.progress, custody.original),
-      id = progress.acquisitionId,
+      progress = parsePrivatePurchaseProgress(value.progress, custody.original)
+    return { originalPayload, candidatePayload, resultPayload, custody, progress }
+  }
+  private requirePayloadReservations(
+    progress: PrivatePurchaseProgress,
+    originalPayload: PrivateAcquisitionPayload,
+    candidatePayload: PrivateAcquisitionPayload,
+    resultPayload: PrivateAcquisitionPayload
+  ): void {
+    const id = progress.acquisitionId,
       expectedOriginal = this.payloads.reserve(
         id,
         progress.requestDigest,
@@ -335,6 +322,14 @@ export class SQLitePrivatePurchaseStore {
         'unavailable'
       )
     }
+  }
+  private requireNativeRecord(
+    row: ProtectedLedgerRecord,
+    progress: PrivatePurchaseProgress,
+    buyer: string,
+    view: ProtectedLedgerView
+  ): void {
+    const id = progress.acquisitionId
     const address = this.address(id),
       fence = view.get(this.fence(id)),
       expectedFence = {
@@ -356,6 +351,34 @@ export class SQLitePrivatePurchaseStore {
       'Purchase native record/fence binding differs',
       'unavailable'
     )
+  }
+  private restore(
+    row: ProtectedLedgerRecord,
+    buyer: string,
+    view: ProtectedLedgerView
+  ): PrivatePurchaseLoaded | undefined {
+    const value = row.value
+    closedOutputObject(
+      value,
+      ['format', 'recipient', 'progress', 'original', 'candidate', 'result'],
+      ['clockProfile']
+    )
+    outputAssert(
+      value.clockProfile === this.clockProfile,
+      'Purchase clock profile differs from original custody',
+      'context-changed'
+    )
+    outputAssert(
+      value.format === 'private-purchase-state/1',
+      'Unsupported purchase state',
+      'unavailable'
+    )
+    if (outputIdentity(value.recipient) !== buyer) return undefined
+    const { originalPayload, candidatePayload, resultPayload, custody, progress } =
+      this.restorePayloads(value, view)
+    const id = progress.acquisitionId
+    this.requirePayloadReservations(progress, originalPayload, candidatePayload, resultPayload)
+    this.requireNativeRecord(row, progress, buyer, view)
     outputAssert(
       (candidatePayload.digest !== null) === (progress.txid !== null) &&
         (resultPayload.digest !== null) === (progress.status === 'delivered'),

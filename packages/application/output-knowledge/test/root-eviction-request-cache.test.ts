@@ -1,4 +1,4 @@
-import { afterEach, expect, it, jest } from '@jest/globals'
+import { beforeAll, afterEach, expect, it, jest } from '@jest/globals'
 import { PublicKey, signOutputPacket, PrivateKey, canonicalOutputJSON } from '@bsv/sdk'
 import { DatabaseSync } from 'node:sqlite'
 import {
@@ -11,6 +11,15 @@ import {
   chain,
   requesterKey
 } from './root-eviction-fixture.js'
+
+let cachePackets: ReturnType<typeof signed>[]
+beforeAll(() => {
+  // Signing is independent fixture preparation; the FIFO test still performs
+  // every original native retain and all 258 real signature verifications.
+  cachePackets = Array.from({ length: 257 }, (_, index) =>
+    signed(request(`cache_request_id_${index}`))
+  )
+})
 
 afterEach(() => {
   jest.restoreAllMocks()
@@ -148,7 +157,7 @@ it('retains SQL field and signed packet corruption detection after a positive re
 it('bounds retained identities and re-verifies the oldest after FIFO eviction', async () => {
   const f = await fixture()
   try {
-    const packets = Array.from({ length: 257 }, (_, i) => signed(request(`cache_request_id_${i}`)))
+    const packets = cachePackets
     const verify = jest.spyOn(PublicKey.prototype, 'verify')
     for (let i = 0; i < 256; i++) await f.store.retain(packets[i], requester, clock)
     await f.store.retain(packets[0], requester, clock)

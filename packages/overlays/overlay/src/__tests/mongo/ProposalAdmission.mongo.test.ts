@@ -91,17 +91,22 @@ describe('proposal recovery through an actual Engine and three-member Mongo repl
       throw new Error('lost response after actual committed Engine admission')
     })
     const f = inputs()
-    const outcomes = await Promise.all(
-      [0, 1, 2].map(
-        async index =>
-          await bridge.recover(
-            { ...f.job, operationId: `proposal-concurrent-${index}` },
-            f.proposal,
-            f.selection,
-            f.context
-          )
-      )
+    const pending = [0, 1, 2].map(
+      async index =>
+        await bridge.recover(
+          { ...f.job, operationId: `proposal-concurrent-${index}` },
+          f.proposal,
+          f.selection,
+          f.context
+        )
     )
+    let outcomes: Awaited<(typeof pending)[number]>[]
+    try {
+      outcomes = await Promise.all(pending)
+    } finally {
+      // A failed caller must not leave another native transaction in teardown.
+      await Promise.allSettled(pending)
+    }
     const first = outcomes[0]
     expect(first.status).toBe('admitted')
     for (let index = 0; index < outcomes.length; index += 1)

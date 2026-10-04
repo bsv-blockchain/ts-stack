@@ -458,7 +458,8 @@ test('wallet recovery encoding covers every extracted implementation with the or
   assert.deepEqual(target.mutate, [
     'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
     'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts',
-    'src/storage/actionRecovery/ActionRecoveryJSON.ts'
+    'src/storage/actionRecovery/ActionRecoveryJSON.ts',
+    'src/storage/actionRecovery/ActionRecoveryJSONOwnership.ts'
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/src/storage/actionRecovery/__test/*.test.ts',
@@ -1001,7 +1002,8 @@ test('host qualification preserves complete selected unions in disjoint legacy a
       ordinary = projects.find(project => project.displayName === 'legacy-commonjs'),
       privateProject = projects.find(project => project.displayName === 'private-esm')
     assert.equal(projects.length, 2)
-    assert.notEqual(ordinary.cacheDirectory, privateProject.cacheDirectory)
+    assert.equal(ordinary.cacheDirectory, undefined)
+    assert.equal(privateProject.cacheDirectory, undefined)
     assert.deepEqual(ordinary.testMatch, options.testMatch)
     assert.deepEqual(privateProject.testMatch, options.testMatch)
     assert.deepEqual(ordinary.extensionsToTreatAsEsm, [])
@@ -1541,4 +1543,41 @@ test('Stryker runs cannot append per-mutant test reports to the job summary', ()
   assert.equal(environment.GITHUB_STEP_SUMMARY, undefined)
   assert.equal(environment.PATH, '/bin')
   assert.equal(environment.TS_STACK_MUTATION_TARGET, 'one')
+})
+
+test('private HTTP qualification fingerprints every original native fixture and acquisition dependency', () => {
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  for (const id of [
+    'private-publication-http',
+    'private-purchase-http',
+    'private-acquisition-http'
+  ]) {
+    assert.ok(
+      configured[id].additionalInputs.includes(
+        '../../application/output-knowledge/test/*fixture.ts'
+      ),
+      id
+    )
+    assert.ok(
+      configured[id].additionalInputs.includes(
+        '../../application/output-knowledge/test/private-*.ts'
+      ),
+      id
+    )
+    assert.ok(
+      configured[id].additionalInputs.includes(
+        '../../application/output-knowledge/test/fixtures/**'
+      ),
+      id
+    )
+  }
+  for (const input of [
+    '../../content/lch/src/**',
+    '../../content/lch/test/overlay-acquisition*.ts',
+    '../../content/lch/package.json',
+    '../../content/lch/tsconfig*.json'
+  ]) {
+    assert.ok(configured['private-acquisition-http'].additionalInputs.includes(input), input)
+    assert.ok(configured['private-purchase-http'].additionalInputs.includes(input), input)
+  }
 })

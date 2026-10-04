@@ -168,7 +168,8 @@ describe('retained BRC-193 lookup transport', () => {
     expect(await f.client.open(opening)).toEqual(f.snapshot)
     clock.mockReturnValue(1_300_000)
     await expect(f.client.read(f.snapshot, limits)).rejects.toMatchObject({
-      code: 'reset-required'
+      code: 'reset-required',
+      message: 'Lookup session expired'
     })
     expect(f.fetchClient).toHaveBeenCalledTimes(1)
   })
@@ -210,7 +211,12 @@ describe('retained BRC-193 lookup transport', () => {
     const send = jest
       .spyOn(SimplifiedFetchTransport.prototype, 'send')
       .mockImplementation(async function (this: SimplifiedFetchTransport) {
-        await this.fetchClient(new URL('https://other.test/.well-known/auth'))
+        const refused = this.fetchClient(new URL('https://other.test/.well-known/auth'))
+        await expect(refused).rejects.toMatchObject({
+          code: 'unauthorized',
+          message: 'Lookup transport changed endpoint'
+        })
+        await refused
       })
     await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'unauthorized' })
     expect(send).toHaveBeenCalledTimes(1)
@@ -399,6 +405,7 @@ describe('retained BRC-193 lookup transport', () => {
     const result = f.client.open({ ...opening, limits: { ...limits, maxBytes: 1 } })
     await expect(result).rejects.toBeInstanceOf(OutputLookupServiceError)
     await expect(result).rejects.toMatchObject({ code: 'limited', retryable: false, packet })
+    await expect(result).rejects.toMatchObject({ name: 'OutputLookupServiceError' })
     expect(f.fetchClient).toHaveBeenCalledTimes(1)
   })
 
@@ -445,7 +452,10 @@ describe('retained BRC-193 lookup transport', () => {
     f.fetchClient.mockImplementation(async () =>
       f.response({ ...f.snapshot, scope: { ...f.snapshot.scope, ...scope } })
     )
-    await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'context-changed' })
+    await expect(f.client.open(opening)).rejects.toMatchObject({
+      code: 'context-changed',
+      message: _name === 'query' ? 'Lookup query changed' : 'Lookup response changed selected scope'
+    })
   })
 
   it.each([
@@ -458,7 +468,15 @@ describe('retained BRC-193 lookup transport', () => {
     f.fetchClient.mockImplementation(async () =>
       f.response(typeof update === 'string' ? update : { ...f.snapshot, ...update })
     )
-    await expect(f.client.open(opening)).rejects.toThrow()
+    const result = f.client.open(opening)
+    await expect(result).rejects.toThrow()
+    const reasons: Record<string, string> = {
+      'live opening': 'Opening did not establish a snapshot',
+      expired: 'Lookup session expired',
+      'wrong retention': 'Lookup retention differs from original contract'
+    }
+    if (_name !== 'duplicate JSON field')
+      await expect(result).rejects.toMatchObject({ message: reasons[String(_name)] })
   })
 
   it.each([
@@ -469,7 +487,15 @@ describe('retained BRC-193 lookup transport', () => {
   ])('rejects %s before observations are returned', async (_name, headers) => {
     const f = setup()
     f.fetchClient.mockImplementation(async () => f.response(f.snapshot, 200, headers))
-    await expect(f.client.open(opening)).rejects.toThrow()
+    const result = f.client.open(opening)
+    await expect(result).rejects.toThrow()
+    const reasons: Record<string, string> = {
+      capability: 'Lookup response changed selected contract',
+      profile: 'Lookup response changed selected contract',
+      compression: 'Lookup requires identity encoding',
+      'oversized headers': 'Lookup HTTP header limit'
+    }
+    await expect(result).rejects.toMatchObject({ message: reasons[String(_name)] })
   })
 
   it('validates the actual JSON bytes independently of an unsigned response MIME label', async () => {
@@ -512,11 +538,17 @@ describe('retained BRC-193 lookup transport', () => {
     const moved = f.response(f.snapshot)
     Object.defineProperty(moved, 'url', { value: 'https://other.test' })
     f.fetchClient.mockResolvedValueOnce(moved)
-    await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'unauthorized' })
+    await expect(f.client.open(opening)).rejects.toMatchObject({
+      code: 'unauthorized',
+      message: 'Lookup response changed endpoint'
+    })
     const redirected = f.response(f.snapshot)
     Object.defineProperty(redirected, 'redirected', { value: true })
     f.fetchClient.mockResolvedValueOnce(redirected)
-    await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'unauthorized' })
+    await expect(f.client.open(opening)).rejects.toMatchObject({
+      code: 'unauthorized',
+      message: 'Lookup response changed endpoint'
+    })
   })
 
   it.each([
@@ -540,10 +572,12 @@ describe('retained BRC-193 lookup transport', () => {
       return f.response(f.live)
     })
     await expect(f.client.read(f.snapshot, limits)).rejects.toMatchObject({
-      code: 'reset-required'
+      code: 'reset-required',
+      message: 'Lookup session expired'
     })
     await expect(f.client.read(f.snapshot, limits)).rejects.toMatchObject({
-      code: 'reset-required'
+      code: 'reset-required',
+      message: 'Lookup session expired'
     })
     expect(f.fetchClient).toHaveBeenCalledTimes(1)
   })
@@ -551,11 +585,12 @@ describe('retained BRC-193 lookup transport', () => {
   it('checks local input and the saved contract before network I/O', async () => {
     const f = setup()
     await expect(f.client.open({ ...opening, service: 'wrong' })).rejects.toMatchObject({
-      code: 'context-changed'
+      code: 'context-changed',
+      message: 'Lookup service changed'
     })
     await expect(
       f.client.open({ ...opening, requiredRulesDigest: '02'.repeat(32) })
-    ).rejects.toMatchObject({ code: 'context-changed' })
+    ).rejects.toMatchObject({ code: 'context-changed', message: 'Lookup rules changed' })
     await expect(f.client.open({ ...opening, query: 'x'.repeat(1048576) })).rejects.toMatchObject({
       code: 'limited'
     })
@@ -588,7 +623,10 @@ describe('retained BRC-193 lookup transport', () => {
   it('cancels before I/O and keeps late non-cancellable fetch work bounded after cancellation', async () => {
     const f = setup()
     const cancelled = AbortSignal.abort()
-    await expect(f.client.open(opening, cancelled)).rejects.toMatchObject({ code: 'cancelled' })
+    await expect(f.client.open(opening, cancelled)).rejects.toMatchObject({
+      code: 'cancelled',
+      message: 'Lookup request cancelled'
+    })
     expect(f.fetchClient).not.toHaveBeenCalled()
     let finish!: (response: Response) => void
     f.fetchClient.mockImplementationOnce(
@@ -600,8 +638,14 @@ describe('retained BRC-193 lookup transport', () => {
     const controller = new AbortController()
     const pending = f.client.open(opening, controller.signal)
     controller.abort()
-    await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
-    await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'limited' })
+    await expect(pending).rejects.toMatchObject({
+      code: 'cancelled',
+      message: 'Lookup request cancelled'
+    })
+    await expect(f.client.open(opening)).rejects.toMatchObject({
+      code: 'limited',
+      message: 'Lookup request or earlier I/O is still active'
+    })
     expect(f.fetchClient).toHaveBeenCalledTimes(1)
     const cancelBody = jest.fn<() => void>()
     const late = new Response(new ReadableStream({ cancel: cancelBody }), {
@@ -624,6 +668,7 @@ describe('retained BRC-193 lookup transport', () => {
     )
     await expect(f.client.open(opening)).rejects.toMatchObject({
       code: 'unavailable',
+      message: 'Lookup request deadline',
       retryable: true
     })
     await expect(f.client.open(opening)).rejects.toMatchObject({ code: 'limited' })
@@ -645,9 +690,63 @@ describe('retained BRC-193 lookup transport', () => {
     const pending = f.client.open(opening, controller.signal)
     await new Promise(resolve => setTimeout(resolve, 0))
     controller.abort()
-    await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
+    await expect(pending).rejects.toMatchObject({
+      code: 'cancelled',
+      message: 'Lookup request cancelled'
+    })
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(cancel).toHaveBeenCalledTimes(1)
     expect(await f.client.open(opening)).toEqual(f.snapshot)
   })
+})
+
+describe('lookup boundary compatibility and useful refusal reasons', () => {
+  it.each(['identity', 'iDeNtItY'])(
+    'accepts supported identity encoding without changing the owned batch (%s)',
+    async encoding => {
+      const f = setup()
+      f.fetchClient.mockImplementation(async () =>
+        f.response(f.snapshot, 200, { 'content-encoding': encoding })
+      )
+      expect(await f.client.open(opening)).toEqual(f.snapshot)
+      expect(f.fetchClient).toHaveBeenCalledTimes(1)
+    }
+  )
+  it.each([0, {}])('refuses an unavailable fetch port before any I/O (%j)', fetchPort => {
+    expect(() => setup({ fetch: fetchPort as unknown as typeof fetch })).toThrow(
+      'Lookup requires a fetch implementation'
+    )
+  })
+  it('retains inclusive checkpoint watermarks and replay deadline equality', () => {
+    const f = setup()
+    const boundary = {
+      ...outputLookupCheckpoint(f.snapshot),
+      expiresAt: '1300',
+      replayUntil: '1300'
+    }
+    expect(parseOutputLookupCheckpoint(boundary)).toEqual(boundary)
+    expect(parseOutputLookupCheckpoint({ ...boundary, phase: 'live' }).snapshotComplete).toBe(true)
+  })
+  it('reports invalid retained watermark, deadline and phase independently', () => {
+    const f = setup(),
+      boundary = outputLookupCheckpoint(f.snapshot)
+    for (const [patch, message] of [
+      [{ through: '5' }, 'Invalid lookup watermark'],
+      [{ expiresAt: '1901' }, 'Invalid replay deadline'],
+      [{ phase: 'live', snapshotComplete: false }, 'Live before completed snapshot']
+    ] as const) {
+      expect(() => parseOutputLookupCheckpoint({ ...boundary, ...patch })).toThrow(message)
+    }
+  })
+})
+
+it('continues accepting an opening with the optional rules selector omitted', async () => {
+  const f = setup(),
+    { requiredRulesDigest, ...input } = opening
+  expect(requiredRulesDigest).toBe(rulesDigest)
+  expect(await f.client.open(input)).toEqual(f.snapshot)
+  expect(f.fetchClient).toHaveBeenCalledTimes(1)
+})
+it('preserves the platform fetch fallback for a nullish caller port', () => {
+  expect(() => setup({ fetch: null as unknown as typeof fetch })).not.toThrow()
 })

@@ -1,18 +1,7 @@
-import { beforeAll, afterAll, expect, it } from '@jest/globals'
+import { expect, it } from '@jest/globals'
 import { Utils, OutputProtocolError, canonicalOutputJSON } from '@bsv/sdk'
 import { nativeRootServingFixture } from './PrivateOverlayHostRootServing.fixture.js'
 import { RootAdvertisementServing } from '../../../../application/output-knowledge/src/root-eviction/RootAdvertisementServing.js'
-
-let ship: Awaited<ReturnType<typeof nativeRootServingFixture>>,
-  slap: Awaited<ReturnType<typeof nativeRootServingFixture>>
-beforeAll(async () => {
-  ship = await nativeRootServingFixture('SHIP')
-  slap = await nativeRootServingFixture('SLAP')
-}, 90000)
-afterAll(async () => {
-  await slap?.close()
-  await ship?.close()
-})
 
 async function qualifyRoot(f: Awaited<ReturnType<typeof nativeRootServingFixture>>) {
   await f.a.admit()
@@ -159,8 +148,18 @@ async function qualifyRoot(f: Awaited<ReturnType<typeof nativeRootServingFixture
   expect((await reopened.serving(cache.inventory[0])).state).toBe('unresolved')
 }
 it('qualifies native SHIP serving, exact post-signing refusal, independent roots, durable replay and spent-history resynchronization', async () => {
-  await qualifyRoot(ship)
+  const fixture = await nativeRootServingFixture('SHIP')
+  try {
+    await qualifyRoot(fixture)
+  } finally {
+    await fixture.close()
+  }
 }, 90000)
 it('qualifies the same complete SLAP pipeline and all physical serving cuts', async () => {
-  await qualifyRoot(slap)
+  const fixture = await nativeRootServingFixture('SLAP')
+  try {
+    await qualifyRoot(fixture)
+  } finally {
+    await fixture.close()
+  }
 }, 90000)

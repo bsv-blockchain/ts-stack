@@ -405,10 +405,13 @@ framing limits, retained acknowledgements and unchanged finite lookup behavior.
 Generated schedules vary these boundaries together. Separate Engine/Mongo tests
 qualify ordinary admission receipt recovery.
 
-Complete checkpoint-two qualification, configuration evolution,
-retained-fence compaction and application projection
-integration are tracked in the [implementation record](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/IMPLEMENTATION.md).
-The endpoint adapter alone does not complete those service obligations. The
+The compound reference installation demonstrates application projection through
+an authenticated current-channel lookup, with the durable client and browser
+subscription described in the [workbench guide](./output-knowledge-workbench.md).
+Complete checkpoint-two qualification is tracked in the
+[implementation record](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/IMPLEMENTATION.md).
+Configuration evolution and retained-fence compaction require explicitly qualified
+adapters; the endpoint does not grant those capabilities. The
 [compiled examples](./compiled-package-examples.md) verify public package wiring.
 
 ## Recover a saved operation from the SDK
@@ -480,8 +483,11 @@ Run this example using the [workbench instructions](./output-knowledge-workbench
 It uses public synthetic keys and a pinned test chain, not live funds or a
 consensus node. The HTTP fixture maps the selected HTTPS origin to an owned
 loopback listener while preserving actual BRC-103/104 authentication; it does
-not qualify TLS termination or production deployment. Interactive private
-subscriptions and admission-driven lookup projection remain separate work.
+not qualify TLS termination or production deployment. The separate private-state
+browser installation demonstrates interactive authenticated subscriptions and
+native IndexedDB recovery. The compound native client demonstrates admission-driven
+current-channel projection and replay of the original finalized operation; see
+[the workbench guide](./output-knowledge-workbench.md) for both installations.
 
 ### Repeated signature verification
 

@@ -103,3 +103,55 @@ describe('Peer handshake callback boundary', () => {
     expect(removeSession).not.toHaveBeenCalled()
   })
 })
+
+describe('observable response timeout while transport send is still pending', () => {
+  test.each(['complete', 'reject'] as const)(
+    'preserves timeout/transport failure and cleans its exact session after a slow send (%s)',
+    async mode => {
+      jest.useFakeTimers()
+      let release!: () => void, entered!: () => void
+      const held = new Promise<void>(resolve => {
+        release = resolve
+      })
+      const observed = new Promise<void>(resolve => {
+        entered = resolve
+      })
+      const transportFailure = new Error('synthetic slow transport failed')
+      const transport: Transport = {
+        async send() {
+          entered()
+          await held
+          if (mode === 'reject') throw transportFailure
+        },
+        async onData(_callback: (message: AuthMessage) => Promise<void>) {}
+      }
+      const sessions = new SessionManager(),
+        remove = jest.spyOn(sessions, 'removeSession')
+      try {
+        const peer = new Peer(
+          new CompletedProtoWallet(new PrivateKey(38)),
+          transport,
+          undefined,
+          sessions
+        )
+        await peer.ready
+        const pending = peer.getAuthenticatedSession(new PrivateKey(39).toPublicKey().toString())
+        const result =
+          mode === 'reject'
+            ? expect(pending).rejects.toBe(transportFailure)
+            : expect(pending).rejects.toThrow('Timeout waiting for the BRC-103 initial response.')
+        await observed
+        // Original30-second deadline; fake time exercises ownership without waiting wall-clock.
+        await jest.advanceTimersByTimeAsync(30000)
+        release()
+        await result
+        expect(remove).toHaveBeenCalledTimes(1)
+        expect(remove.mock.calls[0]![0]).toMatchObject({ isAuthenticated: false })
+        expect(jest.getTimerCount()).toBe(0)
+      } finally {
+        release()
+        jest.useRealTimers()
+      }
+    }
+  )
+})

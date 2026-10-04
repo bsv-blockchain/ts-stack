@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import path, { resolve } from 'node:path'
 import { createRequire } from 'node:module'
+import { existsSync, readFileSync } from 'node:fs'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 import { canonicalInventory, targetSources } from './mutation-final-qualification.mjs'
@@ -25,7 +26,9 @@ const semanticTargets = [
   'root-eviction-storage',
   'overlay-private-publication-admission',
   'private-publication-state',
-  'private-publication-service'
+  'private-publication-service',
+  'wallet-recovery-encoding',
+  'private-purchase-http'
 ]
 const mutantIdentity = mutant =>
   JSON.stringify([
@@ -50,7 +53,9 @@ async function* serialResults(values, read) {
 
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
-  const expectedCounts = [503, 987, 519, 1426, 173, 264, 336, 1164, 484, 463, 357, 374, 943, 456]
+  const expectedCounts = [
+    503, 996, 519, 1471, 173, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 650
+  ]
   const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
     const original = targets[id],
       sources = targetSources(REPOSITORY_ROOT, original),
@@ -91,7 +96,7 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(selectedMutationPartition(id, original), original)
   }
   assert.equal(Object.keys(targets).length, 141)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 274)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 372)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {
@@ -139,6 +144,7 @@ test('serialized mutation configuration preserves both original overlay module p
   })
   for await (const { id, selected, configs } of projects) {
     assert.equal(configs.length, 2, id)
+    assert.notEqual(configs[0].id, configs[1].id, id)
     for (const project of configs) {
       const original = selected.projects.find(item => item.displayName === project.displayName.name)
       const expanded = values =>
@@ -152,6 +158,100 @@ test('serialized mutation configuration preserves both original overlay module p
       assert.deepEqual(project.extensionsToTreatAsEsm, original.extensionsToTreatAsEsm, id)
       assert.equal(project.testEnvironment, requirePackage.resolve(environment), id)
       assert.equal(project.globals.__strykerGlobalNamespace__, '__stryker__', id)
+      assert.equal(original.cacheDirectory, undefined, id)
+      assert.ok(!project.cacheDirectory.split(path.sep).includes('node_modules'), id)
+      const mapped = source => {
+        const entry = project.moduleNameMapper.find(([pattern]) => new RegExp(pattern).test(source))
+        assert.ok(entry, `${id}: ${source}`)
+        return source.replace(new RegExp(entry[0]), entry[1])
+      }
+      for (const [source, expected] of [
+        ['../../../overlay/src/Engine.js', 'packages/overlays/overlay/src/Engine.ts'],
+        [
+          '../../../overlay/src/__tests/mongo/MongoReplicaFixture.js',
+          'packages/overlays/overlay/src/__tests/mongo/MongoReplicaFixture.ts'
+        ],
+        [
+          '../../../../sdk/src/overlay-tools/OutputPaidLookupTransport.js',
+          'packages/sdk/src/overlay-tools/OutputPaidLookupTransport.ts'
+        ],
+        [
+          '../../../../content/lch/test/overlay-acquisition-covenant.fixture.js',
+          'packages/content/lch/test/overlay-acquisition-covenant.fixture.ts'
+        ],
+        [
+          '../../../../content/lch/src/overlayAcquisitionCovenantSeller.js',
+          'packages/content/lch/src/overlayAcquisitionCovenantSeller.ts'
+        ]
+      ]) {
+        assert.equal(mapped(source), resolve(REPOSITORY_ROOT, expected), `${id}: ${source}`)
+        assert.ok(existsSync(mapped(source)), `${id}: ${source}`)
+      }
+      if (id.startsWith('private-')) {
+        const source =
+          '../../../../application/output-knowledge/src/private/PrivatePublicationLookupContext.js'
+        assert.equal(
+          mapped(source),
+          resolve(
+            REPOSITORY_ROOT,
+            'packages/application/output-knowledge/src/private/PrivatePublicationLookupContext.ts'
+          ),
+          id
+        )
+        assert.ok(existsSync(mapped(source)), id)
+      }
+      assert.equal(mapped('../PrivatePurchaseRoutes.js'), '../PrivatePurchaseRoutes', id)
+      assert.ok(existsSync(mapped('uuid')), id)
+      const transform = project.transform.find(([pattern]) =>
+        new RegExp(pattern).test('fixture.ts')
+      )
+      assert.ok(transform, id)
+      assert.equal(transform[2].useESM, original.displayName === 'private-esm', id)
+      assert.deepEqual(transform[2].tsconfig, original.transform['^.+\\.tsx?$'][1].tsconfig, id)
     }
+  }
+})
+
+test('incremental overlay metadata leaves dependency linking free and preserves original compiler and emit options', () => {
+  const directory = resolve(REPOSITORY_ROOT, 'packages/overlays/overlay-express')
+  const ts = createRequire(resolve(directory, 'package.json'))('typescript')
+  const profiles = {
+    esm: { rootDir: './', outDir: './dist/esm', allowSyntheticDefaultImports: true },
+    cjs: {
+      target: 'es2019',
+      module: 'commonjs',
+      moduleResolution: 'bundler',
+      rootDir: './',
+      outDir: './dist/cjs',
+      declaration: true,
+      declarationMap: true
+    },
+    types: {
+      rootDir: './',
+      outDir: './dist/types',
+      emitDeclarationOnly: true,
+      declaration: true,
+      declarationMap: true
+    }
+  }
+  for (const [profile, originalOptions] of Object.entries(profiles)) {
+    const file = resolve(directory, `tsconfig.${profile}.json`)
+    const source = JSON.parse(readFileSync(file, 'utf8'))
+    assert.deepEqual(source, {
+      extends: './tsconfig.base.json',
+      compilerOptions: {
+        ...originalOptions,
+        tsBuildInfoFile: `./.cache/overlay-express-${profile}.tsbuildinfo`
+      }
+    })
+    const parsed = ts.parseJsonConfigFileContent(source, ts.sys, directory, undefined, file)
+    assert.deepEqual(parsed.errors, [])
+    assert.equal(
+      parsed.options.tsBuildInfoFile,
+      resolve(directory, `.cache/overlay-express-${profile}.tsbuildinfo`)
+    )
+    assert.ok(!parsed.options.tsBuildInfoFile.split(path.sep).includes('node_modules'))
+    assert.equal(parsed.options.outDir, resolve(directory, `dist/${profile}`))
+    assert.equal(parsed.options.incremental, true)
   }
 })

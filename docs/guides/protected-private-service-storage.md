@@ -3,8 +3,8 @@ id: protected-private-service-storage
 title: 'Protected Private-Service Storage'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+last_updated: '2026-10-04'
+last_verified: '2026-10-04'
 review_cadence_days: 30
 status: experimental
 tags: [overlays, privacy, storage]
@@ -35,6 +35,16 @@ checks the authenticated inventory and decrypts every retained record so that a
 missing old key cannot silently become an apparently empty store. Opening with a
 new active encryption key is allowed only while the custody provider can still
 resolve all required retained keys.
+
+Each operation freshly authenticates the head and complete inventory under its
+native write transaction and resolves active write custody by making a fresh
+seal. When the authenticated canonical head and active key label are unchanged,
+that transaction can omit only the redundant SQL head update. A changed clock,
+revision, inventory or custody label still writes the head; pure reads also
+honor key rotation. No authentication or authorization result is cached between
+calls. The same locks, savepoints, FULL synchronization, commits and durable
+refusal clocks remain in effect. Missing custody still fails rather than being
+interpreted as an unchanged read.
 
 Every payload is protected by the local AES-256-GCM/HKDF framing. Associated data
 binds the format, store identity, immutable configuration digest, record kind,

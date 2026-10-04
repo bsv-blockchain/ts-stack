@@ -33,7 +33,8 @@ import { LookupResponseDisclosure } from '../../../../application/output-knowled
 import { collectionOutputIndexKey } from '../../../../application/output-knowledge/src/lookup/CollectionOutputQueryPolicy.js'
 import {
   fixture,
-  clock
+  clock,
+  closeRootFixtureResources
 } from '../../../../application/output-knowledge/test/root-eviction-fixture.js'
 import {
   rootAdvertisementFixture,
@@ -316,9 +317,11 @@ export async function nativeRootServingFixture(protocol: 'SHIP' | 'SLAP') {
         historicalOutputs: true
       }),
       async close() {
-        await feed.cleanup()
-        await storage.close()
-        await root.cleanup()
+        await closeRootFixtureResources([
+          () => feed.cleanup(),
+          () => storage.close(),
+          () => root.cleanup()
+        ])
       }
     }
     roots.push(value)
@@ -445,18 +448,30 @@ export async function nativeRootServingFixture(protocol: 'SHIP' | 'SLAP') {
       },
       async close() {
         server.closeAllConnections()
-        await new Promise<void>((resolve, reject) =>
-          server.close(error => (error ? reject(error) : resolve()))
-        )
-        for (const root of roots) await root.close()
-        await replica.close()
+        await closeRootFixtureResources([
+          () =>
+            new Promise<void>((resolve, reject) =>
+              server.close(error => (error ? reject(error) : resolve()))
+            ),
+          ...roots.map(root => () => root.close()),
+          () => replica.close()
+        ])
       }
     }
   } catch (error) {
     server.closeAllConnections()
-    server.close()
-    for (const root of roots) await root.close()
-    await replica.close()
+    try {
+      await closeRootFixtureResources([
+        () =>
+          new Promise<void>((resolve, reject) =>
+            server.close(failure => (failure ? reject(failure) : resolve()))
+          ),
+        ...roots.map(root => () => root.close()),
+        () => replica.close()
+      ])
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Root fixture setup and cleanup failed')
+    }
     throw error
   }
 }

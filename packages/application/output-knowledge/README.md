@@ -1324,3 +1324,10 @@ and currently usable material remain distinct. The native adapter uses one stabl
 local noSend action, with current authority at new signing boundaries and exact
 final-byte recovery. See the [buyer guide](../../../docs/guides/durable-private-lookup-buyer.md)
 for installation, concurrency, shutdown and the complete HTTP demonstration.
+
+Private purchase progress and native retained-record validation are divided into
+internal helpers that retain the original ordered checks and error identities.
+This changes no public interface, wire or persisted schema, financial effect,
+clock requirement or disclosure rule. No caller migration is required. Semantic
+mutation execution boundaries follow complete methods and retain the entire
+canonical source and test selection.

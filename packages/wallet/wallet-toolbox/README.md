@@ -28,6 +28,12 @@ and [local funding recovery](https://bsv-blockchain.github.io/ts-stack/guides/lo
 for construction limits, deep imports, verification and unresolved service obligations.
 A local receipt does not prove settlement, a content license or protected delivery.
 
+Internal recovery JSON ownership uses a fresh call-local context for scalar,
+array and record checks. It retains the same deterministic stored bytes, error
+identities, descriptor/prototype/cycle checks and fixed resource bounds; the
+refactor requires no caller or stored-format migration. It never retains
+ownership state or authority between calls.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users

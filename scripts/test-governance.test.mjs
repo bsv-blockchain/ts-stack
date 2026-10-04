@@ -592,7 +592,8 @@ test('wallet recovery encoding and descriptors retain complete modules and the s
     'src/storage/actionRecovery/ActionRecoveryCodec.ts',
     'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
     'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts',
-    'src/storage/actionRecovery/ActionRecoveryJSON.ts'
+    'src/storage/actionRecovery/ActionRecoveryJSON.ts',
+    'src/storage/actionRecovery/ActionRecoveryJSONOwnership.ts'
   ])
   for (const name of names) {
     assert.deepEqual(targets[name].runnerOptions, targets[names[0]].runnerOptions)

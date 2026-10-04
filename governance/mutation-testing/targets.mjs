@@ -47,11 +47,32 @@ function jestTarget(
   }
 }
 
-function overlayJestTarget(testMatch, options = {}) {
+function overlayJestTarget(repositoryRoot, testMatch, options = {}) {
+  const originalProjects = createOverlayTestProjects(testMatch, options.config)
+  // Jest's serialized parent mapping takes precedence over child mappings.
+  // Keep independent peer modules rooted outside the mutable sandbox, and keep
+  // every original specific alias before the local mutable-module fallback.
+  const moduleNameMapper = {
+    [String.raw`^\.\./\.\./\.\./overlay/src/(.*)\.js$`]: resolve(
+      repositoryRoot,
+      'packages/overlays/overlay/src/$1.ts'
+    ),
+    [String.raw`^\.\./\.\./\.\./\.\./sdk/src/(.*)\.js$`]: resolve(
+      repositoryRoot,
+      'packages/sdk/src/$1.ts'
+    ),
+    [String.raw`^\.\./\.\./\.\./\.\./content/lch/(.*)\.js$`]: resolve(
+      repositoryRoot,
+      'packages/content/lch/$1.ts'
+    ),
+    ...options.config?.moduleNameMapper,
+    ...originalProjects[0].moduleNameMapper
+  }
+  const projects = originalProjects.map(project => ({ ...project, moduleNameMapper }))
   return jestTarget('jest.config.js', testMatch, {
     ...options,
     esm: true,
-    config: { ...options.config, projects: createOverlayTestProjects(testMatch, options.config) }
+    config: { ...options.config, moduleNameMapper, projects }
   })
 }
 
@@ -431,7 +452,8 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [
         'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
         'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts',
-        'src/storage/actionRecovery/ActionRecoveryJSON.ts'
+        'src/storage/actionRecovery/ActionRecoveryJSON.ts',
+        'src/storage/actionRecovery/ActionRecoveryJSONOwnership.ts'
       ]
     },
     'wallet-recovery-installation': walletRecoveryTarget(
@@ -1096,19 +1118,23 @@ export function buildMutationTargets(repositoryRoot) {
         '../../middleware/auth-express-middleware/src/**',
         '../../middleware/auth-express-middleware/mod.ts'
       ],
-      ...overlayJestTarget(['<rootDir>/src/__tests__/RootEvictionResponseGuard*.test.ts'], {
-        config: {
-          moduleNameMapper: {
-            [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/root-eviction-fixture\.js$`]:
-              resolve(
-                repositoryRoot,
-                'packages/application/output-knowledge/test/root-eviction-fixture.ts'
-              ),
-            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
-            '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+      ...overlayJestTarget(
+        repositoryRoot,
+        ['<rootDir>/src/__tests__/RootEvictionResponseGuard*.test.ts'],
+        {
+          config: {
+            moduleNameMapper: {
+              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/root-eviction-fixture\.js$`]:
+                resolve(
+                  repositoryRoot,
+                  'packages/application/output-knowledge/test/root-eviction-fixture.ts'
+                ),
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+            }
           }
         }
-      })
+      )
     },
     'overlay-proposal-http': {
       packageDirectory: 'packages/overlays/overlay-express',
@@ -1136,6 +1162,7 @@ export function buildMutationTargets(repositoryRoot) {
         '../../middleware/auth-express-middleware/mod.ts'
       ],
       ...overlayJestTarget(
+        repositoryRoot,
         [
           '<rootDir>/src/__tests__/Proposal*.test.ts',
           '<rootDir>/src/__tests__/OverlayExpress.test.ts'
@@ -1178,24 +1205,28 @@ export function buildMutationTargets(repositoryRoot) {
         '../../middleware/auth-express-middleware/src/**',
         '../../middleware/auth-express-middleware/mod.ts'
       ],
-      ...overlayJestTarget(['<rootDir>/src/__tests__/RootEvictionRoutes*.test.ts'], {
-        config: {
-          moduleNameMapper: {
-            ...Object.fromEntries(
-              [
-                'root-eviction-service-fixture',
-                'root-contract-fixture',
-                'root-eviction-fixture'
-              ].map(name => [
-                String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/${name}\.js$`,
-                resolve(repositoryRoot, `packages/application/output-knowledge/test/${name}.ts`)
-              ])
-            ),
-            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
-            '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+      ...overlayJestTarget(
+        repositoryRoot,
+        ['<rootDir>/src/__tests__/RootEvictionRoutes*.test.ts'],
+        {
+          config: {
+            moduleNameMapper: {
+              ...Object.fromEntries(
+                [
+                  'root-eviction-service-fixture',
+                  'root-contract-fixture',
+                  'root-eviction-fixture'
+                ].map(name => [
+                  String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/test/${name}\.js$`,
+                  resolve(repositoryRoot, `packages/application/output-knowledge/test/${name}.ts`)
+                ])
+              ),
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+            }
           }
         }
-      })
+      )
     },
     'overlay-output-lookup-http': {
       packageDirectory: 'packages/overlays/overlay-express',
@@ -1215,6 +1246,7 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/lookup-provider-fixture.ts'
       ],
       ...overlayJestTarget(
+        repositoryRoot,
         [
           '<rootDir>/src/__tests__/OutputLookupRoutes.test.ts',
           '<rootDir>/src/__tests__/OutputLookupRoutes.property.test.ts',
@@ -1534,6 +1566,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/OutputLookupHTTPPolicy.ts',
         '../../application/output-knowledge/src/**',
         '../../application/output-knowledge/test/private-*.ts',
+        '../../application/output-knowledge/test/*fixture.ts',
         '../../application/output-knowledge/test/evidence-fixture.ts',
         '../../application/output-knowledge/test/fixtures/**',
         '../overlay/src/**',
@@ -1546,25 +1579,29 @@ export function buildMutationTargets(repositoryRoot) {
         'src/PrivatePublicationResponseGuard.ts',
         'src/PrivatePublicationRoutes.ts'
       ],
-      ...overlayJestTarget(['<rootDir>/src/__tests__/PrivatePublication*.test.ts'], {
-        esm: true,
-        maxTestRunnerReuse: 8,
-        config: {
-          moduleNameMapper: {
-            [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
-              repositoryRoot,
-              'packages/application/output-knowledge/$1.ts'
-            ),
-            [String.raw`^\.\./\.\./\.\./overlay/src/__tests/mongo/MongoReplicaFixture\.js$`]:
-              resolve(
+      ...overlayJestTarget(
+        repositoryRoot,
+        ['<rootDir>/src/__tests__/PrivatePublication*.test.ts'],
+        {
+          esm: true,
+          maxTestRunnerReuse: 8,
+          config: {
+            moduleNameMapper: {
+              [String.raw`^\.\./\.\./\.\./\.\./application/output-knowledge/(.*)\.js$`]: resolve(
                 repositoryRoot,
-                'packages/overlays/overlay/src/__tests/mongo/MongoReplicaFixture.ts'
+                'packages/application/output-knowledge/$1.ts'
               ),
-            [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
-            '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+              [String.raw`^\.\./\.\./\.\./overlay/src/__tests/mongo/MongoReplicaFixture\.js$`]:
+                resolve(
+                  repositoryRoot,
+                  'packages/overlays/overlay/src/__tests/mongo/MongoReplicaFixture.ts'
+                ),
+              [String.raw`^(\.{1,2}/.*)\.js$`]: '$1',
+              '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
+            }
           }
         }
-      })
+      )
     },
     'private-purchase-http': {
       packageDirectory: 'packages/overlays/overlay-express',
@@ -1587,6 +1624,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/OutputLookupHTTPPolicy.ts',
         '../../application/output-knowledge/src/**',
         '../../application/output-knowledge/test/private-*.ts',
+        '../../application/output-knowledge/test/*fixture.ts',
         '../../application/output-knowledge/test/evidence-fixture.ts',
         '../../application/output-knowledge/test/fixtures/**',
         '../../content/lch/src/**',
@@ -1605,6 +1643,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/PrivateOverlayHost.ts'
       ],
       ...overlayJestTarget(
+        repositoryRoot,
         [
           '<rootDir>/src/__tests__/PrivateAcquisition*.test.ts',
           '<rootDir>/src/__tests__/PrivateOverlayHost*.test.ts',
@@ -1657,8 +1696,13 @@ export function buildMutationTargets(repositoryRoot) {
         'src/OutputLookupHTTPPolicy.ts',
         '../../application/output-knowledge/src/**',
         '../../application/output-knowledge/test/private-*.ts',
+        '../../application/output-knowledge/test/*fixture.ts',
         '../../application/output-knowledge/test/evidence-fixture.ts',
         '../../application/output-knowledge/test/fixtures/**',
+        '../../content/lch/src/**',
+        '../../content/lch/test/overlay-acquisition*.ts',
+        '../../content/lch/package.json',
+        '../../content/lch/tsconfig*.json',
         '../overlay/src/**',
         '../../sdk/src/**',
         '../../middleware/auth-express-middleware/src/**'
@@ -1671,6 +1715,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/PrivateOverlayHost.ts'
       ],
       ...overlayJestTarget(
+        repositoryRoot,
         [
           '<rootDir>/src/__tests__/PrivateAcquisition*.test.ts',
           '<rootDir>/src/__tests__/PrivateOverlayHost*.test.ts',
@@ -2825,6 +2870,7 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest: 'packages/overlays/overlay-express/src/__tests/ReorgStream.property.test.ts',
       mutate: ['src/ReorgStream.ts'],
       ...overlayJestTarget(
+        repositoryRoot,
         [
           '<rootDir>/src/__tests/ReorgStream*.test.ts',
           '<rootDir>/src/__tests__/ReorgStream*.test.ts'

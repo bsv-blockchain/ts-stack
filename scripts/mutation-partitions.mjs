@@ -218,7 +218,10 @@ const plans = new Map([
     'wallet-recovery-encoding',
     {
       fallback: 'binary',
-      files: new Map([['src/storage/actionRecovery/ActionRecoveryJSON.ts', 'json']])
+      files: new Map([
+        ['src/storage/actionRecovery/ActionRecoveryJSON.ts', 'json'],
+        ['src/storage/actionRecovery/ActionRecoveryJSONOwnership.ts', 'json']
+      ])
     }
   ],
   [
@@ -297,14 +300,53 @@ const rangePlans = new Map(
           'src/private/PrivatePurchaseProgress.ts',
           {
             label: 'progress',
-            starts: [1, 137, 155, 269, 294, 389]
+            markers: [
+              'function digest(value: unknown): string {',
+              'export function privatePurchaseOperation(original: PrivatePurchaseOriginal, txid: string): string {',
+              'function response(progress: PrivatePurchaseProgress): OutputPurchaseEnvelope {',
+              'function purchaseAdmission(',
+              'function purchaseDelivery(',
+              'function purchaseProgressReservation(input: unknown, original: PrivatePurchaseOriginal) {',
+              'function purchaseProgressPosition(',
+              'function validatePurchaseProgressResult(',
+              'export function parsePrivatePurchaseProgress(',
+              'export function createPrivatePurchaseProgress(',
+              'export function advancePrivatePurchaseProgress(',
+              'export function privatePurchaseEnvelope('
+            ]
           }
         ],
         [
           'src/private/SQLitePrivatePurchaseStore.ts',
           {
             label: 'store',
-            starts: [1, 179, 269, 398, 602, 798]
+            markers: [
+              'function encoded(input: unknown, maximum: number): string {',
+              'function decoded(input: string, maximum: number): unknown {',
+              'function authorize(guard: ProtectedLedgerGuard, view: ProtectedLedgerView): void {',
+              'constructor(',
+              'private address(id: string) {',
+              'private fence(id: string) {',
+              'private custody(input: unknown): PrivatePurchaseCustody {',
+              'private feasible(custody: PrivatePurchaseCustody): void {',
+              'private payloadRows(payload: PrivateAcquisitionPayload, view: ProtectedLedgerView) {',
+              'private restorePayloads(value: Record<string, unknown>, view: ProtectedLedgerView) {',
+              'private requirePayloadReservations(',
+              'private requireNativeRecord(',
+              'private restore(',
+              'load(',
+              'prepare(',
+              'private preparationPlan(input: PrivatePurchaseCustody, observedAt: string) {',
+              'private require(',
+              'pin(',
+              'advance(',
+              'complete(',
+              'private commitPayload(',
+              'private commit(',
+              'disclose(',
+              'discloseTerms(',
+              'private enqueue<T>('
+            ]
           }
         ]
       ]
@@ -335,21 +377,123 @@ const rangePlans = new Map(
           'src/private/SQLiteProtectedLedger.ts',
           {
             label: 'ledger',
-            starts: [1, 204, 317, 411, 520, 632]
+            markers: [
+              'static create(',
+              'static open(',
+              'private initialize(): void {',
+              'private binding(kind: string, extra: OutputJSONObject): OutputJSONObject {',
+              'private encode(binding: OutputJSONObject, text: string): string {',
+              'private decode(binding: OutputJSONObject, envelope: string, maximum: number): unknown {',
+              'private envelopeBound(bytes: number): number {',
+              'private saveHead(',
+              'private head(): ProtectedLedgerHead {',
+              'private headSnapshot(): ProtectedHeadSnapshot {',
+              'private headers(): ProtectedLedgerHeader[] {',
+              'private inventory(head: ProtectedLedgerHead): void {',
+              'private record(address: ProtectedLedgerAddress): ProtectedLedgerRecord | undefined {',
+              'private authorize(head: ProtectedLedgerHead, guard: ProtectedLedgerGuard): void {',
+              'private synchronous(work: (...args: never[]) => unknown): void {',
+              'private observed<T>(',
+              'read(',
+              'enumerate(',
+              'private addresses(input: readonly ProtectedLedgerAddress[]): ProtectedLedgerAddress[] {',
+              'private ownLocalBatch(',
+              'private ownCommitOptions(input: ProtectedLedgerCommitOptions): ProtectedLedgerCommitOptions {',
+              'commit(',
+              'commitPrepared(',
+              'private preparedGuard(guard: ProtectedLedgerGuard, view: ProtectedLedgerView): void {',
+              'private ownChanges(',
+              'private applyChanges(',
+              'disclose(',
+              'close(): void {'
+            ]
           }
         ],
         [
           'src/private/SQLitePrivatePurchaseStore.ts',
           {
             label: 'store',
-            starts: [1, 179, 269, 398, 602, 798]
+            markers: [
+              'function encoded(input: unknown, maximum: number): string {',
+              'function decoded(input: string, maximum: number): unknown {',
+              'function authorize(guard: ProtectedLedgerGuard, view: ProtectedLedgerView): void {',
+              'constructor(',
+              'private address(id: string) {',
+              'private fence(id: string) {',
+              'private custody(input: unknown): PrivatePurchaseCustody {',
+              'private feasible(custody: PrivatePurchaseCustody): void {',
+              'private payloadRows(payload: PrivateAcquisitionPayload, view: ProtectedLedgerView) {',
+              'private restorePayloads(value: Record<string, unknown>, view: ProtectedLedgerView) {',
+              'private requirePayloadReservations(',
+              'private requireNativeRecord(',
+              'private restore(',
+              'load(',
+              'prepare(',
+              'private preparationPlan(input: PrivatePurchaseCustody, observedAt: string) {',
+              'private require(',
+              'pin(',
+              'advance(',
+              'complete(',
+              'private commitPayload(',
+              'private commit(',
+              'disclose(',
+              'discloseTerms(',
+              'private enqueue<T>('
+            ]
           }
         ],
         [
           'src/private/PrivatePurchaseProgress.ts',
           {
             label: 'progress',
-            starts: [1, 137, 155, 269, 294, 389]
+            markers: [
+              'function digest(value: unknown): string {',
+              'export function privatePurchaseOperation(original: PrivatePurchaseOriginal, txid: string): string {',
+              'function response(progress: PrivatePurchaseProgress): OutputPurchaseEnvelope {',
+              'function purchaseAdmission(',
+              'function purchaseDelivery(',
+              'function purchaseProgressReservation(input: unknown, original: PrivatePurchaseOriginal) {',
+              'function purchaseProgressPosition(',
+              'function validatePurchaseProgressResult(',
+              'export function parsePrivatePurchaseProgress(',
+              'export function createPrivatePurchaseProgress(',
+              'export function advancePrivatePurchaseProgress(',
+              'export function privatePurchaseEnvelope('
+            ]
+          }
+        ]
+      ]
+    ],
+    [
+      'private-purchase-http',
+      [
+        [
+          'src/PrivatePurchaseHTTPPolicy.ts',
+          {
+            label: 'policy',
+            markers: [
+              'export function sendPrivatePurchaseHTTPError(res: Response, error: unknown): void {',
+              'export function privatePurchaseHTTPCORS('
+            ]
+          }
+        ],
+        ['src/PrivatePurchaseResponseGuard.ts', { label: 'guard', starts: [1] }],
+        ['src/PrivateOverlayHost.ts', { label: 'host', starts: [1] }],
+        [
+          'src/PrivatePurchaseRoutes.ts',
+          {
+            label: 'routes',
+            markers: [
+              'class PrivatePurchaseHTTPHandler {',
+              'private route(path: string): Route | undefined {',
+              'readonly handle: RequestHandler = (req, res, next) => {',
+              'private track(res: Response): void {',
+              'private parsed(',
+              'private acquire(identity: string): () => void {',
+              'private async execute(',
+              'export function createPrivatePurchaseRouter(options: PrivatePurchaseRouteOptions): Router {',
+              'function authenticatedCaller('
+            ]
           }
         ]
       ]
@@ -377,7 +521,13 @@ const rangePlans = new Map(
           'src/revenue-listing/RevenueListingPurchaseVerifier.ts',
           {
             label: 'verifier',
-            starts: [1, 160]
+            markers: [
+              'async verify(',
+              'private current(): void {',
+              'private bindPrepared(',
+              'private extend(',
+              'function purchaseFailure('
+            ]
           }
         ]
       ]
@@ -386,6 +536,27 @@ const rangePlans = new Map(
 )
 
 const refinedFileParts = new Map([
+  [
+    'wallet-recovery-encoding',
+    new Map([
+      [
+        'json',
+        new Map([
+          ['src/storage/actionRecovery/ActionRecoveryJSON.ts', { label: 'json', starts: [1] }],
+          [
+            'src/storage/actionRecovery/ActionRecoveryJSONOwnership.ts',
+            {
+              label: 'ownership',
+              markers: [
+                'private array(input: unknown[], keys: (string | symbol)[], depth: number): JSONValue[] {',
+                'private object(input: object, keys: (string | symbol)[], depth: number): { [key: string]: JSONValue } {'
+              ]
+            }
+          ]
+        ])
+      ]
+    ])
+  ],
   [
     'root-eviction-records',
     new Map([
@@ -472,6 +643,7 @@ const refinedFileParts = new Map([
 // Keep the complete presently type-only module in a nonempty execution part.
 // Future executable content in that module remains part of the same full union.
 const rangeCompanions = new Map([
+  ['private-purchase-http', new Map([['src/PrivatePurchaseHTTPPorts.ts', 'routes-1']])],
   ['root-eviction-storage', new Map([['src/root-eviction/RootEvictionStorage.ts', 'database-1']])]
 ])
 
@@ -484,22 +656,47 @@ function specificationRange(specification, lines) {
   return { start, end }
 }
 
+/** Resolve unique complete-method anchors; ambiguous configuration is rejected. */
+export function semanticMutationStarts(lines, plan) {
+  if (plan.starts !== undefined) {
+    if (plan.markers !== undefined || !Array.isArray(plan.starts))
+      throw new Error('Ambiguous semantic mutation partition boundaries')
+    return plan.starts
+  }
+  if (!Array.isArray(plan.markers) || plan.markers.length === 0)
+    throw new Error('Missing semantic mutation partition markers')
+  return [
+    1,
+    ...plan.markers.map(marker => {
+      if (typeof marker !== 'string' || marker.length === 0)
+        throw new Error('Invalid semantic mutation partition marker')
+      const matches = lines.flatMap((line, index) => (line.trim() === marker ? [index + 1] : []))
+      if (matches.length !== 1)
+        throw new Error(
+          `Semantic mutation partition marker must identify one source line: ${marker}`
+        )
+      return matches[0]
+    })
+  ]
+}
+
 function rangeGroups(target, file, specifications, plan) {
   const directory = path.resolve(ROOT, target.packageDirectory)
   const location = fs.realpathSync(path.join(directory, file))
   if (!location.startsWith(`${fs.realpathSync(ROOT)}${path.sep}`))
     throw new Error('Mutation partition source escapes repository')
-  const lines = fs.readFileSync(location, 'utf8').split('\n').length
+  const source = fs.readFileSync(location, 'utf8').split('\n')
+  const lines = source.length
+  const starts = semanticMutationStarts(source, plan)
   if (
-    plan.starts[0] !== 1 ||
-    plan.starts.some(
-      (start, i) =>
-        !Number.isSafeInteger(start) || start < 1 || (i > 0 && start <= plan.starts[i - 1])
+    starts[0] !== 1 ||
+    starts.some(
+      (start, i) => !Number.isSafeInteger(start) || start < 1 || (i > 0 && start <= starts[i - 1])
     )
   )
     throw new Error('Invalid semantic mutation partition boundaries')
-  return plan.starts.flatMap((start, i) => {
-    const end = i + 1 < plan.starts.length ? plan.starts[i + 1] - 1 : lines
+  return starts.flatMap((start, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1] - 1 : lines
     const mutate = specifications.flatMap(specification => {
       const original = specificationRange(specification, lines)
       const low = Math.max(start, original.start),

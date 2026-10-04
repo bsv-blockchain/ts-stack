@@ -578,3 +578,118 @@ it('rolls back all record changes when metadata sealing fails after their writes
   const result = f.reopen().read([address()], clock, authorize)
   expect(result).toEqual({ revision: '0', observedAt: '170', records: [undefined] })
 })
+
+it('avoids redundant physical head writes while checking fresh authority and preserving refusal clocks', () => {
+  const f = fixture()
+  f.ledger.commit('0', [change()], clock, authorize)
+  const db = new DatabaseSync(f.path)
+  const envelope = () =>
+    String(db.prepare('SELECT envelope FROM protected_head WHERE id=1').get()!.envelope)
+  try {
+    const original = envelope()
+    let checks = 0
+    const guard = () => {
+      checks++
+    }
+    expect(f.ledger.read([address()], clock, guard).records[0]!.value.secret).toBe(
+      'synthetic-material'
+    )
+    expect(f.ledger.read([address()], () => '99', guard).observedAt).toBe('100')
+    expect(checks).toBe(2)
+    expect(envelope()).toBe(original)
+    f.reopen().commit(
+      '1',
+      [{ ...change(1, { secret: 'updated' }), expectedRevision: '1' }],
+      clock,
+      authorize
+    )
+    const foreign = envelope()
+    expect(foreign).not.toBe(original)
+    expect(f.ledger.read([address()], clock, guard).records[0]!.value.secret).toBe('updated')
+    expect(checks).toBe(3)
+    expect(envelope()).toBe(foreign)
+    expect(() =>
+      f.ledger.read(
+        [address()],
+        () => '130',
+        () => {
+          throw new Error('permission revoked')
+        }
+      )
+    ).toThrow('permission revoked')
+    const refused = envelope()
+    expect(refused).not.toBe(foreign)
+    expect(f.reopen().read([address()], () => '99', authorize)).toMatchObject({
+      revision: '2',
+      observedAt: '130'
+    })
+    expect(envelope()).toBe(refused)
+  } finally {
+    db.close()
+  }
+})
+
+it('rotates the custody of an unchanged empty head during a pure read', () => {
+  const keys = new Map([
+    ['old', key],
+    ['new', createSecretKey(Buffer.alloc(32, 21))]
+  ])
+  const provider = {
+    resolve(id: string) {
+      const found = keys.get(id)
+      if (!found) throw new Error('missing')
+      return found
+    }
+  }
+  const f = fixture(configuration, new NodeProtectedPayloadCodec(provider, 'old'))
+  f.ledger.read([address()], clock, authorize)
+  const db = new DatabaseSync(f.path)
+  const envelope = () =>
+    String(db.prepare('SELECT envelope FROM protected_head WHERE id=1').get()!.envelope)
+  try {
+    const old = envelope()
+    expect(JSON.parse(old).keyId).toBe('old')
+    const rotated = f.reopen(new NodeProtectedPayloadCodec(provider, 'new'))
+    expect(rotated.read([address()], clock, authorize)).toEqual({
+      revision: '0',
+      observedAt: '100',
+      records: [undefined]
+    })
+    expect(envelope()).not.toBe(old)
+    expect(JSON.parse(envelope()).keyId).toBe('new')
+    keys.delete('old')
+    expect(
+      f.reopen(new NodeProtectedPayloadCodec(provider, 'new')).read([address()], clock, authorize)
+        .observedAt
+    ).toBe('100')
+  } finally {
+    db.close()
+  }
+})
+
+it('still refuses unchanged reads when the active write custody key becomes unavailable', () => {
+  const keys = new Map([
+    ['old', key],
+    ['new', createSecretKey(Buffer.alloc(32, 21))]
+  ])
+  const provider = {
+    resolve(id: string) {
+      const found = keys.get(id)
+      if (!found) throw new Error('missing')
+      return found
+    }
+  }
+  const f = fixture(configuration, new NodeProtectedPayloadCodec(provider, 'old'))
+  f.ledger.read([address()], clock, authorize)
+  const rotated = f.reopen(new NodeProtectedPayloadCodec(provider, 'new'))
+  const db = new DatabaseSync(f.path)
+  try {
+    const old = db.prepare('SELECT envelope FROM protected_head WHERE id=1').get()!.envelope
+    keys.delete('new')
+    expect(() => rotated.read([address()], clock, authorize)).toThrow('custody is unavailable')
+    expect(db.prepare('SELECT envelope FROM protected_head WHERE id=1').get()!.envelope).toBe(old)
+    expect(f.ledger.read([address()], clock, authorize).observedAt).toBe('100')
+  } finally {
+    db.close()
+  }
+})

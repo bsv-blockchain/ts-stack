@@ -9,7 +9,8 @@ import {
   partitionMutationTarget,
   selectedMutationPartition,
   mutationExecutionMatrix,
-  partitionedMutationTargets
+  partitionedMutationTargets,
+  semanticMutationStarts
 } from './mutation-partitions.mjs'
 const compareSpecifications = (left, right) => left.localeCompare(right)
 const target = {
@@ -38,7 +39,9 @@ const semanticTargets = [
   'root-eviction-storage',
   'overlay-private-publication-admission',
   'private-publication-state',
-  'private-publication-service'
+  'private-publication-service',
+  'wallet-recovery-encoding',
+  'private-purchase-http'
 ]
 const sourceLines = (target, specifications) =>
   new Set(
@@ -82,11 +85,11 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 141)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 274)
+  assert.equal(matrix.include.length, 372)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 18]
+    [256, 116]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
@@ -174,16 +177,16 @@ test('semantic ranges retain future files and the exact original overlapping lin
     parts = partitionMutationTarget('private-purchase-state', selected)
   assert.deepEqual(
     parts.map(part => part.id),
-    ['progress-1', 'progress-2', 'progress-3', 'remaining']
+    ['progress-5', 'progress-6', 'progress-7', 'remaining']
   )
   assert.deepEqual(
     parts.flatMap(part => part.target.mutate),
     [
       `${file}:120-136`,
-      `${file}:137-154`,
-      `${file}:150-154`,
-      `${file}:155-160`,
-      `${file}:155-180`,
+      `${file}:137-153`,
+      `${file}:150-153`,
+      `${file}:154-160`,
+      `${file}:154-180`,
       future
     ]
   )
@@ -399,7 +402,10 @@ for (const [targetId, fallback, expected] of [
         'src/storage/actionRecovery/ActionRecoveryEncoding.ts',
         'src/storage/actionRecovery/ActionRecoveryEncodingLimits.ts'
       ],
-      json: ['src/storage/actionRecovery/ActionRecoveryJSON.ts']
+      json: [
+        'src/storage/actionRecovery/ActionRecoveryJSON.ts',
+        'src/storage/actionRecovery/ActionRecoveryJSONOwnership.ts'
+      ]
     }
   ],
   [
@@ -441,7 +447,10 @@ for (const [targetId, fallback, expected] of [
 ])
   test(`${targetId} retains every complete file and original qualification input`, () => {
     const canonical = buildMutationTargets(REPOSITORY_ROOT)[targetId]
-    const parts = partitionMutationTarget(targetId, canonical)
+    const parts = Object.keys(expected).map(id => ({
+      id,
+      target: selectedMutationPartition(targetId, canonical, id)
+    }))
     assert.deepEqual(Object.fromEntries(parts.map(part => [part.id, part.target.mutate])), expected)
     const union = parts.flatMap(part => part.target.mutate)
     assert.deepEqual(
@@ -700,4 +709,25 @@ test('durable buyer parts retain the complete source union and identical native 
   assert.deepEqual(parts.find(part => part.id === 'payment').target.mutate, [
     'src/private/WalletToolboxBuyerPayment.ts'
   ])
+})
+
+test('semantic anchors reject ambiguity, absent or duplicate methods and retain explicit numeric plans', () => {
+  const lines = ['preamble', 'first() {', '}', '  second() {', '}', 'third() {']
+  assert.deepEqual(
+    semanticMutationStarts(lines, { markers: ['second() {', 'third() {'] }),
+    [1, 4, 6]
+  )
+  const original = [1, 4]
+  assert.equal(semanticMutationStarts(lines, { starts: original }), original)
+  for (const plan of [
+    {},
+    { markers: [] },
+    { markers: [null] },
+    { markers: [''] },
+    { markers: ['missing() {'] },
+    { markers: ['}'] },
+    { starts: [1], markers: ['second() {'] },
+    { starts: null }
+  ])
+    assert.throws(() => semanticMutationStarts(lines, plan))
 })

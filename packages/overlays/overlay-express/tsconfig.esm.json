@@ -4,6 +4,6 @@
     "rootDir": "./",
     "outDir": "./dist/esm",
     "allowSyntheticDefaultImports": true,
-    "tsBuildInfoFile": "./node_modules/.cache/overlay-express-esm.tsbuildinfo"
+    "tsBuildInfoFile": "./.cache/overlay-express-esm.tsbuildinfo"
   }
 }

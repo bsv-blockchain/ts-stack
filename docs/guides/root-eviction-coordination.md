@@ -374,10 +374,14 @@ integrations remain separate requirements below.
 The component's tests cover independent bases, permanent retries, partial batches,
 expiry, policy change, divergent local root decisions, result capacity, two actual
 process-kill boundaries and exclusion of a separate writer during final enqueue.
-The full service still needs the evidence adapter connected to authenticated
-HTTP/status policy, broader local blocking-decision records, scheduled reassessment
-and every real lookup/cache/snapshot/live/GASP adapter. These remain explicit work
-in the implementation tracker; the journal alone is not a complete BRC-199 service.
+A complete installation connects the evidence adapter, authenticated HTTP/status
+policy, local blocking decisions, scheduled reassessment and every actual
+lookup/cache/snapshot/live/GASP adapter. The later sections describe these separate
+owners and the native two-root serving composition, which exercises actual
+Script/SPV evidence, Engine/Mongo admission, durable SQLite decisions, authenticated
+finite/live responses and retained GASP history. The journal alone does not install
+that composition or authorize its policy. Final qualification remains tracked in
+the implementation record.
 
 ## Durable intake and exact result signing
 
