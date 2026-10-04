@@ -36,6 +36,11 @@ missing old key cannot silently become an apparently empty store. Opening with a
 new active encryption key is allowed only while the custody provider can still
 resolve all required retained keys.
 
+The bounded parser returns an independent value and its validated canonical
+text for the current call. The ledger reuses those owned results for its shape
+and byte-length checks rather than serializing or copying the same plaintext
+again. Every later read authenticates and validates afresh.
+
 Each operation freshly authenticates the head and complete inventory under its
 native write transaction and resolves active write custody by making a fresh
 seal. When the authenticated canonical head and active key label are unchanged,

@@ -38,6 +38,9 @@ it('status uses retained original state without new chain verification or discov
 it('recovers an expired manifest obligation and verifies alternate BEEF without changing its original contract', async () => {
   const f = fixture()
   await f.coordinator.publish(f.contract.request, f.caller)
+  const original = structuredClone(
+    f.store.loadVerified(f.status.publicationId, () => '20', allow)!.original
+  )
   f.time('101')
   f.manifest.mockClear()
   const alternate = {
@@ -54,7 +57,7 @@ it('recovers an expired manifest obligation and verifies alternate BEEF without 
   expect(f.manifest).not.toHaveBeenCalled()
   expect(f.calls).toHaveLength(1)
   expect(f.store.loadVerified(f.status.publicationId, () => '101', allow)!.original).toEqual(
-    f.contract.record
+    original
   )
 })
 it('requires publisher ownership before revealing state or its original selector', async () => {

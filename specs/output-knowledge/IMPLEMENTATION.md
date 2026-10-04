@@ -4776,3 +4776,96 @@ hosted qualification. The old failed campaign was cancelled after its complete
 mutation parts pass; their complete core/aggregate and the final blank-selector,
 same-run 141-target campaign remain pending. No component score, ordinary pass
 or earlier source identity is substituted for those gates.
+
+### Hosted performance and complete SDK execution follow-up, 4 October
+
+The retained `010d97eee` hosted application log interrupted the original buyer
+history property at 286 of 300 after its unchanged 150-second limit. The full
+local application coverage pass did not qualify hosted performance. The full
+original buyer selection was profiled without narrowing: 55 tests/eight suites,
+both 300-case native properties, seed 3242026, blank replay, and original limits.
+It passed in 233.139 seconds; the buyer property took 79.921 seconds.
+
+An outside candidate retained the independently parsed value and validated
+canonical text from the current protected-ledger decode. Head comparison and
+record shape/byte-length checks reuse those owned results. Every later call
+still decrypts and validates afresh. Fresh custody and sealing, rotation,
+authenticated inventory, authorization, clock/refusal persistence, record
+bounds, errors, schema, locks, savepoints and FULL synchronization are preserved.
+No private value or authority is cached across calls. The identical buyer
+selection passed in 219.643 seconds, with its buyer property at 65.764 seconds;
+this local comparison is not a hosted performance qualification. The complete
+original native selection also passed 277 tests/16 suites. All consumed bytes
+and all 4,424 compiled dependency paths were fixed, and groups 44036/45397 were
+absent before adoption. An initial outside native harness omitted the original
+TypeScript transform and ran zero tests; that failure is retained separately.
+Five additional authenticated-restoration cases now check null, array, string,
+number and boolean records against the original refusal/error contract.
+
+SDK diagnostic run 37177374408 on `010d97eee` passed the client and transport
+parts: 240 of 250 detected (96%) and 86 of 91 (94.51%), with zero invalid or
+uncovered mutants. Verified archive digests bind those reports to that run,
+attempt and source. Its oversized core part passed the full 381-test baseline,
+then reached the original 45-minute hosted limit without a completed report.
+The failed terminal log remains retained; no complete SDK score is claimed.
+
+The SDK target now separates message validation, lookup and finite HTTP into
+complete file parts alongside the original client, transport and remaining
+Peer/future-core part. Every part keeps the same full test selection and all
+original settings; every original mutation tuple appears exactly once. The
+canonical aggregate still requires 90% and zero invalid/uncovered mutants. The
+complete matrix contains 141 canonical targets and 375 execution rows, in
+ordered batches of 256 and 119. Current pinned inventories contain 1,483 native
+clock mutations and 890 SDK authentication/HTTP mutations. Method anchors stay
+unique, exact and ordered; ambiguity or a missing method still fails closed.
+The earlier 372-row evidence describes the preceding plan and cannot qualify
+the new complete campaign. Adopted builds, full coverage, installed controls,
+reference compositions and exact-head hosted qualification follow before C2.
+
+### Final local boundary and reference validation, 4 October
+
+Hosted run 37178889968 on `b21aba89d` retained two application-suite
+failures and reached its unchanged 35-minute lane deadline. Its buyer history
+property stopped at 273 of 300 under the original 150-second limit. The
+publication recovery comparison also exposed a test-clock assumption: its
+fixture record could precede the independently verified accepted record by one
+second. The test now snapshots that accepted original immediately after first
+publication, then compares every field after recovery. No timestamp is excluded,
+clock bound relaxed or production behavior changed. The complete affected file
+passes all 21 tests on the adopted bytes.
+
+Four additional SDK authentication cases retain exact malformed-message errors
+under default, delegated and finite payload policies, and verify that nested
+payload-shaped metadata still obeys the original message byte budget. The full
+SDK coverage selection passes 8,364 tests/257 suites, zero skips, in 196.547
+seconds (94.65% statements, 88.59% branches, 96.26% functions, 95.74% lines).
+The original coverage thresholds, seed, replay and 1,800-second supervisor remain.
+Group 56325 is absent after the actual 06:03:24.969411 UTC receipt.
+
+The adopted production bytes also pass full application coverage: 3,447 tests/
+228 suites, zero skips, in 1,012.259 seconds (98.34/96.81/98.63/98.86%).
+All original 300-case properties, seed 3242026, blank replay, 150-second property
+and 2,100-second supervisor bounds remain. The buyer history property completes
+in 65.672 seconds locally; this does not qualify hosted performance. Group 51437
+is absent after the actual 05:53:48.150433 UTC drain, before the subsequent
+publication-test oracle adjustment. That test-only adjustment is covered by its
+fresh full 21-test file; final-head full hosted coverage is still required.
+
+The complete reference application passes 20 tests/five suites plus all three
+actual Chrome profiles in 79.911 seconds. Private-state delivery records exactly
+two Opens, zero browser exceptions, native IndexedDB, owned HTTPS, provider
+restart and proposal expiry. Complete wallet/application exact packs and strict
+consumers, wallet browser and actual Metro/Hermes profiles pass in 58.591 seconds.
+Complete SDK/application browser contracts pass all original budgets in 90.479
+seconds. Documentation compiles 62 examples against 24 exact tarballs in 9.524
+seconds. Their receipts fingerprint all 4,424 compiled dependency files across
+seven complete roots; bytes and path sets remain fixed. Groups
+57142/57167/57438/59714/61127 are independently absent before subsequent edits.
+
+Recommended and typed raw comparisons against the pushed `b21aba89d` introduce
+zero findings, with the unchanged pre-existing finding retained rather than
+suppressed or reclassified. The complete 494 installed controls and required
+root checks pass on the adopted production/partition changes; fresh final
+checks follow this evidence update. These local receipts do not replace complete
+exact-head hosted coverage/security or the one blank-selector, same-run,
+all-141 canonical/375-execution-row mutation qualification. C2 remains open.

@@ -20,7 +20,11 @@ const target = {
     'src/auth/clients/AuthFetch.ts:1-20',
     'src/auth/clients/AuthFetch.ts:40-50',
     'src/auth/transports/SimplifiedFetchTransport.ts:5-90',
-    'src/auth/FutureHelper.ts'
+    'src/auth/FutureHelper.ts',
+    'src/auth/AuthMessageValidation.ts:1-20',
+    'src/overlay-tools/OutputLookupProtocol.ts:1-30',
+    'src/overlay-tools/OutputLookupTransport.ts',
+    'src/overlay-tools/internal/OutputFiniteHTTP.ts'
   ],
   runnerOptions: { jest: { config: { testMatch: ['all-original-tests'] } } }
 }
@@ -41,7 +45,8 @@ const semanticTargets = [
   'private-publication-state',
   'private-publication-service',
   'wallet-recovery-encoding',
-  'private-purchase-http'
+  'private-purchase-http',
+  'sdk-auth-http'
 ]
 const sourceLines = (target, specifications) =>
   new Set(
@@ -85,11 +90,11 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 141)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 372)
+  assert.equal(matrix.include.length, 375)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 116]
+    [256, 119]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
@@ -204,7 +209,7 @@ test('execution partitions preserve complete original specifications and identic
   const parts = partitionMutationTarget('sdk-auth-http', target)
   assert.deepEqual(
     parts.map(part => part.id),
-    ['core', 'client', 'transport']
+    ['core', 'client', 'transport', 'message-validation', 'lookup', 'finite-http']
   )
   assert.deepEqual(
     parts.flatMap(part => part.target.mutate).sort(compareSpecifications),
@@ -220,6 +225,10 @@ test('execution partitions preserve complete original specifications and identic
     }
   }
   assert.equal(owner.get('src/auth/FutureHelper.ts'), 'core')
+  assert.equal(owner.get('src/auth/AuthMessageValidation.ts'), 'message-validation')
+  assert.equal(owner.get('src/overlay-tools/OutputLookupProtocol.ts'), 'lookup')
+  assert.equal(owner.get('src/overlay-tools/OutputLookupTransport.ts'), 'lookup')
+  assert.equal(owner.get('src/overlay-tools/internal/OutputFiniteHTTP.ts'), 'finite-http')
   assert.equal(selectedMutationPartition('sdk-auth-http', target), target)
   assert.throws(() => selectedMutationPartition('other', target, 'core'), /Unknown/)
 })
@@ -245,6 +254,9 @@ test('matrix expands only canonical SDKAuth while preserving original target ord
       { target: 'sdk-auth-http', partition: 'core' },
       { target: 'sdk-auth-http', partition: 'client' },
       { target: 'sdk-auth-http', partition: 'transport' },
+      { target: 'sdk-auth-http', partition: 'message-validation' },
+      { target: 'sdk-auth-http', partition: 'lookup' },
+      { target: 'sdk-auth-http', partition: 'finite-http' },
       { target: 'after', partition: 'whole' }
     ]
   )

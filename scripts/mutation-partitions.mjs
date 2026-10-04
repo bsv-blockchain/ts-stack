@@ -75,7 +75,11 @@ const plans = new Map([
       fallback: 'core',
       files: new Map([
         ['src/auth/clients/AuthFetch.ts', 'client'],
-        ['src/auth/transports/SimplifiedFetchTransport.ts', 'transport']
+        ['src/auth/transports/SimplifiedFetchTransport.ts', 'transport'],
+        ['src/auth/AuthMessageValidation.ts', 'message-validation'],
+        ['src/overlay-tools/OutputLookupProtocol.ts', 'lookup'],
+        ['src/overlay-tools/OutputLookupTransport.ts', 'lookup'],
+        ['src/overlay-tools/internal/OutputFiniteHTTP.ts', 'finite-http']
       ])
     }
   ],
@@ -383,7 +387,7 @@ const rangePlans = new Map(
               'private initialize(): void {',
               'private binding(kind: string, extra: OutputJSONObject): OutputJSONObject {',
               'private encode(binding: OutputJSONObject, text: string): string {',
-              'private decode(binding: OutputJSONObject, envelope: string, maximum: number): unknown {',
+              'private decode(binding: OutputJSONObject, envelope: string, maximum: number): ProtectedPlaintext {',
               'private envelopeBound(bytes: number): number {',
               'private saveHead(',
               'private head(): ProtectedLedgerHead {',

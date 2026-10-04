@@ -9,7 +9,8 @@ import {
   outputHex32,
   outputU64,
   parseOutputJSON,
-  type OutputJSONObject
+  type OutputJSONObject,
+  type OutputJSON
 } from '@bsv/sdk'
 import { SQLiteTransactionDomain } from '../storage/SQLiteTransactionDomain.js'
 import { NodeProtectedPayloadCodec } from './NodeProtectedPayloadCodec.js'
@@ -36,6 +37,11 @@ import {
 /** Explicit local storage-plan capacity; never widens protocol JSON packets. */
 export interface ProtectedLedgerCommitOptions {
   maximumBatchBytes: number
+}
+
+interface ProtectedPlaintext {
+  value: OutputJSON
+  text: string
 }
 
 interface ProtectedHeadSnapshot {
@@ -161,7 +167,7 @@ export class SQLiteProtectedLedger {
       bytes.fill(0)
     }
   }
-  private decode(binding: OutputJSONObject, envelope: string, maximum: number): unknown {
+  private decode(binding: OutputJSONObject, envelope: string, maximum: number): ProtectedPlaintext {
     const bytes = this.payloads.open(
       binding,
       parseOutputJSON(envelope, { bytes: this.envelopeBound(maximum) })
@@ -184,7 +190,8 @@ export class SQLiteProtectedLedger {
         'Noncanonical protected ledger record',
         'unavailable'
       )
-      return value
+      // Both fields belong to this authenticated call; neither survives in a cache.
+      return { value, text }
     } finally {
       bytes.fill(0)
     }
@@ -229,7 +236,11 @@ export class SQLiteProtectedLedger {
       'unavailable'
     )
     const revision = outputU64(row.revision).toString()
-    const value = this.decode(this.binding('head', { revision }), row.envelope, HEAD_BYTES)
+    const { value, text } = this.decode(
+      this.binding('head', { revision }),
+      row.envelope,
+      HEAD_BYTES
+    )
     closedOutputObject(value, [
       'revision',
       'observedAt',
@@ -253,7 +264,7 @@ export class SQLiteProtectedLedger {
     outputAssert(typeof envelope.keyId === 'string', 'Invalid protected ledger custody label')
     return {
       head: value as unknown as ProtectedLedgerHead,
-      text: canonicalOutputJSON(value, { bytes: HEAD_BYTES }),
+      text,
       keyId: envelope.keyId
     }
   }
@@ -297,7 +308,7 @@ export class SQLiteProtectedLedger {
       'unavailable'
     )
     const { kind, key, revision, reservedBytes, reservedUpdates, bytes } = header
-    const value = this.decode(
+    const { value, text } = this.decode(
       this.binding('record', {
         recordKind: kind,
         key,
@@ -309,13 +320,18 @@ export class SQLiteProtectedLedger {
       row.envelope,
       reservedBytes
     )
-    const owned = protectedValue(value, reservedBytes)
+    // The bounded parser already returned an independent data-only value, and
+    // decode checked its exact canonical text before clearing plaintext bytes.
     outputAssert(
-      Buffer.byteLength(owned.text, 'utf8') === bytes,
+      value !== null && typeof value === 'object' && !Array.isArray(value),
+      'Protected ledger record must be an object'
+    )
+    outputAssert(
+      Buffer.byteLength(text, 'utf8') === bytes,
       'Protected ledger record length differs',
       'unavailable'
     )
-    return { kind, key, revision, reservedBytes, reservedUpdates, value: owned.value }
+    return { kind, key, revision, reservedBytes, reservedUpdates, value }
   }
   private authorize(head: ProtectedLedgerHead, guard: ProtectedLedgerGuard): void {
     let active = true

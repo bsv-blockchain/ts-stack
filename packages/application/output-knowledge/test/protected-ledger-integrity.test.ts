@@ -89,6 +89,29 @@ it('refuses authenticated noncanonical JSON rather than silently normalizing res
   unavailable(() => f.reopen(), 'Noncanonical protected ledger record')
 })
 
+it.each<[string, string]>([
+  ['null', 'null'],
+  ['array', '[]'],
+  ['string', '"one"'],
+  ['number', '1'],
+  ['boolean', 'true']
+])(
+  'refuses an authenticated nonobject record before returning private state: %s',
+  (_label, text) => {
+    const f = populated()
+    restoreRecord(f, Buffer.from(text))
+    const rejection = {
+      name: 'OutputProtocolError',
+      code: 'invalid',
+      message: 'Protected ledger record must be an object'
+    }
+    expect(() => f.reopen()).toThrow(expect.objectContaining(rejection))
+    expect(() => f.ledger.read([address()], clock, authorize)).toThrow(
+      expect.objectContaining(rejection)
+    )
+  }
+)
+
 it('checks declared UTF-8 bytes against the decrypted value', () => {
   const f = populated()
   const plaintext = Buffer.from(canonicalOutputJSON({ secret: 'é' }))
