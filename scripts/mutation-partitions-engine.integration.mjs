@@ -207,7 +207,11 @@ test('serialized mutation configuration preserves both original overlay module p
       )
       assert.ok(transform, id)
       assert.equal(transform[2].useESM, original.displayName === 'private-esm', id)
-      assert.deepEqual(transform[2].tsconfig, original.transform['^.+\\.tsx?$'][1].tsconfig, id)
+      assert.deepEqual(
+        transform[2].tsconfig,
+        original.transform[String.raw`^.+\.tsx?$`][1].tsconfig,
+        id
+      )
     }
   }
 })

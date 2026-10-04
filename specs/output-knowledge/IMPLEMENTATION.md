@@ -4733,3 +4733,46 @@ unchanged and both process groups were verified empty. Required root checks are
 repeated on this final coherent authored batch before pushing. Whole-source,
 platform, documentation, browser-reference and exact-head hosted campaign gates
 remain pending, without transferring qualification from earlier source versions.
+
+The coherent batch was committed and pushed as `010d97eee4429c90d27e6a0c00e76a5723968d39`.
+All four SDK, wallet, application and Overlay Express builds pass on that source.
+Complete SDK coverage passes 8,360 tests in 257 suites at
+2026-10-04T04:36:58.084296Z, in 218.712 seconds: 94.66 percent statements,
+88.58 branches, 96.26 functions and 95.74 lines. Complete application coverage
+passes 3,442 tests in 228 suites at 2026-10-04T04:54:24.226915Z, in
+998.734 seconds: 98.34 percent statements, 96.81 branches, 98.63 functions
+and 98.86 lines. Neither skips a case. Original source unions, global thresholds,
+300-case properties, seed, blank replay, 150-second property interruption and
+35-minute application supervisor remain unchanged. Both readers retain unchanged
+captured inputs and independently empty process groups; no causal performance
+claim is made.
+
+Hosted analysis of that exact commit reports one new `javascript:S7780` finding
+in the installed normalization control. The corrected transform key uses
+`String.raw`, with independently identical UTF-16 and UTF-8 values. It changes
+neither a selection nor an assertion. The correction was prepared outside the
+frozen source and adopted only after the application reader's actual drain.
+The failed hosted result remains retained. Package source and compiled dependency
+bytes are unchanged by this control-only correction; final hosted verification
+still follows the next pushed commit.
+
+The complete reference application passes all 20 native tests in five suites
+and all three actual Chrome profiles at 2026-10-04T04:56:39.186248Z, in
+80.168 seconds. The private non-final profile reports exactly two Opens,
+zero browser exceptions, native IndexedDB, owned HTTPS, provider restart and
+proposal expiry. Wallet/application packing, strict consumers, actual wallet
+browser and Metro/Hermes mobile profiles pass at
+2026-10-04T04:58:29.465010Z, in 59.075 seconds. Complete SDK and application
+browser checks retain every original budget and pass at
+2026-10-04T05:00:34.575452Z, in 90.914 seconds. Compiled documentation
+examples pass at 2026-10-04T05:01:09.688553Z, in 9.694 seconds.
+
+These composition receipts additionally fingerprint all 4,424 actual compiled
+dependency files in seven roots. Every captured byte and the complete runtime
+file set remain unchanged; each process group is separately verified absent.
+The single control-literal correction remains distinct from final complete
+hosted qualification. The old failed campaign was cancelled after its complete
+275-job metadata was retained. Current exact-source SDK client and transport
+mutation parts pass; their complete core/aggregate and the final blank-selector,
+same-run 141-target campaign remain pending. No component score, ordinary pass
+or earlier source identity is substituted for those gates.
