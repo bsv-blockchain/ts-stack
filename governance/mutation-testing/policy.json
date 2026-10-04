@@ -506,6 +506,86 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-canonical-chunks",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/CanonicalPortableChunks.property.test.ts",
+      "risk": "critical",
+      "boundary": "Allocation-bounded canonical RFC8785 portable serialization and detached source ownership",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-packed-row",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38PackedRow.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded packed-row binary, date and historical JSON projection preserving exact legacy portable semantics",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-source-stream",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38Stream.test.ts",
+      "risk": "critical",
+      "boundary": "Complete thirteen-table canonical stream framing, original source validation and awaited cleanup before completion",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-knex-source",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38KnexSource.test.ts",
+      "risk": "critical",
+      "boundary": "Coherent retained SQLite/MySQL thirteen-table keyset sources, bounded payload admission and profile closure",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-json-stream",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38JsonStream.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded strict UTF8 and complete BRC38 document framing into private staging with semantic completion and cleanup",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-brc39-frame",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/Brc39Frame.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded standard WDAT envelope framing and explicit KDF/file admission preserving complete ciphertext and tag",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-brc39-node",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/Brc39StreamNode.test.ts",
+      "risk": "critical",
+      "boundary": "Node BRC39 native AEAD, canonical Argon2id/NFC, owned key/password cleanup and private staging backpressure",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-portable-private-file",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/portable/Brc39PrivateFileNode.test.ts",
+      "risk": "critical",
+      "boundary": "Node private authenticated-file quarantine, bounded serial I/O, complete verification and physical cleanup",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

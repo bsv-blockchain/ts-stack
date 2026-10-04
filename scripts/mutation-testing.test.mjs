@@ -214,7 +214,7 @@ test('additional package-relative fixture inputs select their target without rep
   )
 
   const canonical = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(canonical).length, 49)
+  assert.equal(Object.keys(canonical).length, 57)
   assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
     'test/utils/snapshotRelationFixtures.ts',
     'test/utils/snapshotCertificateFixtures.ts',
@@ -377,6 +377,48 @@ test('adaptive paging owns its complete controller without removing the existing
   ])
   assert.ok(affected.includes('wallet-adaptive-sync-budget'))
   assert.ok(affected.includes('wallet-snapshot-sync'))
+})
+
+test('portable streaming keeps every complete source module and original behavioral suite', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const modules = [
+    ['wallet-portable-canonical-chunks', 'CanonicalPortableChunks'],
+    ['wallet-portable-packed-row', 'Brc38PackedRow'],
+    ['wallet-portable-source-stream', 'Brc38Stream'],
+    ['wallet-portable-knex-source', 'Brc38KnexSource'],
+    ['wallet-portable-json-stream', 'Brc38JsonStream'],
+    ['wallet-portable-brc39-frame', 'Brc39Frame'],
+    ['wallet-portable-brc39-node', 'Brc39StreamNode'],
+    ['wallet-portable-private-file', 'Brc39PrivateFileNode']
+  ]
+  const originalSuites = [
+    'Brc38JsonStream.property.test.ts',
+    'Brc38JsonStream.test.ts',
+    'Brc38KnexSource.test.ts',
+    'Brc38PackedRow.test.ts',
+    'Brc38Stream.test.ts',
+    'Brc39Frame.property.test.ts',
+    'Brc39Frame.test.ts',
+    'Brc39PrivateFileNode.test.ts',
+    'Brc39StreamNode.test.ts',
+    'CanonicalPortableChunks.property.test.ts',
+    'CanonicalPortableChunks.test.ts'
+  ].map(name => `<rootDir>/src/storage/portable/${name}`)
+  for (const [id, source] of modules) {
+    const target = targets[id]
+    assert.deepEqual(target.mutate, [`src/storage/portable/${source}.ts`])
+    assert.deepEqual(target.runnerOptions.jest.config.testMatch, originalSuites)
+    assert.deepEqual(target.additionalInputs, [
+      'src/storage/portable/index.ts',
+      'src/storage/portable/stream.ts',
+      'src/storage/portable/node.ts'
+    ])
+    assert.ok(
+      selectAffectedMutationTargets(targets, [
+        `packages/wallet/wallet-toolbox/src/storage/portable/${source}.ts`
+      ]).includes(id)
+    )
+  }
 })
 
 test('snapshot sync owns every inherited manager region and complete primary selection', () => {

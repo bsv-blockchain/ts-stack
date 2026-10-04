@@ -3,8 +3,8 @@ id: wallet-sync-reliability
 title: 'Resumable wallet synchronization and proof recovery'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-04'
+last_verified: '2026-10-04'
 review_cadence_days: 30
 status: beta
 tags: [wallet, sync, storage, performance]
@@ -20,6 +20,18 @@ proceed between commits. Remote/custom destinations retain the established
 exclusive path unless their local provider explicitly supports the required
 capability. Existing `syncFromReader`, `syncToWriter` and their result contracts
 remain available.
+
+## Optional portable streaming components
+
+The candidate adds `@bsv/wallet-toolbox/portable` for bounded BRC-38 codecs,
+private JSON staging and BRC-39 framing. The `/portable/node` entry adds a
+dedicated coherent SQL source, native encryption/decryption and private file
+quarantine. The legacy materialized APIs retain their contracts. Read the
+[portable streaming contract](wallet-data-portability.md#unpublished-bounded-streaming-entries)
+for explicit limits, semantic validation and cleanup requirements. These
+components do not advertise incremental synchronization or activate an imported
+profile. Hard database/WAL/directory quotas, total native memory and IPC bounds,
+durable import recovery and full issue #544 qualification remain required.
 
 ## Consumer contract
 

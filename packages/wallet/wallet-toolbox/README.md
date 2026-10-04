@@ -52,7 +52,7 @@ opt in with `supportsReadSnapshot` and `readSnapshot`. Use the export option
 `requireSnapshot: true` to refuse unsupported capture; old custom-provider calls
 retain their documented caller-quiesced fallback.
 Recognized optional nullable JSON fields are omitted in a detached archive copy;
-array entries and meaningful falsy values are preserved. The helpers still
+array entries and meaningful falsy values are preserved. The legacy helpers still
 materialize the full document/file, and IndexedDB writers wait during capture.
 Run `pnpm test:snapshot-archive-crash` for native SQLite process recovery and
 `pnpm test:snapshot-archive-mysql` for the disposable MySQL fixture from this
@@ -65,6 +65,13 @@ memory/CPU/process count and temporary data volume; individual Docker calls,
 readiness and the child proof have deadlines. Failure or cancellation drains
 owned work and attempts exact-owner cleanup before reporting its outcome;
 unproved cleanup fails qualification. Other wallet shards do not start MySQL.
+
+The unpublished candidate adds optional `@bsv/wallet-toolbox/portable` and
+`@bsv/wallet-toolbox/portable/node` streaming entries. They require explicit
+resource ceilings, coherent source validation and private staging. They preserve
+the existing archive format and materialized APIs. See the
+[streaming contracts and remaining limits](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/#unpublished-bounded-streaming-entries)
+before integrating them. Full issue #544 production qualification remains open.
 
 The candidate also contains internal SQL journal primitives for exact revisions,
 bounded metadata pages, bootstrap with a durable explicit row allowance,

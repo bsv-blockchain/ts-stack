@@ -9,5 +9,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "files": ["hashWasm.cts", "hashWasm.mts"]
+  "files": ["hashWasm.cts", "hashWasm.mts", "portableStreams.ts"]
 }

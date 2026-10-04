@@ -45,6 +45,60 @@ function jestTarget(
   }
 }
 
+function portableStreamMutationTargets(repositoryRoot) {
+  const definitions = [
+    [
+      'wallet-portable-canonical-chunks',
+      'CanonicalPortableChunks',
+      'CanonicalPortableChunks.property.test.ts'
+    ],
+    ['wallet-portable-packed-row', 'Brc38PackedRow', 'Brc38PackedRow.test.ts'],
+    ['wallet-portable-source-stream', 'Brc38Stream', 'Brc38Stream.test.ts'],
+    ['wallet-portable-knex-source', 'Brc38KnexSource', 'Brc38KnexSource.test.ts'],
+    ['wallet-portable-json-stream', 'Brc38JsonStream', 'Brc38JsonStream.property.test.ts'],
+    ['wallet-portable-brc39-frame', 'Brc39Frame', 'Brc39Frame.property.test.ts'],
+    ['wallet-portable-brc39-node', 'Brc39StreamNode', 'Brc39StreamNode.test.ts'],
+    ['wallet-portable-private-file', 'Brc39PrivateFileNode', 'Brc39PrivateFileNode.test.ts']
+  ]
+  const testMatch = [
+    '<rootDir>/src/storage/portable/Brc38JsonStream.property.test.ts',
+    '<rootDir>/src/storage/portable/Brc38JsonStream.test.ts',
+    '<rootDir>/src/storage/portable/Brc38KnexSource.test.ts',
+    '<rootDir>/src/storage/portable/Brc38PackedRow.test.ts',
+    '<rootDir>/src/storage/portable/Brc38Stream.test.ts',
+    '<rootDir>/src/storage/portable/Brc39Frame.property.test.ts',
+    '<rootDir>/src/storage/portable/Brc39Frame.test.ts',
+    '<rootDir>/src/storage/portable/Brc39PrivateFileNode.test.ts',
+    '<rootDir>/src/storage/portable/Brc39StreamNode.test.ts',
+    '<rootDir>/src/storage/portable/CanonicalPortableChunks.property.test.ts',
+    '<rootDir>/src/storage/portable/CanonicalPortableChunks.test.ts'
+  ]
+  return Object.fromEntries(
+    definitions.map(([id, source, property]) => [
+      id,
+      {
+        packageDirectory: 'packages/wallet/wallet-toolbox',
+        manifest: 'packages/wallet/wallet-toolbox/package.json',
+        propertyTest: `packages/wallet/wallet-toolbox/src/storage/portable/${property}`,
+        mutate: [`src/storage/portable/${source}.ts`],
+        additionalInputs: [
+          'src/storage/portable/index.ts',
+          'src/storage/portable/stream.ts',
+          'src/storage/portable/node.ts'
+        ],
+        ...jestTarget('jest.config.cjs', testMatch, {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        })
+      }
+    ])
+  )
+}
+
 function vitestTarget(configFile) {
   return {
     testRunner: 'vitest',
@@ -927,6 +981,7 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    ...portableStreamMutationTargets(repositoryRoot),
     ...snapshotSyncMutationTargets(repositoryRoot),
     'overlay-linkage': {
       packageDirectory: 'packages/overlays/topics',

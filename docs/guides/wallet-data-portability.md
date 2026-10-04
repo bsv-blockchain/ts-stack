@@ -3,8 +3,8 @@ id: wallet-data-portability
 title: 'BRC-38/39 Wallet Data Portability'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-04'
+last_verified: '2026-10-04'
 review_cadence_days: 30
 status: stable
 tags: [wallet, backup, interoperability, brc38, brc39]
@@ -66,11 +66,23 @@ IndexedDB and remote clients do not gain this capability. The existing export
 helpers continue to use their scoped capture path; see
 [retained SQL view limits](wallet-sync-reliability.md#retained-local-sql-read-views-unpublished-candidate).
 
-This is an intermediate source candidate, not a released streaming export API.
-The materialized helpers below still allocate the full document/file. Remote
-snapshot handles, bounded immutable paging, streaming files, staged recovery and
-the push/backup scheduling changes remain required parts of the
+This is an unpublished source candidate. The legacy materialized helpers below
+still allocate the full document/file. The optional streaming entries described
+below provide component limits; remote snapshot handles, durable staged recovery,
+platform adapters and push/backup scheduling remain required parts of the
 [full implementation program](https://github.com/bsv-blockchain/ts-stack/blob/codex/wallet-sync-interop-reliability/specs/wallet/sync-portability-program.md).
+
+### Unpublished bounded streaming entries
+
+The 2.15 candidate adds `@bsv/wallet-toolbox/portable` for bounded canonical value/row projection, the all-thirteen-table BRC-38 encoder and private JSON staging reader, and BRC-39 framing. `@bsv/wallet-toolbox/portable/node` additionally provides `openBrc38KnexSource`, native AES-GCM encryption/decryption and `createBrc39NodeFileQuarantine`. The existing materialized helpers and browser/mobile roots retain their contracts.
+
+Supply explicit row, page, metadata, chunk, archive, password and KDF ceilings. `openBrc38KnexSource` requires a dedicated compatible SQLite/MySQL reader provider and keeps source settings, identity, sync state and all thirteen table streams in one retained read view. A slow consumer occupies that provider until cleanup; use an independent foreground provider. The built-in SQL source validates closure in that same view before and after complete traversal. Host-defined sources must implement their own independent complete semantic/provenance validation and awaited cleanup.
+
+Encryption emits the existing WDAT envelope with canonical Argon2id defaults (7 iterations, 131072 KiB, parallelism 1), fresh 32-byte salt/nonce, NFC password bytes and a 16-byte GCM tag. New exports refuse weaker strength. Decryption admits valid legacy parameter values only within caller-selected work ceilings and supported native nonce lengths; the materialized codec remains available with its existing input contract. Progress and cancellation occur between owned operations; an already running KDF or file/database operation settles before cleanup. Source validation and physical close must succeed before the final encryption tag. Output remains private until the host completes its durable save transaction.
+
+Decryption writes only into isolated quarantine. GCM authentication must precede strict UTF-8 and complete BRC-38 semantic validation. `createBrc39NodeFileQuarantine` uses a caller-owned trusted parent, private 0700/0600 files, bounded serial reads/writes, fsync, content verification and explicit awaited `discard()`. Its `withAuthenticatedChunks` callback is available after validation and closes its reader even on early return. Always discard after the host operation settles. It does not import, activate a profile or provide a durable recovery transaction. `readBrc38JsonStream` likewise accepts authenticated plaintext and awaits one private staging callback at a time; its host validator must check every staged row, unique key, relation, identity, network and original provenance before a result can be used.
+
+These entry points bound each component's admitted work and buffers. They do not establish native allocator/RSS/IPC bounds, hard database/WAL/directory quotas, durable occupied-target restore, replicated remote export destinations, or physical mobile qualification. Those remain mandatory in the full #544 program. No pending intermediate API is a released production guarantee.
 
 ## Coverage and limits
 
@@ -227,12 +239,7 @@ identity/network, obtain the user's confirmation of the target and mode, then
 invoke import. Do not trust an archive's identity as the selected profile.
 
 ```ts
-import {
-  decryptBRC39,
-  importBRC38,
-  type BRC38WalletData,
-  type StorageProvider
-} from '@bsv/wallet-toolbox'
+import { decryptBRC39, importBRC38, type BRC38WalletData, type StorageProvider } from '@bsv/wallet-toolbox'
 
 export async function previewWalletDataFile(
   bytes: Uint8Array,
@@ -251,10 +258,7 @@ export async function previewWalletDataFile(
 }
 
 // Call only after profile/target confirmation. Do not mutate the preview.
-export async function restoreConfirmedWalletData(
-  emptyTarget: StorageProvider,
-  document: BRC38WalletData
-) {
+export async function restoreConfirmedWalletData(emptyTarget: StorageProvider, document: BRC38WalletData) {
   return await importBRC38(emptyTarget, document, { mode: 'restore' })
 }
 ```
