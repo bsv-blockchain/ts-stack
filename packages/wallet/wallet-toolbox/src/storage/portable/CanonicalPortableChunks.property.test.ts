@@ -55,3 +55,30 @@ test('generated JSON values preserve exact canonical bytes and per-chunk bounds'
     }
   )
 }, 180000)
+
+test('generated UTF16 strings agree with independent UTF8 roundtrip validity and JSON bytes', () => {
+  fc.assert(
+    fc.property(
+      fc.array(fc.integer({ min: 0, max: 0xffff }), { maxLength: 128 }),
+      fc.integer({ min: 64, max: 1024 }),
+      (units, maximumChunkBytes) => {
+        const value = String.fromCharCode(...units)
+        const encode = () => [...canonicalPortableChunks(value, { maximumValueBytes: 4096, maximumChunkBytes })]
+        if (Buffer.from(value, 'utf8').toString('utf8') !== value) {
+          expect(encode).toThrow(TypeError)
+        } else {
+          const chunks = encode()
+          expect(chunks.every(chunk => chunk.byteLength > 0 && chunk.byteLength <= maximumChunkBytes)).toBe(true)
+          expect(Buffer.concat(chunks).toString('utf8')).toBe(JSON.stringify(value))
+        }
+      }
+    ),
+    {
+      numRuns: Math.max(300, Number(process.env.FAST_CHECK_NUM_RUNS ?? 300)),
+      seed: Number(process.env.FAST_CHECK_SEED ?? 3242026),
+      ...(process.env.FAST_CHECK_PATH ? { path: process.env.FAST_CHECK_PATH } : {}),
+      interruptAfterTimeLimit: 150000,
+      markInterruptAsFailure: true
+    }
+  )
+}, 180000)

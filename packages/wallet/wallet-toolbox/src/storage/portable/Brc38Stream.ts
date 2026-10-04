@@ -134,24 +134,25 @@ export async function createBrc38Stream(source: Brc38StreamSource, selected: Brc
         yield bytes.slice(offset, offset + maximumChunkBytes)
       }
     }
+    async function* tableChunks(index: number, table: Table) {
+      yield* literal(`${index === 0 ? '' : ','}${JSON.stringify(table)}:[`)
+      let first = true
+      for await (const row of rows(table)) {
+        signal?.throwIfAborted()
+        objectRow(row)
+        if (!first) yield* literal(',')
+        first = false
+        yield* canonicalPortableChunks(row, rowPolicy)
+      }
+      yield* literal(']')
+    }
     async function* body() {
       let failure: { error: unknown } | undefined
       try {
         yield* literal(`{"brc":38,"exportedAt":${JSON.stringify(header.exportedAt)},"formatVersion":1,"sourceStorage":`)
         yield* canonicalPortableChunks(header.sourceStorage, headerPolicy)
         yield* literal(',"tables":{')
-        for await (const [index, table] of tables.entries()) {
-          yield* literal(`${index === 0 ? '' : ','}${JSON.stringify(table)}:[`)
-          let first = true
-          for await (const row of rows(table)) {
-            signal?.throwIfAborted()
-            objectRow(row)
-            if (!first) yield* literal(',')
-            first = false
-            yield* canonicalPortableChunks(row, rowPolicy)
-          }
-          yield* literal(']')
-        }
+        for (const [index, table] of tables.entries()) yield* tableChunks(index, table)
         yield* literal('},"title":"User Wallet Data Format","user":')
         yield* canonicalPortableChunks(header.user, headerPolicy)
         yield* literal('}')
@@ -163,12 +164,12 @@ export async function createBrc38Stream(source: Brc38StreamSource, selected: Brc
       } finally {
         try {
           await release()
-        } catch (cleanup) {
+        } catch (error_) {
           failure = {
             error:
               failure === undefined
-                ? cleanup
-                : new AggregateError([failure.error, cleanup], 'BRC-38 source processing and cleanup failed', {
+                ? error_
+                : new AggregateError([failure.error, error_], 'BRC-38 source processing and cleanup failed', {
                     cause: failure.error
                   })
           }
@@ -190,8 +191,8 @@ export async function createBrc38Stream(source: Brc38StreamSource, selected: Brc
     const iterator = chunks()
     return Object.freeze({
       chunks: iterator,
-      async validateCompleted() {
-        if (!completed) throw new Error('BRC-38 source stream did not complete')
+      validateCompleted() {
+        return completed ? Promise.resolve() : Promise.reject(new Error('BRC-38 source stream did not complete'))
       },
       async close() {
         let failure: { error: unknown } | undefined
@@ -202,11 +203,11 @@ export async function createBrc38Stream(source: Brc38StreamSource, selected: Brc
         }
         try {
           await release()
-        } catch (cleanup) {
-          if (failure === undefined) failure = { error: cleanup }
-          else if (failure.error !== cleanup)
+        } catch (error_) {
+          if (failure === undefined) failure = { error: error_ }
+          else if (failure.error !== error_)
             failure = {
-              error: new AggregateError([failure.error, cleanup], 'BRC-38 iterator and source cleanup failed', {
+              error: new AggregateError([failure.error, error_], 'BRC-38 iterator and source cleanup failed', {
                 cause: failure.error
               })
             }
@@ -217,8 +218,8 @@ export async function createBrc38Stream(source: Brc38StreamSource, selected: Brc
   } catch (error) {
     try {
       await release()
-    } catch (cleanup) {
-      throw new AggregateError([error, cleanup], 'BRC-38 preparation and source cleanup failed', { cause: error })
+    } catch (error_) {
+      throw new AggregateError([error, error_], 'BRC-38 preparation and source cleanup failed', { cause: error })
     }
     throw error
   }

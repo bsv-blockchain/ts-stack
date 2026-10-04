@@ -407,7 +407,11 @@ test('portable streaming keeps every complete source module and original behavio
   for (const [id, source] of modules) {
     const target = targets[id]
     assert.deepEqual(target.mutate, [`src/storage/portable/${source}.ts`])
-    assert.deepEqual(target.runnerOptions.jest.config.testMatch, originalSuites)
+    const selectedSuites = target.runnerOptions.jest.config.testMatch
+    assert.deepEqual(selectedSuites.slice(0, originalSuites.length), originalSuites)
+    assert.deepEqual(selectedSuites.slice(originalSuites.length), [
+      '<rootDir>/src/storage/portable/EntryPoints.test.ts'
+    ])
     assert.deepEqual(target.additionalInputs, [
       'src/storage/portable/index.ts',
       'src/storage/portable/stream.ts',
@@ -416,6 +420,11 @@ test('portable streaming keeps every complete source module and original behavio
     assert.ok(
       selectAffectedMutationTargets(targets, [
         `packages/wallet/wallet-toolbox/src/storage/portable/${source}.ts`
+      ]).includes(id)
+    )
+    assert.ok(
+      selectAffectedMutationTargets(targets, [
+        'packages/wallet/wallet-toolbox/src/storage/portable/EntryPoints.test.ts'
       ]).includes(id)
     )
   }

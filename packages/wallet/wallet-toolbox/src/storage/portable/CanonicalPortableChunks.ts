@@ -29,11 +29,9 @@ function unicode(value: string, state: State): void {
   charge(state, 64 + 2 * value.length)
   for (let index = 0; index < value.length; index++) {
     if (index % 1024 === 0) state.signal?.throwIfAborted()
-    const unit = value.charCodeAt(index)
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = value.charCodeAt(++index)
-      if (!(next >= 0xdc00 && next <= 0xdfff)) invalid()
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) invalid()
+    const point = value.codePointAt(index)!
+    if (point >= 0xd800 && point <= 0xdfff) invalid()
+    if (point > 0xffff) index++
   }
 }
 function child(value: object, key: string): unknown {
@@ -85,8 +83,8 @@ function* stringParts(value: string, width: number): Generator<string> {
   let offset = 0
   while (offset < value.length) {
     let end = Math.min(value.length, offset + width)
-    const tail = value.charCodeAt(end - 1)
-    if (end < value.length && tail >= 0xd800 && tail <= 0xdbff) end++
+    const tail = value.codePointAt(end - 1)!
+    if (end < value.length && tail > 0xffff) end++
     // ECMAScript escaping on a bounded window preserves JCS scalar spelling.
     yield JSON.stringify(value.slice(offset, end)).slice(1, -1)
     offset = end

@@ -47,7 +47,7 @@ const tables: readonly Table[] = Object.freeze([
   'certificateFields',
   'syncStates'
 ])
-const isTable = (value: string): value is Table => tables.some(table => table === value)
+const isTable = (value: string): value is Table => (tables as readonly string[]).includes(value)
 const typedArrayPrototype: object = Object.getPrototypeOf(Uint8Array.prototype)
 const byteLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength')!.get!
 const bufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'buffer')!.get!
@@ -77,11 +77,9 @@ function object(value: unknown): value is Record<string, Value> {
 }
 function unicode(value: string): void {
   for (let index = 0; index < value.length; index++) {
-    const unit = value.charCodeAt(index)
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = value.charCodeAt(++index)
-      if (!(next >= 0xdc00 && next <= 0xdfff)) invalid()
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) invalid()
+    const point = value.codePointAt(index)!
+    if (point >= 0xd800 && point <= 0xdfff) invalid()
+    if (point > 0xffff) index++
   }
 }
 function portable(value: unknown): asserts value is Value {
@@ -404,13 +402,13 @@ async function discard(input: Input | undefined, sink: Brc38JsonStagingSink, err
   const failures = [error]
   try {
     await input?.close()
-  } catch (cleanup) {
-    if (cleanup !== error) failures.push(cleanup)
+  } catch (error_) {
+    if (error_ !== error) failures.push(error_)
   }
   try {
     await sink.discard(error)
-  } catch (cleanup) {
-    failures.push(cleanup)
+  } catch (error_) {
+    failures.push(error_)
   }
   if (failures.length > 1)
     throw new AggregateError(failures, 'BRC-38 JSON reading and staging cleanup failed', { cause: error })

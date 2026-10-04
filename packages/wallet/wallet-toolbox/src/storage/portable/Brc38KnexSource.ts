@@ -327,9 +327,9 @@ export async function openBrc38KnexSource(
   } catch (error) {
     try {
       await release()
-    } catch (cleanup) {
-      if (cleanup === error) throw error
-      throw new AggregateError([error, cleanup], 'BRC-38 source opening and physical cleanup failed', { cause: error })
+    } catch (error_) {
+      if (error_ === error) throw error
+      throw new AggregateError([error, error_], 'BRC-38 source opening and physical cleanup failed', { cause: error })
     }
     throw error
   }

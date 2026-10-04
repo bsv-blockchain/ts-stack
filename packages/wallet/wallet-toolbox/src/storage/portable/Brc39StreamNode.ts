@@ -95,8 +95,8 @@ function release(session: CryptoOwnership): void {
 async function discard(quarantine: Pick<Brc39StreamQuarantine, 'discard'>, original: unknown): Promise<never> {
   try {
     await quarantine.discard()
-  } catch (cleanup) {
-    throw new AggregateError([original, cleanup], 'BRC-39 processing and quarantine cleanup failed', {
+  } catch (error_) {
+    throw new AggregateError([original, error_], 'BRC-39 processing and quarantine cleanup failed', {
       cause: original
     })
   }
@@ -133,9 +133,9 @@ async function closeFailedSource(source: Brc39StreamPlaintext, original: unknown
   try {
     await source.close?.()
     return original
-  } catch (cleanup) {
-    if (cleanup === original) return original
-    return new AggregateError([original, cleanup], 'BRC-39 encryption and source cleanup failed', { cause: original })
+  } catch (error_) {
+    if (error_ === original) return original
+    return new AggregateError([original, error_], 'BRC-39 encryption and source cleanup failed', { cause: original })
   }
 }
 function* splitOutput(bytes: Uint8Array, maximumChunkBytes: number): Generator<Uint8Array> {
@@ -213,8 +213,8 @@ export async function encryptBrc39StreamToQuarantine(
     let failure = error
     try {
       release(session)
-    } catch (cleanup) {
-      failure = new AggregateError([error, cleanup], 'BRC-39 encryption and crypto cleanup failed', { cause: error })
+    } catch (error_) {
+      failure = new AggregateError([error, error_], 'BRC-39 encryption and crypto cleanup failed', { cause: error })
     }
     return await discard(output, await closeFailedSource(source, failure))
   }
@@ -295,10 +295,10 @@ export async function decryptBrc39StreamToQuarantine(
   } catch (error) {
     try {
       release(session)
-    } catch (cleanup) {
+    } catch (error_) {
       return await discard(
         quarantine,
-        new AggregateError([error, cleanup], 'BRC-39 processing and crypto cleanup failed', { cause: error })
+        new AggregateError([error, error_], 'BRC-39 processing and crypto cleanup failed', { cause: error })
       )
     }
     return await discard(quarantine, error)

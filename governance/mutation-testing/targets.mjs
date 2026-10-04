@@ -71,7 +71,8 @@ function portableStreamMutationTargets(repositoryRoot) {
     '<rootDir>/src/storage/portable/Brc39PrivateFileNode.test.ts',
     '<rootDir>/src/storage/portable/Brc39StreamNode.test.ts',
     '<rootDir>/src/storage/portable/CanonicalPortableChunks.property.test.ts',
-    '<rootDir>/src/storage/portable/CanonicalPortableChunks.test.ts'
+    '<rootDir>/src/storage/portable/CanonicalPortableChunks.test.ts',
+    '<rootDir>/src/storage/portable/EntryPoints.test.ts'
   ]
   return Object.fromEntries(
     definitions.map(([id, source, property]) => [

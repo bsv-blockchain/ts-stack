@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, stat, truncate, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FileHandle } from 'node:fs/promises'
@@ -207,12 +207,17 @@ test('private file modes and detached writes precede authenticated bounded readb
   await expect(stage.withAuthenticatedChunks(collect)).rejects.toThrow('has not been validated')
   const { directory, filename } = await stagedPath()
   expect((await stat(directory)).mode & 0o777).toBe(0o700)
-  expect((await stat(filename)).mode & 0o777).toBe(0o600)
-  const input = new Uint8Array(expected)
-  const pending = stage.appendUntrusted(input)
-  input.fill(0)
-  await pending
-  expect(await readFile(filename)).toEqual(expected)
+  const reader = await open(filename, 'r')
+  try {
+    expect((await reader.stat()).mode & 0o777).toBe(0o600)
+    const input = new Uint8Array(expected)
+    const pending = stage.appendUntrusted(input)
+    input.fill(0)
+    await pending
+    expect(await reader.readFile()).toEqual(expected)
+  } finally {
+    await reader.close()
+  }
   expect(validated).toBe(0)
   await stage.validateAuthenticated()
   expect(validated).toBe(1)

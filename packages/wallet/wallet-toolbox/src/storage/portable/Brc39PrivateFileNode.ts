@@ -90,13 +90,18 @@ class PrivateFile {
       const write = (bytes: Uint8Array, offset: number) => writer.write(bytes, offset, bytes.length - offset, null)
       let offset = 0
       const check = () => this.check()
-      async function* writes() {
-        while (offset < bytes.length) {
-          check()
-          yield write(bytes, offset)
+      const writes: AsyncIterable<Awaited<ReturnType<typeof write>>> = {
+        [Symbol.asyncIterator]() {
+          return {
+            next() {
+              if (offset >= bytes.length) return Promise.resolve({ done: true as const, value: undefined })
+              check()
+              return write(bytes, offset).then(value => ({ done: false as const, value }))
+            }
+          }
         }
       }
-      for await (const { bytesWritten } of writes()) {
+      for await (const { bytesWritten } of writes) {
         if (!Number.isSafeInteger(bytesWritten) || bytesWritten < 1 || bytesWritten > bytes.length - offset)
           throw new Error('Private quarantine write made invalid progress')
         this.digest.update(bytes.subarray(offset, offset + bytesWritten))
@@ -118,15 +123,21 @@ class PrivateFile {
     const actualDigest = createHash('sha256')
     const maximum = this.policy.maximumChunkBytes
     const check = () => this.check()
-    async function* reads() {
-      while (offset < size) {
-        check()
-        const bytes = new Uint8Array(Math.min(maximum, size - offset))
-        yield reader.read(bytes, 0, bytes.length, offset)
+    const read = (bytes: Uint8Array) => reader.read(bytes, 0, bytes.length, offset)
+    const reads: AsyncIterable<Awaited<ReturnType<typeof read>>> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            if (offset >= size) return Promise.resolve({ done: true as const, value: undefined })
+            check()
+            const bytes = new Uint8Array(Math.min(maximum, size - offset))
+            return read(bytes).then(value => ({ done: false as const, value }))
+          }
+        }
       }
     }
     async function* chunks() {
-      for await (const { buffer, bytesRead } of reads()) {
+      for await (const { buffer, bytesRead } of reads) {
         if (!Number.isSafeInteger(bytesRead) || bytesRead < 1 || bytesRead > buffer.length)
           throw new Error('Private quarantine read made invalid progress')
         offset += bytesRead
@@ -163,8 +174,8 @@ class PrivateFile {
       async close => {
         try {
           await close()
-        } catch (cleanup) {
-          failure = { error: failure === undefined ? cleanup : combined(failure.error, cleanup) }
+        } catch (error_) {
+          failure = { error: failure === undefined ? error_ : combined(failure.error, error_) }
         }
       }
     )
@@ -272,8 +283,8 @@ export async function createBrc39NodeFileQuarantine(
     try {
       if (stage === undefined) await rm(directory, { recursive: true, force: true })
       else await stage.discard()
-    } catch (cleanup) {
-      throw combined(error, cleanup)
+    } catch (error_) {
+      throw combined(error, error_)
     }
     throw error
   }
