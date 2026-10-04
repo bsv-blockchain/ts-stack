@@ -121,7 +121,7 @@ export class UMPLookupService implements LookupService {
     return docs.map(doc => ({
       txid: doc.txid,
       outputIndex: doc.outputIndex,
-      history: async () => true
+      history: () => Promise.resolve(true)
     }))
   }
 

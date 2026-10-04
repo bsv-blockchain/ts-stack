@@ -787,29 +787,37 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     if (pinnedOutpoint == null) return undefined
     const candidates = new Map(tokens.map(token => [token.currentOutpoint, token]))
     const pinSource = candidates.has(pinnedOutpoint) ? this.findLookupTransaction(outputs, pinnedOutpoint) : undefined
+    const relationships = await Promise.all(
+      outputs.map(output => this.pinRelationship(output, candidates, pinnedOutpoint, pinSource))
+    )
     const related = new Set<string>()
     let anchorSeen = false
-    for (const output of outputs) {
-      try {
-        const tx = this.readTokenHistory(output.beef)
-        const outpoint = `${tx.id('hex')}.${output.outputIndex}`
-        const token = candidates.get(outpoint)
-        if (token == null) continue
-        if (outpoint === pinnedOutpoint) {
-          anchorSeen = true
-          related.add(outpoint)
-        } else {
-          const descent = this.descendsFromPin(tx, pinnedOutpoint, pinSource)
-          if (descent != null) {
-            anchorSeen = true
-            if (descent === 'verified' && (await this.hasCompleteUpdateEvidence(tx))) related.add(outpoint)
-          }
-        }
-      } catch {
-        // A malformed copy cannot establish an anchor or hide a deeper copy.
-      }
+    for (const relationship of relationships) {
+      if (relationship == null) continue
+      anchorSeen = true
+      if (relationship.selected) related.add(relationship.outpoint)
     }
     return anchorSeen ? tokens.filter(token => related.has(token.currentOutpoint as string)) : undefined
+  }
+
+  private async pinRelationship(
+    output: LookupAnswer['outputs'][number],
+    candidates: ReadonlyMap<string | undefined, UMPToken>,
+    pin: string,
+    pinSource?: Transaction
+  ): Promise<{ outpoint: string; selected: boolean } | undefined> {
+    try {
+      const tx = this.readTokenHistory(output.beef)
+      const outpoint = `${tx.id('hex')}.${output.outputIndex}`
+      if (!candidates.has(outpoint)) return undefined
+      if (outpoint === pin) return { outpoint, selected: true }
+      const descent = this.descendsFromPin(tx, pin, pinSource)
+      if (descent == null) return undefined
+      return { outpoint, selected: descent === 'verified' && (await this.hasCompleteUpdateEvidence(tx)) }
+    } catch {
+      // A malformed copy cannot establish an anchor or hide a deeper copy.
+      return undefined
+    }
   }
 
   /** Preserve unmined funding-ancestry checks without adding a network dependency. */
