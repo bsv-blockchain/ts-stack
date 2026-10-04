@@ -516,6 +516,27 @@ const rangePlans = new Map(
       ]
     ],
     [
+      'wallet-recovery-store',
+      [
+        [
+          'src/storage/actionRecovery/SQLiteActionRecoveryStore.ts',
+          {
+            label: 'store',
+            markers: [
+              'async lock(trx: TrxToken): Promise<Metadata> {',
+              'async read(key: string, binding: string, trx?: TrxToken): Promise<Row | undefined> {',
+              'async insert(row: Row, trx: TrxToken): Promise<void> {',
+              'async replace(previous: Row, next: Row, trx: TrxToken): Promise<void> {',
+              'private transaction(trx: TrxToken) {',
+              'function validateRow(row: Row): void {',
+              'function rowBytes(row: Row): number {',
+              'function retained(row: Row): RetainedActionRecoveryPlan {'
+            ]
+          }
+        ]
+      ]
+    ],
+    [
       'wallet-recovery-codec',
       [
         [

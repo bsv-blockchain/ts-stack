@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPOSITORY_ROOT } from '../repository-health.mjs'
 import { mutationExecutionBatches } from '../mutation-execution-batches.mjs'
+import { partitionedMutationTargets } from '../mutation-partitions.mjs'
+import { buildMutationTargets } from '../../governance/mutation-testing/targets.mjs'
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
 async function mutationExecutor(workflow) {
   const caller = workflow.jobs['mutation-tests']
@@ -273,12 +275,17 @@ test('partition jobs cannot replace each original canonical global gate or the f
   )
   assert.deepEqual(full.jobs['partition-aggregate'].needs, ['prepare', 'mutation-tests'])
   assert.match(full.jobs['partition-aggregate'].strategy.matrix.target, /partition-targets/)
-  for (const id of ['sdk-auth-http', 'wallet-retained-snapshot', 'root-eviction-records']) {
-    const download = ci.jobs['mutation-quality'].steps.find(
+  const canonicalTargets = buildMutationTargets(REPOSITORY_ROOT)
+  for (const id of partitionedMutationTargets(Object.keys(canonicalTargets), canonicalTargets)) {
+    const downloads = ci.jobs['mutation-quality'].steps.filter(
       step => step.with?.pattern === `mutation-${id}-*`
     )
-    assert.ok(download)
-    assert.match(download.if, /partition-targets/)
+    assert.equal(downloads.length, 1, id)
+    const [download] = downloads
+    assert.equal(
+      download.if,
+      `contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), '${id}')`
+    )
     assert.equal(download.with.path, `.mutation-parts/${id}`)
   }
   for (const targets of ['[]', '', 'null']) {

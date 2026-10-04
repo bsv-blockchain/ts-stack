@@ -751,6 +751,26 @@ jobs:
           pattern: mutation-revenue-listing-purchase-*
           path: .mutation-parts/revenue-listing-purchase
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-private-publication-admission')
+        with:
+          pattern: mutation-overlay-private-publication-admission-*
+          path: .mutation-parts/overlay-private-publication-admission
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-http')
+        with:
+          pattern: mutation-private-purchase-http-*
+          path: .mutation-parts/private-purchase-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-plan')
+        with:
+          pattern: mutation-wallet-recovery-plan-*
+          path: .mutation-parts/wallet-recovery-plan
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-store')
+        with:
+          pattern: mutation-wallet-recovery-store-*
+          path: .mutation-parts/wallet-recovery-store
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-codec')
         with:
           pattern: mutation-wallet-recovery-codec-*

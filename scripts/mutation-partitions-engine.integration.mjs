@@ -13,6 +13,7 @@ import {
 } from './mutation-partitions.mjs'
 
 const semanticTargets = [
+  'wallet-recovery-store',
   'wallet-recovery-plan',
   'lch-overlay-covenant-terms',
   'private-purchase-state',
@@ -57,7 +58,8 @@ async function* serialResults(values, read) {
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [
-    131, 503, 996, 519, 1481, 175, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 650, 890, 843
+    229, 131, 503, 996, 519, 1481, 175, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 650, 890,
+    843
   ]
   const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
     const original = targets[id],
@@ -94,6 +96,8 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
           inventory.length,
           { 'plan-1': 62, 'construction-1': 35, 'construction-2': 34 }[part.id]
         )
+      if (id === 'wallet-recovery-store')
+        assert.equal(inventory.length, [44, 9, 14, 16, 20, 10, 93, 13, 10][parts.indexOf(part)])
       observed.push(...inventory)
     }
     assert.deepEqual(
@@ -104,7 +108,7 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(selectedMutationPartition(id, original), original)
   }
   assert.equal(Object.keys(targets).length, 141)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 380)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 388)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {

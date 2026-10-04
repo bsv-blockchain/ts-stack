@@ -30,6 +30,7 @@ const target = {
 }
 
 const semanticTargets = [
+  'wallet-recovery-store',
   'wallet-recovery-plan',
   'lch-overlay-covenant-terms',
   'private-purchase-state',
@@ -91,16 +92,38 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 141)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 380)
+  assert.equal(matrix.include.length, 388)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 124]
+    [256, 132]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
     matrix.include
   )
+})
+
+test('recovery store partitions preserve its canonical interval and future companion sources', () => {
+  const id = 'wallet-recovery-store',
+    canonical = buildMutationTargets(REPOSITORY_ROOT)[id],
+    parts = partitionMutationTarget(id, canonical),
+    future = 'src/storage/actionRecovery/FutureStore.ts',
+    extended = { ...canonical, mutate: [...canonical.mutate, future] },
+    next = partitionMutationTarget(id, extended)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    Array.from({ length: 9 }, (_, i) => `store-${i + 1}`)
+  )
+  const originalLines = sourceLines(canonical, canonical.mutate)
+  for (const part of parts) {
+    for (const line of sourceLines(canonical, part.target.mutate))
+      assert.ok(originalLines.has(line))
+    assert.deepEqual(selectedMutationPartition(id, canonical, part.id), part.target)
+  }
+  assert.deepEqual(next.find(part => part.id === 'remaining').target.mutate, [future])
+  assert.equal(next.flatMap(part => part.target.mutate).filter(file => file === future).length, 1)
+  for (const part of next) assert.deepEqual({ ...part.target, mutate: extended.mutate }, extended)
 })
 
 test('recovery plan partitions retain call-only ranges and future companion sources', () => {

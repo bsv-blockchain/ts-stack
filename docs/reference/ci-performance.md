@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.6.0'
+version: '1.7.0'
 last_updated: '2026-10-04'
 last_verified: '2026-10-04'
 review_cadence_days: 30
@@ -400,3 +400,27 @@ allowance after its full 182-site run took 50m05s. That run achieved 97.80% with
 zero uncovered/invalid outcomes and unchanged dependency bytes. This is an
 execution allowance, not a reduced test set, score gate or worker constraint.
 All earlier target allowances and the 45-minute default are retained.
+
+### Recovery-store execution partitions
+
+`wallet-recovery-store` remains one canonical target. Its original store-method
+interval is scheduled at complete method and helper boundaries; installation
+and operation-transition source intervals retain their separate original
+registrations. All nine parts run the complete original tests and property
+selection with unchanged inputs, operators, four workers and deadlines. Future
+canonical companion sources remain in the fallback part. Ordinary CI downloads
+every selected partitioned target's evidence before the mandatory canonical
+aggregate, including recovery-plan, recovery-store, private-publication
+admission and private-purchase HTTP parts. An installed
+workflow control checks this wiring against the entire current target registry.
+
+On source `9aff4d95b666103f2d3f1a209102b5f5b09fc02e`, full campaign
+`37223480110`, attempt one, passed all 237 initial store tests in 123 seconds,
+then reached the existing 90-minute job limit without a final report. That job
+is unqualified. Independent pinned-engine replay observes all 229 original
+mutants exactly once across nine nonempty parts, with inventories
+44/9/14/16/20/10/93/13/10. The complete registry remains 141 targets, now
+scheduled as 388 execution rows in batches of 256 and 132. Source and test
+unions, global 90% score and zero-uncovered/invalid/unexecuted requirements
+remain unchanged. This inventory proof establishes completeness; a fresh full
+campaign on the published source must establish execution and final qualification.

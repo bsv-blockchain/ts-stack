@@ -5042,3 +5042,42 @@ absent; all captured authored inputs and, for the test reader,4,424 compiled
 paths remain fixed through drain. These local tests establish the unchanged
 purchase and economic behavior; complete final-source hosted profiles and the
 new full mutation campaign remain required.
+
+### Recovery-store complete scheduling follow-up — 2026-10-04
+
+Published source9aff has successful ordinary CI, strict Sonar, CodeQL,
+conformance, container and codegen checks, including native20 reference tests,
+all three actual Chrome profiles, mobile46 tests, compiled documentation and
+packed consumers. Its complete application aggregate passes3457 tests/229
+suites with97.24% patch coverage. Thirteen review threads are resolved, with no
+new open CodeQL findings. One external nonblocking Codecov reporting job
+initially exceeds its unchanged five-minute wait while the external upload is
+still started; rerunning only that same-source reporting job succeeds. No
+source, test, timeout, classification or quality gate is changed for that retry.
+
+The full blank-selector mutation campaign37223480110/attempt1 remains a
+separate requirement. Its recovery-plan parts and all eight purchase-verifier
+parts succeed. The complete wallet-recovery-store job111498613163 starts at
+18:13:35Z and ends cancelled at19:43:52Z under the original90-minute job limit.
+The engine instruments229 mutants and passes all237 initial tests in123
+seconds; there is no final mutation report or inferred passing score. That
+campaign cannot qualify the checkpoint and supplies no score for a new head.
+
+The store's existing canonical interval is now divided at complete methods and
+helpers into nine execution parts. The production store bytes, installation
+and transition intervals, complete original test selection, property300/seed
+3242026/blank replay, operators, workers, deadlines and global score/zero-error
+gates remain unchanged. A pinned-engine replay independently proves the exact
+229-tuple duplicate-free union with nonempty inventories44/9/14/16/20/10/93/13/10.
+Its local group4231 is physically absent; all authored inputs and4424 compiled
+paths stay fixed. Ordinary CI additionally downloads the previously missing
+recovery-plan parts and the new recovery-store parts before canonical
+aggregation. Its first complete local control run catches two other missing
+downloads, for private-publication admission and private-purchase HTTP. Those
+downloads are added too; that initial control run remains failed, with its
+group4312 physically absent and all authored/4424 compiled inputs unchanged.
+The workflow regression now checks every actual partitioned
+target's exact download predicate and destination, instead of three examples.
+The registry retains141 canonical targets with388 rows in batches[256,132].
+Complete final-source root/installed controls and a new full same-run published
+campaign remain required; checkpoint two is still open.
