@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.4.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '1.5.0'
+last_updated: '2026-10-04'
+last_verified: '2026-10-04'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -59,6 +59,20 @@ packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
+
+The application output-knowledge coverage suite uses two isolated Jest shards
+within the existing coverage matrix. Each retains the original complete discovery,
+serial native worker, property cases and per-test deadlines. Its ordinary local
+`test:coverage` command remains a single complete run with the original global
+thresholds. CI requires both shards, then independently discovers the complete
+suite again and checks a disjoint, exact execution union. Failed, missing, pending,
+todo or skipped tests and mismatched source, run, attempt or configuration fail
+qualification. The aggregate merges the complete Istanbul maps and applies all four
+original global thresholds before contributing LCOV to the required patch gate.
+Individual shard reports cannot qualify package coverage. The coverage jobs retain
+their 35-minute deadlines; the aggregate and final merge gates remain required.
+The three reporting libraries are direct, exact-version development dependencies
+already present in the frozen graph; no runtime package dependency changes.
 
 ## Execution ledger across outcomes and attempts
 

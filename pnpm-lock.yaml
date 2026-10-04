@@ -41,6 +41,15 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+      istanbul-lib-coverage:
+        specifier: 3.2.2
+        version: 3.2.2
+      istanbul-lib-report:
+        specifier: 3.0.1
+        version: 3.0.1
+      istanbul-reports:
+        specifier: 3.2.0
+        version: 3.2.0
       jest-environment-node:
         specifier: 30.5.1
         version: 30.5.1

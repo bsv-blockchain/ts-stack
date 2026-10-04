@@ -322,9 +322,14 @@ jobs:
             --projects-json .ci-direct-packages.json \
             --mode coverage-other)
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
-          COVERAGE_OTHER_MATRIX=$(jq -c \
-            'if length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
-            <<<"$COVERAGE_OTHER_PACKAGES")
+          COVERAGE_OTHER_MATRIX=$(jq -c '
+            . as $all | map(select(. != "@bsv/output-knowledge")) as $other |
+            {include: ((if ($other | length) > 1 then
+              [{id:"packages-1",shard:1,total:2,application:0},{id:"packages-2",shard:2,total:2,application:0}]
+              elif ($other | length) == 1 then [{id:"packages-1",shard:1,total:1,application:0}]
+              else [] end) + (if $all | index("@bsv/output-knowledge") then
+              [{id:"application-1",shard:1,total:2,application:1},{id:"application-2",shard:2,total:2,application:2}]
+              else [] end))}' <<<"$COVERAGE_OTHER_PACKAGES")
           echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
           BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \
             --projects-json .ci-affected-packages.json \
@@ -1281,7 +1286,7 @@ jobs:
           retention-days: 1
 
   coverage-other:
-    name: Coverage / other affected packages (${{ matrix.shard }}/${{ matrix.total }})
+    name: Coverage / ${{ matrix.application && 'application state' || 'other affected packages' }} (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
@@ -1309,7 +1314,13 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Generate complete application coverage shard
+        if: matrix.application != 0
+        run: >-
+          node scripts/output-knowledge-coverage.mjs collect
+          "${{ matrix.application }}" ".coverage-output/shard-${{ matrix.application }}"
       - name: Generate coverage for other affected packages
+        if: matrix.application == 0
         env:
           COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
@@ -1322,7 +1333,7 @@ jobs:
               packages+=("$package")
             fi
             index=$((index + 1))
-          done < <(jq -r '.[]' <<<"$COVERAGE_OTHER_PACKAGES")
+          done < <(jq -r '.[] | select(. != "@bsv/output-knowledge")' <<<"$COVERAGE_OTHER_PACKAGES")
 
           filters=()
           echo "Coverage shard ${{ matrix.shard }}/${{ matrix.total }}:"
@@ -1359,7 +1370,7 @@ jobs:
           echo "a coverage script are tested by the non-coverage lane." > .coverage-output/partition.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-other-${{ matrix.shard }}
+          name: coverage-other-${{ matrix.id }}
           path: .coverage-output/
           if-no-files-found: error
           include-hidden-files: true
@@ -1398,15 +1409,21 @@ jobs:
       # The gate compares emitted JavaScript to distinguish declaration-only
       # edits from executable changes. LCOV intentionally has no interfaces.
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
         with:
           node-version: 24.18.0
       - name: Install the locked patch-coverage compiler
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
+        env:
+          COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
         run: |
-          pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack
+          filters=()
+          if jq -e 'index("@bsv/output-knowledge") != null' <<<"$COVERAGE_OTHER_PACKAGES" > /dev/null; then
+            filters+=(--filter @bsv/output-knowledge)
+          fi
+          pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack "${filters[@]}"
           pnpm rebuild esbuild
           node --input-type=module -e "import { runtimeComparisonAvailable } from './scripts/patch-coverage.mjs'; if (!runtimeComparisonAvailable()) throw new Error('Patch coverage requires the locked compiler.');"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1414,6 +1431,12 @@ jobs:
           pattern: coverage-*
           path: .coverage-artifacts
           merge-multiple: true
+      - name: Require the complete application test union and original global coverage thresholds
+        if: contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
+        run: |
+          node scripts/output-knowledge-coverage.mjs aggregate .coverage-artifacts .application-coverage
+          node scripts/normalize-lcov-paths.mjs .application-coverage/lcov.info packages/application/output-knowledge
+          cp .application-coverage/lcov.info .coverage-artifacts/output-knowledge.lcov.info
       - name: Compose Codecov inputs
         id: cov
         run: |

@@ -171,6 +171,50 @@ test('CI contributes mobile and type-only wallet surfaces to aggregate patch cov
   }
 })
 
+test('application coverage shards retain the complete selection and a required merged global gate', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
+  const command = jobs.prepare.match(
+    /COVERAGE_OTHER_MATRIX=\$\(jq -c '([\s\S]*?)' <<<"\$COVERAGE_OTHER_PACKAGES"\)/
+  )?.[1]
+  assert.ok(command)
+  for (const selected of [
+    [],
+    ['@bsv/output-knowledge'],
+    ['other'],
+    ['other', 'second'],
+    ['other', '@bsv/output-knowledge', 'second']
+  ]) {
+    const rows = JSON.parse(
+      execFileSync('jq', ['-c', command], { input: JSON.stringify(selected), encoding: 'utf8' })
+    ).include
+    const application = rows.filter(row => row.application !== 0)
+    assert.deepEqual(
+      application.map(row => row.application),
+      selected.includes('@bsv/output-knowledge') ? [1, 2] : []
+    )
+    assert.ok(application.every(row => row.total === 2 && row.shard === row.application))
+    const other = selected.filter(name => name !== '@bsv/output-knowledge')
+    const packageRows = rows.filter(row => row.application === 0)
+    const union = packageRows.flatMap(row =>
+      other.filter((_, index) => (index % row.total) + 1 === row.shard)
+    )
+    assert.deepEqual(union.sort(), [...other].sort())
+    assert.equal(new Set(rows.map(row => row.id)).size, rows.length)
+  }
+  assert.match(jobs['coverage-other'], /^    timeout-minutes: 35$/m)
+  assert.match(jobs['coverage-other'], /node scripts\/output-knowledge-coverage.mjs collect/)
+  assert.match(jobs['coverage-other'], /name: coverage-other-\$\{\{ matrix.id \}\}/)
+  assert.match(jobs['coverage-upload'], /node scripts\/output-knowledge-coverage.mjs aggregate/)
+  assert.match(jobs['coverage-upload'], /output-knowledge.lcov.info/)
+  assert.match(jobs['coverage-upload'], /needs.coverage-other.result == 'success'/)
+  assert.match(jobs['merge-gate'], /^      - coverage-upload$/m)
+  assert.doesNotMatch(
+    jobs['coverage-other'] + jobs['coverage-upload'],
+    /continue-on-error|passWithNoTests/
+  )
+})
+
 test('CI push jobs survive intentionally skipped pull-request-only gates', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
