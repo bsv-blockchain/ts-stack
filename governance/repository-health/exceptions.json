@@ -409,6 +409,25 @@
       "created": "2026-10-02",
       "reviewBy": "2026-11-02",
       "removeWhen": "Remove when a released @stryker-mutator/vitest-runner supports Vitest 5 test-name chains, the governed Stryker pin is moved to it, and fund-wallet-cli and payment-402 meet their policy floors on Vitest 5 with zero survived mutants reporting testsCompleted 0."
+    },
+    {
+      "id": "metro-file-map-picomatch-advisory-repair",
+      "category": "override",
+      "target": "Exact metro-file-map@0.87.1 micromatch removal, paired watcher patch and Picomatch 2.3.2 extension",
+      "owner": "ts-stack-maintainers",
+      "reason": "The reviewed high braces advisory has no patched release. Metro-file-map 0.87.1 consumes only micromatch.some(), which already uses Picomatch 2.3.2. The paired source/distribution patch retains that matcher loop and declares the same exact dependency so the unused vulnerable micromatch/braces closure can be removed. Preserve all unrelated versions, importers and installation controls. This temporary dependency repair does not suppress the audit.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        "https://github.com/micromatch/braces/pull/72",
+        "patches/metro-file-map@0.87.1.patch",
+        "scripts/lib/metro-watcher-contract.mjs",
+        "scripts/lib/fixtures/metro-watcher-contract.json",
+        "scripts/check-wallet-toolbox-platform.mjs",
+        "https://github.com/bsv-blockchain/ts-stack/discussions/780#discussioncomment-18737450"
+      ],
+      "created": "2026-10-03",
+      "reviewBy": "2026-11-02",
+      "removeWhen": "Remove the patch, exact-version package extension and parent-scoped removal together when an official compatible Metro/file-map release removes the affected dependency path. Require the complete independent watcher oracle, frozen graph, full unexcluded audit and packed Metro/Hermes platform checks before retirement."
     }
   ]
 }
