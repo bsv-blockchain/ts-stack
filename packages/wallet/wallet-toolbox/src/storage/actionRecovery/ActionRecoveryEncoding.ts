@@ -9,7 +9,7 @@ export function encodeActionRecoveryBytes(value: unknown): string {
   if (value instanceof Uint8Array) return Buffer.from(value).toString('base64')
   const owned = Buffer.alloc(value.length)
   for (let index = 0; index < value.length; index++) {
-    const field = Object.getOwnPropertyDescriptor(value, String(index))
+    const field = Object.getOwnPropertyDescriptor(value, index)
     requireValue(field !== undefined && field.enumerable && 'value' in field)
     const byte: unknown = field.value
     requireValue(typeof byte === 'number' && Number.isInteger(byte) && byte >= 0 && byte <= 255)

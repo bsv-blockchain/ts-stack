@@ -90,11 +90,11 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 141)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 375)
+  assert.equal(matrix.include.length, 376)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 119]
+    [256, 120]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
@@ -489,7 +489,7 @@ test('protected ledger parts preserve every complete file and all canonical conf
   const parts = partitionMutationTarget('protected-ledger', canonical)
   assert.deepEqual(
     parts.map(part => part.id),
-    ['store', 'codec']
+    ['store', 'scalar-codec', 'payload-codec']
   )
   assert.deepEqual(
     parts.flatMap(part => part.target.mutate).sort(compareSpecifications),
@@ -497,7 +497,11 @@ test('protected ledger parts preserve every complete file and all canonical conf
   )
   for (const part of parts) {
     assert.deepEqual({ ...part.target, mutate: canonical.mutate }, canonical)
+    assert.equal(part.target.runnerOptions, canonical.runnerOptions)
+    assert.equal(part.target.additionalInputs, canonical.additionalInputs)
   }
+  assert.deepEqual(parts[1].target.mutate, ['src/private/ProtectedLedgerCodec.ts'])
+  assert.deepEqual(parts[2].target.mutate, ['src/private/NodeProtectedPayloadCodec.ts'])
   const future = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
   assert.ok(
     partitionMutationTarget('protected-ledger', future)

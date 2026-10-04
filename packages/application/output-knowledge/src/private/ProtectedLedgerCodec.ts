@@ -146,7 +146,18 @@ export function protectedHeader(
   input: Record<string, unknown>,
   maximum: number
 ): ProtectedLedgerHeader {
-  const address = protectedAddress({ kind: input.kind, key: input.key })
+  // Capture each native field once, as in the original constructed address.
+  const fields = { kind: input.kind, key: input.key }
+  // These two owned ASCII scalars are always below the 1,024-byte address
+  // ceiling. Other representations retain the original ownership/error path.
+  const address: ProtectedLedgerAddress =
+    typeof fields.kind === 'string' &&
+    /^[a-z-]{1,13}$/.test(fields.kind) &&
+    protectedLedgerKinds.includes(fields.kind as ProtectedLedgerKind) &&
+    typeof fields.key === 'string' &&
+    /^[0-9a-f]{64}$/.test(fields.key)
+      ? { kind: fields.kind as ProtectedLedgerKind, key: outputHex32(fields.key) }
+      : protectedAddress(fields)
   const revision = outputU64(input.revision).toString()
   outputAssert(revision !== '0', 'Invalid protected record revision', 'unavailable')
   return {

@@ -6,6 +6,7 @@ import {
   protectedHeader,
   protectedInteger,
   protectedInventory,
+  protectedLedgerKinds,
   protectedRevisionCapacity,
   protectedUpdates,
   protectedValue,
@@ -131,4 +132,149 @@ it('rejects each independent inventory capacity violation without silently losin
     reservedUpdates: 2,
     records: 1
   })
+})
+
+it('owns every supported scalar header independently and retains all revision and capacity guards', () => {
+  for (const kind of protectedLedgerKinds) {
+    const input = { ...header(), kind }
+    const owned = protectedHeader(input, 16)
+    expect(owned).toEqual(input)
+    owned.key = '33'.repeat(32)
+    expect(input.key).toBe('11'.repeat(32))
+    expect(protectedHeader(input, 16).key).toBe('11'.repeat(32))
+    for (const patch of [
+      { revision: '0' },
+      { reservedBytes: 0 },
+      { reservedBytes: 17 },
+      { reservedUpdates: 65 },
+      { bytes: 0 },
+      { bytes: 17 },
+      { sealedDigest: 'invalid' }
+    ])
+      expect(() => protectedHeader({ ...input, ...patch }, 16)).toThrow()
+  }
+})
+
+it('preserves ownership and error classifications for every malformed native address representation', () => {
+  const capture = (work: () => unknown) => {
+    try {
+      return { ok: true, value: work() }
+    } catch (error) {
+      return {
+        ok: false,
+        code: (error as { code?: string }).code,
+        name: (error as Error).name,
+        message: (error as Error).message
+      }
+    }
+  }
+  const coercions: string[] = []
+  const guarded = Object.defineProperty({}, 'toString', {
+    enumerable: true,
+    get() {
+      coercions.push('toString')
+      throw new Error('Unexpected native field coercion')
+    }
+  })
+  const kinds: unknown[] = [
+    guarded,
+    'publication',
+    undefined,
+    null,
+    true,
+    1,
+    {},
+    [],
+    () => {},
+    '',
+    'unknown',
+    'PUBLICATION',
+    'a'.repeat(1024),
+    '\ud800',
+    'a\n',
+    'a"'
+  ]
+  const keys: unknown[] = [
+    guarded,
+    'a'.repeat(1024),
+    undefined,
+    null,
+    true,
+    1,
+    {},
+    [],
+    () => {},
+    '',
+    'a'.repeat(63),
+    'a'.repeat(65),
+    'A'.repeat(64),
+    'g'.repeat(64),
+    'a'.repeat(63) + '\ud800',
+    'a'.repeat(63) + '\n'
+  ]
+  for (const kind of kinds)
+    for (const key of keys) {
+      const address = { kind, key }
+      const expected = capture(() => protectedAddress(address))
+      const actual = capture(() => protectedHeader({ ...header(), ...address }, 16))
+      expect(actual).toEqual(expected)
+    }
+  expect(coercions).toEqual([])
+})
+
+it('captures native fields once in order and retains original getter exceptions', () => {
+  const calls: string[] = []
+  const input = { ...header() }
+  Object.defineProperty(input, 'kind', {
+    get() {
+      calls.push('kind')
+      return 'publication'
+    }
+  })
+  Object.defineProperty(input, 'key', {
+    configurable: true,
+    get() {
+      calls.push('key')
+      return '11'.repeat(32)
+    }
+  })
+  expect(protectedHeader(input, 16)).toEqual(header())
+  expect(calls).toEqual(['kind', 'key'])
+  const failure = new Error('native key read failed')
+  Object.defineProperty(input, 'key', {
+    get() {
+      calls.push('key')
+      throw failure
+    }
+  })
+  calls.length = 0
+  expect(() => protectedHeader(input, 16)).toThrow(failure)
+  expect(calls).toEqual(['kind', 'key'])
+})
+
+it('retains live kind membership and the original Unicode and byte-bound fallback', () => {
+  const kinds = protectedLedgerKinds as unknown as string[]
+  const original = [...kinds]
+  try {
+    for (const kind of ['future-kind', 'a'.repeat(100), 'é', '\ud800', 'a'.repeat(1024)]) {
+      kinds.push(kind)
+      const address = { kind, key: '11'.repeat(32) }
+      if (kind === '\ud800' || kind.length === 1024) {
+        expect(() => protectedHeader({ ...header(), ...address }, 16)).toThrow()
+        expect(() => protectedAddress(address)).toThrow()
+      } else {
+        expect(protectedHeader({ ...header(), ...address }, 16)).toEqual({
+          ...header(),
+          ...protectedAddress(address)
+        })
+      }
+      kinds.pop()
+    }
+    kinds.splice(kinds.indexOf('publication'), 1)
+    expect(() => protectedHeader({ ...header() }, 16)).toThrow(
+      'Invalid protected ledger record kind'
+    )
+  } finally {
+    kinds.splice(0, kinds.length, ...original)
+  }
 })
