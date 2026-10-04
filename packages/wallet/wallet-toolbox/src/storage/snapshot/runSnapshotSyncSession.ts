@@ -142,6 +142,7 @@ export async function runSnapshotSyncSession(
     if (cancelled()) return result
     const checkpoint = result.snapshotCheckpoint
     const table = snapshotSyncTables[checkpoint.tableIndex]
+    budget.beginTable(table)
     const prepared = await preparePage(
       session,
       checkpoint,
@@ -179,7 +180,8 @@ export async function runSnapshotSyncSession(
         [table]: page.rows
       } as SyncChunk,
       readMs + prepareMs + commitMs,
-      readMs + prepareMs
+      readMs + prepareMs,
+      page.payloadBytes
     )
     notify('committed', { readMs, prepareMs, queueMs: commitAt - queuedAt, commitMs })
     if (cancelled()) return result

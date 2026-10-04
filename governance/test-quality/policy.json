@@ -549,6 +549,19 @@
         ]
       },
       {
+        "path": "packages/wallet/wallet-toolbox/src/storage/sync/SyncPageBudget.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet adaptive sync page work and payload forecasts, caller limits and current-table transition isolation",
+        "target": "Bounded generated table, fixed/marginal cost and payload transitions with independent caller/charge limits",
+        "invariants": [
+          "Row and byte ceilings and the caller cursor remain unchanged and each request stays within the caller row bound.",
+          "Observed actual payload charges conservatively limit subsequent page requests without granting allocation or physical quota authority.",
+          "A known next-table transition discards previous workload forecasts before its first read; same-table observations persist.",
+          "Proof page ceilings, independent session state, minimum300 runs and original interrupt-as-failure controls remain."
+        ]
+      },
+      {
         "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",
@@ -594,7 +607,7 @@
           "Exact page retries preserve immutable bytes and the independent hash-chain receipt without double charging.",
           "The authenticated profile cannot read or release another profile's archive.",
           "Capacity remains reserved through interrupted cleanup and is released exactly once after every page is deleted.",
-          "A complete SQL capture contains the selected profile’s original rows; cancellation removes all staged pages and reservations without activating wallet data."
+          "A complete SQL capture contains the selected profile\u2019s original rows; cancellation removes all staged pages and reservations without activating wallet data."
         ]
       },
       {

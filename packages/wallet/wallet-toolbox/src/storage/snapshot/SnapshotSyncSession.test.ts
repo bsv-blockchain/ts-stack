@@ -371,11 +371,54 @@ test('progress timings separate read, preparation, queue and commit costs', asyn
       queueMs: 17,
       commitMs: 19
     })
-    expect(budget).toHaveBeenCalledWith(expect.any(Object), 43, 24)
+    expect(budget).toHaveBeenCalledWith(expect.any(Object), 43, 24, 0)
   } finally {
     budget.mockRestore()
     clock.mockRestore()
   }
+})
+
+test('actual returned payload charges bound the next request while every page commits in order', async () => {
+  const f = session()
+  const requested: Array<{ maxRows: number; maxBytes: number }> = []
+  let remaining = 40
+  let position = 7
+  let durable = { ...f.checkpoint }
+  ;(f.view.readPage as jest.Mock).mockImplementation(async (_table, _cursor, limits) => {
+    requested.push({ ...limits })
+    const count = Math.min(remaining, limits.maxRows, Math.floor(limits.maxBytes / 512))
+    remaining -= count
+    position += count
+    return {
+      rows: Array.from({ length: count }, () => ({})),
+      payloadBytes: count * 512,
+      done: remaining === 0,
+      cursor: remaining === 0 ? undefined : { ...f.checkpoint.cursor, after: [position] }
+    }
+  })
+  ;(f.destination.prepare as jest.Mock).mockImplementation(async (checkpoint, page) => {
+    const expected = { ...checkpoint }
+    return async () => {
+      expect(durable.sequence).toBe(expected.sequence)
+      durable = {
+        ...expected,
+        sequence: expected.sequence + 1,
+        tableIndex: expected.tableIndex + Number(page.done),
+        cursor: page.cursor,
+        done: page.done
+      }
+      return { checkpoint: durable, inserts: page.rows.length, updates: 0 }
+    }
+  })
+  const result = await runSnapshotSyncSession(f.input, { maxItems: 1000, maxRoughSize: 8192 })
+  expect(result).toMatchObject({ status: 'completed', pages: 3, inserts: 40, updates: 0 })
+  expect(requested[0]).toEqual({ maxRows: 64, maxBytes: 8192 })
+  expect(requested.slice(1)).toEqual([
+    { maxRows: 16, maxBytes: 8192 },
+    { maxRows: 16, maxBytes: 8192 }
+  ])
+  expect(durable).toMatchObject({ sequence: 14, tableIndex: 12, done: true, cursor: undefined })
+  expect(f.commit).toHaveBeenCalledTimes(4)
 })
 
 test.each([1, 10000000])('the exact byte ceiling %s remains accepted', async maxRoughSize => {
@@ -388,4 +431,22 @@ test.each([1, 10000000])('the exact byte ceiling %s remains accepted', async max
     maxRows: 1,
     maxBytes: maxRoughSize
   })
+})
+
+test('identifies the current snapshot table before reading its first page', async () => {
+  const f = session()
+  const apply = jest.spyOn(SyncPageBudget.prototype, 'apply')
+  const beginTable = jest.spyOn(SyncPageBudget.prototype, 'beginTable')
+  try {
+    await runSnapshotSyncSession(f.input, { maxItems: 17, maxRoughSize: 8192 })
+    expect(apply).toHaveBeenCalledTimes(1)
+    expect(beginTable).toHaveBeenCalledTimes(1)
+    expect(beginTable).toHaveBeenCalledWith('provenTxReqs')
+    expect(beginTable.mock.invocationCallOrder[0]).toBeLessThan(apply.mock.invocationCallOrder[0])
+    expect(apply).toHaveBeenCalledWith(expect.objectContaining({ maxItems: 17, maxRoughSize: 8192 }))
+    expect(f.view.readPage).toHaveBeenCalledWith('provenTxReqs', f.checkpoint.cursor, { maxRows: 17, maxBytes: 8192 })
+  } finally {
+    apply.mockRestore()
+    beginTable.mockRestore()
+  }
 })

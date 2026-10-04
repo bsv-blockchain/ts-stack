@@ -214,7 +214,7 @@ test('additional package-relative fixture inputs select their target without rep
   )
 
   const canonical = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(canonical).length, 48)
+  assert.equal(Object.keys(canonical).length, 49)
   assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
     'test/utils/snapshotRelationFixtures.ts',
     'test/utils/snapshotCertificateFixtures.ts',
@@ -349,6 +349,34 @@ test('every inherited snapshot-sync target keeps the complete journal tests for 
       )
     )
   }
+})
+
+test('adaptive paging owns its complete controller without removing the existing snapshot caller target', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const target = targets['wallet-adaptive-sync-budget']
+  assert.deepEqual(target.mutate, ['src/storage/sync/SyncPageBudget.ts'])
+  assert.deepEqual(target.additionalInputs, ['src/storage/snapshot/runSnapshotSyncSession.ts'])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/storage/sync/SyncPageBudget.test.ts',
+    '<rootDir>/src/storage/sync/SyncPageBudget.property.test.ts',
+    '<rootDir>/src/storage/snapshot/SnapshotSyncSession.test.ts'
+  ])
+  assert.ok(
+    targets['wallet-snapshot-sync'].mutate.includes(
+      'src/storage/snapshot/runSnapshotSyncSession.ts'
+    )
+  )
+  assert.deepEqual(
+    selectAffectedMutationTargets(targets, [
+      'packages/wallet/wallet-toolbox/src/storage/sync/SyncPageBudget.ts'
+    ]),
+    ['wallet-adaptive-sync-budget']
+  )
+  const affected = selectAffectedMutationTargets(targets, [
+    'packages/wallet/wallet-toolbox/src/storage/snapshot/runSnapshotSyncSession.ts'
+  ])
+  assert.ok(affected.includes('wallet-adaptive-sync-budget'))
+  assert.ok(affected.includes('wallet-snapshot-sync'))
 })
 
 test('snapshot sync owns every inherited manager region and complete primary selection', () => {

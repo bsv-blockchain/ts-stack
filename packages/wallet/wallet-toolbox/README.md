@@ -408,6 +408,8 @@ validation and 5.58 seconds with bounded concurrency, with the same 250 root and
 Timeouts remain possible during dependency outages; writes are never blindly
 replayed, and resumed sync rereads durable destination progress.
 
+Adaptive snapshot paging isolates observations by table, separates fixed page latency from marginal row cost, and uses the actual committed payload charge to forecast the next request. A known next table starts at the original 64-row budget; repeated observations of the same table retain their history. Caller row and byte limits remain authoritative, and an oversized individual row still refuses without advancing the checkpoint. These forecasts do not establish a WAL, allocation or memory bound. This change needs no wire or schema migration. Full #544 qualification and production performance evidence remain required.
+
 The adaptive page controller and optional validated-proof lookup add a small
 client bundle cost. The [artifact measurements and limits](./docs/sync-transfer.md#artifact-cost-requiring-review)
 include the combined upstream security fixes. These are explicit feature costs;

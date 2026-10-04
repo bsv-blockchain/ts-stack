@@ -903,6 +903,30 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'wallet-adaptive-sync-budget': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/sync/SyncPageBudget.property.test.ts',
+      mutate: ['src/storage/sync/SyncPageBudget.ts'],
+      additionalInputs: ['src/storage/snapshot/runSnapshotSyncSession.ts'],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/sync/SyncPageBudget.test.ts',
+          '<rootDir>/src/storage/sync/SyncPageBudget.property.test.ts',
+          '<rootDir>/src/storage/snapshot/SnapshotSyncSession.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
     ...snapshotSyncMutationTargets(repositoryRoot),
     'overlay-linkage': {
       packageDirectory: 'packages/overlays/topics',

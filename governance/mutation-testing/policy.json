@@ -78,6 +78,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "wallet-adaptive-sync-budget",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/sync/SyncPageBudget.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet adaptive sync page work and payload forecasts, caller limits and current-table transition isolation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "wallet-snapshot-sync",
       "manifest": "packages/wallet/wallet-toolbox/package.json",
       "propertyTest": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
