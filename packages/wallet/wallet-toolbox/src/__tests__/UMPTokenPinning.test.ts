@@ -463,4 +463,69 @@ describe('Pinned UMP token update continuity', () => {
       currentOutpoint: outpoint(latest)
     })
   })
+
+  it('ignores a valid record with a different requested presentation hash', async () => {
+    const pinned = await record(1)
+    const updated = await record(2, pinned)
+    const unrelated = await record(3)
+    const otherHash = await record(4, undefined, Hash.sha256(Array(32).fill(9)))
+    await expect(
+      lookup([unrelated, otherHash, pinned, updated]).findByPresentationKeyHash(presentationHash, {
+        pinnedOutpoint: outpoint(pinned)
+      })
+    ).resolves.toMatchObject({ currentOutpoint: outpoint(updated), passwordKeyEncrypted: Array(32).fill(2) })
+  })
+
+  it('keeps usable update evidence when another provider copy cannot be decoded', async () => {
+    const pinned = await record(1)
+    const updated = await record(2, pinned)
+    const unrelated = await record(3)
+    const subject = lookup([unrelated, pinned, updated])
+    const readHistory = (subject as any).readTokenHistory.bind(subject)
+    const decode = jest.spyOn(subject as any, 'readTokenHistory').mockImplementation(bytes => {
+      const tx = readHistory(bytes) as Transaction
+      if (tx.id('hex') === unrelated.id('hex')) throw new Error('Synthetic provider decode failure')
+      return tx
+    })
+    try {
+      await expect(
+        subject.findByPresentationKeyHash(presentationHash, { pinnedOutpoint: outpoint(pinned) })
+      ).resolves.toMatchObject({ currentOutpoint: outpoint(updated), passwordKeyEncrypted: Array(32).fill(2) })
+    } finally {
+      decode.mockRestore()
+    }
+  })
+
+  it('refuses a confirmed descendant when the spend evaluator raises an error', async () => {
+    const pinned = await record(1)
+    const updated = await record(2, pinned)
+    updated.merklePath = new MerklePath(101, [[{ offset: 0, hash: updated.id('hex'), txid: true }]])
+    const unrelated = await record(3)
+    const authorize = jest.spyOn(Spend.prototype, 'validate').mockImplementation(() => {
+      throw new Error('Synthetic spend evaluator failure')
+    })
+    try {
+      await expect(
+        lookup([unrelated, updated], true).findByPresentationKeyHash(presentationHash, {
+          pinnedOutpoint: outpoint(pinned)
+        })
+      ).rejects.toMatchObject({ reason: 'token-ambiguous' })
+      expect(authorize).toHaveBeenCalled()
+    } finally {
+      authorize.mockRestore()
+    }
+  })
+
+  it('does not treat a different-valued funding output as a UMP pin', async () => {
+    const funding = await record(1)
+    funding.outputs[0].satoshis = 5
+    funding.merklePath = new MerklePath(100, [[{ offset: 0, hash: funding.id('hex'), txid: true }]])
+    const updated = await record(2, funding)
+    const unrelated = await record(3)
+    await expect(
+      lookup([unrelated, updated]).findByPresentationKeyHash(presentationHash, {
+        pinnedOutpoint: outpoint(funding)
+      })
+    ).rejects.toMatchObject({ reason: 'token-ambiguous' })
+  })
 })
