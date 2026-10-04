@@ -2,13 +2,26 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { validateShardUnion } from './output-knowledge-coverage-validation.mjs'
+import {
+  compareCoveragePaths,
+  validateShardUnion
+} from './output-knowledge-coverage-validation.mjs'
 
 const directory = fileURLToPath(
   new URL('../packages/application/output-knowledge/', import.meta.url)
 )
 const identity = { sha: 'a'.repeat(40), run: '1', attempt: '1', configuration: 'b'.repeat(64) }
 const expected = ['test/a.test.ts', 'test/b.test.ts']
+
+test('canonical path ordering retains deterministic code units and the original input array', () => {
+  const input = ['é', 'a', '😀', 'A', '_', '-']
+  const before = [...input]
+  assert.deepEqual(input.toSorted(compareCoveragePaths), ['-', 'A', '_', 'a', 'é', '😀'])
+  assert.deepEqual(input, before)
+  assert.equal(compareCoveragePaths('same', 'same'), 0)
+  assert.equal(compareCoveragePaths('a', 'A'), 1)
+  assert.equal(compareCoveragePaths('A', 'a'), -1)
+})
 
 function evidence() {
   return expected.map((name, index) => ({

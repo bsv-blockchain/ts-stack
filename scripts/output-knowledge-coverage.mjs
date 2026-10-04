@@ -11,6 +11,7 @@ import reportLibrary from 'istanbul-lib-report'
 import reports from 'istanbul-reports'
 import config from '../packages/application/output-knowledge/jest.coverage.config.js'
 import {
+  compareCoveragePaths,
   relativeTests,
   assertCompleteResults,
   validateShardUnion,
@@ -28,12 +29,12 @@ const { createCoverageMap } = coverageLibrary
 const { createContext } = reportLibrary
 
 export function mergeCoverage(shards) {
-  const expected = Object.keys(shards[0].coverage).sort()
+  const expected = Object.keys(shards[0].coverage).toSorted(compareCoveragePaths)
   assert.ok(expected.length > 0, 'empty coverage artifact')
   const map = createCoverageMap({})
   for (const shard of shards) {
     assert.deepEqual(
-      Object.keys(shard.coverage).sort(),
+      Object.keys(shard.coverage).toSorted(compareCoveragePaths),
       expected,
       'different instrumented source inventory'
     )

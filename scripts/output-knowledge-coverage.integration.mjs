@@ -33,7 +33,9 @@ test('the full merged map must pass every original global metric, including unco
   for (const metric of Object.keys(thresholds.global)) assert.equal(summary[metric].pct, 100)
   assert.throws(() => enforceGlobalCoverage(createCoverageMap({}), thresholds))
   assert.throws(() => enforceGlobalCoverage(map, { global: thresholds.global, './other': {} }))
-  assert.throws(() => enforceGlobalCoverage(map, { global: { ...thresholds.global, lines: NaN } }))
+  assert.throws(() =>
+    enforceGlobalCoverage(map, { global: { ...thresholds.global, lines: Number.NaN } })
+  )
   assert.doesNotThrow(() =>
     enforceGlobalCoverage(map, { global: { ...thresholds.global, lines: -1 } })
   )

@@ -7,6 +7,12 @@ const packageDirectory = fileURLToPath(
 )
 const shardCount = 2
 
+// Preserve ECMAScript's UTF-16 code-unit order across runner locales.
+export function compareCoveragePaths(left, right) {
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+
 export function relativeTests(tests, directory = packageDirectory) {
   assert.ok(Array.isArray(tests) && tests.length > 0, 'empty test inventory')
   return tests
@@ -16,7 +22,7 @@ export function relativeTests(tests, directory = packageDirectory) {
       assert.ok(!relative.split('/').includes('..'))
       return relative
     })
-    .sort()
+    .toSorted(compareCoveragePaths)
 }
 
 export function assertCompleteResults(results, selected, directory = packageDirectory) {
@@ -62,12 +68,16 @@ export function validateShardUnion(shards, identity, expected) {
     selected.push(...manifest.selectedTests)
   }
   assert.equal(new Set(selected).size, selected.length, 'duplicate test execution')
-  assert.deepEqual(selected.sort(), expected, 'missing or extra test execution')
+  assert.deepEqual(
+    selected.toSorted(compareCoveragePaths),
+    expected,
+    'missing or extra test execution'
+  )
 }
 
 export function enforceGlobalCoverage(map, thresholds) {
   assert.deepEqual(Object.keys(thresholds), ['global'], 'unsupported coverage threshold scope')
-  assert.deepEqual(Object.keys(thresholds.global).sort(), [
+  assert.deepEqual(Object.keys(thresholds.global).toSorted(compareCoveragePaths), [
     'branches',
     'functions',
     'lines',
