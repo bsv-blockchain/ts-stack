@@ -161,7 +161,17 @@ test('workload identity is independent of property order for a mixed legacy chun
   const mixed = { ...chunk(0), transactions: rows, outputs: rows } as SyncChunk
   for (let i = 0; i < 10; i++) budget.committed(mixed, 100, 50, 32 * 250000)
   const expected = budget.apply(args)
-  budget.committed({ ...chunk(0), outputs: rows, transactions: rows } as SyncChunk, 100, 50)
+  budget.committed(
+    {
+      outputs: rows,
+      transactions: rows,
+      fromStorageIdentityKey: 'from',
+      toStorageIdentityKey: 'to',
+      userIdentityKey: 'user'
+    } as SyncChunk,
+    100,
+    50
+  )
   expect(budget.apply(args)).toEqual(expected)
 })
 
@@ -189,4 +199,101 @@ test('known table transitions preserve smaller caller limits and original byte a
   expect(JSON.stringify(limits)).toBe(original)
   expect(budget.apply(args, 'outputs').maxItems).toBe(64)
   expect(budget.apply(args, 'provenTxs').maxItems).toBe(64)
+})
+
+test.each([0, 0.4, 1])('shrinks immediately after equal-size pages become expensive (read share=%s)', readShare => {
+  const budget = new SyncPageBudget()
+  const capped = { ...args, maxItems: 64 }
+  for (let i = 0; i < 8; i++) {
+    budget.committed(chunk(64), 100, 100 * readShare)
+    expect(budget.apply(capped).maxItems).toBe(64)
+  }
+  // The caller's row cap has kept every observed page the same size. A new
+  // 200-ms-per-record cost must constrain the very next five-second request.
+  budget.committed(chunk(64), 12800, 12800 * readShare)
+  expect(budget.apply(capped).maxItems).toBe(25)
+})
+
+test('retains the metadata ceiling when the caller allows more rows', () => {
+  const budget = new SyncPageBudget()
+  const wide = { ...args, maxItems: 5000 }
+  for (let i = 0; i < 8; i++) budget.committed(chunk(budget.apply(wide).maxItems), 0)
+  expect(budget.apply(wide).maxItems).toBe(1000)
+})
+
+test('probes the single-row floor only periodically and returns after expensive proofs', () => {
+  const budget = new SyncPageBudget()
+  budget.committed(chunk(64, true), 640000, 320000)
+  const limits: number[] = []
+  for (let i = 0; i < 12; i++) {
+    const count = budget.apply(args).maxItems
+    limits.push(count)
+    budget.committed(chunk(count, true), count * 10000, count * 5000)
+  }
+  expect(limits).toEqual([1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2])
+})
+
+test.each([
+  [125, 50],
+  [125.1, 39]
+])('holds a 20-percent boundary but shrinks beyond it (cost=%s)', (cost, expected) => {
+  const budget = new SyncPageBudget()
+  budget.committed(chunk(64), 6400)
+  for (let i = 0; i < 8; i++) budget.committed(chunk(50), 5000)
+  expect(budget.apply(args).maxItems).toBe(50)
+  budget.committed(chunk(50), 50 * cost)
+  expect(budget.apply(args).maxItems).toBe(expected)
+})
+
+test('recovers gradually from large payloads while preserving the byte ceiling', () => {
+  const budget = new SyncPageBudget()
+  budget.committed(chunk(64), 0, 0, 64 * 500000)
+  const limits = [budget.apply(args).maxItems]
+  for (let i = 0; i < 3; i++) {
+    budget.committed(chunk(64), 0, 0, 64 * 100000)
+    limits.push(budget.apply(args).maxItems)
+  }
+  expect(limits).toEqual([4, 5, 6, 7])
+})
+
+test('invalid timing and byte observations cannot discard an established workload budget', () => {
+  const budget = new SyncPageBudget()
+  budget.committed(chunk(64), 100, 50, 64 * 500000)
+  const expected = budget.apply(args)
+  for (const readMs of [NaN, Infinity, -1, 101]) {
+    budget.committed(chunk(64, true), 100, readMs, 64)
+    expect(budget.apply(args)).toEqual(expected)
+  }
+  for (const bytes of [NaN, Infinity, -1, 0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    budget.committed(chunk(64), 100, 50, bytes)
+    expect(budget.apply(args)).toEqual(expected)
+  }
+  budget.committed(chunk(0, true), 0, 0, 1)
+  expect(budget.apply(args)).toEqual(expected)
+})
+
+test('forgets an old slowdown after sustained cheap equal-size pages', () => {
+  const budget = new SyncPageBudget()
+  const capped = { ...args, maxItems: 64 }
+  for (let i = 0; i < 6; i++) budget.committed(chunk(64), 12800, 6400)
+  expect(budget.apply(capped).maxItems).toBe(25)
+  for (let i = 0; i < 32; i++) budget.committed(chunk(64), 640, 320)
+  expect(budget.apply(capped).maxItems).toBe(64)
+  // An ever-growing history would still let the original slow pages dominate.
+  // Sustained 10-ms records must recover most of the five-second work budget.
+  expect(budget.apply(args).maxItems).toBeGreaterThanOrEqual(400)
+  expect(budget.apply(args).maxItems).toBeLessThanOrEqual(500)
+})
+
+test('holds modest cost recovery inside hysteresis and grows after a sustained improvement', () => {
+  const budget = new SyncPageBudget()
+  budget.committed(chunk(64), 6400)
+  for (let i = 0; i < 8; i++) budget.committed(chunk(50), 5000)
+  for (let i = 0; i < 8; i++) {
+    budget.committed(chunk(50), 4000)
+    expect(budget.apply(args).maxItems).toBe(50)
+  }
+  for (let i = 0; i < 32; i++) budget.committed(chunk(50), 4000)
+  expect(budget.apply(args).maxItems).toBeGreaterThan(60)
+  expect(budget.apply(args).maxItems).toBeLessThanOrEqual(62)
 })

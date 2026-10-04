@@ -42,13 +42,17 @@ function marginalCost(
     covariance += delta * (sample[phase] - averageMs)
   }
   // Until page sizes differ there is no evidence that any cost is fixed.
+  const latest = samples.at(-1)!
   if (variance === 0) {
     const fixedMs = Math.min(previousFixedMs, averageMs)
-    return { perRecordMs: (averageMs - fixedMs) / averageRecords, fixedMs, fitted: false }
+    return {
+      perRecordMs: Math.max((averageMs - fixedMs) / averageRecords, (latest[phase] - fixedMs) / latest.records),
+      fixedMs,
+      fitted: false
+    }
   }
   const slope = Math.max(0, covariance / variance)
   const fixedMs = Math.max(0, averageMs - slope * averageRecords)
-  const latest = samples.at(-1)!
   // React to a newly expensive page immediately, even when the rolling fit
   // still contains cheap pages. Never subtract more than its observed cost.
   return { perRecordMs: Math.max(slope, (latest[phase] - fixedMs) / latest.records), fixedMs, fitted: true }
