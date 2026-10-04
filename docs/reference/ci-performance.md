@@ -72,7 +72,7 @@ original global thresholds before contributing LCOV to the required patch gate.
 Individual shard reports cannot qualify package coverage. The coverage jobs retain
 their 35-minute deadlines; the aggregate and final merge gates remain required.
 The three reporting libraries are direct, exact-version development dependencies
-already present in the frozen graph; no runtime package dependency changes.
+already present in the frozen graph; no runtime package dependency changes. Dependency-free inventory/result controls remain in the zero-install repository-health job. The actual reporting-library integration runs unconditionally after the frozen install and before build; its execution cannot be skipped to satisfy early health.
 
 ## Execution ledger across outcomes and attempts
 

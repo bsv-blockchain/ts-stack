@@ -213,6 +213,20 @@ test('application coverage shards retain the complete selection and a required m
     jobs['coverage-other'] + jobs['coverage-upload'],
     /continue-on-error|passWithNoTests/
   )
+  const steps = jobs.prepare.split(/\n {6}- /)
+  const installed = steps.findIndex(step =>
+    step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')
+  )
+  const reporting = steps.findIndex(step =>
+    step.startsWith('name: Test installed application coverage reporting\n')
+  )
+  const build = steps.findIndex(step => step.startsWith('name: Build workspace\n'))
+  assert.ok(installed >= 0 && reporting > installed && build > reporting)
+  assert.match(
+    steps[reporting],
+    /run: node --test scripts\/output-knowledge-coverage\.integration\.mjs/
+  )
+  assert.doesNotMatch(steps[reporting], /if:|continue-on-error:|passWithNoTests/)
 })
 
 test('CI push jobs survive intentionally skipped pull-request-only gates', () => {

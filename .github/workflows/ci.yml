@@ -263,6 +263,9 @@ jobs:
       - name: Test installed mutation engine controls
         run: node --test scripts/mutation-partitions-engine.integration.mjs
 
+      - name: Test installed application coverage reporting
+        run: node --test scripts/output-knowledge-coverage.integration.mjs
+
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
 
