@@ -481,6 +481,34 @@ test('backend failure preserves exact identity without fallback and discards sta
   expect(quarantine.discarded).toBe(1)
 })
 
+test.each([
+  ['encrypt', 'completed'],
+  ['encrypt', 'failed'],
+  ['decrypt', 'completed'],
+  ['decrypt', 'failed']
+] as const)('the original derived key is erased after %s %s settlement', async (mode, outcome) => {
+  const derived = key.slice()
+  backend!.deriveKey = async () => derived
+  const quarantine = stage()
+  const failure = new Error('synthetic private write failure')
+  if (outcome === 'failed')
+    quarantine.appendUntrusted = async () => {
+      throw failure
+    }
+  const operation =
+    mode === 'encrypt'
+      ? encryptBrc39StreamToQuarantine(plaintextSource(), 'password', quarantine, options)
+      : decryptBrc39StreamToQuarantine(chunks(encrypted()), 'password', quarantine, options)
+  if (outcome === 'failed') {
+    await expect(operation).rejects.toBe(failure)
+    expect(quarantine.discarded).toBe(1)
+  } else {
+    await expect(operation).resolves.toMatchObject({ plaintextBytes: expect.any(Number) })
+  }
+  expect(derived).toEqual(new Uint8Array(32))
+  expect(key).toEqual(new Uint8Array(32).fill(17))
+})
+
 test.each(['encrypt', 'decrypt'] as const)(
   'encoded password refusal wipes its owned bytes before %s cleanup',
   async mode => {

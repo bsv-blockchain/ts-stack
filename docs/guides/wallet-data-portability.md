@@ -84,6 +84,10 @@ Decryption writes only into isolated quarantine. GCM authentication must precede
 
 These entry points bound each component's admitted work and buffers. They do not establish native allocator/RSS/IPC bounds, hard database/WAL/directory quotas, durable occupied-target restore, replicated remote export destinations, or physical mobile qualification. Those remain mandatory in the full #544 program. No pending intermediate API is a released production guarantee.
 
+A selected host Argon2id backend must return a fresh owned 32-byte key buffer
+for each streaming operation. The Node streaming adapter consumes and wipes
+that buffer after success or failure; a backend must not reuse it between calls.
+
 ## Coverage and limits
 
 The implementation exports one `user`, its `sourceStorage` metadata and 13

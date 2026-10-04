@@ -139,5 +139,15 @@
     "@bsv/sdk": {
       "optional": false
     }
+  },
+  "typesVersions": {
+    "*": {
+      "portable": [
+        "out/src/storage/portable/stream.d.ts"
+      ],
+      "portable/node": [
+        "out/src/storage/portable/node.d.ts"
+      ]
+    }
   }
 }

@@ -30,6 +30,8 @@ export interface Brc39StreamQuarantine {
 }
 export interface Brc39NodeStreamOptions {
   policy: Brc39StreamPolicy
+  /** A selected host Argon2id backend must return a fresh owned key buffer.
+   * Streaming consumes that buffer and wipes it when the operation settles. */
   maximumPasswordBytes: number
   signal?: AbortSignal
   onProgress?: (progress: Readonly<{ fileBytes: number; plaintextBytes: number }>) => void
@@ -73,7 +75,9 @@ async function deriveKey(
       outputType: 'binary'
     })
     if (!(result instanceof Uint8Array) || result.length !== 32) throw new TypeError('Invalid BRC-39 derived key')
-    return new Uint8Array(result)
+    // Own the returned derivation buffer directly. A second copy would leave
+    // the original key outside the session's awaited erasure boundary.
+    return result
   } finally {
     bytes.fill(0)
   }
