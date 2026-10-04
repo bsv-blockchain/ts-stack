@@ -658,7 +658,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.offset ?? 0,
       args.paged?.limit,
       async r => {
-        if (args.tagIds != null && !args.tagIds.includes(r.outputTagId)) return false
+        if (args.tagIds != null && args.tagIds.length > 0 && !args.tagIds.includes(r.outputTagId)) return false
         if (!matchesOutputTagMapPartial(r, args.partial)) return false
         if (userId !== undefined) {
           const tagsForUser = await this.countOutputTags({
@@ -1614,8 +1614,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.offset ?? 0,
       args.paged?.limit,
       r => {
-        if (args.certifiers != null && !args.certifiers.includes(r.certifier)) return false
-        if (args.types != null && !args.types.includes(r.type)) return false
+        if (args.certifiers != null && args.certifiers.length > 0 && !args.certifiers.includes(r.certifier)) return false
+        if (args.types != null && args.types.length > 0 && !args.types.includes(r.type)) return false
         return matchesCertificatePartial(r, args.partial)
       },
       filtered
@@ -2014,7 +2014,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       async r => {
         if (args.from != null && r.created_at.getTime() < args.from.getTime()) return false
         if (args.to != null && r.created_at.getTime() >= args.to.getTime()) return false
-        if (args.status != null && !args.status.includes(r.status)) return false
+        if (args.status != null && args.status.length > 0 && !args.status.includes(r.status)) return false
         if (!matchesTransactionPartial(r, args.partial)) return false
         if (
           labelIds != null &&

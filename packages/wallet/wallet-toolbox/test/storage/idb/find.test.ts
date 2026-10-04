@@ -63,6 +63,15 @@ describe('idb find tests', () => {
         })
       ).toHaveLength(1)
       expect(await storage.findCertificates({ partial: {}, types: ['oblongata'] })).toHaveLength(0)
+      // Empty arrays mean "no filter", as in StorageKnex and as every listCertificates caller relies on.
+      expect(await storage.findCertificates({ partial: {}, certifiers: [], types: [] })).toHaveLength(3)
+      expect(
+        await storage.findCertificates({
+          partial: {},
+          certifiers: [],
+          types: [setup.u1cert2.type]
+        })
+      ).toHaveLength(1)
     }
   })
 
