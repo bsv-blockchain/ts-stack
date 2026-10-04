@@ -15,6 +15,53 @@ async function fixture() {
 afterEach(async () => {
   await Promise.all(fixtures.splice(0).map(f => f.close()))
 })
+
+it('rejects a harmless nested read during installed-policy replay and releases the read gate', async () => {
+  const f = await fixture()
+  await f.open().commit(f.next)
+  const parse = f.lifecycle.parse.bind(f.lifecycle)
+  let armed = true
+  let nested: Promise<PromiseSettledResult<unknown>[]> | undefined
+  const policy = jest.spyOn(f.lifecycle, 'parse').mockImplementation(input => {
+    if (armed) {
+      armed = false
+      nested = Promise.allSettled([f.store.head()])
+    }
+    return parse(input)
+  })
+  try {
+    expect((await f.store.head()).revision).toBe('2')
+    expect(nested).toBeDefined()
+    const result = (await nested!)[0]
+    expect(result.status).toBe('rejected')
+    if (result.status !== 'rejected') throw new Error('Expected nested read rejection')
+    expect(result.reason).toBeInstanceOf(OutputProtocolError)
+    expect(result.reason).toMatchObject({
+      code: 'unavailable',
+      message: expect.stringContaining('reentered')
+    })
+    expect((await f.store.head()).revision).toBe('2')
+  } finally {
+    policy.mockRestore()
+  }
+})
+
+it('releases the read transaction after an installed policy refuses replay', async () => {
+  const f = await fixture()
+  await f.open().commit(f.next)
+  const refusal = new Error('Installed replay policy refused')
+  const policy = jest.spyOn(f.lifecycle, 'parse').mockImplementationOnce(() => {
+    throw refusal
+  })
+  try {
+    await expect(f.store.head()).rejects.toBe(refusal)
+    expect((await f.store.head()).revision).toBe('2')
+    expect((await f.store.commit(f.next)).status).toBe('replayed')
+  } finally {
+    policy.mockRestore()
+  }
+})
+
 async function rejected(result: Promise<unknown>, code: string): Promise<void> {
   const outcome = (await Promise.allSettled([result]))[0]
   expect(outcome.status).toBe('rejected')

@@ -2,9 +2,9 @@
 id: non-final-proposals
 title: Authenticated Non-Final Proposals
 kind: guide
-version: '1.0.0'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+version: '1.1.0'
+last_updated: '2026-10-04'
+last_verified: '2026-10-04'
 review_cadence_days: 30
 status: experimental
 tags: [overlays, sdk, proposals, application-state]
@@ -69,6 +69,13 @@ transaction boundary can distinguish a lost commit acknowledgement for recovery.
 Final-send failures use the stricter connection-retirement rule because delivery
 cannot be undone. These implementation ports are internal, synchronous, and not
 an authorization mechanism or a public raw-SQL extension point.
+
+Standalone journal reads pin their metadata and retained prefix to one synchronous
+SQLite read transaction. Installed policy replay runs inside that same ownership
+gate; it may not reenter the journal or close its connection. A rejected policy
+releases the gate before the caller receives the rejection. Normal sequential
+reads, independently opened writers and the persisted namespace format remain
+compatible. This guard adds no payment, admission or disclosure authority.
 
 The optional `SQLiteProposalChannelStore` now composes the proposal journal,
 current index, retained log, session pins and visibility fences on one connection.

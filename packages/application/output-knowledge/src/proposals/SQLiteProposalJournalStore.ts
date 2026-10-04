@@ -329,10 +329,15 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
 
   private readState(): ProposalJournalState {
     this.ready()
-    // The immutable prefix is pinned by its target revision; concurrent appends
-    // after that revision do not change the prefix or its recorded byte counts.
-    this.refresh()
-    return this.state
+    // Pin metadata and its immutable prefix to one synchronous read snapshot.
+    // Installed replay policy must not reenter or close the physical owner.
+    return this.domain.transaction(
+      () => {
+        this.refresh()
+        return this.state
+      },
+      { write: false }
+    )
   }
 
   private refresh(): void {

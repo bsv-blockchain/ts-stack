@@ -5081,3 +5081,38 @@ target's exact download predicate and destination, instead of three examples.
 The registry retains141 canonical targets with388 rows in batches[256,132].
 Complete final-source root/installed controls and a new full same-run published
 campaign remain required; checkpoint two is still open.
+
+### Standalone proposal read ownership — 2026-10-04
+
+Published head d331 passes all 42 applicable ordinary CI jobs, strict security
+reconciliation and the native, browser, mobile, packed and documentation profiles.
+Its full blank-selector campaign 37229910345/attempt1 does not qualify. The
+proposal-journal-send/store job passes all 232 initial tests, then reports native
+worker terminations and two invalid mutants against the unchanged zero-invalid
+gate. The report ZIP digest and terminal job log are retained outside published
+package artifacts; the campaign is stopped and terminal cancelled. No partial
+score or previous-head result qualifies this source.
+
+Ordinary source review finds a separate concrete ownership gap: standalone reads
+replay installed policy while the SQLite transaction domain appears idle. A
+harmless nested-read regression fails the old source with an invalid-history
+error because nested replay changes the cache under the outer replay. This
+regression does not close an executing native connection or reproduce the
+unknown worker fault.
+
+Standalone reads now pin metadata and its immutable prefix to one synchronous
+read transaction. Installed policy replay therefore shares the physical-owner
+gate; harmless reentry is rejected before replay can change the cache. A second
+regression verifies gate release after an ordinary JavaScript policy refusal and
+subsequent durable replay. Every original proposal test remains selected. The
+complete 234-test/13-file unit, native process, composition and 300-case property
+union passes locally in 19.047 seconds with seed3242026 and blank replay. Its
+owned group72706 is physically absent and all authored/2275 consumed runtime
+paths remain fixed. No API, persisted schema, permission, payment or admission
+authority changes. The guide and generated release/migration documentation
+describe the synchronous ownership rule.
+
+This source-level correction does not establish the cause of the native worker
+terminations. Complete original local controls, published-source platform gates
+and one new full same-run mutation campaign remain required. Checkpoint two is
+still open; invalid mutants, cancelled rows and incomplete scores are not waived.
