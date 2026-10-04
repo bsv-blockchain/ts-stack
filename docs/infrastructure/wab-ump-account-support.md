@@ -2,9 +2,9 @@
 id: wab-ump-account-support
 title: 'WAB UMP Account Support'
 kind: infra
-version: '1.1.0'
-last_updated: '2026-09-04'
-last_verified: '2026-09-04'
+version: '1.1.1'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: stable
 tags: [wab, ump, support, phone, recovery]
@@ -81,13 +81,18 @@ that the UMP side is empty.
      }'
    ```
 
-5. Ask the user to retry ordinary sign-in. The client first attempts normal
-   verified lineage resolution. It applies the pin only if ambiguity remains
-   and the pinned outpoint is in its verified candidate set.
+5. Ask the user to retry ordinary sign-in. Compatible clients use a verified
+   pin as a lineage anchor among competing records. A password or token update
+   that consumes that anchor takes precedence, including when the pin is only
+   present in authenticated token ancestry. Every token spend proves control,
+   including confirmed updates and hash rotation; funding inputs do not establish
+   token lineage. An unrelated historical
+   continuation cannot override it. Older clients use the pin only as a fallback
+   after normal lineage resolution, so validate their actual returned state.
 6. Record the ticket ID, redacted account identifier, selected outpoint, WAB
    deployment version, operator, and validation result.
 
-Clear a pin after the account has a single healthy current UMP token:
+Clear a pin only after ordinary unpinned lookup independently returns the verified current token. Repeat the lookup after clearing; do not clear a pin that still prevents ambiguity or stale selection:
 
 ```bash
 curl --fail-with-body --request POST "${WAB_SUPPORT_URL}/admin/ump-pin" \
@@ -100,8 +105,22 @@ curl --fail-with-body --request POST "${WAB_SUPPORT_URL}/admin/ump-pin" \
   }'
 ```
 
-An incorrect or stale pin does not authorize an unknown token; the client
-ignores it and keeps reporting ambiguity.
+A pin cannot authorize an unknown token. A spent pin may be superseded only by
+verified update lineage; it cannot resolve competing descendants. Keep retry and
+recovery errors for incomplete, unavailable or unverifiable lookup evidence.
+
+UMP lookup must request the retained token lineage through its overlay history
+decider. Deploy `@bsv/overlay@2.6.4` and `@bsv/overlay-topics@2.0.1` (or the
+equivalent decider in a custom UMP service) together with Wallet Toolbox 2.14.6.
+The engine preserves selected history past confirmed Merkle anchors, and the
+client links that history before selecting a current token. The stored pin can
+remain an older lineage anchor while password/token updates supersede it.
+No additional WAB pin rewrite or schema is required.
+
+Older hosts may omit this history. If an absent old pin is named by an input but
+its authenticated source is missing, clients require history rather than selecting
+an unrelated historical continuation. Preserve retry/recovery behavior until the
+host is corrected; do not make incomplete evidence authoritative.
 
 ## Phone-number changes and takeovers
 
