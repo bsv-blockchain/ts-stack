@@ -1,5 +1,5 @@
 import * as WalletSdk from '@bsv/sdk'
-import { MerklePath, PrivateKey, RPuzzle, Transaction, WalletInterface } from '@bsv/sdk'
+import { MerklePath, PrivateKey, RPuzzle, Script, Transaction, WalletInterface } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../test/utils/TestUtilsWalletStorage'
 import { WalletAuthenticationManager } from '../WalletAuthenticationManager'
 import { WalletPermissionsManager } from '../WalletPermissionsManager'
@@ -83,6 +83,28 @@ describe('faucet completion with empty wallet storage', () => {
     const sign = jest.spyOn(ctx.wallet, 'signAction')
     const abort = jest.spyOn(ctx.wallet, 'abortAction')
     await expect(fund(manager(ctx.wallet), ctx.wallet)).rejects.toThrow('unrequested output')
+    expect(sign).not.toHaveBeenCalled()
+    expect(abort).toHaveBeenCalledTimes(1)
+    expect((await ctx.wallet.listOutputs({ basket: 'default' })).outputs).toHaveLength(0)
+  })
+
+  it.each(['script', 'amount'])('rejects a %s substitution after the local storage fee was approved', async field => {
+    ctx.activeStorage.commissionSatoshis = 200
+    const create = ctx.wallet.createAction.bind(ctx.wallet)
+    jest.spyOn(ctx.wallet, 'createAction').mockImplementation(async (args, originator) => {
+      const result = await create(args, originator)
+      const transaction = Transaction.fromAtomicBEEF(result.signableTransaction!.tx)
+      const commission = transaction.outputs.find(output => output.satoshis === 200)!
+      if (field === 'script') commission.lockingScript = Script.fromHex('51')
+      else commission.satoshis = 201
+      // Keep the original result identity and its private approval. Altering the
+      // transaction must still invalidate that approval before any signing.
+      result.signableTransaction!.tx = transaction.toAtomicBEEF(true)
+      return result
+    })
+    const sign = jest.spyOn(ctx.wallet, 'signAction')
+    const abort = jest.spyOn(ctx.wallet, 'abortAction')
+    await expect(fund(manager(ctx.wallet), ctx.wallet)).rejects.toThrow('authorized additional output')
     expect(sign).not.toHaveBeenCalled()
     expect(abort).toHaveBeenCalledTimes(1)
     expect((await ctx.wallet.listOutputs({ basket: 'default' })).outputs).toHaveLength(0)

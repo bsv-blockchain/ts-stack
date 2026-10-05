@@ -626,7 +626,7 @@ function normalizeAdditionalOutputAuthorizations(value: unknown): BoundActionOut
         keys[keyIndex] !== 'satoshis'
       ) {
         throw new Error(
-          'Additional output authorizations must contain only index, script and amount'
+          `Additional output authorization ${index} field ${keyIndex} must be index, script or amount`
         )
       }
     }
@@ -836,7 +836,7 @@ function bindRequestedAction(
       output.satoshis !== authorization.satoshis
     ) {
       throw new Error(
-        'Wallet transaction omitted, duplicated or substituted an authorized additional output'
+        `Wallet transaction omitted, duplicated or substituted an authorized additional output at authorization ${index}`
       )
     }
     matchedCandidateOutputs[authorization.outputIndex] = true
