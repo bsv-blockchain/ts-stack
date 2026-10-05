@@ -140,6 +140,49 @@ it('releases the read transaction after an installed policy refuses replay', asy
   }
 })
 
+it.each(['0000000000000000', '0000000000000001'])(
+  'rejects a non-advancing replay page before installed policy and recovers (%s)',
+  async revision => {
+    const f = await fixture()
+    await f.open().commit(f.next)
+    const prepare = DatabaseSync.prototype.prepare
+    const policy = jest.spyOn(f.lifecycle, 'parse')
+    let pages = 0
+    const database = jest.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+      this: DatabaseSync,
+      sql: string
+    ) {
+      const statement = prepare.call(this, sql)
+      if (sql.includes('FROM proposal_journal_entries')) {
+        const all = statement.all
+        Object.defineProperty(statement, 'all', {
+          configurable: true,
+          value: (...bindings: unknown[]) => {
+            const rows = Reflect.apply(all, statement, bindings) as Record<string, unknown>[]
+            pages++
+            // Inject only an unexpected JS row value after the real bounded read.
+            // The native statement and database bytes remain unchanged.
+            return rows.map(row => ({ ...row, revision }))
+          }
+        })
+      }
+      return statement
+    })
+    try {
+      await expect(f.store.head()).rejects.toMatchObject({ code: 'unavailable' })
+      expect(pages).toBe(1)
+      expect(policy).not.toHaveBeenCalled()
+      database.mockRestore()
+      expect(await f.store.head()).toMatchObject({ revision: '2', entries: 2 })
+      expect(await f.store.read('0', 10)).toHaveLength(2)
+      expect((await f.store.commit(f.next)).status).toBe('replayed')
+    } finally {
+      database.mockRestore()
+      policy.mockRestore()
+    }
+  }
+)
+
 async function rejected(result: Promise<unknown>, code: string): Promise<void> {
   const outcome = (await Promise.allSettled([result]))[0]
   expect(outcome.status).toBe('rejected')
