@@ -125,7 +125,7 @@ function checkedBuildIdentity(value) {
   if (
     versioned &&
     (typeof value.nodeVersion !== 'string' ||
-      !/^v[1-9][0-9]*\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(value.nodeVersion))
+      !/^v[1-9]\d*\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value.nodeVersion))
   )
     throw new Error('Invalid build identity runtime')
   for (const field of ['runId', 'runAttempt', 'artifactId'])
