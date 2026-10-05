@@ -1,7 +1,7 @@
 import { MerklePath } from '@bsv/sdk'
 import { BlockHeader, GetMerklePathResult } from '../sdk/WalletServices.interfaces'
 import { WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
-import { ReqHistoryNote } from '../sdk/types'
+import { Chain, ReqHistoryNote } from '../sdk/types'
 import { WalletError } from '../sdk/WalletError'
 import { validateHeaderFormat, validateHeaderProofOfWork } from './chaintracker/chaintracks/util/blockHeaderUtilities'
 
@@ -238,7 +238,8 @@ export function copyMerklePath(txid: string, value: unknown): { merklePath: Merk
 export function copyValidatedBlockHeader(
   value: unknown,
   requireProofOfWork = false,
-  requireHeaderFormat = true
+  requireHeaderFormat = true,
+  chain?: Chain
 ): BlockHeader {
   const descriptors = requirePlainDataRecord(value, 'header')
   const header: BlockHeader = {
@@ -259,7 +260,7 @@ export function copyValidatedBlockHeader(
   if (requireHeaderFormat) {
     try {
       validateHeaderFormat(header)
-      if (requireProofOfWork) validateHeaderProofOfWork(header)
+      if (requireProofOfWork) validateHeaderProofOfWork(header, chain)
     } catch {
       invalid(
         'header',
@@ -279,14 +280,15 @@ export function validateMerklePathResult(
   requestedTxid: unknown,
   result: GetMerklePathResult,
   requireProofOfWork = false,
-  requireHeaderFormat = true
+  requireHeaderFormat = true,
+  chain?: Chain
 ): ValidatedMerklePathResult {
   const txid = normalizeTxid(requestedTxid)
   const descriptors = requirePlainDataRecord(result, 'getMerklePath result')
   const merklePathValue = ownValue(descriptors, 'merklePath', 'getMerklePath result')
   const headerValue = ownValue(descriptors, 'header', 'getMerklePath result')
   const proof = copyMerklePath(txid, merklePathValue)
-  const header = copyValidatedBlockHeader(headerValue, requireProofOfWork, requireHeaderFormat)
+  const header = copyValidatedBlockHeader(headerValue, requireProofOfWork, requireHeaderFormat, chain)
   if (proof.merklePath.blockHeight !== header.height) {
     invalid('merklePath.blockHeight', 'the authenticated header height')
   }
@@ -301,9 +303,10 @@ export async function authenticateMerklePathResult(
   result: GetMerklePathResult,
   validator: MerkleRootValidator,
   requireProofOfWork = false,
-  requireHeaderFormat = true
+  requireHeaderFormat = true,
+  chain?: Chain
 ): Promise<ValidatedMerklePathResult> {
-  const validated = validateMerklePathResult(requestedTxid, result, requireProofOfWork, requireHeaderFormat)
+  const validated = validateMerklePathResult(requestedTxid, result, requireProofOfWork, requireHeaderFormat, chain)
   if ((await validator.isValidRootForHeight(validated.root, validated.header.height)) !== true) {
     invalid('merklePath root', 'a root authenticated by the configured chain tracker at the proof height')
   }

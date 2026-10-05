@@ -2,6 +2,7 @@ import { PublicKey } from '@bsv/sdk'
 import { toArray } from '@bsv/sdk/primitives/utils'
 import { BlockHeader } from '../sdk/WalletServices.interfaces'
 import { WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
+import { Chain } from '../sdk/types'
 import { isBlockHeader } from '../services/chaintracker/chaintracks/Api/BlockHeaderApi'
 import {
   validateHeaderFormat,
@@ -73,7 +74,12 @@ export function copyMonitorTags(value: unknown, name = 'tags'): string[] {
   })
 }
 
-export function copyValidatedMonitorHeader(value: unknown, name = 'header', requireProofOfWork = true): BlockHeader {
+export function copyValidatedMonitorHeader(
+  value: unknown,
+  name = 'header',
+  requireProofOfWork = true,
+  chain?: Chain
+): BlockHeader {
   if (!isBlockHeader(value as BlockHeader)) {
     throw new WERR_INVALID_PARAMETER(name, 'an accessor-free block-header data object')
   }
@@ -90,7 +96,7 @@ export function copyValidatedMonitorHeader(value: unknown, name = 'header', requ
   }
   try {
     validateHeaderFormat(header)
-    if (requireProofOfWork) validateHeaderProofOfWork(header)
+    if (requireProofOfWork) validateHeaderProofOfWork(header, chain)
   } catch {
     throw new WERR_INVALID_PARAMETER(
       name,

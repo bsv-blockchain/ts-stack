@@ -14,11 +14,14 @@ import { Chain } from '../sdk/types'
  *                         ChainTracks when TSTN_CHAINTRACKS_URL is unset
  *                         (`${TSTN_ARCADE_URL}/chaintracks/v1`, mirroring the ttn layout).
  *   TSTN_CHAINTRACKS_URL  ChainTracks service URL.
+ *   REGTEST_ARCADE_URL        regtest Arcade broadcaster / ARC endpoint base. Also the fallback
+ *                             host for ChainTracks when REGTEST_CHAINTRACKS_URL is unset.
+ *   REGTEST_CHAINTRACKS_URL   regtest ChainTracks service URL.
  *
- * stn/tstn run only operator-configured Arcade and ChainTracks services; there is no
+ * stn/tstn/regtest run only operator-configured Arcade and ChainTracks services; there is no
  * documented WhatsOnChain service for them, so no WhatsOnChain endpoint is configured and
  * the WhatsOnChain-only lookups (raw tx, utxo status, txid status, script-hash history) are not
- * available on stn/tstn.
+ * available on stn/tstn/regtest.
  *
  * `process` is accessed defensively so importing this module remains safe in
  * browser bundles. Browser applications can still supply an explicit
@@ -42,6 +45,7 @@ export function publicArcadeUrl(chain: Chain): string | undefined {
       return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech'
     case 'stn':
     case 'tstn':
+    case 'regtest':
     case 'mock':
       return undefined
   }
@@ -88,5 +92,24 @@ export function stnChaintracksUrl(): string {
   if (arcade != null) return `${stripTrailingSlash(arcade)}/chaintracks/v1`
   throw new Error(
     'stn chain requires a ChainTracks URL: set STN_CHAINTRACKS_URL (or STN_ARCADE_URL) in the environment.'
+  )
+}
+
+/** Arcade broadcaster / ARC endpoint for regtest, or `undefined` when `REGTEST_ARCADE_URL` is unset. */
+export function regtestArcadeUrl(): string | undefined {
+  return readEnv('REGTEST_ARCADE_URL')
+}
+
+/**
+ * ChainTracks service URL for regtest. Falls back to `${REGTEST_ARCADE_URL}/chaintracks/v1` when
+ * `REGTEST_CHAINTRACKS_URL` is unset (mirrors the tstn layout). Throws when neither is configured.
+ */
+export function regtestChaintracksUrl(): string {
+  const explicit = readEnv('REGTEST_CHAINTRACKS_URL')
+  if (explicit != null) return explicit
+  const arcade = regtestArcadeUrl()
+  if (arcade != null) return `${stripTrailingSlash(arcade)}/chaintracks/v1`
+  throw new Error(
+    'regtest chain requires a ChainTracks URL: set REGTEST_CHAINTRACKS_URL (or REGTEST_ARCADE_URL) in the environment.'
   )
 }

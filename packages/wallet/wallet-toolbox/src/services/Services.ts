@@ -115,7 +115,7 @@ export class Services implements WalletServices {
     if (this.chain === 'mock') {
       throw new WERR_INVALID_PARAMETER(
         'chain',
-        "'main', 'test', 'stn', 'ttn', or 'tstn'. Use MockServices for 'mock' chain."
+        "'main', 'test', 'stn', 'ttn', 'tstn', or 'regtest'. Use MockServices for 'mock' chain."
       )
     }
 
@@ -819,7 +819,7 @@ export class Services implements WalletServices {
     header ??= await this.whatsonchain.getBlockHeaderByHash(normalizedHash)
     if (header == null)
       throw new WERR_INVALID_PARAMETER('hash', `valid blockhash '${normalizedHash}' on mined chain ${this.chain}`)
-    const validated = copyValidatedBlockHeader(header, true)
+    const validated = copyValidatedBlockHeader(header, true, true, this.chain)
     if (validated.hash !== normalizedHash) {
       throw new WERR_INVALID_PARAMETER('hash', `the hash of the returned mined header on chain ${this.chain}`)
     }
