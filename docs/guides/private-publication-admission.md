@@ -2,9 +2,9 @@
 id: private-publication-admission
 title: 'Private Publication Admission'
 kind: guide
-version: '1.0.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '1.0.1'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [overlay, custody, recovery, wallet]
@@ -108,7 +108,7 @@ by implication. Public reuse recovers public admission only. The protected store
 publisher/schema validation and real lookup binding still have to succeed before
 the publication service may report ready.
 
-## Reference validation and remaining composition
+## Reference validation and service composition
 
 Boundary and generated tests cover exact context/selection bindings, owned inputs,
 capacity, current guards, duplicate and lost replies, topic projection and output
@@ -119,6 +119,10 @@ roots; independent header-policy validation belongs to the full reference servic
 Existing proposal tests run against the shared retained-receipt validator to preserve
 their historical assessment bytes and behavior.
 
-The complete publication HTTP service, native private lookup binding, schema/publisher
-verification and final authenticated response enqueue remain separate integration
-work. This component does not enable an endpoint or a paid availability claim.
+The [verified publication service](./verified-private-publication.md) composes
+this bridge with native protected storage, schema/publisher verification, lookup
+binding, authenticated publication/status routes and final response enqueue.
+Its actual Engine/Mongo and HTTP tests exercise retained admission, restart,
+private values and authorization changes during signing. The bridge alone
+enables neither an endpoint nor a paid availability claim; complete
+published-source qualification remains required.

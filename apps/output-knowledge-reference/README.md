@@ -1,8 +1,9 @@
 # Output knowledge reference workbench
 
 This application demonstrates progressive, authenticated live lookup and durable
-client recovery for the second implementation checkpoint. The larger
-BRC-192–199 composition is still being assembled.
+client recovery for the second implementation checkpoint. The accompanying native compositions demonstrate the BRC-192–199 private
+acquisition, covenant purchase and independent root-host workflows. Complete
+qualification of the published implementation branch is still required.
 
 The initial composition connects a trusted fixture producer, a durable SQLite
 lookup index and session store, the authenticated Overlay Express lookup

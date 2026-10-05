@@ -2,9 +2,9 @@
 id: private-purchase-custody
 title: 'Original Covenant Purchase Custody'
 kind: guide
-version: '1.0.0'
-last_updated: '2026-10-03'
-last_verified: '2026-10-03'
+version: '1.0.1'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -217,8 +217,10 @@ verdict. The authenticated HTTP suites use actual BRC-103 middleware and native
 custody, with controlled domain/admission fixtures. They establish transport,
 recipient checks, staged responses and revoked physical disclosure, not chain
 truth. The native licensed-purchase composition below separately exercises the
-actual domain, wallet, admission and playback path; the complete checkpoint still
-requires the remaining workflows and final qualification.
+actual domain, wallet, admission and playback path. The
+[checkpoint inventory](../../specs/output-knowledge/CHECKPOINT2.md) links the
+complete reference workflows; the checkpoint still requires final qualification
+of the published source.
 
 ## One original buyer and native wallet action
 

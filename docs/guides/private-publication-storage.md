@@ -2,9 +2,9 @@
 id: private-publication-storage
 title: 'Private Publication Storage'
 kind: guide
-version: '1.0.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '1.0.1'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [overlay, custody, recovery, wallet]
@@ -97,7 +97,7 @@ pass, reload each candidate, and reserve effects with its current record revisio
 New entries behind a previous cursor must not be lost. Enumeration alone grants
 no private disclosure or external-effect authority.
 
-## Validation and remaining integration
+## Validation and service integration
 
 The adopted foundation passes 266 native tests across 13 suites, including the
 existing protected-ledger cases, four actual process-termination boundaries,
@@ -108,9 +108,13 @@ its complete source with work-discovery and full-inventory boundary cases.
 Complete mutation qualification, packed documentation/platform checks and final
 exact-head CI remain required for this new batch.
 
-The next composition must connect real retained topic admission and durable lookup
-bindings, then add authenticated publication/status routes, reconciliation and
-native response enqueue. Paid lookup acquisition and purchase/POTATOES delivery
-will share the authoritative domain but retain their own evidence, funding,
-release and recipient-usability contracts. This storage foundation does not yet
-establish those services or complete checkpoint two.
+The [verified publication service](./verified-private-publication.md) connects
+this foundation to real retained topic admission, durable lookup bindings,
+authenticated publication/status routes, reconciliation and native response
+enqueue. [Paid lookup acquisition](./private-acquisition-recovery.md) and
+[covenant purchase/POTATOES delivery](./private-purchase-custody.md) compose the
+same authoritative domain through separate evidence, funding, release and
+recipient-usability contracts. Their native HTTP, wallet and licensed-playback
+compositions exercise those boundaries together. Installing this storage
+foundation alone establishes none of those services, and complete
+published-source qualification remains required for checkpoint two.

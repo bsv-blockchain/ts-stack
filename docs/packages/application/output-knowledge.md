@@ -5,8 +5,8 @@ kind: package
 domain: application
 npm: '@bsv/output-knowledge'
 version: '0.1.0'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/application/output-knowledge'
 status: experimental
@@ -76,7 +76,8 @@ only, preserves original requests and completed actions, and checks installed
 maintenance authority independently of requester status access. Hosts still
 schedule startup and periodic passes. The service must separately install
 access/evidence authority and actual serving adapters. See [root coordination](../../guides/root-eviction-coordination.md) for
-bounds, creation/recovery, currentness, policy changes and remaining integration work.
+bounds, creation/recovery, currentness, policy changes and the complete
+independent-root serving demonstration.
 
 ## Public composition
 
@@ -161,8 +162,12 @@ capacity. Authenticated transport and durable admission remain explicit integrat
 `SDKProposalEvidence` performs complete target BEEF/Script verification against
 a pinned immutable chain view. A signed PRP1 fixture with synthetic header ancestry
 exercises that adapter before SQLite reservation; ordinary admission remains
-unresolved in that test. Full HTTP/topic qualification remains in progress.
-Its optional richer evidence method retains the original verification context
+unresolved in that component test. The reference application's separate
+proposal pipeline composes actual Engine/Mongo admission, authenticated HTTP,
+live lookup and durable client/provider restart. See the
+[workbench guide](../../guides/output-knowledge-workbench.md) for that composition
+and its synthetic-chain validation limits.
+The adapter's optional richer evidence method retains the original verification context
 atomically with the reservation in local `proposal-service/2` records. Recovery
 passes that saved context to admission without adopting a new view or policy;
 adapters can require it explicitly. Original v1 records and string-returning
@@ -176,8 +181,11 @@ saved verification context and returns only the requested topic from the origina
 durable receipt. The receipt's assessment identity is independent of the newer
 reservation context. Missing history and duplicate or failed submission remain
 unresolved; configure retained-history storage explicitly. Actual Engine/Mongo
-restart and lost-response tests qualify this boundary separately from the
-remaining complete HTTP and application composition.
+restart and lost-response tests exercise this boundary. The reference
+application additionally exercises the complete authenticated HTTP and live
+lookup composition, including lost admission replies and retained finalization
+after client/provider restart. Complete published-source qualification remains
+required; these fixtures do not establish production mining or unspentness.
 
 `SQLiteProposalJournal` also exposes the optional `ProposalJournalSend` companion.
 It reads the exact current channel or retained proposal under its writer lock,

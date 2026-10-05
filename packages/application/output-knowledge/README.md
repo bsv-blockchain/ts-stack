@@ -25,7 +25,7 @@ The optional `@bsv/output-knowledge/private/node` entry now composes verified
 publication, actual retained Engine admission, protected lookup binding, current
 publisher disclosure and bounded restart recovery. Its
 [installation guide](../../../docs/guides/verified-private-publication.md) separates
-publication from the remaining paid lookup and purchase/POTATOES owners.
+publication from the separately composed paid lookup and purchase/POTATOES owners.
 The package version does not indicate a published or production-qualified release.
 See the [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md)
 for exact component evidence and outstanding work.
@@ -145,7 +145,8 @@ the root identity, chain and sealed capacities. This component leaves installed
 requester/evidence authority, broader bans, scheduling and actual HTTP/index adapters
 to the service; it does not enable a discovery endpoint by itself. See
 [root coordination](../../../docs/guides/root-eviction-coordination.md) for API
-contracts, limits, crash recovery and the remaining integration obligations.
+contracts, limits, crash recovery and the complete independent-root serving
+demonstration.
 
 The portable entry also supplies `RootEvictionService` for bounded raw-text intake
 and authorized status signing. It preserves the original capability on retry,
@@ -171,7 +172,7 @@ advertised result limit. Explicit coordination configuration uses the sealed
 `upgradeCoordination` is an explicit transactional migration that preserves history
 and fences older open connections. Missing legacy selections are never filled
 from current discovery. See the root coordination guide for storage budgets,
-recovery, migration and the remaining complete-service obligations.
+recovery, migration and the explicit host installation obligations.
 
 The Node root entry also exports `SQLiteRootEvictionMaintenance`, an optional
 trusted local recovery companion. It opens the same existing sealed database,
