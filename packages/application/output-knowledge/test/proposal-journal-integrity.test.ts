@@ -1,8 +1,9 @@
 import { afterEach, expect, it, jest } from '@jest/globals'
-import { DatabaseSync, type StatementSync } from 'node:sqlite'
+import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
 import { OutputProtocolError } from '@bsv/sdk'
 import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
+import { prepareProposalStatement } from '../src/proposals/SQLiteProposalJournalStore.js'
 import { proposalSendFixture } from './proposal-send-fixture.js'
 import { author, recipient, signed } from './proposal-fixture.js'
 
@@ -417,43 +418,68 @@ it('owns the input bytes before invoking caller code and emits deliberate protoc
 
 it.each(['', ' ', '\n\t'])(
   'rejects missing statement text before calling the native driver (%j)',
-  async sql => {
-    const f = await fixture()
+  sql => {
     // Keep malformed input entirely in JavaScript, including when the guard is mutated.
     const driverRefusal = new Error('Unexpected native preparation')
-    const driver = jest.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(() => {
+    const prepare = jest.fn<DatabaseSync['prepare']>().mockImplementation(() => {
       throw driverRefusal
     })
-    try {
-      const owner = f.store as unknown as { prepare: (sql: string) => StatementSync }
-      expect(() => owner.prepare(sql)).toThrow(
-        expect.objectContaining({
-          code: 'unavailable',
-          message: 'Proposal journal statement is empty'
-        })
-      )
-      expect(driver).not.toHaveBeenCalled()
-    } finally {
-      driver.mockRestore()
-    }
-    expect(await f.store.head()).toMatchObject({ revision: '1', entries: 1 })
+    expect(() => prepareProposalStatement({ prepare }, sql)).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Proposal journal statement is empty'
+      })
+    )
+    expect(prepare).not.toHaveBeenCalled()
   }
 )
 
 it('preserves valid statement text, native binding and preparation errors', async () => {
   const f = await fixture()
-  const owner = f.store as unknown as { prepare: (sql: string) => StatementSync }
-  const sql = ' SELECT ? AS value '
-  expect(owner.prepare(sql).get('original binding')).toEqual({ value: 'original binding' })
-  const refusal = new Error('Installed driver refused preparation')
-  const driver = jest.spyOn(DatabaseSync.prototype, 'prepare').mockImplementationOnce(() => {
-    throw refusal
-  })
+  const database = new DatabaseSync(f.file)
   try {
-    expect(() => owner.prepare(sql)).toThrow(refusal)
-    expect(driver).toHaveBeenCalledWith(sql)
+    const sql = ' SELECT ? AS value '
+    expect(prepareProposalStatement(database, sql).get('original binding')).toEqual({
+      value: 'original binding'
+    })
+    const refusal = new Error('Installed driver refused preparation')
+    const driver = jest.spyOn(database, 'prepare').mockImplementationOnce(() => {
+      throw refusal
+    })
+    try {
+      expect(() => prepareProposalStatement(database, sql)).toThrow(refusal)
+      expect(driver).toHaveBeenCalledWith(sql)
+    } finally {
+      driver.mockRestore()
+    }
   } finally {
-    driver.mockRestore()
+    database.close()
   }
   expect(await f.store.head()).toMatchObject({ revision: '1', entries: 1 })
+})
+
+it('preserves application subclasses with their own preparation method', async () => {
+  const f = await fixture()
+  let calls = 0
+  class ApplicationJournal extends SQLiteProposalJournal {
+    prepare(): string {
+      calls++
+      return 'application preparation'
+    }
+  }
+  const store = new ApplicationJournal(
+    join(f.directory, 'subclass.sqlite'),
+    'subclass-test',
+    author,
+    f.lifecycle
+  )
+  try {
+    expect(await store.commit(f.first)).toMatchObject({ status: 'committed', revision: '1' })
+    expect(await store.head()).toMatchObject({ revision: '1', entries: 1 })
+    expect(calls).toBe(0)
+    expect(store.prepare()).toBe('application preparation')
+    expect(calls).toBe(1)
+  } finally {
+    await store.close()
+  }
 })

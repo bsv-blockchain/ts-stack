@@ -5219,8 +5219,13 @@ Deterministic regressions exercise missing text through a JavaScript driver stub
 verify that native preparation is never reached, and retain valid native binding,
 driver-error identity and subsequent journal recovery. The original governed
 mutation scope, operators, workers, property budget, seed, timeouts and quality
-limits remain unchanged. The focused integrity suite passes all 28 cases; full
+limits remain unchanged. The focused integrity suite passes all 29 cases; full
 exact-source qualification remains required before checkpoint readiness.
-The complete original proposal profile also passes all 243 cases in 13 suites,
+The complete original proposal profile also passes all 244 cases in 13 suites,
 including its original 300-case property campaign and seed. Root health, lint,
 format, strict types and the unexcluded security audit pass.
+
+The preparation helper remains outside the exported class hierarchy. An
+application-subclass regression retains its own preparation method without
+intercepting journal SQL. Public journal declarations and subclass behavior
+remain compatible with the original implementation.

@@ -25,6 +25,16 @@ import type {
   ProposalJournalResponseReference
 } from './ProposalJournalSend.js'
 
+/** @internal Source-owned SQL preparation; not exported by a public package entry. */
+export function prepareProposalStatement(
+  database: Pick<DatabaseSync, 'prepare'>,
+  sql: string
+): StatementSync {
+  if (sql.trim().length === 0)
+    throw new OutputProtocolError('unavailable', 'Proposal journal statement is empty')
+  return database.prepare(sql)
+}
+
 const position = (value: string): string => outputU64(value).toString(16).padStart(16, '0')
 function decimal(value: unknown): string {
   if (typeof value !== 'string' || !/^[0-9a-f]{16}$/.test(value))
@@ -133,20 +143,21 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
       `)
     if (
       mode === 'create' &&
-      this.prepare('SELECT 1 FROM proposal_journal_meta WHERE namespace=?').get(this.namespace) !==
-        undefined
+      prepareProposalStatement(
+        this.database,
+        'SELECT 1 FROM proposal_journal_meta WHERE namespace=?'
+      ).get(this.namespace) !== undefined
     )
       throw new OutputProtocolError('conflict', 'Proposal journal namespace already exists')
     if (mode !== 'open') {
-      this.prepare('INSERT OR IGNORE INTO proposal_journal_meta VALUES (?, ?, ?, ?, 0, 0)').run(
-        this.namespace,
-        this.state.serviceIdentity,
-        this.configuration,
-        position('0')
-      )
+      prepareProposalStatement(
+        this.database,
+        'INSERT OR IGNORE INTO proposal_journal_meta VALUES (?, ?, ?, ?, 0, 0)'
+      ).run(this.namespace, this.state.serviceIdentity, this.configuration, position('0'))
       // A legacy database gains its capacity seal without rewriting its entries.
       // All writers must use this version before relying on held completion space.
-      this.prepare(
+      prepareProposalStatement(
+        this.database,
         'INSERT OR IGNORE INTO proposal_journal_capacity SELECT namespace, ? FROM proposal_journal_meta WHERE namespace=?'
       ).run(canonicalOutputJSON(this.state.limits), this.namespace)
     }
@@ -228,14 +239,12 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
     const result = state.plan(prepared)
     if (result.status !== 'committed') return result
     const head = state.head()
-    this.prepare('INSERT INTO proposal_journal_entries VALUES (?, ?, ?, ?, ?)').run(
-      this.namespace,
-      position(result.revision),
-      prepared.key,
-      prepared.text,
-      prepared.bytes
-    )
-    this.prepare(
+    prepareProposalStatement(
+      this.database,
+      'INSERT INTO proposal_journal_entries VALUES (?, ?, ?, ?, ?)'
+    ).run(this.namespace, position(result.revision), prepared.key, prepared.text, prepared.bytes)
+    prepareProposalStatement(
+      this.database,
       'UPDATE proposal_journal_meta SET revision=?, retained_bytes=?, entries=? WHERE namespace=?'
     ).run(position(result.revision), head.bytes + prepared.bytes, head.entries + 1, this.namespace)
     state.apply(prepared, result.revision)
@@ -352,7 +361,8 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
     do {
       // Finish the native read before invoking installed application policy.
       // Every page remains inside the owner's same physical snapshot.
-      const rows = this.prepare(
+      const rows = prepareProposalStatement(
+        this.database,
         'SELECT * FROM proposal_journal_entries WHERE namespace=? AND revision>? AND revision<=? ORDER BY revision LIMIT ?'
       ).all(this.namespace, position(cursor), position(target), 128)
       const last = rows.at(-1)
@@ -373,9 +383,10 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
   }
 
   private metadata(): Record<string, unknown> {
-    const row = this.prepare('SELECT * FROM proposal_journal_meta WHERE namespace=?').get(
-      this.namespace
-    )
+    const row = prepareProposalStatement(
+      this.database,
+      'SELECT * FROM proposal_journal_meta WHERE namespace=?'
+    ).get(this.namespace)
     if (
       row?.configuration !== this.configuration ||
       row.service_identity !== this.state.serviceIdentity
@@ -384,7 +395,8 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
         'context-changed',
         'Proposal journal identity or installed configuration changed'
       )
-    const capacity = this.prepare(
+    const capacity = prepareProposalStatement(
+      this.database,
       'SELECT limits FROM proposal_journal_capacity WHERE namespace=?'
     ).get(this.namespace)
     if (capacity?.limits !== canonicalOutputJSON(this.state.limits))
@@ -417,13 +429,6 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
     )
       throw new OutputProtocolError('unavailable', 'Noncanonical proposal journal entry')
     this.state.replay({ revision: decimal(entry.revision), key: entry.commit_key, ...payload })
-  }
-
-  /** Require actual statement text before crossing the native preparation boundary. */
-  private prepare(sql: string): StatementSync {
-    if (sql.trim().length === 0)
-      throw new OutputProtocolError('unavailable', 'Proposal journal statement is empty')
-    return this.database.prepare(sql)
   }
 
   private ready(): void {
