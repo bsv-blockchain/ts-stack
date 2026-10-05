@@ -967,8 +967,10 @@ Expiry between worker return and read permits one recovery pass under the same
 deadline. Previously displayed UI activity still needs its own expiry handling.
 See the [client guide](../../../docs/guides/non-final-proposals.md#receive-proposals-in-an-application-journal)
 for source binding, currentness limits, restart behavior and migration rules.
-Private query/projection composition and complete-profile qualification remain
-separate work.
+The [reference workbench](../../../docs/guides/output-knowledge-workbench.md)
+composes current-channel queries with actual admission and live proposal updates.
+Installing this client policy alone does not install that service composition.
+Complete-profile and final-source qualification remain separate gates.
 
 ### Durable proposal service composition
 
@@ -1283,7 +1285,11 @@ custody, coordinator, release verification, wallet bridge and recovery workers.
 [Authenticated acquisition and recovery](../../../docs/guides/private-acquisition-recovery.md)
 connects it to the opt-in Overlay Express host/router. The optional `private/buyer` entry now composes durable original acquisition,
 one local recoverable payment and immutable delivered-result custody. Concrete
-domain adapters and complete mutation/hosted qualification remain open.
+domain adapters demonstrate authenticated paid lookup and LCH playback; the
+[purchase guide](../../../docs/guides/private-purchase-custody.md) separately
+demonstrates covenant acquisition and recipient-bound licensed decryption.
+These reference compositions do not establish production deployment. Complete
+mutation and final-source hosted qualification remain required.
 The [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md) tracks
 that work and the distinction between native checks and complete qualification.
 
