@@ -2,9 +2,9 @@
 id: non-final-proposals
 title: Authenticated Non-Final Proposals
 kind: guide
-version: '1.1.0'
-last_updated: '2026-10-04'
-last_verified: '2026-10-04'
+version: '1.2.0'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [overlays, sdk, proposals, application-state]
@@ -75,7 +75,11 @@ SQLite read transaction. Installed policy replay runs inside that same ownership
 gate; it may not reenter the journal or close its connection. A rejected policy
 releases the gate before the caller receives the rejection. Normal sequential
 reads, independently opened writers and the persisted namespace format remain
-compatible. This guard adds no payment, admission or disclosure authority.
+compatible. Replay reads at most 128 persisted entries per page and completes each
+native read before invoking installed application policy. All pages retain the
+same physical snapshot and target revision. An empty delta still checks the
+entry table, so a cached prefix cannot hide missing storage. These ownership
+rules add no payment, admission or disclosure authority.
 
 The optional `SQLiteProposalChannelStore` now composes the proposal journal,
 current index, retained log, session pins and visibility fences on one connection.

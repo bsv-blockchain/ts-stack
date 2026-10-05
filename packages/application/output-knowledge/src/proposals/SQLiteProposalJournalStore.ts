@@ -346,12 +346,23 @@ export class SQLiteProposalJournalStore implements ProposalJournalStorage, Propo
       before = this.state.head()
     if (outputU64(target) < outputU64(before.revision))
       throw new OutputProtocolError('unavailable', 'Proposal journal revision moved backwards')
-    const rows = this.database
-      .prepare(
-        'SELECT * FROM proposal_journal_entries WHERE namespace=? AND revision>? AND revision<=? ORDER BY revision'
-      )
-      .iterate(this.namespace, position(before.revision), position(target))
-    for (const entry of rows) this.replayRow(entry)
+    let cursor = before.revision
+    do {
+      // Finish the native read before invoking installed application policy.
+      // Every page remains inside the owner's same physical snapshot.
+      const rows = this.database
+        .prepare(
+          'SELECT * FROM proposal_journal_entries WHERE namespace=? AND revision>? AND revision<=? ORDER BY revision LIMIT ?'
+        )
+        .all(this.namespace, position(cursor), position(target), 128)
+      const last = rows.at(-1)
+      if (last === undefined) break
+      const next = decimal(last.revision)
+      if (outputU64(next) <= outputU64(cursor))
+        throw new OutputProtocolError('unavailable', 'Proposal journal replay did not advance')
+      for (const entry of rows) this.replayRow(entry)
+      cursor = next
+    } while (outputU64(cursor) < outputU64(target))
     const after = this.state.head()
     if (
       after.revision !== target ||

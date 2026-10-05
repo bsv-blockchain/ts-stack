@@ -16,6 +16,84 @@ afterEach(async () => {
   await Promise.all(fixtures.splice(0).map(f => f.close()))
 })
 
+it('replays installed policy after the native read cursor has finished', async () => {
+  const f = await fixture()
+  await f.open().commit(f.next)
+  const prepare = DatabaseSync.prototype.prepare
+  let activeCursors = 0
+  const reads: number[] = []
+  const database = jest.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+    this: DatabaseSync,
+    sql: string
+  ) {
+    const statement = prepare.call(this, sql)
+    if (sql.includes('FROM proposal_journal_entries')) {
+      const iterate = statement.iterate
+      Object.defineProperty(statement, 'iterate', {
+        configurable: true,
+        value: (...bindings: unknown[]) => {
+          const rows = Reflect.apply(iterate, statement, bindings) as Iterable<
+            Record<string, unknown>
+          >
+          return (function* () {
+            activeCursors++
+            try {
+              yield* rows
+            } finally {
+              activeCursors--
+            }
+          })()
+        }
+      })
+    }
+    return statement
+  })
+  const parse = f.lifecycle.parse.bind(f.lifecycle)
+  const policy = jest.spyOn(f.lifecycle, 'parse').mockImplementation(input => {
+    reads.push(activeCursors)
+    return parse(input)
+  })
+  try {
+    expect((await f.store.head()).revision).toBe('2')
+    expect(reads.length).toBeGreaterThan(0)
+    expect(reads.every(count => count === 0)).toBe(true)
+    expect(activeCursors).toBe(0)
+  } finally {
+    policy.mockRestore()
+    database.mockRestore()
+  }
+})
+
+it('replays a complete multi-page prefix and subsequently discovers a later append', async () => {
+  const f = await fixture()
+  const reader = f.open()
+  let previous = f.first.next
+  for (let i = 1; i <= 129; i++) {
+    const proposal = signed({ revision: i.toString(), previous: previous.proposalId })
+    const transition = f.lifecycle.put(previous, proposal, author, '11')
+    expect((await f.store.commit(transition)).status).toBe('committed')
+    previous = transition.next
+  }
+  expect(await reader.head()).toMatchObject({ revision: '130', entries: 130 })
+  expect(await reader.read('0', 140)).toHaveLength(130)
+  const later = signed({ revision: '130', previous: previous.proposalId })
+  expect((await f.store.commit(f.lifecycle.put(previous, later, author, '11'))).status).toBe(
+    'committed'
+  )
+  expect(await reader.head()).toMatchObject({ revision: '131', entries: 131 })
+})
+
+it('refuses a missing entry table even when its cached prefix has no new revisions', async () => {
+  const f = await fixture()
+  const database = new DatabaseSync(f.file)
+  try {
+    database.exec('DROP TABLE proposal_journal_entries')
+  } finally {
+    database.close()
+  }
+  await expect(f.store.head()).rejects.toThrow('no such table')
+})
+
 it('rejects a harmless nested read during installed-policy replay and releases the read gate', async () => {
   const f = await fixture()
   await f.open().commit(f.next)

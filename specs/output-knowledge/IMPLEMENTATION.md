@@ -5116,3 +5116,48 @@ This source-level correction does not establish the cause of the native worker
 terminations. Complete original local controls, published-source platform gates
 and one new full same-run mutation campaign remain required. Checkpoint two is
 still open; invalid mutants, cancelled rows and incomplete scores are not waived.
+
+### Bounded standalone proposal replay — 2026-10-05
+
+Published head d3d8ac94 passes the required ordinary CI gate and the native,
+browser, mobile, packed and documentation profiles. The external nonblocking
+Codecov reporting job fails verified TLS certificate validation, including its
+same-source retry; no TLS check is bypassed. Full campaign 37250572731/attempt1
+does not qualify. Its proposal-journal-send/store job passes all 234 initial
+tests, then reports four native worker terminations and one invalid mutant
+against the unchanged zero-invalid gate. The failed report archive and terminal
+log are retained outside published artifacts; the stopped campaign is terminal
+cancelled. Its 212 passing execution rows are partial evidence only.
+
+Ordinary source review observes installed application policy running while the
+SQLite entry iterator is active. A harmless valid-data regression records active
+cursor ownership and fails the old source with observations [1,1,1] through an
+ordinary JavaScript assertion. It does not close an executing connection,
+inspect an unknown mutant trigger or reproduce a native fault.
+
+Standalone replay now reads bounded pages of at most 128 entries. Each native
+read completes before policy runs, while all pages share the existing physical
+read transaction and pinned target revision. The first query still runs for an
+empty delta, preserving missing-entry-table rejection. No public API, persisted
+schema, payment, admission, disclosure or ownership authority changes.
+
+Three additive regressions cover completed native reads before policy, a
+129-revision prefix followed by a later append, and missing storage with no new
+revision. Initial candidate checks retain their ordinary failures: an incorrectly
+constructed multi-channel fixture reaches the unchanged author quota, and a
+while-loop candidate misses the empty-delta storage check. The corrected fixture
+uses one channel and the implementation always performs the first query. Every
+original test and limit remains intact.
+
+The corrected source passes all 237 proposal unit/native/property tests in 13
+suites and the complete 560-test proposal/current-channel/scheduler/property
+union in 43 suites, with 300 cases, seed3242026 and blank replay. Both original
+bounded runs drain physically and retain all captured authored and 2275 compiled
+runtime paths. The final strengthened zero-active-cursor assertion passes in the complete
+560-test/43-suite run in 129.363 seconds. Group81540 is physically absent and all
+captured authored and 2275 compiled paths remain fixed. The owning package's
+original build passes in 1.301 seconds and group81436 is physically absent with
+fixed authored inputs. Root controls, packed consumers and published-source
+gates retain their separate fresh-receipt requirements. This correction does
+not establish the native worker fault's cause or qualify the checkpoint; one
+complete same-source, same-run campaign remains required.
