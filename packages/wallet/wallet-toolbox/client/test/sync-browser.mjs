@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { access } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { build } from 'esbuild'
+import { build, stop } from 'esbuild'
 import puppeteer from 'puppeteer-core'
 
 const candidates = [
@@ -55,6 +55,8 @@ try {
   const reports = await page.evaluate(async () => await globalThis.syncBenchmark())
   process.stdout.write(`${JSON.stringify({ nativeSync: reports }, null, 2)}\n`)
 } finally {
+  // This standalone runner also owns the bundler service.
+  await stop()
   if (browser !== undefined) await browser.close()
   await new Promise((resolve, reject) => server.close(error => (error ? reject(error) : resolve())))
 }

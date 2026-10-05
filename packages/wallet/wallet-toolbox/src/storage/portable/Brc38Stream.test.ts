@@ -325,3 +325,184 @@ test('generated standard rows retain source IDs, tombstones, bytes and complete 
     }
   )
 }, 180000)
+
+test.each([
+  ['maximumArchiveBytes', Number.MAX_SAFE_INTEGER],
+  ['maximumRowBytes', 16777216],
+  ['maximumMetadataBytes', 65536]
+] as const)('every %s boundary refuses before row access and accepts its exact maximum', async (name, maximum) => {
+  for (const value of [0, -1, 1.5, NaN, Infinity, maximum + 1]) {
+    const owner = source()
+    await expect(createBrc38Stream(owner, { ...options, [name]: value })).rejects.toThrow(RangeError)
+    expect(owner.visits).toEqual([])
+    expect(owner.released).toBe(1)
+  }
+  const owner = source()
+  const stream = await createBrc38Stream(owner, { ...options, [name]: maximum })
+  await stream.close()
+  expect(owner.released).toBe(1)
+  expect(owner.visits).toEqual([])
+})
+
+test.each([0, 63, 65537, -1, 64.5, NaN, Infinity])(
+  'invalid chunk bound %s releases without row access',
+  async value => {
+    const owner = source()
+    await expect(createBrc38Stream(owner, { ...options, maximumChunkBytes: value })).rejects.toThrow(RangeError)
+    expect(owner.released).toBe(1)
+    expect(owner.visits).toEqual([])
+  }
+)
+
+test.each([undefined, 64, 65536])(
+  'default and exact chunk boundary %s retain complete portable rows',
+  async maximum => {
+    const data = document()
+    data.tables.outputTags[0].tag = 'bounded '.repeat(200)
+    const owner = source(data)
+    const stream = await createBrc38Stream(owner, { ...options, maximumChunkBytes: maximum })
+    const parts: Uint8Array[] = []
+    try {
+      for await (const bytes of stream.chunks) {
+        expect(bytes.length).toBeGreaterThan(0)
+        expect(bytes.length).toBeLessThanOrEqual(maximum ?? 65536)
+        parts.push(bytes)
+      }
+      expect(parseBRC38Json(Buffer.concat(parts).toString())).toEqual(data)
+      await stream.validateCompleted()
+    } finally {
+      await stream.close()
+    }
+    expect(owner.visits).toHaveLength(13)
+    expect(owner.validated).toBe(1)
+    expect(owner.released).toBe(1)
+  }
+)
+
+test.each([null, undefined, [], false, 3, 'row'])(
+  'non-object source row %s cannot complete provisional output',
+  async selected => {
+    const owner = source()
+    owner.rows = async function* () {
+      yield selected as unknown as BRC38Tables[keyof BRC38Tables][number]
+    }
+    const stream = await createBrc38Stream(owner, options)
+    await expect(collect(stream.chunks)).rejects.toThrow(/portable object rows/)
+    await expect(stream.validateCompleted()).rejects.toThrow(/did not complete/)
+    await stream.close()
+    expect(owner.validated).toBe(0)
+    expect(owner.released).toBe(1)
+  }
+)
+
+test('pre-aborted preparation releases the owned source and retains its exact cancellation cause', async () => {
+  const owner = source()
+  const controller = new AbortController()
+  const cause = new Error('Synthetic cancellation before stream preparation')
+  controller.abort(cause)
+  await expect(createBrc38Stream(owner, { ...options, signal: controller.signal })).rejects.toBe(cause)
+  expect(owner.visits).toEqual([])
+  expect(owner.released).toBe(1)
+})
+
+test('preparation and physical cleanup failures preserve both independent exact causes', async () => {
+  const owner = source()
+  const controller = new AbortController()
+  const cause = new Error('Synthetic cancelled preparation')
+  const cleanup = new Error('Synthetic preparation cleanup failure')
+  controller.abort(cause)
+  owner.release = async () => {
+    owner.released++
+    throw cleanup
+  }
+  await expect(createBrc38Stream(owner, { ...options, signal: controller.signal })).rejects.toMatchObject({
+    cause,
+    errors: [cause, cleanup]
+  })
+  expect(owner.visits).toEqual([])
+  expect(owner.released).toBe(1)
+})
+
+test('physical release failure after semantic validation prevents stream completion', async () => {
+  const owner = source()
+  const cleanup = new Error('Synthetic release failure after source validation')
+  owner.release = async () => {
+    owner.released++
+    throw cleanup
+  }
+  const stream = await createBrc38Stream(owner, options)
+  await expect(collect(stream.chunks)).rejects.toBe(cleanup)
+  await expect(stream.validateCompleted()).rejects.toThrow(/did not complete/)
+  await expect(stream.close()).rejects.toBe(cleanup)
+  expect(owner.validated).toBe(1)
+  expect(owner.released).toBe(1)
+})
+
+test('cancellation during source validation prevents completion after the final provisional bytes', async () => {
+  const owner = source()
+  const controller = new AbortController()
+  const cause = new Error('Synthetic cancellation during semantic source validation')
+  const validate = owner.validateCompleted
+  owner.validateCompleted = async () => {
+    await validate()
+    controller.abort(cause)
+  }
+  const stream = await createBrc38Stream(owner, { ...options, signal: controller.signal })
+  await expect(collect(stream.chunks)).rejects.toBe(cause)
+  await expect(stream.validateCompleted()).rejects.toThrow(/did not complete/)
+  await stream.close()
+  expect(owner.validated).toBe(1)
+  expect(owner.released).toBe(1)
+})
+
+test('closing a paused row stream retains iterator-return and source-release failure identities', async () => {
+  const data = document()
+  const owner = source(data)
+  const returning = new Error('Synthetic row iterator return failure')
+  const cleanup = new Error('Synthetic physical stream release failure')
+  let started = false
+  owner.rows = () => ({
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          started = true
+          return { done: false as const, value: data.tables.certificateFields[0] }
+        },
+        async return() {
+          throw returning
+        }
+      }
+    }
+  })
+  owner.release = async () => {
+    owner.released++
+    throw cleanup
+  }
+  const stream = await createBrc38Stream(owner, options)
+  const iterator = stream.chunks[Symbol.asyncIterator]()
+  while (!started) await iterator.next()
+  await expect(stream.close()).rejects.toMatchObject({
+    cause: expect.objectContaining({ cause: returning, errors: [returning, cleanup] }),
+    errors: [expect.objectContaining({ cause: returning, errors: [returning, cleanup] }), cleanup]
+  })
+  await expect(stream.validateCompleted()).rejects.toThrow(/did not complete/)
+  expect(owner.validated).toBe(0)
+  expect(owner.released).toBe(1)
+})
+
+test.each(['中'.repeat(23000), '\u0001'.repeat(11500)])(
+  'expanded canonical metadata bytes refuse independently of detached allocation before row access: %#',
+  async storageName => {
+    const data = document()
+    data.sourceStorage.storageName = storageName
+    for (const table of Object.keys(data.tables) as Array<keyof BRC38Tables>) data.tables[table] = []
+    expect(Buffer.byteLength(JSON.stringify(data))).toBeGreaterThan(65536)
+    const owner = source(data)
+    await expect(createBrc38Stream(owner, { ...options, maximumMetadataBytes: 65536 })).rejects.toThrow(
+      'BRC-38 metadata exceeds the selected byte policy'
+    )
+    expect(owner.visits).toEqual([])
+    expect(owner.validated).toBe(0)
+    expect(owner.released).toBe(1)
+  }
+)
