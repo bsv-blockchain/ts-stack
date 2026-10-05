@@ -95,6 +95,38 @@ function physicalTrigger(tableId: number, table: string, event: string, changed:
   return `CREATE TRIGGER snapshot_journal_physical_${tableId}_${event} AFTER ${event} ON ${q(table)} ${event === 'UPDATE' ? 'WHEN ' + changed : ''} BEGIN ${body} END`
 }
 
+/** Read one bounded group of table columns in one fresh SQLite statement.
+ * The result belongs only to this observer construction; it is never retained
+ * as schema, generation or commit authority. Other drivers retain the original
+ * per-table PRAGMA path. */
+interface ObservedColumns {
+  table: string
+  columns: Array<{ name: string }>
+}
+async function readObserverColumns(k: Knex): Promise<ObservedColumns[] | undefined> {
+  const tables = [...snapshotJournalSqliteSources]
+  if (k.client.config.client !== 'better-sqlite3' || tables.length === 0 || tables.length > 16) return undefined
+  const selected = tables.map((_, i) => `SELECT ${i} ordinal, ? name`).join(' UNION ALL ')
+  const rows: Array<{ ordinal: string; name: string }> = await k.raw(
+    `SELECT CAST(s.ordinal AS TEXT) ordinal,p.name FROM (${selected}) s CROSS JOIN pragma_table_info(s.name) p ORDER BY s.ordinal,p.cid`,
+    tables
+  )
+  const observed: ObservedColumns[] = tables.map(table => ({ table, columns: [] }))
+  const byOrdinal = new Map(observed.map((value, index) => [String(index), value]))
+  for (const { ordinal, name } of rows) byOrdinal.get(ordinal)?.columns.push({ name })
+  return observed
+}
+
+async function observerColumns(
+  k: Knex,
+  observed: ObservedColumns[] | undefined,
+  tableId: number,
+  table: string
+): Promise<Array<{ name: string }>> {
+  const selected = observed?.[tableId]
+  return selected?.table === table ? selected.columns : await k.raw('PRAGMA table_info(??)', [table])
+}
+
 /** Prepare observers only after the caller validates the completed v2 source generation. */
 export async function snapshotJournalSqliteObserverSql(k: Knex): Promise<string[]> {
   if (!['sqlite3', 'better-sqlite3'].includes(k.client.config.client))
@@ -141,8 +173,9 @@ export async function snapshotJournalSqliteObserverSql(k: Knex): Promise<string[
         `CREATE TRIGGER snapshot_journal_scope_${i}_${event} AFTER ${event} ON ${q(source.table)} BEGIN ${keyGuard(fields.slice(2), fields[1])}${tick}${scopeUpsert('SELECT ' + selected + ' WHERE ' + writable)} END`
       )
     }
+  const observed = await readObserverColumns(k)
   await runInSeries(snapshotJournalSqliteSources.entries(), async ([tableId, table]) => {
-    const columns: Array<{ name: string }> = await k.raw('PRAGMA table_info(??)', [table])
+    const columns: Array<{ name: string }> = await observerColumns(k, observed, tableId, table)
     if (columns.length === 0) throw new WERR_INVALID_OPERATION('Missing snapshot journal source')
     const changed = columns
       .map(({ name }) => `CAST(OLD.${q(name)} AS BLOB) IS NOT CAST(NEW.${q(name)} AS BLOB)`)

@@ -586,6 +586,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/schema/snapshotGlobalIndexBootstrap.ts',
         'src/storage/schema/snapshotGlobalIndexTriggers.ts',
         'src/storage/schema/snapshotSqliteIdentity.ts',
+        'src/storage/schema/snapshotSqliteIdentityObservations.ts',
         'src/storage/schema/snapshotSqliteMembership.ts',
         'src/storage/schema/snapshotSqliteIndexGeneration.ts',
         'src/storage/schema/snapshotSqliteIndexBootstrap.ts',
@@ -633,6 +634,8 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.cjs',
         [
           '<rootDir>/src/storage/snapshot/*.test.ts',
+          '<rootDir>/src/storage/schema/snapshotSqliteIdentityObservations.test.ts',
+          '<rootDir>/src/storage/schema/snapshotSqliteDefinitions.test.ts',
           '<rootDir>/src/storage/snapshot/journal/SnapshotJournalCapture*.test.ts',
           '<rootDir>/src/storage/snapshot/journal/SnapshotJournalConnections.test.ts',
           '<rootDir>/src/storage/snapshot/journal/SnapshotJournalMaintenance*.test.ts',

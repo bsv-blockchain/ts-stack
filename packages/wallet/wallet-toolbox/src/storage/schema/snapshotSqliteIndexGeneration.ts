@@ -2,7 +2,7 @@ import { runInSeries } from '../../utility/runInSeries'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { validateLegacy, legacySchema, retiredTables } from './snapshotSqliteLegacyOwnership'
 import type { Knex } from 'knex'
-import { readIdentity, identityDDL, type IdentityDefinition } from './snapshotSqliteIdentity'
+import { readIdentities, identityDDL, type IdentityDefinition } from './snapshotSqliteIdentity'
 import { numeric, relations, membershipTriggers, type MembershipNames } from './snapshotSqliteMembership'
 import { validateSqliteSource } from './snapshotGlobalIndexSqlite'
 import { snapshotGlobalIndexTriggers } from './snapshotGlobalIndexTriggers'
@@ -134,14 +134,11 @@ function tables(fieldCollation: string): string[] {
     ...indexes.map(([name, table, columns]) => `CREATE INDEX ${q(name)} ON ${q(table)} (${columns.map(q).join(',')})`)
   ]
 }
-export async function readPlan(k: Knex): Promise<Plan> {
+async function readSourcePlan(k: Knex): Promise<Omit<Plan, 'ddl' | 'triggers'>> {
   if (!String(k.client.config.client).includes('sqlite'))
     throw new WERR_INVALID_OPERATION('SQLite rebuild requires SQLite')
   await validateSqliteSource(k)
-  const identities: IdentityDefinition[] = []
-  await runInSeries(numeric, async source => {
-    identities.push(await readIdentity(k, source))
-  })
+  const identities = await readIdentities(k, numeric)
   await runInSeries(relations, async relation => {
     await compositeOrder(k, relation.table, [relation.leftKey, relation.rightKey])
   })
@@ -157,6 +154,10 @@ export async function readPlan(k: Knex): Promise<Plan> {
     .select('type', 'name', 'tbl_name', 'sql')
     .orderBy(['type', 'name'])
   const source = JSON.stringify(schema)
+  return { identities, fieldCollation, source }
+}
+export async function readPlan(k: Knex): Promise<Plan> {
+  const { identities, fieldCollation, source } = await readSourcePlan(k)
   const ddl = [...tables(fieldCollation), ...identities.flatMap(identityDDL)]
   const observer = snapshotGlobalIndexTriggers(false)
     .filter(trigger => trigger.table === 'snapshot_global_edges')
@@ -181,21 +182,56 @@ async function validateInstallLock(k: Knex): Promise<void> {
     throw new WERR_INVALID_OPERATION('Invalid rebuild lock definition')
 }
 
+interface InstalledDefinition {
+  type: string
+  name: string
+  sql: string
+}
+function installedDefinition(sql: string): InstalledDefinition | undefined {
+  const match = /^CREATE (TABLE|INDEX|TRIGGER) ("[^"]+"|\w+)/.exec(sql)
+  return match ? { type: match[1].toLowerCase(), name: match[2].replaceAll('"', ''), sql } : undefined
+}
+async function validateDefinition(k: Knex, sql: string): Promise<void> {
+  const definition = installedDefinition(sql)
+  if (!definition) throw new WERR_INVALID_OPERATION('Invalid generated schema definition')
+  const rows: Array<{ sql: string }> = await k('sqlite_master')
+    .where({ type: definition.type, name: definition.name })
+    .select('sql')
+  if (rows.length !== 1 || rows[0].sql !== sql)
+    throw new WERR_INVALID_OPERATION('Rebuild schema definition mismatch: ' + definition.name)
+}
+async function validateDefinitions(k: Knex, expected: string[]): Promise<void> {
+  // Each read binds at most sixteen exact type/name pairs. Validation still
+  // compares every original SQL definition, in its original order.
+  const pages = Array.from({ length: Math.ceil(expected.length / 16) }, (_, index) =>
+    expected.slice(index * 16, (index + 1) * 16)
+  )
+  await runInSeries(pages, async page => {
+    const definitions = page.map(sql => (typeof sql === 'string' ? installedDefinition(sql) : undefined))
+    if (definitions.some(definition => definition === undefined)) {
+      // Preserve the original error ordering for malformed caller-supplied plans.
+      await runInSeries(page, async sql => await validateDefinition(k, sql))
+      return
+    }
+    const selected = definitions.filter((definition): definition is InstalledDefinition => definition !== undefined)
+    const rows: InstalledDefinition[] = await k('sqlite_master')
+      .where(query => {
+        for (const { type, name } of selected) void query.orWhere({ type, name })
+      })
+      .select('type', 'name', 'sql')
+    for (const definition of selected) {
+      const matches = rows.filter(row => row.type === definition.type && row.name === definition.name)
+      if (matches.length !== 1 || matches[0].sql !== definition.sql)
+        throw new WERR_INVALID_OPERATION('Rebuild schema definition mismatch: ' + definition.name)
+    }
+  })
+}
 /** Exact generated DDL ownership; never adopt a similarly named foreign object. */
 export async function validateInstalled(k: Knex, plan: Plan): Promise<void> {
   await validateInstallLock(k)
-  if ((await readPlan(k)).source !== plan.source) throw new WERR_INVALID_OPERATION('Rebuild source schema changed')
-  const expected = [...plan.ddl, ...plan.triggers]
-  await runInSeries(expected, async sql => {
-    const match = /^CREATE (TABLE|INDEX|TRIGGER) ("[^"]+"|\w+)/.exec(sql)
-    if (!match) throw new WERR_INVALID_OPERATION('Invalid generated schema definition')
-    const name = match[2].replaceAll('"', '')
-    const rows: Array<{
-      sql: string
-    }> = await k('sqlite_master').where({ type: match[1].toLowerCase(), name }).select('sql')
-    if (rows.length !== 1 || rows[0].sql !== sql)
-      throw new WERR_INVALID_OPERATION('Rebuild schema definition mismatch: ' + name)
-  })
+  if ((await readSourcePlan(k)).source !== plan.source)
+    throw new WERR_INVALID_OPERATION('Rebuild source schema changed')
+  await validateDefinitions(k, [...plan.ddl, ...plan.triggers])
   const rows: Array<{
     id: number
     source: string

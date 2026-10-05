@@ -1,6 +1,7 @@
 import { runInSeries } from '../../utility/runInSeries'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import type { Knex } from 'knex'
+import { readSqliteIdentityObservations, type SqliteIdentityObservation } from './snapshotSqliteIdentityObservations'
 // Metadata-bound conflict witnesses are maintained by the additive SQLite generation.
 export interface SourceIdentity {
   table: string
@@ -25,7 +26,30 @@ export interface IdentityDefinition {
 }
 const quote = (name: string): string => '"' + name.replaceAll('"', '""') + '"'
 export async function readIdentity(k: Knex, source: SourceIdentity): Promise<IdentityDefinition> {
-  const columns: Column[] = await k.raw('PRAGMA table_xinfo(??)', [source.table])
+  return await readIdentityCurrent(k, source)
+}
+
+/** Fresh source metadata is scoped to this one construction. No caller can
+ * supply observations or reuse them as generation/commit authority. */
+export async function readIdentities(k: Knex, sources: SourceIdentity[]): Promise<IdentityDefinition[]> {
+  const observed = await readSqliteIdentityObservations(
+    k,
+    sources.map(source => source.table)
+  )
+  const identities: IdentityDefinition[] = []
+  await runInSeries(sources.entries(), async ([index, source]) => {
+    const selected = observed?.[index]
+    identities.push(await readIdentityCurrent(k, source, selected?.table === source.table ? selected : undefined))
+  })
+  return identities
+}
+
+async function readIdentityCurrent(
+  k: Knex,
+  source: SourceIdentity,
+  observed?: SqliteIdentityObservation
+): Promise<IdentityDefinition> {
+  const columns: Column[] = observed?.columns ?? (await k.raw('PRAGMA table_xinfo(??)', [source.table]))
   const primary = columns.filter(column => column.pk !== 0)
   if (primary.length !== 1 || primary[0].name !== source.key || primary[0].type.toLowerCase() !== 'integer')
     throw new WERR_INVALID_OPERATION('Unsupported numeric identity')
@@ -33,7 +57,7 @@ export async function readIdentity(k: Knex, source: SourceIdentity): Promise<Ide
     name: string
     unique: number
     partial: number
-  }> = await k.raw('PRAGMA index_list(??)', [source.table])
+  }> = observed?.indexes ?? (await k.raw('PRAGMA index_list(??)', [source.table]))
   const unique: Part[][] = []
   await runInSeries(
     indexes.filter(index => index.unique !== 0),

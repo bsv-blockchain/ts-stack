@@ -6,6 +6,12 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## 2.15.0 candidate — bounded synchronization and canonical proof recovery
 
+- Read fresh bounded SQLite identity and journal-observer metadata once per
+  operation, group rows in one pass, and validate installed definitions in pages
+  of at most sixteen. Preserve exact metadata, DDL and validation/error order;
+  no schema cache, API, wire or database migration is required. Full #544
+  production qualification remains open.
+
 - Preserve queued primary reselection: a request to select A during a pending
   switch from A to B waits for that switch and then selects A, including after
   an earlier failure. Check no-op selections under the existing ownership

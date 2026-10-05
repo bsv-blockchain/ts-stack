@@ -194,6 +194,11 @@ triggers from views even when their names coincide; foreign readers of auxiliary
 data refuse migration. Preserve partial state for recovery;
 ordinary downgrade refuses, while explicit `dropAllData()` retains its destructive
 contract. See the [SQLite generation migration contract](https://bsv-blockchain.github.io/ts-stack/guides/wallet-sync-reliability/#sqlite-conflict-safe-index-generation-unpublished-candidate).
+SQLite identity and journal-observer validation read fresh bounded metadata pages
+for each operation. Metadata is grouped in one pass, and installed schema
+definitions are checked in pages of at most sixteen. Exact metadata, DDL,
+validation order and error identities are retained; there is no cross-operation
+schema cache. The existing schema and BRC-38/39 formats need no migration.
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results
