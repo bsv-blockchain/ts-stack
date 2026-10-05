@@ -213,6 +213,7 @@ test('actual reusable preflight rejects wrong profiles and stale original caller
     SOURCE_SHA: 'a'.repeat(40),
     SOURCE_RUN_ID: '100',
     SOURCE_RUN_ATTEMPT: '2',
+    NODE_VERSION: 'v24.18.0',
     ARCHIVE_DIGEST: 'b'.repeat(64),
     ARTIFACT_ID: '300'
   }
@@ -234,6 +235,7 @@ test('actual reusable preflight rejects wrong profiles and stale original caller
       'SOURCE_SHA',
       'SOURCE_RUN_ID',
       'SOURCE_RUN_ATTEMPT',
+      'NODE_VERSION',
       'ARCHIVE_DIGEST',
       'ARTIFACT_ID',
       'ARTIFACT_NAME'
@@ -301,7 +303,8 @@ test('both callers dispatch serial immutable batches and the reusable executor r
   )
   assert.match(executor, /ref: \$\{\{ fromJSON\(inputs\.identity\)\.sourceSha \}\}/)
   assert.match(executor, /persist-credentials: false/)
-  assert.match(executor, /node-version: 24\.18\.0/)
+  assert.match(executor, /node-version: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \}\}/)
+  assert.match(executor, /NODE_VERSION: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \}\}/)
   assert.match(executor, /pnpm install --frozen-lockfile --ignore-scripts/)
   assert.match(executor, /artifact-ids: \$\{\{ fromJSON\(inputs\.identity\)\.artifactId \}\}/)
   assert.ok(executor.indexOf('verify-execution') < executor.indexOf('tar --extract'))

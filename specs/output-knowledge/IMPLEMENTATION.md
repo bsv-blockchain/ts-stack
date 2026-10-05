@@ -5161,3 +5161,34 @@ fixed authored inputs. Root controls, packed consumers and published-source
 gates retain their separate fresh-receipt requirements. This correction does
 not establish the native worker fault's cause or qualify the checkpoint; one
 complete same-source, same-run campaign remains required.
+
+### Mutation runtime and original compatibility — 2026-10-05
+
+Published source 0a735bc7 passes required CI, native/browser/mobile/reference,
+packed-consumer and documentation profiles. Full campaign 37262942899/attempt1
+is terminal cancelled and unqualified. Its proposal-journal-send/store job
+111614062315 passes all 237 initial tests before native worker crashes and two
+invalid mutants against the unchanged maximum of zero. The failure archive
+11330305202 has independently verified SHA256
+`e588c1a4c0dfae6191d3c94c1b7c98e59cc1520a42886c9a3d5d64d820e49b32`;
+the retained log SHA256 is
+`466691b7ff671dfd01857d973afade9f4c0d1170cd21e56d670a26005b0a6df4`.
+Neither partial successes nor the preceding bounded-read correction establish
+native-fault resolution. No unknown trigger was inspected or reproduced.
+
+The full mutation workflow now uses Node 24.19.0 for build, aggregation and
+final verification. Its [official release notes](https://nodejs.org/en/blog/release/v24.19.0)
+include supported SQLite lifecycle corrections. This patch validation is not a
+claim that a particular upstream correction caused or fixes the observed worker
+failures. The shared executor selects the exact Node version from its original
+caller's immutable identity and refuses absent or noncanonical version values
+before setup. Ordinary CI continues using its original Node 24.18.0 identity.
+Release, service, package and public runtime contracts are unchanged.
+
+One additive installed workflow control checks full-stage runtime agreement,
+exact caller-version binding, unchanged ordinary CI pins and malformed-version
+refusals. All original controls, source/test unions, operators, target inventory,
+property cases/seed/replay, deadlines, workers, score and zero-invalid requirements
+remain unchanged. A fresh complete same-source, same-run, same-attempt campaign
+and independent final raw-report reconciliation remain required. Old or peer
+receipts cannot qualify the new source; checkpoint two remains open.

@@ -398,3 +398,67 @@ test('the installed PR gate rejects missing, stale and malformed execution batch
   ])
     assert.notEqual(execute(value).status, 0)
 })
+
+test('mutation execution retains the exact caller runtime and ordinary CI baseline', async () => {
+  const { parse } = await import('yaml')
+  const full = parse(
+    readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
+  )
+  const fullRuntimes = Object.values(full.jobs).flatMap(job =>
+    (job.steps ?? [])
+      .filter(step => step.uses?.startsWith('actions/setup-node@'))
+      .map(step => step.with['node-version'])
+  )
+  assert.deepEqual(fullRuntimes, ['24.19.0', '24.19.0', '24.19.0'])
+  const executor = await mutationExecutor(full)
+  const setup = executor.steps.find(step => step.uses?.startsWith('actions/setup-node@'))
+  assert.equal(setup.with['node-version'], '${{ fromJSON(inputs.identity).nodeVersion }}')
+  const profile = executor.steps.find(
+    step => step.name === 'Require the original caller evidence profile'
+  )
+  assert.equal(profile.env.NODE_VERSION, '${{ fromJSON(inputs.identity).nodeVersion }}')
+  const source = 'a'.repeat(40)
+  for (const version of [
+    'v24.18.0',
+    'v24.19.0',
+    '',
+    'latest',
+    '24.19.0',
+    'v24.19',
+    'v24.19.0-extra',
+    'v024.19.0',
+    'v24.019.0'
+  ]) {
+    const result = spawnSync('/bin/bash', ['-e', '-c', profile.run], {
+      env: {
+        PATH: process.env.PATH,
+        PROFILE: 'qualification',
+        CAMPAIGN_MODE: 'full',
+        SOURCE_SHA: source,
+        GITHUB_SHA: source,
+        SOURCE_RUN_ID: '123',
+        GITHUB_RUN_ID: '123',
+        SOURCE_RUN_ATTEMPT: '1',
+        GITHUB_RUN_ATTEMPT: '1',
+        NODE_VERSION: version,
+        ARCHIVE_DIGEST: 'b'.repeat(64),
+        ARTIFACT_ID: '456',
+        ARTIFACT_NAME: 'mutation-build-outputs-123-1'
+      },
+      encoding: 'utf8'
+    })
+    assert.equal(result.status === 0, ['v24.18.0', 'v24.19.0'].includes(version), version)
+  }
+  const ci = parse(readFileSync(CI_PATH, 'utf8'))
+  const originalSetup = ci.jobs.prepare.steps.find(step =>
+    step.uses?.startsWith('actions/setup-node@')
+  )
+  assert.equal(originalSetup.with['node-version'], '24.18.0')
+  const ciExecutor = await mutationExecutor(ci)
+  assert.equal(
+    ciExecutor.steps.find(step => step.uses?.startsWith('actions/setup-node@')).with[
+      'node-version'
+    ],
+    '${{ fromJSON(inputs.identity).nodeVersion }}'
+  )
+})
