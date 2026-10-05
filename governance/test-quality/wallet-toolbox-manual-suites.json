@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-30",
+  "lastReviewed": "2026-10-01",
   "owner": "ts-stack-maintainers",
-  "reviewBy": "2026-09-30",
+  "reviewBy": "2026-10-08",
   "suites": [
     {
       "path": "packages/wallet/wallet-toolbox/src/services/__tests/ARC.man.test.ts",
@@ -98,16 +98,16 @@
     {
       "path": "packages/wallet/wallet-toolbox/src/storage/remoting/__test/StorageClient.man.test.ts",
       "kind": "manual-integration",
-      "sideEffects": "remote-state",
+      "sideEffects": "funded-state",
       "disposition": "retain-as-test",
-      "purpose": "Validates bounded tagged-revision create/sign, availability, and recorded authentication replay behavior against explicitly configured storage."
+      "purpose": "Validates bounded funded mainnet create/sign and broadcast against a tagged storage revision, plus availability and recorded authentication behavior."
     },
     {
       "path": "packages/wallet/wallet-toolbox/src/wab-client/__tests/WABClient.man.test.ts",
       "kind": "manual-integration",
-      "sideEffects": "remote-state",
+      "sideEffects": "funded-state",
       "disposition": "retain-as-test",
-      "purpose": "Validates WAB server information, phone authentication, faucet, linked methods, and user deletion."
+      "purpose": "Validates WAB information, phone authentication, a faucet payment, linked methods and user deletion against the configured server."
     },
     {
       "path": "packages/wallet/wallet-toolbox/test/Wallet/StorageClient/storageClient.man.test.ts",
@@ -147,9 +147,9 @@
     {
       "path": "packages/wallet/wallet-toolbox/test/Wallet/local/localWallet.man.test.ts",
       "kind": "manual-integration",
-      "sideEffects": "disposable-state",
+      "sideEffects": "funded-state",
       "disposition": "retain-as-test",
-      "purpose": "Validates local wallet monitoring, action creation, synchronization, active-store changes, and backup."
+      "purpose": "Validates funded test-chain action creation, monitoring, cloud/local active-store changes, synchronization and backup using the configured identity."
     },
     {
       "path": "packages/wallet/wallet-toolbox/test/Wallet/local/localWallet2.man.test.ts",
@@ -175,9 +175,9 @@
     {
       "path": "packages/wallet/wallet-toolbox/test/WalletClient/LocalKVStore.man.test.ts",
       "kind": "manual-integration",
-      "sideEffects": "disposable-state",
+      "sideEffects": "funded-state",
       "disposition": "retain-as-test",
-      "purpose": "Validates local key-value persistence for Wallet and WalletClient implementations."
+      "purpose": "Validates one-satoshi key-value token creation, replacement and removal through a configured mainnet Wallet and attached WalletClient."
     },
     {
       "path": "packages/wallet/wallet-toolbox/test/WalletClient/WERR.man.test.ts",

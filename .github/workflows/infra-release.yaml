@@ -10,14 +10,29 @@ name: Infra Release
 # wab-marketplace-release.yml on the same tag — that path is additive
 # and does not replace this workflow.
 #
-# Trigger: push of an `infra/v*` tag (the version embedded in the tag
-# is informational only — each component is released based on its
-# own package.json version vs what already exists in GHCR).
+# Triggers:
+#   - push of an `infra/v*` tag (the version embedded in the tag is
+#     informational only — each component is released based on its own
+#     package.json version vs what already exists in GHCR);
+#   - protected manual dispatch from main; or
+#   - workflow_call from release.yaml after npm publication. The caller has
+#     already qualified github.sha in the same run and passes either that SHA
+#     or its single generated infrastructure-sync child as the image source.
 on:
   push:
     tags:
       - 'infra/v*'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source-sha:
+        description: Image source commit (github.sha or its generated infra-sync child)
+        required: true
+        type: string
+      qualified-sha:
+        description: Exact source qualified by the caller's full mutation campaign
+        required: true
+        type: string
 
 permissions: {}
 
@@ -36,16 +51,59 @@ jobs:
       matrix: ${{ steps.set.outputs.matrix }}
       count: ${{ steps.set.outputs.count }}
       all-matrix: ${{ steps.set.outputs.all-matrix }}
+      called: ${{ steps.source.outputs.called }}
+      source-sha: ${{ steps.source.outputs.source-sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ inputs.source-sha || github.sha }}
 
       - name: Verify trusted release source
+        id: source
         env:
           EVENT_NAME: ${{ github.event_name }}
+          SOURCE_SHA: ${{ inputs.source-sha }}
+          QUALIFIED_SHA: ${{ inputs.qualified-sha }}
         run: |
           git fetch origin main
+          if [[ -n "$SOURCE_SHA" ]]; then
+            # Called from release.yaml, whose prepare job already proved that
+            # github.sha is on main. No other workflow may call this one.
+            if [[ "$GITHUB_WORKFLOW_REF" != "$GITHUB_REPOSITORY/.github/workflows/release.yaml@"* ]]; then
+              echo "::error::Only release.yaml may call the infrastructure release ($GITHUB_WORKFLOW_REF)."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "::error::The calling release commit must be reachable from main."
+              exit 1
+            fi
+            if [[ "$QUALIFIED_SHA" != "$GITHUB_SHA" ]]; then
+              echo "::error::The caller did not qualify the exact release commit."
+              exit 1
+            fi
+            if [[ "$SOURCE_SHA" != "$GITHUB_SHA" ]]; then
+              # The only permitted difference is the single generated commit that
+              # synchronizes published first-party versions into infra manifests
+              # and locks. Product source cannot change after qualification.
+              if [[ "$(git rev-parse "$SOURCE_SHA^")" != "$GITHUB_SHA" ]]; then
+                echo "::error::$SOURCE_SHA is not the direct infra-sync child of $GITHUB_SHA."
+                exit 1
+              fi
+              disallowed="$(git diff --name-only "$GITHUB_SHA" "$SOURCE_SHA" |
+                grep -Ev '^(infra/.+/package(-lock)?\.json|packages/.+/package\.json|pnpm-lock\.yaml|docs/reference/stack-facts\.md)$' || true)"
+              if [[ -n "$disallowed" ]]; then
+                echo "::error::The infra-sync commit changes paths outside its allowlist:"
+                printf '%s\n' "$disallowed"
+                exit 1
+              fi
+            fi
+            echo "called=true" >> "$GITHUB_OUTPUT"
+            echo "source-sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "called=false" >> "$GITHUB_OUTPUT"
+          echo "source-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
               echo "::error::Manual infrastructure releases must run from main."
@@ -113,10 +171,55 @@ jobs:
           echo "Resolved $count component(s) to release:"
           jq -r '.[] | "  - \(.name)@\(.tag)"' <<<"$components"
 
+  # Standalone tag/dispatch runs qualify their own exact source. A release.yaml
+  # call reuses the caller's same-run campaign for github.sha instead of
+  # repeating the identical full mutation campaign.
+  full-mutation:
+    name: Qualify exact source before publication
+    needs: discover
+    if: needs.discover.outputs.count != '0' && needs.discover.outputs.called == 'false'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mutation-tests.yml
+
+  qualification:
+    name: Resolve exact-source qualification
+    needs: [discover, full-mutation]
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      qualified-sha: ${{ steps.resolve.outputs.qualified-sha }}
+    steps:
+      - name: Require a qualified exact source
+        id: resolve
+        env:
+          CALLED: ${{ needs.discover.outputs.called }}
+          CALLER_QUALIFIED: ${{ inputs.qualified-sha }}
+          CAMPAIGN_RESULT: ${{ needs.full-mutation.result }}
+          CAMPAIGN_QUALIFIED: ${{ needs.full-mutation.outputs.qualified-sha }}
+        run: |
+          if [[ "$CALLED" == "true" ]]; then
+            qualified="$CALLER_QUALIFIED"
+          elif [[ "$CAMPAIGN_RESULT" == "success" ]]; then
+            qualified="$CAMPAIGN_QUALIFIED"
+          else
+            echo "::error::Full mutation qualification did not succeed: $CAMPAIGN_RESULT"
+            exit 1
+          fi
+          if [[ "$qualified" != "$GITHUB_SHA" ]]; then
+            echo "::error::Qualified source '$qualified' is not $GITHUB_SHA."
+            exit 1
+          fi
+          echo "qualified-sha=$qualified" >> "$GITHUB_OUTPUT"
+
   release:
     name: Release ${{ matrix.component.name }}@${{ matrix.component.tag }}
-    needs: discover
-    if: needs.discover.outputs.count != '0'
+    needs: [discover, qualification]
+    # always(): a release.yaml call deliberately skips full-mutation, and the
+    # implicit success() would treat that skipped ancestor as a failure.
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0' && needs.qualification.result == 'success' && needs.qualification.outputs.qualified-sha == github.sha
     runs-on: ubuntu-latest
     permissions:
       artifact-metadata: write
@@ -132,8 +235,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ needs.discover.outputs.source-sha }}
 
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -143,14 +247,18 @@ jobs:
 
       - name: Resolve reproducible source metadata
         id: source
+        env:
+          SOURCE_SHA: ${{ needs.discover.outputs.source-sha }}
         run: |
-          echo "created=$(git show -s --format=%cI "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
-          echo "source_date_epoch=$(git show -s --format=%ct "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+          echo "created=$(git show -s --format=%cI "$SOURCE_SHA")" >> "$GITHUB_OUTPUT"
+          echo "source_date_epoch=$(git show -s --format=%ct "$SOURCE_SHA")" >> "$GITHUB_OUTPUT"
 
       - name: Resolve immutable tags and OCI labels
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
+          # Read the checked-out image source, which may be the infra-sync child.
+          context: git
           images: ${{ matrix.component.image }}
           tags: |
             type=raw,value=${{ matrix.component.tag }}
@@ -162,7 +270,7 @@ jobs:
             org.opencontainers.image.vendor=BSV Blockchain
             org.opencontainers.image.version=${{ matrix.component.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ needs.discover.outputs.source-sha }}
             org.opencontainers.image.licenses=${{ matrix.component.license }}
             org.opencontainers.image.url=${{ matrix.component.documentation }}
             org.opencontainers.image.documentation=${{ matrix.component.documentation }}
@@ -171,7 +279,7 @@ jobs:
       # step operates on this exact image instead of rebuilding after review.
       - name: Build release image
         id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.component.path }}
           file: ${{ matrix.component.path }}/Dockerfile
@@ -183,7 +291,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            APP_COMMIT=${{ github.sha }}
+            APP_COMMIT=${{ needs.discover.outputs.source-sha }}
             APP_VERSION=${{ matrix.component.version }}
             SOURCE_DATE_EPOCH=${{ steps.source.outputs.source_date_epoch }}
           cache-from: type=gha,scope=infra-${{ matrix.component.name }}
@@ -203,7 +311,7 @@ jobs:
           timeout: 15m
 
       - name: Generate SPDX image SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: ${{ matrix.component.image }}:${{ matrix.component.tag }}
           format: spdx-json
@@ -245,14 +353,14 @@ jobs:
           docker buildx imagetools inspect "$IMAGE@$digest"
 
       - name: Attest build provenance
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ matrix.component.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
       - name: Attest SPDX SBOM
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ matrix.component.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -292,7 +400,7 @@ jobs:
       matrix:
         component: ${{ fromJson(needs.discover.outputs.all-matrix) }}
     steps:
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -349,7 +457,8 @@ jobs:
           DIGEST: ${{ steps.published.outputs.digest }}
         run: |
           image_ref="$IMAGE@$DIGEST"
-          identity='^https://github\.com/bsv-blockchain/ts-stack/\.github/workflows/infra-release\.yaml@refs/(tags/infra/v.+|heads/main)$'
+          # A release.yaml call signs as this called workflow at the caller's ref.
+          identity='^https://github\.com/bsv-blockchain/ts-stack/\.github/workflows/infra-release\.yaml@refs/(tags/(infra/v.+|release/v.+|v.+)|heads/main)$'
           issuer='https://token.actions.githubusercontent.com'
           docker buildx imagetools inspect "$image_ref"
           cosign verify \
@@ -393,11 +502,13 @@ jobs:
             echo "- Image digest keylessly signed with GitHub OIDC via Cosign"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # A release.yaml call runs one combined verification after npm and images.
   post-release-verification:
     needs:
+      - discover
       - release
       - verify-published
-    if: ${{ always() && needs.verify-published.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    if: ${{ always() && needs.discover.outputs.called == 'false' && needs.verify-published.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     permissions:
       contents: read
       packages: read

@@ -410,38 +410,7 @@ interface OverlayOutput {
 
 ## DID Types
 
-### DIDDocument
-
-```typescript
-interface DIDDocument {
-  '@context': string[]
-  id: string
-  controller: string
-  verificationMethod: DIDVerificationMethod[]
-  authentication: string[]
-  assertionMethod: string[]
-}
-```
-
-### DIDVerificationMethod
-
-```typescript
-interface DIDVerificationMethod {
-  id: string
-  type: string // 'EcdsaSecp256k1VerificationKey2019'
-  controller: string
-  publicKeyHex: string
-}
-```
-
-### DIDParseResult
-
-```typescript
-interface DIDParseResult {
-  method: string // 'bsv'
-  identityKey: string
-}
-```
+`DidDocument` and `DidResolutionResult` are re-exported from `@bsv/did`. Documents use a Multikey and the BRC-202 verification relationships; successful metadata is empty. See the [DID API](did.md).
 
 ## Credential Types
 
@@ -497,66 +466,20 @@ interface CredentialIssuerConfig {
 }
 ```
 
-### VerifiableCredential
+### BRC52Envelope and BRC52VerificationResult
+
+Re-exported from `@bsv/did`. An envelope has `profile`, `certificateBinary`, and `credential`, with optional `disclosure` under the explicit recipient-keyring protocol. Verification returns `verified`, `verifiedDocument`, `mediaType`, and `errors`. It supplies no issuer trust, holder authentication, disclosure authorization, or automatic chain status.
+
+### IssuedCredential
 
 ```typescript
-interface VerifiableCredential {
-  '@context': string[]
-  type: string[]
-  id?: string
-  issuer: string // 'did:bsv:...'
-  issuanceDate: string
-  expirationDate?: string
-  credentialSubject: {
-    id: string // 'did:bsv:...'
-    [key: string]: any
-  }
-  credentialStatus?: {
-    id: string // 'bsv:txid.vout'
-    type: string // 'BSVHashLockRevocation2024'
-  }
-  proof: {
-    type: string // 'BSVMasterCertificateProof2024'
-    created: string
-    proofPurpose: string
-    verificationMethod: string
-    signatureValue: string
-  }
-  _bsv: {
-    certificate: CertificateData
-  }
+interface IssuedCredential {
+  credential: BRC52Envelope
+  keyringForSubject: Record<string, string>
 }
 ```
 
-### VerifiablePresentation
-
-```typescript
-interface VerifiablePresentation {
-  '@context': string[]
-  type: string[]
-  holder: string // 'did:bsv:...'
-  verifiableCredential: VerifiableCredential[]
-  proof: {
-    type: string
-    created: string
-    proofPurpose: string
-    verificationMethod: string
-  }
-}
-```
-
-### VerificationResult
-
-```typescript
-interface VerificationResult {
-  valid: boolean
-  revoked: boolean
-  errors: string[]
-  issuer?: string
-  subject?: string
-  type?: string
-}
-```
+Keep subject keyrings outside the authenticated credential graph and deliver only to the authorized subject.
 
 ### RevocationRecord
 

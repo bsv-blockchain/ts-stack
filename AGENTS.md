@@ -202,9 +202,32 @@ signatures, validation, rate limits, and request bounds provide security.
 
 ## Validation
 
+Use local feedback to reduce unnecessary hosted iterations. During editing,
+run the smallest relevant regression/negative tests and changed-file lint and
+format checks. Reuse a valid frozen installation and build outputs while their
+inputs remain unchanged. Batch related fixes, self-review the complete diff,
+and run the required local checks before the next push. Avoid pushing repeatedly
+to discover failures that local checks can already expose.
+
+`node scripts/ci-local-feedback.mjs --base <intended-PR-base>` prints an advisory
+plan including committed, staged, unstaged and untracked authored changes.
+The commands validate working-tree bytes; align the index and working tree before
+treating their results as evidence for the next push. It
+uses the current dependency/mutation registries to distinguish direct coverage,
+dependent regressions and build prerequisites. Review changed invariants and
+trust boundaries too; no path selector proves completeness. Keep full campaigns
+for shared controls and the affected critical boundaries required by policy.
+The short edit loop does not require every workspace suite after each keystroke.
+
+Measure local versus hosted wall time, setup and worker contention on comparable
+source before deciding where to run a campaign. A developer machine may be
+faster; shared machines and nested worker pools may also slow peers. Prefer one
+measured bounded campaign and preserve source/config/seed receipts. Local
+evidence never replaces reproducible complete exact-head remote qualification.
+
 Use Node and pnpm versions from the root `package.json`. Run the strictest
 relevant local checks before spending hosted CI resources. At minimum, every
-change must pass:
+completed change batch must pass these checks before pushing:
 
 ```sh
 pnpm health:check

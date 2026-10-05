@@ -491,10 +491,54 @@ async function checkUmd(consumerDirectory, manifest, budget, enforceBudget) {
   }
 }
 
-export async function checkBrowserPackage(packageDirectory, { enforceBudget = true } = {}) {
+export function validateBudgetFile(packageDirectory, budgetFile, policy) {
+  if (typeof budgetFile !== 'string' || !/^browser-[a-z0-9-]+\.json$/.test(budgetFile)) {
+    throw new Error('browser budget selector must be a package-local browser-*.json filename')
+  }
+  if (budgetFile !== 'browser-budget.json') {
+    const relativePath = path.relative(REPOSITORY_ROOT, path.resolve(packageDirectory))
+    const registered = policy.packages.some(
+      entry => entry.path === relativePath && entry.budget === `${relativePath}/${budgetFile}`
+    )
+    if (!registered) throw new Error('browser budget selector must identify a governed budget')
+  }
+  return budgetFile
+}
+
+export function parseBrowserArguments(arguments_) {
+  const result = {
+    packageDirectory: arguments_[0],
+    budgetFile: 'browser-budget.json',
+    measureOnly: false
+  }
+  if (!result.packageDirectory || result.packageDirectory.startsWith('--')) {
+    throw new Error(
+      'Usage: check-browser-package.mjs <package-directory> [--budget <filename>] [--measure]'
+    )
+  }
+  let selectedBudget = false
+  for (let index = 1; index < arguments_.length; index += 1) {
+    const argument = arguments_[index]
+    if (argument === '--measure' && !result.measureOnly) result.measureOnly = true
+    else if (argument === '--budget' && !selectedBudget && arguments_[index + 1]) {
+      result.budgetFile = arguments_[++index]
+      selectedBudget = true
+    } else throw new Error(`Invalid browser argument: ${argument}`)
+  }
+  return result
+}
+
+export async function checkBrowserPackage(
+  packageDirectory,
+  { enforceBudget = true, budgetFile = 'browser-budget.json' } = {}
+) {
+  const policy = JSON.parse(
+    await fs.readFile(path.join(REPOSITORY_ROOT, 'governance/browser-artifact-policy.json'), 'utf8')
+  )
+  validateBudgetFile(packageDirectory, budgetFile, policy)
   const [manifestText, budgetText] = await Promise.all([
     fs.readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
-    fs.readFile(path.join(packageDirectory, 'browser-budget.json'), 'utf8')
+    fs.readFile(path.join(packageDirectory, budgetFile), 'utf8')
   ])
   const manifest = JSON.parse(manifestText)
   const budget = JSON.parse(budgetText)
@@ -536,25 +580,22 @@ export async function checkBrowserPackage(packageDirectory, { enforceBudget = tr
 }
 
 async function main(arguments_) {
-  const measureOnly = arguments_.at(-1) === '--measure'
-  const positionalArguments = measureOnly ? arguments_.slice(0, -1) : arguments_
-  if (positionalArguments.length !== 1) {
-    throw new Error('Usage: check-browser-package.mjs <package-directory> [--measure]')
-  }
-  const packageDirectory = path.resolve(process.cwd(), positionalArguments[0])
+  const { packageDirectory: directory, measureOnly, budgetFile } = parseBrowserArguments(arguments_)
+  const packageDirectory = path.resolve(process.cwd(), directory)
   const manifest = JSON.parse(
     await fs.readFile(path.join(packageDirectory, 'package.json'), 'utf8')
   )
   const measurements = await checkBrowserPackage(packageDirectory, {
-    enforceBudget: !measureOnly
+    enforceBudget: !measureOnly,
+    budgetFile
   })
   const outputDirectory = process.env.BROWSER_COMPOSITION_DIRECTORY
   if (outputDirectory) {
     await fs.mkdir(outputDirectory, { recursive: true })
-    const slug = manifest.name.replace(/^@/, '').replaceAll('/', '-')
-    const budget = JSON.parse(
-      await fs.readFile(path.join(packageDirectory, 'browser-budget.json'), 'utf8')
-    )
+    const slug =
+      manifest.name.replace(/^@/, '').replaceAll('/', '-') +
+      (budgetFile === 'browser-budget.json' ? '' : `-${budgetFile.slice(0, -5)}`)
+    const budget = JSON.parse(await fs.readFile(path.join(packageDirectory, budgetFile), 'utf8'))
     await fs.writeFile(
       path.join(outputDirectory, `${slug}.json`),
       `${JSON.stringify(

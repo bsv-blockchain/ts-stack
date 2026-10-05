@@ -20,22 +20,22 @@ jest.mock('@bsv/auth-express-middleware', () => ({
 /** Creates a mock MongoDB Db object with a collection stub that supports BanService */
 function createMockDbValue(): Record<string, any> {
   const cursor: Record<string, any> = {}
-  cursor.sort = jest.fn<any>().mockReturnValue(cursor)
-  cursor.skip = jest.fn<any>().mockReturnValue(cursor)
-  cursor.limit = jest.fn<any>().mockReturnValue(cursor)
-  cursor.toArray = jest.fn<any>().mockResolvedValue([{ domain: 'node.example', txid: '01' }])
+  cursor.sort = jest.fn<(...args: any[]) => any>().mockReturnValue(cursor)
+  cursor.skip = jest.fn<(...args: any[]) => any>().mockReturnValue(cursor)
+  cursor.limit = jest.fn<(...args: any[]) => any>().mockReturnValue(cursor)
+  cursor.toArray = jest.fn<(...args: any[]) => any>().mockResolvedValue([{ domain: 'node.example', txid: '01' }])
   const mockCollection = {
-    createIndex: jest.fn<any>().mockResolvedValue(undefined),
-    find: jest.fn<any>().mockReturnValue(cursor),
-    findOne: jest.fn<any>().mockResolvedValue({ domain: 'node.example' }),
-    updateOne: jest.fn<any>().mockResolvedValue({}),
-    deleteOne: jest.fn<any>().mockResolvedValue({}),
-    deleteMany: jest.fn<any>().mockResolvedValue({ deletedCount: 1 }),
-    countDocuments: jest.fn<any>().mockResolvedValue(1)
+    createIndex: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+    find: jest.fn<(...args: any[]) => any>().mockReturnValue(cursor),
+    findOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({ domain: 'node.example' }),
+    updateOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({}),
+    deleteOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({}),
+    deleteMany: jest.fn<(...args: any[]) => any>().mockResolvedValue({ deletedCount: 1 }),
+    countDocuments: jest.fn<(...args: any[]) => any>().mockResolvedValue(1)
   }
   return {
-    collection: jest.fn<any>().mockReturnValue(mockCollection),
-    command: jest.fn<any>().mockResolvedValue({ ok: 1 }),
+    collection: jest.fn<(...args: any[]) => any>().mockReturnValue(mockCollection),
+    command: jest.fn<(...args: any[]) => any>().mockResolvedValue({ ok: 1 }),
     databaseName: 'TestService_lookup_services'
   }
 }
@@ -661,8 +661,8 @@ describe('OverlayExpress', () => {
   describe('configureChainTracker', () => {
     it('should set custom chain tracker', () => {
       const mockChainTracker: ChainTracker = {
-        isValidRootForHeight: jest.fn<any>().mockResolvedValue(true),
-        currentHeight: jest.fn<any>().mockResolvedValue(800_000)
+        isValidRootForHeight: jest.fn<(...args: any[]) => any>().mockResolvedValue(true),
+        currentHeight: jest.fn<(...args: any[]) => any>().mockResolvedValue(800_000)
       }
       overlayExpress.configureChainTracker(mockChainTracker)
       expect(overlayExpress.chainTracker).toBe(mockChainTracker)
@@ -1196,8 +1196,8 @@ describe('OverlayExpress', () => {
     })
 
     it('should initialize SHIP/SLAP indexes before completing engine configuration', async () => {
-      const shipEnsureIndexes = jest.fn<any>().mockResolvedValue(undefined)
-      const slapEnsureIndexes = jest.fn<any>().mockResolvedValue(undefined)
+      const shipEnsureIndexes = jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
+      const slapEnsureIndexes = jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       ;(DiscoveryServices.SHIPStorage as any).mockImplementationOnce(() => ({
         ensureIndexes: shipEnsureIndexes
       }))
@@ -1214,8 +1214,8 @@ describe('OverlayExpress', () => {
 
     it('should fail engine configuration when discovery index initialization fails', async () => {
       const indexError = new Error('discovery index migration failed')
-      const shipEnsureIndexes = jest.fn<any>().mockRejectedValue(indexError)
-      const slapEnsureIndexes = jest.fn<any>().mockResolvedValue(undefined)
+      const shipEnsureIndexes = jest.fn<(...args: any[]) => any>().mockRejectedValue(indexError)
+      const slapEnsureIndexes = jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       ;(DiscoveryServices.SHIPStorage as any).mockImplementationOnce(() => ({
         ensureIndexes: shipEnsureIndexes
       }))
@@ -1399,24 +1399,24 @@ describe('OverlayExpress', () => {
         refreshUnprovenTransactionProofs: jest.fn().mockResolvedValue({}),
         // @ts-expect-error - Mock return values
         maintainUnprovenTransactions: jest.fn().mockResolvedValue({}),
-        provideTopicAnchorTip: jest.fn<any>().mockResolvedValue({ height: 1 }),
-        provideTopicAnchorRange: jest.fn<any>().mockResolvedValue([{ height: 1 }]),
-        provideAdmittedList: jest.fn<any>().mockResolvedValue({ txids: [] }),
-        provideCompoundMerklePath: jest.fn<any>().mockResolvedValue({ path: [] }),
-        provideRawTransactions: jest.fn<any>().mockResolvedValue({ transactions: [] }),
-        startBASMSync: jest.fn<any>().mockResolvedValue({ topics: 1 }),
-        evictUnprovenTransactions: jest.fn<any>().mockResolvedValue({ evicted: 1 }),
-        advanceTopicAnchorChains: jest.fn<any>().mockResolvedValue({ advanced: 1 }),
-        revalidateRecentAnchors: jest.fn<any>().mockResolvedValue({ revalidated: 1 }),
+        provideTopicAnchorTip: jest.fn<(...args: any[]) => any>().mockResolvedValue({ height: 1 }),
+        provideTopicAnchorRange: jest.fn<(...args: any[]) => any>().mockResolvedValue([{ height: 1 }]),
+        provideAdmittedList: jest.fn<(...args: any[]) => any>().mockResolvedValue({ txids: [] }),
+        provideCompoundMerklePath: jest.fn<(...args: any[]) => any>().mockResolvedValue({ path: [] }),
+        provideRawTransactions: jest.fn<(...args: any[]) => any>().mockResolvedValue({ transactions: [] }),
+        startBASMSync: jest.fn<(...args: any[]) => any>().mockResolvedValue({ topics: 1 }),
+        evictUnprovenTransactions: jest.fn<(...args: any[]) => any>().mockResolvedValue({ evicted: 1 }),
+        advanceTopicAnchorChains: jest.fn<(...args: any[]) => any>().mockResolvedValue({ advanced: 1 }),
+        revalidateRecentAnchors: jest.fn<(...args: any[]) => any>().mockResolvedValue({ revalidated: 1 }),
         evictAppliedTransaction: jest
-          .fn<any>()
+          .fn<(...args: any[]) => any>()
           .mockResolvedValue({ evictedTransactions: 1, evictedOutputs: 1 }),
         lookupServices: {
           ls_one: {
-            outputEvicted: jest.fn<any>().mockResolvedValue(undefined)
+            outputEvicted: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
           },
           ls_two: {
-            outputEvicted: jest.fn<any>().mockRejectedValue(new Error('best-effort failure'))
+            outputEvicted: jest.fn<(...args: any[]) => any>().mockRejectedValue(new Error('best-effort failure'))
           }
         },
         advertiser: {
@@ -1450,11 +1450,11 @@ describe('OverlayExpress', () => {
 
     const mockResponse = (): any => {
       const res: any = {}
-      res.status = jest.fn<any>().mockReturnValue(res)
-      res.json = jest.fn<any>().mockReturnValue(res)
-      res.send = jest.fn<any>().mockReturnValue(res)
-      res.set = jest.fn<any>().mockReturnValue(res)
-      res.setHeader = jest.fn<any>().mockReturnValue(res)
+      res.status = jest.fn<(...args: any[]) => any>().mockReturnValue(res)
+      res.json = jest.fn<(...args: any[]) => any>().mockReturnValue(res)
+      res.send = jest.fn<(...args: any[]) => any>().mockReturnValue(res)
+      res.set = jest.fn<(...args: any[]) => any>().mockReturnValue(res)
+      res.setHeader = jest.fn<(...args: any[]) => any>().mockReturnValue(res)
       return res
     }
 
@@ -1537,11 +1537,11 @@ describe('OverlayExpress', () => {
 
     it('passes a configured async session manager to BSV auth middleware', async () => {
       const sessionManager = {
-        addSession: jest.fn<any>().mockResolvedValue(undefined),
-        updateSession: jest.fn<any>().mockResolvedValue(undefined),
-        getSession: jest.fn<any>().mockResolvedValue(undefined),
-        removeSession: jest.fn<any>().mockResolvedValue(undefined),
-        hasSession: jest.fn<any>().mockResolvedValue(false)
+        addSession: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        updateSession: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        getSession: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        removeSession: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        hasSession: jest.fn<(...args: any[]) => any>().mockResolvedValue(false)
       }
       instance.serverWallet = {} as any
       instance.configureAuthSessionManager(sessionManager)
@@ -1908,8 +1908,8 @@ describe('OverlayExpress', () => {
     describe('ARC ingest callback token', () => {
       const mockRes = (): any => {
         const res: any = {}
-        res.status = jest.fn<any>().mockReturnValue(res)
-        res.json = jest.fn<any>().mockReturnValue(res)
+        res.status = jest.fn<(...args: any[]) => any>().mockReturnValue(res)
+        res.json = jest.fn<(...args: any[]) => any>().mockReturnValue(res)
         return res
       }
       // Flush the async IIFE inside the /arc-ingest handler.
@@ -2466,17 +2466,17 @@ describe('OverlayExpress', () => {
       instance.configureAdminIdentityKey(adminIdentityKey)
       const banService = {
         getStats: jest
-          .fn<any>()
+          .fn<(...args: any[]) => any>()
           .mockResolvedValue({ domainBans: 1, outpointBans: 1, totalBans: 2 }),
-        banDomain: jest.fn<any>().mockResolvedValue(undefined),
-        banOutpoint: jest.fn<any>().mockResolvedValue(undefined),
-        removeBan: jest.fn<any>().mockResolvedValue(undefined),
-        listBans: jest.fn<any>().mockResolvedValue([{ type: 'domain', value: 'node.example' }])
+        banDomain: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        banOutpoint: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        removeBan: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        listBans: jest.fn<(...args: any[]) => any>().mockResolvedValue([{ type: 'domain', value: 'node.example' }])
       }
       instance.banService = banService as any
       const janitor = {
-        checkHost: jest.fn<any>().mockResolvedValue({ ok: true, responseTime: 10 }),
-        run: jest.fn<any>().mockResolvedValue({ checked: 1, removed: 0 })
+        checkHost: jest.fn<(...args: any[]) => any>().mockResolvedValue({ ok: true, responseTime: 10 }),
+        run: jest.fn<(...args: any[]) => any>().mockResolvedValue({ checked: 1, removed: 0 })
       }
       jest.spyOn(instance as any, 'createJanitor').mockReturnValue(janitor)
       const { getSpy, postSpy } = await startAndCaptureRoutes()
@@ -2657,8 +2657,8 @@ describe('OverlayExpress', () => {
     it('executes authenticated sync, maintenance, eviction, and janitor operations', async () => {
       const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
       const janitor = {
-        checkHost: jest.fn<any>().mockResolvedValue({ ok: true }),
-        run: jest.fn<any>().mockResolvedValue({ checked: 2, removed: 1 })
+        checkHost: jest.fn<(...args: any[]) => any>().mockResolvedValue({ ok: true }),
+        run: jest.fn<(...args: any[]) => any>().mockResolvedValue({ checked: 2, removed: 1 })
       }
       jest.spyOn(instance as any, 'createJanitor').mockReturnValue(janitor)
       mockEngine.refreshUnprovenTransactionProofs.mockImplementationOnce(async (options: any) => {

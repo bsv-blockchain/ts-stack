@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-mobile",
-  "version": "2.14.3",
+  "version": "2.14.5",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -67,13 +67,13 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile#readme",
   "dependencies": {
-    "@babel/runtime": "7.29.7",
+    "@babel/runtime": "8.0.5",
     "@noble/hashes": "2.4.0",
     "hash-wasm": "^4.12.0",
     "idb": "^8.0.3"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.8.0"
+    "@bsv/sdk": "^2.8.0 || ^3.0.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
@@ -81,18 +81,18 @@
     }
   },
   "devDependencies": {
-    "@babel/core": "7.29.7",
+    "@babel/core": "8.0.5",
     "@bsv/sdk": "workspace:^",
-    "@react-native/babel-preset": "0.86.2",
-    "@types/node": "^26.1.2",
+    "@react-native/babel-preset": "0.87.1",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "4.1.11",
-    "hermes-compiler": "260318099.0.1",
-    "metro": "0.87.0",
-    "metro-config": "0.87.0",
-    "oxlint": "^1.76.0",
-    "tsdown": "0.22.14",
+    "@vitest/coverage-v8": "5.0.1",
+    "hermes-compiler": "260318099.0.3",
+    "metro": "0.87.1",
+    "metro-config": "0.87.1",
+    "oxlint": "^1.83.0",
+    "tsdown": "0.23.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   }
 }

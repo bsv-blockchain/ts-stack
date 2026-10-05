@@ -69,6 +69,14 @@ creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
 
 **Time:** ~45 minutes | **Level:** Advanced
 
+### 7. [Understand and Contribute Registry Metadata](./registry-metadata.md)
+
+Document protocols through the BRC process, request accurate optional descriptions,
+and keep registry stewardship separate from wallet permissions. Includes exact
+lookup identities, publisher choice, updates and wallet fallback expectations.
+
+**Level:** Beginner to Intermediate
+
 ## Recommended Learning Path
 
 1. Start with **Wallet-Aware App** if you're new to wallets and transactions
@@ -89,3 +97,8 @@ creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
 **Want to implement a protocol?** See [Conformance Testing](../conformance/).
 
 **Looking for infrastructure examples?** Check [Infrastructure Components](../infrastructure/).
+
+## Identity, DIDs and credentials
+
+- [Unified integration and implementer guidance](identity-did-vc.md)
+- [Breaking API and service migration](identity-did-vc-migration.md)

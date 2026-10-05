@@ -11,12 +11,9 @@
     "MemoryRevocationStore",
     "Overlay",
     "WalletCore",
-    "createWallet",
-    "toVerifiableCredential",
-    "toVerifiablePresentation"
+    "createWallet"
   ],
   "prohibitedExports": [
-    "DIDResolverService",
     "FileRevocationStore",
     "IdentityRegistry",
     "JsonFileStore",

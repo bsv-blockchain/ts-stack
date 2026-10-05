@@ -36,15 +36,21 @@ const advertiser = new WalletAdvertiser(
 )
 await advertiser.init()
 
-// Advertise that we host the tm_did topic and ls_did lookup service.
+// Advertise that we host the tm_identity topic and ls_identity lookup service.
 await advertiser.createAdvertisements([
-  { protocol: 'SHIP', topicOrServiceName: 'tm_did' },
-  { protocol: 'SLAP', topicOrServiceName: 'ls_did' }
+  { protocol: 'SHIP', topicOrServiceName: 'tm_identity' },
+  { protocol: 'SLAP', topicOrServiceName: 'ls_identity' }
 ])
 
 // Recover this identity's current advertisements for reconciliation/revocation.
 const mine = await advertiser.findAllAdvertisements('SHIP')
 ```
+
+The `tm_identity` / `ls_identity` pair discovers attributed identity certificates.
+Advertise it only when the node already hosts that topic and lookup service.
+Discovery identifies candidate endpoints; applications must separately validate
+certificate signatures and apply their selected certifier trust policy. Identity-key
+`did:key` resolution is deterministic and does not use an overlay lookup.
 
 For TerraTestNet, pass `ttn` as the chain and a TTN wallet-storage URL. Unless
 overridden with `lookupResolverConfig`, the advertiser uses the isolated
@@ -82,14 +88,14 @@ Overlay Services wrapper.
 
 ### Run a discoverable overlay service
 
-Host a topic (e.g. `tm_did`) and publish a SHIP advertisement so other nodes route relevant transactions to you.
+Host a topic (e.g. `tm_identity`) and publish a SHIP advertisement so other nodes route relevant transactions to you.
 
 ### Find peers for a given topic
 
 ```ts
 const hosts = await engine.lookup({
   service: 'ls_ship',
-  query: { topics: ['tm_did'], limit: 100 }
+  query: { topics: ['tm_identity'], limit: 100 }
 })
 ```
 
@@ -101,7 +107,7 @@ identity. Use the SHIP/SLAP lookup services to discover other identities.
 
 ```ts
 const mine = await advertiser.findAllAdvertisements('SLAP')
-await advertiser.revokeAdvertisements(mine.filter(a => a.topicOrService === 'ls_did'))
+await advertiser.revokeAdvertisements(mine.filter(a => a.topicOrService === 'ls_identity'))
 ```
 
 ## API

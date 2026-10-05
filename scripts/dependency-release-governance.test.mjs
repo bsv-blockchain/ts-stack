@@ -22,22 +22,23 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 24)
+  assert.equal(overrides.length, 27)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
+  assert.equal(
+    overrides.find(entry => entry.selector === 'brace-expansion@<5.0.11')?.value,
+    '5.0.11'
+  )
+  assert.equal(overrides.find(entry => entry.selector === 'engine.io@<6.6.10')?.value, '6.6.10')
   assert.equal(overrides.filter(entry => entry.selector === 'toml@<4.2.0').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml@<3.15.2').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml').length, 1)
-  assert.deepEqual(
-    overrides.filter(entry => entry.selector === 'metro@0.87.0>image-size'),
-    [
-      {
-        source: 'pnpm-workspace.yaml',
-        selector: 'metro@0.87.0>image-size',
-        value: '2.0.4'
-      }
-    ]
+  assert.equal(overrides.find(entry => entry.selector === 'lodash-es@<4.18.0')?.value, '4.18.1')
+  assert.equal(overrides.filter(entry => entry.selector.includes('image-size')).length, 0)
+  assert.equal(
+    overrides.find(entry => entry.selector === 'metro-file-map@0.87.1>micromatch')?.value,
+    "'-'"
   )
 })
 

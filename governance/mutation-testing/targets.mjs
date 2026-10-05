@@ -234,10 +234,21 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',
       propertyTest: 'packages/overlays/topics/src/mandala/__tests/types.property.test.ts',
-      mutate: ['src/mandala/types.ts:72-97', 'src/admission/issuerPolicy.ts:36-39'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/mandala/__tests/types*.test.ts'], {
-        esm: true
-      })
+      mutate: [
+        'src/mandala/types.ts',
+        'src/mandala/details.ts',
+        'src/admission/issuerPolicy.ts:36-39'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/mandala/__tests/types*.test.ts',
+          '<rootDir>/src/mandala/__tests/details*.test.ts'
+        ],
+        {
+          esm: true
+        }
+      )
     },
     'did-codecs': {
       packageDirectory: 'packages/helpers/did',
@@ -246,7 +257,72 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: ['src/utils/base64url.ts', 'src/utils/multibase.ts'],
       ...jestTarget(
         'jest.config.js',
-        ['<rootDir>/tests/codec.property.test.ts', '<rootDir>/tests/did.test.ts'],
+        [
+          '<rootDir>/tests/codec.property.test.ts',
+          '<rootDir>/tests/codec-boundaries.test.ts',
+          '<rootDir>/tests/did.test.ts',
+          '<rootDir>/tests/brc202.test.ts',
+          '<rootDir>/tests/brc202.property.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc202-resolution': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc202.property.test.ts',
+      mutate: ['src/did/BsvDid.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc202.property.test.ts',
+          '<rootDir>/tests/brc202.test.ts',
+          '<rootDir>/tests/did.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc52-envelope': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-envelope.property.test.ts',
+      mutate: ['src/brc52/envelope.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc52-envelope.property.test.ts',
+          '<rootDir>/tests/brc52-envelope.test.ts',
+          '<rootDir>/tests/brc52-envelope-boundaries.test.ts',
+          '<rootDir>/tests/brc52-status.test.ts',
+          '<rootDir>/tests/brc52-disclosure.test.ts',
+          '<rootDir>/tests/brc52-auth-interoperability.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc52-status': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-status.property.test.ts',
+      mutate: ['src/brc52/status.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/tests/brc52-status.property.test.ts', '<rootDir>/tests/brc52-status.test.ts'],
+        { esm: true }
+      )
+    },
+    'brc52-disclosure': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-disclosure.property.test.ts',
+      mutate: ['src/brc52/disclosure.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc52-disclosure.property.test.ts',
+          '<rootDir>/tests/brc52-disclosure.test.ts',
+          '<rootDir>/tests/brc52-auth-interoperability.test.ts'
+        ],
         { esm: true }
       )
     },
@@ -254,8 +330,12 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/helpers/ts-templates',
       manifest: 'packages/helpers/ts-templates/package.json',
       propertyTest: 'packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts',
-      mutate: ['src/mandala-encoding.ts'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/mandala-encoding*.test.ts'])
+      mutate: ['src/mandala-encoding.ts', 'src/strictCbor.ts', 'src/Bsv21Binary.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests/mandala-encoding*.test.ts',
+        '<rootDir>/src/__tests/strictCbor*.test.ts',
+        '<rootDir>/src/__tests/Bsv21Binary*.test.ts'
+      ])
     },
     'paymail-address': {
       packageDirectory: 'packages/messaging/ts-paymail',

@@ -18,8 +18,12 @@ function issuer(publicKey = SUBJECT_KEY): any {
       publicKey,
       schemas: [{ id: 'test-schema', name: 'Test Schema', certificateTypeBase64: CERTIFICATE_TYPE }]
     })),
-    isRevoked: jest.fn(async () => false),
-    issue: jest.fn(async () => ({ _bsv: { certificate: { serialNumber: SERIAL_NUMBER } } })),
+    getRevocationRecordStatus: jest.fn(async () => 'unknown'),
+    issueCertificate: jest.fn(async () => ({ serialNumber: SERIAL_NUMBER })),
+    issue: jest.fn(async () => ({
+      credential: { serialNumber: SERIAL_NUMBER },
+      keyringForSubject: {}
+    })),
     verify: jest.fn(async () => ({ valid: true })),
     revoke: jest.fn(async () => ({ txid: 'revoke-txid' }))
   }
@@ -230,9 +234,10 @@ describe('credential issuer GET and authorization boundaries', () => {
     await expect(status.json()).resolves.toEqual({
       success: true,
       serialNumber: SERIAL_NUMBER,
-      revoked: false
+      revocationRecordStatus: 'unknown',
+      status: 'unknown'
     })
-    expect(testIssuer.isRevoked).toHaveBeenCalledWith(SERIAL_NUMBER)
+    expect(testIssuer.getRevocationRecordStatus).toHaveBeenCalledWith(SERIAL_NUMBER)
 
     const certify = await handler.GET?.({
       url: 'https://issuer.example/api/credential-issuer?action=certify'

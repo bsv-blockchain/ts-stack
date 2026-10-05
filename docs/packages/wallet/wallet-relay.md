@@ -4,7 +4,7 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.5.1'
+version: '0.5.2'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
 review_cadence_days: 30
@@ -14,6 +14,10 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-w
 ---
 
 # @bsv/wallet-relay
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 Enables mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket tunnels. A web app (desktop browser) shows a QR code; user scans with their mobile BSV wallet; all wallet operations (signing, key retrieval, etc.) are proxied over HTTPS+WSS relay servers to the mobile without exposing keys or trust chains to the desktop. Provides both the relay server infrastructure (Node.js) and React frontend components for web apps to add "Connect Mobile Wallet" functionality.
 

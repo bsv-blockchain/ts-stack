@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.2'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+version: '1.3.3'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -108,6 +108,26 @@ notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
 audit and CodeQL results, package and consumer tests, bundle/performance
 impact, and affected public versions.
 
+## Temporary Metro watcher repair
+
+Metro-file-map 0.87.1 consumes only `micromatch.some()`, whose matcher is already
+Picomatch 2.3.2. An exact-version paired source/distribution patch uses the same
+matcher loop directly, declares that exact dependency, and removes only the
+parent-scoped micromatch dependency and unused braces closure. The reviewed
+[braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) lists no
+patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
+has not supplied a published repair. No audit exclusion or threshold change is added.
+
+The mobile platform gate checks all 1,120 results independently reproduced from
+the unmodified published watcher, event/stat/path contracts, and absence of the
+removed dependencies before its existing packed Metro/Hermes compilation,
+source-map and bundle checks. All prior assertions and bounds remain.
+The dated registry owns this 27th selector, its package extension and patch as
+one repair. Remove all three together when a compatible official release removes
+the affected path and the complete compatibility, frozen-graph, audit and platform
+checks pass. This development-tool repair changes no public package API, version
+or production service startup.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:
@@ -136,12 +156,17 @@ must be a dependency or peer, and clean packed consumers must typecheck it.
 This keeps build-only advisory trees out of consumer installs without shipping
 unresolvable public declarations.
 
-The root workspace carries six narrow audited dependency overrides:
+The root workspace carries seven narrow audited dependency overrides:
 
-- Jest 30.4.2 still constrains parts of its reporting and coverage graph to
-  minimatch releases with older `brace-expansion` ranges. The follow-up
-  GHSA-rgw5-rvv9-x895 requires `brace-expansion` 5.0.9, so the workspace
-  substitutes 5.0.9 until every supported path resolves it natively.
+- Jest 30.4.2 and Stryker still constrain parts of their reporting and coverage
+  graphs to minimatch releases with older `brace-expansion` ranges.
+  GHSA-rgw5-rvv9-x895 required 5.0.9. GHSA-6j4f-fj2g-mc7p requires 5.0.10 and
+  GHSA-qhr7-859c-m2p7 requires 5.0.11, so the workspace substitutes 5.0.11
+  until every supported path resolves it natively.
+- `socket.io` in `@bsv/authsocket` still admits `engine.io` releases below
+  6.6.10. GHSA-2gc4-cqfq-p2gv is a protocol-revision mismatch that can crash
+  the Node process during a transport upgrade, so the workspace selects
+  6.6.10, the first patched release, without changing the public Engine.IO API.
 - Express/body-parser, Superagent, and Stryker's `typed-rest-client@2.3.1` can
   retain vulnerable `qs` releases. A version-bounded substitution selects
   6.16.0, the first release that also fixes the bracket/comma array-limit bypass
@@ -158,11 +183,6 @@ The root workspace carries six narrow audited dependency overrides:
 - Jest's Istanbul reporting chain and the standalone WAB server can still
   select `js-yaml` 3.15.1. The workspace and WAB lock select the compatible
   3.15.2 security release until those parent ranges advance naturally.
-- Metro 0.87 still declares vulnerable `image-size` 1.x. A parent-scoped
-  substitution selects 2.0.4, which retains Metro's CommonJS default-function
-  call shape while moving past the malformed HEIF/JXL and ICNS parser
-  advisories. The child-process regression plus Metro and Hermes mobile gates
-  verify the substitution.
 
 These substitutions are verified through their affected Jest, mutation,
 documentation, and build paths and have owners, evidence, review dates, and
@@ -176,15 +196,18 @@ changed, stale, unowned, or upstream-unlinked override. Elapsed review dates
 produce maintenance reminders in source CI and fail the separate weekly
 maintenance audit (`node scripts/repository-health.mjs --maintenance`).
 
-The 2026-09-16 review rechecked all 24 selectors against the frozen graphs,
-current upstream manifests, and the advisory audit. The supported graphs still
-select exact `gaxios@7.1.3`, admit `uuid@9`, and pin `qs@6.15.1` without their
-registered substitutions, while the current frontmatter plugin still requests
-TOML 3.x and Metro 0.87 still requests `image-size` 1.x. New upstream majors can
+The 2026-10-01 review rechecked all 25 selectors against the frozen graph.
+Jest, Stryker, and socket.io still admit the vulnerable `brace-expansion` and
+`engine.io` ranges, so those two substitutions stay. The earlier findings still
+hold for the rest: the supported graphs select exact `gaxios@7.1.3`, admit
+`uuid@9`, and pin `qs@6.15.1` without their registered substitutions, while the
+current frontmatter plugin still requests TOML 3.x. New upstream majors can
 remove some legacy paths only through a coordinated Stryker or Google Cloud
-migration. The Metro-scoped `image-size` substitution is independently verified
-through the mobile platform contract. The method, result, count, and next
-rehearsal are enforced in `governance/dependency-release-policy.json`.
+migration. Metro 0.87.1 replaced its `image-size` dependency with an in-tree
+parser, so the former Metro-scoped substitution was retired; the mobile
+platform contract verifies that boundary. The method, result, count, and next
+rehearsal are enforced in
+`governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly
 compatibility override. It is isolated from runtime packages, registered with

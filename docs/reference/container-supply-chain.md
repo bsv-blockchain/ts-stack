@@ -2,9 +2,9 @@
 id: container-supply-chain
 title: 'Container Supply Chain'
 kind: reference
-version: '1.2.1'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.3.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, containers, security, releases]
@@ -93,8 +93,15 @@ GitHub code scanning.
 ## GHCR release
 
 `.github/workflows/infra-release.yaml` accepts an `infra/v*` tag reachable from
-`main`, or a manual dispatch from `main`. For every version not already present
-in GHCR it:
+`main`, a manual dispatch from `main`, or a `workflow_call` from the cascade
+npm release in `release.yaml`. A standalone run qualifies its own exact source
+with the full mutation campaign. A `release.yaml` call reuses that run's
+campaign for `github.sha` and builds from either `github.sha` or the single
+generated infra-sync commit whose parent is `github.sha`; that commit may change
+only `infra/*/package.json`, `infra/*/package-lock.json`,
+`packages/*/package.json`, `pnpm-lock.yaml`, and the generated stack facts.
+Images built from it carry that commit as their OCI revision. For every version
+not already present in GHCR it:
 
 1. resolves the component from the checked-in registry;
 2. builds the image once with commit-derived metadata;
@@ -118,7 +125,7 @@ image_ref='ghcr.io/bsv-blockchain/overlay-server@sha256:<digest>'
 docker buildx imagetools inspect "$image_ref"
 cosign verify \
   --certificate-identity-regexp \
-  '^https://github\.com/bsv-blockchain/ts-stack/\.github/workflows/infra-release\.yaml@refs/(tags/infra/v.+|heads/main)$' \
+  '^https://github\.com/bsv-blockchain/ts-stack/\.github/workflows/infra-release\.yaml@refs/(tags/(infra/v.+|release/v.+|v.+)|heads/main)$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   "$image_ref"
 gh attestation verify "oci://$image_ref" \

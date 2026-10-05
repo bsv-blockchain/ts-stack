@@ -1,7 +1,7 @@
 {
   "name": "@bsv/fund-wallet",
   "private": false,
-  "version": "1.5.2",
+  "version": "1.5.3",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -39,18 +39,18 @@
   },
   "dependencies": {
     "@bsv/wallet-toolbox": "workspace:^",
-    "chalk": "^5.6.2"
+    "chalk": "^6.0.0"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/coverage-v8": "4.1.11",
     "fast-check": "^4.9.0",
-    "oxlint": "^1.76.0",
-    "tsdown": "0.22.14",
+    "oxlint": "^1.83.0",
+    "tsdown": "0.23.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "4.1.11"
   },
   "files": [
     "dist",
@@ -69,7 +69,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.6 || ^3.0.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

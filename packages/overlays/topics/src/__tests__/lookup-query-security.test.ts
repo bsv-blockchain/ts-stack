@@ -8,6 +8,7 @@ import { Bsv21LookupService } from '../bsv21/Bsv21LookupService.js'
 import { Bsv21StorageManager } from '../bsv21/Bsv21StorageManager.js'
 import { BasketMapLookupService } from '../basketmap/BasketMapLookupService.js'
 import { BasketMapStorageManager } from '../basketmap/BasketMapStorageManager.js'
+import { requireTokenId } from '../shared/queryValidation.js'
 
 const IDENTITY_KEY = `02${'11'.repeat(32)}`
 const CERTIFIER_KEY = `03${'22'.repeat(32)}`
@@ -266,5 +267,35 @@ describe('public lookup query security boundaries', () => {
       })
     ).resolves.toEqual([{ txid: TXID, outputIndex: 0 }])
     expect(storage.findById).toHaveBeenCalledWith('payments', [CERTIFIER_KEY])
+  })
+})
+
+describe('requireTokenId', () => {
+  const TOKEN_ID = `${'ab'.repeat(32)}_0`
+
+  it('accepts a lowercase 64-hex token id and returns it unchanged', () => {
+    expect(requireTokenId(TOKEN_ID, 'tokenId')).toBe(TOKEN_ID)
+  })
+
+  it.each([
+    ['uppercase hex', `${'AB'.repeat(32)}_0`],
+    ['a non-zero vout', `${'ab'.repeat(32)}_1`],
+    ['a dotted outpoint', `${'ab'.repeat(32)}.0`],
+    ['a missing suffix', 'ab'.repeat(32)],
+    ['a short txid', `${'ab'.repeat(31)}_0`],
+    ['a long txid', `${'ab'.repeat(33)}_0`],
+    ['non-hex characters', `${'zz'.repeat(32)}_0`],
+    ['a trailing newline', `${TOKEN_ID}\n`],
+    ['a leading space', ` ${TOKEN_ID}`],
+    ['an empty string', ''],
+    ['a number', 7],
+    ['null', null],
+    ['undefined', undefined],
+    ['an object selector', { $ne: '' }],
+    ['an array', [TOKEN_ID]]
+  ])('refuses %s', (_label, value) => {
+    expect(() => requireTokenId(value, 'metadataTokenId')).toThrow(
+      'Invalid lookup query: metadataTokenId must be a token id (<64 lowercase hex>_0)'
+    )
   })
 })

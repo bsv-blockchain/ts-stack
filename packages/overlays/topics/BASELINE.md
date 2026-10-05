@@ -1,61 +1,66 @@
 # @bsv/overlay-topics — Baseline
 
+> Historical import baseline. The counts, origin inventory and checked boxes
+> below describe the original migration, not the current package or CI status.
+> The proposed 2.0 release removes the legacy DID serial-token topic. See the
+> current [README](./README.md) and [migration guide](../../../docs/guides/identity-did-vc-migration.md).
+
 **Criticality:** Tier 2 — overlay infrastructure, canonical topic definitions  
 **Reliability Level:** RL1  
 **Owner:** @sirdeggen
 
 ## Build
 
-| Check | Status |
-|-------|--------|
-| TypeScript | ✅ passes (`tsc --noEmit`) |
-| Lint | ⚠️ not yet run (Oxlint) |
-| Tests | ✅ 189 passing, 1 skipped (19 suites: all 19 topic pairs) |
+| Check      | Status                                                    |
+| ---------- | --------------------------------------------------------- |
+| TypeScript | ✅ passes (`tsc --noEmit`)                                |
+| Lint       | ⚠️ not yet run (Oxlint)                                   |
+| Tests      | ✅ 189 passing, 1 skipped (19 suites: all 19 topic pairs) |
 
 ## Coverage
 
-| Metric | Value |
-|--------|-------|
-| Test suites | 19 passing |
-| Tests | 189 passing, 1 skipped |
-| Topics with TM tests | all 19 topic pairs |
+| Metric               | Value                                                                                                                                                           |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test suites          | 19 passing                                                                                                                                                      |
+| Tests                | 189 passing, 1 skipped                                                                                                                                          |
+| Topics with TM tests | all 19 topic pairs                                                                                                                                              |
 | Topics with LS tests | any, hello, uhrp, walletconfig, message-box, basketmap, protomap, certmap, identity, kvstore, ump, fractionalize, supplychain, slackthreads (MongoMemoryServer) |
-| Topics pending tests | none |
+| Topics pending tests | none                                                                                                                                                            |
 
 ## Packages
 
-| Topic | TopicManager ID | LookupService ID |
-|-------|-----------------|------------------|
-| any | `tm_anytx` | `ls_anytx` |
-| apps | `tm_apps` | `ls_apps` |
-| basketmap | `tm_basketmap` | `ls_basketmap` |
-| certmap | `tm_certmap` | `ls_certmap` |
-| desktopintegrity | `tm_desktopintegrity` | `ls_desktopintegrity` |
-| did | `tm_did` | `ls_did` |
-| fractionalize | `tm_fractionalize` | `ls_fractionalize` |
-| hello | `tm_helloworld` | `ls_helloworld` |
-| identity | `tm_identity` | `ls_identity` |
-| kvstore | `tm_kvstore` | `ls_kvstore` |
-| message-box | `tm_messagebox` | `ls_messagebox` |
-| monsterbattle | `tm_monsterbattle` | `ls_monsterbattle` |
-| protomap | `tm_protomap` | `ls_protomap` |
-| slackthreads | `tm_slackthread` | `ls_slackthread` |
-| supplychain | `tm_supplychain` | `ls_supplychain` |
-| uhrp | `tm_uhrp` | `ls_uhrp` |
-| ump | `tm_users` | `ls_users` |
-| utility-tokens | `tm_tokendemo` | `ls_tokendemo` |
-| walletconfig | `tm_walletconfig` | `ls_walletconfig` |
+| Topic                                      | TopicManager ID       | LookupService ID      |
+| ------------------------------------------ | --------------------- | --------------------- |
+| any                                        | `tm_anytx`            | `ls_anytx`            |
+| apps                                       | `tm_apps`             | `ls_apps`             |
+| basketmap                                  | `tm_basketmap`        | `ls_basketmap`        |
+| certmap                                    | `tm_certmap`          | `ls_certmap`          |
+| desktopintegrity                           | `tm_desktopintegrity` | `ls_desktopintegrity` |
+| did (historical; removed in 2.0 candidate) | `tm_did`              | `ls_did`              |
+| fractionalize                              | `tm_fractionalize`    | `ls_fractionalize`    |
+| hello                                      | `tm_helloworld`       | `ls_helloworld`       |
+| identity                                   | `tm_identity`         | `ls_identity`         |
+| kvstore                                    | `tm_kvstore`          | `ls_kvstore`          |
+| message-box                                | `tm_messagebox`       | `ls_messagebox`       |
+| monsterbattle                              | `tm_monsterbattle`    | `ls_monsterbattle`    |
+| protomap                                   | `tm_protomap`         | `ls_protomap`         |
+| slackthreads                               | `tm_slackthread`      | `ls_slackthread`      |
+| supplychain                                | `tm_supplychain`      | `ls_supplychain`      |
+| uhrp                                       | `tm_uhrp`             | `ls_uhrp`             |
+| ump                                        | `tm_users`            | `ls_users`            |
+| utility-tokens                             | `tm_tokendemo`        | `ls_tokendemo`        |
+| walletconfig                               | `tm_walletconfig`     | `ls_walletconfig`     |
 
 ## Source origins
 
-| Topic | Source |
-|-------|--------|
-| identity | identity-services (has StorageManager) |
-| did | did-services (base64 serialNumber — production canonical) |
-| basketmap, certmap, protomap | registry-services (has StorageManager classes) |
-| kvstore | kvstore-services (history/pagination support) |
-| ump | ump-services (v3 token format support) |
-| all others | overlay-server (sole implementation) |
+| Topic                        | Source                                                    |
+| ---------------------------- | --------------------------------------------------------- |
+| identity                     | identity-services (has StorageManager)                    |
+| did                          | did-services (base64 serialNumber — production canonical) |
+| basketmap, certmap, protomap | registry-services (has StorageManager classes)            |
+| kvstore                      | kvstore-services (history/pagination support)             |
+| ump                          | ump-services (v3 token format support)                    |
+| all others                   | overlay-server (sole implementation)                      |
 
 ## Dependencies
 

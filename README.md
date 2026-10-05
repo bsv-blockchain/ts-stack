@@ -152,7 +152,6 @@ before running one of those suites.
 | [`packages/helpers/simple`](packages/helpers/simple)                       | [`@bsv/simple`](https://www.npmjs.com/package/@bsv/simple)               | Recommended high-level browser/server application API |
 | [`packages/helpers/bsv-wallet-helper`](packages/helpers/bsv-wallet-helper) | [`@bsv/wallet-helper`](https://www.npmjs.com/package/@bsv/wallet-helper) | Wallet helper functions                               |
 | [`packages/helpers/ts-templates`](packages/helpers/ts-templates)           | [`@bsv/templates`](https://www.npmjs.com/package/@bsv/templates)         | Script templates                                      |
-| [`packages/helpers/did-client`](packages/helpers/did-client)               | [`@bsv/did-client`](https://www.npmjs.com/package/@bsv/did-client)       | DID resolver client                                   |
 | [`packages/helpers/amountinator`](packages/helpers/amountinator)           | [`@bsv/amountinator`](https://www.npmjs.com/package/@bsv/amountinator)   | Satoshi/BSV conversion and formatting                 |
 | [`packages/helpers/fund-wallet`](packages/helpers/fund-wallet)             | [`@bsv/fund-wallet`](https://www.npmjs.com/package/@bsv/fund-wallet)     | Testnet/devnet wallet funding helper                  |
 

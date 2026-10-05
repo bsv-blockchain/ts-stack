@@ -15,7 +15,7 @@ import {
   VerifiedTransactionOutput,
   defaultTransactionEvidenceLimits
 } from '@bsv/sdk'
-import { toUTF8Strict } from '@bsv/sdk/primitives/utils'
+import { toArray, toUTF8Strict } from '@bsv/sdk/primitives/utils'
 import { TrustSettings, validateTrustSettings } from '../WalletSettingsManager'
 import { OverlayOutputEvidence } from './verifyOverlayOutput'
 
@@ -24,6 +24,26 @@ const MAX_IDENTITY_CERTIFICATE_BYTES = 256 * 1024
 const MAX_IDENTITY_FIELDS = 100
 const IDENTITY_PROTOCOL: [1, 'identity'] = [1, 'identity']
 const IDENTITY_KEY_ID = '1'
+// BRC-100 bounds a discovered certificate's certifierInfo.description to 5-50
+// UTF-8 bytes. Trust settings accept up to 500 so stored settings stay
+// readable, so the bound is applied where the result is built.
+const MIN_CERTIFIER_DESCRIPTION_BYTES = 5
+const MAX_CERTIFIER_DESCRIPTION_BYTES = 50
+const FALLBACK_CERTIFIER_DESCRIPTION = 'Trusted certifier'
+
+/** Cut a long description at a code point boundary; replace one too short to keep. */
+function certifierDescription(description: string): string {
+  let kept = ''
+  let bytes = 0
+  for (const char of description) {
+    const size = toArray(char, 'utf8').length
+    if (bytes + size > MAX_CERTIFIER_DESCRIPTION_BYTES) break
+    kept += char
+    bytes += size
+  }
+  kept = kept.trimEnd()
+  return toArray(kept, 'utf8').length >= MIN_CERTIFIER_DESCRIPTION_BYTES ? kept : FALLBACK_CERTIFIER_DESCRIPTION
+}
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) return false
@@ -313,7 +333,7 @@ export const transformVerifiableCertificatesWithTrust = (
     const certifierInfo: IdentityCertifier = {
       name: trustedCertifier.name,
       iconUrl: trustedCertifier.iconUrl ?? 'https://bsvblockchain.org/favicon.ico',
-      description: trustedCertifier.description,
+      description: certifierDescription(trustedCertifier.description),
       trust: trustedCertifier.trust
     }
 

@@ -3,7 +3,7 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.8'
+version: '2.2.9'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-24'
 last_verified: '2026-09-24'
@@ -15,6 +15,10 @@ tags: [middleware, express, auth, brc-103, brc-104]
 ---
 
 # @bsv/auth-express-middleware
+
+This source candidate declares SDK peer `^2.8.5 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 Express transport for BRC-103 peer-to-peer mutual authentication over
 BRC-104 HTTP. It handles the public handshake, verifies authenticated

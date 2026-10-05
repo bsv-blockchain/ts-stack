@@ -1,7 +1,15 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.8.10",
-  "sideEffects": false,
+  "version": "3.0.0",
+  "sideEffects": [
+    "./dist/esm/src/umd.js",
+    "./dist/cjs/src/umd.js",
+    "./dist/umd/bundle.js",
+    "./dist/esm/src/primitives/entries/BasePoint.js",
+    "./dist/esm/src/primitives/entries/JacobianPoint.js",
+    "./dist/cjs/src/primitives/entries/BasePoint.js",
+    "./dist/cjs/src/primitives/entries/JacobianPoint.js"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -51,6 +59,46 @@
       "require": {
         "types": "./dist/cjs/src/primitives/index.d.ts",
         "default": "./dist/cjs/src/primitives/index.js"
+      }
+    },
+    "./primitives/BasePoint": {
+      "import": {
+        "types": "./dist/types/src/primitives/entries/BasePoint.d.ts",
+        "default": "./dist/esm/src/primitives/entries/BasePoint.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/primitives/entries/BasePoint.d.ts",
+        "default": "./dist/cjs/src/primitives/entries/BasePoint.js"
+      }
+    },
+    "./primitives/BasePoint.ts": {
+      "import": {
+        "types": "./dist/types/src/primitives/entries/BasePoint.d.ts",
+        "default": "./dist/esm/src/primitives/entries/BasePoint.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/primitives/entries/BasePoint.d.ts",
+        "default": "./dist/cjs/src/primitives/entries/BasePoint.js"
+      }
+    },
+    "./primitives/JacobianPoint": {
+      "import": {
+        "types": "./dist/types/src/primitives/entries/JacobianPoint.d.ts",
+        "default": "./dist/esm/src/primitives/entries/JacobianPoint.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/primitives/entries/JacobianPoint.d.ts",
+        "default": "./dist/cjs/src/primitives/entries/JacobianPoint.js"
+      }
+    },
+    "./primitives/JacobianPoint.ts": {
+      "import": {
+        "types": "./dist/types/src/primitives/entries/JacobianPoint.d.ts",
+        "default": "./dist/esm/src/primitives/entries/JacobianPoint.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/primitives/entries/JacobianPoint.d.ts",
+        "default": "./dist/cjs/src/primitives/entries/JacobianPoint.js"
       }
     },
     "./primitives/*.ts": {
@@ -764,8 +812,8 @@
       }
     },
     "./umd": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/umd/bundle.js"
+      "types": "./dist/types/src/umd.d.ts",
+      "import": "./dist/esm/src/umd.js"
     }
   },
   "scripts": {
@@ -778,7 +826,7 @@
     "lint:ci": "pnpm lint",
     "lint": "oxlint mod.ts src benchmarks jest.config.js rspack.config.js --deny-warnings",
     "pack:check": "pnpm build && node ../../scripts/check-package-artifact.mjs . --exports PrivateKey,PublicKey,Transaction,Script,WalletClient,ProtoWallet,AuthFetch,IdentityClient,LookupResolver,RemittanceManager --esm-only-entrypoints ./umd",
-    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs .",
+    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs . && node scripts/check-umd-contract.mjs",
     "typecheck": "tsc --build --pretty false",
     "build": "pnpm build:ts && pnpm build:umd",
     "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
@@ -808,16 +856,16 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk#readme",
   "devDependencies": {
-    "@jest/globals": "^30.4.1",
-    "@rspack/cli": "^2.1.7",
-    "@rspack/core": "^2.1.7",
+    "@jest/globals": "^30.5.1",
+    "@rspack/cli": "^2.2.5",
+    "@rspack/core": "^2.2.5",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "fast-check": "^4.9.0",
-    "jest": "^30.4.2",
-    "jest-environment-jsdom": "^30.4.1",
-    "oxlint": "^1.76.0",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
+    "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
     "ts2md": "^0.2.8",
@@ -826,6 +874,12 @@
   },
   "typesVersions": {
     "*": {
+      "primitives/BasePoint.ts": [
+        "dist/types/src/primitives/entries/BasePoint.d.ts"
+      ],
+      "primitives/JacobianPoint.ts": [
+        "dist/types/src/primitives/entries/JacobianPoint.d.ts"
+      ],
       "*.ts": [
         "dist/types/src/*.d.ts"
       ],
@@ -968,7 +1022,7 @@
         "dist/types/src/remittance/*.d.ts"
       ],
       "umd": [
-        "dist/types/mod.d.ts"
+        "dist/types/src/umd.d.ts"
       ],
       "*": [
         "dist/types/mod.d.ts"

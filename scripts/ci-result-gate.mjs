@@ -1,6 +1,39 @@
 #!/usr/bin/env node
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
+export function validateMutationClassification(classification, selected, targets, policy) {
+  const errors = []
+  const all = []
+  const risks = new Map(policy.targets.map(target => [target.id, target.risk]))
+  for (const key of ['required', 'deferred', 'outside']) {
+    if (
+      !Array.isArray(classification?.[key]) ||
+      classification[key].some(id => typeof id !== 'string')
+    ) {
+      errors.push(`mutation classification lacks valid ${key} inventory`)
+      continue
+    }
+    all.push(...classification[key])
+  }
+  const canonical = Object.keys(targets)
+  if (
+    all.length !== canonical.length ||
+    new Set(all).size !== all.length ||
+    all.some(id => !canonical.includes(id))
+  )
+    errors.push('mutation classification is not a complete disjoint canonical partition')
+  if (JSON.stringify(classification?.required) !== JSON.stringify(selected))
+    errors.push('selected mutation targets differ from required classification')
+  if (classification?.deferred?.some(id => risks.get(id) !== 'high'))
+    errors.push('critical or unknown mutation risk cannot defer to final qualification')
+  if (classification?.outside?.some(id => risks.get(id) !== 'critical'))
+    errors.push('only unaffected critical targets may be outside the current PR scope')
+  return errors
+}
 
 // A selected lane must succeed even when a PR-only ancestor is skipped on main.
 // Missing scope outputs fail closed; they must never turn into an empty selection.
@@ -64,7 +97,22 @@ export function validateCiResults(needs, event) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
-    const errors = validateCiResults(JSON.parse(process.env.CI_NEEDS ?? ''), process.env.CI_EVENT)
+    const needs = JSON.parse(process.env.CI_NEEDS ?? '')
+    const root = fileURLToPath(new URL('..', import.meta.url))
+    const classification = JSON.parse(needs.prepare?.outputs?.['mutation-classification'] ?? '')
+    const selected = JSON.parse(needs.prepare?.outputs?.['mutation-targets'] ?? '')
+    const policy = JSON.parse(
+      fs.readFileSync(path.join(root, 'governance/mutation-testing/policy.json'), 'utf8')
+    )
+    const errors = [
+      ...validateCiResults(needs, process.env.CI_EVENT),
+      ...validateMutationClassification(
+        classification,
+        selected,
+        buildMutationTargets(root),
+        policy
+      )
+    ]
     if (errors.length > 0) throw new Error(errors.join('\n'))
     console.log('Every selected CI lane completed successfully; remaining skips match scope.')
   } catch (error) {

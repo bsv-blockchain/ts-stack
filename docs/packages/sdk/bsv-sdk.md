@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.8.10'
+version: '3.0.0'
 npm: '@bsv/sdk'
-last_updated: '2026-09-27'
-last_verified: '2026-09-27'
+last_updated: '2026-10-01'
+last_verified: '2026-10-01'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,13 +15,26 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The 2.8.10 source candidate restores WhatsOnChain Merkle-proof verification
+The isolated SDK3 retirement candidate removes the obsolete serial-DID token
+validation module. Native identity, certificate and authentication APIs remain.
+Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
+[migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
+qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
+see [registry metadata](../../guides/registry-metadata.md). It covers exact
+lookups, BRC-based inclusion requests, publisher choice and the boundary between
+display metadata and wallet permissions.
+
+Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
 for block headers containing the provider's full metadata. Header objects may
 contain up to 64 owned data properties, matching the existing header-list
 bound. Merkle-root equality, response size limits, and rejection of accessors,
 symbols, and inherited properties remain unchanged. No API, wire, proof, or
-wallet-data migration is required. Publication follows the protected SDK
-release workflow.
+wallet-data migration is required. Protected release
+[36324548797](https://github.com/bsv-blockchain/ts-stack/actions/runs/36324548797)
+verified the exact registry bytes, source provenance and CycloneDX SBOM for
+source `5a4053223692b020372f5a8e20f59bf9c82cc968`.
 
 The 2.8.8 source candidate aligns explicit script verification flags with
 spending-era rules, historical signature hashing, locktime operations, and

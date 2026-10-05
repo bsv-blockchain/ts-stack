@@ -16,6 +16,10 @@ tags: [paymail, messaging, brc-29, identity]
 
 # @bsv/paymail
 
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > TypeScript SDK for BSV Paymail (BRC-121 capability discovery and routing). Provides both client-side capability discovery and server-side router with built-in support for PKI, P2P destinations, and public profiles.
 
 The 2.4.10 source candidate fixes the CommonJS build of the P2P signature and `PaymailClient` key helpers, which failed with `.default is not a constructor` under `require()`. No API migration is required.

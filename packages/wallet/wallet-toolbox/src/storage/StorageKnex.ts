@@ -135,6 +135,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     super(options)
     if (options.knex == null) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
+    parsePostgresInt8AsNumber(this.knex)
     this.preparedBeefPolicy = validatePreparedBeefPolicy(options.preparedBeef)
     this.preparedBeefCoordinator = new PreparedBeefCoordinator(this)
     if (this.telemetry.enabled) {
@@ -304,9 +305,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       let epochQuery = this.toDb(trx)<PreparedBeefMetadata>('prepared_beef_metadata').where({
         preparedBeefMetadataId: 1
       })
-      // Serialize a worker commit with proof invalidation across MySQL server
-      // processes. SQLite serializes the subsequent write transaction.
-      if (this.dbtype === 'MySQL') epochQuery = epochQuery.forUpdate()
+      // Serialize a worker commit with proof invalidation across MySQL and
+      // Postgres server processes. SQLite serializes the subsequent write transaction.
+      if (this.dbtype === 'MySQL' || this.dbtype === 'Postgres') epochQuery = epochQuery.forUpdate()
       const metadata = await epochQuery.first('proofEpoch')
       if (metadata == null || Number(metadata.proofEpoch) !== expectedProofEpoch) return false
 
@@ -357,7 +358,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .whereNull('pb.preparedBeefId')
       .select('o.userId', 'o.txid as rootTxid')
       .groupBy('o.userId', 'o.txid')
-      .orderByRaw('MIN(o.outputId)')
+      // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+      .orderByRaw('MIN(??)', ['o.outputId'])
       .limit(limit)) as PreparedBeefRoot[]
     return rows
   }
@@ -513,10 +515,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         k
           .select('*')
           .from('transactions')
-          .whereRaw('proven_txs.provenTxId = transactions.provenTxId and transactions.userId = ?', [args.userId])
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+          .whereRaw('?? = ?? and ?? = ?', [
+            'proven_txs.provenTxId',
+            'transactions.provenTxId',
+            'transactions.userId',
+            args.userId
+          ])
       )
     })
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('proven_txs'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -537,10 +546,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         k
           .select('*')
           .from('transactions')
-          .whereRaw('proven_tx_reqs.txid = transactions.txid and transactions.userId = ?', [args.userId])
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+          .whereRaw('proven_tx_reqs.txid = transactions.txid and ?? = ?', ['transactions.userId', args.userId])
       )
     })
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('proven_tx_reqs'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -560,10 +571,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       k
         .select('*')
         .from('tx_labels')
-        .whereRaw('tx_labels.txLabelId = tx_labels_map.txLabelId and tx_labels.userId = ?', [args.userId])
+        // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+        .whereRaw('?? = ?? and ?? = ?', [
+          'tx_labels.txLabelId',
+          'tx_labels_map.txLabelId',
+          'tx_labels.userId',
+          args.userId
+        ])
     )
     if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('tx_labels_map'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -582,10 +600,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       k
         .select('*')
         .from('output_tags')
-        .whereRaw('output_tags.outputTagId = output_tags_map.outputTagId and output_tags.userId = ?', [args.userId])
+        // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+        .whereRaw('?? = ?? and ?? = ?', [
+          'output_tags.outputTagId',
+          'output_tags_map.outputTagId',
+          'output_tags.userId',
+          args.userId
+        ])
     )
     if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
     if (args.paged != null) {
+      q = q.orderBy(pagingOrder('output_tags_map'))
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset ?? 0)
     }
@@ -662,10 +687,36 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return await listOutputs(this, auth, vargs)
   }
 
+  /**
+   * Insert one row and return its auto-increment primary key. MySQL and SQLite
+   * report the id as the insert result; Postgres requires a RETURNING clause.
+   */
+  private async insertReturningId(table: string, idColumn: string, row: object, trx?: TrxToken): Promise<number> {
+    if (this.dbtype !== 'Postgres') {
+      const [id] = await this.toDb(trx)(table).insert(row)
+      return id
+    }
+    return await this.inSavepoint(trx, async db => {
+      const [r] = await db(table).insert(row).returning(idColumn)
+      return r[idColumn]
+    })
+  }
+
+  /**
+   * The findOrInsert helpers catch a failed insert and find the row again in
+   * the same transaction. MySQL and SQLite allow that. Postgres aborts the
+   * whole transaction on any statement error, so there the insert runs in a
+   * savepoint that is rolled back on its own.
+   */
+  private async inSavepoint<R>(trx: TrxToken | undefined, run: (db: Knex) => Promise<R>): Promise<R> {
+    if (trx == null || this.dbtype !== 'Postgres') return await run(this.toDb(trx))
+    return await (trx as Knex.Transaction).transaction(async savepoint => await run(savepoint))
+  }
+
   override async insertProvenTx(tx: TableProvenTx, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxId === 0) delete e.provenTxId
-    const [id] = await this.toDb(trx)<TableProvenTx>('proven_txs').insert(e)
+    const id = await this.insertReturningId('proven_txs', 'provenTxId', e, trx)
     tx.provenTxId = id
     return tx.provenTxId
   }
@@ -673,7 +724,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertActionBatch(batch: TableActionBatch, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(batch, trx, ['expiresAt', 'hardExpiresAt'])
     if (e.actionBatchId === 0) delete e.actionBatchId
-    const [id] = await this.toDb(trx)<TableActionBatch>('action_batches').insert(e)
+    const id = await this.insertReturningId('action_batches', 'actionBatchId', e, trx)
     batch.actionBatchId = id
     return id
   }
@@ -824,7 +875,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTxReq(tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
-    const [id] = await this.toDb(trx)<TableProvenTxReq>('proven_tx_reqs').insert(e)
+    const id = await this.insertReturningId('proven_tx_reqs', 'provenTxReqId', e, trx)
     tx.provenTxReqId = id
     return tx.provenTxReqId
   }
@@ -832,7 +883,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertUser(user: TableUser, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(user, trx)
     if (e.userId === 0) delete e.userId
-    const [id] = await this.toDb(trx)<TableUser>('users').insert(e)
+    const id = await this.insertReturningId('users', 'userId', e, trx)
     user.userId = id
     return user.userId
   }
@@ -856,7 +907,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const fields = e.fields
     if (e.fields != null) delete e.fields
 
-    const [id] = await this.toDb(trx)<TableCertificate>('certificates').insert(e)
+    const id = await this.insertReturningId('certificates', 'certificateId', e, trx)
     certificate.certificateId = id
 
     if (fields != null) {
@@ -878,7 +929,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutputBasket(basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(basket, trx, undefined, ['isDeleted'])
     if (e.basketId === 0) delete e.basketId
-    const [id] = await this.toDb(trx)<TableOutputBasket>('output_baskets').insert(e)
+    const id = await this.insertReturningId('output_baskets', 'basketId', e, trx)
     basket.basketId = id
     return basket.basketId
   }
@@ -886,7 +937,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.transactionId === 0) delete e.transactionId
-    const [id] = await this.toDb(trx)<TableTransaction>('transactions').insert(e)
+    const id = await this.insertReturningId('transactions', 'transactionId', e, trx)
     tx.transactionId = id
     return tx.transactionId
   }
@@ -894,7 +945,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertCommission(commission: TableCommission, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(commission, trx)
     if (e.commissionId === 0) delete e.commissionId
-    const [id] = await this.toDb(trx)<TableCommission>('commissions').insert(e)
+    const id = await this.insertReturningId('commissions', 'commissionId', e, trx)
     commission.commissionId = id
     return commission.commissionId
   }
@@ -902,7 +953,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutput(output: TableOutput, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(output, trx)
     if (e.outputId === 0) delete e.outputId
-    const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
+    const id = await this.insertReturningId('outputs', 'outputId', e, trx)
     output.outputId = id
     return output.outputId
   }
@@ -924,33 +975,33 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutputTag(tag: TableOutputTag, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tag, trx, undefined, ['isDeleted'])
     if (e.outputTagId === 0) delete e.outputTagId
-    const [id] = await this.toDb(trx)<TableOutputTag>('output_tags').insert(e)
+    const id = await this.insertReturningId('output_tags', 'outputTagId', e, trx)
     tag.outputTagId = id
     return tag.outputTagId
   }
 
   override async insertOutputTagMap(tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(tagMap, trx, undefined, ['isDeleted'])
-    await this.toDb(trx)<TableOutputTagMap>('output_tags_map').insert(e)
+    await this.inSavepoint(trx, async db => await db<TableOutputTagMap>('output_tags_map').insert(e))
   }
 
   override async insertTxLabel(label: TableTxLabel, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(label, trx, undefined, ['isDeleted'])
     if (e.txLabelId === 0) delete e.txLabelId
-    const [id] = await this.toDb(trx)<TableTxLabel>('tx_labels').insert(e)
+    const id = await this.insertReturningId('tx_labels', 'txLabelId', e, trx)
     label.txLabelId = id
     return label.txLabelId
   }
 
   override async insertTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
-    await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
+    await this.inSavepoint(trx, async db => await db<TableTxLabelMap>('tx_labels_map').insert(e))
   }
 
   override async insertMonitorEvent(event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(event, trx)
     if (e.id === 0) delete e.id
-    const [id] = await this.toDb(trx)<TableMonitorEvent>('monitor_events').insert(e)
+    const id = await this.insertReturningId('monitor_events', 'id', e, trx)
     event.id = id
     return event.id
   }
@@ -958,7 +1009,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertSyncState(syncState: TableSyncState, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(syncState, trx, ['when'], ['init'])
     if (e.syncStateId === 0) delete e.syncStateId
-    const [id] = await this.toDb(trx)<TableSyncState>('sync_states').insert(e)
+    const id = await this.insertReturningId('sync_states', 'syncStateId', e, trx)
     syncState.syncStateId = id
     return syncState.syncStateId
   }
@@ -1173,6 +1224,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       }
     }
     if (args.paged != null) {
+      if (args.orderDescending !== true) void q.orderBy(pagingOrder(table))
       void q.limit(args.paged.limit)
       void q.offset(args.paged.offset ?? 0)
     }
@@ -1460,10 +1512,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     const q = this.findSyncStatesQuery(args)
-    // Serialize sync checkpoint reads with the page transaction on MySQL too.
+    // Serialize sync checkpoint reads with the page transaction on MySQL and Postgres too.
     if (
       args.trx != null &&
-      this.dbtype === 'MySQL' &&
+      (this.dbtype === 'MySQL' || this.dbtype === 'Postgres') &&
       args.partial.userId != null &&
       (args.partial.syncStateId != null || args.partial.storageIdentityKey != null)
     )
@@ -1525,9 +1577,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   async getCount<T extends object>(q: Knex.QueryBuilder<T, T[]>): Promise<number> {
-    void q.count()
+    // Alias the count: the default result key differs by dialect, and Postgres
+    // returns count(*) as a bigint string.
+    // A paged find query orders its rows; an aggregate cannot keep that order on Postgres.
+    void q.clearOrder().count({ count: '*' })
     const r = await q
-    return r[0]['count(*)']
+    return Number(r[0].count)
   }
 
   override async countCertificateFields(args: FindCertificateFieldsArgs): Promise<number> {
@@ -1868,7 +1923,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         void this.select(1)
           .from('action_batch_outputs as abo')
           .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
-          .whereRaw('abo.outputId = o.outputId')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+          .whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           .whereIn('ab.status', ['active', 'prepared'])
           .where('ab.expiresAt', '>', now)
           .where('ab.hardExpiresAt', '>', now)
@@ -1907,7 +1963,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         void this.select(1)
           .from('action_batch_outputs as abo')
           .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
-          .whereRaw('abo.outputId = o.outputId')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+          .whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           .whereIn('ab.status', ['active', 'prepared'])
           .where('ab.expiresAt', '>', now)
           .where('ab.hardExpiresAt', '>', now)
@@ -1946,7 +2003,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         void this.select(1)
           .from('action_batch_outputs as abo')
           .join('action_batches as ab', 'abo.actionBatchId', 'ab.actionBatchId')
-          .whereRaw('abo.outputId = o.outputId')
+          // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+          .whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           .whereIn('ab.status', ['active', 'prepared'])
           .where('ab.expiresAt', '>', now)
           .where('ab.hardExpiresAt', '>', now)
@@ -2172,6 +2230,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
 
+    let reservedConcurrently = false
     const r: TableOutput | undefined = await this.knex.transaction(async trx => {
       const baseQuery = (): Knex.QueryBuilder<TableOutput, TableOutput[]> =>
         trx<TableOutput>('outputs as o')
@@ -2191,7 +2250,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .whereNot('o.derivationSuffix', '')
           .whereNull('o.spentBy')
           .whereNotExists(function () {
-            void this.select(1).from('action_batch_outputs as abo').whereRaw('abo.outputId = o.outputId')
+            // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+            void this.select(1).from('action_batch_outputs as abo').whereRaw('?? = ??', ['abo.outputId', 'o.outputId'])
           })
           .whereIn('t.status', status)
           .select('o.*')
@@ -2217,6 +2277,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
       if (output == null) return undefined
 
+      // Under Postgres READ COMMITTED the NOT EXISTS above uses the statement's
+      // snapshot, so an action batch reservation committed while the statement
+      // waited for the row lock is not visible to it. Retry in a new transaction.
+      if (
+        this.dbtype === 'Postgres' &&
+        (await this.findReservedActionBatchOutputIds([output.outputId], trx)).length > 0
+      ) {
+        reservedConcurrently = true
+        return undefined
+      }
+
       await this.updateOutput(
         output.outputId,
         {
@@ -2235,6 +2306,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       return output
     })
 
+    if (reservedConcurrently)
+      return await this.allocateChangeInput(
+        userId,
+        basketId,
+        targetSatoshis,
+        exactSatoshis,
+        excludeSending,
+        transactionId
+      )
     return r
   }
 
@@ -2536,5 +2616,71 @@ select
       tagsTotal
     }
     return r
+  }
+}
+
+/**
+ * Key columns that give paged queries a deterministic row order. Without an
+ * ORDER BY, Postgres may return the rows of consecutive LIMIT/OFFSET pages in
+ * different orders, so sync chunks could repeat some rows and skip others.
+ */
+function pagingOrder(table: string): string[] {
+  return pagingKey(table).map(column => `${table}.${column}`)
+}
+
+function pagingKey(table: string): string[] {
+  switch (table) {
+    case 'certificate_fields':
+      return ['certificateId', 'fieldName']
+    case 'certificates':
+      return ['certificateId']
+    case 'commissions':
+      return ['commissionId']
+    case 'monitor_events':
+      return ['id']
+    case 'output_baskets':
+      return ['basketId']
+    case 'output_tags':
+      return ['outputTagId']
+    case 'output_tags_map':
+      return ['outputTagId', 'outputId']
+    case 'outputs':
+      return ['outputId']
+    case 'proven_tx_reqs':
+      return ['provenTxReqId']
+    case 'proven_txs':
+      return ['provenTxId']
+    case 'sync_states':
+      return ['syncStateId']
+    case 'transactions':
+      return ['transactionId']
+    case 'tx_labels':
+      return ['txLabelId']
+    case 'tx_labels_map':
+      return ['txLabelId', 'transactionId']
+    case 'users':
+      return ['userId']
+    default:
+      return []
+  }
+}
+
+const pgInt8Parsed = Symbol('pgInt8Parsed')
+
+/**
+ * node-postgres returns int8 values (bigint columns such as satoshis, `count(*)`)
+ * as strings. Set a parser on each connection this knex acquires so they come
+ * back as numbers, as with mysql2 and better-sqlite3. The process-wide `pg.types`
+ * defaults are left unchanged.
+ */
+function parsePostgresInt8AsNumber(knex: Knex): void {
+  const client = knex.client as (Knex.Client & { [pgInt8Parsed]?: true }) | undefined
+  if (client?.dialect !== 'postgresql' || client[pgInt8Parsed] === true) return
+  client[pgInt8Parsed] = true
+  const acquireConnection = client.acquireConnection.bind(client)
+  client.acquireConnection = async () => {
+    const connection = await acquireConnection()
+    connection.setTypeParser(20, (value: string) => Number.parseInt(value, 10))
+    return connection
   }
 }
