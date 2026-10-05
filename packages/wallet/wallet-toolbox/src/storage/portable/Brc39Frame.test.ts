@@ -291,3 +291,80 @@ test.each(['bytes', 'buffer', 'buffer-view'] as const)(
     }
   }
 )
+
+test.each([1, 32, 255])('the exact minimum complete envelope is admitted with %i-byte salt and nonce', length => {
+  const bytes = file(Buffer.from([73]), length, length)
+  const frame = new Brc39StreamFrame({ ...policy, maximumFileBytes: bytes.length, maximumChunkBytes: 1 })
+  const output: Uint8Array[] = []
+  expect(frame.accept(new Uint8Array())).toEqual([])
+  for (const byte of bytes) output.push(...frame.accept(Uint8Array.of(byte)))
+  expect(frame.accept(new Uint8Array())).toEqual([])
+  expect(frame.header()?.salt).toEqual(new Uint8Array(length).fill(42))
+  expect(frame.header()?.nonce).toEqual(new Uint8Array(length).fill(42))
+  expect(Buffer.concat(output)).toEqual(Buffer.from([73]))
+  expect(frame.finish()).toEqual({
+    tag: new Uint8Array(16).fill(99),
+    fileBytes: 33 + length * 2 + 1 + 16,
+    ciphertextBytes: 1
+  })
+  expect(() => frame.accept(new Uint8Array())).toThrow(/closed/)
+  expect(() => frame.finish()).toThrow(/closed/)
+  const insufficient = new Brc39StreamFrame({ ...policy, maximumFileBytes: bytes.length - 1 })
+  expect(() => insufficient.accept(bytes.subarray(0, 33))).toThrow(SnapshotResourceLimitError)
+  expect(() => insufficient.header()).toThrow(/closed/)
+})
+
+test('a complete prefix and trailing tag require at least one ciphertext byte', () => {
+  const bytes = file(Buffer.alloc(0))
+  const frame = new Brc39StreamFrame({ ...policy, maximumFileBytes: bytes.length + 1 })
+  expect(frame.accept(bytes)).toEqual([])
+  expect(frame.header()).toBeDefined()
+  expect(() => frame.finish()).toThrow(/Truncated or empty/)
+  expect(() => frame.accept(Uint8Array.of(1))).toThrow(/closed/)
+  expect(() => frame.header()).toThrow(/closed/)
+})
+
+test('import rejects a key length one byte below the fixed 32-byte contract', () => {
+  const bytes = file()
+  bytes[20] = 31
+  const frame = new Brc39StreamFrame(policy)
+  expect(() => frame.accept(bytes.subarray(0, 33))).toThrow(/key length/)
+  expect(() => frame.finish()).toThrow(/closed/)
+})
+
+test.each([65536, 65537])('the actual %i-byte input obeys the 64 KiB chunk ceiling', length => {
+  const ciphertext = Buffer.alloc(length - 97 - 16, 73)
+  const bytes = file(ciphertext)
+  expect(bytes).toHaveLength(length)
+  const frame = new Brc39StreamFrame({ ...policy, maximumFileBytes: bytes.length })
+  if (length > 65536) {
+    expect(() => frame.accept(bytes)).toThrow(SnapshotResourceLimitError)
+    expect(() => frame.header()).toThrow(/closed/)
+    expect(() => frame.accept(bytes.subarray(0, 1))).toThrow(/closed/)
+  } else {
+    const output = frame.accept(bytes)
+    expect(Buffer.concat(output)).toEqual(ciphertext)
+    expect(output.every(chunk => chunk.length <= 65536)).toBe(true)
+    expect(frame.finish()).toEqual({
+      tag: new Uint8Array(16).fill(99),
+      fileBytes: bytes.length,
+      ciphertextBytes: ciphertext.length
+    })
+  }
+})
+
+test('the accumulated file ceiling admits its last byte and closes on the next nonempty chunk', () => {
+  const bytes = file(Buffer.from('independent accumulated-file oracle'))
+  const frame = new Brc39StreamFrame({ ...policy, maximumFileBytes: bytes.length, maximumChunkBytes: 97 })
+  const output = [...frame.accept(bytes.subarray(0, 97))]
+  expect(frame.accept(new Uint8Array())).toEqual([])
+  output.push(...frame.accept(bytes.subarray(97, bytes.length - 1)))
+  expect(frame.accept(new Uint8Array())).toEqual([])
+  output.push(...frame.accept(bytes.subarray(bytes.length - 1)))
+  expect(Buffer.concat(output)).toEqual(Buffer.from('independent accumulated-file oracle'))
+  expect(frame.accept(new Uint8Array())).toEqual([])
+  expect(() => frame.accept(Uint8Array.of(0))).toThrow(SnapshotResourceLimitError)
+  expect(() => frame.accept(new Uint8Array())).toThrow(/closed/)
+  expect(() => frame.header()).toThrow(/closed/)
+  expect(() => frame.finish()).toThrow(/closed/)
+})
