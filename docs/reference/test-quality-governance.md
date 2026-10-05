@@ -2,9 +2,9 @@
 id: test-quality-governance
 title: 'Test Quality and Skip Governance'
 kind: reference
-version: '1.1.0'
-last_updated: '2026-07-26'
-last_verified: '2026-08-26'
+version: '1.1.1'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, testing]
@@ -70,8 +70,8 @@ pnpm --filter @bsv/sdk test:resource
 
 ## Property-based security tests
 
-Required CI uses `fast-check` to generate and shrink unexpected inputs across
-25 packages and the stack's highest-risk trust boundaries:
+Required CI uses `fast-check` to generate and shrink unexpected inputs at the
+registered packages' highest-risk trust boundaries:
 
 - binary and text codecs: SDK Base58Check, DID base64url/multibase/SD-JWT,
   Bitcoin script numbers, asset outpoints, wallet action packs, and native BDK
@@ -102,8 +102,8 @@ Every property suite and package declaration is registered under
 `propertyTesting` in the policy. The governance check rejects a removed suite,
 an unregistered `*.property.test.ts`, a missing package command, an undeclared
 library/version, a missing trust-boundary/invariant description, or a run budget
-below 300 generated cases. It also inventories all 33 package manifests: each
-must either own a registered property suite or have a dated, owned exclusion
+below 300 generated cases. It also inventories all package manifests discovered
+under `packages/`: each must either own a registered property suite or have a dated, owned exclusion
 that explains why the package is only an adapter, composition layer, example,
 or platform harness. This prevents both silent coverage gaps and low-value
 properties added solely to increase a package count.
