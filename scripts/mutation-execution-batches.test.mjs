@@ -1,16 +1,18 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import { mutationExecutionMatrix, selectedMutationPartition } from './mutation-partitions.mjs'
 import {
+  mutationBuildIdentity,
   mutationExecutionBatches,
   mutationExecutionDigest,
   verifyMutationExecutionBatches,
-  verifyMutationExecutionIdentity
+  verifyMutationExecutionIdentity,
+  verifySelectedExecution
 } from './mutation-execution-batches.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
@@ -19,6 +21,112 @@ const matrixFor = count => ({
     target: `fixture-${index}`,
     partition: 'whole'
   }))
+})
+
+test('actual build capture and execution bind runtime while accepting original six-field callers', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'mutation-build-runtime-'))
+  const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
+  const identityInputs = [
+    'governance/mutation-testing/targets.mjs',
+    'governance/mutation-testing/policy.json',
+    'governance/mutation-testing/stryker.config.mjs',
+    'scripts/mutation-testing.mjs',
+    'scripts/mutation-final-qualification.mjs',
+    'scripts/mutation-partitions.mjs',
+    'scripts/mutation-partition-evidence.mjs',
+    'scripts/mutation-execution-batches.mjs',
+    '.github/workflows/mutation-execution.yml',
+    '.github/workflows/mutation-tests.yml',
+    'package.json',
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    'tsconfig.base.json'
+  ]
+  try {
+    const sources = execFileSync('/usr/bin/git', ['ls-files', '-z', 'packages'], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8'
+    })
+      .split('\0')
+      .filter(file => file.endsWith('.ts'))
+    for (const file of [...identityInputs, ...sources]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true })
+      copyFileSync(join(REPOSITORY_ROOT, file), join(root, file))
+    }
+    git(['init', '--quiet'])
+    git(['add', '.'])
+    git([
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-m',
+      'Fixture'
+    ])
+    const environment = {
+      GITHUB_SHA: git(['rev-parse', 'HEAD']).trim(),
+      GITHUB_RUN_ID: '100',
+      GITHUB_RUN_ATTEMPT: '2',
+      BUILD_ARTIFACT_ID: '300',
+      BUILD_ARTIFACT_NAME: 'mutation-build-outputs-100-2'
+    }
+    mkdirSync(join(root, '.ci-artifacts'))
+    for (const file of ['build-outputs.tar.gz', '.ci-artifacts/build-outputs.tar.gz'])
+      writeFileSync(join(root, file), 'Identical fixture archive; never extracted')
+    const identity = await mutationBuildIdentity(root, environment)
+    assert.equal(identity.nodeVersion, process.version)
+    assert.equal(Object.keys(identity).length, 7)
+    const matrix = mutationExecutionMatrix(['sdk-paid-lookup-funding'], buildMutationTargets(root))
+    const verify = value =>
+      verifySelectedExecution(root, {
+        ...environment,
+        EXECUTION_IDENTITY: JSON.stringify(value),
+        SELECTED_TARGETS: JSON.stringify(['sdk-paid-lookup-funding']),
+        MUTATION_MATRIX_DIGEST: mutationExecutionDigest(matrix),
+        EXECUTION_BATCH: '1',
+        EXECUTION_MATRIX: JSON.stringify(matrix)
+      })
+    await verify(identity)
+    const legacy = { ...identity }
+    delete legacy.nodeVersion
+    await verify(legacy)
+    const otherRuntime = process.version === 'v24.18.0' ? 'v24.19.0' : 'v24.18.0'
+    await assert.rejects(
+      verify({ ...identity, nodeVersion: otherRuntime }),
+      /Stale execution runtime/
+    )
+    for (const version of [
+      '',
+      'latest',
+      '24.19.0',
+      'v24.19',
+      'v024.19.0',
+      'v24.019.0',
+      'v24.19.0-extra',
+      null
+    ])
+      await assert.rejects(
+        verify({ ...identity, nodeVersion: version }),
+        /Invalid build identity runtime/
+      )
+    for (const value of [
+      { ...identity, unexpected: true },
+      { ...legacy, unexpected: true }
+    ])
+      await assert.rejects(verify(value), /Unexpected build identity fields/)
+    for (const field of [
+      'sourceSha',
+      'runId',
+      'runAttempt',
+      'archiveDigest',
+      'artifactId',
+      'artifactName'
+    ])
+      await assert.rejects(verify({ ...identity, [field]: 'different' }))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('ordered execution batches preserve zero, boundary and multiple complete inventories', () => {
@@ -303,8 +411,14 @@ test('both callers dispatch serial immutable batches and the reusable executor r
   )
   assert.match(executor, /ref: \$\{\{ fromJSON\(inputs\.identity\)\.sourceSha \}\}/)
   assert.match(executor, /persist-credentials: false/)
-  assert.match(executor, /node-version: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \}\}/)
-  assert.match(executor, /NODE_VERSION: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \}\}/)
+  assert.match(
+    executor,
+    /node-version: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.18\.0' \}\}/
+  )
+  assert.match(
+    executor,
+    /NODE_VERSION: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.18\.0' \}\}/
+  )
   assert.match(executor, /pnpm install --frozen-lockfile --ignore-scripts/)
   assert.match(executor, /artifact-ids: \$\{\{ fromJSON\(inputs\.identity\)\.artifactId \}\}/)
   assert.ok(executor.indexOf('verify-execution') < executor.indexOf('tar --extract'))

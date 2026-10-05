@@ -412,11 +412,17 @@ test('mutation execution retains the exact caller runtime and ordinary CI baseli
   assert.deepEqual(fullRuntimes, ['24.19.0', '24.19.0', '24.19.0'])
   const executor = await mutationExecutor(full)
   const setup = executor.steps.find(step => step.uses?.startsWith('actions/setup-node@'))
-  assert.equal(setup.with['node-version'], '${{ fromJSON(inputs.identity).nodeVersion }}')
+  assert.equal(
+    setup.with['node-version'],
+    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}"
+  )
   const profile = executor.steps.find(
     step => step.name === 'Require the original caller evidence profile'
   )
-  assert.equal(profile.env.NODE_VERSION, '${{ fromJSON(inputs.identity).nodeVersion }}')
+  assert.equal(
+    profile.env.NODE_VERSION,
+    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}"
+  )
   const source = 'a'.repeat(40)
   for (const version of [
     'v24.18.0',
@@ -459,6 +465,6 @@ test('mutation execution retains the exact caller runtime and ordinary CI baseli
     ciExecutor.steps.find(step => step.uses?.startsWith('actions/setup-node@')).with[
       'node-version'
     ],
-    '${{ fromJSON(inputs.identity).nodeVersion }}'
+    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}"
   )
 })

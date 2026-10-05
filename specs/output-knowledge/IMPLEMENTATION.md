@@ -5181,8 +5181,12 @@ final verification. Its [official release notes](https://nodejs.org/en/blog/rele
 include supported SQLite lifecycle corrections. This patch validation is not a
 claim that a particular upstream correction caused or fixes the observed worker
 failures. The shared executor selects the exact Node version from its original
-caller's immutable identity and refuses absent or noncanonical version values
-before setup. Ordinary CI continues using its original Node 24.18.0 identity.
+caller's immutable identity. Preflight validates the selected runtime; the
+closed identity decoder rejects any malformed declared version before archive
+extraction. Original six-field identities retain their exact Node 24.18.0 selection;
+new build identities add the canonical captured runtime, independently verified
+against the actual executing process before archive extraction. Ordinary CI
+continues using its original Node 24.18.0 build runtime.
 Release, service, package and public runtime contracts are unchanged.
 
 One additive installed workflow control checks full-stage runtime agreement,
@@ -5192,3 +5196,13 @@ property cases/seed/replay, deadlines, workers, score and zero-invalid requireme
 remain unchanged. A fresh complete same-source, same-run, same-attempt campaign
 and independent final raw-report reconciliation remain required. Old or peer
 receipts cannot qualify the new source; checkpoint two remains open.
+
+Published source 7da41722 exposed a producer/consumer startup mismatch in full
+campaign 37277512489/attempt1: the executor expected a runtime field omitted by
+the actual six-field build-identity producer. The campaign failed preflight and
+was cancelled before mutation execution; it provides no qualification or native
+fault evidence. The additive runtime capture and exact six-or-seven-field
+decoder correct that interface. A regression now invokes the actual producer
+and consumer with a clean Git fixture, checks recorded runtime and legacy
+acceptance, and rejects mismatched runtime, malformed versions, extra fields
+and altered original identity fields. Every original control remains intact.

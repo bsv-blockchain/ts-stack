@@ -107,11 +107,27 @@ async function archiveDigest(file) {
 }
 
 function checkedBuildIdentity(value) {
+  const versioned =
+    value !== null && typeof value === 'object' && Object.hasOwn(value, 'nodeVersion')
   closed(
     value,
-    ['sourceSha', 'runId', 'runAttempt', 'archiveDigest', 'artifactId', 'artifactName'],
+    [
+      'sourceSha',
+      'runId',
+      'runAttempt',
+      'archiveDigest',
+      'artifactId',
+      'artifactName',
+      ...(versioned ? ['nodeVersion'] : [])
+    ],
     'build identity'
   )
+  if (
+    versioned &&
+    (typeof value.nodeVersion !== 'string' ||
+      !/^v[1-9][0-9]*\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(value.nodeVersion))
+  )
+    throw new Error('Invalid build identity runtime')
   for (const field of ['runId', 'runAttempt', 'artifactId'])
     if (typeof value[field] !== 'string' || !/^[1-9]\d*$/.test(value[field]))
       throw new Error('Invalid build identity number')
@@ -140,7 +156,8 @@ export async function mutationBuildIdentity(root, environment) {
     runAttempt: identity.runAttempt,
     archiveDigest: await archiveDigest(resolve(root, 'build-outputs.tar.gz')),
     artifactId: environment.BUILD_ARTIFACT_ID,
-    artifactName: environment.BUILD_ARTIFACT_NAME
+    artifactName: environment.BUILD_ARTIFACT_NAME,
+    nodeVersion: identity.nodeVersion
   })
 }
 
@@ -160,6 +177,11 @@ export async function verifySelectedExecution(root, environment) {
   const selected = selectedTargets(JSON.parse(environment.SELECTED_TARGETS), targets)
   const executionMatrix = mutationExecutionMatrix(selected, targets)
   const identity = qualificationIdentity(root, environment, targets)
+  if (
+    Object.hasOwn(requestIdentity, 'nodeVersion') &&
+    requestIdentity.nodeVersion !== identity.nodeVersion
+  )
+    throw new Error('Stale execution runtime')
   const actual = {
     sourceSha: identity.sourceSha,
     runId: identity.runId,
