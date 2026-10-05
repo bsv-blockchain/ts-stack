@@ -1,5 +1,5 @@
 import { afterEach, expect, it, jest } from '@jest/globals'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { join } from 'node:path'
 import { OutputProtocolError } from '@bsv/sdk'
 import { SQLiteProposalJournal } from '../src/proposals/SQLiteProposalJournal.js'
@@ -413,4 +413,47 @@ it('owns the input bytes before invoking caller code and emits deliberate protoc
   )
   await f.store.close()
   await rejected(f.store.head(), 'unavailable')
+})
+
+it.each(['', ' ', '\n\t'])(
+  'rejects missing statement text before calling the native driver (%j)',
+  async sql => {
+    const f = await fixture()
+    // Keep malformed input entirely in JavaScript, including when the guard is mutated.
+    const driverRefusal = new Error('Unexpected native preparation')
+    const driver = jest.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(() => {
+      throw driverRefusal
+    })
+    try {
+      const owner = f.store as unknown as { prepare: (sql: string) => StatementSync }
+      expect(() => owner.prepare(sql)).toThrow(
+        expect.objectContaining({
+          code: 'unavailable',
+          message: 'Proposal journal statement is empty'
+        })
+      )
+      expect(driver).not.toHaveBeenCalled()
+    } finally {
+      driver.mockRestore()
+    }
+    expect(await f.store.head()).toMatchObject({ revision: '1', entries: 1 })
+  }
+)
+
+it('preserves valid statement text, native binding and preparation errors', async () => {
+  const f = await fixture()
+  const owner = f.store as unknown as { prepare: (sql: string) => StatementSync }
+  const sql = ' SELECT ? AS value '
+  expect(owner.prepare(sql).get('original binding')).toEqual({ value: 'original binding' })
+  const refusal = new Error('Installed driver refused preparation')
+  const driver = jest.spyOn(DatabaseSync.prototype, 'prepare').mockImplementationOnce(() => {
+    throw refusal
+  })
+  try {
+    expect(() => owner.prepare(sql)).toThrow(refusal)
+    expect(driver).toHaveBeenCalledWith(sql)
+  } finally {
+    driver.mockRestore()
+  }
+  expect(await f.store.head()).toMatchObject({ revision: '1', entries: 1 })
 })

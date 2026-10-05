@@ -5206,3 +5206,21 @@ decoder correct that interface. A regression now invokes the actual producer
 and consumer with a clean Git fixture, checks recorded runtime and legacy
 acceptance, and rejects mismatched runtime, malformed versions, extra fields
 and altered original identity fields. Every original control remains intact.
+
+## Native statement preparation qualification follow-up
+
+The final proposal-journal campaign reported native test-runner exits during
+statement preparation rather than assertion failures. The journal now requires
+nonempty statement text before invoking the native driver. This is an internal
+preparation invariant; all installed SQL, parameter bindings, public interfaces,
+persisted formats and original driver errors remain unchanged.
+
+Deterministic regressions exercise missing text through a JavaScript driver stub,
+verify that native preparation is never reached, and retain valid native binding,
+driver-error identity and subsequent journal recovery. The original governed
+mutation scope, operators, workers, property budget, seed, timeouts and quality
+limits remain unchanged. The focused integrity suite passes all 28 cases; full
+exact-source qualification remains required before checkpoint readiness.
+The complete original proposal profile also passes all 243 cases in 13 suites,
+including its original 300-case property campaign and seed. Root health, lint,
+format, strict types and the unexcluded security audit pass.
