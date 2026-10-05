@@ -426,12 +426,26 @@ response must contain the exact declared Atomic BEEF target and output zero must
 commit to the supplied nonzero R-puzzle scalar. The manager signs that outpoint
 at its actual wallet input index and sends the fee-adjusted balance only to an
 explicit BRC-29 output derived for the authenticated wallet. That output's exact
-script and bounded amount are authorized before signing; an unrequested wallet
-output cannot consume the faucet input. The signed action is staged locally,
-labeled, and recorded in a recovery basket before broadcast. A retry recovers
-and internalizes that exact transaction, or recognizes its already-internalized
-managed output, instead of authorizing a second destination. Missing, reordered,
-substituted, ambiguous, or result-only transactions fail closed.
+script and bounded amount are authorized before signing. With a compatible SDK,
+its local signer also authorizes independently validated storage commission and
+locally derived change, bound to exact output indices, scripts and amounts. The
+permissions wrapper preserves this private decision; serialized results or
+unknown wallet adapters do not gain this authority. Other unrequested outputs
+cannot consume the faucet input.
+
+Upgrade wallet-toolbox to 2.14.6 and the SDK to a release exposing
+`completeBoundAction.outputAuthorizationVersion=1` together. Older SDK peers retain
+the existing strict behavior and cannot redeem a fee-bearing faucet input for an
+empty wallet. Main currently carries the separate SDK3.1 candidate; SDK2 hosts
+need an additive backport or the documented SDK3 migration.
+
+The signed action is staged locally, labeled, and recorded in a recovery basket
+before broadcast. This fee fix does not change signup persistence or retry
+recovery. Internalization clears the output's custom instructions, and standard
+`listActions` does not return them; a later retry can therefore require manual
+reconciliation. Preserve the existing wallet and reconcile its faucet action
+before restarting a failed signup. Missing, substituted, ambiguous, or
+result-only recovery evidence fails closed.
 
 New WAB registrations are interruption-safe across the off-chain/on-chain
 boundary. A WAB that advertises `registrationStatus: "pending"` lets a verified

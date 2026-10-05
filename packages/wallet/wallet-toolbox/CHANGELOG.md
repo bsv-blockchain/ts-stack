@@ -20,6 +20,13 @@ attention to changes that materially alter behavior or extend functionality.
   UMP history decider and engine retention fix with this client patch; missing
   pin ancestry remains indeterminate rather than selecting an unrelated continuation.
 
+- WAB faucet redemption accepts the local signer's independently validated
+  service charge and derived change, with exact SDK transaction binding. Empty
+  wallets no longer reject legitimate fee outputs financed by the faucet input.
+  Upgrade the SDK alongside the toolbox to enable the new capability. Older SDK
+  peers retain strict behavior; serialization discards local output authority.
+  Signup interruption/retry persistence remains unchanged.
+
 ## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference

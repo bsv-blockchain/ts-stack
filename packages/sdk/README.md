@@ -533,3 +533,30 @@ These controls authenticate peers and protect message integrity and freshness;
 they do not encrypt the transport. Applications must use a confidential
 transport such as correctly verified TLS and must separately authorize the
 authenticated identity for every protected operation.
+
+## Locally authorized outputs in completed actions
+
+`completeBoundAction` continues to reject an unrequested output funded by a
+caller-supplied input by default. A caller may install
+`authorizeAdditionalOutputs(result)` to return independently approved outputs,
+each bound to an exact `outputIndex`, `lockingScript`, and `satoshis`. This is a
+local policy decision: do not approve outputs merely because an untrusted wallet
+labels them as change or a fee. Input-value conservation, requested-output
+binding, input signing, and signed-template verification still apply.
+
+For example, a local signer can retain its independently verified storage-policy
+decision in a private `WeakMap` keyed by the exact `createAction` result:
+
+```ts
+await completeBoundAction(wallet, args, {
+  inputSigners,
+  authorizeAdditionalOutputs: result => verifiedLocalOutputs.get(result) ?? []
+})
+```
+
+The new `BOUND_ACTION_OUTPUT_AUTHORIZATION_VERSION` export is `1`. The existing function also exposes `completeBoundAction.outputAuthorizationVersion=1`.
+Consumers supporting older SDK peers should detect that function property before supplying the new
+option; older SDKs retain their existing strict behavior. This additive API is
+included in the SDK 3.1 source candidate. The separate SDK3 identity migration
+still applies; SDK2 applications need an additive backport or a coordinated SDK3
+upgrade. No BRC-100 wire or wallet-data changes are introduced by this option.

@@ -206,3 +206,13 @@ reference, reclaim, commission, and relation lookups avoid repeated full-wallet
 scans during restores. Legacy duplicate transaction IDs remain intact. Clients
 that request an older IndexedDB schema version cannot reopen this database;
 retain a compatible client when using the local backup.
+
+## WAB faucet fee compatibility
+
+Version 2.14.6 carries the local signer's independently validated fee/change
+outputs through the permissions manager to SDK completed-action binding. Upgrade
+with an SDK exposing `completeBoundAction.outputAuthorizationVersion=1`; older SDK
+peers preserve their strict behavior and do not receive the fee-bearing faucet
+fix. Use wallet and authentication manager from the same package instance.
+Serialized results discard local authorization. See the full toolbox README for
+SDK3 migration and the unchanged signup retry/reconciliation limitations.
