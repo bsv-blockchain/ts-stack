@@ -218,7 +218,7 @@ custody, with controlled domain/admission fixtures. They establish transport,
 recipient checks, staged responses and revoked physical disclosure, not chain
 truth. The native licensed-purchase composition below separately exercises the
 actual domain, wallet, admission and playback path. The
-[checkpoint inventory](../../specs/output-knowledge/CHECKPOINT2.md) links the
+[checkpoint inventory](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/CHECKPOINT2.md) links the
 complete reference workflows; the checkpoint still requires final qualification
 of the published source.
 
