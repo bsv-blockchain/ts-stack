@@ -13,6 +13,7 @@ import {
 import { PrivilegedKeyManager } from '../sdk'
 import {
   CWIStyleWalletManager,
+  DEFAULT_PROFILE_ID,
   PBKDF2_NUM_ROUNDS,
   UMPToken,
   UMPTokenInteractor,
@@ -454,6 +455,37 @@ describe('CWIStyleWalletManager Tests', () => {
   })
 
   describe('Profile management', () => {
+    test('overlapping addProfile calls keep both profiles', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      // Each addProfile runs synchronously up to its first getFactor, so call 1
+      // is A's and call 2 is B's; B is held until A has published.
+      let releaseB!: () => void
+      const bHeld = new Promise<void>(resolve => {
+        releaseB = resolve
+      })
+      const getFactorSpy = jest
+        .spyOn(manager as any, 'getFactor')
+        .mockImplementationOnce(async () => Random(32))
+        .mockImplementationOnce(async () => {
+          await bHeld
+          return Random(32)
+        })
+        .mockImplementation(async () => Random(32))
+      const updateSpy = jest.spyOn(manager as any, 'updateFactors')
+      const addA = manager.addProfile('A')
+      const addB = manager.addProfile('B')
+      await addA
+      releaseB()
+      await addB
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'A', 'B'])
+      const lastPublished = updateSpy.mock.calls[updateSpy.mock.calls.length - 1][6] as Array<{ name: string }>
+      expect(lastPublished.map(p => p.name)).toEqual(['A', 'B'])
+      updateSpy.mockRestore()
+      getFactorSpy.mockRestore()
+    })
+
     test('addProfile adds a new profile and updates the UMP token', async () => {
       ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
@@ -480,6 +512,78 @@ describe('CWIStyleWalletManager Tests', () => {
 
       expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
 
+      getFactorSpy.mockRestore()
+    })
+
+    test('addProfile leaves the profile list unchanged when the UMP token update fails', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const getFactorSpy = jest
+        .spyOn(manager as any, 'getFactor')
+        .mockRejectedValueOnce(new Error('Failed to decrypt factor passwordKey'))
+        .mockImplementation(async () => Random(32))
+
+      await expect(manager.addProfile('Work')).rejects.toThrow('Failed to decrypt factor passwordKey')
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default'])
+
+      // A retry reports the outcome of the retry, not "already in use"
+      await expect(manager.addProfile('Work')).resolves.toHaveLength(16)
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work'])
+
+      getFactorSpy.mockRestore()
+    })
+
+    test('deleteProfile keeps the profile when the UMP token update fails', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      await manager.switchProfile(workId)
+
+      getFactorSpy.mockRejectedValueOnce(new Error('Failed to decrypt factor passwordKey'))
+      const switchSpy = jest.spyOn(manager, 'switchProfile')
+
+      await expect(manager.deleteProfile(workId)).rejects.toThrow('Failed to decrypt factor passwordKey')
+      // It left the active profile for the update, then went back to it
+      expect(switchSpy.mock.calls.map(([id]) => id)).toEqual([DEFAULT_PROFILE_ID, workId])
+      switchSpy.mockRestore()
+      const profiles = manager.listProfiles()
+      expect(profiles.map(p => p.name)).toEqual(['default', 'Work'])
+      expect(profiles.find(p => p.name === 'Work')?.active).toBe(true)
+
+      // A retry succeeds and falls back to the default profile
+      await manager.deleteProfile(workId)
+      const after = manager.listProfiles()
+      expect(after.map(p => p.name)).toEqual(['default'])
+      expect(after[0].active).toBe(true)
+
+      getFactorSpy.mockRestore()
+    })
+
+    test('deleteProfile reports the update failure even if switching back also fails', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      await manager.switchProfile(workId)
+
+      getFactorSpy.mockRejectedValueOnce(new Error('Failed to decrypt factor passwordKey'))
+      const realSwitch = manager.switchProfile.bind(manager)
+      const switchSpy = jest
+        .spyOn(manager, 'switchProfile')
+        .mockImplementationOnce(realSwitch)
+        .mockRejectedValueOnce(new Error('wallet rebuild failed'))
+
+      await expect(manager.deleteProfile(workId)).rejects.toThrow('Failed to decrypt factor passwordKey')
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work'])
+
+      switchSpy.mockRestore()
       getFactorSpy.mockRestore()
     })
 

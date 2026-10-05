@@ -4,6 +4,15 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.6
+
+- `CWIStyleWalletManager.addProfile` and `deleteProfile` change the profile list
+  only once the UMP token update succeeds, and build the new list after the
+  awaits so two overlapping calls can't drop one another's profile. A failed
+  add no longer leaves a phantom profile that makes retries fail with "already
+  in use", and a failed delete keeps the profile; the original error is
+  reported even if switching back also fails.
+
 ## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference
