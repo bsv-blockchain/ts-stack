@@ -142,7 +142,7 @@ export class Brc39StreamFrame {
     const fromInput = emit - fromTail
     const result: Uint8Array[] = []
     if (fromTail !== 0) result.push(this.tail.slice(0, fromTail))
-    if (fromInput !== 0) result.push(input.slice(0, fromInput))
+    if (fromInput !== 0) result.push(new Uint8Array(input.subarray(0, fromInput)))
     this.tail.copyWithin(0, fromTail, this.tailUsed)
     this.tailUsed -= fromTail
     this.tail.set(input.subarray(fromInput), this.tailUsed)

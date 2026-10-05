@@ -3,8 +3,8 @@ id: wallet-data-portability
 title: 'BRC-38/39 Wallet Data Portability'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-10-04'
-last_verified: '2026-10-04'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: [wallet, backup, interoperability, brc38, brc39]
@@ -81,6 +81,8 @@ Supply explicit row, page, metadata, chunk, archive, password and KDF ceilings. 
 Encryption emits the existing WDAT envelope with canonical Argon2id defaults (7 iterations, 131072 KiB, parallelism 1), fresh 32-byte salt/nonce, NFC password bytes and a 16-byte GCM tag. New exports refuse weaker strength. Decryption admits valid legacy parameter values only within caller-selected work ceilings and supported native nonce lengths; the materialized codec remains available with its existing input contract. Progress and cancellation occur between owned operations; an already running KDF or file/database operation settles before cleanup. Source validation and physical close must succeed before the final encryption tag. Output remains private until the host completes its durable save transaction.
 
 Decryption writes only into isolated quarantine. GCM authentication must precede strict UTF-8 and complete BRC-38 semantic validation. `createBrc39NodeFileQuarantine` uses a caller-owned trusted parent, private 0700/0600 files, bounded serial reads/writes, fsync, content verification and explicit awaited `discard()`. Its `withAuthenticatedChunks` callback is available after validation and closes its reader even on early return. Always discard after the host operation settles. It does not import, activate a profile or provide a durable recovery transaction. `readBrc38JsonStream` likewise accepts authenticated plaintext and awaits one private staging callback at a time; its host validator must check every staged row, unique key, relation, identity, network and original provenance before a result can be used.
+
+The BRC-39 frame returns owned ciphertext buffers, including when input comes from Node Buffers or Buffer subviews. Callers may reuse their input chunks after `accept()` returns; changing emitted bytes does not alter the frame's retained tag or later output.
 
 These entry points bound each component's admitted work and buffers. They do not establish native allocator/RSS/IPC bounds, hard database/WAL/directory quotas, durable occupied-target restore, replicated remote export destinations, or physical mobile qualification. Those remain mandatory in the full #544 program. No pending intermediate API is a released production guarantee.
 
@@ -243,7 +245,12 @@ identity/network, obtain the user's confirmation of the target and mode, then
 invoke import. Do not trust an archive's identity as the selected profile.
 
 ```ts
-import { decryptBRC39, importBRC38, type BRC38WalletData, type StorageProvider } from '@bsv/wallet-toolbox'
+import {
+  decryptBRC39,
+  importBRC38,
+  type BRC38WalletData,
+  type StorageProvider
+} from '@bsv/wallet-toolbox'
 
 export async function previewWalletDataFile(
   bytes: Uint8Array,
@@ -262,7 +269,10 @@ export async function previewWalletDataFile(
 }
 
 // Call only after profile/target confirmation. Do not mutate the preview.
-export async function restoreConfirmedWalletData(emptyTarget: StorageProvider, document: BRC38WalletData) {
+export async function restoreConfirmedWalletData(
+  emptyTarget: StorageProvider,
+  document: BRC38WalletData
+) {
   return await importBRC38(emptyTarget, document, { mode: 'restore' })
 }
 ```

@@ -256,3 +256,38 @@ test.each([22, 23, 24, 26, 27, 28, 29, 30, 31])('reserved byte %i is independent
   expect(() => frame.accept(bytes.subarray(0, 33))).toThrow(/reserved/)
   expect(() => frame.header()).toThrow(/closed/)
 })
+
+test.each(['bytes', 'buffer', 'buffer-view'] as const)(
+  'ciphertext emitted from %s owns its bytes across caller and output mutation',
+  kind => {
+    const ciphertext = Buffer.from('independent ciphertext crossing the retained trailing-tag window')
+    const original = file(ciphertext)
+    const backing = Buffer.concat([Buffer.alloc(7, 88), original, Buffer.alloc(7, 88)])
+    const inputs = {
+      bytes: original.slice(),
+      buffer: Buffer.from(original),
+      'buffer-view': backing.subarray(7, backing.length - 7)
+    }
+    const input = inputs[kind]
+    const frame = new Brc39StreamFrame(policy)
+    const boundary = 97 + 23
+    const first = frame.accept(input.subarray(0, boundary))
+    expect(Buffer.concat(first)).toEqual(ciphertext.subarray(0, 7))
+    input.fill(0, 97, boundary)
+    expect(Buffer.concat(first)).toEqual(ciphertext.subarray(0, 7))
+    for (const chunk of first) chunk.fill(77)
+    const second = frame.accept(input.subarray(boundary))
+    expect(Buffer.concat(second)).toEqual(ciphertext.subarray(7))
+    input.fill(0, boundary)
+    expect(Buffer.concat(second)).toEqual(ciphertext.subarray(7))
+    for (const chunk of second) chunk.fill(66)
+    const end = frame.finish()
+    expect(end.tag).toEqual(new Uint8Array(16).fill(99))
+    expect(end.fileBytes).toBe(original.length)
+    expect(end.ciphertextBytes).toBe(ciphertext.length)
+    if (kind === 'buffer-view') {
+      expect(backing.subarray(0, 7)).toEqual(Buffer.alloc(7, 88))
+      expect(backing.subarray(backing.length - 7)).toEqual(Buffer.alloc(7, 88))
+    }
+  }
+)
