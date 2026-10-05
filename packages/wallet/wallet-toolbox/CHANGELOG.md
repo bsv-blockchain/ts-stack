@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.14.5
 
+- `WalletPermissionsManager.internalizeAction` stores basket `customInstructions`
+  with one metadata encryption when `encryptWalletMetadata` is enabled.
+  A normal basket on a call that also carries a registered `p <scheme>` label
+  was encrypted before the permission module ran and again afterwards, so
+  `listOutputs` (which decrypts once) returned ciphertext. The after-module
+  pass now encrypts only permission-module baskets, matching `createAction`'s
+  once-only rule.
 - `WalletPermissionsManager` retires no-send transaction ownership and reference
   aliases when `createAction` or `signAction` reports them as `sending` or
   `unproven`, including sendWith-only calls and successful members of an

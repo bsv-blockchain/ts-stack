@@ -5019,12 +5019,22 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
+  /**
+   * Encrypts custom instructions that permission modules can still introduce.
+   * Normal-basket instructions are already encrypted once by
+   * authorizeInternalizeActionBaskets, before modules run. Encrypting them
+   * again here wrapped ciphertext inside ciphertext whenever a registered
+   * p-label or p-basket caused modules to run, and listOutputs decrypts only
+   * one layer. Permission-module baskets are not covered by that earlier pass.
+   */
   private async encryptInternalizeActionModuleMetadata(requestArgs: InternalizeActionArgs): Promise<void> {
     for (const outIndex in requestArgs.outputs) {
       const output = requestArgs.outputs[outIndex]
-      const customInstructions = output.insertionRemittance?.customInstructions
-      if (output.protocol !== 'basket insertion' || !customInstructions) continue
-      output.insertionRemittance!.customInstructions = await this.maybeEncryptMetadata(customInstructions)
+      const remittance = output.insertionRemittance
+      const customInstructions = remittance?.customInstructions
+      if (output.protocol !== 'basket insertion' || remittance == null || !customInstructions) continue
+      if (!remittance.basket.startsWith('p ')) continue
+      remittance.customInstructions = await this.maybeEncryptMetadata(customInstructions)
     }
   }
 
