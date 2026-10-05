@@ -224,7 +224,10 @@ function validateRemoteStorageSettings(value: unknown): RemoteStorageSettings {
     throw new Error('Wallet storage returned invalid settings.')
   }
   const chain = properties.chain?.value
-  if (chain !== undefined && (typeof chain !== 'string' || !['main', 'test', 'stn', 'ttn', 'tstn'].includes(chain))) {
+  if (
+    chain !== undefined &&
+    (typeof chain !== 'string' || !['main', 'test', 'stn', 'ttn', 'tstn', 'regtest'].includes(chain))
+  ) {
     throw new Error('Wallet storage returned invalid settings.')
   }
   const dbtype = properties.dbtype?.value

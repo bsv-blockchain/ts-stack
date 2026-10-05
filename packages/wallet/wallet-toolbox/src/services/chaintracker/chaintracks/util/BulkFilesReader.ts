@@ -242,7 +242,14 @@ export class BulkFilesReader {
           `fileHash mismatch for file ${file.fileName}: expected ${file.fileHash}, got ${fileHash}`
         )
       }
-      ;({ lastHeaderHash, lastChainWork } = validateBufferOfHeaders(data, lastHeaderHash, 0, file.count, lastChainWork))
+      ;({ lastHeaderHash, lastChainWork } = validateBufferOfHeaders(
+        data,
+        lastHeaderHash,
+        0,
+        file.count,
+        lastChainWork,
+        chain
+      ))
       if (index === 0) validateGenesisHeader(data, chain)
 
       if (file.lastHash !== lastHeaderHash) {
@@ -295,7 +302,7 @@ export class BulkFilesReader {
         break
       }
 
-      const last = validateBufferOfHeaders(data, lastHeaderHash, 0, undefined, lastChainWork)
+      const last = validateBufferOfHeaders(data, lastHeaderHash, 0, undefined, lastChainWork, chain)
 
       await toFs.writeFile(toPath(i), data)
 

@@ -7,7 +7,7 @@ import { Chain } from '../../../../sdk/types'
 import { BlockHeader } from '../Api/BlockHeaderApi'
 import { ChaintracksStorageBase } from '../Storage/ChaintracksStorageBase'
 
-const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'mock'])
+const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
 
 export abstract class BulkIngestorBase implements BulkIngestorApi {
   /**

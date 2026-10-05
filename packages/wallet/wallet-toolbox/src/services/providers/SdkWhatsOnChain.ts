@@ -73,8 +73,11 @@ export default class SdkWhatsOnChain implements ChainTracker {
    * @param {'main' | 'test' | 'stn'} network - The BSV network to use when calling the WhatsOnChain API.
    * @param {WhatsOnChainConfig} config - Configuration options for the WhatsOnChain ChainTracker.
    */
-  constructor(network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' = 'main', config: LocalWhatsOnChainConfig = {}) {
-    if (!['main', 'test', 'stn', 'ttn', 'tstn'].includes(network)) {
+  constructor(
+    network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'regtest' = 'main',
+    config: LocalWhatsOnChainConfig = {}
+  ) {
+    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest'].includes(network)) {
       throw new Error('WhatsOnChain network is invalid.')
     }
     const properties = plainDataProperties(config, 'WhatsOnChain config')
@@ -100,8 +103,8 @@ export default class SdkWhatsOnChain implements ChainTracker {
     this.network = network
     if (network === 'ttn') {
       this.URL = 'https://api.woc-ttn.bsvblockchain.tech/v1/bsv/test'
-    } else if (network === 'tstn') {
-      // tstn has no WhatsOnChain / explorer service. The instance is constructed for
+    } else if (network === 'tstn' || network === 'regtest') {
+      // tstn and regtest have no WhatsOnChain / explorer service. The instance is constructed for
       // interface completeness but is not registered as a Services provider, so this URL
       // is never used for requests.
       this.URL = ''

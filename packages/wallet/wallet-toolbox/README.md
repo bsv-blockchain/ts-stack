@@ -533,11 +533,20 @@ synchronized tracker can continue serving its last-good checked data during a
 provider outage. WhatsOnChain remains a mainnet/testnet fallback and anonymous
 requests are serialized below its documented public rate.
 
-The supported chain identifiers are `main`, `test`, `stn`, `ttn`, and `tstn`
-(`mock` remains available for test utilities). STN and Terra Scaling TestNet do
-not have operator-independent public endpoints: set `STN_CHAINTRACKS_URL` or
-`TSTN_CHAINTRACKS_URL`, use the matching Arcade environment variable, or inject
-an explicit `ChaintracksClientApi`. URLs ending in `/v2` use the reconnecting
+The supported chain identifiers are `main`, `test`, `stn`, `ttn`, `tstn`, and
+`regtest` (`mock` remains available for test utilities). STN, Terra Scaling
+TestNet, and regtest do not have operator-independent public endpoints: set
+`STN_CHAINTRACKS_URL`, `TSTN_CHAINTRACKS_URL`, or `REGTEST_CHAINTRACKS_URL`, use
+the matching Arcade environment variable, or inject an explicit
+`ChaintracksClientApi`.
+
+`regtest` is Teranode's regression network (go-chaincfg `RegressionNetParams`):
+the canonical regtest genesis header and a proof-of-work limit of `0x207fffff`.
+Only a caller that names `regtest` gets that limit; every other chain, and every
+header check that names no chain, keeps the mainnet limit of `0x1d00ffff`.
+Regtest proof of work costs nothing to produce, so a regtest wallet trusts its
+ChainTracks service for the header chain. Use it for private test deployments
+only. URLs ending in `/v2` use the reconnecting
 go-chaintracks client; existing legacy v1 URLs and explicit clients remain
 compatible. Browser and mobile distributions expose the same fetch/SSE client
 without Node `Buffer` or filesystem dependencies.

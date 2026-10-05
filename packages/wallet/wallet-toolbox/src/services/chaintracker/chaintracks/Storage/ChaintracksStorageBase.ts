@@ -24,7 +24,7 @@ const MAX_BULK_HEADER_CANDIDATES = 100000
 const MAX_PUBLIC_HEADER_RANGE = 100000
 const MAX_STORAGE_LIMIT = 100000
 const MAX_STORAGE_TRAVERSAL = 100000
-const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'mock'])
+const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
 
 /**
  * Required interface methods of a Chaintracks Storage Engine implementation.
@@ -93,7 +93,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
 
   protected validateIncomingHeader(header: BlockHeader): BlockHeader {
     validateHeaderFormat(header)
-    validateHeaderProofOfWork(header)
+    validateHeaderProofOfWork(header, this.chain)
     validateAgainstDirtyHashes(header.hash)
     return {
       version: header.version,
@@ -516,7 +516,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
         hash: header.hash
       }
       validateHeaderFormat(candidate)
-      validateHeaderProofOfWork(candidate)
+      validateHeaderProofOfWork(candidate, this.chain)
       validateAgainstDirtyHashes(candidate.hash)
       return candidate
     })
@@ -571,7 +571,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     const duplicate = chains.some(chain => chain.headers.at(-1)!.hash === header.hash)
     if (duplicate) return
 
-    const headerWork = convertBitsToWork(header.bits)
+    const headerWork = convertBitsToWork(header.bits, this.chain)
     const extendedChain = chains.find(chain => {
       const tip = chain.headers.at(-1)!
       return tip.height + 1 === header.height && tip.hash === header.previousHash
@@ -593,7 +593,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     if (forkedChain != null) {
       const forkHeaders = forkedChain.headers.slice(0, -1)
       forkHeaders.push(header)
-      const replacedTipWork = convertBitsToWork(forkedChain.headers.at(-1)!.bits)
+      const replacedTipWork = convertBitsToWork(forkedChain.headers.at(-1)!.bits, this.chain)
       const forkWork = addWork(subWork(forkedChain.chainWork, replacedTipWork), headerWork)
       chains.push({
         headers: forkHeaders,
@@ -623,7 +623,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     if (liveHeaders.length === 0) return
     const lastChainWork = liveHeaders.at(-1)!.chainWork
     const firstHeader = liveHeaders[0]
-    const previousWork = subWork(firstHeader.chainWork, convertBitsToWork(liveHeaders[0].bits))
+    const previousWork = subWork(firstHeader.chainWork, convertBitsToWork(liveHeaders[0].bits, this.chain))
     const incrementalWork = subWork(lastChainWork, previousWork)
     await this.bulkManager.mergeIncrementalBlockHeaders(liveHeaders, incrementalWork)
   }

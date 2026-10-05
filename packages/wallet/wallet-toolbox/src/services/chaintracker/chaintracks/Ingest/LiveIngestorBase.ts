@@ -4,7 +4,7 @@ import { LiveIngestorApi } from '../Api/LiveIngestorApi'
 import { ChaintracksStorageApi } from '../Api/ChaintracksStorageApi'
 import { BlockHeader } from '../Api/BlockHeaderApi'
 
-const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'mock'])
+const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
 
 export interface LiveIngestorBaseOptions {
   /**

@@ -787,7 +787,7 @@ export class Monitor {
     // is outside Bitcoin's production proof-of-work limit. Still bind every
     // field to the computed header hash, but require consensus PoW everywhere
     // a remotely sourced production/test network header can enter.
-    return copyValidatedMonitorHeader(value, name, this.chain !== 'mock')
+    return copyValidatedMonitorHeader(value, name, this.chain !== 'mock', this.chain)
   }
 
   /**

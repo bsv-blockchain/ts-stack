@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.14.6'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+version: '2.15.0'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -60,8 +60,8 @@ new account even if other hosts fail or return malformed records.
 
 The mobile build includes the fetch-based, credential-free ChainTracks v2
 client and reconnecting SSE adapter without Node-only modules. Public defaults
-cover mainnet, testnet, and TerraTestNet; STN/TSTN use an injected or configured
-endpoint.
+cover mainnet, testnet, and TerraTestNet; STN/TSTN and regtest use an injected
+or configured endpoint.
 
 The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous

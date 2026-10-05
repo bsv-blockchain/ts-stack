@@ -93,7 +93,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   private readonly sourceStatus = new Map<string, ChaintracksSourceStatusApi>()
 
   constructor(public options: ChaintracksOptions) {
-    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'mock'].includes(options.chain)) {
+    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'].includes(options.chain)) {
       throw new Error('chain must be a supported Chain value.')
     }
     if (options.storage == null) throw new Error('storage is required.')
@@ -757,7 +757,7 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   private async addLiveHeader(header: BlockHeader): Promise<InsertHeaderResult> {
     validateHeaderFormat(header)
-    validateHeaderProofOfWork(header)
+    validateHeaderProofOfWork(header, this.chain)
     validateAgainstDirtyHashes(header.hash)
 
     const ihr = this.available
