@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.2'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+version: '1.3.3'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -107,6 +107,26 @@ and requires the pull request's dependency-evidence section to record release
 notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
 audit and CodeQL results, package and consumer tests, bundle/performance
 impact, and affected public versions.
+
+## Temporary Metro watcher repair
+
+Metro-file-map 0.87.1 consumes only `micromatch.some()`, whose matcher is already
+Picomatch 2.3.2. An exact-version paired source/distribution patch uses the same
+matcher loop directly, declares that exact dependency, and removes only the
+parent-scoped micromatch dependency and unused braces closure. The reviewed
+[braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) lists no
+patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
+has not supplied a published repair. No audit exclusion or threshold change is added.
+
+The mobile platform gate checks all 1,120 results independently reproduced from
+the unmodified published watcher, event/stat/path contracts, and absence of the
+removed dependencies before its existing packed Metro/Hermes compilation,
+source-map and bundle checks. All prior assertions and bounds remain.
+The dated registry owns this 27th selector, its package extension and patch as
+one repair. Remove all three together when a compatible official release removes
+the affected path and the complete compatibility, frozen-graph, audit and platform
+checks pass. This development-tool repair changes no public package API, version
+or production service startup.
 
 ## Supply-chain controls
 
