@@ -5028,14 +5028,20 @@ export class WalletPermissionsManager implements WalletInterface {
    * one layer. Permission-module baskets are not covered by that earlier pass.
    */
   private async encryptInternalizeActionModuleMetadata(requestArgs: InternalizeActionArgs): Promise<void> {
+    const encryptionTasks: Array<Promise<void>> = []
     for (const outIndex in requestArgs.outputs) {
       const output = requestArgs.outputs[outIndex]
       const remittance = output.insertionRemittance
       const customInstructions = remittance?.customInstructions
       if (output.protocol !== 'basket insertion' || remittance == null || !customInstructions) continue
       if (!remittance.basket.startsWith('p ')) continue
-      remittance.customInstructions = await this.maybeEncryptMetadata(customInstructions)
+      encryptionTasks.push(
+        this.maybeEncryptMetadata(customInstructions).then(encrypted => {
+          remittance.customInstructions = encrypted
+        })
+      )
     }
+    await Promise.all(encryptionTasks)
   }
 
   private async runInternalizeActionModules(
