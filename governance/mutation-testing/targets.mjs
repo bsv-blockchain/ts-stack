@@ -583,6 +583,7 @@ export function buildMutationTargets(repositoryRoot) {
         'src/storage/schema/snapshotGlobalIndexModel.ts',
         'src/storage/schema/snapshotGlobalIndexMysql.ts',
         'src/storage/schema/snapshotGlobalIndexSqlite.ts',
+        'src/storage/schema/snapshotSqliteSchemaObservations.ts',
         'src/storage/schema/snapshotGlobalIndexBootstrap.ts',
         'src/storage/schema/snapshotGlobalIndexTriggers.ts',
         'src/storage/schema/snapshotSqliteIdentity.ts',
@@ -635,6 +636,7 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/src/storage/snapshot/*.test.ts',
           '<rootDir>/src/storage/schema/snapshotSqliteIdentityObservations.test.ts',
+          '<rootDir>/src/storage/schema/snapshotSqliteSchemaObservations.test.ts',
           '<rootDir>/src/storage/schema/snapshotSqliteDefinitions.test.ts',
           '<rootDir>/src/storage/snapshot/journal/SnapshotJournalCapture*.test.ts',
           '<rootDir>/src/storage/snapshot/journal/SnapshotJournalConnections.test.ts',

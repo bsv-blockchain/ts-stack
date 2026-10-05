@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { readIdentity, readIdentities, identityDDL, type SourceIdentity } from './snapshotSqliteIdentity'
-import { readSqliteIdentityObservations } from './snapshotSqliteIdentityObservations'
+import { readSqliteIdentityObservations, readSqliteIndexObservations } from './snapshotSqliteIdentityObservations'
 
 const sources: SourceIdentity[] = [
   { table: 'identity_a', key: 'id', owner: 'owner' },
@@ -224,6 +224,75 @@ test('repeated source names retain independent ordered metadata groups', async (
     expect(actual).toEqual(await original(k, repeated))
     actual[0].columns[0].name = 'changed_first_group'
     expect(actual[2].columns[0].name).toBe('id')
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('two bounded index names use one fresh exact index-part group', async () => {
+  const k = await fixture()
+  try {
+    await k.raw('CREATE UNIQUE INDEX "identity quoted index" ON identity_a(owner,code COLLATE RTRIM)')
+    const queries: string[] = []
+    const observe = (query: { sql: string }) => queries.push(query.sql)
+    const names = ((await k.raw('PRAGMA index_list(identity_a)')) as Array<{ name: string; unique: number }>)
+      .filter(row => row.unique !== 0)
+      .map(row => row.name)
+    k.on('query', observe)
+    const observed = await readSqliteIndexObservations(k, names)
+    k.off('query', observe)
+    const actual = await readIdentities(k, [sources[0]])
+    expect(queries.filter(sql => sql.includes('pragma_index_xinfo'))).toHaveLength(1)
+    expect(queries.filter(sql => sql.startsWith('PRAGMA index_xinfo'))).toHaveLength(0)
+    expect(actual).toEqual(await original(k, [sources[0]]))
+    expect(actual.map(identityDDL)).toEqual((await original(k, [sources[0]])).map(identityDDL))
+    for (const [index, name] of names.entries()) {
+      expect(observed?.[index].parts).toEqual(await k.raw('PRAGMA index_xinfo(??)', [name]))
+      expect(observed?.[index].parts[0]).not.toHaveProperty('sourceOrdinal')
+    }
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('seventeen current unique constraints retain individual fresh index reads', async () => {
+  const k = await fixture()
+  try {
+    for (let index = 0; index < 16; index++)
+      await k.raw('CREATE UNIQUE INDEX ?? ON identity_a(owner,code)', ['extra_' + index])
+    const names = ((await k.raw('PRAGMA index_list(identity_a)')) as Array<{ name: string }>).map(row => row.name)
+    expect(names).toHaveLength(17)
+    expect(await readSqliteIndexObservations(k, names)).toBeUndefined()
+    expect(await readIdentities(k, [sources[0]])).toEqual(await original(k, [sources[0]]))
+  } finally {
+    await k.destroy()
+  }
+})
+
+test('empty and nonoptimized index groups preserve fallback without executing metadata SQL', async () => {
+  const k = await fixture(),
+    client = k.client.config.client
+  try {
+    expect(await readSqliteIndexObservations(k, [])).toBeUndefined()
+    k.client.config.client = 'sqlite3'
+    expect(await readSqliteIndexObservations(k, ['sqlite_autoindex_identity_a_1'])).toBeUndefined()
+  } finally {
+    k.client.config.client = client
+    await k.destroy()
+  }
+})
+
+test('returned index metadata is independent across duplicate groups and future observations', async () => {
+  const k = await fixture()
+  try {
+    const names = ['sqlite_autoindex_identity_a_1', 'sqlite_autoindex_identity_a_1']
+    const observed = await readSqliteIndexObservations(k, names)
+    expect(observed).toBeDefined()
+    observed![0].parts[0].name = 'mutated_returned_part'
+    expect(observed![1].parts[0].name).toBe('code')
+    expect((await readSqliteIndexObservations(k, names))?.[0].parts).toEqual(
+      await k.raw('PRAGMA index_xinfo(??)', [names[0]])
+    )
   } finally {
     await k.destroy()
   }

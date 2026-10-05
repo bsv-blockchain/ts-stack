@@ -3,7 +3,7 @@ import { runInSeries } from '../../utility/runInSeries'
 import { snapshotGlobalIndexTriggers, type SnapshotGlobalIndexTrigger } from './snapshotGlobalIndexTriggers'
 import { tables, PROGRESS, mysql, normalized, invalid, type Table } from './snapshotGlobalIndexModel'
 import { mysqlParts, mysqlTable, validateMysqlSource } from './snapshotGlobalIndexMysql'
-import { sqliteTable, validateSqliteSource } from './snapshotGlobalIndexSqlite'
+import { sqliteTable, validateSqliteSource, validateSqliteTables } from './snapshotGlobalIndexSqlite'
 import { validPosition, bootstrapPage, type Position } from './snapshotGlobalIndexBootstrap'
 
 export const SNAPSHOT_GLOBAL_INDEX_MIGRATION = '2026-10-01-006 add snapshot global reference indexes'
@@ -40,6 +40,13 @@ async function ensureTable(k: Knex, table: Table): Promise<void> {
 async function validateSource(k: Knex): Promise<void> {
   if (mysql(k)) await validateMysqlSource(k)
   else await validateSqliteSource(k)
+}
+async function validateGlobalTables(k: Knex): Promise<void> {
+  if (!mysql(k)) return await validateSqliteTables(k, tables())
+  await runInSeries(tables(), async table => {
+    if (!(await k.schema.hasTable(table.name))) invalid('Snapshot global index migration is incomplete')
+    await validateTable(k, table)
+  })
 }
 async function validateTrigger(k: Knex, expected: SnapshotGlobalIndexTrigger): Promise<boolean> {
   if (!mysql(k)) {
@@ -114,10 +121,7 @@ export async function readSnapshotGlobalIndexState(k: Knex, config?: Knex.Migrat
   if (config?.schemaName !== undefined) void journal.withSchema(config.schemaName)
   if ((await journal.first('name')) === undefined) return false
   await validateSource(k)
-  await runInSeries(tables(), async table => {
-    if (!(await k.schema.hasTable(table.name))) invalid('Snapshot global index migration is incomplete')
-    await validateTable(k, table)
-  })
+  await validateGlobalTables(k)
   const states: Array<Position & { id: number }> = await k(PROGRESS).select('*').limit(2)
   if (
     states.length !== 1 ||

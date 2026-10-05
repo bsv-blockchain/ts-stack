@@ -1,8 +1,10 @@
 import type { Knex } from 'knex'
 import { runInSeries } from '../../utility/runInSeries'
 import { invalid, sources, type Table, type Index } from './snapshotGlobalIndexModel'
+import { readSqliteSchemaObservations, type SqliteSchemaObservation } from './snapshotSqliteSchemaObservations'
+import { readSqliteIndexObservations, type SqliteIndexObservation } from './snapshotSqliteIdentityObservations'
 interface SqlitePart {
-  name: string
+  name: string | null
   desc: number
   coll: string
   key: number
@@ -12,6 +14,28 @@ async function sqliteParts(k: Knex, name: string): Promise<SqlitePart[]> {
   return rows.filter(row => row.key === 1)
 }
 export async function sqliteTable(k: Knex, table: Table, secondary: boolean): Promise<boolean> {
+  return await sqliteObservedTable(k, table, secondary)
+}
+async function globalIndexParts(
+  k: Knex,
+  required: Index[],
+  indexes: Array<{ name: string; partial: number }>
+): Promise<SqliteIndexObservation[] | undefined> {
+  if (!k.isTransaction) return undefined
+  const selected = required.map(index => indexes.find(value => value.name === index.name))
+  if (!selected.every(index => index?.partial === 0)) return undefined
+  return await readSqliteIndexObservations(
+    k,
+    selected.map(index => index!.name)
+  )
+}
+async function sqliteObservedTable(
+  k: Knex,
+  table: Table,
+  secondary: boolean,
+  observed?: SqliteSchemaObservation
+): Promise<boolean> {
+  const observation = observed?.table === table.name ? observed : undefined
   const actual: Array<{
     name: string
     type: string
@@ -19,7 +43,7 @@ export async function sqliteTable(k: Knex, table: Table, secondary: boolean): Pr
     dflt_value: unknown
     pk: number
     hidden: number
-  }> = await k.raw('PRAGMA table_xinfo(??)', [table.name])
+  }> = observation?.columns ?? (await k.raw('PRAGMA table_xinfo(??)', [table.name]))
   const types = {
     int: 'integer',
     uint: 'integer',
@@ -45,7 +69,7 @@ export async function sqliteTable(k: Knex, table: Table, secondary: boolean): Pr
     unique: number
     origin: string
     partial: number
-  }> = await k.raw('PRAGMA index_list(??)', [table.name])
+  }> = observation?.indexes ?? (await k.raw('PRAGMA index_list(??)', [table.name]))
   if (indexes.some(index => index.unique !== 0 && (index.origin !== 'pk' || index.partial !== 0))) return false
   const required: Index[] = secondary ? [...table.indexes] : []
   if (table.primary.length > 1) {
@@ -53,10 +77,15 @@ export async function sqliteTable(k: Knex, table: Table, secondary: boolean): Pr
     if (primary === undefined) return false
     required.push({ name: primary.name, columns: table.primary })
   }
-  for (const index of required) {
+  const observedParts = observation === undefined ? undefined : await globalIndexParts(k, required, indexes)
+  for (const [position, index] of required.entries()) {
     const found = indexes.find(value => value.name === index.name)
     if (found?.partial !== 0) return false
-    const parts = await sqliteParts(k, found.name)
+    const selectedParts = observedParts?.[position]
+    const parts =
+      selectedParts?.name === found.name
+        ? selectedParts.parts.filter(part => part.key === 1)
+        : await sqliteParts(k, found.name)
     if (
       parts.length !== index.columns.length ||
       parts.some((part, i) => part.name !== index.columns[i] || part.desc !== 0 || part.coll !== 'BINARY')
@@ -65,13 +94,24 @@ export async function sqliteTable(k: Knex, table: Table, secondary: boolean): Pr
   }
   return true
 }
-async function sqliteTextOrder(k: Knex, table: string): Promise<string> {
-  const indexes: Array<{ name: string; unique: number; partial: number }> = await k.raw('PRAGMA index_list(??)', [
-    table
-  ])
+async function sqliteTextOrder(k: Knex, table: string, observed?: SqliteSchemaObservation): Promise<string> {
+  const indexes: Array<{ name: string; unique: number; partial: number }> =
+    observed?.table === table ? observed.indexes : await k.raw('PRAGMA index_list(??)', [table])
+  const eligible = indexes.filter(index => index.partial === 0 && (table !== 'proven_tx_reqs' || index.unique === 1))
+  const observedParts =
+    observed?.table === table
+      ? await readSqliteIndexObservations(
+          k,
+          eligible.map(index => index.name)
+        )
+      : undefined
   for (const index of indexes) {
     if (index.partial !== 0 || (table === 'proven_tx_reqs' && index.unique !== 1)) continue
-    const parts = await sqliteParts(k, index.name)
+    const selectedParts = observedParts?.find(value => value.name === index.name)
+    const parts =
+      selectedParts === undefined
+        ? await sqliteParts(k, index.name)
+        : selectedParts.parts.filter(part => part.key === 1)
     if (
       parts[0]?.name !== 'txid' ||
       parts[0].desc !== 0 ||
@@ -89,14 +129,19 @@ async function sqliteTextOrder(k: Knex, table: string): Promise<string> {
 }
 export async function validateSqliteSource(k: Knex): Promise<void> {
   let collation: string | undefined
+  const observed = await readSqliteSchemaObservations(
+    k,
+    sources.map(source => source.name)
+  )
   await runInSeries(sources, async source => {
+    const observation = observed?.find(value => value.table === source.name)
     const actual: Array<{
       name: string
       type: string
       notnull: number
       pk: number
       hidden: number
-    }> = await k.raw('PRAGMA table_xinfo(??)', [source.name])
+    }> = observation?.columns ?? (await k.raw('PRAGMA table_xinfo(??)', [source.name]))
     const primary = actual.filter(column => column.pk !== 0)
     if (primary.length !== 1 || primary[0]?.name !== source.key || primary[0].pk !== 1)
       invalid('Unsupported snapshot global source key')
@@ -110,10 +155,31 @@ export async function validateSqliteSource(k: Knex): Promise<void> {
         invalid('Unsupported snapshot global source column')
     }
     if (source.name !== 'proven_txs') {
-      const order = await sqliteTextOrder(k, source.name)
+      const order = await sqliteTextOrder(k, source.name, observation)
       if (collation !== undefined && collation !== order)
         invalid('Snapshot global source comparisons require matching text definitions')
       collation = order
     }
+  })
+}
+
+/** Same presence/definition error ordering as the original per-table loop.
+ * Observations are created here and never accepted from a caller. */
+export async function validateSqliteTables(k: Knex, definitions: Table[]): Promise<void> {
+  const observed = await readSqliteSchemaObservations(
+    k,
+    definitions.map(table => table.name)
+  )
+  await runInSeries(definitions, async table => {
+    if (!(await k.schema.hasTable(table.name))) invalid('Snapshot global index migration is incomplete')
+    if (
+      !(await sqliteObservedTable(
+        k,
+        table,
+        true,
+        observed?.find(value => value.table === table.name)
+      ))
+    )
+      invalid('Snapshot global table definition mismatch')
   })
 }

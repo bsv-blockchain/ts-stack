@@ -11,6 +11,10 @@ attention to changes that materially alter behavior or extend functionality.
   of at most sixteen. Preserve exact metadata, DDL and validation/error order;
   no schema cache, API, wire or database migration is required. Full #544
   production qualification remains open.
+  Global-index validation now groups fresh table and index metadata inside its
+  pinned SQLite transaction, with individual reads outside a transaction and for
+  unsupported drivers or oversized groups. Public validator arity, MySQL behavior,
+  partial/descending-index rejection and `EXPLAIN` checks remain unchanged.
 
 - Preserve queued primary reselection: a request to select A during a pending
   switch from A to B waits for that switch and then selects A, including after

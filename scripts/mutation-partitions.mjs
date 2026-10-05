@@ -40,6 +40,7 @@ const plans = new Map([
         ['src/storage/schema/snapshotGlobalIndexModel.ts', 'global-index'],
         ['src/storage/schema/snapshotGlobalIndexMysql.ts', 'global-mysql'],
         ['src/storage/schema/snapshotGlobalIndexSqlite.ts', 'global-sqlite'],
+        ['src/storage/schema/snapshotSqliteSchemaObservations.ts', 'global-sqlite'],
         ['src/storage/schema/snapshotGlobalIndexBootstrap.ts', 'global-bootstrap'],
         ['src/storage/schema/snapshotGlobalIndexTriggers.ts', 'global-triggers'],
         ['src/storage/schema/snapshotSqliteIdentity.ts', 'sqlite-identity'],

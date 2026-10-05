@@ -198,7 +198,11 @@ SQLite identity and journal-observer validation read fresh bounded metadata page
 for each operation. Metadata is grouped in one pass, and installed schema
 definitions are checked in pages of at most sixteen. Exact metadata, DDL,
 validation order and error identities are retained; there is no cross-operation
-schema cache. The existing schema and BRC-38/39 formats need no migration.
+schema cache. The existing schema and BRC-38/39 formats need no migration. Global-index
+validation groups fresh table and index metadata only inside its pinned SQLite
+transaction. Individual reads remain the fallback outside a transaction, for
+unsupported drivers or oversized groups; the public table validator retains its
+original three-argument contract.
 The complete sync/streaming/restore program remains in progress on #569.
 
 ## Backup and sync: tested results
