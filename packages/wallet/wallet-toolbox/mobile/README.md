@@ -204,3 +204,13 @@ This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve earlier Open BSV grants compiled into the
 mobile build.
+
+## WAB faucet fee compatibility
+
+Version 2.14.6 carries the local signer's independently validated fee/change
+outputs through the permissions manager to SDK completed-action binding. Upgrade
+with an SDK exposing `completeBoundAction.outputAuthorizationVersion=1`; older SDK
+peers preserve their strict behavior and do not receive the fee-bearing faucet
+fix. Use wallet and authentication manager from the same package instance.
+Serialized results discard local authorization. See the full toolbox README for
+SDK3 migration and the unchanged signup retry/reconciliation limitations.

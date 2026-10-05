@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.14.5'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+version: '2.14.6'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -132,3 +132,14 @@ for complete remote and IndexedDB setup.
 
 Open BSV License Version 6. See the
 [package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/client/LICENSE.txt).
+
+## Faucet output authorization
+
+The source candidate adds exact completed-action binding for independently
+validated local storage fees and change. The SDK capability marker is
+`completeBoundAction.outputAuthorizationVersion=1`; upgrade the wallet and SDK together.
+Existing SDK2 peers retain strict behavior. The separate SDK3 migration still
+applies; SDK2 consumers need an additive backport or that migration. Serialized
+wallet results do not carry local authority. The fee fix does not change signup
+persistence or interrupted-funding reconciliation. See the package README and
+[release and migration ledger](../../reference/package-api-migrations.md).
