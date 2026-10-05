@@ -208,7 +208,7 @@ async function validateDefinitions(k: Knex, expected: string[]): Promise<void> {
   )
   await runInSeries(pages, async page => {
     const definitions = page.map(sql => (typeof sql === 'string' ? installedDefinition(sql) : undefined))
-    if (definitions.some(definition => definition === undefined)) {
+    if (definitions.includes(undefined)) {
       // Preserve the original error ordering for malformed caller-supplied plans.
       await runInSeries(page, async sql => await validateDefinition(k, sql))
       return
