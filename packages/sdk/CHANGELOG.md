@@ -214,6 +214,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Add caller-installed additional-output authorization to `completeBoundAction`.
+  Bind independently verified local outputs by exact index, script and amount
+  while preserving the default external-input restriction and value conservation.
+
 ### Removed (3.0.0 candidate)
 
 - Remove the legacy `identity/DIDTokenValidation` module and its

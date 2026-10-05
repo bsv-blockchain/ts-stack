@@ -26,6 +26,7 @@ import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INTERNAL } from '../../sdk/WERR_errors'
 import { setResultBeef } from './resultBeef'
 import { setExactActionSpend } from '../../utility/exactActionSpend'
+import { setActionOutputAuthorizations } from '../../utility/actionOutputAuthorizations'
 
 export interface CreateActionResultX extends CreateActionResult {
   txid?: TXIDHexString
@@ -251,6 +252,17 @@ function makeSignableTransactionResult(
     }
   }
   setExactActionSpend(r, prior.amount)
+  // buildSignableTransaction has independently validated the requested outputs,
+  // bounded commission and client-derived change. Carry that local decision to
+  // completion without treating remotely serialized metadata as authority.
+  setActionOutputAuthorizations(
+    r,
+    prior.dcr.outputs.slice(args.outputs.length).map(output => ({
+      outputIndex: output.vout,
+      lockingScript: prior.tx.outputs[output.vout].lockingScript.toHex(),
+      satoshis: prior.tx.outputs[output.vout].satoshis!
+    }))
+  )
 
   wallet.pendingSignActions[r.signableTransaction!.reference] = prior
 
