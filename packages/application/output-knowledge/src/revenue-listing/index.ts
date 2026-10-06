@@ -18,3 +18,10 @@ export {
   REVENUE_LISTING_LINEAGE_SCHEMA
 } from './RevenueListingPurchaseVerifier.js'
 export type { RevenueListingPurchaseResult } from './RevenueListingPurchaseVerifier.js'
+
+export { RevenueListingProfileLineageVerifier } from './RevenueListingProfileLineageVerifier.js'
+export type { RevenueListingProfileLineageResult } from './RevenueListingProfileLineageVerifier.js'
+export { parseRevenueListingProfileLineagePackage } from './ProfileLineagePackage.js'
+export type { RevenueListingProfileLineagePackage } from './ProfileLineagePackage.js'
+export { RevenueListingProfilePurchaseVerifier } from './RevenueListingProfilePurchaseVerifier.js'
+export type { RevenueListingProfilePurchaseResult } from './RevenueListingProfilePurchaseVerifier.js'

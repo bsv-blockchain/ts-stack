@@ -40,6 +40,21 @@ Start with [durable receipt storage](#durable-receipt-journal),
 
 ## Revenue listing history
 
+Current BRC PR295 installations select `RevenueListingProfileLineageVerifier`,
+`RevenueListingProfilePurchaseVerifier` and `parseRevenueListingProfileLineagePackage`
+from `@bsv/output-knowledge/revenue-listing`. They bind the immutable descriptor
+and signed reserve-stage genesis, require child-link activation, check complete
+Bitcoin evidence and execute every actual input Script. Purchase verification
+returns the full purchase commitment only after exact original-request association
+and successor history succeed. These portable components leave asset authority,
+currentness, native wallet/alias custody and private release to installed owners.
+See the [current-profile guide](../../../docs/guides/revenue-listing-profile-lineage.md).
+
+### Historical compatible interfaces
+
+The older interfaces below preserve the superseded pre-adoption family, including
+its merge and mutable schedule semantics. They are not the current BRC-197 profile.
+
 The optional @bsv/output-knowledge/revenue-listing entry exports
 RevenueListingLineageVerifier, its bounded package parser, limits and types.
 It checks authorized genesis, both paths of every merge, immutable-view Bitcoin

@@ -12,6 +12,12 @@ tags: [utxo, sdk, scripts, revenue, evidence]
 
 # Verifying Revenue Listing Histories
 
+This page preserves the historical pre-replacement family and its original
+interfaces. Its merge and revision rules do not describe the current BRC-197.
+New installations select the [immutable profile verifiers](./revenue-listing-profile-lineage.md).
+Keeping the older exports available preserves compatibility; it does not
+qualify them for the replacement family.
+
 A matching locking script does not prove that an output belongs to an authorized
 listing. The optional @bsv/output-knowledge/revenue-listing entry verifies the
 proposed BRC-197 full-history profile: seller-authorized genesis, every listing

@@ -2418,11 +2418,17 @@ export async function completeImmutableProfileWitness(
     if (root.publicKey !== request.identity) throw new Error('Wrong protected seller wallet')
     const protocolID: [2, '3241645161d8'] = [...request.protocolID]
     const key = await protectedWallet.getPublicKey({
-      protocolID, keyID: request.keyID, counterparty: request.counterparty, forSelf: true
+      protocolID,
+      keyID: request.keyID,
+      counterparty: request.counterparty,
+      forSelf: true
     })
     if (key.publicKey !== request.publicKey) throw new Error('Wrong fixed seller child')
     const signed = await protectedWallet.createSignature({
-      protocolID, keyID: request.keyID, counterparty: request.counterparty, data: request.data
+      protocolID,
+      keyID: request.keyID,
+      counterparty: request.counterparty,
+      data: request.data
     })
     signatures.seller = toHex([...signed.signature, request.scope])
   }
@@ -2434,5 +2440,44 @@ export async function completeImmutableProfileWitness(
     purchaseCommitment: prepared.purchaseCommitment,
     unlockingLengthBound: builder.estimateUnlockingLength()
   }
+}
+```
+
+## Current immutable listing verification
+
+This explicitly selected profile verifies complete reserve-stage ancestry and
+actual Bitcoin input Scripts before exposing a purchase commitment. Installed
+chain views, original signed consent, currentness, asset authority, economic
+reservation and private release are separate responsibilities. Historical
+examples without `Profile` retain the earlier pre-replacement contract.
+
+```ts compile
+// example-id: immutable-profile-purchase-verification
+import { RevenueListingProfile as VerifiedRevenueProfile } from '@bsv/sdk/script/templates/RevenueListingProfile'
+import {
+  RevenueListingProfilePurchaseVerifier,
+  type ChainViewResolver as ImmutableRevenueChains,
+  type VerificationContext as ImmutableRevenueContext
+} from '@bsv/output-knowledge/revenue-listing'
+import type {
+  OutputEvidence as ImmutablePurchaseEvidence,
+  OutputPurchasePrepare as ImmutablePurchaseRequest,
+  OutputSignedPurchaseTerms as ImmutablePurchaseTerms
+} from '@bsv/sdk'
+
+export async function verifyImmutableListingPurchase(
+  activationProgram: Uint8Array,
+  activeProgram: Uint8Array,
+  chains: ImmutableRevenueChains,
+  evidence: ImmutablePurchaseEvidence,
+  original: { request: ImmutablePurchaseRequest; terms: ImmutablePurchaseTerms; seller: string },
+  context: ImmutableRevenueContext,
+  signal: AbortSignal
+) {
+  const profile = new VerifiedRevenueProfile(activationProgram, activeProgram)
+  const verifier = new RevenueListingProfilePurchaseVerifier(profile, chains)
+  const result = await verifier.verify(evidence, original, context, signal)
+  if (result.status !== 'verified') throw new Error(result.status)
+  return { purchaseCommitment: result.purchaseCommitment, lineage: result.lineage }
 }
 ```

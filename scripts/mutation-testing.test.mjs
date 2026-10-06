@@ -52,7 +52,7 @@ test('every core overlay profile fingerprints its canonical and native fixture i
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 142)
+  assert.equal(Object.keys(configured).length, 143)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -1105,7 +1105,7 @@ test('relocated LCH overlay tests retain their independent application dependenc
     )
     assert.equal(new RegExp(mappings[0][0]).test('../src/overlayAcquisition.js'), false)
   }
-  assert.equal(Object.keys(configured).length, 142)
+  assert.equal(Object.keys(configured).length, 143)
 })
 
 test('compound private builds retain every dependency and append the sequential helper input', () => {
@@ -1584,4 +1584,25 @@ test('private HTTP qualification fingerprints every original native fixture and 
     assert.ok(configured['private-acquisition-http'].additionalInputs.includes(input), input)
     assert.ok(configured['private-purchase-http'].additionalInputs.includes(input), input)
   }
+})
+
+test('current immutable listing qualification adds complete sources without changing historical campaigns', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['revenue-listing-profile']
+  assert.deepEqual(target.mutate, [
+    'src/revenue-listing/LineagePackage.ts',
+    'src/revenue-listing/ProfileLineagePackage.ts',
+    'src/revenue-listing/ProfileLineageGraph.ts',
+    'src/revenue-listing/RevenueListingProfileLineageVerifier.ts',
+    'src/revenue-listing/RevenueListingProfilePurchaseVerifier.ts'
+  ])
+  assert.equal(
+    target.propertyTest,
+    'packages/application/output-knowledge/test/revenue-profile.property.test.ts'
+  )
+  assert.equal(target.runnerOptions.jest.enableFindRelatedTests, false)
+  assert.ok(
+    target.runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/test/revenue-profile-work.test.ts'
+    )
+  )
 })

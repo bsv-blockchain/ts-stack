@@ -48,14 +48,20 @@ may install different transaction domains without adopting its revenue model.
 - [x] Provide an independently usable two-stage literal codec with explicit stage
       choice, 717-byte metadata, immutable root/child/weight schedules and mandatory
       height expiry. Match both unchanged positive wire-corpus locks exactly.
-      This component does not yet replace the legacy planner, witness builder or
-      lineage adapter and cannot qualify their behavior.
+      The separately selected current planner, witness and lineage components
+      compose with this codec; native adapter integration remains open.
 - [x] Add separate immutable route planning and funded witness construction with
       reserve-stage activation, purchase, seller-child split, permissionless
       payout and both retirement paths. Reproduce unchanged activation/purchase
       bytes, execute all inputs and eight recipients, and preserve the original
-      300-run controls. These are component interfaces; replacing every legacy
-      adapter and validating signed ancestry remain open.
+      300-run controls. These are component interfaces; adopting them in
+      every native adapter and validating both acquisition sides remain open.
+- [x] Add separately selected current-profile lineage and exact purchase verifiers:
+      reserve-stage authorized genesis, activation ancestry, immutable descriptor,
+      complete raw sources, actual input Scripts and full purchase commitment.
+      Unchanged wire purchases and complete split/payout histories are component
+      evidence. Both retirement Scripts execute; selected-chain retirement,
+      all native/adaptor replacements and buyer/seller composition remain open.
 - [ ] Replace the superseded program, metadata, fixtures and ABI with both frozen
       programs and component manifests. Activation: 33406 program bytes,
       SHA256 `5152517f75ac4159aa5d34211f45ce12cd85386a8d1414169886b0d64dac1dea`.

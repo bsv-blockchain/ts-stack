@@ -1748,6 +1748,18 @@
           "The protected BRC-100 wallet returns only a child public key and signature; no child scalar is exported.",
           "Finality and witness arity match the selected route, and the estimator bounds the actual unlocking size."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/revenue-profile.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Current immutable BRC-197 reserve-stage ancestry, complete-source economics and actual protected-child Script transitions",
+        "target": "At least 300 unchanged-corpus envelope histories and 300 complete normally funded permissionless payouts",
+        "invariants": [
+          "Signed genesis and immutable descriptor are owned without normalizing their wire commitments.",
+          "Every active lineage includes authorized reserve genesis and public child-link activation.",
+          "Permissionless payout pays exact fixed-child quanta and retains reserve and remainders; actual complete input Scripts validate."
+        ]
       }
     ],
     "exclusions": [

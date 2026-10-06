@@ -1436,6 +1436,16 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-listing-profile",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-profile.property.test.ts",
+      "risk": "critical",
+      "boundary": "Current immutable BRC-197 reserve-stage ancestry, complete-source economics and actual protected-child Script transitions",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

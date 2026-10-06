@@ -532,6 +532,40 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true, buildCommand: 'pnpm build' }
       )
     },
+    'revenue-listing-profile': {
+      packageDirectory: 'packages/application/output-knowledge',
+      manifest: 'packages/application/output-knowledge/package.json',
+      propertyTest: 'packages/application/output-knowledge/test/revenue-profile.property.test.ts',
+      additionalInputs: [
+        'src/revenue-listing/**',
+        'src/SDKEvidenceVerifier.ts',
+        'src/EvidenceAssembler.ts',
+        'src/validation.ts',
+        'src/internal/asyncValues.ts',
+        'src/internal/synchronousPromise.ts',
+        'test/revenue-profile*.ts',
+        'test/revenue-lineage-package*.ts',
+        'test/fixtures/revenue-listing/**'
+      ],
+      mutate: [
+        'src/revenue-listing/LineagePackage.ts',
+        'src/revenue-listing/ProfileLineagePackage.ts',
+        'src/revenue-listing/ProfileLineageGraph.ts',
+        'src/revenue-listing/RevenueListingProfileLineageVerifier.ts',
+        'src/revenue-listing/RevenueListingProfilePurchaseVerifier.ts'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/test/revenue-profile.test.ts',
+          '<rootDir>/test/revenue-profile-work.test.ts',
+          '<rootDir>/test/revenue-profile.property.test.ts',
+          '<rootDir>/test/revenue-lineage-package.test.ts',
+          '<rootDir>/test/revenue-lineage-package.property.test.ts'
+        ],
+        { esm: true, buildCommand: 'pnpm build' }
+      )
+    },
     'revenue-listing-purchase': {
       packageDirectory: 'packages/application/output-knowledge',
       manifest: 'packages/application/output-knowledge/package.json',

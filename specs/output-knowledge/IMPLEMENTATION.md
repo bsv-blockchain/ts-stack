@@ -49,7 +49,8 @@ are fully checked. Both output-zero locks match the unchanged PR295 positive
 wire corpus byte for byte. Codec/property tests cover complete ownership,
 descriptor commitments, padding, recipient counts and exact numeric bounds;
 the new profile and extracted public-key modules have complete coverage. This
-does not yet replace the legacy planner, witness builder or lineage adapter.
+composes with the separately selected current planner, witness and lineage
+interfaces below; native adapter integration remains open.
 Packed/browser contracts and compiled examples exercise the new portable entry,
 without qualifying activation, protected signing or private release.
 
@@ -62,8 +63,27 @@ BRC-100 requests select only the seller child for split and early retirement;
 other routes need no seller signature. Full purchase commitments and final-layout
 bindings are construction evidence, not independent lineage or release authority.
 Original 300-run controls cover immutable conservation and fully funded active
-route execution. This component work leaves the signed-lineage, native wallet,
-collector and durable alias integration rows open.
+route execution. This construction component leaves native wallet, collector and durable alias
+integration open; the independent current-lineage verifier is described below.
+
+The optional output-knowledge revenue entry now separately exports current-profile
+lineage and purchase verifiers. They authenticate reserve-stage genesis, require
+child-link activation on each active path, inspect immutable route economics,
+verify bounded chain evidence and execute every actual input Script even for
+mined transitions. Full purchase commitments are returned only after independent
+original-term association and complete successor history succeed. Complete raw
+funding is mandatory; missing declared ancestry remains unresolved. Route inspection
+has no canonical scriptSig ABI requirement. Positive unchanged genesis/activation
+and both wire purchases, protected-child split, permissionless payout, both
+retirement Scripts and original 300-run properties are component evidence.
+The combined current and historical regression profile passes 118 tests, with
+99.7% statements and 96.8% branches over the five changed boundary modules.
+Packed exports, all browser entries under unchanged budgets and 67 compiled
+examples against 24 exact tarballs pass; full campaign and integration evidence
+remain separate.
+Historical exports remain compatible and are explicitly identified as superseded.
+Native wallet/alias ownership, collector/currentness integration and complete
+checkpoint qualification remain open.
 
 ## Historical foundation and qualification record
 

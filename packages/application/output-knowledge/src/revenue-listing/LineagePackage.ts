@@ -4,22 +4,23 @@ import {
   closedOutputObject,
   decodeOutputBytes,
   outputHex32,
+  outputPacketDigest,
   OutputProtocolError,
   parseOutputJSON,
   parseOutputOutpoint,
   verifyOutputPacket,
+  type OutputChain,
   type OutputOutpoint,
   type Transaction
 } from '@bsv/sdk'
 import {
   parseRevenueListingDescriptor,
-  revenueListingId,
   type RevenueListingDescriptor
 } from '@bsv/sdk/script/templates/RevenueListing'
 
-export interface RevenueListingLineagePackage {
+export interface ListingLineagePackage<D extends { chain: OutputChain; seller: string }> {
   version: 1
-  descriptor: RevenueListingDescriptor
+  descriptor: D
   genesis: {
     body: { version: 1; listingId: string; genesis: OutputOutpoint }
     signature: string
@@ -27,6 +28,8 @@ export interface RevenueListingLineagePackage {
   target: OutputOutpoint
   transactions: { txid: string; beef: string }[]
 }
+
+export interface RevenueListingLineagePackage extends ListingLineagePackage<RevenueListingDescriptor> {}
 
 export interface RevenueListingLineageLimits {
   bytes: number
@@ -74,6 +77,15 @@ export function parseRevenueListingLineagePackage(
   input: unknown,
   limits: Partial<RevenueListingLineageLimits> = {}
 ): RevenueListingLineagePackage {
+  return parseListingLineagePackage(input, parseRevenueListingDescriptor, limits)
+}
+
+/** Shared bounded envelope parser. The installed family supplies its own exact descriptor schema. */
+export function parseListingLineagePackage<D extends { chain: OutputChain; seller: string }>(
+  input: unknown,
+  parseDescriptor: (value: unknown) => D,
+  limits: Partial<RevenueListingLineageLimits> = {}
+): ListingLineagePackage<D> {
   const policy = lineageLimits(limits)
   const value = parseOutputJSON(
     typeof input === 'string' || input instanceof Uint8Array
@@ -83,13 +95,16 @@ export function parseRevenueListingLineagePackage(
   )
   closedOutputObject(value, ['version', 'descriptor', 'genesis', 'target', 'transactions'])
   requireLineage(value.version === 1, 'Unknown lineage package version')
-  const descriptor = parseRevenueListingDescriptor(value.descriptor)
+  const descriptor = parseDescriptor(value.descriptor)
   closedOutputObject(value.genesis, ['body', 'signature'])
   closedOutputObject(value.genesis.body, ['version', 'listingId', 'genesis'])
   const body = value.genesis.body
   requireLineage(body.version === 1, 'Unknown genesis version')
   const listingId = outputHex32(body.listingId)
-  requireLineage(listingId === revenueListingId(descriptor), 'Genesis descriptor mismatch')
+  requireLineage(
+    listingId === outputPacketDigest('sale-listing', descriptor),
+    'Genesis descriptor mismatch'
+  )
   const genesis = parseOutputOutpoint(body.genesis),
     target = parseOutputOutpoint(value.target)
   for (const point of [genesis, target])
@@ -127,18 +142,20 @@ export function parseRevenueListingLineagePackage(
   }
 }
 
-export interface LineageAssembly {
-  package: RevenueListingLineagePackage
+export interface LineageAssembly<
+  D extends { chain: OutputChain; seller: string } = RevenueListingDescriptor
+> {
+  package: ListingLineagePackage<D>
   beef: Beef
   transactions: Map<string, Transaction>
   entries: Set<string>
 }
 
 /** Collect every binding before resolving paths. Entry order is never dependency order. */
-export function assembleLineage(
-  input: RevenueListingLineagePackage,
+export function assembleLineage<D extends { chain: OutputChain; seller: string }>(
+  input: ListingLineagePackage<D>,
   limits: Readonly<RevenueListingLineageLimits>
-): LineageAssembly {
+): LineageAssembly<D> {
   const beef = new Beef(),
     transactions = new Map<string, Transaction>(),
     entries = new Set<string>()

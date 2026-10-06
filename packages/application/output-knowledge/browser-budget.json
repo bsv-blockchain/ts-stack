@@ -39,7 +39,10 @@
     "REVENUE_LISTING_LINEAGE_LIMITS",
     "SQLiteRootEvictionStore",
     "SDKRootEvictionEvidence",
-    "RootEvictionContracts"
+    "RootEvictionContracts",
+    "RevenueListingProfileLineageVerifier",
+    "RevenueListingProfilePurchaseVerifier",
+    "parseRevenueListingProfileLineagePackage"
   ],
   "maximumBytes": {
     "vite": {
@@ -194,7 +197,10 @@
       "requiredExports": [
         "RevenueListingLineageVerifier",
         "parseRevenueListingLineagePackage",
-        "REVENUE_LISTING_LINEAGE_LIMITS"
+        "REVENUE_LISTING_LINEAGE_LIMITS",
+        "RevenueListingProfileLineageVerifier",
+        "RevenueListingProfilePurchaseVerifier",
+        "parseRevenueListingProfileLineagePackage"
       ],
       "prohibitedExports": [
         "SQLiteJournal",
