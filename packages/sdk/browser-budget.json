@@ -44,7 +44,10 @@
         "parseRevenueListingState",
         "revenueListingId",
         "encodeRevenueListingState",
-        "decodeRevenueListingState"
+        "decodeRevenueListingState",
+        "revenueListingChildPublicKey",
+        "REVENUE_LISTING_AUTHORITY_PROTOCOL",
+        "REVENUE_LISTING_AUTHORITY_KEY_ID"
       ],
       "prohibitedExports": ["WalletClient", "AuthFetch"],
       "maximumBytes": {
@@ -84,7 +87,7 @@
     },
     {
       "entry": "./script/templates/RevenueListingSpend",
-      "requiredExports": ["RevenueListingSpend"],
+      "requiredExports": ["RevenueListingSpend", "revenueListingPurchaseCommitment"],
       "prohibitedExports": ["WalletClient", "AuthFetch"],
       "maximumBytes": {
         "vite": {

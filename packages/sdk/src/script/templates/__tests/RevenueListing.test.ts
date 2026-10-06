@@ -13,6 +13,9 @@ import {
   revenueListingId,
   encodeRevenueListingState,
   decodeRevenueListingState,
+  revenueListingChildPublicKey,
+  REVENUE_LISTING_AUTHORITY_PROTOCOL,
+  REVENUE_LISTING_AUTHORITY_KEY_ID,
   type RevenueListingDescriptor,
   type RevenueListingState
 } from '../RevenueListing.js'
@@ -31,6 +34,34 @@ beforeAll(() => {
 })
 
 describe('BRC-197 frozen listing codec', () => {
+  test.each([
+    [
+      '037a9375ad6167ad54aa74c6348cc54d344cc5dc9487d847049d5eabb0fa03c8fb',
+      '023b4c5ca0fc8a54ad054abd589ed847f4763e0427f2cb67d29c0c4abe9aae64e1'
+    ],
+    [
+      '02fe8d1eb1bcb3432b1db5833ff5f2226d9cb5e65cee430558c18ed3a3c86ce1af',
+      '0303de460a87b6cd19646468546b8bb566693f7eadc8720f9dea3985e19af9bf40'
+    ],
+    [
+      '03d528ecd9b696b54c907a9ed045447a79bb408ec39b68df504bb51f459bc3ffc9',
+      '028c9313056cd8901f18866415a6a259dc07c344b02a6d7fd97612687c2f9784c3'
+    ]
+  ])('matches the independent current-family public root/child link for %s', (root, child) => {
+    // Unchanged public vectors from BRC PR295 1b9a75e, lineage-vectors.json.
+    expect(revenueListingChildPublicKey(root)).toBe(child)
+    expect(revenueListingChildPublicKey(root)).not.toBe(root)
+    expect(REVENUE_LISTING_AUTHORITY_PROTOCOL).toEqual([2, '3241645161d8'])
+    expect(Object.isFrozen(REVENUE_LISTING_AUTHORITY_PROTOCOL)).toBe(true)
+    expect(REVENUE_LISTING_AUTHORITY_KEY_ID).toBe('brc197 authority')
+  })
+
+  test.each(['', '02', '00'.repeat(33), '04' + '11'.repeat(32), '02' + 'ff'.repeat(32)])(
+    'rejects an invalid root identity %s before public derivation',
+    identity => {
+      expect(() => revenueListingChildPublicKey(identity)).toThrow()
+    }
+  )
   test('matches the independently frozen genesis script byte for byte', () => {
     expect(REVENUE_LISTING_PROGRAM_BYTES).toBe(39580)
     expect(REVENUE_LISTING_SCRIPT_BYTES).toBe(40008)

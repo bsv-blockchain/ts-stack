@@ -1,4 +1,11 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { gunzipSync } from 'node:zlib'
+import { revenueListingPurchaseCommitment } from '../../script/templates/RevenueListingSpend.js'
 import {
+  Beef,
+  Utils,
   canonicalOutputJSON,
   outputPacketDigest,
   parseOutputPotatoes,
@@ -97,6 +104,201 @@ function fixture() {
 }
 
 describe('BRC-196 closed purchase envelopes and original-contract bindings', () => {
+  it('matches both unchanged signed purchase examples from the current independent BRC corpus', () => {
+    const bytes = readFileSync(resolve(__dirname, 'fixtures/purchase-commitment-wire.json.gz'))
+    const vectors = JSON.parse(gunzipSync(bytes).toString('utf8'))
+    expect(vectors.source.commit).toBe('1b9a75e497b5856675af1ce01fd86843c37d07f9')
+    expect(vectors.source.archiveSHA256).toBe(
+      'a8f130d7b0fd89fb301e9327ecef2eb5f39374efb6ade9d7fc0b88c11c63e2eb'
+    )
+    expect(vectors.cases).toHaveLength(2)
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(
+      '9451fecbcc446e507b3c3a78355e43dc6f31ab806aa01ea8f94b3282bca04502'
+    )
+    for (const vector of vectors.cases) {
+      const beef = Beef.fromBinaryStrict(Utils.toArray(vector.submit.beef, 'base64'))
+      const transaction = beef.findTransactionForSigning(vector.submit.txid)!
+      expect(transaction.id('hex')).toBe(vector.submit.txid)
+      expect(revenueListingPurchaseCommitment(transaction)).toBe(
+        vector.envelope.result.purchaseCommitment
+      )
+      const terms = verifyOutputPurchaseTerms(
+        vector.terms,
+        vector.prepare,
+        vector.terms.body.seller
+      )
+      expect(
+        verifyOutputPurchaseEnvelope(
+          vector.pending,
+          terms,
+          vector.submit.txid,
+          vector.envelope.result.purchaseCommitment
+        )
+      ).toEqual(vector.pending)
+      const result = verifyOutputPurchaseEnvelope(
+        vector.envelope,
+        terms,
+        vector.submit.txid,
+        vector.envelope.result.purchaseCommitment
+      )
+      expect(result).toEqual(vector.envelope)
+      expect(result.result.status).toBe('delivered')
+    }
+  })
+  function committedFixture() {
+    const original = fixture()
+    const purchaseCommitment = 'ab'.repeat(32)
+    const terms = signOutputPacket(
+      'purchase-terms',
+      {
+        ...original.body,
+        domainProfile: 'https://bsv.brc.dev/tokens/0197#listing-purchase-v1'
+      },
+      sellerKey
+    )
+    const envelope = {
+      ...original.envelope,
+      result: {
+        ...original.envelope.result,
+        purchaseCommitment,
+        potatoes: signOutputPacket(
+          'potatoes',
+          { ...original.potatoesBody, purchaseCommitment },
+          sellerKey
+        )
+      },
+      currentAlias: { txid: 'cd'.repeat(32), beef: 'AQ==' }
+    }
+    return { ...original, terms, envelope, purchaseCommitment }
+  }
+
+  it('retains a current alias separately from the exact historical signed release', () => {
+    const { envelope, terms, purchaseCommitment } = committedFixture()
+    const original = canonicalOutputJSON(envelope)
+    const owned = verifyOutputPurchaseEnvelope(envelope, terms, txid, purchaseCommitment)
+    expect(canonicalOutputJSON(owned)).toBe(original)
+    expect(owned.result).toEqual(envelope.result)
+    expect(owned.releaseEvidence?.txid).toBe(txid)
+    expect(owned.currentAlias?.txid).not.toBe(txid)
+    envelope.currentAlias.beef = 'Ag=='
+    expect(owned.currentAlias?.beef).toBe('AQ==')
+    // A transport alias is unverified evidence. It cannot substitute for the
+    // historical transaction expected by the independent entitlement owner.
+    expect(() =>
+      verifyOutputPurchaseEnvelope(owned, terms, owned.currentAlias!.txid, purchaseCommitment)
+    ).toThrow('transaction mismatch')
+  })
+
+  it('requires the exemplar commitment after reservation but leaves other domains independent', () => {
+    const { terms, envelope, purchaseCommitment } = committedFixture()
+    const base = {
+      version: 1,
+      acquisitionId: terms.body.acquisitionId,
+      recoveryUntil: terms.body.recoveryUntil
+    }
+    for (const status of ['prepared', 'expired']) {
+      const simple = { result: { ...base, status } }
+      expect(verifyOutputPurchaseEnvelope(simple, terms)).toEqual(simple)
+      expect(() =>
+        parseOutputPurchaseEnvelope({ result: { ...base, status, purchaseCommitment } })
+      ).toThrow('Unknown')
+      expect(() =>
+        parseOutputPurchaseEnvelope({ ...simple, currentAlias: envelope.currentAlias })
+      ).toThrow('reserved purchase')
+    }
+    for (const status of [
+      'admission-pending',
+      'admission-rejected',
+      'admitted-delivery-pending',
+      'delivery-failed',
+      'delivered'
+    ]) {
+      const admitted = ['admitted-delivery-pending', 'delivery-failed', 'delivered'].includes(
+        status
+      )
+      const decided = ['admission-rejected', 'delivery-failed'].includes(status)
+      const input = {
+        result: {
+          ...base,
+          txid,
+          status,
+          purchaseCommitment,
+          ...(admitted ? { steak: envelope.result.steak } : {}),
+          ...(decided
+            ? {
+                decision: {
+                  reason: 'Local decision',
+                  policy: terms.body.releasePolicy,
+                  evidence: 'AA==',
+                  decidedAt: '92',
+                  globalOutcome: 'unknown'
+                }
+              }
+            : {}),
+          ...(status === 'delivered' ? { potatoes: envelope.result.potatoes } : {})
+        },
+        ...(status === 'delivered' ? { releaseEvidence: envelope.releaseEvidence } : {})
+      }
+      expect(verifyOutputPurchaseEnvelope(input, terms, txid, purchaseCommitment)).toEqual(input)
+      const missing: Record<string, unknown> = { ...input.result }
+      delete missing.purchaseCommitment
+      if (status === 'delivered') missing.potatoes = fixture().envelope.result.potatoes
+      expect(() =>
+        verifyOutputPurchaseEnvelope({ ...input, result: missing }, terms, txid)
+      ).toThrow('commitment required')
+    }
+    const other = fixture()
+    expect(verifyOutputPurchaseEnvelope(other.envelope, other.terms, txid)).toEqual(other.envelope)
+  })
+
+  it('checks the full supplied commitment without accepting a digest as Bitcoin proof', () => {
+    const { envelope, terms, purchaseCommitment, potatoesBody } = committedFixture()
+    expect(() => verifyOutputPurchaseEnvelope(envelope, terms, txid, 'ef'.repeat(32))).toThrow(
+      'commitment mismatch'
+    )
+    for (const wrong of ['ab', 'AB'.repeat(32), 'ab'.repeat(31), 'ab'.repeat(33), null])
+      expect(() =>
+        parseOutputPurchaseEnvelope({
+          ...envelope,
+          result: { ...envelope.result, purchaseCommitment: wrong }
+        })
+      ).toThrow()
+    const potatoes = signOutputPacket(
+      'potatoes',
+      { ...potatoesBody, purchaseCommitment: 'ef'.repeat(32) },
+      sellerKey
+    )
+    expect(() =>
+      parseOutputPurchaseEnvelope({ ...envelope, result: { ...envelope.result, potatoes } })
+    ).toThrow('evidence differ')
+    const unsigned = {
+      ...envelope.result.potatoes,
+      body: { ...envelope.result.potatoes.body, purchaseCommitment: 'ef'.repeat(32) }
+    }
+    const changed = {
+      ...envelope,
+      result: { ...envelope.result, purchaseCommitment: 'ef'.repeat(32), potatoes: unsigned }
+    }
+    expect(() => verifyOutputPurchaseEnvelope(changed, terms, txid, 'ef'.repeat(32))).toThrow(
+      'signature failed'
+    )
+    expect(() =>
+      verifyOutputPurchaseEnvelope(envelope, terms, 'cd'.repeat(32), purchaseCommitment)
+    ).toThrow('transaction mismatch')
+  })
+
+  it('rejects unknown and malformed alias fields while preserving owned BEEF bytes', () => {
+    const { envelope } = committedFixture()
+    for (const currentAlias of [
+      { txid: 'cd'.repeat(32) },
+      { beef: 'AQ==' },
+      { ...envelope.currentAlias, verified: true },
+      { ...envelope.currentAlias, txid: 'cd' },
+      { ...envelope.currentAlias, beef: 'not base64' }
+    ])
+      expect(() => parseOutputPurchaseEnvelope({ ...envelope, currentAlias })).toThrow()
+  })
+
   it('owns preparation, submit and uncharged recovery representations', () => {
     const { request } = fixture()
     const owned = parseOutputPurchasePrepare(JSON.stringify(request))

@@ -1,4 +1,5 @@
 import fc from 'fast-check'
+import { createHash } from 'node:crypto'
 import {
   makeFamily,
   corpus,
@@ -7,7 +8,7 @@ import {
   action,
   transaction
 } from './RevenueListing.fixture.js'
-import { RevenueListingSpend } from '../RevenueListingSpend.js'
+import { RevenueListingSpend, revenueListingPurchaseCommitment } from '../RevenueListingSpend.js'
 import TransactionSignature from '../../../primitives/TransactionSignature.js'
 import { toHex, Writer } from '../../../primitives/utils.js'
 
@@ -59,6 +60,10 @@ test('purchase unlocking ABI binds generated headers and change to every indepen
           scope: 65
         })
         expect(chunks[0].data).toEqual(expected)
+        const commitment = createHash('sha256')
+          .update(createHash('sha256').update(Uint8Array.from(expected)).digest())
+          .digest('hex')
+        expect(revenueListingPurchaseCommitment(tx)).toBe(commitment)
         const prevouts = new Writer()
         for (const source of trace.sources)
           prevouts

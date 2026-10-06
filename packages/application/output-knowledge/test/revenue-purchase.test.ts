@@ -1,4 +1,5 @@
 import { expect, it } from '@jest/globals'
+import { createHash } from 'node:crypto'
 import {
   Beef,
   canonicalOutputJSON,
@@ -35,6 +36,12 @@ it('verifies a real funded BRC-196 receipt and every covenant back to the author
   expect(result.successor).toEqual({ ...f.prepared.target, txid: f.purchase.txid })
   expect(result.previousSatoshis).toBe(f.prepared.descriptor.reserve)
   expect(result.increment).toBe(f.prepared.descriptor.purchasePrice)
+  const preimage = f.completed.inputs[0].unlockingScript!.chunks[0].data!
+  expect(result.purchaseCommitment).toBe(
+    createHash('sha256')
+      .update(createHash('sha256').update(Uint8Array.from(preimage)).digest())
+      .digest('hex')
+  )
   expect(BigInt(result.lineage.satoshis)).toBe(
     BigInt(result.previousSatoshis) + BigInt(result.increment)
   )

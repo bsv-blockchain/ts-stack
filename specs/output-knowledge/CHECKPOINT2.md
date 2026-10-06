@@ -2,6 +2,11 @@
 
 This inventory tracks completion of the approved BRC-192–199 reference
 implementation. It complements the chronological [implementation record](./IMPLEMENTATION.md).
+The current specification baseline is [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
+at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Its pre-adoption replacement
+requires fresh alignment and qualification. Historical integration evidence for
+the earlier exemplar does not qualify the replacement. The outstanding contract
+changes are tracked in [specification alignment](./SPEC-ALIGNMENT.md).
 Passing a component test does not complete an end-to-end row. Integration marks
 below describe demonstrated reference workflows, not production deployment or
 final hosted qualification. The final review checkpoint additionally requires the
@@ -32,21 +37,27 @@ the PR completion evidence; this document does not self-certify those gates.
 - [x] Install concrete domain/LCH material validation and demonstrate BRC-198
       acquisition and playback while preserving ordinary BRC-170 use.
 
-## Covenant purchases and revenue
+## Transactional private acquisition and the reference revenue family
 
-- [x] Compose authorized genesis and complete lineage validation with actual
-      wallet-funded purchase, split, merge, payout, unanimous recipient-change and
-      retirement transactions. Exercise their scripts and economic refusals.
+- [ ] Compose authorized reserve-stage genesis, verified public child-link
+      activation and complete lineage validation with wallet-funded purchase,
+      seller-child split, permissionless payout and seller-child or expiry
+      retirement. Exercise both frozen programs, all recipient slots, economic
+      refusals and the route-specific finality boundary. Merge and schedule
+      amendment are outside this reference family.
 - [x] Durably merge independently verified alternate BEEF proofs for the same raw
       transaction without replacing original custody, payment, admission or delivery.
       Native cumulative custody, controlled lifecycle boundaries and the richer
       complete Script/domain/actual-host composition pass.
-- [x] Demonstrate authenticated topic submission returning bound STEAK and
-      POTATOES, with retained original admission and release-policy recovery. Show
-      that admission alone does not establish mining or decryption.
-- [x] Demonstrate retained remainders, exact final payout with external top-up,
-      recipient consent and the distinction between additional contributed value
-      and an authenticated related lineage.
+- [ ] Demonstrate authenticated topic submission returning bound STEAK and
+      POTATOES with a full verified purchase commitment and separately retained
+      admission evidence for every transaction alias. Exercise mined-alias
+      selection before issuance and immutable historical entitlement after
+      issuance, including native restart and bounded alias custody.
+- [ ] Demonstrate immutable distribution, protected child signing and fixed-child
+      remittance, retained remainders and exact final payout with external top-up.
+      The reference family is optional; reusable private acquisition ports do
+      not assume its revenue model.
 
 ## Root-host coordination
 
@@ -58,7 +69,7 @@ the PR completion evidence; this document does not self-certify those gates.
 
 ## Package, documentation and final qualification
 
-- [x] Finish public SDK/host/tooling exports, compiled examples, application and
+- [ ] Finish public SDK/host/tooling exports, compiled examples, application and
       operator guides, migration decisions and shutdown/recovery instructions.
 
 Final qualification must verify affected conformance, compatibility,
@@ -85,10 +96,10 @@ tests and the original two actual Chrome/IndexedDB profiles pass; the admission 
 actual Engine/Mongo. The native licensed-purchase composition now exercises real
 wallet funding/reopen, authenticated HTTP, original retained admission, private
 custody and recipient-bound LCH decryption, including lost replies and concurrent
-buyers. The complete host union passes 878 tests. All six native economic routes
-also execute with full authorized genesis/lineage, unanimous amendment, retained
-remainders and exact final top-up/payout. See the implementation record and the
-purchase custody guide for commands and assurance limits.
+buyers. The earlier complete host union passed 878 tests. Those purchase receipts
+predate PR295 and do not qualify its replacement Script, signing, finality or
+alias-recovery contract. The native purchase composition must be adapted and
+revalidated against the current family before its acceptance rows can close.
 
 These integration receipts establish concrete progress. They still require
 complete published-source and final qualification evidence. Native protected
@@ -136,13 +147,13 @@ complete campaign or final PR gate.
   [buyer guide](../../docs/guides/durable-private-lookup-buyer.md) and
   [acquisition recovery guide](../../docs/guides/private-acquisition-recovery.md)
   explain original quote, wallet and result custody and explicit usability checks.
-- Covenant acquisition, topical STEAK/POTATOES and licensed decryption: run
-  Overlay Express `src/__tests__/PrivatePurchaseNative.integration.test.ts`.
-  For all six native economic routes, run output-knowledge
-  `test/private-purchase-wallet-routes.test.ts`. Follow the
-  [purchase custody guide](../../docs/guides/private-purchase-custody.md) for
-  exact commands, full lineage/authority premises, retained remainders, unanimous
-  recipient amendment and externally funded exact final payout.
+- Transactional private acquisition, topical STEAK/POTATOES and licensed
+  decryption: Overlay Express `src/__tests__/PrivatePurchaseNative.integration.test.ts`
+  and output-knowledge `test/private-purchase-wallet-routes.test.ts` are the
+  native integration owners. Update them to the current activation/active
+  family, fixed-child authority/remittance and commitment-based recovery before
+  treating them as current qualification. The purchase custody guide requires
+  the same alignment; earlier route and signer examples are superseded.
 - Independent root serving and retained public history: run Overlay Express
   `src/__tests__/PrivateOverlayHostRootServing.integration.test.ts` for both SHIP
   and SLAP. It composes actual Engine/Mongo, two independent root journals, finite

@@ -36,27 +36,31 @@ const signedTerms = s.object({ body: terms, signature: s.bytes })
 const submit = s.object({ version: s.literal(1), acquisitionId: s.hex, txid: s.hex, beef: s.bytes })
 const recover = s.object({ version: s.literal(1), acquisitionId: s.hex })
 const potatoes = s.object({
-  body: s.object({
-    version: s.literal(1),
-    acquisitionId: s.hex,
-    requestDigest: s.hex,
-    seller: s.identity,
-    recipient: s.identity,
-    topic: s.text,
-    txid: s.hex,
-    assetId: s.hex,
-    termsDigest: s.hex,
-    releasePolicy: parseOutputReleasePolicy,
-    evidenceDigest: s.hex,
-    schema: s.iri,
-    secret: s.bytes,
-    issuedAt: s.u64,
-    recoveryUntil: s.u64
-  }),
+  body: s.object(
+    {
+      version: s.literal(1),
+      acquisitionId: s.hex,
+      requestDigest: s.hex,
+      seller: s.identity,
+      recipient: s.identity,
+      topic: s.text,
+      txid: s.hex,
+      assetId: s.hex,
+      termsDigest: s.hex,
+      releasePolicy: parseOutputReleasePolicy,
+      evidenceDigest: s.hex,
+      schema: s.iri,
+      secret: s.bytes,
+      issuedAt: s.u64,
+      recoveryUntil: s.u64
+    },
+    { purchaseCommitment: s.hex }
+  ),
   signature: s.bytes
 })
 const common = { version: s.literal(1), acquisitionId: s.hex, recoveryUntil: s.u64 }
 const reserved = { ...common, txid: s.hex }
+const candidateIdentity = { purchaseCommitment: s.hex }
 const admitted = { ...reserved, steak: parseOutputSTEAK }
 const decision = s.object({
   reason: s.text,
@@ -68,20 +72,38 @@ const decision = s.object({
 const result = s.tagged('status', {
   prepared: s.object({ ...common, status: s.literal('prepared') }),
   expired: s.object({ ...common, status: s.literal('expired') }),
-  'admission-pending': s.object({ ...reserved, status: s.literal('admission-pending') }),
-  'admission-rejected': s.object({
-    ...reserved,
-    status: s.literal('admission-rejected'),
-    decision
-  }),
-  'admitted-delivery-pending': s.object({
-    ...admitted,
-    status: s.literal('admitted-delivery-pending')
-  }),
-  'delivery-failed': s.object({ ...admitted, status: s.literal('delivery-failed'), decision }),
-  delivered: s.object({ ...admitted, status: s.literal('delivered'), potatoes })
+  'admission-pending': s.object(
+    { ...reserved, status: s.literal('admission-pending') },
+    candidateIdentity
+  ),
+  'admission-rejected': s.object(
+    {
+      ...reserved,
+      status: s.literal('admission-rejected'),
+      decision
+    },
+    candidateIdentity
+  ),
+  'admitted-delivery-pending': s.object(
+    {
+      ...admitted,
+      status: s.literal('admitted-delivery-pending')
+    },
+    candidateIdentity
+  ),
+  'delivery-failed': s.object(
+    { ...admitted, status: s.literal('delivery-failed'), decision },
+    candidateIdentity
+  ),
+  delivered: s.object({ ...admitted, status: s.literal('delivered'), potatoes }, candidateIdentity)
 })
-const envelope = s.object({ result }, { releaseEvidence: parseOutputReleaseEvidence })
+const envelope = s.object(
+  { result },
+  {
+    releaseEvidence: parseOutputReleaseEvidence,
+    currentAlias: s.object({ txid: s.hex, beef: s.bytes })
+  }
+)
 
 export type OutputPurchasePrepare = ReturnType<typeof prepare>
 export type OutputPurchaseTerms = ReturnType<typeof terms>
@@ -91,6 +113,10 @@ export type OutputPurchaseRecover = ReturnType<typeof recover>
 export type OutputSignedPotatoes = ReturnType<typeof potatoes>
 export type OutputPurchaseResult = ReturnType<typeof result>
 export type OutputPurchaseEnvelope = ReturnType<typeof envelope>
+/** Transport evidence only. Independently verify the complete transaction,
+ * purchase commitment and selected-chain placement before using this alias.
+ */
+export type OutputPurchaseCurrentAlias = NonNullable<OutputPurchaseEnvelope['currentAlias']>
 
 /** Closed representation only; caller authentication and domain validation are separate. */
 export const parseOutputPurchasePrepare = (input: unknown): OutputPurchasePrepare =>
@@ -120,12 +146,17 @@ export function parseOutputPurchaseEnvelope(input: unknown): OutputPurchaseEnvel
     Object.hasOwn(parsed, 'releaseEvidence') === (response.status === 'delivered'),
     'Release evidence belongs exactly to delivered purchases'
   )
+  outputAssert(
+    parsed.currentAlias === undefined || 'txid' in response,
+    'A current alias requires a reserved purchase'
+  )
   if (response.status === 'delivered') {
     const body = response.potatoes.body,
       evidence = parsed.releaseEvidence!
     outputAssert(
       body.acquisitionId === response.acquisitionId &&
         body.txid === response.txid &&
+        body.purchaseCommitment === response.purchaseCommitment &&
         body.recoveryUntil === response.recoveryUntil &&
         evidence.txid === response.txid &&
         canonicalOutputJSON(body.releasePolicy) === canonicalOutputJSON(evidence.policy) &&
@@ -183,7 +214,11 @@ export function verifyOutputPurchaseTerms(
 export function verifyOutputPurchaseEnvelope(
   input: unknown,
   originalTerms: OutputSignedPurchaseTerms,
-  expectedTxid?: string
+  expectedTxid?: string,
+  /** Independently derived from a fully verified domain purchase. A supplied
+   * commitment never relaxes exact historical txid or release-evidence checks.
+   */
+  expectedPurchaseCommitment?: string
 ): OutputPurchaseEnvelope {
   const original = parseOutputPurchaseTerms(originalTerms),
     termsBody = original.body
@@ -192,7 +227,9 @@ export function verifyOutputPurchaseEnvelope(
     'Original purchase terms signature failed',
     'unauthorized'
   )
-  const txid = expectedTxid === undefined ? undefined : s.hex(expectedTxid)
+  const txid = expectedTxid === undefined ? undefined : s.hex(expectedTxid),
+    commitment =
+      expectedPurchaseCommitment === undefined ? undefined : s.hex(expectedPurchaseCommitment)
   const parsed = parseOutputPurchaseEnvelope(input),
     response = parsed.result
   outputAssert(
@@ -205,6 +242,13 @@ export function verifyOutputPurchaseEnvelope(
       txid !== undefined && response.txid === txid,
       'Purchase response transaction mismatch'
     )
+    if (termsBody.domainProfile === 'https://bsv.brc.dev/tokens/0197#listing-purchase-v1')
+      outputAssert(
+        response.purchaseCommitment !== undefined,
+        'Listing purchase commitment required'
+      )
+    if (commitment !== undefined)
+      outputAssert(response.purchaseCommitment === commitment, 'Purchase commitment mismatch')
   }
   if ('decision' in response) {
     outputAssert(

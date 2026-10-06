@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto'
-import { RevenueListingSpend, type PreparedRevenueListingSpend } from '../RevenueListingSpend.js'
+import {
+  RevenueListingSpend,
+  revenueListingPurchaseCommitment,
+  type PreparedRevenueListingSpend
+} from '../RevenueListingSpend.js'
 import { type RevenueListing } from '../RevenueListing.js'
 import { planRevenueListingSpend } from '../RevenueListingPlan.js'
 import {
@@ -24,6 +28,59 @@ beforeAll(() => {
   family = makeFamily()
 })
 const keys = Array.from({ length: 20 }, (_, index) => new PrivateKey(index + 41))
+
+test('purchase commitment preserves the full independent SHA256d preimage digest', () => {
+  const trace = accepted.find(item => item.operation === 1)!
+  const tx = transaction(trace.txid)
+  trace.sources.forEach((source, index) => {
+    tx.inputs[index].sourceTransaction = transaction(source.txid)
+  })
+  const witness = tx.inputs[0].unlockingScript!.chunks[0].data!
+  const digest = createHash('sha256')
+    .update(createHash('sha256').update(Uint8Array.from(witness)).digest())
+    .digest('hex')
+  const original = tx.toHex()
+  expect(revenueListingPurchaseCommitment(tx)).toBe(digest)
+  expect(digest).toHaveLength(64)
+  expect(tx.toHex()).toBe(original)
+  // Header/output changes affect the calculation. No Script acceptance or
+  // equivalence claim is made for these unsigned calculation inputs.
+  tx.version = tx.version === 1 ? 2 : 1
+  expect(revenueListingPurchaseCommitment(tx)).not.toBe(digest)
+  tx.version = 3
+  expect(revenueListingPurchaseCommitment(tx)).not.toBe(digest)
+  tx.outputs[0].satoshis! += 1
+  expect(revenueListingPurchaseCommitment(tx)).not.toBe(digest)
+})
+
+test('purchase commitment refuses absent or contradictory source data and nonfinal purchases', () => {
+  const trace = accepted.find(item => item.operation === 1)!
+  const fresh = () => {
+    const tx = transaction(trace.txid)
+    trace.sources.forEach((source, index) => {
+      tx.inputs[index].sourceTransaction = transaction(source.txid)
+    })
+    return tx
+  }
+  const absent = fresh()
+  delete absent.inputs[0].sourceTransaction
+  expect(() => revenueListingPurchaseCommitment(absent)).toThrow('predecessor evidence required')
+  const wrong = fresh()
+  wrong.inputs[0].sourceTransaction = transaction(trace.sources[1].txid)
+  expect(() => revenueListingPurchaseCommitment(wrong)).toThrow('predecessor identity mismatch')
+  const missing = fresh()
+  missing.inputs[0].sourceOutputIndex = 999
+  expect(() => revenueListingPurchaseCommitment(missing)).toThrow('output missing')
+  const locked = fresh()
+  locked.lockTime = 1
+  expect(() => revenueListingPurchaseCommitment(locked)).toThrow('final purchase header')
+  const nonfinal = fresh()
+  nonfinal.inputs[1].sequence = 0xfffffffe
+  expect(() => revenueListingPurchaseCommitment(nonfinal)).toThrow('final inputs')
+  const negative = fresh()
+  negative.outputs[0].satoshis = 0
+  expect(() => revenueListingPurchaseCommitment(negative)).toThrow('funded amount')
+})
 function fixture(name: string) {
   const trace = accepted.find(item => item.name === name)!
   const tx = transaction(trace.txid)

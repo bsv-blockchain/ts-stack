@@ -117,6 +117,9 @@ disclosure layers behind explicitly selected BRC-194 endpoints.
 
 ## Private acquisition and recovery
 
+- [Purchase commitments and public child keys](./revenue-listing-commitments.md):
+  calculate the stable purchase identity, bind historical signed release and
+  independently assess current aliases under the optional reference domain.
 - [Authenticated seller acquisition and recovery](./private-acquisition-recovery.md):
   compose durable obligations, wallet credits, disclosure and the optional host.
 - [Explicit paid lookup clients and protected workflow state](./paid-lookup-client.md):

@@ -13,6 +13,7 @@ import {
 } from '@bsv/sdk'
 import { RevenueListing } from '@bsv/sdk/script/templates/RevenueListing'
 import { planRevenueListingSpend } from '@bsv/sdk/script/templates/RevenueListingPlan'
+import { revenueListingPurchaseCommitment } from '@bsv/sdk/script/templates/RevenueListingSpend'
 import type { ChainViewResolver } from '../SDKEvidenceVerifier.js'
 import { parseVerificationContext } from '../validation.js'
 import type { VerificationContext } from '../ports.js'
@@ -47,6 +48,10 @@ export type RevenueListingPurchaseResult =
       successor: OutputPurchasePrepare['listing']
       previousSatoshis: string
       increment: string
+      /** Full input-zero SHA256d preimage digest, returned only after complete
+       * Bitcoin, Script, lineage and original-request verification succeeds.
+       */
+      purchaseCommitment: string
     }
   | (Exclude<RevenueListingLineageResult, { status: 'verified' }> & {
       /** Bounded local diagnostic for preparation/ABI refusals. Not a wire
@@ -127,7 +132,8 @@ export class RevenueListingPurchaseVerifier {
         predecessor: { ...terms.body.listing, chain: { ...terms.body.listing.chain } },
         successor: { ...verified.target, chain: { ...verified.target.chain } },
         previousSatoshis: combined.previousSatoshis,
-        increment: prepared.descriptor.purchasePrice
+        increment: prepared.descriptor.purchasePrice,
+        purchaseCommitment: combined.purchaseCommitment
       }
     } catch (error) {
       return purchaseFailure(error)
@@ -162,10 +168,14 @@ export class RevenueListingPurchaseVerifier {
     purchase: OutputEvidence,
     terms: OutputSignedPurchaseTerms,
     limits: Readonly<RevenueListingLineageLimits>
-  ): { package: RevenueListingLineagePackage; previousSatoshis: string } {
+  ): {
+    package: RevenueListingLineagePackage
+    previousSatoshis: string
+    purchaseCommitment: string
+  } {
     const next = this.extendHistory(prepared, purchase, limits),
-      previousSatoshis = this.bindTransaction(prepared, purchase, terms, next, limits)
-    return { package: next, previousSatoshis }
+      bound = this.bindTransaction(prepared, purchase, terms, next, limits)
+    return { package: next, ...bound }
   }
   /** Preserve original evidence association before assembling the successor. */
   private extendHistory(
@@ -201,7 +211,7 @@ export class RevenueListingPurchaseVerifier {
     terms: OutputSignedPurchaseTerms,
     next: RevenueListingLineagePackage,
     limits: Readonly<RevenueListingLineageLimits>
-  ): string {
+  ): { previousSatoshis: string; purchaseCommitment: string } {
     const assembly = assembleLineage(next, limits),
       tx = assembly.beef.findTransactionForSigning(purchase.txid),
       previous = assembly.transactions.get(prepared.target.txid)
@@ -233,7 +243,10 @@ export class RevenueListingPurchaseVerifier {
     )
     // Full lineage verification executes the actual covenant even for a mined
     // purchase and independently verifies funding/ancestor Bitcoin evidence.
-    return plan.inputs[0].satoshis
+    return {
+      previousSatoshis: plan.inputs[0].satoshis,
+      purchaseCommitment: revenueListingPurchaseCommitment(tx)
+    }
   }
 }
 function purchaseFailure(

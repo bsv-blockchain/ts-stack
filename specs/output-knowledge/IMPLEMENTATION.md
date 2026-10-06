@@ -1,7 +1,9 @@
 # Output knowledge implementation qualification
 
-This branch implements the proposed [BRC-192–199 packet](https://github.com/bsv-blockchain/BRCs/pull/284).
-The specification checkpoint is approved for implementation. The implementation
+This branch implements the application-neutral [BRC-192–199 packet](https://github.com/bsv-blockchain/BRCs/pull/284)
+with current amendments in [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
+at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. The specification checkpoint is
+approved for implementation. The implementation
 checkpoint remains open; neither an initial package version nor passing foundation
 tests announces completion, publication or production qualification.
 
@@ -9,7 +11,28 @@ The core contracts remain application-neutral. Application examples demonstrate
 the contracts without defining their semantics. Existing wallet, overlay, lookup,
 submission and GASP behavior remains available to applications that do not opt in.
 
-## Implemented foundation
+## Current contract alignment
+
+[The alignment inventory](./SPEC-ALIGNMENT.md) tracks the replacement reference
+family, stable purchase commitments, alias recovery and route-specific finality.
+BRC-197 is one optional transaction domain exercising the shared architecture.
+Its earlier program, signing and economic-route receipts do not qualify the
+replacement. Full current-source integration and hosted qualification remain open.
+
+The first alignment batch extends closed purchase envelopes with commitments and
+separate current-alias evidence. It binds the full commitment in POTATOES without
+changing historical release txids, calculates the complete SHA256d input preimage
+digest, and returns it after purchase verification succeeds. It also provides
+the fixed public child derivation for subsequent Script/wallet integration. These
+calculations do not themselves establish Bitcoin validity, authorized activation,
+selected-chain settlement, secret usability or native alias recovery.
+
+## Historical foundation and qualification record
+
+The following milestones describe earlier source and contract versions. They
+preserve engineering provenance, not a support claim for superseded reference
+programs or a current checkpoint certification. Current acceptance is governed
+by the alignment inventory and final exact-source qualification.
 
 - Additive SDK wire codecs, canonical encodings, digest domains, signed capability
   profiles, observation schemas and bounded BRC-193 request/response schemas,

@@ -1,6 +1,10 @@
 import fc from 'fast-check'
 import { outputPacketDigest, signOutputPacket } from '../OutputProtocol.js'
-import { verifyOutputPurchaseTerms } from '../OutputPurchaseProtocol.js'
+import {
+  parseOutputPurchaseEnvelope,
+  verifyOutputPurchaseTerms,
+  verifyOutputPurchaseEnvelope
+} from '../OutputPurchaseProtocol.js'
 import PrivateKey from '../../primitives/PrivateKey.js'
 import { toBase64 } from '../../primitives/utils.js'
 
@@ -12,6 +16,86 @@ fc.configureGlobal({
   numRuns: Number.isSafeInteger(runs) ? Math.max(MIN_PROPERTY_RUNS, runs) : MIN_PROPERTY_RUNS,
   ...(Number.isSafeInteger(seed) ? { seed } : {}),
   ...(path ? { path } : {})
+})
+
+test('reserved commitments bind all 32 bytes and current aliases never rewrite historical delivery', () => {
+  const key = new PrivateKey(83),
+    seller = key.toPublicKey().toString()
+  const recipient = new PrivateKey(84).toPublicKey().toString()
+  const chain = { network: 'purchase-commitment-property', genesisHash: '11'.repeat(32) }
+  fc.assert(
+    fc.property(
+      fc.uint8Array({ minLength: 32, maxLength: 32 }),
+      fc.integer({ min: 0, max: 31 }),
+      fc.uint8Array({ maxLength: 128 }),
+      (bytes, position, aliasEvidence) => {
+        const commitment = Buffer.from(bytes).toString('hex')
+        const original = signOutputPacket(
+          'purchase-terms',
+          {
+            version: 1 as const,
+            acquisitionId: '22'.repeat(32),
+            requestDigest: '33'.repeat(32),
+            seller,
+            recipient,
+            topic: 'tm_property',
+            listing: { chain, txid: '44'.repeat(32), outputIndex: 0 },
+            assetId: '55'.repeat(32),
+            termsDigest: '66'.repeat(32),
+            domainProfile: 'https://bsv.brc.dev/tokens/0197#listing-purchase-v1',
+            domainEvidence: { schema: 'urn:fixture:lineage', bytes: 'AA==' },
+            releasePolicy: { kind: 'local-admission' as const },
+            purchaseUntil: '100',
+            recoveryUntil: '86500'
+          },
+          key
+        )
+        const envelope = {
+          result: {
+            version: 1,
+            acquisitionId: original.body.acquisitionId,
+            status: 'admission-pending',
+            txid: '77'.repeat(32),
+            purchaseCommitment: commitment,
+            recoveryUntil: original.body.recoveryUntil
+          },
+          currentAlias: { txid: '88'.repeat(32), beef: toBase64(Array.from(aliasEvidence)) }
+        }
+        const verified = verifyOutputPurchaseEnvelope(
+          envelope,
+          original,
+          envelope.result.txid,
+          commitment
+        )
+        expect(verified).toEqual(envelope)
+        const changed = new Uint8Array(bytes)
+        changed[position] ^= 1
+        expect(() =>
+          verifyOutputPurchaseEnvelope(
+            envelope,
+            original,
+            envelope.result.txid,
+            Buffer.from(changed).toString('hex')
+          )
+        ).toThrow('commitment mismatch')
+        expect(() =>
+          verifyOutputPurchaseEnvelope(envelope, original, envelope.currentAlias.txid, commitment)
+        ).toThrow('transaction mismatch')
+        envelope.currentAlias.beef = toBase64([...aliasEvidence, 1])
+        expect(verified.currentAlias?.beef).toBe(toBase64(Array.from(aliasEvidence)))
+        const without = { ...envelope.result } as Partial<typeof envelope.result>
+        delete without.purchaseCommitment
+        expect(() =>
+          verifyOutputPurchaseEnvelope(
+            { ...envelope, result: without },
+            original,
+            envelope.result.txid
+          )
+        ).toThrow('commitment required')
+        expect(parseOutputPurchaseEnvelope(verified)).toEqual(verified)
+      }
+    )
+  )
 })
 
 test('seller terms retain the exact selected request and minimum recovery interval', () => {

@@ -2295,3 +2295,44 @@ function recipientContext(
 }
 export { recipientContext }
 ```
+
+## Purchase commitments and historical release
+
+An installed domain must independently verify the exact historical transaction,
+including every Script, receipt and complete lineage, before this binding step.
+Current-alias BEEF remains separate evidence requiring its own domain and chain
+assessment; it cannot replace the historical signed release.
+
+```ts compile
+// example-id: purchase-commitment-historical-release
+import {
+  Transaction as HistoricalPurchaseTransaction,
+  verifyOutputPurchaseEnvelope as bindHistoricalPurchaseEnvelope,
+  type OutputSignedPurchaseTerms as HistoricalPurchaseTerms
+} from '@bsv/sdk'
+import { revenueListingPurchaseCommitment as historicalPurchaseCommitment } from '@bsv/sdk/script/templates/RevenueListingSpend'
+import { revenueListingChildPublicKey as deriveHistoricalSellerChild } from '@bsv/sdk/script/templates/RevenueListing'
+
+export function bindHistoricalPurchase(
+  domainVerifiedHistoricalTransaction: HistoricalPurchaseTransaction,
+  originalTerms: HistoricalPurchaseTerms,
+  authenticatedEnvelope: unknown
+) {
+  const commitment = historicalPurchaseCommitment(domainVerifiedHistoricalTransaction)
+  const envelope = bindHistoricalPurchaseEnvelope(
+    authenticatedEnvelope,
+    originalTerms,
+    domainVerifiedHistoricalTransaction.id('hex'),
+    commitment
+  )
+  return {
+    envelope,
+    commitment,
+    publicSellerChild: deriveHistoricalSellerChild(originalTerms.body.seller)
+  }
+}
+```
+
+This pure step neither funds nor signs and does not establish secret usability.
+The complete replacement Script, wallet, alias-recovery and LCH compositions
+remain distinct checkpoint requirements.

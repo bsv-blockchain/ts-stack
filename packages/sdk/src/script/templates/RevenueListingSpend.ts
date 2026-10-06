@@ -2,7 +2,7 @@ import Transaction from '../../transaction/Transaction.js'
 import TransactionSignature from '../../primitives/TransactionSignature.js'
 import PublicKey from '../../primitives/PublicKey.js'
 import BigNumber from '../../primitives/BigNumber.js'
-import { sha256 } from '../../primitives/Hash.js'
+import { sha256, hash256 } from '../../primitives/Hash.js'
 import { toArray, toHex, Writer } from '../../primitives/utils.js'
 import Script from '../Script.js'
 import UnlockingScript from '../UnlockingScript.js'
@@ -174,6 +174,39 @@ function preimage(tx: Transaction, index: number): number[] {
     lockTime: tx.lockTime,
     scope: 0x41
   })
+}
+
+/**
+ * Calculate the full BRC-197 purchase commitment from owned transaction bytes.
+ * This is SHA256d of the complete authenticated input-zero 0x41 preimage, never
+ * the reduced Script scalar. Calculation does not establish Script validity,
+ * authorized lineage, receipt eligibility or selected-chain placement: the
+ * installed domain must verify those independently before accepting this value.
+ */
+export function revenueListingPurchaseCommitment(transaction: Transaction): string {
+  const listing = transaction.inputs[0]
+  outputAssert(listing?.sourceTransaction !== undefined, 'Listing predecessor evidence required')
+  const source = sourceTransaction(listing.sourceTransaction)
+  const tx = snapshot(transaction)
+  outputAssert(tx.lockTime === 0, 'Purchase commitment requires a final purchase header')
+  for (const input of tx.inputs) {
+    outputAssert(input.sequence === 0xffffffff, 'Purchase commitment requires final inputs')
+    outputAssert(
+      typeof input.sourceTXID === 'string' && /^[0-9a-f]{64}$/.test(input.sourceTXID),
+      'Purchase commitment requires exact input identities'
+    )
+    outputU32(input.sourceOutputIndex)
+  }
+  outputAssert(
+    tx.inputs[0].sourceTXID === source.id('hex'),
+    'Listing predecessor identity mismatch'
+  )
+  const output = source.outputs[tx.inputs[0].sourceOutputIndex]
+  outputAssert(output !== undefined, 'Listing predecessor output missing')
+  positiveAmount(output.satoshis)
+  for (const required of tx.outputs) positiveAmount(required.satoshis)
+  tx.inputs[0].sourceTransaction = source
+  return toHex(hash256(preimage(tx, 0)))
 }
 function signatureHex(value: unknown): string {
   outputAssert(

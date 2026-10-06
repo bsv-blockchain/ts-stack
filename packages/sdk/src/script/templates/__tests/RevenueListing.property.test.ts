@@ -1,7 +1,12 @@
 import fc from 'fast-check'
 import PrivateKey from '../../../primitives/PrivateKey.js'
+import ProtoWallet from '../../../wallet/ProtoWallet.js'
 import { toHex } from '../../../primitives/utils.js'
-import { encodeRevenueListingState, decodeRevenueListingState } from '../RevenueListing.js'
+import {
+  encodeRevenueListingState,
+  decodeRevenueListingState,
+  revenueListingChildPublicKey
+} from '../RevenueListing.js'
 
 const MIN_PROPERTY_RUNS = 300
 const runs = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -15,6 +20,23 @@ fc.configureGlobal({
 const identities = Array.from({ length: 8 }, (_, index) =>
   new PrivateKey(index + 1).toPublicKey().toString()
 ).sort((left, right) => left.localeCompare(right, 'en'))
+
+test('public child derivation agrees with protected BRC-100 wallet derivation without exporting a child scalar', async () => {
+  await fc.assert(
+    fc.asyncProperty(fc.integer({ min: 1, max: 1000000 }), async value => {
+      const wallet = new ProtoWallet(new PrivateKey(value))
+      const root = await wallet.getPublicKey({ identityKey: true })
+      const derived = await wallet.getPublicKey({
+        protocolID: [2, '3241645161d8'],
+        keyID: 'brc197 authority',
+        counterparty: 'anyone',
+        forSelf: true
+      })
+      expect(revenueListingChildPublicKey(root.publicKey)).toBe(derived.publicKey)
+      expect(derived.publicKey).not.toBe(root.publicKey)
+    })
+  )
+})
 
 test('exact revenue-state encoding preserves U64 revisions, ordered identities, quanta and padding', () => {
   fc.assert(
