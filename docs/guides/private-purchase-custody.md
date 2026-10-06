@@ -265,6 +265,21 @@ domain, original cutoff and a nondecreasing clock. An already finalized retained
 transaction may be submitted after the construction cutoff under the original
 recovery promise. This does not authorize constructing a replacement transaction.
 
+An installed domain may also supply `fundingPreflight` for signed terms. It
+returns an owned synchronous `checkCurrent` guard, rather than discarding its
+same-view assessment. The buyer retains that exact guard across awaited wallet
+planning and protected custody writes, then passes it into the wallet's final
+new-effect callback. A changed stage, height, authority or preparation window
+therefore refuses new funding. The hook replaces signed-term `preflight` only;
+unsigned discovery still uses the existing hook. Its installation identity must
+bind the complete selected domain contract, and both a present hook and its
+absence are pinned. Inherited, accessor, asynchronous, changed or Promise-valued
+guards are refused. Omit this companion to preserve the existing preflight path.
+Read-only recovery of an already finalized candidate and previously verified
+entitlement does not repeat a new-funding expiry check. Installing the companion
+alone does not implement transaction-alias reconciliation or establish Script,
+lineage, inclusion or licensing validity.
+
 `WalletToolboxPurchasePayment` installs the original wallet/storage/chain/originator
 and independently selected seller, actual covenant family, chain-view resolver,
 verification identity and synchronous current-context guard. It authenticates the

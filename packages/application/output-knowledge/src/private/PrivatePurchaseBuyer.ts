@@ -197,6 +197,7 @@ export class PrivatePurchaseBuyer {
       pin(ports.payment, 'recover'),
       pin(ports.payment, 'finish'),
       pin(ports.validation, 'preflight'),
+      pin(ports.validation, 'fundingPreflight', true),
       pin(ports.validation, 'verify'),
       pin(ports.validation, 'usable'),
       pin(ports.wallet, 'getPublicKey'),
@@ -440,14 +441,47 @@ export class PrivatePurchaseBuyer {
     progress: Progress,
     terms: OutputSignedPurchaseTerms | null,
     signal: AbortSignal
-  ): Promise<void> {
+  ): Promise<(() => void) | undefined> {
     this.newWork(progress, terms, signal)
+    if (terms !== null && this.ports.validation.fundingPreflight !== undefined) {
+      const assessment = await this.ports.validation.fundingPreflight(
+          structuredClone(this.request),
+          structuredClone(terms),
+          signal
+        ),
+        guard = this.fundingGuard(assessment)
+      this.newWork(progress, terms, signal)
+      guard()
+      return guard
+    }
     await this.ports.validation.preflight(
       structuredClone(this.request),
       structuredClone(terms),
       signal
     )
     this.newWork(progress, terms, signal)
+    return undefined
+  }
+  private fundingGuard(assessment: { checkCurrent(): void }): () => void {
+    outputAssert(
+      assessment !== null && typeof assessment === 'object',
+      'Purchase funding assessment must be an owned object'
+    )
+    const check: unknown = Object.getOwnPropertyDescriptor(assessment, 'checkCurrent')?.value
+    outputAssert(
+      typeof check === 'function' && check.constructor.name !== 'AsyncFunction',
+      'Purchase funding guard must be owned and synchronous'
+    )
+    return () => {
+      const result: unknown = check.call(assessment)
+      if (result instanceof Promise) void result.catch(() => undefined)
+      outputAssert(
+        result === undefined &&
+          Object.getOwnPropertyDescriptor(assessment, 'checkCurrent')?.value === check,
+        'Purchase funding guard changed or did not finish',
+        'context-changed'
+      )
+    }
   }
   private transport(
     operation: 'prepare',
@@ -588,7 +622,8 @@ export class PrivatePurchaseBuyer {
       let plan = await this.get('plan'),
         rawCandidate = await this.get('candidate')
       if (plan === undefined) {
-        await this.preflight(saved.progress, terms, active)
+        const funding = await this.preflight(saved.progress, terms, active)
+        funding?.()
         plan = object(
           await this.ports.payment.plan(
             digest('action', this.binding),
@@ -599,17 +634,22 @@ export class PrivatePurchaseBuyer {
           this.sizes.plan
         )
         this.newWork(saved.progress, terms, active)
+        funding?.()
         await this.put('plan', plan)
       }
       if (rawCandidate === undefined) {
-        await this.preflight(saved.progress, terms, active)
+        const funding = await this.preflight(saved.progress, terms, active)
         saved = await this.load()
         await this.save(saved.snapshot, { ...saved.progress, phase: 'funding' })
+        funding?.()
         rawCandidate = object(
           this.candidate(
             await this.ports.payment.finish(
               structuredClone(plan),
-              () => this.newWork(saved.progress, terms, active),
+              () => {
+                this.newWork(saved.progress, terms, active)
+                funding?.()
+              },
               active
             ),
             terms
@@ -740,9 +780,12 @@ export class PrivatePurchaseBuyer {
     await Promise.all(this.physical)
   }
 }
-function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {
+function pin<T, K extends keyof T>(owner: T, key: K, optional = false): () => boolean {
   const method = owner[key]
-  outputAssert(typeof method === 'function', 'Purchase buyer capability is required')
+  outputAssert(
+    typeof method === 'function' || (optional && method === undefined),
+    'Purchase buyer capability is required'
+  )
   return () => owner[key] === method
 }
 function maximum(values: readonly bigint[]): bigint {

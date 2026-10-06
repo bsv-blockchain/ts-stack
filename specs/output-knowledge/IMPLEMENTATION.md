@@ -5423,3 +5423,35 @@ The preparation helper remains outside the exported class hierarchy. An
 application-subclass regression retains its own preparation method without
 intercepting journal SQL. Public journal declarations and subclass behavior
 remain compatible with the original implementation.
+
+## Native buyer same-view funding companion
+
+The optional `PrivatePurchaseBuyerValidation.fundingPreflight` carries a signed-term
+assessment into the buyer rather than discarding its synchronous guard. The buyer
+pins the installed method, including its absence; captures an owned, stable,
+synchronous data-method guard; rechecks after asynchronous planning and protected
+custody writes; and combines that guard with the original cutoff/currentness
+callback passed to the native financial owner. Unsigned discovery retains the
+original preflight path. Omitted companions retain all prior behavior, and recovery
+of an already finalized original candidate does not repeat new-work expiry.
+The installation identity must bind the complete selected domain contract.
+
+The first regression run exposed an accidental required-method pin for the optional
+hook: 25 historical tests failed while the nine new cases passed. Making only that
+pin optional restores the original path. The final complete selected buyer run
+passes 36 tests in three suites (71.782 seconds), retaining the original 300-case
+recovery property, seed 3242026. Cases cover async planning and final wallet-effect
+fence changes, inherited/accessor/async/Promise/changed/missing guards, changed
+installed hooks and absence, and retained recovery after expiry. The three original
+native wallet suites, including their original 300-case property and historical
+route exercise, pass all ten tests (106.918 seconds). That historical route evidence
+does not qualify the replacement Script family.
+
+Original registry/partition controls pass. The exact packed output-knowledge
+exports and complete browser budgets/runtime pass unchanged, including browser
+restart and protected original custody. Seventy-three compiled examples across
+24 exact tarballs pass, including the new funding-companion public type example.
+This component neither manufactures a purchase commitment nor implements native
+alias/action reconciliation. Coordinator commitment persistence, replacement-family
+native composition, all per-txid admission/release facts and complete final-head
+qualification remain open checkpoint-two requirements.

@@ -2653,3 +2653,23 @@ function installImmutableCollectorSeller(
 }
 export { installImmutableCollectorSeller }
 ```
+
+## Same-view purchase funding companion
+
+The native buyer retains this returned domain guard through awaits and its wallet
+new-effect callback. This example composes the public types; it does not perform
+verification, signing or a purchase. The application installs its actual current
+profile domain and binds that full contract in the validation identity.
+
+```ts compile
+// example-id: private-purchase-funding-companion
+import type { PrivatePurchaseBuyerValidation as PurchaseFundingValidation } from '@bsv/output-knowledge/private/purchase-buyer'
+
+function attachPurchaseFundingFence(
+  validation: PurchaseFundingValidation,
+  fundingPreflight: NonNullable<PurchaseFundingValidation['fundingPreflight']>
+): PurchaseFundingValidation {
+  return { ...validation, fundingPreflight }
+}
+void attachPurchaseFundingFence
+```

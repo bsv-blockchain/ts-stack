@@ -116,6 +116,12 @@ capacity before signing. Delivered custody, independent validation and current
 usability remain separate. Reopen the original protected owners and native action
 store instead of creating another operation after a missing reply. The purchase
 custody guide describes installation, wallet layout and shutdown requirements.
+Domains with a same-view financial fence may additionally install
+`validation.fundingPreflight` for signed terms. Its owned synchronous guard is
+retained across awaits and checked through the native wallet effect callback.
+Unsigned discovery, omitted-hook behavior and finalized read-only recovery retain
+their existing paths. Bind the companion in the validation installation ID;
+it does not supply alias ownership or replace independent delivered verification.
 
 ## Durable progressive and live provider
 

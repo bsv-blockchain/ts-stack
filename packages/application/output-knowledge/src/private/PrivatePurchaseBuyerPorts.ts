@@ -38,6 +38,17 @@ export interface PrivatePurchaseBuyerValidation {
     terms: OutputSignedPurchaseTerms | null,
     signal: AbortSignal
   ): Promise<void>
+  /** Optional financial companion for domains with a same-view preparation
+   * fence. The owner retains and rechecks its owned synchronous guard across
+   * awaits and immediately before financial effects. It replaces signed-term
+   * preflight only; unsigned discovery and retained recovery stay unchanged.
+   * The installation ID must bind the complete selected domain contract.
+   */
+  fundingPreflight?(
+    request: OutputPurchasePrepare,
+    terms: OutputSignedPurchaseTerms,
+    signal: AbortSignal
+  ): Promise<{ checkCurrent(): void }>
   verify(
     request: OutputPurchasePrepare,
     terms: OutputSignedPurchaseTerms,

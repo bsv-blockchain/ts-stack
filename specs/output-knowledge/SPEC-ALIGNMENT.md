@@ -22,6 +22,12 @@ may install different transaction domains without adopting its revenue model.
       before scalar reduction, and return it only after purchase verification
       succeeds. Match both unchanged current-specification positive transactions.
       A calculation alone does not qualify the replacement Script/domain.
+- [x] Add an optional signed-term native buyer financial-preflight companion.
+      Retain an owned synchronous domain fence across asynchronous planning and
+      custody writes, and pass it into the native wallet's final effect callback.
+      Preserve unsigned discovery, omitted-hook defaults and read-only finalized
+      recovery. This component alone does not provide alias reconciliation or
+      replacement-family native wallet composition.
 - [ ] Reserve one economic candidate identity per acquisition and retain exact
       raw transaction, admission work and release assessment separately per alias.
       Repeated aliases cannot charge again or create another private release.
