@@ -568,7 +568,10 @@ test('protected ledger parts preserve every complete file and all canonical conf
     assert.equal(part.target.additionalInputs, canonical.additionalInputs)
   }
   assert.deepEqual(parts[1].target.mutate, ['src/private/ProtectedLedgerCodec.ts'])
-  assert.deepEqual(parts[2].target.mutate, ['src/private/NodeProtectedPayloadCodec.ts'])
+  assert.deepEqual(parts[2].target.mutate, [
+    'src/private/NodeProtectedPayloadCodec.ts',
+    'src/private/NativeOutputBytes.ts'
+  ])
   const future = { ...canonical, mutate: [...canonical.mutate, 'src/private/FutureCompanion.ts'] }
   assert.ok(
     partitionMutationTarget('protected-ledger', future)

@@ -128,6 +128,34 @@ test('inconsistent, unknown and cyclic profile frames fail closed', () => {
   }
 })
 
+test('out-of-order timestamp deltas retain every paired observation and chronological duration', () => {
+  const unordered = profile()
+  unordered.timeDeltas = [3000, -1000, 4000]
+  const summary = summarizeCPUProfile(unordered)
+  const ordered = summarizeCPUProfile(profile())
+  assert.equal(summary.samples, 3)
+  assert.equal(summary.totalMilliseconds, 6)
+  assert.equal(summary.negativeDeltas, 1)
+  assert.equal(summary.reorderedSamples, 2)
+  assert.deepEqual(summary.topSelf, ordered.topSelf)
+  assert.deepEqual(summary.topInclusive, ordered.topInclusive)
+  assert.deepEqual(summary.topSelfByFunction, ordered.topSelfByFunction)
+  assert.deepEqual(summary.topInclusiveByFunction, ordered.topInclusiveByFunction)
+  assert.equal(ordered.negativeDeltas, 0)
+  assert.equal(ordered.reorderedSamples, 0)
+})
+
+test('nonfinite and before-start cumulative timestamps remain invalid, including after valid observations', () => {
+  for (const deltas of [
+    [1000, -1001, 3000],
+    [1000, Number.POSITIVE_INFINITY, 3000]
+  ]) {
+    const invalid = profile()
+    invalid.timeDeltas = deltas
+    assert.throws(() => summarizeCPUProfile(invalid), /profile-time-delta/)
+  }
+})
+
 test('hosted timing is explicitly opt-in and preserves the ordinary artifact and coverage gates', () => {
   const workflow = fs.readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
   assert.match(workflow, /application-performance-diagnostics:\n(?:.*\n){2}        default: false/)

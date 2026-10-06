@@ -7,6 +7,7 @@ import {
   hkdfSync
 } from 'node:crypto'
 import { NodeProtectedPayloadCodec } from '../src/private/NodeProtectedPayloadCodec.js'
+import { nativeOutputBytes } from '../src/private/NativeOutputBytes.js'
 import { canonicalOutputJSON, decodeOutputBytes, type OutputJSONObject } from '@bsv/sdk'
 
 // Public synthetic test keys only.
@@ -353,3 +354,51 @@ it.each([
     }
   }
 )
+
+it('matches the independent SDK byte decoder for every octet and exact zero/small boundaries', () => {
+  for (const value of [
+    Buffer.alloc(0),
+    Buffer.from([0]),
+    Buffer.from([0, 255]),
+    Buffer.from([0, 127, 255]),
+    Buffer.from(Array.from({ length: 256 }, (_, index) => index))
+  ]) {
+    const encoded = value.toString('base64')
+    expect(Array.from(nativeOutputBytes(encoded, value.byteLength))).toEqual(
+      decodeOutputBytes(encoded, value.byteLength)
+    )
+    expect(nativeOutputBytes(encoded)).toEqual(value)
+  }
+})
+
+it('retains SDK byte-limit and input-type refusal order for the shared native decoder', () => {
+  for (const [input, maximum] of [
+    ['', -1],
+    ['', 1.5],
+    ['', Number.NaN],
+    ['', Number.POSITIVE_INFINITY],
+    ['', 4194305],
+    [null, 0],
+    [undefined, 0],
+    [0, 0],
+    [Object(''), 0],
+    ['AA==', 0],
+    ['AAAA', 2],
+    ['AAAA', 1],
+    ['AA', 1],
+    ['AB==', 1],
+    ['AAB=', 2]
+  ] as const) {
+    let expected: unknown
+    try {
+      decodeOutputBytes(input, maximum)
+    } catch (error) {
+      expected = error
+    }
+    expect(expected).toBeDefined()
+    const { code, message } = expected as { code: string; message: string }
+    expect(() => nativeOutputBytes(input, maximum)).toThrow(
+      expect.objectContaining({ code, message })
+    )
+  }
+})

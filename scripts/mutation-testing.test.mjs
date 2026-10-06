@@ -496,7 +496,8 @@ test('protected ledger retains complete storage and custody source with native c
   assert.deepEqual(target.mutate, [
     'src/private/SQLiteProtectedLedger.ts',
     'src/private/ProtectedLedgerCodec.ts',
-    'src/private/NodeProtectedPayloadCodec.ts'
+    'src/private/NodeProtectedPayloadCodec.ts',
+    'src/private/NativeOutputBytes.ts'
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/protected-payload.test.ts',

@@ -9,12 +9,12 @@ import {
 import {
   canonicalOutputJSON,
   closedOutputObject,
-  outputAssert,
   outputString,
   parseOutputJSON,
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'
+import { nativeOutputBytes } from './NativeOutputBytes.js'
 
 /** Local custody port. IDs must be public labels; key material never enters a persisted envelope. */
 export interface ProtectedPayloadCustody {
@@ -197,16 +197,7 @@ function associatedData(binding: OutputJSONObject, keyId: string): Buffer {
 }
 
 function bytes(input: string, maximum: number, exact?: number): Buffer {
-  // Envelope fields and installed capacities are already validated. Preserve
-  // the SDK's canonical base64 rules and error order without a number[] copy.
-  outputAssert(input.length <= 4 * Math.ceil(maximum / 3), 'Decoded byte limit', 'limited')
-  outputAssert(
-    input.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(input),
-    'Noncanonical base64'
-  )
-  const result = Buffer.from(input, 'base64')
-  outputAssert(result.byteLength <= maximum, 'Decoded byte limit', 'limited')
-  outputAssert(result.toString('base64') === input, 'Nonzero base64 padding bits')
+  const result = nativeOutputBytes(input, maximum)
   if (exact !== undefined && result.byteLength !== exact)
     throw new OutputProtocolError('invalid', 'Invalid protected payload framing')
   return result

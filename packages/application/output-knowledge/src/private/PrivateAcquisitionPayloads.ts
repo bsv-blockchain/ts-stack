@@ -3,12 +3,12 @@ import {
   ownOutputJSON,
   canonicalOutputJSON,
   closedOutputObject,
-  decodeOutputBytes,
   outputAssert,
   outputHex32,
   type OutputJSONObject
 } from '@bsv/sdk'
 import type { PrivateServiceIdentity } from './PrivateServiceIdentity.js'
+import { nativeOutputBytes } from './NativeOutputBytes.js'
 import type { ProtectedLedgerChange, ProtectedLedgerRecord } from './ProtectedLedgerCodec.js'
 
 const CHUNK_BYTES = 786432
@@ -131,7 +131,7 @@ export class PrivateAcquisitionPayloads {
       .digest('hex')
   }
   private data(value: PrivateAcquisitionPayload, data: unknown): Buffer {
-    return Buffer.from(decodeOutputBytes(data, value.maximumBytes))
+    return nativeOutputBytes(data, value.maximumBytes)
   }
   addresses(input: PrivateAcquisitionPayload) {
     const value = parsePrivateAcquisitionPayload(input)
@@ -279,7 +279,7 @@ export class PrivateAcquisitionPayloads {
       'unavailable'
     )
     const chunks = this.slots(value, rows).map((part, index) => {
-      const chunk = Buffer.from(decodeOutputBytes(part, CHUNK_BYTES))
+      const chunk = nativeOutputBytes(part, CHUNK_BYTES)
       outputAssert(
         chunk.length === Math.min(CHUNK_BYTES, Math.max(0, value.bytes! - index * CHUNK_BYTES)),
         'Acquisition payload chunk length differs',

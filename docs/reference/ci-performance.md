@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.2'
+version: '1.8.3'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -55,7 +55,15 @@ inclusive function timing. Per-call-stack timings are retained alongside complet
 function aggregates keyed by name, source URL and measured line. Recursive
 occurrences receive each inclusive sample only once. Measured positions can refer
 to instrumented/transformed code rather than original source lines. Profiling
-overhead is included. A valid measurement
+overhead is included. V8 encodes observation timestamps as relative deltas;
+observations can arrive out of order. Following
+[Chromium's paired-sample ordering](https://chromium.googlesource.com/devtools/devtools-frontend/+/9a696c4e723caa3c7e1f78886da353f1f06a79b0/front_end/core/sdk/CPUProfileDataModel.ts),
+the summary reconstructs finite timestamps relative to capture start, rejects
+before-start observations, sorts each timestamp together with its original
+sample, and derives nonnegative chronological durations. It retains every
+observation and reports the number of negative deltas and reordered positions;
+it neither clamps timestamps nor discards samples. Frame, file, sample, node,
+depth, source and deadline checks remain required. A valid measurement
 can describe a property-budget interruption; it never qualifies the property,
 coverage, mutation campaign or checkpoint. The complete ordinary coverage run
 must still pass independently. No performance improvement is claimed

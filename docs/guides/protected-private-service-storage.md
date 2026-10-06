@@ -2,7 +2,7 @@
 id: protected-private-service-storage
 title: 'Protected Private-Service Storage'
 kind: guide
-version: '1.0.1'
+version: '1.0.2'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -60,6 +60,11 @@ padding-bit checks and error order remain the same as the SDK decoder. The
 AES-256-GCM/HKDF algorithms, salt, nonce, tag, associated data and persisted
 envelope are unchanged. Existing envelopes require no migration, and every read
 still resolves current custody and authenticates the complete binding afresh.
+The same internal Node byte decoder serves retained acquisition chunks and alias
+original/result storage. It validates the complete SDK byte-limit and canonical
+encoding contract before returning independently owned bytes. Chunk digests,
+record parsing, financial bindings and disclosure guards still run; portable SDK
+decoders retain their original number-array interface.
 
 The ledger uses that serialized path within the original SQL read bound.
 The bounded plaintext parser returns an independent value and its validated canonical

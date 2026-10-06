@@ -214,7 +214,8 @@ const plans = new Map([
       fallback: 'store',
       files: new Map([
         ['src/private/ProtectedLedgerCodec.ts', 'scalar-codec'],
-        ['src/private/NodeProtectedPayloadCodec.ts', 'payload-codec']
+        ['src/private/NodeProtectedPayloadCodec.ts', 'payload-codec'],
+        ['src/private/NativeOutputBytes.ts', 'payload-codec']
       ])
     }
   ],

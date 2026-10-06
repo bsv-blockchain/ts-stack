@@ -17,6 +17,7 @@ import {
   type OutputSignedPurchaseTerms
 } from '@bsv/sdk'
 import { assembleOutputEvidence } from '../EvidenceAssembler.js'
+import { nativeOutputBytes } from './NativeOutputBytes.js'
 import {
   PrivateAcquisitionPayloads,
   parsePrivateAcquisitionPayload
@@ -208,7 +209,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
       'Purchase secret schema requires an absolute IRI'
     )
     outputAssert(typeof value.material === 'string', 'Purchase material must be encoded bytes')
-    decodeOutputBytes(value.material, this.limits.maximumOriginalBytes)
+    nativeOutputBytes(value.material, this.limits.maximumOriginalBytes)
     return {
       format: value.format,
       original,
@@ -739,7 +740,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
         envelope.result.potatoes.body.schema === actual.custody.schema,
       'Alias result schema differs'
     )
-    decodeOutputBytes(envelope.result.potatoes.body.secret, actual.custody.maximumSecretBytes)
+    nativeOutputBytes(envelope.result.potatoes.body.secret, actual.custody.maximumSecretBytes)
     const progress = advancePrivatePurchaseProgress(
       actual.progress,
       actual.custody.original,
@@ -817,7 +818,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     closedOutputObject(decision, ['reason', 'evidence'])
     const reason = outputString(decision.reason)
     outputAssert(typeof decision.evidence === 'string', 'Failure evidence must be bytes')
-    decodeOutputBytes(decision.evidence, this.limits.maximumOutcomeBytes)
+    nativeOutputBytes(decision.evidence, this.limits.maximumOutcomeBytes)
     const evidence = decision.evidence
     const id = loaded.progress.acquisitionId,
       actual = this.require(id, loaded.state.recipient, clock, guard)
@@ -1151,7 +1152,7 @@ function encoded(input: unknown, maximum: number): string {
   return Buffer.from(canonicalOutputJSON(input, { bytes: maximum }), 'utf8').toString('base64')
 }
 function decoded(input: string, maximum: number): unknown {
-  return parseOutputJSON(Uint8Array.from(decodeOutputBytes(input, maximum)), { bytes: maximum })
+  return parseOutputJSON(nativeOutputBytes(input, maximum), { bytes: maximum })
 }
 function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {
   const method = owner[key]

@@ -2047,7 +2047,8 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [
         'src/private/SQLiteProtectedLedger.ts',
         'src/private/ProtectedLedgerCodec.ts',
-        'src/private/NodeProtectedPayloadCodec.ts'
+        'src/private/NodeProtectedPayloadCodec.ts',
+        'src/private/NativeOutputBytes.ts'
       ],
       ...jestTarget(
         'jest.config.js',

@@ -71,6 +71,32 @@ function indexProfileFrames(profile, checkDeadline) {
   return { nodes, parents, frames, frameKeys }
 }
 
+function profileSampleOrder(profile, nodes, checkDeadline) {
+  const timestamps = new Float64Array(profile.samples.length)
+  let timestamp = 0,
+    negativeDeltas = 0
+  for (let index = 0; index < profile.samples.length; index++) {
+    if (index % 1024 === 0) checkDeadline()
+    assert.ok(nodes.has(profile.samples[index]), 'profile-sample-reference')
+    const delta = profile.timeDeltas[index]
+    assert.ok(Number.isFinite(delta), 'profile-time-delta')
+    timestamp += delta
+    assert.ok(Number.isFinite(timestamp) && timestamp >= 0, 'profile-time-delta')
+    timestamps[index] = timestamp
+    if (delta < 0) negativeDeltas++
+  }
+  const order = Array.from({ length: profile.samples.length }, (_, index) => index)
+  // V8 records relative timestamps. Chromium pairs samples with reconstructed
+  // timestamps and sorts observations before deriving nonnegative durations.
+  // Preserve every observation; never clamp, omit or invent a sample.
+  if (negativeDeltas > 0) {
+    checkDeadline()
+    order.sort((left, right) => timestamps[left] - timestamps[right] || left - right)
+    checkDeadline()
+  }
+  return { timestamps, order, negativeDeltas }
+}
+
 /** Extract call-frame timing, never raw profiles, arguments or application values. */
 export function summarizeCPUProfile(profile) {
   const deadline = performance.now() + 30000
@@ -88,11 +114,17 @@ export function summarizeCPUProfile(profile) {
     inclusive = new Map(),
     selfByFunction = new Map(),
     inclusiveByFunction = new Map()
-  let total = 0
+  const { timestamps, order, negativeDeltas } = profileSampleOrder(profile, nodes, checkDeadline)
+  let total = 0,
+    previous = 0,
+    reorderedSamples = 0
   for (let index = 0; index < profile.samples.length; index++) {
     if (index % 1024 === 0) checkDeadline()
-    const id = profile.samples[index],
-      us = profile.timeDeltas[index]
+    const sourceIndex = order[index],
+      id = profile.samples[sourceIndex],
+      us = timestamps[sourceIndex] - previous
+    previous = timestamps[sourceIndex]
+    if (sourceIndex !== index) reorderedSamples++
     assert.ok(nodes.has(id), 'profile-sample-reference')
     assert.ok(Number.isFinite(us) && us >= 0, 'profile-time-delta')
     total += us
@@ -138,6 +170,8 @@ export function summarizeCPUProfile(profile) {
   return {
     samples: profile.samples.length,
     totalMilliseconds: Math.round(total / 1000),
+    negativeDeltas,
+    reorderedSamples,
     topSelf: rows(self),
     topInclusive: rows(inclusive),
     functions: frames.size,
