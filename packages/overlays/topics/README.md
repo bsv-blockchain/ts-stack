@@ -9,6 +9,12 @@ UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by 
 
 The release candidate advances the packed Overlay dependency to support optional retained admission history. This dependency addition does not enable history retention automatically or migrate data. The separately approved DID retirement below has its own migration requirements.
 
+UMP lookup requests the full retained token-update lineage for presentation,
+recovery and outpoint queries. The engine owns traversal and byte limits.
+Use `@bsv/overlay` 2.6.4 or later to preserve explicitly selected history past
+confirmation. Wallet Toolbox 2.14.6 links that history so an older WAB support
+pin can remain a lineage anchor while a password or token update takes precedence.
+
 ## DID overlay retirement (2.0 candidate)
 
 The proposed 2.0 release removes `DIDTopicManager`, `createDIDLookupService`,
