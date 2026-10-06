@@ -135,7 +135,7 @@ const LOGO_SVG =
  * field starts from the flags and seed of the mode it is shown in, as in the terminal.
  * `fieldOptions(field, mode)`: the options offered for a field in a mode.
  */
-export const PAGE_DRAFT_SRC = String.raw`function whenMatches(when, draft) {
+export const PAGE_DRAFT_SRC = `function whenMatches(when, draft) {
   if (!when) return true;
   return Object.keys(when).every(function (k) {
     return Array.isArray(when[k]) ? when[k].indexOf(String(draft[k])) !== -1 : draft[k] === when[k];
@@ -184,7 +184,7 @@ function fieldOptions(f, mode) {
  * Client-side source of the copyable command: `buildCommand(d, dir)` and its coloured
  * `buildTokens(d, dir)`; `dir` is the target directory, omitted when it is `.`.
  */
-export const PAGE_COMMAND_SRC = String.raw`function buildCommand(d, dir) {
+export const PAGE_COMMAND_SRC = `function buildCommand(d, dir) {
   var p = ['npx create-bsv-app', '--mode', d.mode || 'new'];
   if (dir && dir !== '.') p.push('--dir', JSON.stringify(dir));
   if (d.name) p.push('--name', JSON.stringify(d.name));

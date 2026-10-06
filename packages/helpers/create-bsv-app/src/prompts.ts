@@ -49,35 +49,39 @@ export function optionsFor(
   return field.options ?? []
 }
 
+async function promptField(
+  field: ConfigField,
+  draft: ConfigDraft,
+  existing: ProjectManifest | null,
+  ask: Ask
+): Promise<void> {
+  const values = draft as Record<string, unknown>
+  if (field.key !== 'capabilities' && values[field.key] !== undefined) return // set by flags/seed
+  if (!isFieldVisible(field, values)) return
+  const mode = draft.mode ?? 'new'
+  const options = optionsFor(field, existing, mode)
+  if (field.key !== 'capabilities') {
+    values[field.key] = await ask(field, options, field.default)
+    return
+  }
+  // new mode pre-ticks every offered capability; add mode never pre-ticks onto an existing project
+  const initial = mode === 'new' ? options.map(o => o.value) : []
+  const value = (await ask(field, options, initial)) as string[]
+  draft.capabilities = mergeCapabilityIds(draft.capabilities ?? [], value)
+}
+
 export async function runPrompts(
   ctx: { existing: ProjectManifest | null; flags: ConfigDraft },
   ask: Ask
 ): Promise<ProjectConfig> {
   const draft: ConfigDraft = seedDraft(ctx.existing, ctx.flags)
-  for (const section of configSchema) {
-    for (const field of section.fields) {
-      if (
-        field.key !== 'capabilities' &&
-        (draft as Record<string, unknown>)[field.key] !== undefined
-      )
-        continue // set by flags/seed
-      if (!isFieldVisible(field, draft as Record<string, unknown>)) continue
-      const mode = draft.mode ?? 'new'
-      const options = optionsFor(field, ctx.existing, mode)
-      // new mode pre-ticks every offered capability; add mode never pre-ticks onto an existing project
-      let initial: string | boolean | string[] | undefined = field.default
-      if (field.key === 'capabilities') initial = mode === 'new' ? options.map(o => o.value) : []
-      const value = await ask(field, options, initial)
-      if (field.key === 'capabilities') {
-        ;(draft as Record<string, unknown>).capabilities = mergeCapabilityIds(
-          (draft.capabilities as string[]) ?? [],
-          value as string[]
-        )
-      } else {
-        ;(draft as Record<string, unknown>)[field.key] = value
-      }
-    }
-  }
+  // one prompt at a time, in schema order: later fields' visibility depends on earlier answers
+  await configSchema
+    .flatMap(section => section.fields)
+    .reduce<Promise<void>>(
+      (previous, field) => previous.then(() => promptField(field, draft, ctx.existing, ask)),
+      Promise.resolve()
+    )
   return resolveDraft(draft)
 }
 

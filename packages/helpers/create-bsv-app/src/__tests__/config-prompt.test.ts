@@ -36,6 +36,25 @@ describe('runPrompts', () => {
     expect(c.capabilities).toHaveLength(2)
   })
 
+  test('asks one field at a time, so dependent fields see earlier answers', async () => {
+    const asked: string[] = []
+    let inFlight = 0
+    let maxInFlight = 0
+    await runPrompts(
+      { existing: null, flags: { name: 'demo' } },
+      async (field, _options, initial) => {
+        inFlight++
+        maxInFlight = Math.max(maxInFlight, inFlight)
+        asked.push(field.key)
+        await new Promise(resolve => setTimeout(resolve, 0))
+        inFlight--
+        return field.key === 'frontend' ? 'react' : initial
+      }
+    )
+    expect(maxInFlight).toBe(1)
+    expect(asked.indexOf('frontendVariant')).toBeGreaterThan(asked.indexOf('frontend'))
+  })
+
   test('new mode: initial values select the full project', async () => {
     const initials: Record<string, unknown> = {}
     let offered: string[] = []
