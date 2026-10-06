@@ -287,3 +287,13 @@ disables the transport, and old/disabled peers decline it. This is a low-level
 transport, not a retained database adapter or adoption by ordinary sync/export.
 Remote row cursors, manager integration, portable semantics and physical platform
 acceptance remain open. See the [archive transport contract](../../../../docs/guides/wallet-sync-reliability.md#authenticated-snapshot-archive-transport-unpublished-candidate).
+
+## WAB faucet fee compatibility
+
+Version 2.14.6 carries the local signer's independently validated fee/change
+outputs through the permissions manager to SDK completed-action binding. Upgrade
+with an SDK exposing `completeBoundAction.outputAuthorizationVersion=1`; older SDK
+peers preserve their strict behavior and do not receive the fee-bearing faucet
+fix. Use wallet and authentication manager from the same package instance.
+Serialized results discard local authorization. See the full toolbox README for
+SDK3 migration and the unchanged signup retry/reconciliation limitations.

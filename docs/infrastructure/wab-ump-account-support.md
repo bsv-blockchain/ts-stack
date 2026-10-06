@@ -2,9 +2,9 @@
 id: wab-ump-account-support
 title: 'WAB UMP Account Support'
 kind: infra
-version: '1.1.0'
-last_updated: '2026-09-04'
-last_verified: '2026-09-04'
+version: '1.2.0'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: [wab, ump, support, phone, recovery]
@@ -42,7 +42,20 @@ curl --fail-with-body --request POST "${WAB_SUPPORT_URL}/admin/registration/reop
   }'
 ```
 
-Ask the user to repeat ordinary phone verification and account creation. The
+Before repeating account creation, inspect the existing wallet's faucet action.
+An empty wallet on an older SDK may reject a legitimate storage service charge
+with `Wallet used a requested input to fund an unrequested output`. The toolbox
+2.14.6 source fix requires an SDK exposing
+`completeBoundAction.outputAuthorizationVersion=1`; it preserves exact output
+binding and does not increase the faucet grant or remove storage fees.
+
+This fix does not repair signup checkpoints. Internalization clears recovery
+custom instructions, while `listActions` does not return them. A retry after
+partial funding or UMP publication may require reconciliation of the original
+wallet and transaction; retain the root key and wallet records before retrying.
+Do not infer that the absence of a UMP token means the wallet has no funds.
+
+After reconciling funding, repeat ordinary phone verification and account creation. The
 WAB reuses the original presentation key, preserves faucet history, and returns
 to active after publication. Record the ticket, operator, redacted identity,
 lookup evidence, WAB version, and successful final state. Never delete the auth

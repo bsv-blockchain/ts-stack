@@ -200,6 +200,15 @@ attention to changes that materially alter behavior or extend functionality.
   latency on SQLite, authenticated HTTP and native Chromium IndexedDB. Inclusive
   timestamp boundary traffic remains a snapshot/high-water follow-up.
 
+## wallet-toolbox 2.14.6
+
+- WAB faucet redemption accepts the local signer's independently validated
+  service charge and derived change, with exact SDK transaction binding. Empty
+  wallets no longer reject legitimate fee outputs financed by the faucet input.
+  Upgrade the SDK alongside the toolbox to enable the new capability. Older SDK
+  peers retain strict behavior; serialization discards local output authority.
+  Signup interruption/retry persistence remains unchanged.
+
 ## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference

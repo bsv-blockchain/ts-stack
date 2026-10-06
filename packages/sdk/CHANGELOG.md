@@ -214,7 +214,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 3.0.0 candidate — prepared BRC-118 payments and recipient interoperability
+### 3.1.0 candidate — prepared BRC-118 payments and recipient interoperability
 
 - Preserve native body serialization and inferred Content-Type on ordinary HTTP
   fallback, including cached unauthenticated peers; retain owned payment bytes.
@@ -231,6 +231,10 @@ All notable changes to this project will be documented in this file. The format 
 - Derive the recipient's own BRC-29 child key on settlement receipt.
 - Add independent Python wire/preimage vectors, real HTTP/proxy-limit tests and
   adversarial payment lifecycle coverage. See the BRC-118 guide for migration.
+
+- Add caller-installed additional-output authorization to `completeBoundAction`.
+  Bind independently verified local outputs by exact index, script and amount
+  while preserving the default external-input restriction and value conservation.
 
 ### Removed (3.0.0 candidate)
 
