@@ -370,8 +370,9 @@ npm or infrastructure release workflows, the read-only verification workflow:
 - reconciles all public source manifests, recorded published baselines, and npm
   `latest`, explicitly reporting source candidates held by an operator's
   publication decision;
-- installs every published package with lifecycle scripts disabled and runs
-  npm registry signature/provenance verification;
+- installs every exact published package in its own locked consumer context with
+  lifecycle scripts disabled, allowing its declared peers to resolve normally,
+  and runs npm registry signature/provenance verification in every context;
 - pulls every checked-in deployment image by its immutable digest; and
 - verifies generated package, support, conformance, coverage-reporting, and
   version facts.

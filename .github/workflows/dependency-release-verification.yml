@@ -50,19 +50,25 @@ jobs:
           node scripts/dependency-release-governance.mjs verify-published
           --output published-package-verification.json
 
-      - name: Prepare the locked published-package install
+      - name: Prepare isolated locked published-package installs
         run: >-
           node scripts/dependency-release-governance.mjs prepare-published-install
           --report published-package-verification.json
           --directory published-install
 
       - name: Install every published package tarball without lifecycle scripts
-        working-directory: published-install
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: |
+          jq -er '.contexts[].directory' published-install/contexts.json |
+            while IFS= read -r context; do
+              (cd "published-install/$context" && npm ci --ignore-scripts --no-audit --no-fund)
+            done
 
       - name: Verify registry signatures and npm provenance
-        working-directory: published-install
-        run: npm audit signatures
+        run: |
+          jq -er '.contexts[].directory' published-install/contexts.json |
+            while IFS= read -r context; do
+              (cd "published-install/$context" && npm audit signatures)
+            done
 
       - name: Verify immutable deployment images can be pulled by digest
         run: |
@@ -89,6 +95,7 @@ jobs:
             dependency-release-inventory.json
             published-package-verification.json
             immutable-deployment-images.json
-            published-install/package-lock.json
+            published-install/contexts.json
+            published-install/**/package-lock.json
           if-no-files-found: error
           retention-days: 90
