@@ -2386,3 +2386,53 @@ export function encodeImmutableListingStages(
   }
 }
 ```
+
+The immutable profile's funded builder owns an explicitly prepared transaction.
+A caller supplies already validated source/domain evidence and complete funding,
+then selects a protected wallet for the sole required seller-child request.
+The builder verifies that signature and the retained layout. Independent final
+input Script, lineage and selected-chain verification must precede admission or
+private release; the returned commitment alone authorizes neither.
+
+```ts compile
+// example-id: immutable-profile-funded-witness
+import type { WalletInterface } from '@bsv/sdk'
+import Transaction from '@bsv/sdk/transaction/Transaction'
+import { RevenueListingProfile } from '@bsv/sdk/script/templates/RevenueListingProfile'
+import { RevenueListingProfileSpend } from '@bsv/sdk/script/templates/RevenueListingProfileSpend'
+import { toHex } from '@bsv/sdk/primitives/utils'
+
+export async function completeImmutableProfileWitness(
+  profile: RevenueListingProfile,
+  descriptor: unknown,
+  previous: unknown,
+  action: unknown,
+  fundedTransaction: Transaction,
+  protectedWallet: Pick<WalletInterface, 'getPublicKey' | 'createSignature'>
+) {
+  const builder = new RevenueListingProfileSpend(profile, descriptor, previous, action)
+  const prepared = builder.prepare(fundedTransaction)
+  const signatures: { seller?: string } = {}
+  for (const request of prepared.signingRequests()) {
+    const root = await protectedWallet.getPublicKey({ identityKey: true })
+    if (root.publicKey !== request.identity) throw new Error('Wrong protected seller wallet')
+    const protocolID: [2, '3241645161d8'] = [...request.protocolID]
+    const key = await protectedWallet.getPublicKey({
+      protocolID, keyID: request.keyID, counterparty: request.counterparty, forSelf: true
+    })
+    if (key.publicKey !== request.publicKey) throw new Error('Wrong fixed seller child')
+    const signed = await protectedWallet.createSignature({
+      protocolID, keyID: request.keyID, counterparty: request.counterparty, data: request.data
+    })
+    signatures.seller = toHex([...signed.signature, request.scope])
+  }
+  const transaction = prepared.complete(signatures)
+  prepared.assertFinalLayout(transaction)
+  return {
+    transaction,
+    plan: builder.plan(),
+    purchaseCommitment: prepared.purchaseCommitment,
+    unlockingLengthBound: builder.estimateUnlockingLength()
+  }
+}
+```

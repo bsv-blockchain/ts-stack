@@ -940,13 +940,28 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
       propertyTest: 'packages/sdk/src/script/templates/__tests/RevenueListingPlan.property.test.ts',
-      mutate: ['src/script/templates/RevenueListingPlan.ts'],
+      mutate: [
+        'src/script/templates/RevenueListingPlan.ts',
+        'src/script/templates/RevenueListingProfilePlan.ts'
+      ],
       ...jestTarget('jest.config.js', [
         '<rootDir>/src/script/templates/__tests/RevenueListingPlan.test.ts',
-        '<rootDir>/src/script/templates/__tests/RevenueListingPlan.property.test.ts'
+        '<rootDir>/src/script/templates/__tests/RevenueListingPlan.property.test.ts',
+        '<rootDir>/src/script/templates/__tests/RevenueListingProfilePlan.test.ts'
       ])
     },
     ...revenueSpendTargets(repositoryRoot),
+    'sdk-revenue-listing-profile-spend': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest:
+        'packages/sdk/src/script/templates/__tests/RevenueListingProfileSpend.property.test.ts',
+      mutate: ['src/script/templates/RevenueListingProfileSpend.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/script/templates/__tests/RevenueListingProfileSpend.test.ts',
+        '<rootDir>/src/script/templates/__tests/RevenueListingProfileSpend.property.test.ts'
+      ])
+    },
     'sdk-revenue-listing': {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',

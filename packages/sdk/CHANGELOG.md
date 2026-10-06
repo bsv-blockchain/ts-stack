@@ -216,7 +216,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.1 source candidate)
 
-- Add the portable `RevenueListingProfile` two-stage literal codec, immutable public-child schedule and exact 717-byte metadata with required height expiry. Both locks match unchanged PR295 positive wire vectors. Recognition does not establish activation, lineage or transaction validity; replacement of the legacy planner and witnesses remains open.
+- Add the portable `RevenueListingProfile` two-stage literal codec, immutable public-child schedule and exact 717-byte metadata with required height expiry. Both locks match unchanged PR295 positive wire vectors. Recognition does not establish activation, lineage or transaction validity; the separate `RevenueListingProfilePlan` and `RevenueListingProfileSpend` entries add immutable route planning, owned complete funding layouts, full 114/15-value public witnesses, protected seller-child requests and full purchase commitments. Tests execute complete positive routes and all eight recipients. Native remittance, lineage and alias integration remain open.
 
 - Add full input-zero purchase commitment calculation, fixed public BRC-197 child derivation and commitment/current-alias BRC-196 wire bindings. Exact historical release identity remains unchanged. Replacement-family/wallet/native-alias integration is still open; earlier six-route reference receipts do not qualify BRC PR295.
 

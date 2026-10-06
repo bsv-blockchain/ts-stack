@@ -642,12 +642,14 @@
         "path": "packages/sdk/src/script/templates/__tests/RevenueListingPlan.property.test.ts",
         "manifest": "packages/sdk/package.json",
         "risk": "critical",
-        "boundary": "BRC-197 six-route output, revenue conservation and retirement planning",
-        "target": "At least 300 bounded construction and value-preservation cases",
+        "boundary": "Legacy revenue planning and immutable two-stage profile conservation, fixed-child outputs and exact retirement",
+        "target": "At least 300 original construction cases and 300 immutable one-through-eight-recipient payout/split/retirement cases",
         "invariants": [
           "Mandatory listing, receipt and payout outputs match frozen route transactions.",
           "Payout quanta retain all indivisible remainders.",
-          "Retirement preserves exact shares with an explicit bounded external top-up."
+          "Retirement preserves exact shares with an explicit bounded external top-up.",
+          "The immutable profile preserves exact listing value and only requests a protected seller-child signature for split or early retirement.",
+          "Permissionless retirement distributes the full balance with a top-up smaller than one quantum and committed height finality."
         ]
       },
       {
@@ -1733,6 +1735,18 @@
         "invariants": [
           "Retained raw subjects and available parents remain byte-identical after leaf hydration; unrelated branches confer no authority.",
           "Wrong Atomic subjects, absent raw targets, changed current raw bytes and complete input/output budget overflows fail closed."
+        ]
+      },
+      {
+        "path": "packages/sdk/src/script/templates/__tests/RevenueListingProfileSpend.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "Immutable active profile funded outputs, protected child authority and complete 15-value Script witnesses",
+        "target": "At least 300 complete positive purchase/split/payout/early-retirement/expiry-retirement transactions with all inputs executed",
+        "invariants": [
+          "Mandatory outputs preserve listing value and exact shares; external funding alone pays the receipt, top-up and chosen fee.",
+          "The protected BRC-100 wallet returns only a child public key and signature; no child scalar is exported.",
+          "Finality and witness arity match the selected route, and the estimator bounds the actual unlocking size."
         ]
       }
     ],

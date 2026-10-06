@@ -52,7 +52,7 @@ test('every core overlay profile fingerprints its canonical and native fixture i
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 141)
+  assert.equal(Object.keys(configured).length, 142)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -1105,7 +1105,7 @@ test('relocated LCH overlay tests retain their independent application dependenc
     )
     assert.equal(new RegExp(mappings[0][0]).test('../src/overlayAcquisition.js'), false)
   }
-  assert.equal(Object.keys(configured).length, 141)
+  assert.equal(Object.keys(configured).length, 142)
 })
 
 test('compound private builds retain every dependency and append the sequential helper input', () => {

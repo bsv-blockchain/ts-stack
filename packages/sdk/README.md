@@ -698,8 +698,12 @@ The optional BRC-197 exemplar is under pre-adoption replacement by BRC PR295.
 codec: both literal programs are pinned, stage choice is explicit, and the shared
 717-byte metadata binds the immutable schedule, public children and mandatory
 expiry. See the [profile guide](../../docs/guides/revenue-listing-profile.md).
-Fixed-child signing/remittance, witnesses, activation lineage, expiry finality
-and native alias recovery still require integration. Earlier six-route codec
+`RevenueListingProfilePlan` and `RevenueListingProfileSpend` separately plan
+exact outputs and construct funded 114/15-value witnesses, requesting a protected
+seller-child signature only for split or early retirement. Complete positive
+transactions, all eight recipients and original property controls exercise these
+components. Fixed-child native remittance, signed activation lineage, selected-chain
+expiry finality and durable alias recovery still require integration. Earlier six-route codec
 and native receipts do not qualify the current profile. See
 [specification alignment](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
 

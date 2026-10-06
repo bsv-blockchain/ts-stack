@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 141)
+  assert.equal(result.summary.propertySuites, 142)
   assert.equal(result.summary.propertyPackages, 32)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 37)
-  assert.equal(result.summary.mutationTargets, 141)
+  assert.equal(result.summary.mutationTargets, 142)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -475,6 +475,24 @@ test('revenue spend partitions cover every source line once with the complete su
     nextLine - 1,
     fs.readFileSync(path.join(REPOSITORY_ROOT, 'packages/sdk', source), 'utf8').split('\n').length
   )
+})
+
+test('immutable profile witness retains its complete source, positive suite, property and critical gate', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const target = targets['sdk-revenue-listing-profile-spend']
+  assert.deepEqual(target.mutate, ['src/script/templates/RevenueListingProfileSpend.ts'])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/script/templates/__tests/RevenueListingProfileSpend.test.ts',
+    '<rootDir>/src/script/templates/__tests/RevenueListingProfileSpend.property.test.ts'
+  ])
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
+  )
+  const registration = policy.targets.find(item => item.id === 'sdk-revenue-listing-profile-spend')
+  assert.equal(registration.propertyTest, target.propertyTest)
+  assert.equal(registration.minimumScore, 90)
+  assert.equal(registration.maximumInvalid, 0)
+  assert.equal(registration.maximumNoCoverage, 0)
 })
 
 test('action store partitions retain every source line, test and independent critical gate', () => {

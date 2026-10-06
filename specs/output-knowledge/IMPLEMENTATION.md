@@ -53,6 +53,18 @@ does not yet replace the legacy planner, witness builder or lineage adapter.
 Packed/browser contracts and compiled examples exercise the new portable entry,
 without qualifying activation, protected signing or private release.
 
+The SDK now also has separately selected immutable profile planning and funded
+witness construction. Its normal activation and purchase witnesses reproduce
+unchanged specification bytes, and complete positive split, permissionless
+payout, early retirement and expiry retirement execute every input. An
+activation/purchase/payout example exercises all eight recipients. Protected
+BRC-100 requests select only the seller child for split and early retirement;
+other routes need no seller signature. Full purchase commitments and final-layout
+bindings are construction evidence, not independent lineage or release authority.
+Original 300-run controls cover immutable conservation and fully funded active
+route execution. This component work leaves the signed-lineage, native wallet,
+collector and durable alias integration rows open.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

@@ -502,7 +502,7 @@
       "manifest": "packages/sdk/package.json",
       "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingPlan.property.test.ts",
       "risk": "critical",
-      "boundary": "BRC-197 six-route output, revenue conservation and retirement planning",
+      "boundary": "Legacy revenue planning and immutable two-stage profile conservation, fixed-child outputs and exact retirement",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
@@ -1423,6 +1423,16 @@
       "propertyTest": "packages/overlays/overlay/src/__tests/RetainedTransactionBEEF.property.test.ts",
       "risk": "critical",
       "boundary": "Bounded original raw subject and available dependency history under plain and Atomic BEEF plus separate current leaf evidence",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing-profile-spend",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingProfileSpend.property.test.ts",
+      "risk": "critical",
+      "boundary": "Immutable active profile funded outputs, protected child authority and complete 15-value Script witnesses",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

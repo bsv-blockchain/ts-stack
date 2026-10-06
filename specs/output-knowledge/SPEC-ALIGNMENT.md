@@ -50,6 +50,12 @@ may install different transaction domains without adopting its revenue model.
       height expiry. Match both unchanged positive wire-corpus locks exactly.
       This component does not yet replace the legacy planner, witness builder or
       lineage adapter and cannot qualify their behavior.
+- [x] Add separate immutable route planning and funded witness construction with
+      reserve-stage activation, purchase, seller-child split, permissionless
+      payout and both retirement paths. Reproduce unchanged activation/purchase
+      bytes, execute all inputs and eight recipients, and preserve the original
+      300-run controls. These are component interfaces; replacing every legacy
+      adapter and validating signed ancestry remain open.
 - [ ] Replace the superseded program, metadata, fixtures and ABI with both frozen
       programs and component manifests. Activation: 33406 program bytes,
       SHA256 `5152517f75ac4159aa5d34211f45ce12cd85386a8d1414169886b0d64dac1dea`.
