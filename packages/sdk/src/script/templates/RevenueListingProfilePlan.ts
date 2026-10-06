@@ -226,7 +226,7 @@ function economicOutputs(
   let payout = 0n,
     topUp = 0n,
     contribution = action.operation === 'activate' ? 0n : 1n
-  let commitment = new Array<number>(32).fill(0)
+  let commitment = Array.from({ length: 32 }, () => 0)
   switch (action.operation) {
     case 'activate':
       continuing.push(output(reserve, profile.lock('active', descriptor).toHex()))

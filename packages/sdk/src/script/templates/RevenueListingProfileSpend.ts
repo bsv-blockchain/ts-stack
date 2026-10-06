@@ -278,7 +278,7 @@ function activationWitness(descriptor: Descriptor, digest: bigint): PublicWitnes
   for (const recipient of descriptor.initialRevenue.recipients)
     values.push(...linkage(recipient.identity, digest))
   for (let index = descriptor.initialRevenue.recipients.length; index < 8; index++)
-    values.push(...new Array<bigint>(11).fill(0n))
+    values.push(...Array.from({ length: 11 }, () => 0n))
   return values
 }
 function operationParameter(action: RevenueListingProfileAction): bigint {
@@ -312,16 +312,16 @@ function witness(
     BigInt(plan.operationCode),
     action.operation === 'purchase'
       ? toArray(action.acquisitionId, 'hex')
-      : new Array<number>(32).fill(0),
+      : Array.from({ length: 32 }, () => 0),
     action.operation === 'purchase'
       ? toArray(action.requestDigest, 'hex')
-      : new Array<number>(32).fill(0),
-    buyer === undefined ? new Array<number>(33).fill(0) : (buyer.encode(true) as number[]),
+      : Array.from({ length: 32 }, () => 0),
+    buyer === undefined ? Array.from({ length: 33 }, () => 0) : (buyer.encode(true) as number[]),
     buyerX,
     buyerY,
     operationParameter(action),
     change === undefined
-      ? new Array<number>(20).fill(0)
+      ? Array.from({ length: 20 }, () => 0)
       : toArray(change.lockingScript.toHex().slice(6, 46), 'hex'),
     BigInt(change?.satoshis ?? 0),
     signature,
