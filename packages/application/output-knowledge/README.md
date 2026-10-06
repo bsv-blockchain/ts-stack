@@ -114,8 +114,16 @@ Engine/Mongo/LCH demonstrations as historical-profile evidence.
 
 The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,
 `privatePurchaseBuyerBinding` and `PRIVATE_PURCHASE_BUYER_INITIAL`. The separate
-`private/purchase-wallet` entry exports the historical
-`WalletToolboxPurchasePayment` without authenticated HTTP orchestration. Six
+`private/purchase-wallet` entry exports the current
+`WalletToolboxProfilePurchasePayment` and historical `WalletToolboxPurchasePayment`
+without authenticated HTTP orchestration. The current adapter explicitly binds
+both frozen programs and a separate format-two plan, verifies reserve-stage
+genesis and activation ancestry, and requires an active listing and same verified
+chain view below height expiry before new native funding or signing. Finalized
+original recovery remains read-only. Both adapters share the full native
+intent/funding/layout/recovery pipeline; historical options and format-one plans
+remain compatible. Fixed-child payout remittance and native alias reconciliation
+remain separate integrations. Six
 protected object reservations precede seller
 preparation and wallet work. The small durable control journal contains no large
 lineage, BEEF or delivered secret. `recover` reads the original wallet intent and

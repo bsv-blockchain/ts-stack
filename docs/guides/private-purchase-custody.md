@@ -3,8 +3,8 @@ id: private-purchase-custody
 title: 'Original Covenant Purchase Custody'
 kind: guide
 version: '1.0.1'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -285,8 +285,9 @@ alias reconciliation or the current exemplar's wallet construction.
 `@bsv/output-knowledge/private/purchase-buyer` supplies the portable
 `PrivatePurchaseBuyer`, its installation-binding helper and initial control value,
 and interchangeable payment/validation ports. The independent
-`@bsv/output-knowledge/private/purchase-wallet` entry supplies
-the retained historical `WalletToolboxPurchasePayment`, separating native Script/lineage-aware transaction
+`@bsv/output-knowledge/private/purchase-wallet` entry supplies the current
+`WalletToolboxProfilePurchasePayment` and retained historical
+`WalletToolboxPurchasePayment`, separating native Script/lineage-aware transaction
 construction from authenticated HTTP orchestration. Neither entry imports a native
 wallet or Node storage implementation. A native host
 may supply the existing Wallet Toolbox `RecoverableActionController`; a browser
@@ -339,6 +340,25 @@ entitlement does not repeat a new-funding expiry check. Installing the companion
 alone does not implement transaction-alias reconciliation or establish Script,
 lineage, inclusion or licensing validity.
 
+`WalletToolboxProfilePurchasePayment` explicitly selects the current immutable
+two-stage exemplar. Supply a `RevenueListingProfile`, the independently selected
+chain resolver and synchronous same-context guard, and an installed recoverable
+native action owner. The adapter authenticates the complete original request and
+signed lineage, requires reserve-only genesis followed by valid activation and
+an active target, and verifies that history before creating the plan or allocating
+funding. Its separately bound format-two plan contains both frozen program hashes.
+An earlier format-one plan cannot be opened as a current-profile operation.
+
+The verified chain view, partition, generation and policy must remain unchanged
+through new allocation and signing. At each financial boundary the current tip
+must be below the descriptor's mandatory `expiryHeight`. A changed view or height
+refuses new work while retaining any original prepared native intent. Reconcile
+that intent through the same owner; never fund a replacement after a lost reply.
+Already finalized recovery reads the original transaction without applying a
+fresh listing-expiry or offer-eligibility test. Independent delivery, License and
+key validation still govern usable rights. Neither adapter grants a right merely
+because its wallet action completed.
+
 The historical `WalletToolboxPurchasePayment` adapter installs the original wallet/storage/chain/originator
 and independently selected seller, actual covenant family, chain-view resolver,
 verification identity and synchronous current-context guard. It authenticates the
@@ -349,7 +369,16 @@ uses the actual predecessor, required successor/recipient receipt and native
 wallet arguments receive the original bytes. It requests no seller signature and
 never broadcasts. Fees and native funding signatures remain wallet obligations.
 
-This historical script adapter permits at most one native P2PKH change output. Install
+Both adapters share the complete native intent, exact funding/layout, bounded
+submission, finalization and recovery pipeline. The historical adapter retains
+its public options, format-one plans, program identity and defaults. Installed
+action, family and chain-resolver owners and their methods are pinned; replacing
+an owner is not a migration of an existing operation. The current adapter does
+not provide listing genesis funding, fixed-child payout remittance, host alias
+custody or authenticated buyer/seller composition; those integrations remain
+separate checkpoint requirements.
+
+Each script adapter permits at most one native P2PKH change output. Install
 the existing Wallet Toolbox managed-change policy with
 `maxOutputsPerAction: 1` and `migrationInputsPerAction: 0` for this owner, and preserve
 that installation through reopen. Native commission, migration or additional

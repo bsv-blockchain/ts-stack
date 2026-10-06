@@ -5623,3 +5623,48 @@ The replacement-family native wallet and alias custody, full current HTTP
 composition, complete final mutation campaign and exact-head hosted gates
 remain required. These component results do not complete checkpoint two or
 qualify a later source head.
+
+## Selected current native wallet and fixed-child intake preparation
+
+The selected `WalletToolboxProfilePurchasePayment` companion retains the complete
+ordinary native funding pipeline and historical entry point. Its format-2 durable
+snapshot binds the frozen program pair, complete activation ancestry, active stage,
+exclusive expiry and the same installed chain view and eligibility guard across
+allocation, awaits and the final side effect. Finalized recovery reads original
+bytes without allocating again or renewing expired authority. The internal store
+mode is required and nullable while the historical public getter remains unchanged;
+this also removes the redundant optional `undefined` flagged by Sonar.
+
+The first frozen current-wallet run executed the complete original nine-file
+coverage-instrumented selection: 83 cases passed and eight new current fixture
+cases failed before allocation because the genesis signature did not match the
+checkpoint owner. All captures passed bounded native-fault marker triage; the
+owned container and volume were physically removed. The later profile and
+state-clock selections were not run. The corrected fixture uses a fresh disclosed
+public funding checkpoint, consistent mock headers and its funding actor's P2PKH
+signature. Independent portable execution validates every genesis and activation
+input and verifies the complete active lineage. This diagnosis and semantic type
+check are component evidence; a new frozen native run is still required.
+
+The additive local fixed-child intake has an explicit profile and recipient,
+independent public child matching, complete AtomicBEEF verification and the full
+existing signer, authorized-writer and transactional provider ownership pipeline.
+Ordinary BRC-29 Base64 validation, historical methods, database schema and remote
+BRC-100 wire behavior retain their previous contracts. The original native managed
+change suite now includes wrong-recipient, wrong-Script, idempotence and unsupported
+writer cases plus eight independent recipient receipt/reopen/protected-spending
+cases. A genuine generated property is appended to the existing controller suite
+under the original minimum 300 runs, seed and deadlines. Those tests await native
+qualification. The complete source union has 936 distinct canonical mutation sites,
+including both factored cores, old and selected wrappers, fixed-field helper and
+new public method ranges. All three original funding targets retain their original
+selectors and controls; no target or execution row is removed. This is an inventory
+proof, not mutation-campaign evidence.
+
+The current hosted wallet shard's 17 Chaintracks tests collided on fixed port
+33066 before their assertions. The fixture now requests the existing server's
+supported ephemeral port, preserving the full assertions and deadlines. Its
+original complete cohort also awaits the new frozen qualification. These source
+corrections, guides and compiled API example do not finish Checkpoint 2; full current
+alias custody, native profile routes and activation gates, HTTP composition, final
+whole mutation reconciliation and exact published-head hosted gates remain open.

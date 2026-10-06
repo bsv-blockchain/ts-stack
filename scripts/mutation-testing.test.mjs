@@ -1393,7 +1393,9 @@ test('covenant buyer and native payment retain whole entries and complete origin
   ])
   assert.deepEqual(configured['wallet-purchase-payment'].mutate, [
     'src/private/WalletToolboxPurchasePayment.ts',
-    'src/private/purchase-wallet.ts'
+    'src/private/purchase-wallet.ts',
+    'src/private/WalletToolboxPurchasePaymentCore.ts',
+    'src/private/WalletToolboxProfilePurchasePayment.ts'
   ])
   for (const id of ['private-purchase-buyer', 'wallet-purchase-payment']) {
     const target = configured[id]

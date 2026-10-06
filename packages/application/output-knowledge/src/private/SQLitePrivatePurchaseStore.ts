@@ -144,10 +144,10 @@ class PrivatePurchaseStoreCore<S extends PrivatePurchaseState | PrivatePurchaseC
     private readonly contracts: PrivatePurchaseContracts,
     limits: PrivatePurchaseStoreLimits,
     policy: PrivatePurchaseCustody['validationPolicy'],
-    clockProfile?: 'native-observation-v1',
-    candidateProfile?: PrivatePurchaseCandidateProfile
+    clockProfile: 'native-observation-v1' | undefined,
+    candidateProfile: PrivatePurchaseCandidateProfile | null
   ) {
-    this.economicProfile = candidateProfile
+    this.economicProfile = candidateProfile ?? undefined
     outputAssert(
       clockProfile === undefined || clockProfile === 'native-observation-v1',
       'Unsupported purchase clock profile'
@@ -967,7 +967,7 @@ export class SQLitePrivatePurchaseStore extends PrivatePurchaseStoreCore<Private
   ) {
     // Fix the historical owner to the legacy mode while retaining its public
     // five-argument constructor; the internal companion mode is not inherited.
-    super(domain, contracts, limits, policy, clockProfile, undefined)
+    super(domain, contracts, limits, policy, clockProfile, null)
   }
   override pin(
     id: string,

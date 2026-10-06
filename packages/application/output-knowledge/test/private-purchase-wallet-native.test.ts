@@ -1,7 +1,22 @@
 import { expect, it, jest } from '@jest/globals'
-import { Beef, canonicalOutputJSON, Utils, type OutputJSONObject } from '@bsv/sdk'
+import {
+  Beef,
+  canonicalOutputJSON,
+  Utils,
+  signOutputPacket,
+  outputPacketDigest,
+  PrivateKey,
+  type OutputJSONObject
+} from '@bsv/sdk'
 import { WalletToolboxPurchasePayment } from '../src/private/WalletToolboxPurchasePayment.js'
 import { nativePurchaseWalletFixture } from './private-purchase-wallet-native.fixture.js'
+import { WalletToolboxProfilePurchasePayment } from '../src/private/WalletToolboxProfilePurchasePayment.js'
+import { nativeProfilePurchaseWalletFixture } from './private-purchase-wallet-profile.fixture.js'
+import {
+  REVENUE_LISTING_ACTIVATION_PROGRAM_SHA256,
+  REVENUE_LISTING_ACTIVE_PROGRAM_SHA256
+} from '@bsv/sdk/script/templates/RevenueListingProfile'
+import { fixture as currentProfileFixture } from './revenue-profile.fixture.js'
 const signal = () => new AbortController().signal
 it('passes owned native bytes while retaining the original base64 plan and recovery identity', async () => {
   const f = await nativePurchaseWalletFixture(),
@@ -164,3 +179,161 @@ it('rejects changes to both public capacity fields instead of widening the insta
   expect(f.counts.prepare).toBe(0)
   expect(f.counts.finalize).toBe(0)
 })
+
+it('funds and recovers a current two-stage purchase with complete activation history and one native operation', async () => {
+  const f = await nativeProfilePurchaseWalletFixture(),
+    active = signal()
+  const plan = await f.payment.plan('81'.repeat(32), f.prepare, f.terms, active)
+  expect(plan.format).toBe('private-purchase-wallet/2')
+  expect(f.payment.configuration.script).toEqual({
+    activation: REVENUE_LISTING_ACTIVATION_PROGRAM_SHA256,
+    active: REVENUE_LISTING_ACTIVE_PROGRAM_SHA256
+  })
+  const candidate = await f.payment.finish(plan, () => {}, active)
+  const verified = await f.verify(candidate)
+  expect(verified).toMatchObject({
+    status: 'verified',
+    increment: f.lineage.descriptor.purchasePrice
+  })
+  if (verified.status !== 'verified') throw new Error('Current native purchase was not verified')
+  expect(verified.purchaseCommitment).toMatch(/^[0-9a-f]{64}$/)
+  expect(verified.lineage.stage).toBe('active')
+  expect(verified.lineage.genesis).toEqual(f.lineage.genesis)
+  const reopened = await f.reopen()
+  f.setHeight(f.lineage.descriptor.expiryHeight)
+  f.setAccess(false)
+  expect(await reopened.payment.recover(plan, active)).toEqual({ state: 'finalized', candidate })
+  expect(
+    await reopened.payment.finish(
+      plan,
+      () => {
+        throw new Error('Historical recovery cannot grant new work')
+      },
+      active
+    )
+  ).toEqual(candidate)
+  expect(f.counts.prepare).toBe(1)
+  expect(f.counts.finalize).toBe(1)
+  expect(f.native.broadcast).not.toHaveBeenCalled()
+})
+it('refuses a verified expired current listing before native allocation', async () => {
+  const f = await nativeProfilePurchaseWalletFixture(524288, 101)
+  await expect(f.payment.plan('82'.repeat(32), f.prepare, f.terms, signal())).rejects.toThrow(
+    'height expired'
+  )
+  expect(f.counts.prepare).toBe(0)
+  expect(f.counts.finalize).toBe(0)
+  expect(f.native.broadcast).not.toHaveBeenCalled()
+})
+it('retains original native funding when the verified current chain view changes during allocation', async () => {
+  const f = await nativeProfilePurchaseWalletFixture(),
+    active = signal()
+  const originalPrepare = f.actions.prepare
+  const options = {
+    ...f.paymentOptions,
+    actions: {
+      ...f.actions,
+      prepare: async (...args: Parameters<typeof originalPrepare>) => {
+        const result = await originalPrepare(...args)
+        f.setHeight(102)
+        return result
+      }
+    }
+  }
+  const payment = new WalletToolboxProfilePurchasePayment(options)
+  const plan = await payment.plan('83'.repeat(32), f.prepare, f.terms, active)
+  await expect(payment.finish(plan, () => {}, active)).rejects.toThrow('chain context changed')
+  expect(await payment.recover(plan, active)).toEqual({ state: 'prepared' })
+  expect(f.counts.prepare).toBe(1)
+  expect(f.counts.finalize).toBe(0)
+  f.setHeight(101)
+  const candidate = await payment.finish(plan, () => {}, active)
+  expect(await f.verify(candidate)).toMatchObject({ status: 'verified' })
+  expect(f.counts.prepare).toBe(1)
+  expect(f.counts.finalize).toBe(1)
+  expect(f.native.broadcast).not.toHaveBeenCalled()
+})
+it('binds current native plans to both frozen programs and the separately selected format', async () => {
+  const f = await nativeProfilePurchaseWalletFixture(),
+    active = signal()
+  const plan = await f.payment.plan('84'.repeat(32), f.prepare, f.terms, active)
+  for (const change of ['format', 'active-program', 'activation-program']) {
+    const altered = JSON.parse(canonicalOutputJSON(plan, { bytes: 4194304 })) as OutputJSONObject
+    if (change === 'format') altered.format = 'private-purchase-wallet/1'
+    else
+      ((altered.binding as OutputJSONObject).script as OutputJSONObject)[
+        change === 'active-program' ? 'active' : 'activation'
+      ] = '00'.repeat(32)
+    await expect(f.payment.finish(altered, () => {}, active)).rejects.toThrow('owner differs')
+  }
+  expect(f.counts.prepare).toBe(0)
+  expect(f.counts.finalize).toBe(0)
+  expect(f.native.broadcast).not.toHaveBeenCalled()
+})
+it('refuses an authenticated reserve-stage listing without treating it as an active purchase', async () => {
+  const f = await nativeProfilePurchaseWalletFixture(),
+    active = signal()
+  const point = structuredClone(f.lineage.genesis.body.genesis)
+  const request = { ...f.prepare, listing: point }
+  const lineage = {
+    ...f.lineage,
+    target: point,
+    transactions: f.lineage.transactions.filter(tx => tx.txid === point.txid)
+  }
+  const terms = signOutputPacket(
+    'purchase-terms',
+    {
+      ...f.terms.body,
+      listing: point,
+      requestDigest: outputPacketDigest('purchase-request', request),
+      domainEvidence: {
+        ...f.terms.body.domainEvidence,
+        bytes: Utils.toBase64(
+          new TextEncoder().encode(canonicalOutputJSON(lineage, { bytes: 4194304 }))
+        )
+      }
+    },
+    new PrivateKey(currentProfileFixture.testActors.seller.scalar)
+  )
+  await expect(f.payment.plan('85'.repeat(32), request, terms, active)).rejects.toThrow(
+    'stage does not permit'
+  )
+  expect(f.counts.prepare).toBe(0)
+  expect(f.counts.finalize).toBe(0)
+  expect(f.native.broadcast).not.toHaveBeenCalled()
+})
+
+it.each(['actions', 'family', 'chains'] as const)(
+  'refuses replacing the selected current wallet %s owner before new allocation',
+  async key => {
+    const f = await nativeProfilePurchaseWalletFixture(),
+      active = signal()
+    const options = { ...f.paymentOptions }
+    const payment = new WalletToolboxProfilePurchasePayment(options)
+    const plan = await payment.plan('87'.repeat(32), f.prepare, f.terms, active)
+    if (key === 'actions') options.actions = { ...options.actions }
+    else if (key === 'family') options.family = Object.create(options.family)
+    else options.chains = { ...options.chains }
+    await expect(payment.finish(plan, () => {}, active)).rejects.toThrow('installation changed')
+    expect(f.counts.prepare).toBe(0)
+    expect(f.counts.finalize).toBe(0)
+    expect(f.native.broadcast).not.toHaveBeenCalled()
+  }
+)
+it.each(['actions', 'family', 'chains'] as const)(
+  'preserves historical installation identity when its %s owner is replaced',
+  async key => {
+    const f = await nativePurchaseWalletFixture(),
+      active = signal()
+    const options = { ...f.paymentOptions }
+    const payment = new WalletToolboxPurchasePayment(options)
+    const plan = await payment.plan('88'.repeat(32), f.prepare, f.terms, active)
+    if (key === 'actions') options.actions = { ...options.actions }
+    else if (key === 'family') options.family = Object.create(options.family)
+    else options.chains = { ...options.chains }
+    await expect(payment.finish(plan, () => {}, active)).rejects.toThrow('installation changed')
+    expect(f.counts.prepare).toBe(0)
+    expect(f.counts.finalize).toBe(0)
+    expect(f.native.broadcast).not.toHaveBeenCalled()
+  }
+)

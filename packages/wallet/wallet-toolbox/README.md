@@ -885,6 +885,14 @@ that contain unrelated BEEF branches. The wallet restricts either form to the
 declared transaction and its recursive dependencies before independently
 validating every transaction, proof, and BRC-29 payment output.
 
+The experimental local `getBrc197InternalizationCapabilities()` and
+`internalizeBrc197Action()` extension accepts the literal fixed-child remittance
+for the optional BRC-197 exemplar through the complete wallet ownership pipeline.
+Ordinary BRC-29 validation and remote BRC-100 methods remain unchanged.
+Read the [fixed-child intake guide](../../../docs/guides/brc197-fixed-child-wallet.md)
+for explicit capability selection and the outstanding native, recipient spending
+and activation-before-funding qualification gates.
+
 ## Documentation
 
 [Full API documentation](https://bsv-blockchain.github.io/wallet-toolbox) is available on GitHub Pages.

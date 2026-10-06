@@ -337,7 +337,12 @@ function walletFundingTarget(repositoryRoot, source, property) {
     'src/storage/fundingRecovery/**',
     'src/signer/fundingRecovery/**',
     'src/storage/methods/internalizeAction.ts',
-    'src/signer/methods/internalizeAction.ts'
+    'src/signer/methods/internalizeAction.ts',
+    'src/storage/methods/internalizeActionCore.ts',
+    'src/signer/methods/internalizeActionCore.ts',
+    'src/storage/methods/internalizeBrc197Action.ts',
+    'src/signer/methods/internalizeBrc197Action.ts',
+    'src/sdk/Brc197Internalization.ts'
   ]
   target.runnerOptions.jest.config.testMatch = [
     '<rootDir>/src/storage/fundingRecovery/__test/*.test.ts',
@@ -416,25 +421,35 @@ export function buildMutationTargets(repositoryRoot) {
       ),
       mutate: [
         'src/signer/fundingRecovery/RecoverableFundingController.ts',
-        ...[
-          ['  if (recovery !== undefined) requireFunding', '  await ctx.asyncSetup()'],
-          ['  private async loadExistingTransaction(', '  private computeWalletPaymentBalance()'],
-          ['  async setupEvidence()', '  async validateAtomicBeef(']
-        ].map(([start, end]) =>
-          sourceLineRange(
-            repositoryRoot,
-            'packages/wallet/wallet-toolbox',
-            'src/storage/methods/internalizeAction.ts',
-            start,
-            end
-          )
+        // The entire shared pipelines include every site in the historical
+        // method ranges, plus the new selected profile and ownership checks.
+        'src/storage/methods/internalizeAction.ts',
+        'src/signer/methods/internalizeAction.ts',
+        'src/storage/methods/internalizeActionCore.ts',
+        'src/signer/methods/internalizeActionCore.ts',
+        'src/storage/methods/internalizeBrc197Action.ts',
+        'src/signer/methods/internalizeBrc197Action.ts',
+        'src/sdk/Brc197Internalization.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/Wallet.ts',
+          '  async getBrc197InternalizationCapabilities(',
+          '  async abortAction('
         ),
         sourceLineRange(
           repositoryRoot,
           'packages/wallet/wallet-toolbox',
-          'src/signer/methods/internalizeAction.ts',
-          '  const r: StorageInternalizeActionResult',
-          '  return r'
+          'src/storage/WalletStorageManager.ts',
+          '  async getBrc197InternalizationCapabilities(',
+          '  async relinquishCertificate('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageProvider.ts',
+          '  async internalizeBrc197Action(',
+          '  async getReqsAndBeefToShareWithWorld('
         )
       ]
     },
@@ -2343,7 +2358,12 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/application/output-knowledge/package.json',
       propertyTest:
         'packages/application/output-knowledge/test/private-purchase-wallet-native.property.test.ts',
-      mutate: ['src/private/WalletToolboxPurchasePayment.ts', 'src/private/purchase-wallet.ts'],
+      mutate: [
+        'src/private/WalletToolboxPurchasePayment.ts',
+        'src/private/purchase-wallet.ts',
+        'src/private/WalletToolboxPurchasePaymentCore.ts',
+        'src/private/WalletToolboxProfilePurchasePayment.ts'
+      ],
       additionalInputs: [
         'src/operations/**',
         'src/revenue-listing/**',

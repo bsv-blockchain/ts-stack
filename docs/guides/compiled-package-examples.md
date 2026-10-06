@@ -3,8 +3,8 @@ id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
 version: '1.1.0'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: stable
 tags: [guide, typescript, packages, consumers, examples]
@@ -664,6 +664,31 @@ export function installLocalRecoveryControllers(
     actions: new RecoverableActionController(wallet, actions, originator),
     funding: new RecoverableFundingController(wallet, funding)
   }
+}
+```
+
+## Selected local fixed-child intake
+
+This function checks the locally installed recipient identity before calling the
+explicit intake method. Its input already requires complete AtomicBEEF and exact
+literal remittance. It does not qualify a remote wallet, authorize application
+access, or replace activation, Script, lineage, fee and chain checks before funding.
+See the [fixed-child intake guide](./brc197-fixed-child-wallet.md) for these boundaries.
+
+```typescript compile
+// example-id: local-fixed-child-intake
+import type { Wallet as FixedChildLocalWallet } from '@bsv/wallet-toolbox'
+import type { Brc197InternalizeActionArgs } from '@bsv/wallet-toolbox/out/src/sdk/Brc197Internalization'
+
+export async function receiveFixedChildPayment(
+  wallet: FixedChildLocalWallet,
+  args: Brc197InternalizeActionArgs
+) {
+  const capability = await wallet.getBrc197InternalizationCapabilities()
+  if (capability.recipientIdentityKey !== args.recipientIdentityKey) {
+    throw new Error('The local wallet is not the intended recipient')
+  }
+  return await wallet.internalizeBrc197Action(args)
 }
 ```
 
@@ -2799,4 +2824,36 @@ function selectPurchaseIdentity(
   return { selected, binding: purchaseIdentityBinding(selected) }
 }
 void selectPurchaseIdentity
+```
+
+## Explicit current-profile native purchase
+
+Supply the independently selected current family, chain resolver, same-context
+guard and recoverable native action owner. Planning verifies the original active
+lineage; recovery reads that original intent. This compiled example does not
+fund, broadcast, internalize fixed-child payouts or establish private rights.
+
+```ts compile
+// example-id: current-profile-native-purchase
+import {
+  WalletToolboxProfilePurchasePayment as CurrentNativePurchasePayment,
+  type WalletToolboxProfilePurchasePaymentOptions as CurrentNativePurchaseOptions
+} from '@bsv/output-knowledge/private/purchase-wallet'
+import type {
+  OutputPurchasePrepare as CurrentNativePurchaseRequest,
+  OutputSignedPurchaseTerms as CurrentNativePurchaseTerms
+} from '@bsv/sdk'
+
+async function recoverCurrentNativePurchase(
+  installation: CurrentNativePurchaseOptions,
+  operationId: string,
+  originalRequest: CurrentNativePurchaseRequest,
+  originalTerms: CurrentNativePurchaseTerms,
+  signal: AbortSignal
+) {
+  const payment = new CurrentNativePurchasePayment(installation)
+  const plan = await payment.plan(operationId, originalRequest, originalTerms, signal)
+  return payment.recover(plan, signal)
+}
+void recoverCurrentNativePurchase
 ```
