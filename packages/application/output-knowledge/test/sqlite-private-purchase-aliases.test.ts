@@ -1,3 +1,4 @@
+import { assembleOutputEvidence } from '../src/EvidenceAssembler.js'
 import { expect, jest, test } from '@jest/globals'
 import { Beef, decodeOutputBytes, ownOutputJSON } from '@bsv/sdk'
 import { SQLitePrivatePurchaseAliases } from '../src/private/SQLitePrivatePurchaseAliases.js'
@@ -447,4 +448,27 @@ test('byte-identical original recovery needs no optional cache slot even when ev
   expect(f.read(f.reopen()).state).toEqual(before.state)
   expect(f.read().state.unconfirmed[0]?.txid).toBe(cached.txid)
   expect(f.read().state.unconfirmed[0]?.admission).toBe('pending')
+})
+
+test('generated alias fixture retains the exact original funding ancestry in complete BEEF', () => {
+  const f = fixture()
+  for (const number of [1, 21, 100, 255]) {
+    const candidate = f.variant(number)
+    const assembled = assembleOutputEvidence(
+      { txid: candidate.txid, beef: candidate.beef, outputIndex: 0 },
+      f.e.original.request.listing.chain,
+      { bytes: 8192, transactions: 8, dependencies: 8 }
+    )
+    expect(assembled.target?.txid).toBe(candidate.txid)
+    expect(assembled.missing).toEqual([])
+    expect(candidate.txid).not.toBe(f.e.candidate.txid)
+    expect(assembled.transactions).toHaveLength(2)
+    expect(assembled.target?.inputs).toEqual([
+      {
+        chain: f.e.original.request.listing.chain,
+        txid: f.e.target.inputs[0].sourceTransaction!.id('hex'),
+        outputIndex: 0
+      }
+    ])
+  }
 })

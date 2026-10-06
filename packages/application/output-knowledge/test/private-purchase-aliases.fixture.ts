@@ -35,6 +35,11 @@ export function purchaseAliasesFixture(maximumWrites = 64) {
     target.inputs[0].unlockingScript = UnlockingScript.fromHex(
       `01${n.toString(16).padStart(2, '0')}75`
     )
+    // fromHex copies only raw transaction bytes. Restore the exact original
+    // input ancestry so mergeTransaction includes the funding transaction and
+    // its Merkle proof in the variant's complete BEEF closure.
+    for (let index = 0; index < target.inputs.length; index++)
+      target.inputs[index].sourceTransaction = e.target.inputs[index].sourceTransaction
     const beef = new Beef()
     beef.mergeTransaction(target)
     return {
