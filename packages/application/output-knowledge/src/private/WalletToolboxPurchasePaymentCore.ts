@@ -82,6 +82,15 @@ export interface PurchaseWalletSpend {
     assertFinalLayout(transaction: Transaction): void
   }
 }
+/** Owned for one public invocation only. Returned wallet bytes and current
+ * authority are checked independently; this is never a retained verdict. */
+interface OriginalPurchase<D extends PurchaseWalletDescriptor> {
+  prepare: OutputPurchasePrepare
+  terms: OutputSignedPurchaseTerms
+  lineage: ListingLineagePackage<D>
+  spend: PurchaseWalletSpend
+  request: CreateActionArgs
+}
 /** Internal, explicitly selected family behavior; never a wallet-supplied mode. */
 export interface PurchaseWalletDomain<D extends PurchaseWalletDescriptor> {
   readonly format: 'private-purchase-wallet/1' | 'private-purchase-wallet/2'
@@ -188,7 +197,7 @@ export class WalletToolboxPurchasePaymentCore<
     if (result instanceof Promise) void result.catch(() => undefined)
     outputAssert(result === undefined, 'Purchase chain guard did not complete', 'context-changed')
   }
-  private original(requestInput: unknown, termsInput: unknown) {
+  private original(requestInput: unknown, termsInput: unknown): OriginalPurchase<D> {
     const prepare = parseOutputPurchasePrepare(requestInput),
       terms = verifyOutputPurchaseTerms(termsInput, prepare, this.installed.seller as string)
     outputAssert(
@@ -252,7 +261,7 @@ export class WalletToolboxPurchasePaymentCore<
     return ownOutputJSON({ ...plan, request: this.requestObject(plan.request) }, { bytes: 4194304 })
       .value as OutputJSONObject
   }
-  private parse(input: OutputJSONObject): Plan {
+  private parse(input: OutputJSONObject): { plan: Plan; original: OriginalPurchase<D> } {
     const value = ownOutputJSON(input, { bytes: 4194304 }).value
     closedOutputObject(value, ['format', 'operationId', 'binding', 'prepare', 'terms', 'request'])
     outputAssert(
@@ -269,20 +278,22 @@ export class WalletToolboxPurchasePaymentCore<
       'context-changed'
     )
     return {
-      format: this.domain.format,
-      operationId: outputHex32(value.operationId),
-      binding: this.configuration,
-      prepare: original.prepare,
-      terms: original.terms,
-      request: original.request
+      original,
+      plan: {
+        format: this.domain.format,
+        operationId: outputHex32(value.operationId),
+        binding: this.configuration,
+        prepare: original.prepare,
+        terms: original.terms,
+        request: original.request
+      }
     }
   }
   private async verified(
-    plan: Plan,
+    original: OriginalPurchase<D>,
     signal: AbortSignal
   ): Promise<{ context: VerificationContext; checkEligible(): void }> {
-    const original = this.original(plan.prepare, plan.terms),
-      context = structuredClone(this.ports.context())
+    const context = structuredClone(this.ports.context())
     outputAssert(
       canonicalOutputJSON(context.view.chain) === canonicalOutputJSON(this.installed.chain),
       'Purchase wallet verification chain changed',
@@ -316,14 +327,13 @@ export class WalletToolboxPurchasePaymentCore<
         terms: original.terms,
         request: original.request
       }
-    await this.verified(plan, signal)
+    await this.verified(original, signal)
     this.current(signal)
     return this.stored(plan)
   }
-  private funded(plan: Plan, bytes: number[] | Uint8Array) {
+  private funded(original: OriginalPurchase<D>, bytes: number[] | Uint8Array) {
     const beef = Beef.fromBinaryStrict(Array.from(bytes)),
-      tx = Transaction.fromAtomicBEEF(Array.from(bytes)),
-      original = this.original(plan.prepare, plan.terms)
+      tx = Transaction.fromAtomicBEEF(Array.from(bytes))
     tx.inputs.forEach(input => {
       input.sourceTransaction = beef.findTransactionForSigning(input.sourceTXID!)
     })
@@ -339,13 +349,17 @@ export class WalletToolboxPurchasePaymentCore<
       complete: prepared.complete()
     }
   }
-  private candidate(plan: Plan, result: SignActionResult): OutputPurchaseSubmit {
+  private candidate(
+    plan: Plan,
+    result: SignActionResult,
+    original: OriginalPurchase<D>
+  ): OutputPurchaseSubmit {
     outputAssert(
       result.tx !== undefined && result.txid !== undefined,
       'Original signed purchase evidence unavailable',
       'unavailable'
     )
-    const funded = this.funded(plan, result.tx)
+    const funded = this.funded(original, result.tx)
     funded.prepared.assertFinalLayout(funded.tx)
     outputAssert(
       funded.tx.id('hex') === result.txid &&
@@ -368,11 +382,11 @@ export class WalletToolboxPurchasePaymentCore<
     signal: AbortSignal
   ): Promise<PrivatePurchaseBuyerPaymentOutcome> {
     this.current(signal)
-    const plan = this.parse(input),
+    const { plan, original } = this.parse(input),
       recovered = await this.ports.actions.recover(plan.operationId, plan.request)
     this.current(signal)
     return recovered.state === 'finalized'
-      ? { state: 'finalized', candidate: this.candidate(plan, recovered.result) }
+      ? { state: 'finalized', candidate: this.candidate(plan, recovered.result, original) }
       : { state: recovered.state }
   }
   async finish(
@@ -385,11 +399,11 @@ export class WalletToolboxPurchasePaymentCore<
       checkNewWork.constructor.name !== 'AsyncFunction',
       'Purchase new-work guard must be synchronous'
     )
-    const plan = this.parse(input)
+    const { plan, original } = this.parse(input)
     let recovered = await this.ports.actions.recover(plan.operationId, plan.request)
     this.current(signal)
-    if (recovered.state === 'finalized') return this.candidate(plan, recovered.result)
-    const { context, checkEligible } = await this.verified(plan, signal),
+    if (recovered.state === 'finalized') return this.candidate(plan, recovered.result, original)
+    const { context, checkEligible } = await this.verified(original, signal),
       guard = () => {
         this.guard(context, signal)
         checkEligible()
@@ -408,14 +422,14 @@ export class WalletToolboxPurchasePaymentCore<
       recovered = await this.ports.actions.recover(plan.operationId, plan.request)
       guard()
     }
-    if (recovered.state === 'finalized') return this.candidate(plan, recovered.result)
+    if (recovered.state === 'finalized') return this.candidate(plan, recovered.result, original)
     outputAssert(
       recovered.state === 'prepared' && recovered.result.signableTransaction !== undefined,
       'Original funded purchase is unresolved',
       'unavailable'
     )
     const signing = recovered.result.signableTransaction,
-      funded = this.funded(plan, signing.tx)
+      funded = this.funded(original, signing.tx)
     // Bound complete evidence and worst-case remaining native input signatures
     // before new signing. The original prepared intent remains recoverable if refused.
     funded.beef.mergeTransaction(funded.complete)
@@ -451,7 +465,7 @@ export class WalletToolboxPurchasePaymentCore<
       guard
     )
     this.current(signal)
-    return this.candidate(plan, result)
+    return this.candidate(plan, result, original)
   }
 }
 function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {

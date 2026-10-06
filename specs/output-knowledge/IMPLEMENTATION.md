@@ -5749,9 +5749,11 @@ both default automatic and explicit legacy modes.
 
 The frozen tracked-source manifest is
 `ea53abbd1893932500b4b7d1f971719c3fedda13148baed40a954252b4a5db47`;
-the independently checked built-runtime manifest is
+the 2,019-file runtime-source input manifest is
 `5a55a4c27ffb88068cd77860767ce88fc9f3dabf5dfeccbbbacc4bdbb0212076`.
-Both were rechecked before and after execution. Every capture passed bounded
+The separate 3,640-file built-artifact manifest is
+`51bf6cb0058f1f90eb3b52dff058511670ea755f90835d0cfd93ef2dc4f15e6c`.
+Source and built artifacts were rechecked before and after execution. Every capture passed bounded
 fault-marker triage without a supervisor timeout. The owned container and volume
 were physically removed and independent successful inventories proved their
 absence; the coordination resource calendar was removed and read back. The
@@ -5768,7 +5770,46 @@ The published `76c5853df` head still has unresolved application performance
 checks. A CPU-only diagnostic on unchanged public purchase fixtures found repeated
 construction of the same original transaction within a single recovery call.
 A private call-local prototype preserves candidate bytes and independently parses
-the returned funded transaction; it has not been adopted or qualified. Durable
-multi-alias custody, full native route and activation preflight coverage, complete
+the returned funded transaction. The source now prepares that refactor, with
+regressions requiring changed returned funding bytes to fail even after a previous
+successful finalized recovery. No public invocation retains a prior construction,
+currentness verdict or signature result. Full source qualification is still
+required for checkpoint acceptance. Durable multi-alias custody, full native route
+and activation preflight coverage, complete
 HTTP demonstrations, final mutation reconciliation and terminal successful
 exact-head hosted gates remain required for Checkpoint 2.
+
+### Call-local recovery qualification
+
+The next frozen Linux run (`v7`) passed the same five complete cohorts: ten
+funding suites with 65 tests, nine buyer suites with 93 tests, three current-profile
+suites with 31 tests, nineteen state/clock suites with 301 tests, and the original
+17 Chaintracks cases. All 42 suites and 507 tests passed. The buyer cohort includes
+the two added regressions for altered finalized transaction bytes after a successful
+recovery, one for each retained wallet format. Both original 300-history properties
+passed with their original seed and deadlines. The complete buyer cohort took
+416.178 Jest seconds; this functional run is not hosted performance qualification.
+
+The refactor owns one original construction for each public invocation and checks
+the actual returned funded transaction afresh. It does not retain an authority,
+currentness, candidate or signature verdict across calls. The complete canonical
+purchase inventory contains 409 distinct sites; all original 143 targets, 390
+execution rows, selectors, thresholds and property controls remain intact.
+
+The 5,290-file tracked-source manifest is
+`6476a17b6554dccda5a0fc4280067011165ca1d0a8e6f70a727a85209497692c`;
+the 2,019-file runtime-source input manifest is
+`565b90f6a8048087664bdf5a403550c44372051a0ab1ff0eb66eafac634b9f7c`.
+The separate 3,640-file built-artifact manifest is
+`ff76ae340dde5e95ae193b6e3d480ade85797d51e545d0a0410c337d4c8a24cb`.
+Both source and actual built artifacts were rechecked before and after the full
+run. All captures passed bounded fault-marker triage without a supervisor timeout.
+Successful independent inventories proved the removed container and volume absent;
+the finite coordination calendar was removed and read back. Subsequent evidence
+and guide edits require their own committed-head documentation and root checks.
+
+The prior failures remain recorded. The published `8c0058229` run has a separate
+ordinary remote-wallet fetch failure in the existing fragmented-batch fixture;
+its transport cause remains under investigation. Native route, alias, seller and
+HTTP compositions, final mutation reconciliation and exact-head hosted gates
+remain open. These passing components do not complete Checkpoint 2.

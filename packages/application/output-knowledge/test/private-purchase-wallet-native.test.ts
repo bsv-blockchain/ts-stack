@@ -6,11 +6,13 @@ import {
   signOutputPacket,
   outputPacketDigest,
   PrivateKey,
+  Transaction,
   type OutputJSONObject
 } from '@bsv/sdk'
 import { WalletToolboxPurchasePayment } from '../src/private/WalletToolboxPurchasePayment.js'
 import { nativePurchaseWalletFixture } from './private-purchase-wallet-native.fixture.js'
 import { WalletToolboxProfilePurchasePayment } from '../src/private/WalletToolboxProfilePurchasePayment.js'
+import type { RecoverableBuyerActions } from '../src/private/WalletToolboxBuyerPayment.js'
 import { nativeProfilePurchaseWalletFixture } from './private-purchase-wallet-profile.fixture.js'
 import {
   REVENUE_LISTING_ACTIVATION_PROGRAM_SHA256,
@@ -18,6 +20,64 @@ import {
 } from '@bsv/sdk/script/templates/RevenueListingProfile'
 import { fixture as currentProfileFixture } from './revenue-profile.fixture.js'
 const signal = () => new AbortController().signal
+it.each(['historical', 'current'] as const)(
+  'rechecks returned funded bytes on every finalized recovery (%s)',
+  async profile => {
+    const { f, paymentFromActions } = await (
+      profile === 'current'
+        ? async () => {
+            const f = await nativeProfilePurchaseWalletFixture()
+            return {
+              f,
+              paymentFromActions: (actions: RecoverableBuyerActions) =>
+                new WalletToolboxProfilePurchasePayment({ ...f.paymentOptions, actions })
+            }
+          }
+        : async () => {
+            const f = await nativePurchaseWalletFixture()
+            return {
+              f,
+              paymentFromActions: (actions: RecoverableBuyerActions) =>
+                new WalletToolboxPurchasePayment({ ...f.paymentOptions, actions })
+            }
+          }
+    )()
+    const active = signal()
+    let alterResult = false
+    const options = {
+      ...f.paymentOptions,
+      actions: {
+        ...f.actions,
+        recover: async (...args: Parameters<typeof f.actions.recover>) => {
+          const result = await f.actions.recover(...args)
+          if (!alterResult || result.state !== 'finalized') return result
+          const changed = Transaction.fromAtomicBEEF(result.result.tx!)
+          changed.outputs[0].satoshis = changed.outputs[0].satoshis! - 1
+          return {
+            state: 'finalized' as const,
+            result: {
+              ...result.result,
+              tx: changed.toAtomicBEEF(),
+              txid: changed.id('hex')
+            }
+          }
+        }
+      }
+    }
+    const payment = paymentFromActions(options.actions),
+      plan = await payment.plan('89'.repeat(32), f.prepare, f.terms, active),
+      candidate = await payment.finish(plan, () => {}, active)
+    expect(await payment.recover(plan, active)).toEqual({ state: 'finalized', candidate })
+    alterResult = true
+    await expect(payment.recover(plan, active)).rejects.toThrow()
+    await expect(payment.finish(plan, () => {}, active)).rejects.toThrow()
+    alterResult = false
+    expect(await payment.recover(plan, active)).toEqual({ state: 'finalized', candidate })
+    expect(f.counts.prepare).toBe(1)
+    expect(f.counts.finalize).toBe(1)
+    expect(f.native.broadcast).not.toHaveBeenCalled()
+  }
+)
 it('passes owned native bytes while retaining the original base64 plan and recovery identity', async () => {
   const f = await nativePurchaseWalletFixture(),
     active = signal(),

@@ -232,7 +232,14 @@ Exactly one payment header and one seller credit remain. The fixture uses signed
 synthetic funding and isolated loopback HTTP, never broadcasts, and does not qualify
 TLS, production publication or the unfinished operator/workbench demonstrations.
 
-## Reusable standing Offer and individual covenant consent
+## Historical standing Offer and individual covenant consent
+
+This section preserves the superseded mutable-schedule family and
+`validateLCHOverlayCovenantTerms` interface. Its seller-v1 administration and
+unanimous amendment requirements are historical compatibility behavior. Current
+installations select `validateLCHOverlayCovenantProfileTerms` and
+`LCHOverlayCovenantProfileDomain`, described below, with the immutable two-stage
+descriptor, mandatory expiry, fixed child derivation and full purchase commitment.
 
 The optional covenant terms adapter separates the reusable Offer from each
 buyer. Install `LCH_OVERLAY_COVENANT_MECHANISMS` explicitly, then call
@@ -276,6 +283,13 @@ the full covenant reference flow.
 This section targets [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
 at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Current acceptance and open
 integration work are recorded in [specification alignment](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
+
+`validateLCHOverlayCovenantProfileTerms` authenticates the reusable standing Offer
+and each buyer's individual Request against the current immutable descriptor and
+collector extension. The Offer can leave the assignee open while each signed
+Request fixes its buyer. Changing the seller, price, expiry or recipient schedule
+requires a new signed lineage. Accepted terms are separate from Script, lineage,
+currentness, custody and entitlement verification.
 
 Install `LCHOverlayCovenantProfileDomain` from `@bsv/lch/overlay-covenant` with the
 complete original Header, reusable standing Offer, individual signed Request,
