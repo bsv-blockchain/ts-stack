@@ -401,6 +401,35 @@ Do not hide a future advisory with a broad override or dismissal. Remove an
 unused dependency, upgrade or replace the owning tool, and verify the frozen
 consumer and development graphs first.
 
+## October 6 advisory repair
+
+The protected UMP release qualification detected newly disclosed critical
+`proxy-addr` and high `source-map-js` advisories before publication. The root
+lock selects the compatible patched releases `proxy-addr` 2.0.8 and
+`source-map-js` 1.2.2; the six affected standalone infrastructure locks select
+`proxy-addr` 2.0.8. Overlay Server already selected that release.
+
+The upstream [proxy-addr advisory](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)
+and [source-map-js advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
+identify those patched versions. Their existing Node engine floors and
+transitive dependency contracts remain compatible. The targeted lock refresh
+uses the existing 24-hour release-age floor, introduces no new dependency
+override or exception, and retains the blocking high-severity audit. Requalify
+the frozen root, documentation and standalone service graphs before release.
+
+The complete standalone audit also found the older Message Box multipart parser
+and legacy UHRP/WAB development watcher paths. Message Box selects the compatible
+`@fastify/busboy` 3.2.2 patch, covering the upstream
+[boundary advisory](https://github.com/advisories/GHSA-xjh9-v7x6-24jw),
+[header advisory](https://github.com/advisories/GHSA-x8mw-p69m-v3mx) and
+[disposition advisory](https://github.com/advisories/GHSA-gxm5-99cw-xjw9).
+UHRP Basic, UHRP Cloud Bucket and WAB replace their legacy Nodemon/ts-node-dev
+watchers with `tsx watch`, retaining source/environment-file watch and telemetry
+preload behavior. Production entry points remain unchanged. Removing that
+unused watcher closure removes the unpatched `braces` advisory rather than
+adding a suppression. The existing full high-severity audit, service suites and
+Node 24 runtime contracts remain required.
+
 ## Update and release flow
 
 1. Refresh mature direct dependencies within their declared semver ranges.

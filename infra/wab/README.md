@@ -5,12 +5,6 @@ Welcome to the **Wallet Authentication Backend (WAB)** project! This README prov
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for bounded defaults, database sizing, and HPA prerequisites.
 
-The Dockerfile uses the governed, digest-pinned Node base from Docker Hub, matching
-the other TS Stack services. This preserves the reviewed image bytes while
-avoiding public ECR mirror throttling during builds. Base versions, equivalent
-registry references and runtime package pins remain governed by
-[`governance/container-images.json`](../../governance/container-images.json).
-
 ---
 
 ## What Is the WAB?
@@ -395,7 +389,7 @@ for evidence requirements, commands, auditing, rollout, and rollback.
    yarn dev
    ```
 
-   This runs `ts-node-dev` or equivalent.
+   This runs `tsx watch` with the existing telemetry preload and watches both source files and `.env`.
 
    The server should start on `http://localhost:8080`.
 
@@ -665,22 +659,14 @@ To contribute:
 
 This project is available under the [Open BSV License Version 6](./LICENSE.txt).
 
-## Development watcher
+## Development watcher security maintenance
 
-`npm run dev` uses the locked Nodemon CLI with a source-owned Chokidar 4
-compatibility adapter. It watches TypeScript, existing JavaScript/JSON extensions,
-new source files and `.env`, retains the Node/ts-node telemetry preload, and
-supports manual `rs` restarts. Existing ignored glob, directory, regex and
-function options retain Chokidar 3 matching behavior. WAB replaces ts-node-dev
-with this same CLI; production startup, HTTP contracts and persisted data are
-unchanged. No public npm package version or consumer migration is required for
-these standalone service development tools.
-
-The parent-scoped Chokidar substitution removes the affected braces dependency
-without an advisory exclusion. The dated dependency registry owns its removal
-condition. `npm test` first runs the actual locked watcher regression, including
-clean shutdown, using the actual service development recipe. WAB also retains
-compiler-configuration restarts. The basic UHRP service owns the adapter and
-regression; the root service-copy generator synchronizes cloud UHRP and WAB.
-Protected Linux image and exact-head CI checks must qualify release candidates;
-source changes do not update deployed images.
+The development command uses the existing Node 24 toolchain with `tsx watch`
+instead of the legacy Nodemon/ts-node-dev watcher dependency chain. It watches
+`src/**` through `tsx` and polls the hidden `.env` file every 500 milliseconds
+through the small `dev-watch.mjs` launcher. Environment changes request a normal
+watcher restart. It preserves the telemetry preload and the service entry point,
+and keeps any existing inspector configuration. Production startup, database
+migrations, public routes and data formats are unchanged. Install the committed
+lock with `npm ci` before using the updated development command. This removes
+the unpatched `braces` path without an advisory exclusion or dependency override.
