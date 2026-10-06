@@ -951,9 +951,14 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
       propertyTest: 'packages/sdk/src/script/templates/__tests/RevenueListing.property.test.ts',
-      mutate: ['src/script/templates/RevenueListing.ts'],
+      mutate: [
+        'src/script/templates/RevenueListing.ts',
+        'src/script/templates/RevenueListingKeys.ts',
+        'src/script/templates/RevenueListingProfile.ts'
+      ],
       ...jestTarget('jest.config.js', [
         '<rootDir>/src/script/templates/__tests/RevenueListing.test.ts',
+        '<rootDir>/src/script/templates/__tests/RevenueListingProfile.test.ts',
         '<rootDir>/src/script/templates/__tests/RevenueListing.property.test.ts'
       ])
     },

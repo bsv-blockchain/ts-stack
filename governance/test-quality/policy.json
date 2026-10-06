@@ -628,12 +628,14 @@
         "path": "packages/sdk/src/script/templates/__tests/RevenueListing.property.test.ts",
         "manifest": "packages/sdk/package.json",
         "risk": "critical",
-        "boundary": "BRC-197 exact descriptor, frozen executable and revenue-state encoding",
-        "target": "At least 300 valid U64 revision and one-to-eight-recipient schedules with independent byte assertions",
+        "boundary": "BRC-197 legacy and replacement descriptor, frozen executable and immutable public-child metadata encoding",
+        "target": "At least 300 original revision/schedule cases, 300 protected-wallet public child derivation cases and 300 immutable profile metadata cases",
         "invariants": [
           "The encoded state is exactly 305 bytes with little-endian U64 revision and U32 weights.",
           "Canonical compressed recipients retain byte ordering and exact integer payout quanta.",
-          "Unused slots are zero and any nonzero padding is rejected."
+          "Unused slots are zero and any nonzero padding is rejected.",
+          "The replacement schedule is exactly 561 bytes with immutable ordered root/child/weight slots and no revision.",
+          "The replacement metadata is exactly 717 bytes with full U64 price/reserve and expiryHeight from 1 through 499999999; all public child links are independently checked."
         ]
       },
       {

@@ -2358,3 +2358,31 @@ export function lchCommitmentFromVerifiedPurchase(
   return { purchaseCommitment: result.purchaseCommitment, checkCurrent }
 }
 ```
+
+The replacement exemplar's portable codec takes both frozen programs and makes
+the stage choice explicit. Genesis creates the activation stage; a complete,
+independently validated activation transaction must precede use of the active
+stage. This codec checks bytes and descriptor metadata. It establishes neither
+that history nor a purchase right. The legacy planner and lineage integration
+remain pending in the current alignment record.
+
+```ts compile
+// example-id: immutable-two-stage-listing-codec
+import { RevenueListingProfile } from '@bsv/sdk/script/templates/RevenueListingProfile'
+
+export function encodeImmutableListingStages(
+  activationProgram: Uint8Array,
+  activeProgram: Uint8Array,
+  descriptor: unknown
+) {
+  const profile = new RevenueListingProfile(activationProgram, activeProgram)
+  const activation = profile.lock('activation', descriptor)
+  const active = profile.lock('active', descriptor)
+  return {
+    activation,
+    active,
+    checkedActivation: profile.decode(activation.toBinary(), descriptor),
+    checkedActive: profile.decode(active.toBinary(), descriptor)
+  }
+}
+```

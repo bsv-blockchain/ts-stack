@@ -3,6 +3,11 @@ import PrivateKey from '../../../primitives/PrivateKey.js'
 import ProtoWallet from '../../../wallet/ProtoWallet.js'
 import { toHex } from '../../../primitives/utils.js'
 import {
+  encodeRevenueListingMetadata,
+  encodeRevenueListingProfileSchedule,
+  decodeRevenueListingProfileSchedule
+} from '../RevenueListingProfile.js'
+import {
   encodeRevenueListingState,
   decodeRevenueListingState,
   revenueListingChildPublicKey
@@ -66,6 +71,62 @@ test('exact revenue-state encoding preserves U64 revisions, ordered identities, 
         if (weights.length < 8) {
           encoded[304] = 1
           expect(() => decodeRevenueListingState(encoded)).toThrow('padding')
+        }
+      }
+    )
+  )
+})
+
+test('immutable PR295 metadata preserves one-to-eight public child links, exact weights and expiry', () => {
+  const children = identities.map(revenueListingChildPublicKey)
+  fc.assert(
+    fc.property(
+      fc.array(fc.integer({ min: 1, max: 1250 }), { minLength: 1, maxLength: 8 }),
+      fc.integer({ min: 1, max: 499999999 }),
+      fc.bigInt({ min: 1n, max: 2100000000000000n }),
+      fc.bigInt({ min: 1n, max: 2100000000000000n }),
+      (weights, expiryHeight, price, reserve) => {
+        const schedule = {
+          recipients: weights.map((weight, index) => ({ identity: identities[index], weight }))
+        }
+        const encoded = encodeRevenueListingProfileSchedule(schedule)
+        const view = new DataView(encoded.buffer, encoded.byteOffset, encoded.byteLength)
+        expect(encoded).toHaveLength(561)
+        expect(encoded[0]).toBe(weights.length)
+        weights.forEach((weight, index) => {
+          const offset = 1 + index * 70
+          expect(toHex(Array.from(encoded.slice(offset, offset + 33)))).toBe(identities[index])
+          expect(toHex(Array.from(encoded.slice(offset + 33, offset + 66)))).toBe(children[index])
+          expect(view.getUint32(offset + 66, true)).toBe(weight)
+        })
+        expect(Array.from(encoded.slice(1 + weights.length * 70))).toEqual(
+          Array((8 - weights.length) * 70).fill(0)
+        )
+        expect(decodeRevenueListingProfileSchedule(encoded)).toEqual(schedule)
+        const chain = { network: 'metadata-property', genesisHash: '11'.repeat(32) }
+        const metadata = encodeRevenueListingMetadata({
+          version: 1,
+          chain,
+          assetId: '22'.repeat(32),
+          seller: identities[0],
+          lineageAnchor: { chain, txid: '33'.repeat(32), outputIndex: 0 },
+          purchasePrice: price.toString(),
+          reserve: reserve.toString(),
+          expiryHeight,
+          termsDigest: '44'.repeat(32),
+          scriptFamily: 'https://bsv.brc.dev/tokens/0197#revenue-listing-v1',
+          metadataDigest: '55'.repeat(32),
+          initialRevenue: schedule
+        })
+        const fields = new DataView(metadata.buffer, metadata.byteOffset, metadata.byteLength)
+        expect(metadata).toHaveLength(717)
+        expect(fields.getBigUint64(70, true)).toBe(price)
+        expect(fields.getBigUint64(78, true)).toBe(reserve)
+        expect(fields.getUint32(86, true)).toBe(expiryHeight)
+        expect(Array.from(metadata.slice(156))).toEqual(Array.from(encoded))
+        if (weights.length < 8) {
+          encoded[560] = 1
+          expect(() => decodeRevenueListingProfileSchedule(encoded)).toThrow('mismatch')
         }
       }
     )

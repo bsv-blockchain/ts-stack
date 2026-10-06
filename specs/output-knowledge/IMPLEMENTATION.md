@@ -42,6 +42,17 @@ package tarballs. Workspace typechecks include the native HTTP proof adapter's
 new return field. This is component evidence: the two-stage Script, immutable
 collector terms, child-wallet and durable multi-alias integration remain open.
 
+The replacement portable codec now owns and pins both literal programs and
+encodes their exact shared 717-byte metadata. Stage choice is explicit; the
+schedule is immutable and its public child slots and mandatory height expiry
+are fully checked. Both output-zero locks match the unchanged PR295 positive
+wire corpus byte for byte. Codec/property tests cover complete ownership,
+descriptor commitments, padding, recipient counts and exact numeric bounds;
+the new profile and extracted public-key modules have complete coverage. This
+does not yet replace the legacy planner, witness builder or lineage adapter.
+Packed/browser contracts and compiled examples exercise the new portable entry,
+without qualifying activation, protected signing or private release.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

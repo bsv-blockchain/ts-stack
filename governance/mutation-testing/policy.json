@@ -492,7 +492,7 @@
       "manifest": "packages/sdk/package.json",
       "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListing.property.test.ts",
       "risk": "critical",
-      "boundary": "BRC-197 exact descriptor, frozen executable and revenue-state encoding",
+      "boundary": "BRC-197 legacy and replacement descriptor, frozen executable and immutable public-child metadata encoding",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

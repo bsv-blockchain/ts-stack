@@ -45,6 +45,11 @@ may install different transaction domains without adopting its revenue model.
 - [x] Provide fixed public child derivation, matching the three independent
       current-family root/child vectors and BRC-100 wallet derivation across the
       full property profile. This does not sign, activate or internalize funds.
+- [x] Provide an independently usable two-stage literal codec with explicit stage
+      choice, 717-byte metadata, immutable root/child/weight schedules and mandatory
+      height expiry. Match both unchanged positive wire-corpus locks exactly.
+      This component does not yet replace the legacy planner, witness builder or
+      lineage adapter and cannot qualify their behavior.
 - [ ] Replace the superseded program, metadata, fixtures and ABI with both frozen
       programs and component manifests. Activation: 33406 program bytes,
       SHA256 `5152517f75ac4159aa5d34211f45ce12cd85386a8d1414169886b0d64dac1dea`.

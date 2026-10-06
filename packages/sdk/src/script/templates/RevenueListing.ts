@@ -1,8 +1,5 @@
 import LockingScript from '../LockingScript.js'
-import BigNumber from '../../primitives/BigNumber.js'
-import Curve from '../../primitives/Curve.js'
-import PublicKey from '../../primitives/PublicKey.js'
-import { sha256, sha256hmac } from '../../primitives/Hash.js'
+import { sha256 } from '../../primitives/Hash.js'
 import { toArray, toHex } from '../../primitives/utils.js'
 import { outputPacketDigest, outputU64 } from '../../overlay-tools/OutputProtocol.js'
 import { outputAssert } from '../../overlay-tools/OutputProtocolError.js'
@@ -19,30 +16,14 @@ import {
   u64
 } from '../../overlay-tools/OutputProtocolSchema.js'
 
-/** Immutable BRC-197 family. Different executable bytes require a different family. */
-export const REVENUE_LISTING_FAMILY = 'https://bsv.brc.dev/tokens/0197#revenue-listing-v1'
-/** Fixed transparent BRC-42/BRC-29 child profile. This deliberate key reuse
- * makes no privacy claim; protected signers must never expose a child scalar.
- */
-export const REVENUE_LISTING_AUTHORITY_PROTOCOL = Object.freeze([2, '3241645161d8'] as const)
-export const REVENUE_LISTING_AUTHORITY_KEY_ID = 'brc197 authority'
+import { REVENUE_LISTING_FAMILY } from './RevenueListingKeys.js'
+export {
+  REVENUE_LISTING_FAMILY,
+  REVENUE_LISTING_AUTHORITY_PROTOCOL,
+  REVENUE_LISTING_AUTHORITY_KEY_ID,
+  revenueListingChildPublicKey
+} from './RevenueListingKeys.js'
 
-/** Public derivation only. With `anyone` (G), the BRC-42 shared point is the
- * identity point itself; the HMAC tweak is public. This calculation
- * establishes neither authorized genesis nor the on-chain activation proof.
- */
-export function revenueListingChildPublicKey(rootIdentity: string): string {
-  const root = PublicKey.fromString(identity(rootIdentity))
-  const invoice = `${REVENUE_LISTING_AUTHORITY_PROTOCOL[0]}-${REVENUE_LISTING_AUTHORITY_PROTOCOL[1]}-${REVENUE_LISTING_AUTHORITY_KEY_ID}`
-  const curve = new Curve()
-  const tweak = new BigNumber(sha256hmac(root.encode(true), toArray(invoice, 'utf8'))).umod(curve.n)
-  const child = root.add(curve.g.mul(tweak))
-  outputAssert(
-    !child.isInfinity() && !child.getX().eq(root.getX()),
-    'Degenerate listing child link'
-  )
-  return child.encode(true, 'hex') as string
-}
 export const REVENUE_LISTING_PROGRAM_SHA256 =
   'ae47a6cc9bdc955d6aa73cdc459bbd6bbe493419dcf3ed3fc952a95c8c510716'
 export const REVENUE_LISTING_PROGRAM_BYTES = 39580

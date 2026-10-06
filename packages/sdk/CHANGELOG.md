@@ -216,6 +216,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.1 source candidate)
 
+- Add the portable `RevenueListingProfile` two-stage literal codec, immutable public-child schedule and exact 717-byte metadata with required height expiry. Both locks match unchanged PR295 positive wire vectors. Recognition does not establish activation, lineage or transaction validity; replacement of the legacy planner and witnesses remains open.
+
 - Add full input-zero purchase commitment calculation, fixed public BRC-197 child derivation and commitment/current-alias BRC-196 wire bindings. Exact historical release identity remains unchanged. Replacement-family/wallet/native-alias integration is still open; earlier six-route reference receipts do not qualify BRC PR295.
 
 - Add opt-in `OutputPurchaseTransport` for exact retained BRC-196 prepare/submit/recover exchanges, original recipient/domain/release/transaction binding and authenticated errors without HTTP payment. Its optional wallet identity fence shares the existing finite deadline; durable custody, new-work authorization, Script validation and usable private material remain separate. Existing transport APIs and defaults are preserved.

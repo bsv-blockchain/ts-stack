@@ -694,20 +694,21 @@ authenticated identity for every protected operation.
 ## Revenue listing script codec
 
 The optional BRC-197 exemplar is under pre-adoption replacement by BRC PR295.
-Its two frozen stages, immutable schedule, fixed-child signing/remittance and
-expiry finality remain integration requirements. Earlier six-route codec and
-native receipts do not qualify the current profile. See
+`@bsv/sdk/script/templates/RevenueListingProfile` supplies its portable two-stage
+codec: both literal programs are pinned, stage choice is explicit, and the shared
+717-byte metadata binds the immutable schedule, public children and mandatory
+expiry. See the [profile guide](../../docs/guides/revenue-listing-profile.md).
+Fixed-child signing/remittance, witnesses, activation lineage, expiry finality
+and native alias recovery still require integration. Earlier six-route codec
+and native receipts do not qualify the current profile. See
 [specification alignment](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
 
-The SDK3.1 source candidate exposes `@bsv/sdk/script/templates/RevenueListing` as a
-separate portable entry point. Supply the frozen BRC-197 program bytes explicitly;
-the codec authenticates the executable and exact descriptor/revenue-state layout.
-Recognition does not establish lineage, currentness, valid spending or fulfillment.
-See the [codec guide](../../docs/guides/revenue-listing-codec.md) for its boundary
-and the remaining complete-family integration work. The separate
-`RevenueListingPlan` and `RevenueListingSpend` entries provide all six route plans,
-funded-layout checks and exact unlocking scripts with externally supplied seller
-and recipient signatures. See the [spend guide](../../docs/guides/revenue-listing-spends.md).
+The SDK3.1 source candidate still contains the superseded `RevenueListing`,
+`RevenueListingPlan` and `RevenueListingSpend` interfaces while their integration
+is replaced. Their earlier single-program/revision/six-route behavior is historical
+and must not be used to construct or qualify the PR295 exemplar. A portable codec
+recognizes bytes; it does not establish lineage, currentness, valid spending or
+fulfillment. Checkpoint two remains open until the complete replacement is qualified.
 Lineage, wallet integration and fulfillment are separate. Existing root imports remain unchanged.
 
 The optional overlay funding helpers parse bounded BRC-195 payment headers and inspect
