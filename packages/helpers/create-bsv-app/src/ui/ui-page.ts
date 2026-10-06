@@ -5,7 +5,7 @@ import {
   type FieldOption
 } from '../config/schema.js'
 import type { ProjectManifest } from '../config/project-manifest.js'
-import { optionsFor } from '../prompts.js'
+import { ALL_CAPABILITIES_INCLUDED, optionsFor } from '../prompts.js'
 
 /** A field as sent to the page; `modeOptions` are the options offered in each mode. */
 export type PageField = ConfigField & { modeOptions?: Record<'new' | 'add', FieldOption[]> }
@@ -385,7 +385,9 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     }
     // multiselect
     var box = el('div');
-    fieldOptions(f, draft.mode).forEach(function (o) {
+    var opts = fieldOptions(f, draft.mode);
+    if (!opts.length) box.appendChild(el('div', { class: 'sec-desc', text: ${JSON.stringify(ALL_CAPABILITIES_INCLUDED)} }));
+    opts.forEach(function (o) {
       var on = (draft[f.key] || []).indexOf(o.value) !== -1;
       var txt = el('span', {}, [el('span', { class: 'ot', text: o.label })]);
       if (o.hint) txt.appendChild(el('span', { class: 'oh', text: o.hint }));

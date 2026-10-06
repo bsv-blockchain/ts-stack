@@ -267,6 +267,10 @@ describe('page wiring', () => {
     expect(html).not.toContain('JSON.stringify(draft)')
   })
 
+  test('an empty capabilities list says the project already has them all', () => {
+    expect(html).toContain('Project already includes all available capabilities')
+  })
+
   test('rendering and submitting share one visibility view', () => {
     expect(html).toMatch(/function shown\(f\) \{ return f\.key in payload\(\); \}/u)
     expect(html).not.toContain('whenOk(')

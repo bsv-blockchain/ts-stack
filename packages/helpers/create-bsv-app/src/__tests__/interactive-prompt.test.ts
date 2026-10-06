@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals'
 const intro = jest.fn()
 const outro = jest.fn()
 const cancel = jest.fn()
+const log = { info: jest.fn() }
 const isCancel = jest.fn(() => false)
 const text = jest.fn(async () => 'interactive-demo')
 const confirm = jest.fn(async () => true)
@@ -25,6 +26,7 @@ jest.mock('@clack/prompts', () => ({
   confirm,
   intro,
   isCancel,
+  log,
   multiselect,
   outro,
   select,
@@ -73,6 +75,22 @@ describe('interactiveConfigPrompt', () => {
     expect(multiselect).toHaveBeenCalledWith(
       expect.objectContaining({ initialValues: expect.arrayContaining(['wallet-login']) })
     )
+  })
+
+  test('says so instead of an empty multiselect when the project has every capability', async () => {
+    const existing = {
+      version: 1 as const,
+      name: 'full',
+      network: 'test' as const,
+      stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } },
+      bsvDir: 'src/bsv',
+      capabilities: ['wallet-connect', 'wallet-login', 'signed-requests']
+    }
+    const config = await interactiveConfigPrompt({ existing, flags: {} })
+
+    expect(multiselect).not.toHaveBeenCalled()
+    expect(log.info).toHaveBeenCalledWith('Project already includes all available capabilities')
+    expect(config.capabilities).toEqual(existing.capabilities)
   })
 
   test('reports cancellation and exits without resolving a partial configuration', async () => {

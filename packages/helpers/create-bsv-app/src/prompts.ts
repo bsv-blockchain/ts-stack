@@ -7,6 +7,9 @@ import { seedDraft, resolveDraft } from './config/draft.js'
 import type { ConfigDraft } from './config/draft.js'
 import type { ProjectConfig } from './config/model.js'
 
+/** Shown instead of an empty capabilities list (terminal and `--ui`). */
+export const ALL_CAPABILITIES_INCLUDED = 'Project already includes all available capabilities'
+
 /** `initial` is the pre-selected value: cursor for select/toggle, ticked boxes for multiselect. */
 export type Ask = (
   field: ConfigField,
@@ -90,7 +93,10 @@ export const interactiveConfigPrompt: ConfigProvider = async ctx => {
       })
     else if (field.type === 'toggle')
       res = await p.confirm({ message: field.label, initialValue: initial === true })
-    else if (field.type === 'multiselect')
+    else if (field.type === 'multiselect' && options.length === 0) {
+      p.log.info(ALL_CAPABILITIES_INCLUDED)
+      res = []
+    } else if (field.type === 'multiselect')
       res = await p.multiselect({
         message: field.label,
         options,
