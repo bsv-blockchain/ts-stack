@@ -14,7 +14,7 @@ on:
         default: false
         required: false
       application-performance-diagnostics:
-        description: Measure the unchanged alias disclosure property before complete coverage
+        description: Measure the unchanged alias disclosure property during artifact qualification
         type: boolean
         default: false
         required: false
@@ -470,6 +470,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -482,6 +483,20 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Measure the unchanged application property on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/output-knowledge-performance-diagnostic.mjs
+      - name: Preserve bounded application function timing
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: application-performance-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .coverage-output/performance-diagnostic-*/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
       - name: Compile documentation examples against exact package tarballs
         if: needs.prepare.outputs.direct-projects != '[]'
         env:
@@ -1342,18 +1357,6 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-      - name: Measure the unchanged application property on hosted Linux
-        if: github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics && matrix.application == 1
-        run: node scripts/output-knowledge-performance-diagnostic.mjs
-      - name: Preserve bounded application function timing
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics && matrix.application == 1
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: application-performance-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .coverage-output/performance-diagnostic-*/
-          if-no-files-found: error
-          include-hidden-files: true
-          retention-days: 30
       - name: Generate complete application coverage shard
         if: matrix.application != 0
         run: >-

@@ -35,44 +35,54 @@ export function triageDiagnostic(bytes, code) {
   }
 }
 
-/** Extract call-frame timing, never raw profiles, arguments or application values. */
-export function summarizeCPUProfile(profile) {
-  const deadline = performance.now() + 30000
-  assert.ok(Array.isArray(profile.nodes) && profile.nodes.length > 0)
-  assert.ok(Array.isArray(profile.samples) && Array.isArray(profile.timeDeltas))
-  assert.equal(profile.samples.length, profile.timeDeltas.length)
-  assert.ok(profile.samples.length <= 2000000)
-  assert.ok(profile.nodes.length <= 500000)
-  const checkDeadline = () => assert.ok(performance.now() < deadline, 'Profile summary deadline')
+function indexProfileFrames(profile, checkDeadline) {
   const nodes = new Map(),
-    parents = new Map(),
-    self = new Map(),
-    inclusive = new Map()
+    parents = new Map()
   for (const node of profile.nodes) {
     checkDeadline()
-    assert.ok(Number.isSafeInteger(node.id) && !nodes.has(node.id))
+    assert.ok(Number.isSafeInteger(node.id) && !nodes.has(node.id), 'profile-frame-identity')
     assert.ok(
       node.callFrame &&
         typeof node.callFrame.functionName === 'string' &&
         typeof node.callFrame.url === 'string' &&
-        Number.isSafeInteger(node.callFrame.lineNumber)
+        Number.isSafeInteger(node.callFrame.lineNumber),
+      'profile-frame-shape'
     )
     nodes.set(node.id, node)
     for (const child of node.children ?? []) {
-      assert.ok(Number.isSafeInteger(child) && !parents.has(child))
+      assert.ok(Number.isSafeInteger(child) && !parents.has(child), 'profile-parent-identity')
       parents.set(child, node.id)
     }
   }
   for (const [child, parent] of parents) {
     checkDeadline()
-    assert.ok(nodes.has(child) && nodes.has(parent))
+    assert.ok(nodes.has(child) && nodes.has(parent), 'profile-parent-reference')
   }
+  return { nodes, parents }
+}
+
+/** Extract call-frame timing, never raw profiles, arguments or application values. */
+export function summarizeCPUProfile(profile) {
+  const deadline = performance.now() + 30000
+  assert.ok(Array.isArray(profile.nodes) && profile.nodes.length > 0, 'profile-node-array')
+  assert.ok(
+    Array.isArray(profile.samples) && Array.isArray(profile.timeDeltas),
+    'profile-sample-arrays'
+  )
+  assert.equal(profile.samples.length, profile.timeDeltas.length, 'profile-sample-length')
+  assert.ok(profile.samples.length <= 2000000, 'profile-sample-bound')
+  assert.ok(profile.nodes.length <= 500000, 'profile-node-bound')
+  const checkDeadline = () => assert.ok(performance.now() < deadline, 'Profile summary deadline')
+  const { nodes, parents } = indexProfileFrames(profile, checkDeadline),
+    self = new Map(),
+    inclusive = new Map()
   let total = 0
   for (let index = 0; index < profile.samples.length; index++) {
     if (index % 1024 === 0) checkDeadline()
     const id = profile.samples[index],
       us = profile.timeDeltas[index]
-    assert.ok(nodes.has(id) && Number.isFinite(us) && us >= 0)
+    assert.ok(nodes.has(id), 'profile-sample-reference')
+    assert.ok(Number.isFinite(us) && us >= 0, 'profile-time-delta')
     total += us
     self.set(id, (self.get(id) ?? 0) + us)
     const seen = new Set()
@@ -114,6 +124,32 @@ export function summarizeCPUProfile(profile) {
   }
 }
 
+/** Read the checked descriptor through a fixed byte budget. A changed size,
+ * symlink, non-file or over-budget profile never reaches the JSON parser. */
+export function readBoundedProfile(file, maximum, report, checkDeadline) {
+  checkDeadline()
+  const reader = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
+  try {
+    const stat = fs.fstatSync(reader)
+    assert.ok(stat.isFile(), 'profile-file-kind')
+    report.profileBytes = stat.size
+    assert.ok(stat.size <= maximum, 'Profile exceeds bounded metadata budget')
+    const bytes = Buffer.alloc(stat.size + 1)
+    let length = 0
+    while (length < bytes.length) {
+      checkDeadline()
+      const count = fs.readSync(reader, bytes, length, bytes.length - length, null)
+      if (count === 0) break
+      length += count
+    }
+    assert.equal(length, stat.size, 'Profile changed during bounded read')
+    report.phase = 'profile-json'
+    return JSON.parse(bytes.subarray(0, length).toString('utf8'))
+  } finally {
+    fs.closeSync(reader)
+  }
+}
+
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex')
 function groupAbsent(pid) {
@@ -125,21 +161,38 @@ function groupAbsent(pid) {
     throw error
   }
 }
-async function drain(pid) {
-  for (const signal of ['SIGTERM', 'SIGKILL']) {
-    if (groupAbsent(pid)) return true
-    try {
-      process.kill(-pid, signal)
-    } catch (error) {
-      if (error.code !== 'ESRCH') throw error
-    }
-    const deadline = performance.now() + 5000
-    while (performance.now() < deadline) {
-      if (groupAbsent(pid)) return true
-      await delay(20)
-    }
+async function waitForGroupAbsence(pid, deadline) {
+  if (groupAbsent(pid)) return true
+  if (performance.now() >= deadline) return false
+  await delay(20)
+  return waitForGroupAbsence(pid, deadline)
+}
+async function stopGroup(pid, signal) {
+  if (groupAbsent(pid)) return true
+  try {
+    process.kill(-pid, signal)
+  } catch (error) {
+    if (error.code === 'ESRCH') return true
+    throw error
   }
-  return groupAbsent(pid)
+  return waitForGroupAbsence(pid, performance.now() + 5000)
+}
+async function drain(pid) {
+  if (await stopGroup(pid, 'SIGTERM')) return true
+  return stopGroup(pid, 'SIGKILL')
+}
+async function watchDiagnosticChild(child, read, deadline, aborted, state) {
+  if (state.spawnError) return { stopReason: 'spawn-error', timedOut: false }
+  const cancellation = aborted()
+  if (cancellation) return { stopReason: cancellation, timedOut: false }
+  const flags = read()
+  if (flags.knownNativeFaultMarker || flags.boundedTriageExceeded || flags.testCaseTimeoutMarker)
+    return { stopReason: 'fault-case-or-output-guard', timedOut: false }
+  if (child.signalCode) return { stopReason: 'child-signal', timedOut: false }
+  if (child.exitCode !== null) return { stopReason: null, timedOut: false }
+  if (performance.now() >= deadline) return { stopReason: 'child-deadline', timedOut: true }
+  await delay(100)
+  return watchDiagnosticChild(child, read, deadline, aborted, state)
 }
 async function supervise(arguments_, cwd, logfile, seconds, env, aborted) {
   const descriptor = fs.openSync(logfile, 'wx'),
@@ -147,19 +200,17 @@ async function supervise(arguments_, cwd, logfile, seconds, env, aborted) {
   let child,
     stopReason = null,
     timedOut = false,
-    code = null,
-    signal = null,
     gone = false
   const read = () => {
-    const size = fs.statSync(logfile).size,
-      bytes = Buffer.alloc(Math.min(size, MAX_LOG + 1))
-    const reader = fs.openSync(logfile, 'r')
+    const reader = fs.openSync(logfile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
     try {
+      const size = fs.fstatSync(reader).size,
+        bytes = Buffer.alloc(Math.min(size, MAX_LOG + 1))
       fs.readSync(reader, bytes, 0, bytes.length, 0)
+      return triageDiagnostic(bytes, child?.exitCode)
     } finally {
       fs.closeSync(reader)
     }
-    return triageDiagnostic(bytes, code)
   }
   try {
     child = spawn(process.execPath, arguments_, {
@@ -168,40 +219,19 @@ async function supervise(arguments_, cwd, logfile, seconds, env, aborted) {
       detached: true,
       stdio: ['ignore', descriptor, descriptor]
     })
-    let ended = false,
-      spawnError = false
-    child.on('error', () => {
-      spawnError = true
-      ended = true
+    const state = { spawnError: false }
+    child.once('error', () => {
+      state.spawnError = true
     })
-    child.on('exit', (value, reason) => {
-      code = value
-      signal = reason
-      ended = true
-    })
-    while (!ended) {
-      if (aborted()) {
-        stopReason = aborted()
-        break
-      }
-      const flags = read()
-      if (
-        flags.knownNativeFaultMarker ||
-        flags.boundedTriageExceeded ||
-        flags.testCaseTimeoutMarker
-      ) {
-        stopReason = 'fault-case-or-output-guard'
-        break
-      }
-      if (performance.now() - started >= seconds * 1000) {
-        timedOut = true
-        stopReason = 'child-deadline'
-        break
-      }
-      await delay(100)
-    }
-    if (spawnError) stopReason = 'spawn-error'
-    if (signal) stopReason ??= 'child-signal'
+    const observed = await watchDiagnosticChild(
+      child,
+      read,
+      started + seconds * 1000,
+      aborted,
+      state
+    )
+    stopReason = observed.stopReason
+    timedOut = observed.timedOut
   } catch {
     stopReason ??= 'supervisor-error'
   } finally {
@@ -215,6 +245,8 @@ async function supervise(arguments_, cwd, logfile, seconds, env, aborted) {
     fs.closeSync(descriptor)
   }
   if (performance.now() - started >= seconds * 1000) timedOut = true
+  const code = child?.exitCode ?? null,
+    signal = child?.signalCode ?? null
   const flags = read()
   flags.knownNativeFaultMarker ||= ['SIGSEGV', 'SIGBUS', 'SIGABRT', 'SIGILL'].includes(signal)
   const result = {
@@ -231,22 +263,41 @@ async function supervise(arguments_, cwd, logfile, seconds, env, aborted) {
   return result
 }
 
+/** A timing-file refusal cannot replace coverage. Only an otherwise safe,
+ * drained property measurement permits the ordinary artifact validation to continue.
+ * Source/calendar guards must still pass immediately before returning. */
+export function diagnosticMayContinueValidation(phase, property) {
+  const timingOnly = new Set(['profile-file-bound', 'profile-json', 'profile-summary'])
+  return (
+    timingOnly.has(phase) &&
+    property?.processGroupGone === true &&
+    property.timedOut === false &&
+    property.stopReason === null &&
+    property.signal === null &&
+    [0, 1].includes(property.exitCode) &&
+    property.knownNativeFaultMarker === false &&
+    property.boundedTriageExceeded === false &&
+    property.testCaseTimeoutMarker === false
+  )
+}
+
 async function main() {
   assert.equal(process.platform, 'linux', 'Application diagnostics require hosted Linux')
   assert.equal(process.env.GITHUB_ACTIONS, 'true')
   assert.match(process.env.GITHUB_SHA ?? '', /^[0-9a-f]{40}$/)
+  assert.match(process.env.OUTPUT_KNOWLEDGE_SOURCE_HEAD ?? '', /^[0-9a-f]{40}$/)
   assert.match(process.env.GITHUB_RUN_ID ?? '', /^[1-9]\d*$/)
   assert.match(process.env.GITHUB_RUN_ATTEMPT ?? '', /^[1-9]\d*$/)
   assert.equal(process.argv.length, 2, 'This diagnostic has one fixed unchanged property selector')
   const started = performance.now(),
     until = Date.now() + 900000
   let cancelled = false
-  const aborted = () =>
-    cancelled
-      ? 'operator-cancelled'
-      : performance.now() - started >= 900000 || Date.now() >= until
-        ? 'diagnostic-calendar-expired'
-        : null
+  const aborted = () => {
+    if (cancelled) return 'operator-cancelled'
+    if (performance.now() - started >= 900000 || Date.now() >= until)
+      return 'diagnostic-calendar-expired'
+    return null
+  }
   const checkWindow = () =>
     assert.equal(aborted(), null, 'Diagnostic calendar or cancellation guard')
   const root = fileURLToPath(new URL('..', import.meta.url)),
@@ -259,10 +310,15 @@ async function main() {
   assert.match(testSource, /markInterruptAsFailure: true/)
   assert.match(testSource, /}, 180000\)/)
   assert.equal(
-    execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+    execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
     process.env.GITHUB_SHA
   )
-  const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+  execFileSync(
+    '/usr/bin/git',
+    ['merge-base', '--is-ancestor', process.env.OUTPUT_KNOWLEDGE_SOURCE_HEAD, 'HEAD'],
+    { cwd: root, stdio: 'pipe' }
+  )
+  const files = execFileSync('/usr/bin/git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
     .split('\0')
     .filter(Boolean)
   const frozen = new Map()
@@ -294,6 +350,7 @@ async function main() {
   }
   const identity = {
     source: process.env.GITHUB_SHA,
+    sourceHead: process.env.OUTPUT_KNOWLEDGE_SOURCE_HEAD,
     run: process.env.GITHUB_RUN_ID,
     attempt: process.env.GITHUB_RUN_ATTEMPT,
     node: process.version,
@@ -310,6 +367,7 @@ async function main() {
       .update(JSON.stringify([...frozen]))
       .digest('hex'),
     profilingOverheadIncluded: true,
+    samplingIntervalMicroseconds: 1000,
     fullFunctionalQualified: false,
     fullCampaignQualified: false
   }
@@ -322,6 +380,7 @@ async function main() {
   fs.mkdirSync(output)
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'output-knowledge-profile-')),
     results = [],
+    report = { phase: 'sqlite-health', refusal: null, timingCollected: false },
     env = {
       ...process.env,
       FAST_CHECK_NUM_RUNS: '300',
@@ -332,7 +391,7 @@ async function main() {
   const write = () =>
     fs.writeFileSync(
       path.join(output, 'diagnostic.json'),
-      JSON.stringify({ identity, results, rawPayloadPrinted: false }, null, 2)
+      JSON.stringify({ identity, results, report, rawPayloadPrinted: false }, null, 2)
     )
   const safe = result =>
     result.processGroupGone &&
@@ -341,6 +400,7 @@ async function main() {
     !result.knownNativeFaultMarker &&
     !result.boundedTriageExceeded &&
     !result.testCaseTimeoutMarker
+  let measured
   const cancel = () => {
     cancelled = true
   }
@@ -365,9 +425,11 @@ async function main() {
     write()
     assert.ok(safe(health) && health.exitCode === 0, 'Driver health is not qualified')
     guard()
-    const measured = await supervise(
+    report.phase = 'unchanged-property-with-coverage'
+    measured = await supervise(
       [
         '--cpu-prof',
+        '--cpu-prof-interval=1000',
         `--cpu-prof-dir=${directory}`,
         '--cpu-prof-name=property.cpuprofile',
         '--experimental-vm-modules',
@@ -393,18 +455,64 @@ async function main() {
       safe(measured) && [0, 1].includes(measured.exitCode),
       'Fault, case timeout, source change or missing drain forbids profile inspection'
     )
+    report.phase = 'post-property-source-guard'
     guard()
-    const profile = path.join(directory, 'property.cpuprofile')
-    assert.ok(fs.statSync(profile).size <= MAX_PROFILE, 'Profile exceeds bounded metadata budget')
-    const summary = summarizeCPUProfile(JSON.parse(fs.readFileSync(profile, 'utf8')))
+    report.phase = 'profile-file-bound'
+    const parsed = readBoundedProfile(
+      path.join(directory, 'property.cpuprofile'),
+      MAX_PROFILE,
+      report,
+      checkWindow
+    )
+    report.phase = 'profile-summary'
+    report.profileNodes = Array.isArray(parsed.nodes) ? parsed.nodes.length : null
+    report.profileSamples = Array.isArray(parsed.samples) ? parsed.samples.length : null
+    const summary = summarizeCPUProfile(parsed)
+    report.phase = 'final-source-guard'
+    guard()
     fs.writeFileSync(
       path.join(output, 'function-timing.json'),
       JSON.stringify({ identity, ...summary }, null, 2)
     )
-    guard()
+    report.phase = 'timing-collected'
+    report.timingCollected = true
     console.log(
       'Bounded function timing collected; the full ordinary coverage run remains mandatory.'
     )
+  } catch (error) {
+    const reasons = new Set([
+      'profile-frame-identity',
+      'profile-frame-shape',
+      'profile-parent-identity',
+      'profile-parent-reference',
+      'profile-node-array',
+      'profile-sample-arrays',
+      'profile-sample-length',
+      'profile-sample-bound',
+      'profile-node-bound',
+      'profile-sample-reference',
+      'profile-time-delta',
+      'Cyclic profile tree',
+      'Profile stack exceeds bounded depth',
+      'Profile summary deadline',
+      'Profile exceeds bounded metadata budget',
+      'profile-file-kind',
+      'Profile changed during bounded read'
+    ])
+    report.refusal =
+      error instanceof Error && reasons.has(error.message.split('\n', 1)[0])
+        ? error.message.split('\n', 1)[0]
+        : 'unclassified-refusal'
+    const code = error?.code
+    report.fileAbsent = report.phase === 'profile-file-bound' && code === 'ENOENT'
+    if (diagnosticMayContinueValidation(report.phase, measured)) {
+      guard()
+      console.log(
+        'Timing extraction refused; the safe drained measurement does not qualify anything and complete artifact validation continues; ordinary coverage remains independently required.'
+      )
+      return
+    }
+    throw error
   } finally {
     fs.rmSync(directory, { recursive: true, force: true })
     write()
@@ -414,8 +522,10 @@ async function main() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  main().catch(() => {
+  try {
+    await main()
+  } catch {
     console.error('Application performance diagnostic refused; inspect Boolean metadata only.')
     process.exitCode = 1
-  })
+  }
 }

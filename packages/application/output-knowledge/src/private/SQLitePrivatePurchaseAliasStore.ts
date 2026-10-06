@@ -614,15 +614,8 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
         'Alias contribution changes original identity',
         'conflict'
       )
-      const bounded = (): ProtectedLedgerChange[] => {
-        outputAssert(
-          changes.length <= 64,
-          'Alias composition exceeds atomic row capacity',
-          'limited'
-        )
-        canonicalOutputJSON(changes, { bytes: this.limits.maximumBatchBytes })
-        return changes
-      }
+      const bounded = (): ProtectedLedgerChange[] =>
+        this.boundBatch(changes, 'Alias composition exceeds atomic row capacity')
       if (
         actual.state.progress.status === 'delivered' ||
         actual.state.progress.status === 'delivery-failed'
@@ -909,15 +902,33 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
           },
           ...sealed.changes
         ]
-        outputAssert(changes.length <= 64, 'Alias failure exceeds atomic row capacity', 'limited')
-        canonicalOutputJSON(changes, { bytes: this.limits.maximumBatchBytes })
-        return changes
+        return this.boundBatch(changes, 'Alias failure exceeds atomic row capacity')
       },
       clock,
       view => this.authorize(guard, view),
       { maximumBatchBytes: this.limits.maximumBatchBytes }
     )
     return this.require(id, actual.state.recipient, clock, guard)
+  }
+  private boundBatch(
+    changes: ProtectedLedgerChange[],
+    rowMessage: string
+  ): ProtectedLedgerChange[] {
+    outputAssert(changes.length <= 64, rowMessage, 'limited')
+    // A native atomic batch is not one protocol packet. Preserve the fixed
+    // protocol ceiling for every record, then count brackets/commas and record
+    // bytes against the independently reserved local batch. The native writer
+    // still owns and checks every complete record before any effect.
+    let bytes = 2 + Math.max(0, changes.length - 1)
+    for (const change of changes) {
+      bytes += Buffer.byteLength(canonicalOutputJSON(change), 'utf8')
+      outputAssert(
+        bytes <= this.limits.maximumBatchBytes,
+        'Alias composition exceeds atomic byte capacity',
+        'limited'
+      )
+    }
+    return changes
   }
   private rawDigest(original: PrivatePurchaseOriginal, candidate: OutputPurchaseSubmit): string {
     const assembled = assembleOutputEvidence(

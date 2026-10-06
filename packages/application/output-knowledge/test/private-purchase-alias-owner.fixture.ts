@@ -19,10 +19,10 @@ import { signPurchaseFixturePacket } from './private-purchase-signing.fixture.js
 /** Actual encrypted SQLite composition with disclosed OP_TRUE transactions and
  * controlled identity/admission/placement premises. This proves effect custody,
  * not BRC197 execution, mining, topical admission or private licence issuance. */
-export function purchaseAliasOwnerFixture(maximumSelections = 8) {
+export function purchaseAliasOwnerFixture(maximumSelections = 8, maximumBatchBytes = 2 * 1048576) {
   const f = purchaseAliasesFixture(),
     base = f.e.base,
-    limits = { ...base.limits, maximumBatchBytes: 2 * 1048576 },
+    limits = { ...base.limits, maximumBatchBytes },
     store = new SQLitePrivatePurchaseAliasStore(
       base.owner.domain,
       base.f.f.contracts,

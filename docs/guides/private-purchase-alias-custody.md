@@ -2,7 +2,7 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.0'
+version: '0.1.1'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -62,6 +62,14 @@ candidate. Check aggregate bytes, native row capacity and the largest atomic
 writer batch. A namespace that cannot honor that complete bounded promise must
 refuse preparation. Staged local reservations without exposed signed terms grant
 no payment or release authority and remain subject to explicit reconciliation.
+
+The local atomic batch is a collection of independently bounded records, not a
+single protocol packet. Keep each canonical record within the protocol JSON
+ceiling and count its UTF-8 bytes, plus the batch brackets and commas, against the
+separate installed native batch allowance. An allowance above 4 MiB must not be
+passed as a wider protocol JSON limit. The native writer independently owns and
+validates every record and the complete batch before any effect; neither the
+wire limit nor record limits are increased by reserving a larger local batch.
 
 The first economic identity, its exact raw candidate and the first native
 reservation observation share one authenticated writer. Later pending selections

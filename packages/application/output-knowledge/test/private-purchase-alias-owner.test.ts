@@ -437,3 +437,33 @@ it('rolls back every failure-result slot when its final reserved row conflicts i
   expect(after.progress.status).toBe('admitted-delivery-pending')
   expect(after.aliases.state.historical).toBeNull()
 })
+
+it('uses a separately bounded native batch above the protocol packet limit for both first reservation and terminal failure', () => {
+  const f = purchaseAliasOwnerFixture(8, 24 * 1048576)
+  f.prepare()
+  const candidate = f.f.variant(27),
+    retained = f.retain(candidate)
+  expect(retained.progress.status).toBe('admission-pending')
+  expect(f.retain(candidate).revision).toBe(retained.revision)
+  f.admitted(candidate)
+  const failed = f.store.fail(
+    f.load(),
+    { reason: 'Irrecoverable material', evidence: 'AA==' },
+    f.f.clock,
+    f.f.guard
+  )
+  expect(failed.progress.status).toBe('delivery-failed')
+  const reopened = f.reopen(),
+    saved = f.load(reopened.owner)
+  expect(saved.progress).toEqual(failed.progress)
+  expect(saved.candidate).toEqual(candidate)
+  expect(saved.aliases.state.historical).toBeNull()
+  expect(
+    reopened.owner.fail(
+      saved,
+      { reason: 'Irrecoverable material', evidence: 'AA==' },
+      f.f.clock,
+      f.f.guard
+    ).revision
+  ).toBe(saved.revision)
+})

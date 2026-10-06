@@ -15,9 +15,16 @@ tags: [reference, ci, performance, github-actions]
 The existing `CI` manual dispatch has an optional
 `application-performance-diagnostics` input, disabled by default. It measures the
 unchanged native alias-disclosure property on an isolated hosted Linux runner
-before the complete first application coverage shard. Use
+in the existing package-artifact job, before complete artifact verification.
+Its additional work does not consume either ordinary application coverage
+job's original time budget. A maintainer can also
+select it on an ordinary PR run with the explicit
+`ci:application-performance-diagnostics` label before the next source push. The
+label alone does not trigger the workflow. Remove it after the bounded
+measurement. This preserves the ordinary PR mutation policy; complete manual
+mutation qualification is still required once the functional baseline passes. Use
 `gh workflow run ci.yml --ref <branch> -f application-performance-diagnostics=true`
-for an explicitly requested measurement. Ordinary pull-request runs, complete
+for an explicitly requested measurement. Ordinary unlabelled pull-request runs, complete
 test discovery, both coverage shards, merge gates and mutation qualification
 remain unchanged.
 
@@ -29,15 +36,21 @@ runs one serial property with coverage and CPU profiling. Every child has a
 finite deadline within an immutable 900-second calendar and Boolean fault, case-timeout and output triage. Cancellation
 and every exit drain the complete process group through bounded TERM/KILL.
 Timing extraction requires unchanged inputs, all guards clear and an absent
-group; otherwise only Boolean metadata is retained. Raw logs, CPU profiles and
-application values never enter the uploaded report.
+group; otherwise only Boolean metadata is retained. A timing-file or summary
+refusal records its bounded phase and reason. Only a safe, fully drained
+measurement with unchanged source may continue into complete artifact validation
+when timing is unavailable; ordinary coverage remains independently required. A fault, case/output bound, child/calendar deadline,
+cancellation or source guard failure stops that diagnostic job. Raw logs, CPU profiles and
+application values never enter the uploaded report. Each file is opened once; its
+descriptor supplies both the size check and bounded read, without following
+symlinks.
 
 The uploaded `application-performance-diagnostic-<run>-<attempt>` artifact
-contains source/runtime identity, exit and drain evidence, and bounded self and
+contains checked-out source and PR-head/runtime identity, exit and drain evidence, and bounded self and
 inclusive function timing. Profiling overhead is included. A valid measurement
 can describe a property-budget interruption; it never qualifies the property,
 coverage, mutation campaign or checkpoint. The complete ordinary coverage run
-still follows and must pass independently. No performance improvement is claimed
+must still pass independently. No performance improvement is claimed
 until comparable measurements and full unchanged qualification support it.
 
 The weekly `CI performance trend` workflow classifies successful pull-request
