@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.1'
+version: '1.8.2'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -51,7 +51,11 @@ symlinks.
 
 The uploaded `application-performance-diagnostic-<run>-<attempt>` artifact
 contains checked-out source and PR-head/runtime identity, exit and drain evidence, and bounded self and
-inclusive function timing. Profiling overhead is included. A valid measurement
+inclusive function timing. Per-call-stack timings are retained alongside complete
+function aggregates keyed by name, source URL and measured line. Recursive
+occurrences receive each inclusive sample only once. Measured positions can refer
+to instrumented/transformed code rather than original source lines. Profiling
+overhead is included. A valid measurement
 can describe a property-budget interruption; it never qualifies the property,
 coverage, mutation campaign or checkpoint. The complete ordinary coverage run
 must still pass independently. No performance improvement is claimed

@@ -38,7 +38,9 @@ export function triageDiagnostic(bytes, code) {
 
 function indexProfileFrames(profile, checkDeadline) {
   const nodes = new Map(),
-    parents = new Map()
+    parents = new Map(),
+    frames = new Map(),
+    frameKeys = new Map()
   for (const node of profile.nodes) {
     checkDeadline()
     assert.ok(Number.isSafeInteger(node.id) && !nodes.has(node.id), 'profile-frame-identity')
@@ -50,6 +52,13 @@ function indexProfileFrames(profile, checkDeadline) {
       'profile-frame-shape'
     )
     nodes.set(node.id, node)
+    const key = JSON.stringify([
+      node.callFrame.functionName,
+      node.callFrame.url,
+      node.callFrame.lineNumber
+    ])
+    frameKeys.set(node.id, key)
+    frames.set(key, { callFrame: node.callFrame })
     for (const child of node.children ?? []) {
       assert.ok(Number.isSafeInteger(child) && !parents.has(child), 'profile-parent-identity')
       parents.set(child, node.id)
@@ -59,7 +68,7 @@ function indexProfileFrames(profile, checkDeadline) {
     checkDeadline()
     assert.ok(nodes.has(child) && nodes.has(parent), 'profile-parent-reference')
   }
-  return { nodes, parents }
+  return { nodes, parents, frames, frameKeys }
 }
 
 /** Extract call-frame timing, never raw profiles, arguments or application values. */
@@ -74,9 +83,11 @@ export function summarizeCPUProfile(profile) {
   assert.ok(profile.samples.length <= 2000000, 'profile-sample-bound')
   assert.ok(profile.nodes.length <= 500000, 'profile-node-bound')
   const checkDeadline = () => assert.ok(performance.now() < deadline, 'Profile summary deadline')
-  const { nodes, parents } = indexProfileFrames(profile, checkDeadline),
+  const { nodes, parents, frames, frameKeys } = indexProfileFrames(profile, checkDeadline),
     self = new Map(),
-    inclusive = new Map()
+    inclusive = new Map(),
+    selfByFunction = new Map(),
+    inclusiveByFunction = new Map()
   let total = 0
   for (let index = 0; index < profile.samples.length; index++) {
     if (index % 1024 === 0) checkDeadline()
@@ -86,30 +97,39 @@ export function summarizeCPUProfile(profile) {
     assert.ok(Number.isFinite(us) && us >= 0, 'profile-time-delta')
     total += us
     self.set(id, (self.get(id) ?? 0) + us)
-    const seen = new Set()
+    const key = frameKeys.get(id)
+    selfByFunction.set(key, (selfByFunction.get(key) ?? 0) + us)
+    const seen = new Set(),
+      seenFrames = new Set()
     let cursor = id
     while (cursor !== undefined) {
       assert.ok(!seen.has(cursor), 'Cyclic profile tree')
       assert.ok(seen.size < 1024, 'Profile stack exceeds bounded depth')
       seen.add(cursor)
       inclusive.set(cursor, (inclusive.get(cursor) ?? 0) + us)
+      const frameKey = frameKeys.get(cursor)
+      // Each function receives the sample once even if it occurs recursively.
+      if (!seenFrames.has(frameKey)) {
+        seenFrames.add(frameKey)
+        inclusiveByFunction.set(frameKey, (inclusiveByFunction.get(frameKey) ?? 0) + us)
+      }
       cursor = parents.get(cursor)
     }
   }
   const clean = value => value.replace(/[^\x20-\x7e]/g, '?').slice(0, 240)
-  const rows = map => {
+  const rows = (map, lookup = nodes, selfTimes = self, inclusiveTimes = inclusive) => {
     checkDeadline()
     const sorted = [...map]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 50)
       .map(([id]) => {
-        const frame = nodes.get(id).callFrame
+        const frame = lookup.get(id).callFrame
         return {
           function: clean(frame.functionName),
           source: clean(frame.url),
           line: frame.lineNumber + 1,
-          selfMilliseconds: Math.round((self.get(id) ?? 0) / 1000),
-          inclusiveMilliseconds: Math.round((inclusive.get(id) ?? 0) / 1000)
+          selfMilliseconds: Math.round((selfTimes.get(id) ?? 0) / 1000),
+          inclusiveMilliseconds: Math.round((inclusiveTimes.get(id) ?? 0) / 1000)
         }
       })
     checkDeadline()
@@ -120,6 +140,9 @@ export function summarizeCPUProfile(profile) {
     totalMilliseconds: Math.round(total / 1000),
     topSelf: rows(self),
     topInclusive: rows(inclusive),
+    functions: frames.size,
+    topSelfByFunction: rows(selfByFunction, frames, selfByFunction, inclusiveByFunction),
+    topInclusiveByFunction: rows(inclusiveByFunction, frames, selfByFunction, inclusiveByFunction),
     rawProfilePrinted: false,
     applicationValuesPrinted: false
   }

@@ -53,6 +53,57 @@ test('CPU summaries retain self and inclusive time without raw profile or applic
   assert.equal(summary.applicationValuesPrinted, false)
   assert.equal(JSON.stringify(summary).includes('must never'), false)
 })
+
+test('function timing combines separate call stacks without double counting recursive inclusive samples', () => {
+  const leaf = frame('leaf', 'file:///public/leaf.mjs', 4)
+  const summary = summarizeCPUProfile({
+    nodes: [
+      { id: 1, callFrame: frame('parent', 'file:///public/parent.mjs', 0), children: [2, 4] },
+      { id: 2, callFrame: leaf, children: [3] },
+      { id: 3, callFrame: leaf },
+      { id: 4, callFrame: leaf }
+    ],
+    samples: [2, 3, 4],
+    timeDeltas: [1000, 2000, 3000]
+  })
+  assert.equal(summary.totalMilliseconds, 6)
+  assert.equal(summary.functions, 2)
+  assert.deepEqual(summary.topSelfByFunction, [
+    {
+      function: 'leaf',
+      source: 'file:///public/leaf.mjs',
+      line: 5,
+      selfMilliseconds: 6,
+      inclusiveMilliseconds: 6
+    }
+  ])
+  assert.equal(summary.topInclusiveByFunction.length, 2)
+  assert.equal(
+    summary.topInclusiveByFunction.every(row => row.inclusiveMilliseconds === 6),
+    true
+  )
+  assert.equal(summary.topSelf.length, 3)
+})
+
+test('function aggregation keeps distinct sources and positions independently identified', () => {
+  const summary = summarizeCPUProfile({
+    nodes: [
+      { id: 1, callFrame: frame('root', '', -1), children: [2, 3, 4] },
+      { id: 2, callFrame: frame('same', 'file:///public/a.mjs', 4) },
+      { id: 3, callFrame: frame('same', 'file:///public/b.mjs', 4) },
+      { id: 4, callFrame: frame('same', 'file:///public/a.mjs', 5) }
+    ],
+    samples: [2, 3, 4],
+    timeDeltas: [1000, 2000, 3000]
+  })
+  assert.equal(summary.functions, 4)
+  assert.equal(summary.topSelfByFunction.length, 3)
+  assert.equal(summary.topSelfByFunction[0].line, 6)
+  assert.equal(summary.topSelfByFunction[1].source, 'file:///public/b.mjs')
+  assert.equal(summary.topInclusiveByFunction[0].function, 'root')
+  assert.equal(summary.topInclusiveByFunction[0].inclusiveMilliseconds, 6)
+})
+
 test('inconsistent, unknown and cyclic profile frames fail closed', () => {
   for (const mutate of [
     p => {
