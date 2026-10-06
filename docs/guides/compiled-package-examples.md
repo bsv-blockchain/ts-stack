@@ -2398,12 +2398,12 @@ private release; the returned commitment alone authorizes neither.
 // example-id: immutable-profile-funded-witness
 import type { WalletInterface } from '@bsv/sdk'
 import Transaction from '@bsv/sdk/transaction/Transaction'
-import { RevenueListingProfile } from '@bsv/sdk/script/templates/RevenueListingProfile'
+import { RevenueListingProfile as FundedRevenueProfile } from '@bsv/sdk/script/templates/RevenueListingProfile'
 import { RevenueListingProfileSpend } from '@bsv/sdk/script/templates/RevenueListingProfileSpend'
 import { toHex } from '@bsv/sdk/primitives/utils'
 
 export async function completeImmutableProfileWitness(
-  profile: RevenueListingProfile,
+  profile: FundedRevenueProfile,
   descriptor: unknown,
   previous: unknown,
   action: unknown,
