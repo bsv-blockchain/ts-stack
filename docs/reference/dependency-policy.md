@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
 version: '1.3.4'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -103,10 +103,10 @@ runtime/deployment effects, remove obsolete dependencies, and require the same
 tests, security analysis, and package checks as human-authored work. Bot noise,
 conflicting single-package bumps, and first-party version PRs are consolidated
 or closed rather than merged piecemeal. CI recognizes dependency-shaped diffs
-and requires the pull request's dependency-evidence section to record release
-notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
-audit and CodeQL results, package and consumer tests, bundle/performance
-impact, and affected public versions.
+and reports advisory evidence for release notes and necessity, runtime/build/peer
+compatibility, lockfile deduplication, audit and CodeQL results, package and
+consumer tests, bundle/performance impact, and affected public versions. Missing
+fields produce a warning; they do not waive any security or merge gate.
 
 The docs-site Mermaid graph selects DOMPurify 3.4.16 instead of 3.4.13 for
 [GHSA-p98j-92pf-mc4p](https://github.com/advisories/GHSA-p98j-92pf-mc4p).
@@ -119,6 +119,37 @@ expression and license-file hash unchanged. This private documentation dependenc
 public APIs or candidate versions. Frozen installation, root checks, docs tests
 and a built-site browser check qualify the ordinary Mermaid consumer. No service
 or package is deployed by this source change.
+
+## October 6 compatible audit remediation
+
+The October 5 advisory database update identified the existing locked
+`proxy-addr` 2.0.7 and `source-map-js` 1.2.1 resolutions. The workspace now
+selects the upstream patched
+[proxy-addr 2.0.8](https://github.com/advisories/GHSA-jqcg-44mw-7w3h) and
+[source-map-js 1.2.2](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
+within their parents' existing ranges. The six affected standalone server
+locks also select proxy-addr 2.0.8; the Overlay lock already selected it.
+Package manifests, public APIs, peers, overrides and unrelated resolutions
+remain unchanged. Both patches retain their existing Node runtime floors and
+dependency graph; source-map-js still has no runtime dependencies.
+
+The proxy-addr patch was published September 15. The source-map-js patch was
+published September 30 and was about 131 hours old at review: older than the
+governed 24-hour floor, younger than the automatic seven-day delay for
+ordinary updates. Its targeted security resolution used
+`pnpm --config.minimumReleaseAge=1440 --recursive update --depth Infinity
+--lockfile-only --ignore-scripts --no-save source-map-js`. This is an explicit
+security selection, with the ordinary workspace default, provenance policy
+and lifecycle denial preserved. No permanent age exclusion, override or
+advisory dismissal was added. pnpm generated the workspace lock, and
+`npm update proxy-addr --package-lock-only --ignore-scripts --audit=false
+--fund=false --workspaces=false` generated each affected standalone lock.
+
+The coherent batch must pass frozen installs, security audits, complete root
+checks, affected consumers and the exact-head hosted gate before review.
+Lockfile remediation does not publish a package or deploy a service. Protected
+publication and normal source-owned availability, provenance and rollback
+checks remain separate requirements for any later service rollout.
 
 ## Temporary Metro watcher dependency repair
 
@@ -169,7 +200,8 @@ startup or persisted schema; deployed images require separate promotion.
 - dependency build scripts are denied unless explicitly listed in `allowBuilds`;
 - peer dependencies must be declared explicitly instead of being installed
   implicitly (including unused optional tooling peers);
-- ordinary releases must age for 24 hours before installation;
+- ordinary releases wait seven days before automatic installation; the governed
+  inventory floor remains 24 hours, including explicitly reviewed security updates;
 - first-party `@bsv/*` packages are exempt so coordinated releases can complete;
 - registry provenance downgrades are rejected for recent packages; and
 - `pnpm audit --audit-level=high` blocks high and critical advisories in CI and
