@@ -2373,7 +2373,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-buyer-payment.test.ts',
           '<rootDir>/test/private-purchase-buyer*.test.ts',
           '<rootDir>/test/private-purchase-wallet-native*.test.ts',
-          '<rootDir>/test/private-purchase-wallet-routes.test.ts'
+          '<rootDir>/test/private-purchase-wallet-routes.test.ts',
+          '<rootDir>/test/private-purchase-wallet-profile-routes.test.ts'
         ],
         {
           esm: true,
@@ -2427,7 +2428,8 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-buyer-payment.test.ts',
           '<rootDir>/test/private-purchase-buyer*.test.ts',
           '<rootDir>/test/private-purchase-wallet-native*.test.ts',
-          '<rootDir>/test/private-purchase-wallet-routes.test.ts'
+          '<rootDir>/test/private-purchase-wallet-routes.test.ts',
+          '<rootDir>/test/private-purchase-wallet-profile-routes.test.ts'
         ],
         {
           esm: true,

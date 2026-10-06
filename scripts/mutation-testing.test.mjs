@@ -1419,7 +1419,8 @@ test('covenant buyer and native payment retain whole entries and complete origin
       '<rootDir>/test/private-buyer-payment.test.ts',
       '<rootDir>/test/private-purchase-buyer*.test.ts',
       '<rootDir>/test/private-purchase-wallet-native*.test.ts',
-      '<rootDir>/test/private-purchase-wallet-routes.test.ts'
+      '<rootDir>/test/private-purchase-wallet-routes.test.ts',
+      '<rootDir>/test/private-purchase-wallet-profile-routes.test.ts'
     ])
       assert.ok(target.runnerOptions.jest.config.testMatch.includes(pattern))
     for (const pattern of [

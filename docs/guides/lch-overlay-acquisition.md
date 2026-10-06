@@ -19,8 +19,9 @@ context. Its concrete buyer domains implement fixed-render,
 whole-Asset, authorized collector acquisition through paid lookup and covenant
 purchase. The covenant domain has a separate `@bsv/lch/overlay-covenant` entry. It is a
 minor API addition requiring the coordinated SDK3 output/revenue companions;
-ordinary imports, SDK2 peers and `CORE_CAPABILITIES` stay unchanged. The full
-covenant and reference-application demonstrations remain unfinished checkpoint-two
+ordinary imports, SDK2 peers and `CORE_CAPABILITIES` stay unchanged. The current
+covenant buyer, seller, alias and authenticated native HTTP composition is
+implemented; its complete fresh qualification remains unfinished checkpoint-two
 work. The concrete paid-lookup seller and authenticated native-wallet recovery
 flow are implemented and locally tested.
 
@@ -50,7 +51,8 @@ interfaces neither issue a License nor authorize decryption or native alias reus
 Select `LCHOverlayCovenantProfileDomain` for the current buyer described below.
 The existing `LCHOverlayCovenantDomain` and `LCHOverlayCovenantSeller` retain the
 earlier contract for compatibility. Current native buyer/action/alias custody
-integration remains open. The current seller is described below.
+integration is assembled in the current-profile reference fixtures and requires
+fresh runtime qualification. The current seller is described below.
 Paid lookup and ordinary BRC-170 continue using their existing separate paths.
 
 ## Original consent before financial work

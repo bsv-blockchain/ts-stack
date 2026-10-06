@@ -162,7 +162,7 @@ complete campaign or final PR gate.
   Engine/Mongo admission, selected-chain aliases, LCH and authenticated physical
   HTTP delivery. `src/__tests__/PrivatePurchaseAliasHTTP.integration.test.ts`
   isolates the authenticated alias adapter. Output-knowledge
-  `test/private-purchase-wallet-routes.test.ts` exercises all current routes and
+  `test/private-purchase-wallet-profile-routes.test.ts` exercises all current routes and
   eight real fixed-child recipients; the alias owner/currentness/coordinator/
   disclosure and buyer-alias suites qualify their independent boundaries.
   These new fixtures require Linux validation before this acceptance row closes.
@@ -170,7 +170,8 @@ complete campaign or final PR gate.
   describes the current composition. The retained
   `PrivatePurchaseNative.integration.test.ts` and historical interfaces continue
   to require compatibility coverage; their earlier receipts do not qualify the
-  current profile.
+  current profile. The original `test/private-purchase-wallet-routes.test.ts`
+  separately retains the complete historical six-route native-wallet regression.
 - Independent root serving and retained public history: run Overlay Express
   `src/__tests__/PrivateOverlayHostRootServing.integration.test.ts` for both SHIP
   and SLAP. It composes actual Engine/Mongo, two independent root journals, finite

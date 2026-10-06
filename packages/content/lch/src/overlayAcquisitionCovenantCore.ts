@@ -442,7 +442,6 @@ export class LCHCovenantDomainCore<
       'Original LCH candidate association changed'
     )
     const evidence = parseOutputEvidence({
-        chain: prepared.terms.prepare.listing.chain,
         txid: ownedCandidate.txid,
         outputIndex: 0,
         beef: ownedCandidate.beef
