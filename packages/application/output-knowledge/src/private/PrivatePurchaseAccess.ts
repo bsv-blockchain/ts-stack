@@ -82,17 +82,7 @@ export class PrivatePurchaseAccess {
       let request: OutputPurchasePrepare, mode: 'initial' | 'retained'
       if (row) {
         if (row.value.recipient !== buyer) throw missing()
-        outputAssert(
-          this.candidateProfile
-            ? (this.ownerProfile === 'alias-custody-v1'
-                ? row.value.format === 'private-purchase-state/3' &&
-                  row.value.clockProfile === 'native-observation-v1'
-                : row.value.format === 'private-purchase-state/2') &&
-                row.value.candidateProfile === this.candidateProfile
-            : row.value.format === 'private-purchase-state/1',
-          'Purchase access state differs',
-          'unavailable'
-        )
+        outputAssert(this.acceptsState(row.value), 'Purchase access state differs', 'unavailable')
         const descriptor = parsePrivateAcquisitionPayload(row.value.original)
         outputAssert(
           descriptor.acquisitionId === id && descriptor.purpose === 'material',
@@ -145,6 +135,15 @@ export class PrivatePurchaseAccess {
       )
         throw missing()
     }
+  }
+  private acceptsState(value: Record<string, unknown>): boolean {
+    if (!this.candidateProfile) return value.format === 'private-purchase-state/1'
+    const formatMatches =
+      this.ownerProfile === 'alias-custody-v1'
+        ? value.format === 'private-purchase-state/3' &&
+          value.clockProfile === 'native-observation-v1'
+        : value.format === 'private-purchase-state/2'
+    return formatMatches && value.candidateProfile === this.candidateProfile
   }
   private check(request: OutputPurchasePrepare, id: string, buyer: string): void {
     outputAssert(

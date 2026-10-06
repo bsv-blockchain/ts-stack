@@ -305,7 +305,7 @@ export class PrivatePurchaseAliasCoordinator {
     return this.run(caller, async signal => {
       const loaded = this.load(id, caller, signal),
         selected = loaded.aliases.state.selected
-      if (!selected || selected.admission !== 'admitted') return undefined
+      if (selected?.admission !== 'admitted') return undefined
       const candidate = loaded.aliases.candidates.get('selected')
       outputAssert(
         candidate?.txid === selected.txid,
@@ -402,7 +402,7 @@ export class PrivatePurchaseAliasCoordinator {
       'Pending alias jobs exceed installed capacity',
       'unavailable'
     )
-    for (const txid of jobs) if (!attempted.has(txid)) await this.admitJob(id, txid, caller, signal)
+    await this.reconcileJobs(id, jobs, caller, signal, attempted)
     for (let attempt = 0; attempt < 8; attempt++) {
       const loaded = this.load(id, caller, signal)
       if (loaded.progress.status === 'admission-pending') {
@@ -425,6 +425,21 @@ export class PrivatePurchaseAliasCoordinator {
       'Concurrent alias progress requires a later retry',
       true
     )
+  }
+  /** The prepaid pending capacity bounds this recursion. Each exact job starts
+   * only after the previous job settles, preserving serial native ownership. */
+  private async reconcileJobs(
+    id: string,
+    jobs: readonly string[],
+    caller: PrivatePurchaseCaller,
+    signal: AbortSignal,
+    attempted: ReadonlySet<string>,
+    index = 0
+  ): Promise<void> {
+    const txid = jobs[index]
+    if (txid === undefined) return
+    if (!attempted.has(txid)) await this.admitJob(id, txid, caller, signal)
+    await this.reconcileJobs(id, jobs, caller, signal, attempted, index + 1)
   }
   private async admitJob(
     id: string,

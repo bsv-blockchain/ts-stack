@@ -233,6 +233,27 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
       result: this.payloads.reserve(id, digest, 'result', this.limits.maximumResultBytes).descriptor
     }
   }
+  private validatePayloadReservations(
+    original: PrivatePurchaseOriginal,
+    originalPayload: ReturnType<typeof parsePrivateAcquisitionPayload>,
+    resultPayload: ReturnType<typeof parsePrivateAcquisitionPayload>
+  ): void {
+    const expected = this.descriptors(original)
+    for (const [actual, reservation] of [
+      [originalPayload, expected.original],
+      [resultPayload, expected.result]
+    ]) {
+      outputAssert(
+        actual.acquisitionId === reservation.acquisitionId &&
+          actual.requestDigest === reservation.requestDigest &&
+          actual.purpose === reservation.purpose &&
+          actual.maximumBytes === reservation.maximumBytes &&
+          actual.chunks === reservation.chunks,
+        'Alias payload reservation differs',
+        'unavailable'
+      )
+    }
+  }
   private restore(
     row: ProtectedLedgerRecord,
     buyer: string,
@@ -268,21 +289,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
         )
       ),
       original = custody.original
-    const expected = this.descriptors(original)
-    for (const [actual, reservation] of [
-      [originalPayload, expected.original],
-      [resultPayload, expected.result]
-    ]) {
-      outputAssert(
-        actual.acquisitionId === reservation.acquisitionId &&
-          actual.requestDigest === reservation.requestDigest &&
-          actual.purpose === reservation.purpose &&
-          actual.maximumBytes === reservation.maximumBytes &&
-          actual.chunks === reservation.chunks,
-        'Alias payload reservation differs',
-        'unavailable'
-      )
-    }
+    this.validatePayloadReservations(original, originalPayload, resultPayload)
     const progress = parsePrivatePurchaseProgress(value.progress, original, PROFILE),
       id = progress.acquisitionId,
       fence = view.get(this.fence(id))
@@ -1087,12 +1094,10 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     // Local-admission evidence has a closed fixed shape. A mined block report
     // additionally carries this bounded candidate BEEF plus bounded context and
     // header metadata. Processor evidence retains the existing 128 KiB ceiling.
-    const releaseMaximum =
-      body.releasePolicy.kind === 'local-admission'
-        ? releaseBaseBytes
-        : body.releasePolicy.kind === 'mined'
-          ? Math.min(131072, releaseBaseBytes + this.limits.maximumCandidateBytes + 8192)
-          : 131072
+    let releaseMaximum = 131072
+    if (body.releasePolicy.kind === 'local-admission') releaseMaximum = releaseBaseBytes
+    else if (body.releasePolicy.kind === 'mined')
+      releaseMaximum = Math.min(131072, releaseBaseBytes + this.limits.maximumCandidateBytes + 8192)
     const deliveryMaximum =
       Buffer.byteLength(frame) +
       4 * Math.ceil(custody.maximumSecretBytes / 3) +

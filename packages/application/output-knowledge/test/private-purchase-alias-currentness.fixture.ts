@@ -18,6 +18,7 @@ export function aliasCurrentnessFixture() {
       contexts++
       const snapshot = context(selected)
       snapshot.id += '-' + generation
+      await Promise.resolve()
       return snapshot
     },
     current(snapshot: ReturnType<typeof context>) {

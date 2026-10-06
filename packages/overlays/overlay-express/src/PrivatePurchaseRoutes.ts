@@ -252,16 +252,7 @@ class PrivatePurchaseHTTPHandler {
       if (req.aborted || res.destroyed) return
       release = this.acquire(caller.buyer)
       const input = parseOutputJSON(text, { bytes: this.requestBytes })
-      let id: string
-      if (operation === 'prepare')
-        id = await this.options.service.prepare(parseOutputPurchasePrepare(input), caller)
-      else if (operation === 'submit')
-        id = await this.options.service.submit(parseOutputPurchaseSubmit(input), caller)
-      else
-        id = await this.options.service.recover(
-          parseOutputPurchaseRecover(input).acquisitionId,
-          caller
-        )
+      const id = await this.runOperation(operation, input, caller)
       if (req.aborted || res.destroyed || res.writableEnded) return
       if (this.options.disclosure.prepareAsync !== this.prepareAsync)
         throw new OutputProtocolError(
@@ -322,6 +313,17 @@ class PrivatePurchaseHTTPHandler {
       res.removeListener('close', cancel)
       req.removeListener('aborted', cancel)
     }
+  }
+  private runOperation(
+    operation: PrivatePurchaseHTTPOperation,
+    input: unknown,
+    caller: PrivatePurchaseHTTPCaller
+  ): Promise<string> {
+    if (operation === 'prepare')
+      return this.options.service.prepare(parseOutputPurchasePrepare(input), caller)
+    if (operation === 'submit')
+      return this.options.service.submit(parseOutputPurchaseSubmit(input), caller)
+    return this.options.service.recover(parseOutputPurchaseRecover(input).acquisitionId, caller)
   }
 }
 

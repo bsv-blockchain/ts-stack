@@ -60,6 +60,7 @@ export function purchaseBuyerAliasFixture() {
               'context-changed',
               'Controlled buyer selected chain changed'
             )
+          await Promise.resolve()
           return {
             currentAlias: { txid: candidate.txid, beef: candidate.beef },
             contextId: 'controlled-buyer-currentness',

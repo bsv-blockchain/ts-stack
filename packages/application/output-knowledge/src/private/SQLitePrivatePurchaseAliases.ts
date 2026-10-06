@@ -692,15 +692,13 @@ export class SQLitePrivatePurchaseAliases {
       for (const role of this.roles) {
         const before = this.entry(snapshot.state, role),
           next = this.entry(proposal.state, role)
-        if (next === null) continue
-        if (next.txid !== before?.txid) {
-          const source = this.roles.find(r => this.entry(snapshot.state, r)?.txid === next.txid)
-          const oldCandidate = source ? snapshot.candidates.get(source) : undefined
-          const oldOutcome = source ? snapshot.outcomes.get(source) : undefined
-          if (oldCandidate) candidates.set(role, oldCandidate)
-          if (oldOutcome) outcomes.set(role, oldOutcome)
-          else outcomes.delete(role)
-        }
+        if (next === null || next.txid === before?.txid) continue
+        const source = this.roles.find(r => this.entry(snapshot.state, r)?.txid === next.txid)
+        const oldCandidate = source ? snapshot.candidates.get(source) : undefined
+        const oldOutcome = source ? snapshot.outcomes.get(source) : undefined
+        if (oldCandidate) candidates.set(role, oldCandidate)
+        if (oldOutcome) outcomes.set(role, oldOutcome)
+        else outcomes.delete(role)
       }
       return { candidates, outcomes }
     }

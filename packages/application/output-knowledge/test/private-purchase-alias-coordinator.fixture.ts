@@ -43,6 +43,7 @@ export function purchaseAliasCoordinatorFixture(
       async assess(_subject, candidate) {
         counts.assessments++
         if (!mined) return undefined
+        await Promise.resolve()
         return {
           currentAlias: { txid: candidate.txid, beef: candidate.beef },
           contextId: 'controlled-alias-currentness',
@@ -61,7 +62,7 @@ export function purchaseAliasCoordinatorFixture(
     },
     failure: {
       async assess() {
-        return failure
+        const assessment = failure
           ? {
               reason: 'Irrecoverable material',
               evidence: 'AA==',
@@ -70,11 +71,13 @@ export function purchaseAliasCoordinatorFixture(
               }
             }
           : undefined
+        await Promise.resolve()
+        return assessment
       }
     },
     release: {
       async assess(custody, progress, candidate) {
-        return {
+        const assessment = {
           evidence: {
             chain: custody.original.request.listing.chain,
             txid: candidate.txid,
@@ -83,6 +86,8 @@ export function purchaseAliasCoordinatorFixture(
           },
           checkCurrent() {}
         }
+        await Promise.resolve()
+        return assessment
       }
     },
     ...options

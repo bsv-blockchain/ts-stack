@@ -34,7 +34,7 @@ export function purchaseAliasOwnerFixture(maximumSelections = 8) {
   const prepare = () => store.prepare(base.custody, f.clock, f.guard)
   const load = (use = store) => {
     const saved = use.load(base.id, base.buyer, f.clock, f.guard)
-    if (!saved) throw Error('Expected original owner custody')
+    if (!saved) throw new Error('Expected original owner custody')
     return saved
   }
   function retain(
@@ -80,7 +80,7 @@ export function purchaseAliasOwnerFixture(maximumSelections = 8) {
   function envelope(saved: PrivatePurchaseAliasedLoaded): OutputPurchaseEnvelope {
     const prior = base.f.envelope()
     if (prior.result.status !== 'delivered' || !saved.progress.txid)
-      throw Error('Fixture must have selected admission')
+      throw new Error('Fixture must have selected admission')
     const evidence = {
       chain: base.f.f.chain,
       txid: saved.progress.txid,

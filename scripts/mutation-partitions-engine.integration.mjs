@@ -58,7 +58,7 @@ async function* serialResults(values, read) {
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [
-    229, 131, 525, 1072, 580, 1557, 176, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 650,
+    229, 131, 525, 1072, 580, 1557, 176, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 673,
     890, 843
   ]
   const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
@@ -107,8 +107,8 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
     assert.equal(selectedMutationPartition(id, original), original)
   }
-  assert.equal(Object.keys(targets).length, 145)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 392)
+  assert.equal(Object.keys(targets).length, 151)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 398)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {

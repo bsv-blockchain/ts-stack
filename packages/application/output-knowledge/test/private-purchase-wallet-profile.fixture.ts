@@ -23,10 +23,10 @@ import {
   type OutputPurchasePrepare,
   type OutputReleasePolicy,
   parseOutputReleasePolicy,
-  type OutputPurchaseSubmit
+  type OutputPurchaseSubmit,
+  type ChainTracker
 } from '@bsv/sdk'
 import type { RevenueListingProfileAuthority } from '../src/revenue-listing/RevenueListingProfileAuthority.js'
-import type { ChainTracker } from '@bsv/sdk'
 import { RevenueListingProfileSpend } from '@bsv/sdk/script/templates/RevenueListingProfileSpend'
 import { revenueListingPurchaseCommitment } from '@bsv/sdk/script/templates/RevenueListingSpend'
 import {
@@ -84,12 +84,10 @@ function nativeFundingChain(originalAnchor: Transaction, maximumHeight = 101) {
     for (let height = 0; height <= maximumHeight; height++) {
       const bytes = Uint8Array.from(Utils.toArray(fixture.headers[0].raw, 'hex'))
       const data = new DataView(bytes.buffer)
-      const root =
-        height === 0
-          ? anchor.id('hex')
-          : height === 102 && purchaseRoot !== undefined
-            ? purchaseRoot
-            : Utils.toHex(Hash.sha256(Utils.toArray(`native-current-header-${height}`, 'utf8')))
+      let root: string
+      if (height === 0) root = anchor.id('hex')
+      else if (height === 102 && purchaseRoot !== undefined) root = purchaseRoot
+      else root = Utils.toHex(Hash.sha256(Utils.toArray(`native-current-header-${height}`, 'utf8')))
       bytes.set(Utils.toArray(headers.at(-1)?.hash ?? '00'.repeat(32), 'hex').reverse(), 4)
       bytes.set(Utils.toArray(root, 'hex').reverse(), 36)
       data.setUint32(68, data.getUint32(68, true) + height * 600, true)
