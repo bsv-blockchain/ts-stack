@@ -6,6 +6,7 @@ import { createSecretKey } from 'node:crypto'
 import { PrivateKey } from '@bsv/sdk'
 import { SQLiteProtectedOperationObjectStore } from '../src/operations/SQLiteProtectedOperationObjectStore.js'
 import { NodeProtectedPayloadCodec } from '../src/private/NodeProtectedPayloadCodec.js'
+import { ProtectedOperationObjectPlan } from '../src/operations/ProtectedOperationObjectPlan.js'
 import { SQLiteProtectedLedger } from '../src/private/SQLiteProtectedLedger.js'
 const directories: string[] = [],
   stores: SQLiteProtectedOperationObjectStore[] = []
@@ -23,11 +24,11 @@ const codec = (byte = 85) =>
     { resolve: () => createSecretKey(Buffer.alloc(32, byte)) },
     'fixture-key'
   )
-function fixture(maximumObjectBytes = 4194304) {
+function fixture(maximumObjectBytes = 4194304, maximumObjects = configuration.maximumObjects) {
   const directory = mkdtempSync(join(tmpdir(), 'result-draft-'))
   directories.push(directory)
   const file = join(directory, 'recipient.sqlite'),
-    config = { ...configuration, maximumObjectBytes }
+    config = { ...configuration, maximumObjectBytes, maximumObjects }
   const store = SQLiteProtectedOperationObjectStore.create(file, config, codec())
   stores.push(store)
   return { store, file, config }
@@ -227,3 +228,115 @@ test.each(['before-reservation', 'after-reservation', 'before-delivery', 'after-
     }
   }
 )
+
+test('joint custody reads every original in one fresh native snapshot without reserving or changing it', async () => {
+  const { store, file, config } = fixture(1024, 3),
+    second = '8a'.repeat(32),
+    third = '8b'.repeat(32)
+  await store.reserve(id, binding, 100)
+  const receipt = await store.put(id, binding, new Uint8Array([4, 5, 6]))
+  const reservation = await store.reserve(second, { role: 'reserved' }, 80)
+  const read = jest.spyOn(SQLiteProtectedLedger.prototype, 'read'),
+    commit = jest.spyOn(SQLiteProtectedLedger.prototype, 'commit')
+  const selectors = [
+    { id: third, originalBinding: { role: 'absent' } },
+    { id, originalBinding: binding },
+    { id: second, originalBinding: { role: 'reserved' } }
+  ]
+  const first = await store.readMany(selectors)
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(commit).not.toHaveBeenCalled()
+  expect(first).toEqual([
+    { state: 'absent' },
+    { state: 'stored', receipt, bytes: new Uint8Array([4, 5, 6]) },
+    { state: 'reserved', reservation }
+  ])
+  if (first[1].state !== 'stored') throw Error('Expected stored original')
+  first[1].bytes.fill(9)
+  first[1].receipt.digest = 'ff'.repeat(32)
+  await store.close()
+  const reopened = SQLiteProtectedOperationObjectStore.open(file, config, codec())
+  stores.push(reopened)
+  const secondRead = await reopened.readMany(selectors)
+  expect(secondRead).toEqual([
+    { state: 'absent' },
+    { state: 'stored', receipt, bytes: new Uint8Array([4, 5, 6]) },
+    { state: 'reserved', reservation }
+  ])
+  expect(await reopened.read(third, { role: 'absent' })).toEqual({ state: 'absent' })
+})
+
+test('joint custody refuses duplicate, accessor, sparse and oversized selectors before native read', async () => {
+  const { store } = fixture(1024, 3),
+    read = jest.spyOn(SQLiteProtectedLedger.prototype, 'read')
+  const one = { id, originalBinding: binding }
+  await expect(store.readMany([])).rejects.toMatchObject({ code: 'limited' })
+  await expect(store.readMany([one, one])).rejects.toThrow('Duplicate')
+  await expect(store.readMany(Array(1))).rejects.toThrow()
+  let touched = false
+  const accessor = Object.defineProperty({}, 'id', {
+    enumerable: true,
+    get: () => {
+      touched = true
+      return id
+    }
+  })
+  await expect(store.readMany([accessor as typeof one])).rejects.toThrow()
+  await expect(
+    store.readMany([{ id, originalBinding: { payload: 'x'.repeat(16385) } }])
+  ).rejects.toThrow()
+  await expect(store.readMany([{ ...one, extra: true } as typeof one])).rejects.toThrow()
+  expect(touched).toBe(false)
+  expect(read).not.toHaveBeenCalled()
+})
+
+test('joint custody honors the actual 64-row native bound without initializing absent objects', async () => {
+  const { store } = fixture(1024, 33),
+    selectors = Array.from({ length: 33 }, (_, n) => ({
+      id: (n + 1).toString(16).padStart(64, '0'),
+      originalBinding: { n }
+    }))
+  const read = jest.spyOn(SQLiteProtectedLedger.prototype, 'read')
+  expect(await store.readMany(selectors.slice(0, 32))).toEqual(
+    Array.from({ length: 32 }, () => ({ state: 'absent' }))
+  )
+  expect(read).toHaveBeenCalledTimes(1)
+  read.mockClear()
+  await expect(store.readMany(selectors)).rejects.toMatchObject({ code: 'limited' })
+  expect(read).not.toHaveBeenCalled()
+  expect(await store.read(selectors[0].id, selectors[0].originalBinding)).toEqual({
+    state: 'absent'
+  })
+})
+
+test('a later joint-binding failure clears earlier plaintext and returns no partial disclosure', async () => {
+  const { store } = fixture(1024, 2),
+    second = '8c'.repeat(32)
+  await store.reserve(id, binding, 100)
+  const receipt = await store.put(id, binding, new Uint8Array([7, 8, 9]))
+  await store.reserve(second, { role: 'second' }, 100)
+  await store.put(second, { role: 'second' }, new Uint8Array([10]))
+  const restore = ProtectedOperationObjectPlan.prototype.restore,
+    copies: Uint8Array[] = []
+  jest.spyOn(ProtectedOperationObjectPlan.prototype, 'restore').mockImplementation(function (
+    this: ProtectedOperationObjectPlan,
+    ...args
+  ) {
+    const result = restore.call(this, ...args)
+    if (result !== null) copies.push(result)
+    return result
+  })
+  await expect(
+    store.readMany([
+      { id, originalBinding: binding },
+      { id: second, originalBinding: { role: 'changed' } }
+    ])
+  ).rejects.toMatchObject({ code: 'context-changed' })
+  expect(copies).toHaveLength(1)
+  expect(copies[0]).toEqual(new Uint8Array([0, 0, 0]))
+  expect(await store.read(id, binding)).toEqual({
+    state: 'stored',
+    receipt,
+    bytes: new Uint8Array([7, 8, 9])
+  })
+})

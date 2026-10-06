@@ -34,7 +34,10 @@ import type {
   OperationStateStore,
   OperationStateSnapshot
 } from '../operations/OperationStateStore.js'
-import type { ProtectedOperationObjectStore } from '../operations/ProtectedOperationObjectStore.js'
+import type {
+  ProtectedOperationObjectStore,
+  ProtectedOperationObjectStatus
+} from '../operations/ProtectedOperationObjectStore.js'
 import { BoundedOutputWork, checkOutputWork } from '../internal/BoundedOutputWork.js'
 import type {
   PrivatePurchaseBuyerPayment,
@@ -65,6 +68,8 @@ export interface PrivatePurchaseBuyerOptions {
   /** Explicit local owner selection. Binds a distinct installation and reserves
    * a seventh immutable object before preparation or financial work. */
   candidateProfile?: 'full-purchase-commitment-v1'
+  /** Explicit local read optimization; no wire, binding or persisted-format change. */
+  objectReadProfile?: 'joint-custody-v1'
   wallet: WalletInterface
   clock(): string
   current(): boolean
@@ -145,6 +150,7 @@ export class PrivatePurchaseBuyer {
   private readonly sizes: Record<Role, number>
   private readonly roles: Role[]
   private readonly candidateProfile?: 'full-purchase-commitment-v1'
+  private readonly objectReadProfile?: 'joint-custody-v1'
   private readonly configurations: string[]
   private readonly pins: (() => boolean)[]
   private readonly stopping = new AbortController()
@@ -154,6 +160,18 @@ export class PrivatePurchaseBuyer {
   private readonly termsVerifier: OutputPurchaseTermsVerifier
   private constructor(private readonly ports: PrivatePurchaseBuyerOptions) {
     this.candidateProfile = ports.candidateProfile
+    outputAssert(
+      ports.objectReadProfile === undefined || ports.objectReadProfile === 'joint-custody-v1',
+      'Unsupported purchase buyer custody read profile',
+      'unsupported'
+    )
+    this.objectReadProfile = ports.objectReadProfile
+    if (this.objectReadProfile)
+      outputAssert(
+        typeof ports.objects.readMany === 'function',
+        'Joint purchase custody requires the explicit object-store companion',
+        'unsupported'
+      )
     this.trust = {
       ...ports.trust,
       chain: structuredClone(ports.trust.chain),
@@ -227,6 +245,7 @@ export class PrivatePurchaseBuyer {
       pin(ports.state, 'compareAndSwap'),
       pin(ports.objects, 'reserve'),
       pin(ports.objects, 'read'),
+      ...(this.objectReadProfile ? [pin(ports.objects, 'readMany')] : []),
       pin(ports.objects, 'put'),
       pin(ports.payment, 'plan'),
       pin(ports.payment, 'recover'),
@@ -285,27 +304,57 @@ export class PrivatePurchaseBuyer {
   }
   private async initialized(): Promise<void> {
     await this.load()
-    await this.roles.reduce(
-      (sequence, role) =>
-        sequence.then(async () => {
-          const saved = await this.ports.objects.read(this.id(role), this.role(role))
+    if (this.objectReadProfile === undefined || this.ports.objects.readMany === undefined) {
+      await this.roles.reduce(
+        (sequence, role) =>
+          sequence.then(async () => {
+            const saved = await this.ports.objects.read(this.id(role), this.role(role))
+            outputAssert(
+              saved.state !== 'absent' &&
+                (saved.state === 'stored'
+                  ? saved.receipt.maximumBytes
+                  : saved.reservation.maximumBytes) === this.sizes[role],
+              'Purchase buyer original reservation is missing',
+              'unavailable'
+            )
+          }),
+        Promise.resolve()
+      )
+      outputAssert(
+        canonicalOutputJSON(await this.get('request')) === canonicalOutputJSON(this.request) &&
+          canonicalOutputJSON(await this.get('contract')) === canonicalOutputJSON(this.contract),
+        'Purchase buyer original custody differs',
+        'context-changed'
+      )
+    } else {
+      const statuses = await this.ports.objects.readMany(
+        this.roles.map(role => ({ id: this.id(role), originalBinding: this.role(role) }))
+      )
+      try {
+        this.installed()
+        const owned = this.ownStatuses(statuses, this.roles.length)
+        this.roles.forEach((role, index) =>
           outputAssert(
-            saved.state !== 'absent' &&
-              (saved.state === 'stored'
-                ? saved.receipt.maximumBytes
-                : saved.reservation.maximumBytes) === this.sizes[role],
+            owned[index].state !== 'absent' &&
+              (owned[index].state === 'stored'
+                ? owned[index].receipt.maximumBytes
+                : owned[index].reservation.maximumBytes) === this.sizes[role],
             'Purchase buyer original reservation is missing',
             'unavailable'
           )
-        }),
-      Promise.resolve()
-    )
-    outputAssert(
-      canonicalOutputJSON(await this.get('request')) === canonicalOutputJSON(this.request) &&
-        canonicalOutputJSON(await this.get('contract')) === canonicalOutputJSON(this.contract),
-      'Purchase buyer original custody differs',
-      'context-changed'
-    )
+        )
+        const request = this.decodeStatus('request', owned[this.roles.indexOf('request')]),
+          contract = this.decodeStatus('contract', owned[this.roles.indexOf('contract')])
+        outputAssert(
+          canonicalOutputJSON(request) === canonicalOutputJSON(this.request) &&
+            canonicalOutputJSON(contract) === canonicalOutputJSON(this.contract),
+          'Purchase buyer original custody differs',
+          'context-changed'
+        )
+      } finally {
+        this.clearStatuses(statuses, this.roles.length)
+      }
+    }
     this.installed()
   }
   private configuration(): string[] {
@@ -321,6 +370,7 @@ export class PrivatePurchaseBuyer {
     outputAssert(
       this.pins.every(check => check()) &&
         this.ports.candidateProfile === this.candidateProfile &&
+        this.ports.objectReadProfile === this.objectReadProfile &&
         this.configuration().every((value, index) => value === this.configurations[index]),
       'Purchase buyer installed capability changed',
       'context-changed'
@@ -351,6 +401,12 @@ export class PrivatePurchaseBuyer {
   private async get(role: Role): Promise<OutputJSONObject | undefined> {
     const saved = await this.ports.objects.read(this.id(role), this.role(role))
     this.installed()
+    return this.decodeStatus(role, saved)
+  }
+  private decodeStatus(
+    role: Role,
+    saved: ProtectedOperationObjectStatus
+  ): OutputJSONObject | undefined {
     outputAssert(
       saved.state !== 'absent',
       'Purchase buyer original slot disappeared',
@@ -366,6 +422,68 @@ export class PrivatePurchaseBuyer {
       saved.bytes.fill(0)
     }
   }
+  private ownStatuses(statuses: unknown, count: number): ProtectedOperationObjectStatus[] {
+    // Both reply ownership and disposal are bounded by the installed request,
+    // never by a length or accessor supplied by the companion.
+    try {
+      outputAssert(
+        Array.isArray(statuses) &&
+          Object.getOwnPropertyDescriptor(statuses, 'length')?.value === count,
+        'Purchase buyer joint custody result differs',
+        'unavailable'
+      )
+      const owned: ProtectedOperationObjectStatus[] = []
+      for (let index = 0; index < count; index++) {
+        const slot = Object.getOwnPropertyDescriptor(statuses, String(index))
+        outputAssert(
+          slot !== undefined && 'value' in slot,
+          'Purchase buyer joint custody result differs',
+          'unavailable'
+        )
+        owned.push(slot.value as ProtectedOperationObjectStatus)
+      }
+      return owned
+    } catch {
+      outputAssert(false, 'Purchase buyer joint custody result differs', 'unavailable')
+    }
+  }
+  private clearStatuses(statuses: unknown, count: number): void {
+    // A malformed or detached reply must not replace the primary refusal.
+    // Omitted and unsolicited slots remain the companion's disposal obligation.
+    try {
+      if (!Array.isArray(statuses)) return
+    } catch {
+      return
+    }
+    for (let index = 0; index < count; index++) {
+      try {
+        const saved = Object.getOwnPropertyDescriptor(statuses, String(index))?.value
+        if (saved === null || typeof saved !== 'object') continue
+        const bytes = Object.getOwnPropertyDescriptor(saved, 'bytes')?.value
+        if (bytes instanceof Uint8Array) Uint8Array.prototype.fill.call(bytes, 0)
+      } catch {
+        // Cleanup cannot suppress a validation, access or ownership refusal.
+      }
+    }
+  }
+  private async getMany(roles: readonly Role[]): Promise<(OutputJSONObject | undefined)[]> {
+    if (this.objectReadProfile === undefined || this.ports.objects.readMany === undefined) {
+      const values: (OutputJSONObject | undefined)[] = []
+      for (const role of roles) values.push(await this.get(role))
+      return values
+    }
+    const statuses = await this.ports.objects.readMany(
+      roles.map(role => ({ id: this.id(role), originalBinding: this.role(role) }))
+    )
+    try {
+      this.installed()
+      const owned = this.ownStatuses(statuses, roles.length)
+      return roles.map((role, index) => this.decodeStatus(role, owned[index]))
+    } finally {
+      this.clearStatuses(statuses, roles.length)
+    }
+  }
+
   private async load(): Promise<{ snapshot: OperationStateSnapshot; progress: Progress }> {
     const snapshot = await this.ports.state.read()
     this.installed()
@@ -859,9 +977,11 @@ export class PrivatePurchaseBuyer {
   validate(signal?: AbortSignal): Promise<'validated' | 'usable'> {
     return this.run(signal, async active => {
       this.access(active)
-      const rawTerms = await this.get('terms'),
-        rawCandidate = await this.get('candidate'),
-        rawResult = await this.get('result')
+      const [rawTerms, rawCandidate, rawResult] = await this.getMany([
+        'terms',
+        'candidate',
+        'result'
+      ])
       outputAssert(
         rawTerms !== undefined && rawCandidate !== undefined && rawResult !== undefined,
         'Purchase buyer has no complete delivered obligation',
@@ -899,10 +1019,12 @@ export class PrivatePurchaseBuyer {
   usableResult(signal?: AbortSignal): Promise<OutputPurchaseEnvelope> {
     return this.run(signal, async active => {
       this.access(active)
-      const saved = await this.load(),
-        rawTerms = await this.get('terms'),
-        rawCandidate = await this.get('candidate'),
-        rawResult = await this.get('result')
+      const saved = await this.load()
+      const [rawTerms, rawCandidate, rawResult] = await this.getMany([
+        'terms',
+        'candidate',
+        'result'
+      ])
       outputAssert(
         saved.progress.phase === 'usable' &&
           rawTerms !== undefined &&

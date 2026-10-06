@@ -152,3 +152,91 @@ test('generated browser object histories preserve first bytes, original roles an
     )
   )
 }, 120000)
+
+test('generated joint native reads preserve ordered original custody through reopen, detached mutation and conflicting selectors', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'joint-result-property-')),
+    file = join(directory, 'recipient.sqlite'),
+    configuration = {
+      storeId: '91'.repeat(32),
+      recipient: new PrivateKey(85).toPublicKey().toString(),
+      binding: { purpose: 'generated-joint-custody' },
+      maximumObjects: 3,
+      maximumObjectBytes: 128
+    },
+    codec = new NodeProtectedPayloadCodec(
+      { resolve: () => createSecretKey(Buffer.alloc(32, 85)) },
+      'fixture-key'
+    ),
+    first = { id: '92'.repeat(32), originalBinding: { role: 'first' } },
+    second = { id: '93'.repeat(32), originalBinding: { role: 'second' } },
+    absent = { id: '94'.repeat(32), originalBinding: { role: 'absent' } }
+  try {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uint8Array({ maxLength: 128 }),
+        fc.uint8Array({ maxLength: 128 }),
+        fc.boolean(),
+        fc.array(fc.constantFrom('read', 'reopen', 'mutate', 'binding', 'duplicate'), {
+          minLength: 1,
+          maxLength: 8
+        }),
+        async (firstBytes, secondBytes, reverse, history) => {
+          let store = SQLiteProtectedOperationObjectStore.create(file, configuration, codec)
+          try {
+            const firstReservation = await store.reserve(first.id, first.originalBinding, 128),
+              secondReservation = await store.reserve(second.id, second.originalBinding, 128)
+            expect(await store.readMany([second, absent, first])).toEqual([
+              { state: 'reserved', reservation: secondReservation },
+              { state: 'absent' },
+              { state: 'reserved', reservation: firstReservation }
+            ])
+            const firstReceipt = await store.put(first.id, first.originalBinding, firstBytes),
+              secondReceipt = await store.put(second.id, second.originalBinding, secondBytes),
+              selectors = reverse ? [second, absent, first] : [first, absent, second],
+              expected = reverse
+                ? [
+                    { state: 'stored', receipt: secondReceipt, bytes: secondBytes },
+                    { state: 'absent' },
+                    { state: 'stored', receipt: firstReceipt, bytes: firstBytes }
+                  ]
+                : [
+                    { state: 'stored', receipt: firstReceipt, bytes: firstBytes },
+                    { state: 'absent' },
+                    { state: 'stored', receipt: secondReceipt, bytes: secondBytes }
+                  ]
+            for (const step of history) {
+              if (step === 'reopen') {
+                await store.close()
+                store = SQLiteProtectedOperationObjectStore.open(file, configuration, codec)
+              }
+              if (step === 'binding')
+                await expect(
+                  store.readMany([first, { ...second, originalBinding: { role: 'changed' } }])
+                ).rejects.toMatchObject({ code: 'context-changed' })
+              if (step === 'duplicate')
+                await expect(store.readMany([first, first])).rejects.toThrow('Duplicate')
+              const values = await store.readMany(selectors)
+              expect(values).toEqual(expected)
+              for (const value of values) {
+                if (value.state !== 'stored') continue
+                if (step === 'mutate') value.receipt.maximumBytes = 1
+                value.bytes.fill(0)
+              }
+              const retained = await store.readMany(selectors)
+              expect(retained).toEqual(expected)
+              for (const value of retained) if (value.state === 'stored') value.bytes.fill(0)
+            }
+            // Status reads cannot consume a slot or initialize the absent role.
+            expect(await store.read(absent.id, absent.originalBinding)).toEqual({ state: 'absent' })
+          } finally {
+            await store.close()
+            for (const suffix of ['', '-wal', '-shm']) rmSync(file + suffix, { force: true })
+          }
+        }
+      ),
+      { interruptAfterTimeLimit: 150000, markInterruptAsFailure: true }
+    )
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}, 180000)

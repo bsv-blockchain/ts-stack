@@ -1386,6 +1386,17 @@ creates a replacement. Logical reservations do not prevent quota exhaustion,
 browser eviction or rollback of a complete valid database. See the
 [operation-object guide](../../../docs/guides/protected-operation-objects.md).
 
+The optional native `readMany` companion returns ordered original object statuses
+from one fresh authenticated read transaction. An explicit purchase-buyer
+`objectReadProfile: 'joint-custody-v1'` selects it for reservation checks and the
+terms/candidate/result set. Omitted selection retains individual reads, and
+other backends must implement and qualify the companion before selecting it.
+It changes no persisted binding, financial intent or entitlement checks; it
+neither initializes missing objects nor caches validity between calls. See the
+[purchase-custody guide](../../../docs/guides/private-purchase-custody.md#optional-bounded-joint-custody-reads).
+This extension is under qualification and does not establish a performance or
+checkpoint-two result.
+
 ### Durable private lookup buyer
 
 The portable `private/buyer` entry exports `PrivateLookupBuyer`, its public

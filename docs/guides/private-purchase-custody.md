@@ -416,6 +416,45 @@ verification verdicts are cached. Domain constraints, original candidate and
 release evidence, current access, and material usability are checked by their
 independent installed ports at the relevant boundary.
 
+## Optional bounded joint custody reads
+
+`PrivatePurchaseBuyerOptions.objectReadProfile: 'joint-custody-v1'` explicitly
+selects the optional protected-object store `readMany` companion. Omit it to
+preserve individual reads. A selected store must implement the companion, and
+its installed method and selected profile are checked before further work.
+This local read strategy changes no wire packet, payment authorization, original
+binding or stored format; it neither creates a namespace nor migrates custody.
+
+`SQLiteProtectedOperationObjectStore.readMany` owns a closed, nonempty list of
+unique object IDs and their complete original bindings before reading. It
+refuses selectors beyond the installed object capacity or 64 native rows; the
+row count includes each object's reserved chunks. It reads every selected slot
+in one fresh authenticated native transaction, verifies the same header, chunk,
+reservation and immutable-object checks as `read`, and returns independently
+owned statuses in request order. Missing objects remain absent. A later binding
+or custody failure returns no partial result and clears earlier detached
+plaintext. Callers must clear returned stored buffers when finished with them.
+The buyer owns only data slots in the finite requested-role range and never
+invokes reply accessors. On malformed replies, cleanup visits at most that same
+range, including after an oversized-length refusal. Detached buffers and failing
+cleanup descriptors cannot replace the original refusal. The companion remains
+responsible for buffers omitted from, or outside, the requested reply.
+
+The buyer uses joint reads for original reservation checks and the complete
+terms/candidate/result set used in validation and playback. Existing financial
+intent, phase CAS, recipient access, complete packet signatures, domain and
+release verification remain separate checks. A custody snapshot establishes no
+current chain, admission, mining, entitlement or spending authority. Every call
+reads again; there is no retained validity cache between calls. First-result
+recovery still returns the immutable original entitlement.
+
+The current-profile fixture explicitly selects this companion. Existing buyer
+properties, seeds, case deadlines and minimum 300 generated runs remain intact.
+Additional native tests cover row limits, malformed selectors, partial failure,
+reopening and detached mutation. These sources are under qualification; strict
+compilation alone is neither a measured performance result nor checkpoint-two
+acceptance.
+
 ## Choose immutable candidate custody explicitly
 
 `SQLitePrivatePurchaseCommitmentStore`, exported from `private/node`, installs the

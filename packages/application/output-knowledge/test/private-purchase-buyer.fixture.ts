@@ -187,7 +187,13 @@ export function purchaseBuyerFixture(candidateProfile?: 'full-purchase-commitmen
         objectConfiguration,
         objectCodec
       ),
-      ports = { ...partial, state, objects, ...overrides }
+      ports = {
+        ...partial,
+        state,
+        objects,
+        objectReadProfile: candidateProfile ? ('joint-custody-v1' as const) : undefined,
+        ...overrides
+      }
     stores.push({ state, objects })
     if (create && candidateProfile) {
       const reserve = objects.reserve.bind(objects)

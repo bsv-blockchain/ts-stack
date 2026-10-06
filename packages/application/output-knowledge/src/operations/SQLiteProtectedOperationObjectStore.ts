@@ -1,4 +1,10 @@
-import { outputAssert, outputHex32, type OutputJSONObject } from '@bsv/sdk'
+import {
+  outputAssert,
+  outputHex32,
+  ownOutputJSON,
+  closedOutputObject,
+  type OutputJSONObject
+} from '@bsv/sdk'
 import { SQLiteProtectedLedger } from '../private/SQLiteProtectedLedger.js'
 import type { NodeProtectedPayloadCodec } from '../private/NodeProtectedPayloadCodec.js'
 import type {
@@ -103,6 +109,19 @@ export class SQLiteProtectedOperationObjectStore implements ProtectedOperationOb
     // Validate and own the original binding even when the requested record is absent.
     const original = this.plan.reservation(id, binding, 1).originalBinding
     const { revision, records: rows } = this.ledger.read(this.addresses(id), clock, guard)
+    return this.restoreSnapshot(id, original, revision, rows)
+  }
+  private restoreSnapshot(
+    id: string,
+    original: OutputJSONObject,
+    revision: string,
+    rows: (ProtectedLedgerRecord | undefined)[]
+  ): {
+    revision: string
+    rows: (ProtectedLedgerRecord | undefined)[]
+    header?: OperationObjectHeader
+    bytes?: Uint8Array | null
+  } {
     if (rows[0] === undefined) {
       outputAssert(
         rows.every(row => row === undefined),
@@ -184,6 +203,69 @@ export class SQLiteProtectedOperationObjectStore implements ProtectedOperationOb
       if (receipt === null)
         return { state: 'reserved', reservation: { id: originalId, bindingDigest, maximumBytes } }
       return { state: 'stored', receipt, bytes: saved.bytes! as Uint8Array }
+    })
+  }
+  readMany(
+    requests: readonly { id: string; originalBinding: OutputJSONObject }[]
+  ): Promise<ProtectedOperationObjectStatus[]> {
+    return attempt(() => {
+      // Own the complete selector list before reading any plaintext or yielding.
+      const input = ownOutputJSON(requests, { bytes: 64 * 17408 }).value
+      outputAssert(
+        Array.isArray(input) &&
+          input.length >= 1 &&
+          input.length <= this.plan.configuration.maximumObjects &&
+          input.length <= 64,
+        'Invalid protected object joint read capacity',
+        'limited'
+      )
+      const selected = input.map(value => {
+        closedOutputObject(value, ['id', 'originalBinding'])
+        const id = outputHex32(value.id),
+          original = this.plan.reservation(
+            id,
+            value.originalBinding as OutputJSONObject,
+            1
+          ).originalBinding
+        return { id, original, addresses: this.addresses(id) }
+      })
+      outputAssert(
+        new Set(selected.map(value => value.id)).size === selected.length,
+        'Duplicate protected object joint read selector'
+      )
+      const addresses = selected.flatMap(value => value.addresses)
+      outputAssert(
+        addresses.length <= 64,
+        'Protected object joint read exceeds atomic native rows',
+        'limited'
+      )
+      const read = this.ledger.read(addresses, clock, guard),
+        statuses: ProtectedOperationObjectStatus[] = []
+      let offset = 0
+      try {
+        for (const value of selected) {
+          const saved = this.restoreSnapshot(
+            value.id,
+            value.original,
+            read.revision,
+            read.records.slice(offset, offset + value.addresses.length)
+          )
+          offset += value.addresses.length
+          if (saved.header === undefined) statuses.push({ state: 'absent' })
+          else {
+            const { id, bindingDigest, maximumBytes, receipt } = saved.header
+            statuses.push(
+              receipt === null
+                ? { state: 'reserved', reservation: { id, bindingDigest, maximumBytes } }
+                : { state: 'stored', receipt, bytes: saved.bytes! as Uint8Array }
+            )
+          }
+        }
+        return statuses
+      } catch (error) {
+        for (const status of statuses) if (status.state === 'stored') status.bytes.fill(0)
+        throw error
+      }
     })
   }
   put(

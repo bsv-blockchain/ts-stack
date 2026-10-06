@@ -519,3 +519,179 @@ it.each([undefined, 'full-purchase-commitment-v1'] as const)(
     expect(f.calls).toEqual(['prepare', 'submit'])
   }
 )
+
+it('keeps ordinary single-read behavior when the joint companion is not selected', async () => {
+  const f = purchaseBuyerFixture()
+  let consulted = false
+  const owner = await f.open(true, {}, ports => {
+    Object.defineProperty(ports.objects, 'readMany', {
+      get: () => {
+        consulted = true
+        throw Error('Unselected companion must be inert')
+      }
+    })
+  })
+  await owner.buyer.advance()
+  expect(await owner.buyer.validate()).toBe('usable')
+  await owner.buyer.usableResult()
+  expect(consulted).toBe(false)
+  expect(f.counts.finish).toBe(1)
+})
+
+it('selects bounded joint custody explicitly while retaining original rights and one financial action', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1')
+  let joint!: jest.SpiedFunction<
+    NonNullable<
+      import('../src/operations/ProtectedOperationObjectStore.js').ProtectedOperationObjectStore['readMany']
+    >
+  >
+  const owner = await f.open(true, {}, ports => {
+    joint = jest.spyOn(ports.objects, 'readMany')
+  })
+  expect(joint).toHaveBeenCalledTimes(1)
+  expect(joint.mock.calls[0][0]).toHaveLength(7)
+  const delivered = await owner.buyer.advance()
+  expect(await owner.buyer.validate()).toBe('usable')
+  expect(await owner.buyer.usableResult()).toEqual(delivered)
+  expect(joint.mock.calls.some(([requests]) => requests.length === 3)).toBe(true)
+  f.setAccess(false)
+  await expect(owner.buyer.usableResult()).rejects.toThrow('access')
+  f.setAccess(true)
+  expect(await owner.buyer.usableResult()).toEqual(delivered)
+  expect(f.counts.finish).toBe(1)
+  expect(f.bindingChecks()).toBe(1)
+})
+
+it('refuses a selected joint-custody capability changed after installation before further effects', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1'),
+    owner = await f.open(true)
+  const original = owner.objects.readMany
+  owner.objects.readMany = async () => []
+  await expect(owner.buyer.advance()).rejects.toThrow('capability changed')
+  owner.objects.readMany = original
+  owner.ports.objectReadProfile = undefined
+  await expect(owner.buyer.advance()).rejects.toThrow('capability changed')
+  expect(f.counts.finish).toBe(0)
+  expect(f.calls).toEqual([])
+})
+
+it('refuses altered first-result bytes from a selected joint read without another payment or write', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1')
+  let corrupt = false
+  const owner = await f.open(true, {}, ports => {
+    const read = ports.objects.readMany!.bind(ports.objects)
+    jest.spyOn(ports.objects, 'readMany').mockImplementation(async requests => {
+      const values = await read(requests)
+      if (corrupt)
+        requests.forEach((request, index) => {
+          const saved = values[index]
+          if (request.originalBinding.role === 'result' && saved.state === 'stored') {
+            const packet = JSON.parse(new TextDecoder().decode(saved.bytes))
+            saved.bytes.fill(0)
+            packet.result.potatoes.signature = 'AA=='
+            values[index] = {
+              ...saved,
+              bytes: new TextEncoder().encode(canonicalOutputJSON(packet))
+            }
+          }
+        })
+      return values
+    })
+  })
+  await owner.buyer.advance()
+  expect(await owner.buyer.validate()).toBe('usable')
+  corrupt = true
+  await expect(owner.buyer.usableResult()).rejects.toThrow()
+  corrupt = false
+  expect(await owner.buyer.usableResult()).toHaveProperty('result.status', 'delivered')
+  expect(f.counts.finish).toBe(1)
+  expect(f.server.counts.issue).toBe(1)
+})
+
+it.each(['missing', 'short'] as const)(
+  'refuses a malformed %s joint reply before finance and clears available plaintext',
+  async kind => {
+    const f = purchaseBuyerFixture('full-purchase-commitment-v1')
+    const disclosed: Uint8Array[] = []
+    await expect(
+      f.open(true, {}, ports => {
+        const read = ports.objects.readMany!.bind(ports.objects)
+        jest.spyOn(ports.objects, 'readMany').mockImplementation(async requests => {
+          const statuses = await read(requests)
+          for (const status of statuses) if (status.state === 'stored') disclosed.push(status.bytes)
+          if (kind === 'short') return statuses.slice(0, 1)
+          // The malformed provider discards its detached copies itself; there is no
+          // reachable plaintext in the invalid reply handed to the buyer.
+          for (const bytes of disclosed) bytes.fill(0)
+          return null as unknown as typeof statuses
+        })
+      })
+    ).rejects.toMatchObject({ code: 'unavailable' })
+    expect(disclosed.length).toBeGreaterThan(0)
+    // For the short reply, only its retained first buffer is reachable by the
+    // buyer. The adapter owns all omitted buffers and clears those separately.
+    expect([...disclosed[0]].every(byte => byte === 0)).toBe(true)
+    for (const bytes of disclosed) bytes.fill(0)
+    expect(f.counts.finish).toBe(0)
+    expect(f.calls).toEqual([])
+  }
+)
+
+it.each(['oversized', 'accessor', 'detached', 'revoked'] as const)(
+  'bounds malformed %s joint reply ownership and cleanup to the requested roles',
+  async kind => {
+    const f = purchaseBuyerFixture('full-purchase-commitment-v1'),
+      disposed: Uint8Array[] = []
+    let requested = 0,
+      inspected = 0,
+      accessorCalled = false
+    await expect(
+      f.open(true, {}, ports => {
+        const read = ports.objects.readMany!.bind(ports.objects)
+        jest.spyOn(ports.objects, 'readMany').mockImplementation(async requests => {
+          requested = requests.length
+          const statuses = await read(requests)
+          for (const status of statuses) if (status.state === 'stored') disposed.push(status.bytes)
+          if (kind === 'revoked') {
+            for (const bytes of disposed) bytes.fill(0)
+            const revoked = Proxy.revocable(statuses, {})
+            revoked.revoke()
+            return revoked.proxy
+          }
+          if (kind === 'oversized') statuses.length = 4294967295
+          else if (kind === 'accessor')
+            Object.defineProperty(statuses, '0', {
+              get: () => {
+                accessorCalled = true
+                throw Error('Reply accessor must never run')
+              },
+              configurable: true
+            })
+          else {
+            for (const bytes of disposed)
+              structuredClone(bytes.buffer, { transfer: [bytes.buffer] })
+            statuses.length = 1
+          }
+          return new Proxy(statuses, {
+            getOwnPropertyDescriptor: (target, key) => {
+              if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+                inspected++
+                expect(Number(key)).toBeLessThan(requested)
+              }
+              return Reflect.getOwnPropertyDescriptor(target, key)
+            }
+          })
+        })
+      })
+    ).rejects.toMatchObject({ code: 'unavailable' })
+    expect(inspected).toBeLessThanOrEqual(requested * 2)
+    expect(accessorCalled).toBe(false)
+    if (kind === 'oversized')
+      for (const bytes of disposed) expect([...bytes].every(byte => byte === 0)).toBe(true)
+    // The companion owns omitted/accessor-inaccessible buffers; detached ones
+    // have already lost their original backing storage.
+    if (kind === 'accessor') for (const bytes of disposed) bytes.fill(0)
+    expect(f.counts.finish).toBe(0)
+    expect(f.calls).toEqual([])
+  }
+)

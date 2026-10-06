@@ -38,6 +38,14 @@ export interface ProtectedOperationObjectStore {
   ): Promise<ProtectedOperationObjectReservation>
   /** Status only: absence never initializes a record. A stored object is immutable. */
   read(id: string, originalBinding: OutputJSONObject): Promise<ProtectedOperationObjectStatus>
+  /** Optional bounded joint custody read. A native owner authenticates every
+   * exact original binding and all selected slots in ONE fresh read transaction.
+   * Return ordered, independently owned statuses; an error discloses no partial
+   * result. No initialization, validity verdict or financial effect is implied.
+   * Stores without this companion retain the original individual-read contract. */
+  readMany?(
+    requests: readonly { id: string; originalBinding: OutputJSONObject }[]
+  ): Promise<ProtectedOperationObjectStatus[]>
   /** Requires an original reservation. A retry can recover only the byte-identical first object. */
   put(
     id: string,
