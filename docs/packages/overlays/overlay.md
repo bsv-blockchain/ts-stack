@@ -5,8 +5,8 @@ kind: package
 domain: overlays
 npm: '@bsv/overlay'
 version: '2.7.0'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+last_updated: '2026-09-26'
+last_verified: '2026-09-26'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay'
 status: stable

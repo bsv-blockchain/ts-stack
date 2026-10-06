@@ -4,6 +4,13 @@ The core engine and storage contracts for BSV Overlay Services. The engine admit
 transactions through topic managers, maintains UTXO state, serves lookup
 services, and supports SHIP, SLAP, GASP, and BASM synchronization.
 
+Lookup history selectors retain their selected topical predecessors even when a
+transaction is confirmed. The response keeps its current subject last in BRC-62
+BEEF and includes the selected available history within existing traversal and
+byte budgets. A lookup with no history selector returns its original proof bytes.
+UMP hosts must request this lineage to let clients follow token updates past an
+older WAB support pin.
+
 Use [`@bsv/overlay-express`](../overlay-express/README.md) when you want the
 standard HTTP server, operational endpoints, edge policy, and health checks.
 Use this package directly when you are embedding the engine in another runtime

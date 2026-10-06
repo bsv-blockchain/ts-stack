@@ -23,6 +23,7 @@ import {
 } from './wab-client/auth-method-interactors/AuthMethodInteractor'
 import { ScriptTemplateBRC29 } from './utility/ScriptTemplateBRC29'
 import { maxPossibleSatoshis } from './storage/methods/generateChange'
+import { getActionOutputAuthorizations } from './utility/actionOutputAuthorizations'
 
 const DEFAULT_AUTH_SESSION_TTL_MS = 10 * 60 * 1000
 const MAX_AUTH_SESSION_TTL_MS = 60 * 60 * 1000
@@ -417,6 +418,9 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
               }
             },
             {
+              ...(completeBoundAction.outputAuthorizationVersion === 1
+                ? { authorizeAdditionalOutputs: getActionOutputAuthorizations }
+                : {}),
               inputSigners: {
                 [outpoint]: async (transaction, inputIndex) => await faucetRedeemUnlocker.sign(transaction, inputIndex)
               },
