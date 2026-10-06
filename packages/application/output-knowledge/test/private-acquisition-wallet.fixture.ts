@@ -95,6 +95,7 @@ export async function acquisitionNativeWalletFixture(
     await storage.makeAvailable()
     const services = chain.network === 'mock' ? new MockServices(knex) : new Services(chain.network)
     services.getChainTracker = () => Promise.resolve(tracker)
+    services.getHeight = () => tracker.currentHeight()
     services.postBeef = broadcast
     const wallet = new Wallet({
       chain: chain.network,

@@ -270,9 +270,19 @@ export async function nativeProfilePurchaseWalletFixture(
   view.view.chain = descriptor.chain
   const selected = { ...descriptor.chain, network: 'mock' as const },
     resolved = await chains.resolve(view.view, new AbortController().signal),
+    walletTracker: ChainTracker = {
+      async currentHeight() {
+        const fresh = await chains.resolve(currentContext().view, new AbortController().signal)
+        return fresh.tracker.currentHeight()
+      },
+      async isValidRootForHeight(root, height) {
+        const fresh = await chains.resolve(currentContext().view, new AbortController().signal)
+        return fresh.tracker.isValidRootForHeight(root, height)
+      }
+    },
     native = await acquisitionNativeWalletFixture(
       selected,
-      resolved.tracker,
+      walletTracker,
       application?.buyerKeyCode ?? 44,
       {
         maxOutputsPerAction: 1,

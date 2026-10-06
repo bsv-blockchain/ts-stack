@@ -392,13 +392,17 @@ export class PrivatePurchaseAliasCoordinator {
     // Bound one pass by prepaid capacity; an unresolved call cannot delete its job
     // or prevent the other retained jobs from being reconciled in the same pass.
     const initial = this.load(id, caller, signal)
+    const aliases = initial.aliases.state
     const jobs = [
       ...new Set(
-        initial.aliases.state.pending.filter(entry => entry !== null).map(entry => entry.txid)
+        [aliases.original, aliases.selected, ...aliases.unconfirmed, ...aliases.pending].flatMap(
+          entry => (entry?.admission === 'pending' ? [entry.txid] : [])
+        )
       )
     ]
+    const capacity = this.ports.aliases.configuration()
     outputAssert(
-      jobs.length <= this.ports.aliases.configuration().maximumPending,
+      jobs.length <= capacity.maximumPending + capacity.maximumUnconfirmed + 2,
       'Pending alias jobs exceed installed capacity',
       'unavailable'
     )
@@ -426,7 +430,7 @@ export class PrivatePurchaseAliasCoordinator {
       true
     )
   }
-  /** The prepaid pending capacity bounds this recursion. Each exact job starts
+  /** The prepaid role capacity bounds this recursion. Each exact job starts
    * only after the previous job settles, preserving serial native ownership. */
   private async reconcileJobs(
     id: string,
@@ -538,6 +542,13 @@ export class PrivatePurchaseAliasCoordinator {
       loaded.aliases.checkCurrent(view)
       validation.checkCurrent()
     }
+    // The owner compares the complete loaded native head before its atomic
+    // transition. Its returned read uses the new head, so the caller's domain
+    // authorization must outlive the deliberately invalidated old alias fence.
+    const transitionGuard: ProtectedLedgerGuard = view => {
+      guard(view)
+      validation.checkCurrent()
+    }
     if (this.ports.failure) {
       const failure = await this.ports.failure.assess(
         structuredClone(loaded.custody),
@@ -562,7 +573,7 @@ export class PrivatePurchaseAliasCoordinator {
         }
         current()
         this.ports.store.fail(loaded, { reason, evidence }, this.ports.clock, view => {
-          authorized(view)
+          transitionGuard(view)
           current()
         })
         return true
@@ -596,7 +607,7 @@ export class PrivatePurchaseAliasCoordinator {
           'unavailable'
         )
         const combined = await this.verifyCandidate(proposal.candidate, loaded, caller, signal)
-        this.ports.store.retain(loaded, proposal, this.ports.clock, authorized, combined)
+        this.ports.store.retain(loaded, proposal, this.ports.clock, transitionGuard, combined)
         // Re-read the exact newly selected admission and native head; no stale
         // observation, admission packet or guard can authorize the result writer.
         return false
@@ -674,7 +685,7 @@ export class PrivatePurchaseAliasCoordinator {
       placement?.placement,
       this.ports.clock,
       view => {
-        authorized(view)
+        transitionGuard(view)
         checkRelease()
         placement?.placement.checkCurrent()
       }

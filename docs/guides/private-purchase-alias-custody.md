@@ -81,6 +81,20 @@ by installed capacity. An unresolved job stays pending while the remaining jobs
 can be reconciled. All external effects, result writers and physical disclosure
 recheck current recipient authority and the original installed capabilities.
 
+Pending jobs may occupy the original, selected or unconfirmed-cache roles as well
+as the extra pending slots. Recovery deduplicates their transaction IDs and visits
+all of those roles serially. The extra pending capacity does not require copying
+an unresolved original into a second role. The maximum pass size is the sum of
+the installed role capacities, including the original and selected roles.
+
+Before a result transition, the owner compares the complete loaded native head
+and row revisions. The atomic write invalidates that old snapshot by design.
+Its returned read authenticates the caller and domain against the newly committed
+head; it must not apply the old snapshot fence to its own successful write.
+An unrelated head change before the writer still refuses the transition, including
+a change during private-result signing. Failure and mined-alias promotion use the
+same separation between pre-effect snapshot checks and fresh readback.
+
 The domain's issuance operation is pure and idempotent over retained material.
 Ordinary issuance, signing or transport errors leave an admitted obligation
 pending. A separate optional installed failure assessment may identify an
@@ -233,6 +247,13 @@ proof-of-work ancestry with an explicit Merkle commitment. It does not establish
 production mining, a full production block body, miner fee/resource acceptance,
 public TLS deployment, wallet database portability or live economic delivery.
 Those remain separate qualification boundaries.
+
+The separate current wallet-route demonstration retains the native wallet's
+ordinary finality gate. It signs an expiry route at an earlier selected tip, then
+advances the disclosed synthetic header view before finalizing the wallet action.
+The same signed transaction is assessed under the retained earlier view, a mature
+view and a regressed view. A non-final intent cannot consume output state in the
+earlier view. This does not authorize the wallet to finalize non-final actions.
 
 On the governed healthy synthetic Linux runtime, after preparing the repository's
 native wallet and Mongo replica prerequisites, run the complete suite serially:

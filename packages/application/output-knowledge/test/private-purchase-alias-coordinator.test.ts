@@ -52,7 +52,11 @@ it('retains an unknown external job before the call and reconciles it after rest
     const paid = f.f.f.variant(42)
     await f.submit(paid)
     expect(f.load().progress.status).toBe('admission-pending')
-    expect(f.load().aliases.state.pending.some(entry => entry?.txid === paid.txid)).toBe(true)
+    const pending = f.load().aliases
+    expect(pending.state.original?.txid).toBe(paid.txid)
+    expect(pending.state.original?.admission).toBe('pending')
+    expect(pending.candidates.get('original')).toEqual(paid)
+    expect(pending.state.pending).toEqual([null, null])
     expect(f.base.counts.admission).toBe(1)
     await f.reopen()
     f.base.setAdmitted(true)
@@ -110,6 +114,30 @@ it('retains only an explicit independently guarded irrecoverable local decision 
     await f.recover()
     expect(f.load().progress).toEqual(failed.progress)
     expect(f.base.counts.issue).toBe(0)
+  } finally {
+    await f.dispose()
+  }
+})
+
+it('refuses a changed native alias head during signing before committing historical release', async () => {
+  const f = purchaseAliasCoordinatorFixture({
+    sign: async (...args) => {
+      const packet = await f.base.owner.sign(...args)
+      if (args[0] === 'potatoes') f.f.f.put(f.f.f.variant(45), true)
+      return packet
+    }
+  })
+  try {
+    await f.prepare()
+    const paid = f.f.f.variant(46)
+    await expect(f.submit(paid)).rejects.toThrow('Alias release native head changed')
+    const saved = f.load()
+    expect(saved.state.progress.status).toBe('prepared')
+    expect(saved.aliases.state.original?.txid).toBe(paid.txid)
+    expect(saved.aliases.state.selected?.txid).toBe(f.f.f.variant(45).txid)
+    expect(saved.aliases.state.historical).toBeNull()
+    expect(f.base.counts.issue).toBe(1)
+    expect(f.base.counts.potatoes).toBe(1)
   } finally {
     await f.dispose()
   }

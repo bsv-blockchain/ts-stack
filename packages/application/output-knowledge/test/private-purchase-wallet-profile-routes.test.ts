@@ -273,6 +273,7 @@ it.each(['auto', 'legacy'] as const)(
         { operation: 'retire', authority: 'expiry', lockHeight: expiry }
       ]
       for (const action of actions) {
+        const intentContext = f.currentContext()
         if (action.operation === 'retire' && action.authority === 'expiry') {
           outputAssert(
             splitSource !== undefined && splitPacket !== undefined,
@@ -347,6 +348,19 @@ it.each(['auto', 'legacy'] as const)(
         const signatures: { seller?: string } = {}
         for (const required of requests) signatures.seller = await seller.signTransaction(required)
         const complete = prepared.complete(signatures)
+        if (action.operation === 'retire' && action.authority === 'expiry') {
+          // Preserve the wallet's ordinary finality gate. The same signed
+          // subject is then assessed against the separately retained early
+          // knowledge view; that view cannot consume a future-height intent.
+          expect(isOutputTransactionFinal(complete, intentContext.view)).toBe(false)
+          expect(await reopened.owner.active.getServices().nLockTimeIsFinal(complete.toHex())).toBe(
+            false
+          )
+          f.setVerifiedHeight(expiry + 1)
+          expect(await reopened.owner.active.getServices().nLockTimeIsFinal(complete.toHex())).toBe(
+            true
+          )
+        }
         const final = await reopened.actions.finalize(id, request, {
           reference: original.signableTransaction!.reference,
           spends: {
@@ -416,7 +430,7 @@ it.each(['auto', 'legacy'] as const)(
           if (action.authority === 'expiry') {
             expect(actual.lockTime).toBe(expiry)
             expect(actual.inputs[0].sequence).toBe(0xfffffffe)
-            const early = f.currentContext()
+            const early = intentContext
             expect(early.view.tipHeight).toBe(String(expiry - 1))
             expect(isOutputTransactionFinal(actual, early.view)).toBe(false)
             const previousOutput = {

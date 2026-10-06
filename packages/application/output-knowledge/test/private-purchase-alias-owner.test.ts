@@ -24,6 +24,7 @@ it('prepares distinct core3 custody and keeps historical readers from opening it
 
 it('refuses an infeasible complete result before creating any payable preparation', () => {
   const f = purchaseAliasOwnerFixture(),
+    reserve = jest.spyOn(f.f.owner, 'reserve'),
     owner = new SQLitePrivatePurchaseAliasStore(
       f.base.owner.domain,
       f.base.f.f.contracts,
@@ -32,9 +33,12 @@ it('refuses an infeasible complete result before creating any payable preparatio
       f.base.policy,
       8
     )
-  expect(() => owner.prepare(f.base.custody, f.f.clock, f.f.guard)).toThrow()
+  expect(() => owner.prepare(f.base.custody, f.f.clock, f.f.guard)).toThrow(
+    'Alias first result exceeds reserved atomic completion capacity'
+  )
+  expect(reserve).not.toHaveBeenCalled()
   expect(owner.load(f.base.id, f.base.buyer, f.f.clock, f.f.guard)).toBeUndefined()
-  expect(f.f.read()).toBeUndefined()
+  expect(() => f.f.read()).toThrow('Original alias custody is missing')
 })
 
 it('commits first identity and native observation with the alias in one writer and leaves byte-identical retry inert', () => {
@@ -98,7 +102,9 @@ it('retains unknown jobs while selecting another alias and uses actual per-alias
   expect(saved.progress.txid).toBe(selected.txid)
   expect(saved.progress.status).toBe('admitted-delivery-pending')
   expect(saved.aliases.state.original?.txid).toBe(first.txid)
-  expect(saved.aliases.state.pending.some(value => value?.txid === first.txid)).toBe(true)
+  expect(saved.aliases.state.original?.admission).toBe('pending')
+  expect(saved.aliases.candidates.get('original')).toEqual(first)
+  expect(saved.aliases.state.pending).toEqual([null, null])
   expect(saved.state.firstReservedAt).toBe('20')
 })
 
@@ -176,7 +182,13 @@ it('rolls back earlier alias writes when the final core row conflicts inside the
   expect(after.row).toEqual(before.row)
   expect(after.state.firstReservedAt).toBeNull()
   expect(after.aliases.state.original).toBeNull()
-  expect(f.f.read()).toEqual(aliases)
+  const afterAliases = f.f.read()
+  expect(afterAliases.state).toEqual(aliases.state)
+  expect(afterAliases.candidates).toEqual(aliases.candidates)
+  expect(afterAliases.outcomes).toEqual(aliases.outcomes)
+  expect(afterAliases.completedAt).toEqual(aliases.completedAt)
+  for (const check of [aliases.checkCurrent, afterAliases.checkCurrent])
+    expect(() => f.base.owner.domain.ledger.read([], f.f.clock, check)).not.toThrow()
 })
 
 it('requires explicit state3 access and checks recipient custody before application permission', () => {

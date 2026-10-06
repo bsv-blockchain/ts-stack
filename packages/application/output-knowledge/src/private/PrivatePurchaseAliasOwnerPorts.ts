@@ -87,7 +87,11 @@ export interface PrivatePurchaseAliasOwner {
     combined: import('./PrivatePurchasePorts.js').PrivatePurchaseValidation
   ): PrivatePurchaseAliasedLoaded
   /** The historical copy and first complete signed result share ONE writer.
-   * A mined first release additionally needs actual selected-chain placement. */
+   * Compare the complete loaded native head before that write. The guard
+   * authenticates the caller/domain both before the effect and on fresh
+   * readback; an old alias snapshot fence is deliberately invalid after this
+   * owner's successful write. A mined first release additionally needs actual
+   * selected-chain placement. */
   complete(
     loaded: PrivatePurchaseAliasedLoaded,
     envelope: OutputPurchaseEnvelope,
