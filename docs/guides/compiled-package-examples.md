@@ -2868,11 +2868,11 @@ funds, broadcast or claim native route qualification.
 
 ```ts compile
 // example-id: protected-current-listing-authority
-import type { WalletInterface } from '@bsv/sdk'
+import type { WalletInterface as ProtectedListingWalletInterface } from '@bsv/sdk'
 import type { PreparedRevenueListingProfileSpend } from '@bsv/sdk/script/templates/RevenueListingProfileSpend'
 import { RevenueListingProfileAuthority } from '@bsv/output-knowledge/revenue-listing'
 
-declare const wallet: WalletInterface
+declare const wallet: ProtectedListingWalletInterface
 declare const selectedSeller: string
 declare const originator: string
 declare const prepared: PreparedRevenueListingProfileSpend
