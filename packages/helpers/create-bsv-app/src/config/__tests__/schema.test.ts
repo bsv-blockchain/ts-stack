@@ -76,6 +76,10 @@ describe('config schema', () => {
     expect(field('backend').options?.map(o => o.value)).toEqual(['express', 'none'])
   })
 
+  test('bsvDir is not prompted (set via --bsv-dir or config file)', () => {
+    expect(() => field('bsvDir')).toThrow('field not found')
+  })
+
   test('capabilities options come from the registry (includes wallet-login)', () => {
     expect(field('capabilities').options?.map(o => o.value)).toContain('wallet-login')
   })

@@ -123,13 +123,6 @@ export const configSchema: ConfigSchema = [
     desc: 'Capabilities and integration helpers.',
     fields: [
       {
-        key: 'bsvDir',
-        label: 'BSV helpers directory',
-        type: 'text',
-        default: 'src/bsv',
-        when: { mode: 'new', starter: capabilityStarterIds() }
-      },
-      {
         key: 'capabilities',
         label: 'Capabilities',
         type: 'multiselect',
