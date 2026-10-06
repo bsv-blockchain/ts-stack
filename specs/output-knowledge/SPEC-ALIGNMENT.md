@@ -52,6 +52,14 @@ may install different transaction domains without adopting its revenue model.
       signature, consent, full purchase commitment, historical release and
       POTATOES checks. Representation remains separate from Bitcoin validity,
       currentness, native custody and entitlement acceptance.
+- [x] Add an explicitly selected current immutable buyer over the complete shared
+      buyer pipeline, with original legacy interfaces/installation IDs retained.
+      Protected custody precedes funding; retain/recheck owned active-stage,
+      installed-height and accepted-window fences before effects. Independently
+      verify complete original funded and released subjects and their identical
+      full commitment before accepting License/key rights. Retained recovery and
+      offline playback never become new preparations. Native action/alias and
+      seller integration remain separate open rows.
 - [ ] Integrate the revised immutable collector extension and current alias chain
       assessment with replacement-family/native buyer and seller recovery.
 - [ ] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias

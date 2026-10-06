@@ -2146,6 +2146,9 @@ export { checkStandingOffer }
 
 ## Protected covenant entitlement and explicit playback
 
+This example preserves the historical domain API. Use the current immutable buyer
+example below for the revised collector profile.
+
 The independently installed proof ports must execute complete original lineage,
 purchase Script and selected release checks. The application owns ciphertext,
 wallet access and protected native or browser custody. This composition never
@@ -2186,6 +2189,9 @@ export { openCovenantEntitlement, verifyAndPlayCovenantContent }
 ```
 
 ## Pure covenant seller with protected coordinator custody
+
+This example preserves the historical seller API; current immutable seller
+integration is separately tracked in specification alignment.
 
 The seller adapter verifies the installed full purchase and release boundaries.
 It receives exact retained BEEF from the coordinator during issuance. Wallet,
@@ -2577,4 +2583,50 @@ export function parseCurrentCollectorDelivery(
     historicalReleaseTxid
   )
 }
+```
+
+## Current immutable buyer funding fence and retained playback
+
+Install independent complete current lineage/purchase/release verifiers and
+protected original/entitlement custody. The financial owner must retain and
+recheck the returned fence immediately before effects. Delivery and historical
+playback never re-evaluate an original obligation as new funding.
+
+```ts compile
+// example-id: immutable-collector-buyer-funding-fence
+import {
+  LCHOverlayCovenantProfileDomain,
+  type LCHOverlayCovenantProfileDomainOptions,
+  type LCHOverlayObjectCustody as ImmutableBuyerObjectCustody
+} from '@bsv/lch/overlay-covenant'
+import type {
+  OutputSignedPurchaseTerms as ImmutableBuyerTerms,
+  OutputPurchaseSubmit as ImmutableBuyerSubmission,
+  OutputPurchaseEnvelope as ImmutableBuyerDelivery
+} from '@bsv/sdk'
+
+async function prepareImmutableBuyer(
+  options: LCHOverlayCovenantProfileDomainOptions,
+  objects: ImmutableBuyerObjectCustody,
+  signedTerms: ImmutableBuyerTerms,
+  signal: AbortSignal
+) {
+  const domain = await LCHOverlayCovenantProfileDomain.create(options)
+  await domain.initializeCustody(objects)
+  const fence = await domain.fundingPreflight(options.original.prepare, signedTerms, signal)
+  fence.checkCurrent()
+  return { domain, fence }
+}
+async function acceptImmutableDelivery(
+  domain: LCHOverlayCovenantProfileDomain,
+  original: LCHOverlayCovenantProfileDomainOptions['original'],
+  signedTerms: ImmutableBuyerTerms,
+  originalFunded: ImmutableBuyerSubmission,
+  delivered: ImmutableBuyerDelivery,
+  signal: AbortSignal
+) {
+  await domain.verify(original.prepare, signedTerms, originalFunded, delivered, signal)
+  return domain.playback(delivered, signal)
+}
+export { prepareImmutableBuyer, acceptImmutableDelivery }
 ```

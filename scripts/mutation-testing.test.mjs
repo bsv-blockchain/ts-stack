@@ -1079,7 +1079,16 @@ test('relocated LCH overlay tests retain their independent application dependenc
     assert.equal(target.packageDirectory, 'packages/content/lch')
     assert.ok(target.additionalInputs.includes('../../application/output-knowledge/src/**'))
     assert.ok(target.additionalInputs.includes('test/overlay-acquisition*.ts'))
-    for (const source of ['RevenueListingProfile.ts', 'RevenueListingKeys.ts'])
+    assert.ok(
+      target.additionalInputs.includes(
+        '../../application/output-knowledge/test/revenue-profile.fixture.ts'
+      )
+    )
+    for (const source of [
+      'RevenueListingProfile.ts',
+      'RevenueListingKeys.ts',
+      'RevenueListingProfileSpend.ts'
+    ])
       assert.ok(target.additionalInputs.includes(`../../sdk/src/script/templates/${source}`))
     assert.ok(
       target.runnerOptions.jest.config.testMatch.includes(
@@ -1283,6 +1292,8 @@ test('complete covenant buyer retains native fixture closure and the prior compl
     target = configured['lch-overlay-covenant']
   assert.deepEqual(target.mutate, [
     'src/overlayAcquisitionCovenant.ts',
+    'src/overlayAcquisitionCovenantCore.ts',
+    'src/overlayAcquisitionCovenantProfile.ts',
     'src/overlayAcquisitionCovenantProof.ts',
     'src/overlayAcquisitionCovenantEntitlement.ts',
     'src/overlayAcquisitionEntitlement.ts',

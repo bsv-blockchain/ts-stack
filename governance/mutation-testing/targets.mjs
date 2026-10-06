@@ -3253,7 +3253,9 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**',
         '../../sdk/src/script/templates/RevenueListingProfile.ts',
-        '../../sdk/src/script/templates/RevenueListingKeys.ts'
+        '../../sdk/src/script/templates/RevenueListingKeys.ts',
+        '../../application/output-knowledge/test/revenue-profile.fixture.ts',
+        '../../sdk/src/script/templates/RevenueListingProfileSpend.ts'
       ],
       mutate: [
         'src/overlayAcquisition.ts',
@@ -3296,7 +3298,9 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**',
         '../../sdk/src/script/templates/RevenueListingProfile.ts',
-        '../../sdk/src/script/templates/RevenueListingKeys.ts'
+        '../../sdk/src/script/templates/RevenueListingKeys.ts',
+        '../../application/output-knowledge/test/revenue-profile.fixture.ts',
+        '../../sdk/src/script/templates/RevenueListingProfileSpend.ts'
       ],
       mutate: [
         'src/overlayAcquisitionCovenantTerms.ts',
@@ -3329,7 +3333,9 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**',
         '../../sdk/src/script/templates/RevenueListingProfile.ts',
-        '../../sdk/src/script/templates/RevenueListingKeys.ts'
+        '../../sdk/src/script/templates/RevenueListingKeys.ts',
+        '../../application/output-knowledge/test/revenue-profile.fixture.ts',
+        '../../sdk/src/script/templates/RevenueListingProfileSpend.ts'
       ],
       mutate: [
         'src/overlayAcquisitionCovenantSettlement.ts',
@@ -3360,7 +3366,9 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**',
         '../../sdk/src/script/templates/RevenueListingProfile.ts',
-        '../../sdk/src/script/templates/RevenueListingKeys.ts'
+        '../../sdk/src/script/templates/RevenueListingKeys.ts',
+        '../../application/output-knowledge/test/revenue-profile.fixture.ts',
+        '../../sdk/src/script/templates/RevenueListingProfileSpend.ts'
       ],
       mutate: ['src/overlayAcquisitionLicense.ts'],
       ...jestTarget(
@@ -3388,7 +3396,9 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**',
         '../../sdk/src/script/templates/RevenueListingProfile.ts',
-        '../../sdk/src/script/templates/RevenueListingKeys.ts'
+        '../../sdk/src/script/templates/RevenueListingKeys.ts',
+        '../../application/output-knowledge/test/revenue-profile.fixture.ts',
+        '../../sdk/src/script/templates/RevenueListingProfileSpend.ts'
       ],
       mutate: ['src/overlayAcquisitionCovenantSeller.ts'],
       ...jestTarget(
@@ -3415,10 +3425,14 @@ export function buildMutationTargets(repositoryRoot) {
         '../../application/output-knowledge/test/fixtures/revenue-listing/**',
         '../../sdk/src/overlay-tools/**',
         '../../sdk/src/script/templates/RevenueListingProfile.ts',
-        '../../sdk/src/script/templates/RevenueListingKeys.ts'
+        '../../sdk/src/script/templates/RevenueListingKeys.ts',
+        '../../application/output-knowledge/test/revenue-profile.fixture.ts',
+        '../../sdk/src/script/templates/RevenueListingProfileSpend.ts'
       ],
       mutate: [
         'src/overlayAcquisitionCovenant.ts',
+        'src/overlayAcquisitionCovenantCore.ts',
+        'src/overlayAcquisitionCovenantProfile.ts',
         'src/overlayAcquisitionCovenantProof.ts',
         'src/overlayAcquisitionCovenantEntitlement.ts',
         'src/overlayAcquisitionEntitlement.ts',

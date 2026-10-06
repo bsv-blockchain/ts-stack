@@ -138,6 +138,35 @@ batch at `337692aefbb088d2f9ccfcb520675432baac37eb` passes the strict hosted Son
 gate with zero new findings and zero unreviewed hotspots; that result does not
 qualify later source or complete the full checkpoint.
 
+The current immutable buyer is now separately selected as
+`LCHOverlayCovenantProfileDomain`. The complete buyer pipeline is shared with the
+historical wrapper while its original public interfaces, installation adapter
+identity, protected custody, defaults and License/role/proof checks remain.
+The current funding boundary returns a retained synchronous same-view guard over
+owned active stage, canonical installed height and the accepted time window.
+The financial owner must recheck it immediately before effects. Actual complete
+original funded and released subjects require independent proof and their same
+full purchase commitment. Retained delivery, reopen and offline playback do not
+repeat a new-preparation height/time predicate.
+
+This buyer component passes the full 274-test/42-suite controlled LCH profile in
+134.312 seconds, including every original property and the additive 300-case
+current funding-window property at seed3242026. Current and historical wrappers
+have complete statement, branch, function and line coverage; the shared buyer
+core has 97.93% statements, 93.02% branches, 94.11% functions and 100% lines.
+The new tests construct actual reserve-only authorized genesis, externally funded
+activation and purchase with pinned current programs, execute complete independent
+Bitcoin/chain proofs, and use encrypted SQLite custody and actual licensed
+ciphertext playback. They do not construct a native wallet action or perform
+live topical admission. Missing explicit program bytes, incorrect fixture calls
+and the compiled-guide duplicate import failure remain recorded as failed runs;
+corrections retain every original source/test/control and program pin.
+Packed and all browser entries pass without increasing budgets. All 71 compiled
+examples pass against 24 exact package tarballs, and the full original mutation
+registry/partition controls pass with whole new buyer sources and both required
+current fixture support paths. Native action/alias custody, the current seller,
+combined admission/HTTP examples and final complete qualification remain open.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

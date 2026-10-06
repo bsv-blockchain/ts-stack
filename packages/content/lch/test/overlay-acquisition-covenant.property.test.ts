@@ -1,5 +1,6 @@
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
+import { lchNativeCovenantProfileFixture } from './overlay-acquisition-covenant-profile-native.fixture.js'
 import { LCHOverlayPaidCustody } from '../src/overlayAcquisitionCustody.js'
 import { lchOverlayCovenantEntitlementDigest } from '../src/overlayAcquisitionCovenantEntitlement.js'
 import { LCHOverlayCovenantDomain } from '../src/overlayAcquisitionCovenant.js'
@@ -58,4 +59,26 @@ it('retains one fully verified purchase through generated expiry, cancellation a
   )
   expect(await reopened.playback(f.delivered, signal)).toEqual(f.plaintext)
   await expect(reopened.preflight(f.prepare, null, signal)).rejects.toThrow('window')
+}, 180000)
+
+it('fences generated current funding windows without revoking the original acquired entitlement', async () => {
+  const f = await lchNativeCovenantProfileFixture(),
+    signal = new AbortController().signal,
+    funding = await f.domain.fundingPreflight(f.prepare, f.prepared, signal)
+  await fc.assert(
+    fc.property(
+      fc.integer({ min: 22, max: 99 }),
+      fc.integer({ min: 100, max: 1000000 }),
+      (valid, expired) => {
+        f.setNow(String(valid))
+        expect(funding.checkCurrent()).toBeUndefined()
+        f.setNow(String(expired))
+        expect(() => funding.checkCurrent()).toThrow('window')
+      }
+    )
+  )
+  f.setNow('200')
+  await f.domain.verify(f.prepare, f.prepared, f.submission, f.delivered, signal)
+  expect(await f.domain.playback(f.delivered, signal)).toEqual(f.plaintext)
+  expect(f.counts).toEqual({ preparation: 1, purchase: 1, release: 1 })
 }, 180000)

@@ -47,8 +47,10 @@ descriptor and exact original consent, signed settlement/POTATOES and historical
 release bindings. Independent complete reserve-stage/activation history, actual
 Script execution and release-policy checks remain required. These representation
 interfaces neither issue a License nor authorize decryption or native alias reuse.
-The existing covenant buyer/seller classes below retain the earlier contract;
-their migration to the current verifiers, collector and alias owner remains open.
+Select `LCHOverlayCovenantProfileDomain` for the current buyer described below.
+The existing `LCHOverlayCovenantDomain` and `LCHOverlayCovenantSeller` retain the
+earlier contract for compatibility. Current native buyer/action/alias custody
+and the current seller integration remain open.
 Paid lookup and ordinary BRC-170 continue using their existing separate paths.
 
 ## Original consent before financial work
@@ -275,7 +277,7 @@ This section targets [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295
 at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Current acceptance and open
 integration work are recorded in [specification alignment](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
 
-Install `LCHOverlayCovenantDomain` from `@bsv/lch/overlay-covenant` with the
+Install `LCHOverlayCovenantProfileDomain` from `@bsv/lch/overlay-covenant` with the
 complete original Header, reusable standing Offer, individual signed Request,
 outer preparation, exact descriptor and independently selected capability.
 Its protected original and positive verification slots follow the same custody
@@ -284,14 +286,25 @@ it never constructs, funds, signs, submits or broadcasts a transaction.
 
 The installed `verification.preparation` must authenticate the authorized genesis,
 every related listing transition and the exact prepared outpoint before wallet
-construction. `RevenueListingLineageVerifier` provides the complete Script and
+construction. `RevenueListingProfileLineageVerifier` provides the complete Script and
 selected-chain implementation. The installed `verification.purchase` must
 validate the actual full transaction and its complete authorized lineage, and bind
 the original acquisition ID, request digest, buyer, descriptor, price and receipt.
 The current BRC-197 v1 target has activation followed by four active routes; merge
 and schedule amendment are outside it.
-`RevenueListingPurchaseVerifier` provides that implementation. Their independently
+`RevenueListingProfilePurchaseVerifier` provides that implementation. Their independently
 selected chain context and currentness are local installation responsibilities.
+Preparation returns owned `stage` and canonical decimal `currentHeight` fields
+with a synchronous same-view `checkCurrent` guard. `fundingPreflight(request,
+signedTerms, signal)` requires initialized protected custody and returns a fence
+that also rechecks active stage, height strictly below expiry and the accepted
+new-purchase time window. The financial owner must retain and recheck it
+immediately before reservation/action; a void `preflight` call is insufficient
+for this current profile. This portable domain performs no financial effects.
+The independently installed purchase port receives both the complete original
+funded wallet candidate and the released purchase evidence. Verify every actual
+input and original BEEF association for each, then require an identical full
+purchase commitment. Distinct txids remain distinct Bitcoin subjects.
 The release port separately assesses the originally selected release policy.
 The purchase port additionally returns the independently verified full 32-byte
 `purchaseCommitment`, calculated from the authenticated input-zero preimage
@@ -302,9 +315,9 @@ commitment cannot become a positive assessment. Every port must return an owned
 synchronous `checkCurrent()` guard; unresolved,
 limited, cancelled or changed proof contexts cannot become positive receipts.
 
-`decodeLCHOverlayCovenantPurchaseEvidence` parses a closed portable lineage package
+`decodeLCHOverlayCovenantProfilePurchaseEvidence` parses a closed portable lineage package
 and authenticates its signed genesis commitment. That is a representation check;
-it cannot replace either full Bitcoin verifier. `bindLCHOverlayCovenantSettlement`
+it cannot replace either full Bitcoin verifier. `bindLCHOverlayCovenantProfileSettlement`
 then authenticates the collector's settlement and STEAK/POTATOES envelope against
 the original signed preparation and the same transaction. It binds predecessor,
 successor, initial economics, contribution amount, buyer, Request/Offer/Asset IDs,
@@ -333,23 +346,22 @@ this historical fingerprint. Changing it cannot rewrite signed settlement,
 License, release evidence or original transaction; it grants no new rights.
 Already verified offline playback does not depend on a new online alias lookup.
 
-The disclosed synthetic native fixture executes actual genesis and purchase
-transactions against the installed BRC-197 family, verifies their complete BEEF
-and easy-work test chain, issues real signed C settlement/License/key grants and
-decrypts real ciphertext. It closes and reopens encrypted SQLite buyer custody
-after expiry. The lifecycle property checks at least 300 seeded cancellation and
-local-access histories: each refusal produces no plaintext, retained originals
-and the positive receipt remain identical, and restored endpoint playback still
-uses one purchase. Separate tests cover equivalent reissue, corrupted encrypted
-grants, changed installations, ciphertext bounds and invalid asynchronous guards.
-The fixture constructs public synthetic funding directly. The reusable wallet
-action owner, actual topical admission and concrete seller still need the complete
-combined reference workflow; these buyer tests do not claim that workflow is done.
+The current disclosed synthetic fixture constructs reserve-only authorized genesis,
+externally funded activation and an actual purchase, then independently verifies
+complete BEEF, every input Script and the selected easy-work chain. It issues real
+signed settlement/License/key grants, retains encrypted SQLite buyer custody and
+decrypts actual ciphertext after reopen and expiry. The additive property checks
+at least 300 accepted/expired funding-window cases without revoking an already
+verified entitlement. The complete original historical buyer tests and property
+remain unchanged. Neither fixture is mainnet evidence or a native wallet action;
+current seller, actual topical admission and the reusable native alias/action
+owner still need the combined reference workflow before checkpoint acceptance.
 
 ## Concrete covenant seller and retained purchase evidence
 
-`LCHOverlayCovenantSeller` implements the protected purchase coordinator's domain
-port. Its installation ID binds seller/issuer identities, verifier and retained
+The preserved historical `LCHOverlayCovenantSeller` implements the protected
+purchase coordinator's earlier domain port. It is not the current immutable
+profile seller; that separately selected integration remains open. Its installation ID binds seller/issuer identities, verifier and retained
 revocation-source IDs, authority network, content ceiling and purchase interval.
 The catalogue supplies complete original Header/Offer, descriptor, authorized
 lineage, finite role paths and actual whole-Asset CEKs. Preparation owns these

@@ -268,8 +268,21 @@ binding provides no Bitcoin, role, unspentness, License or decryption verdict;
 install independent full verifiers before accepting delivery. Historical release
 and current-alias transport evidence remain separate.
 
-`decodeLCHCollectorRevenue` and the existing covenant buyer/seller adapters retain
-pre-replacement behavior for compatibility. They are not current-family adapters.
+`LCHOverlayCovenantProfileDomain` is the explicit current buyer. Initialize its
+protected original and verification custody, then retain the synchronous guard
+returned by `fundingPreflight` with the complete original signed promise. Recheck
+that guard immediately before financial effects: active stage, installed height
+below expiry and accepted time window must still hold. Independently verify the
+complete original funded wallet transaction and released transaction, including
+every actual input Script, and require their identical full purchase commitment.
+The domain checks roles, License, Agreement and recipient-bound keys, then records
+positive entitlement. Historical delivery, reopen and offline playback do not
+repeat a new-funding expiry predicate. Native action/alias custody and the current
+seller remain separate integration work.
+
+`decodeLCHCollectorRevenue`, `LCHOverlayCovenantDomain` and
+`LCHOverlayCovenantSeller` retain pre-replacement behavior for compatibility.
+They are historical APIs, not current-family adapters.
 The decoder/binding predicates alone do not authenticate the Offer. Neither
 terms validation nor those predicates establish activation ancestry, chain
 currentness, wallet remittance or alias recovery.
@@ -331,8 +344,10 @@ lineage, assess release, issue a License or authorize playback. Compose the
 independent verifiers before financial work; the complete covenant licensing
 and application demonstration remain checkpoint-two work.
 
-`@bsv/lch/overlay-covenant` adds `LCHOverlayCovenantDomain` for complete
-standing-collector buyer validation and protected entitlement playback. Install
+The historical `LCHOverlayCovenantDomain` remains available through
+`@bsv/lch/overlay-covenant` for its original standing-collector buyer validation
+and protected entitlement playback. Select `LCHOverlayCovenantProfileDomain`
+for the current immutable collector contract described above. Install
 independent full lineage, actual purchase Script and release-policy proof ports;
 initialize protected original/verification custody before wallet construction.
 The domain binds the signed C settlement, STEAK/POTATOES secret and original
@@ -345,7 +360,7 @@ chain evidence, encrypted SQLite restart and real ciphertext playback. The
 combined native wallet/seller/topical-admission workbench remains required before
 checkpoint-two acceptance. The ordinary and existing paid entries stay separate.
 
-`LCHOverlayCovenantSeller` is the separate optional C seller domain. It retains
+`LCHOverlayCovenantSeller` is the preserved historical C seller domain. It retains
 complete original private CEKs and independently verifies genesis/lineage,
 purchase and release before issuing collector settlement, Agreement and
 recipient License/key grants. The protected purchase coordinator supplies the
