@@ -169,7 +169,7 @@ The file is authoritative except that an explicit `--mode` flag overrides its mo
 npx create-bsv-app --ui --dir my-app
 ```
 
-The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and submits to the same pipeline. Its generated page carries a per-process, cryptographically random session token. The server accepts generation and planning requests only from its exact loopback origin with that token, a JSON content type, and a body of at most 64 KiB. It also rejects DNS-rebinding Host values and does not expose manifest-derived values as executable HTML. These checks are part of the local security boundary: do not proxy or embed the UI in another site.
+The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and submits to the same pipeline. Other flags given with `--ui` pre-fill the form; flags for settings the form does not show, such as `--bsv-dir` or `--skip-install` in add mode, still apply. Its generated page carries a per-process, cryptographically random session token. The server accepts generation and planning requests only from its exact loopback origin with that token, a JSON content type, and a body of at most 64 KiB. It also rejects DNS-rebinding Host values and does not expose manifest-derived values as executable HTML. These checks are part of the local security boundary: do not proxy or embed the UI in another site.
 
 ## Flags
 

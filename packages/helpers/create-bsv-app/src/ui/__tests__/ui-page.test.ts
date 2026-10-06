@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals'
-import { serializeSchema, buildPage, VISIBLE_DRAFT_SRC } from '../ui-page'
+import { serializeSchema, buildPage, PAGE_DRAFT_SRC } from '../ui-page'
 import type { ProjectManifest } from '../../config/project-manifest'
+import { seedDraft } from '../../config/draft'
 
 describe('serializeSchema', () => {
   test('fresh (new mode): capabilities options include wallet-login but NOT wallet-connect', () => {
@@ -136,12 +137,15 @@ describe('buildPage', () => {
   })
 })
 
-type VisibleDraft = (schema: unknown, draft: Record<string, unknown>) => Record<string, unknown>
-const visibleDraft = new Function(`${VISIBLE_DRAFT_SRC}
-return visibleDraft`)() as VisibleDraft
+type Draft = Record<string, unknown>
+const { initialDraft, visibleDraft } = new Function(`${PAGE_DRAFT_SRC}
+return { initialDraft: initialDraft, visibleDraft: visibleDraft }`)() as {
+  initialDraft: (schema: unknown, seed: Draft) => Draft
+  visibleDraft: (schema: unknown, draft: Draft, hidden?: Draft) => Draft
+}
 
 /** The page's in-memory draft for a fresh new-mode run (schema defaults, all capabilities ticked). */
-function newModeDraft(): Record<string, unknown> {
+function newModeDraft(): Draft {
   return {
     mode: 'new',
     starter: 'custom',
@@ -157,10 +161,24 @@ function newModeDraft(): Record<string, unknown> {
   }
 }
 
+const manifest: ProjectManifest = {
+  version: 1,
+  name: 'demo',
+  network: 'test',
+  stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+  bsvDir: 'src/bsv',
+  capabilities: [],
+  targets: { client: '' }
+}
+
 describe('visibleDraft (submit payload)', () => {
   test('add mode without a manifest drops the hidden new-mode stack fields', () => {
-    const draft: Record<string, unknown> = { ...newModeDraft(), mode: 'add' }
-    const payload = visibleDraft(serializeSchema(null), draft)
+    const draft: Draft = { ...newModeDraft(), mode: 'add' }
+    const payload = visibleDraft(
+      serializeSchema(null),
+      draft,
+      seedDraft(null, { mode: 'add' }) as Draft
+    )
     expect(payload).toEqual({ mode: 'add', capabilities: ['wallet-connect', 'wallet-login'] })
     expect(draft.frontend).toBe('react') // in-page draft untouched so toggling back restores it
   })
@@ -176,8 +194,74 @@ describe('visibleDraft (submit payload)', () => {
     })
   })
 
-  test('keeps non-schema keys such as bsvDir', () => {
-    const payload = visibleDraft(serializeSchema(null), { ...newModeDraft(), bsvDir: 'lib/bsv' })
-    expect(payload).toEqual({ ...newModeDraft(), bsvDir: 'lib/bsv' })
+  test('drops non-schema keys such as bsvDir and targets (the server re-applies flags)', () => {
+    const payload = visibleDraft(serializeSchema(null), {
+      ...newModeDraft(),
+      bsvDir: 'lib/bsv',
+      targets: { client: '' }
+    })
+    expect(payload).toEqual(newModeDraft())
+  })
+
+  test('a stale hidden starter does not hide capabilities: hidden fields take the mode seed', () => {
+    const schema = serializeSchema(manifest)
+    const draft: Draft = { ...newModeDraft(), starter: 'meter', mode: 'add' }
+    const payload = visibleDraft(schema, draft, seedDraft(manifest, { mode: 'add' }) as Draft)
+    expect(payload).toEqual({ mode: 'add', capabilities: draft.capabilities })
+  })
+
+  test('add mode keeps capabilities visible for a manifest with or without a starter id', () => {
+    const manifests: ProjectManifest[] = [
+      manifest,
+      { ...manifest, starter: { id: 'custom', kind: 'generated' } }
+    ]
+    for (const m of manifests) {
+      const hidden = seedDraft(m, {}) as Draft
+      const draft = initialDraft(serializeSchema(m), hidden)
+      expect(visibleDraft(serializeSchema(m), draft, hidden)).toEqual({
+        mode: 'add',
+        capabilities: []
+      })
+    }
+  })
+})
+
+describe('initialDraft', () => {
+  test('holds only schema fields, so manifest targets/bsvDir never leak into new mode', () => {
+    const schema = serializeSchema(manifest)
+    const draft = initialDraft(schema, seedDraft(manifest, {}) as Draft)
+    expect(draft).not.toHaveProperty('targets')
+    expect(draft).not.toHaveProperty('bsvDir')
+    draft.mode = 'new'
+    const payload = visibleDraft(schema, draft, seedDraft(manifest, { mode: 'new' }) as Draft)
+    expect(payload).not.toHaveProperty('targets')
+    expect(payload).not.toHaveProperty('bsvDir')
+    expect(payload).toMatchObject({ mode: 'new', name: 'demo', frontend: 'react' })
+  })
+})
+
+describe('page wiring', () => {
+  const html = buildPage({ schema: serializeSchema(null), seed: { mode: 'new' } })
+
+  test('/plan and /generate submit payload(), never the raw draft', () => {
+    expect(html.split('body: JSON.stringify(payload())').length - 1).toBe(2)
+    expect(html).not.toContain('JSON.stringify(draft)')
+  })
+
+  test('rendering and submitting share one visibility view', () => {
+    expect(html).toMatch(/function shown\(f\) \{ return f\.key in payload\(\); \}/u)
+    expect(html).not.toContain('whenOk(')
+  })
+
+  test('the command preview merges CLI flags under the payload, as the server does', () => {
+    const withFlags = buildPage({
+      schema: serializeSchema(null),
+      seed: { mode: 'new' },
+      flags: { bsvDir: 'lib/bsv' }
+    })
+    expect(withFlags).toContain('window.__FLAGS__ = {"bsvDir":"lib/bsv"};')
+    expect(withFlags).toContain('Object.assign({}, FLAGS, payload())')
+    expect(withFlags.split('buildCommand(commandDraft())').length - 1).toBe(1)
+    expect(withFlags.split('buildTokens(commandDraft())').length - 1).toBe(1)
   })
 })
