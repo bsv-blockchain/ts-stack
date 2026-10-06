@@ -7,7 +7,12 @@ import { seedDraft, resolveDraft } from './config/draft.js'
 import type { ConfigDraft } from './config/draft.js'
 import type { ProjectConfig } from './config/model.js'
 
-export type Ask = (field: ConfigField, options: FieldOption[]) => Promise<unknown>
+/** `initial` is the pre-selected value: cursor for select/toggle, ticked boxes for multiselect. */
+export type Ask = (
+  field: ConfigField,
+  options: FieldOption[],
+  initial: string | boolean | string[] | undefined
+) => Promise<unknown>
 export type ConfigProvider = (ctx: {
   existing: ProjectManifest | null
   flags: ConfigDraft
@@ -53,7 +58,12 @@ export async function runPrompts(
       )
         continue // set by flags/seed
       if (!isFieldVisible(field, draft as Record<string, unknown>)) continue
-      const value = await ask(field, optionsFor(field, ctx.existing, draft.mode ?? 'new'))
+      const mode = draft.mode ?? 'new'
+      const options = optionsFor(field, ctx.existing, mode)
+      // new mode pre-ticks every offered capability; add mode never pre-ticks onto an existing project
+      let initial: string | boolean | string[] | undefined = field.default
+      if (field.key === 'capabilities') initial = mode === 'new' ? options.map(o => o.value) : []
+      const value = await ask(field, options, initial)
       if (field.key === 'capabilities') {
         ;(draft as Record<string, unknown>).capabilities = mergeCapabilityIds(
           (draft.capabilities as string[]) ?? [],
@@ -70,7 +80,7 @@ export async function runPrompts(
 export const interactiveConfigPrompt: ConfigProvider = async ctx => {
   const p = await import('@clack/prompts') // lazy: keep clack out of the Jest transform
   p.intro('create-bsv-app')
-  const ask: Ask = async (field, options) => {
+  const ask: Ask = async (field, options, initial) => {
     let res: unknown
     if (field.type === 'text')
       res = await p.text({
@@ -78,10 +88,20 @@ export const interactiveConfigPrompt: ConfigProvider = async ctx => {
         placeholder: typeof field.default === 'string' ? field.default : undefined
       })
     else if (field.type === 'toggle')
-      res = await p.confirm({ message: field.label, initialValue: field.default === true })
+      res = await p.confirm({ message: field.label, initialValue: initial === true })
     else if (field.type === 'multiselect')
-      res = await p.multiselect({ message: field.label, options, required: false })
-    else res = await p.select({ message: field.label, options })
+      res = await p.multiselect({
+        message: field.label,
+        options,
+        initialValues: Array.isArray(initial) ? initial : [],
+        required: false
+      })
+    else
+      res = await p.select({
+        message: field.label,
+        options,
+        initialValue: typeof initial === 'string' ? initial : undefined
+      })
     if (p.isCancel(res)) {
       p.cancel('Cancelled')
       process.exit(1)

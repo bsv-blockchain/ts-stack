@@ -88,10 +88,10 @@ export const configSchema: ConfigSchema = [
         label: 'Frontend',
         type: 'select',
         ui: 'segmented',
-        default: 'none',
+        default: 'react',
         options: [
-          { value: 'none', label: 'None' },
-          { value: 'react', label: 'React (Vite)' }
+          { value: 'react', label: 'React (Vite)' },
+          { value: 'none', label: 'None' }
         ],
         when: { mode: 'new', starter: 'custom' }
       },
@@ -108,10 +108,10 @@ export const configSchema: ConfigSchema = [
         label: 'Backend',
         type: 'select',
         ui: 'segmented',
-        default: 'none',
+        default: 'express',
         options: [
-          { value: 'none', label: 'None' },
-          { value: 'express', label: 'Express (TypeScript)' }
+          { value: 'express', label: 'Express (TypeScript)' },
+          { value: 'none', label: 'None' }
         ],
         when: { mode: 'new', starter: 'custom' }
       }
@@ -138,7 +138,7 @@ export const configSchema: ConfigSchema = [
       },
       {
         key: 'glue',
-        label: 'Auto-wire wallet providers into the app entry (main.tsx)',
+        label: "Set up the wallet features in your app's starting code? (Recommended)",
         type: 'toggle',
         default: true,
         when: { mode: 'new', starter: capabilityStarterIds() }

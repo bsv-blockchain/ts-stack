@@ -36,6 +36,23 @@ describe('runPrompts', () => {
     expect(c.capabilities).toHaveLength(2)
   })
 
+  test('new mode: initial values select the full project', async () => {
+    const initials: Record<string, unknown> = {}
+    let offered: string[] = []
+    await runPrompts(
+      { existing: null, flags: { name: 'demo' } },
+      async (field, options, initial) => {
+        initials[field.key] = initial
+        if (field.key === 'capabilities') offered = options.map(o => o.value)
+        return initial
+      }
+    )
+    expect(initials.frontend).toBe('react')
+    expect(initials.backend).toBe('express')
+    expect(offered.length).toBeGreaterThan(0)
+    expect(initials.capabilities).toEqual(offered)
+  })
+
   test('add mode: locks fields from the manifest, only asks capabilities, unions', async () => {
     const existing: ProjectManifest = {
       version: 1,
@@ -77,11 +94,13 @@ describe('runPrompts', () => {
 
   test('add mode without a manifest offers every capability', async () => {
     let offeredCapabilityCount = 0
+    let initialCapabilities: unknown
     const c = await runPrompts(
       { existing: null, flags: { mode: 'add', name: 'untracked-project' } },
-      async (field, options) => {
+      async (field, options, initial) => {
         if (field.key === 'capabilities') {
           offeredCapabilityCount = options.length
+          initialCapabilities = initial
           return []
         }
         return undefined
@@ -89,6 +108,7 @@ describe('runPrompts', () => {
     )
 
     expect(offeredCapabilityCount).toBeGreaterThan(0)
+    expect(initialCapabilities).toEqual([]) // never pre-tick onto an existing project
     expect(c.mode).toBe('add')
     expect(c.name).toBe('untracked-project')
   })

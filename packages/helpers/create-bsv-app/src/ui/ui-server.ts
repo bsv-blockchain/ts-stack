@@ -9,7 +9,7 @@ import { applyConfig, type RunResult } from '../pipeline.js'
 import { resolveDraft, seedDraft, type ConfigDraft } from '../config/draft.js'
 import { ConfigError } from '../config/validate.js'
 import type { ProjectManifest } from '../config/project-manifest.js'
-import { MANIFEST_FILE } from '../config/project-manifest.js'
+import { MANIFEST_FILE, mergeCapabilityIds } from '../config/project-manifest.js'
 import type { RunCommand } from '../scaffold/base-scaffolder.js'
 import { listCapabilities, resolveCapabilities } from '../registry.js'
 import { planPlacement } from '../engine.js'
@@ -187,9 +187,20 @@ export async function startUiServer(opts: {
           .filter(c => c.defaultSelected === true)
           .map(c => ({ label: c.title }))
       : []
+  const schema = serializeSchema(existing)
+  const seed = seedDraft(existing, {})
+  // new mode pre-selects every offerable capability, matching the terminal flow
+  if (existing === null) {
+    const offerable =
+      schema.flatMap(s => s.fields).find(f => f.key === 'capabilities')?.options ?? []
+    seed.capabilities = mergeCapabilityIds(
+      seed.capabilities ?? [],
+      offerable.map(o => o.value)
+    )
+  }
   const html = buildPage({
-    schema: serializeSchema(existing),
-    seed: seedDraft(existing, {}),
+    schema,
+    seed,
     included,
     sessionToken,
     scriptNonce

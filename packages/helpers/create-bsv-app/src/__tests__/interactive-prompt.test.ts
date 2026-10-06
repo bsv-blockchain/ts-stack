@@ -8,7 +8,7 @@ const text = jest.fn(async ({ message }: { message: string }) =>
   message === 'Project name' ? 'interactive-demo' : 'src/bsv'
 )
 const confirm = jest.fn(async () => true)
-const multiselect = jest.fn(async () => ['wallet-login'])
+const multiselect = jest.fn(async (_opts: { initialValues?: string[] }) => ['wallet-login'])
 const select = jest.fn(async ({ message }: { message: string }) => {
   const answers: Record<string, string> = {
     'Create a new project or add to an existing one?': 'new',
@@ -61,6 +61,20 @@ describe('interactiveConfigPrompt', () => {
     expect(multiselect).toHaveBeenCalled()
     expect(select).toHaveBeenCalled()
     expect(cancel).not.toHaveBeenCalled()
+  })
+
+  test('passes the full-project defaults as clack initial values', async () => {
+    await interactiveConfigPrompt({ existing: null, flags: {} })
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Frontend', initialValue: 'react' })
+    )
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Backend', initialValue: 'express' })
+    )
+    expect(multiselect).toHaveBeenCalledWith(
+      expect.objectContaining({ initialValues: expect.arrayContaining(['wallet-login']) })
+    )
   })
 
   test('reports cancellation and exits without resolving a partial configuration', async () => {

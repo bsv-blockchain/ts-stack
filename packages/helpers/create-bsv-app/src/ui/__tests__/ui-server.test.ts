@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync, readFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startUiServer, runUi } from '../ui-server'
+import { serializeSchema } from '../ui-page'
 import type { UiServer } from '../ui-server'
 import type { RunCommand } from '../../scaffold/base-scaffolder'
 import type { ProjectManifest } from '../../config/project-manifest'
@@ -130,6 +131,46 @@ test('GET / in new mode includes "Always included" banner', async () => {
     const res = await fetch(srv.url)
     const html = await res.text()
     expect(html).toContain('Always included')
+  } finally {
+    srv.close()
+  }
+})
+
+function pageSeed(html: string): Record<string, unknown> {
+  const json = /window\.__SEED__ = (.*);/u.exec(html)?.[1]
+  if (json === undefined) throw new Error('UI seed missing from page')
+  return JSON.parse(json) as Record<string, unknown>
+}
+
+test('GET / in new mode seeds every offerable capability as selected', async () => {
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const seed = pageSeed(await (await fetch(srv.url)).text())
+    const offerable =
+      serializeSchema(null)
+        .flatMap(s => s.fields)
+        .find(f => f.key === 'capabilities')
+        ?.options?.map(o => o.value) ?? []
+    expect(offerable.length).toBeGreaterThan(0)
+    expect(seed.capabilities).toEqual(expect.arrayContaining([...offerable, 'wallet-connect']))
+  } finally {
+    srv.close()
+  }
+})
+
+test('GET / in add mode seeds only the manifest capabilities', async () => {
+  const existing: ProjectManifest = {
+    version: 1,
+    name: 'demo',
+    network: 'test',
+    stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+    bsvDir: 'src/bsv',
+    capabilities: ['wallet-login']
+  }
+  const srv = await startUiServer({ existing, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const seed = pageSeed(await (await fetch(srv.url)).text())
+    expect(seed.capabilities).toEqual(['wallet-login'])
   } finally {
     srv.close()
   }
