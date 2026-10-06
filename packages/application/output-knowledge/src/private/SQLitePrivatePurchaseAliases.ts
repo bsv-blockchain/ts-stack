@@ -71,6 +71,17 @@ interface Snapshot extends PrivatePurchaseAliasSnapshot {
   revision: string
   records: ProtectedLedgerRecord[]
 }
+interface AliasPlan {
+  original: PrivatePurchaseOriginal
+  snapshot: Snapshot
+  state: PrivatePurchaseAliasState
+  candidates: ReadonlyMap<string, OutputPurchaseSubmit>
+  outcomes: ReadonlyMap<string, PrivatePurchaseAdmissionOutcome>
+  guard: ProtectedLedgerGuard
+  verification: ProtectedLedgerGuard
+  extra: readonly ProtectedLedgerChange[]
+  cumulative?: OutputPurchaseSubmit
+}
 /** Owned contribution for a separately installed SAME-ledger effect owner.
  * It grants no admission/release authority. Commit these exact changes with the
  * result owner's changes under checkCurrent in one native transaction. */
@@ -263,7 +274,8 @@ export class SQLitePrivatePurchaseAliases {
   }
   private updates(entry: PrivatePurchaseAliasEntry | null): number {
     if (entry === null) return 0
-    return entry.admission === 'retained' ? 2 : entry.admission === 'pending' ? 1 : 0
+    if (entry.admission === 'retained') return 2
+    return entry.admission === 'pending' ? 1 : 0
   }
   private stateUpdates(state: PrivatePurchaseAliasState): number {
     const pending = new Map<string, number>()
@@ -446,33 +458,11 @@ export class SQLitePrivatePurchaseAliases {
       outcomes = new Map<string, PrivatePurchaseAdmissionOutcome>(),
       completedAt = new Map<string, string>(),
       exactOutcomes = new Map<string, string>()
-    for (let slot = 0; slot < this.roles.length; slot++) {
-      const role = this.roles[slot],
-        offset = 1 + slot * (this.chunks + 1),
-        entry = this.entry(state, role),
-        row = records[offset],
-        header = row.value
-      closedOutputObject(header, [
-        'format',
-        'binding',
-        'role',
-        'admission',
-        'bytes',
-        'digest',
-        'outcome',
-        'completedAt'
-      ])
-      outputAssert(
-        header.format === FORMAT &&
-          header.role === role &&
-          canonicalOutputJSON(header.binding) === canonicalOutputJSON(binding) &&
-          row.reservedBytes === OUTCOME_BYTES + 8192 &&
-          row.reservedUpdates === this.budget(row) &&
-          row.reservedUpdates >= this.updates(entry) &&
-          header.admission === (entry?.admission ?? null),
-        'Alias native header changed',
-        'unavailable'
-      )
+    const restoreFrames = (
+      offset: number,
+      role: string,
+      entry: PrivatePurchaseAliasEntry | null
+    ): string => {
       let encoded = ''
       for (let index = 0; index < this.chunks; index++) {
         const chunkRow = records[offset + index + 1],
@@ -502,6 +492,36 @@ export class SQLitePrivatePurchaseAliases {
           encoded += frame.data
         }
       }
+      return encoded
+    }
+    const restoreRole = (slot: number): void => {
+      const role = this.roles[slot],
+        offset = 1 + slot * (this.chunks + 1),
+        entry = this.entry(state, role),
+        row = records[offset],
+        header = row.value
+      closedOutputObject(header, [
+        'format',
+        'binding',
+        'role',
+        'admission',
+        'bytes',
+        'digest',
+        'outcome',
+        'completedAt'
+      ])
+      outputAssert(
+        header.format === FORMAT &&
+          header.role === role &&
+          canonicalOutputJSON(header.binding) === canonicalOutputJSON(binding) &&
+          row.reservedBytes === OUTCOME_BYTES + 8192 &&
+          row.reservedUpdates === this.budget(row) &&
+          row.reservedUpdates >= this.updates(entry) &&
+          header.admission === (entry?.admission ?? null),
+        'Alias native header changed',
+        'unavailable'
+      )
+      const encoded = restoreFrames(offset, role, entry)
       if (entry === null) {
         outputAssert(
           header.bytes === null &&
@@ -511,7 +531,7 @@ export class SQLitePrivatePurchaseAliases {
           'Empty alias role changed',
           'unavailable'
         )
-        continue
+        return
       }
       const bytes = Uint8Array.from(decodeOutputBytes(encoded, this.limits.maximumCandidateBytes))
       try {
@@ -568,6 +588,7 @@ export class SQLitePrivatePurchaseAliases {
           'unavailable'
         )
     }
+    for (let slot = 0; slot < this.roles.length; slot++) restoreRole(slot)
     const checkCurrent: ProtectedLedgerGuard = view => {
       this.authorized(guard)(view)
       outputAssert(
@@ -623,66 +644,77 @@ export class SQLitePrivatePurchaseAliases {
     // Retry proof custody is cumulative, independently of cache routing. A
     // byte-identical immutable role needs no optional cache allocation: full
     // caches must not prevent recovery of the original financial transaction.
-    let combined = candidate
-    for (const previous of snapshot.candidates.values())
-      if (previous.txid === candidate.txid) combined = this.combine(original, previous, combined)
-    const immutable = ['original', 'historical']
-      .map(role => snapshot.candidates.get(role))
-      .find(
-        prior =>
-          prior?.txid === candidate.txid &&
-          canonicalOutputJSON(prior, { bytes: this.limits.maximumCandidateBytes }) ===
-            canonicalOutputJSON(combined, { bytes: this.limits.maximumCandidateBytes })
-      )
+    const cumulativeCandidate = (): OutputPurchaseSubmit => {
+      let combined = candidate
+      for (const previous of snapshot.candidates.values())
+        if (previous.txid === candidate.txid) combined = this.combine(original, previous, combined)
+      return combined
+    }
+    const combined = cumulativeCandidate(),
+      immutable = ['original', 'historical']
+        .map(role => snapshot.candidates.get(role))
+        .some(
+          prior =>
+            prior?.txid === candidate.txid &&
+            canonicalOutputJSON(prior, { bytes: this.limits.maximumCandidateBytes }) ===
+              canonicalOutputJSON(combined, { bytes: this.limits.maximumCandidateBytes })
+        )
     if (!place && immutable)
-      return this.plan(
+      return this.plan({
         original,
         snapshot,
-        snapshot.state,
-        snapshot.candidates,
-        snapshot.outcomes,
+        state: snapshot.state,
+        candidates: snapshot.candidates,
+        outcomes: snapshot.outcomes,
         guard,
-        () => validation.checkCurrent(),
-        [],
-        combined
-      )
+        verification: () => validation.checkCurrent(),
+        extra: [],
+        cumulative: combined
+      })
     const proposal = retainPrivatePurchaseAlias(
       snapshot.state,
       { purchaseCommitment: validation.purchaseCommitment, entry },
       place ? { checkCurrent: place } : undefined
     )
     if (proposal.status === 'pending') return proposal
-    const candidates = new Map(snapshot.candidates),
-      outcomes = new Map(snapshot.outcomes)
-    for (const role of this.roles) {
-      const before = this.entry(snapshot.state, role),
-        next = this.entry(proposal.state, role)
-      if (next === null) continue
-      if (next.txid !== before?.txid) {
-        const source = this.roles.find(r => this.entry(snapshot.state, r)?.txid === next.txid)
-        const oldCandidate = source ? snapshot.candidates.get(source) : undefined
-        const oldOutcome = source ? snapshot.outcomes.get(source) : undefined
-        if (oldCandidate) candidates.set(role, oldCandidate)
-        if (oldOutcome) outcomes.set(role, oldOutcome)
-        else outcomes.delete(role)
+    const remapCandidates = (): {
+      candidates: Map<string, OutputPurchaseSubmit>
+      outcomes: Map<string, PrivatePurchaseAdmissionOutcome>
+    } => {
+      const candidates = new Map(snapshot.candidates),
+        outcomes = new Map(snapshot.outcomes)
+      for (const role of this.roles) {
+        const before = this.entry(snapshot.state, role),
+          next = this.entry(proposal.state, role)
+        if (next === null) continue
+        if (next.txid !== before?.txid) {
+          const source = this.roles.find(r => this.entry(snapshot.state, r)?.txid === next.txid)
+          const oldCandidate = source ? snapshot.candidates.get(source) : undefined
+          const oldOutcome = source ? snapshot.outcomes.get(source) : undefined
+          if (oldCandidate) candidates.set(role, oldCandidate)
+          if (oldOutcome) outcomes.set(role, oldOutcome)
+          else outcomes.delete(role)
+        }
       }
+      return { candidates, outcomes }
     }
+    const { candidates, outcomes } = remapCandidates()
     candidates.set(proposal.role, combined)
     if (place) candidates.set('selected', combined)
-    return this.plan(
+    return this.plan({
       original,
       snapshot,
-      proposal.state,
+      state: proposal.state,
       candidates,
       outcomes,
       guard,
-      () => {
+      verification: () => {
         validation.checkCurrent()
         place?.()
       },
-      [],
-      combined
-    )
+      extra: [],
+      cumulative: combined
+    })
   }
   /** Durably reserve the exact job BEFORE an external admission call. Unknown
    * outcomes remain pending and cannot be evicted, replaced or called rejected. */
@@ -731,16 +763,16 @@ export class SQLitePrivatePurchaseAliases {
         )
         outcomes.set(role, owned)
       }
-    return this.plan(
+    return this.plan({
       original,
       snapshot,
       state,
-      snapshot.candidates,
+      candidates: snapshot.candidates,
       outcomes,
       guard,
-      () => undefined,
-      []
-    )
+      verification: () => undefined,
+      extra: []
+    })
   }
   /** Call under independent release/selected-view guards; include signed result
    * changes in this SAME native commit. A historical result cannot be rewritten. */
@@ -781,28 +813,30 @@ export class SQLitePrivatePurchaseAliases {
       snapshot.state.historical !== null || resultChanges.length > 0,
       'First historical alias requires the native signed-result write'
     )
-    return this.plan(
+    return this.plan({
       original,
       snapshot,
       state,
       candidates,
       outcomes,
       guard,
-      placement ? capturedCheck(placement) : () => undefined,
-      resultChanges
-    )
+      verification: placement ? capturedCheck(placement) : () => undefined,
+      extra: resultChanges
+    })
   }
-  private plan(
-    original: PrivatePurchaseOriginal,
-    snapshot: Snapshot,
-    state: PrivatePurchaseAliasState,
-    candidates: ReadonlyMap<string, OutputPurchaseSubmit>,
-    outcomes: ReadonlyMap<string, PrivatePurchaseAdmissionOutcome>,
-    guard: ProtectedLedgerGuard,
-    verification: ProtectedLedgerGuard,
-    extra: readonly ProtectedLedgerChange[],
-    cumulative?: OutputPurchaseSubmit
-  ): PrivatePurchaseAliasWrite {
+  private plan(input: AliasPlan): PrivatePurchaseAliasWrite {
+    const {
+      original,
+      snapshot,
+      state,
+      candidates,
+      outcomes,
+      guard,
+      verification,
+      extra,
+      cumulative
+    } = input
+
     const addresses = this.addresses(snapshot.binding),
       changes: ProtectedLedgerChange[] = [],
       next = parsePrivatePurchaseAliasState(state)
@@ -821,14 +855,43 @@ export class SQLitePrivatePurchaseAliases {
         value: this.stateValue(snapshot.binding, next)
       })
     }
-    for (let slot = 0; slot < this.roles.length; slot++) {
+    const appendChunks = (offset: number, role: string, candidate: OutputPurchaseSubmit): void => {
+      const bytes = Buffer.from(
+        canonicalOutputJSON(candidate, { bytes: this.limits.maximumCandidateBytes }),
+        'utf8'
+      )
+      try {
+        for (let index = 0; index < this.chunks; index++) {
+          outputAssert(
+            this.budget(snapshot.records[offset + index + 1]) > 0,
+            'Alias proof write capacity is exhausted',
+            'limited'
+          )
+          changes.push({
+            ...addresses[offset + index + 1],
+            expectedRevision: snapshot.records[offset + index + 1].revision,
+            reservedBytes: this.allowance(index),
+            reservedUpdates: this.budget(snapshot.records[offset + index + 1]) - 1,
+            value: this.chunk(
+              snapshot.binding,
+              role,
+              index,
+              bytes.subarray(index * CHUNK, (index + 1) * CHUNK).toString('base64')
+            )
+          })
+        }
+      } finally {
+        bytes.fill(0)
+      }
+    }
+    const appendSlot = (slot: number): void => {
       const role = this.roles[slot],
         offset = 1 + slot * (this.chunks + 1),
         entry = this.entry(next, role),
         previous = this.entry(snapshot.state, role),
         candidate = candidates.get(role),
         outcome = outcomes.get(role) ?? null
-      if (entry === null) continue
+      if (entry === null) return
       outputAssert(
         candidate !== undefined &&
           candidate.txid === entry.txid &&
@@ -873,35 +936,10 @@ export class SQLitePrivatePurchaseAliases {
         canonicalOutputJSON(old, { bytes: this.limits.maximumCandidateBytes }) !==
           canonicalOutputJSON(candidate, { bytes: this.limits.maximumCandidateBytes })
       ) {
-        const bytes = Buffer.from(
-          canonicalOutputJSON(candidate, { bytes: this.limits.maximumCandidateBytes }),
-          'utf8'
-        )
-        try {
-          for (let index = 0; index < this.chunks; index++) {
-            outputAssert(
-              this.budget(snapshot.records[offset + index + 1]) > 0,
-              'Alias proof write capacity is exhausted',
-              'limited'
-            )
-            changes.push({
-              ...addresses[offset + index + 1],
-              expectedRevision: snapshot.records[offset + index + 1].revision,
-              reservedBytes: this.allowance(index),
-              reservedUpdates: this.budget(snapshot.records[offset + index + 1]) - 1,
-              value: this.chunk(
-                snapshot.binding,
-                role,
-                index,
-                bytes.subarray(index * CHUNK, (index + 1) * CHUNK).toString('base64')
-              )
-            })
-          }
-        } finally {
-          bytes.fill(0)
-        }
+        appendChunks(offset, role, candidate)
       }
     }
+    for (let slot = 0; slot < this.roles.length; slot++) appendSlot(slot)
     outputAssert(
       changes.length + extra.length <= 64,
       'Alias effect exceeds atomic native rows',
@@ -1062,9 +1100,8 @@ export class SQLitePrivatePurchaseAliases {
     const prior = this.assemble(original, previous),
       next = this.assemble(original, incoming)
     outputAssert(
-      prior.target &&
-        next.target &&
-        prior.target.rawTransaction === next.target.rawTransaction &&
+      prior.target?.rawTransaction !== undefined &&
+        prior.target.rawTransaction === next.target?.rawTransaction &&
         next.missing.length === 0,
       'Alias proof union changes complete raw transaction',
       'conflict'

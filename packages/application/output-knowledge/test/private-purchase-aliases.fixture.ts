@@ -12,7 +12,7 @@ export const identity = 'b1'.repeat(32)
 export const verified = () => ({ purchaseCommitment: identity, checkCurrent: () => undefined })
 export const placement = () => ({ checkCurrent: () => undefined })
 export function retained(plan: PrivatePurchaseAliasWrite) {
-  if (plan.status !== 'ready') throw Error('Expected retained native proposal')
+  if (plan.status !== 'ready') throw new Error('Expected retained native proposal')
   return plan
 }
 export function purchaseAliasesFixture(maximumWrites = 64) {

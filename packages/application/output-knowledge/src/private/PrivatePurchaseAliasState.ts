@@ -172,6 +172,47 @@ function guarded(placement: PrivatePurchaseAliasPlacement): void {
     'context-changed'
   )
 }
+function keepSelectedJob(
+  state: PrivatePurchaseAliasState,
+  candidate: PrivatePurchaseAliasEntry
+): boolean {
+  const selected = state.selected
+  if (selected?.admission !== 'pending' || selected.txid === candidate.txid) return true
+  if (
+    [state.original, state.historical, ...state.unconfirmed, ...state.pending].some(
+      x => x?.txid === selected.txid
+    )
+  )
+    return true
+  let index = state.pending.indexOf(null)
+  if (index < 0) index = state.pending.findIndex(x => x?.admission !== 'pending')
+  if (index < 0) return false
+  state.pending[index] = { ...selected }
+  return true
+}
+function retainExistingAlias(
+  state: PrivatePurchaseAliasState,
+  existing: [string, PrivatePurchaseAliasEntry | null],
+  placement: PrivatePurchaseAliasPlacement | undefined
+): PrivatePurchaseAliasRetention {
+  if (placement) {
+    state.selected = { ...existing[1]! }
+    return { status: 'retained', state: parsePrivatePurchaseAliasState(state), role: 'selected' }
+  }
+  if (existing[0] !== 'original' && existing[0] !== 'historical')
+    return { status: 'retained', state, role: existing[0] }
+  // Mutable cumulative proof custody is separate from the first financial
+  // candidate and first signed-release payload. Never overwrite either.
+  let index = state.unconfirmed.indexOf(null)
+  if (index < 0) index = state.unconfirmed.findIndex(x => x?.admission !== 'pending')
+  if (index < 0) return { status: 'pending', reason: 'cache-operations-unresolved' }
+  state.unconfirmed[index] = { ...existing[1]! }
+  return {
+    status: 'retained',
+    state: parsePrivatePurchaseAliasState(state),
+    role: `unconfirmed/${index}`
+  }
+}
 /** Pure native-write proposal. Independently verify every input, receipt,
  * lineage and the full commitment before calling; check that validation again
  * in the transaction committing metadata AND complete raw candidate slots.
@@ -212,43 +253,10 @@ export function retainPrivatePurchaseAlias(
       'Purchase alias changes its complete retained raw transaction',
       'conflict'
     )
-  const keepSelectedJob = (): boolean => {
-    const selected = state.selected
-    if (!selected || selected.admission !== 'pending' || selected.txid === candidate.txid)
-      return true
-    if (
-      [state.original, state.historical, ...state.unconfirmed, ...state.pending].some(
-        x => x?.txid === selected.txid
-      )
-    )
-      return true
-    let index = state.pending.findIndex(x => x === null)
-    if (index < 0) index = state.pending.findIndex(x => x?.admission !== 'pending')
-    if (index < 0) return false
-    state.pending[index] = { ...selected }
-    return true
-  }
-  if (placement && !keepSelectedJob())
+
+  if (placement && !keepSelectedJob(state, candidate))
     return { status: 'pending', reason: 'external-operations-unresolved' }
-  if (existing) {
-    if (placement) {
-      state.selected = { ...existing[1]! }
-      return { status: 'retained', state: parsePrivatePurchaseAliasState(state), role: 'selected' }
-    }
-    if (existing[0] !== 'original' && existing[0] !== 'historical')
-      return { status: 'retained', state, role: existing[0] }
-    // Mutable cumulative proof custody is separate from the first financial
-    // candidate and first signed-release payload. Never overwrite either.
-    let index = state.unconfirmed.findIndex(x => x === null)
-    if (index < 0) index = state.unconfirmed.findIndex(x => x?.admission !== 'pending')
-    if (index < 0) return { status: 'pending', reason: 'cache-operations-unresolved' }
-    state.unconfirmed[index] = { ...existing[1]! }
-    return {
-      status: 'retained',
-      state: parsePrivatePurchaseAliasState(state),
-      role: `unconfirmed/${index}`
-    }
-  }
+  if (existing) return retainExistingAlias(state, existing, placement)
   if (state.original === null) {
     state.purchaseCommitment = purchaseCommitment
     state.original = candidate
@@ -262,7 +270,7 @@ export function retainPrivatePurchaseAlias(
   // A selected-chain candidate has an independent slot above. Cache eviction
   // can never discard an unresolved external operation. Original/historical/
   // selected roles already have separately reserved complete raw custody.
-  let index = state.unconfirmed.findIndex(x => x === null)
+  let index = state.unconfirmed.indexOf(null)
   if (index < 0) index = state.unconfirmed.findIndex(x => x?.admission !== 'pending')
   if (index < 0) return { status: 'pending', reason: 'cache-operations-unresolved' }
   state.unconfirmed[index] = candidate

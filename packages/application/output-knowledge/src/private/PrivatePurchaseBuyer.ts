@@ -469,8 +469,12 @@ export class PrivatePurchaseBuyer {
   private async getMany(roles: readonly Role[]): Promise<(OutputJSONObject | undefined)[]> {
     if (this.objectReadProfile === undefined || this.ports.objects.readMany === undefined) {
       const values: (OutputJSONObject | undefined)[] = []
-      for (const role of roles) values.push(await this.get(role))
-      return values
+      const readNext = async (index: number): Promise<(OutputJSONObject | undefined)[]> => {
+        if (index === roles.length) return values
+        values.push(await this.get(roles[index]))
+        return readNext(index + 1)
+      }
+      return readNext(0)
     }
     const statuses = await this.ports.objects.readMany(
       roles.map(role => ({ id: this.id(role), originalBinding: this.role(role) }))

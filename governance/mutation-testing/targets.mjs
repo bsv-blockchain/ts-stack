@@ -354,6 +354,25 @@ function walletFundingTarget(repositoryRoot, source, property) {
   return target
 }
 
+function appendSharedFixtureInputs(targets) {
+  for (const target of Object.values(targets)) {
+    if (target.packageDirectory === 'packages/overlays/overlay')
+      target.additionalInputs = [
+        ...(target.additionalInputs ?? []),
+        'jest-projects.config.mjs',
+        'jest.config.js',
+        'src/__tests/mongo/**',
+        'src/__tests/*Fixture.ts',
+        'src/__tests/admission/**'
+      ]
+    if (
+      target.packageDirectory === 'packages/application/output-knowledge' &&
+      target.additionalInputs?.includes('test/private-purchase-contract.fixture.ts')
+    )
+      target.additionalInputs.push('test/private-purchase-signing.fixture.ts')
+  }
+}
+
 export function buildMutationTargets(repositoryRoot) {
   const actionStoreFile = 'src/storage/actionRecovery/SQLiteActionRecoveryStore.ts'
   const actionStoreLines = readFileSync(
@@ -3605,22 +3624,7 @@ export function buildMutationTargets(repositoryRoot) {
       'packages/application/output-knowledge/test/private-publication-lookup.property.test.ts',
     mutate: ['src/private/PrivatePublicationLookupContext.ts']
   }
-  for (const target of Object.values(targets)) {
-    if (target.packageDirectory === 'packages/overlays/overlay')
-      target.additionalInputs = [
-        ...(target.additionalInputs ?? []),
-        'jest-projects.config.mjs',
-        'jest.config.js',
-        'src/__tests/mongo/**',
-        'src/__tests/*Fixture.ts',
-        'src/__tests/admission/**'
-      ]
-    if (
-      target.packageDirectory === 'packages/application/output-knowledge' &&
-      target.additionalInputs?.includes('test/private-purchase-contract.fixture.ts')
-    )
-      target.additionalInputs.push('test/private-purchase-signing.fixture.ts')
-  }
+  appendSharedFixtureInputs(targets)
   const retainedTests = [
     '<rootDir>/src/__tests/RetainedTransactionBEEF.test.ts',
     '<rootDir>/src/__tests/RetainedTransactionBEEF.property.test.ts',
