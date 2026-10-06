@@ -5892,3 +5892,27 @@ They do not establish actual native seller signing, creation fee/resource
 preflight, all native routes, alias custody, admission or HTTP composition. Those
 remaining integrations and complete final-source qualification keep Checkpoint 2
 open.
+
+
+### October 6 bounded alias custody foundation
+
+The internal alias metadata, native journal and selected-status projection are
+now adopted from the complete seventeen-input source and registry review
+(BotBoard 863, `DC_kwDOSLqBrM4BHob0`, request `DC_kwDOSLqBrM4BHoT8`).
+The journal prepays all original, historical, selected, bounded unconfirmed and
+unresolved-job roles before exposing a preparation. Every exact raw candidate,
+full purchase commitment, cumulative proof and terminal admission observation
+remains separately retained. Result owners receive exact owned changes and
+fresh same-ledger guards for atomic composition. Existing public exports and
+exact-txid owners are unchanged. The fixture uses a storage-only OP_TRUE domain;
+it establishes no Script, selected-chain, License or private-rights authority.
+
+Two isolated whole-source critical mutation targets preserve all original 143
+target definitions, their selectors, thresholds and controls. Registration now
+contains 145 targets and 392 partition rows; four control expectations reflect
+only the additional counts. The original engine inventory is unchanged. Both
+new governed properties retain a minimum of 300 runs, seed 3242026 and existing
+replay/failure-interrupt/case deadlines. Registration and source review do not
+constitute execution or mutation qualification. Native effect-owner/core-three,
+coordinator/job recovery, independent chain assessment and buyer/LCH/HTTP
+composition remain unfinished, as does checkpoint two.

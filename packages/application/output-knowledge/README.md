@@ -117,8 +117,13 @@ of existing custody. The explicitly selected `SQLitePrivatePurchaseCommitmentSto
 uses sealed version-two state and retains an independently verified full purchase
 commitment through native reservation, admission and signed delivery. Historical
 version-one custody and public declarations remain unchanged. This companion
-still pins an exact submitted txid; per-alias custody and selected-chain alias
-reconciliation remain separate integration work. The purchase guide labels the earlier native six-route and authenticated
+still pins an exact submitted txid. Internal alias metadata, the separately
+installed `SQLitePrivatePurchaseAliases` journal and selected-status projection
+now reserve complete raw candidates and exact admission jobs on the same native
+ledger. Their owned contributions can be composed with the eventual result owner
+in one writer. They do not establish domain validity or selected-chain authority.
+Economic reservation, historical-result composition, buyer/LCH/HTTP integration
+and native qualification remain separate work; no public alias entry is exposed. The purchase guide labels the earlier native six-route and authenticated
 Engine/Mongo/LCH demonstrations as historical-profile evidence.
 
 The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,

@@ -47,6 +47,15 @@ may install different transaction domains without adopting its revenue model.
       exact-txid checks and historical read-only recovery. Independent released
       transaction and License/key validation remains mandatory. This component
       does not supply native alias custody or replacement-family wallet composition.
+- [x] Add an internal, separately installed bounded alias journal and a fresh
+      same-ledger selected-status projection. Prepay original, historical,
+      selected, unconfirmed and unresolved-job slots; retain complete raw bytes,
+      independently verified cumulative proofs, exact per-txid admission and its
+      actual native terminal time. Contributions expose exact owned changes and
+      native currentness fences for a separately installed effect owner. Existing
+      exact-txid owners and public exports are unchanged. Source/registration
+      review and strict compilation do not qualify native execution, economic
+      identity/result composition or chain authority; those rows remain open.
 - [ ] Reserve one economic candidate identity per acquisition and retain exact
       raw transaction, admission work and release assessment separately per alias.
       Repeated aliases cannot charge again or create another private release.

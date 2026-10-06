@@ -3538,6 +3538,44 @@ export function buildMutationTargets(repositoryRoot) {
       )
     }
   }
+  // Explicit alias companions keep historical exact-txid ownership unchanged.
+  // Each new governed property retains complete production modules and original
+  // purchase regression suites, with the same critical quality controls.
+  const aliasTests = [
+    '<rootDir>/test/private-purchase-alias-state.test.ts',
+    '<rootDir>/test/private-purchase-alias-selection.test.ts',
+    '<rootDir>/test/sqlite-private-purchase-aliases.test.ts',
+    '<rootDir>/test/sqlite-private-purchase-aliases.property.test.ts'
+  ]
+  const aliasRegression = targets['private-purchase-state']
+  for (const [id, property, mutate] of [
+    [
+      'private-purchase-alias-state',
+      'private-purchase-alias-state.test.ts',
+      ['src/private/PrivatePurchaseAliasState.ts', 'src/private/PrivatePurchaseAliasSelection.ts']
+    ],
+    [
+      'private-purchase-alias-custody',
+      'sqlite-private-purchase-aliases.property.test.ts',
+      ['src/private/SQLitePrivatePurchaseAliases.ts']
+    ]
+  ]) {
+    targets[id] = {
+      ...structuredClone(aliasRegression),
+      propertyTest: `packages/application/output-knowledge/test/${property}`,
+      additionalInputs: [
+        ...aliasRegression.additionalInputs,
+        'test/private-purchase*.ts',
+        'test/sqlite-private-purchase-aliases*.ts'
+      ],
+      mutate,
+      ...jestTarget(
+        'jest.config.js',
+        [...aliasRegression.runnerOptions.jest.config.testMatch, ...aliasTests],
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
+      )
+    }
+  }
   // Lookup disclosure exercises the same durable publication and custody
   // dependencies. Append its complete suites without narrowing any old union.
   const lookupTests = [

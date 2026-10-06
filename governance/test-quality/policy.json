@@ -1760,6 +1760,30 @@
           "Every active lineage includes authorized reserve genesis and public child-link activation.",
           "Permissionless payout pays exact fixed-child quanta and retains reserve and remainders; actual complete input Scripts validate."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-alias-state.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded custody metadata for one full purchase identity, separately retained original/historical/selected aliases and exact unfinished jobs",
+        "target": "At least 300 deterministic generated cache, admission and historical-retention histories",
+        "invariants": [
+          "A verified selected alias has a separately prepaid role independent of unconfirmed cache capacity.",
+          "Unfinished exact external jobs and the first historical release cannot be silently displaced.",
+          "Metadata cannot establish Bitcoin validity, selected-chain inclusion or authority to release private rights."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/sqlite-private-purchase-aliases.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Encrypted native alias payloads, exact per-txid admission outcomes and immutable original/historical custody across independent owner reopen",
+        "target": "At least 300 deterministic genuine file-backed native recovery histories",
+        "invariants": [
+          "Original financial bytes and first historical result remain immutable through reopen and selected-alias changes.",
+          "Definitive exact-job outcomes and first native terminal times cannot regress under late replies.",
+          "Current authority and same-physical-ledger guards precede every retained write and read; toy semantic fixtures confer no Script or chain authority."
+        ]
       }
     ],
     "exclusions": [

@@ -1446,6 +1446,26 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-state.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded custody metadata for one full purchase identity, separately retained original/historical/selected aliases and exact unfinished jobs",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-custody",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/sqlite-private-purchase-aliases.property.test.ts",
+      "risk": "critical",
+      "boundary": "Encrypted native alias payloads, exact per-txid admission outcomes and immutable original/historical custody across independent owner reopen",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }
