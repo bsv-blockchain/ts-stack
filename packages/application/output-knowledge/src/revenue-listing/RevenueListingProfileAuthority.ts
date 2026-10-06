@@ -1,6 +1,5 @@
 import {
   Hash,
-  Validation,
   PublicKey,
   Random,
   TransactionSignature,
@@ -15,6 +14,7 @@ import {
   verifyOutputPacket,
   type WalletInterface
 } from '@bsv/sdk'
+import { validateOriginator } from '@bsv/sdk/wallet/validationHelpers'
 import {
   parseRevenueListingProfileDescriptor,
   REVENUE_LISTING_ACTIVE_SCRIPT_BYTES,
@@ -79,7 +79,7 @@ export class RevenueListingProfileAuthority {
 
   private constructor(options: RevenueListingProfileAuthorityOptions) {
     this.#identity = outputIdentity(options.identity)
-    const originator = Validation.validateOriginator(options.originator)
+    const originator = validateOriginator(options.originator)
     outputAssert(originator !== undefined, 'Profile authority requires an explicit originator')
     this.originator = originator
     this.publicKey = options.wallet.getPublicKey.bind(options.wallet)
