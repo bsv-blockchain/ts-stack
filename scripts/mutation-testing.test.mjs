@@ -1237,7 +1237,11 @@ test('standing covenant terms retain complete modes, consent and prior cryptogra
 test('covenant settlement retains complete evidence and prior cryptographic qualification', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT),
     target = configured['lch-overlay-covenant-settlement']
-  assert.deepEqual(target.mutate, ['src/overlayAcquisitionCovenantSettlement.ts'])
+  assert.deepEqual(target.mutate, [
+    'src/overlayAcquisitionCovenantSettlement.ts',
+    'src/overlayAcquisitionCovenantSettlementCore.ts',
+    'src/overlayAcquisitionCovenantProfileSettlement.ts'
+  ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/overlay-acquisition*.test.ts',
     '<rootDir>/test/key-delivery.test.ts'

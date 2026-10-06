@@ -1,5 +1,7 @@
 import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
+import { bindLCHOverlayCovenantProfileSettlement } from '../src/overlayAcquisitionCovenantProfileSettlement.js'
+import { lchCovenantProfileSettlementFixture } from './overlay-acquisition-covenant-profile-settlement.fixture.js'
 import { signOutputPacket } from '@bsv/sdk'
 import { bindLCHOverlayCovenantSettlement } from '../src/overlayAcquisitionCovenantSettlement.js'
 import { lchCovenantSettlementFixture } from './overlay-acquisition-covenant-settlement.fixture.js'
@@ -49,6 +51,48 @@ it('refuses independently signed wrong economic and request commitments under ge
         expect(
           bindLCHOverlayCovenantSettlement(f.context, f.terms, f.prepared, f.delivered, f.txid)
             .packet
+        ).toEqual(f.packet)
+      }
+    )
+  )
+}, 180000)
+
+it('binds generated current immutable settlements to the original full commitment and release', async () => {
+  const f = await lchCovenantProfileSettlementFixture()
+  await fc.assert(
+    fc.asyncProperty(
+      fc.constantFrom(
+        'requestId',
+        'offerId',
+        'assetId',
+        'acquisitionId',
+        'listingId',
+        'txid',
+        'purchaseCommitment',
+        'releaseEvidenceDigest'
+      ),
+      fc.uint8Array({ minLength: 32, maxLength: 32 }),
+      fc.integer({ min: 1, max: 10000 }),
+      async (field, bytes, extra) => {
+        const incorrect = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''),
+          packet = signOutputPacket(
+            'lch-covenant-settlement',
+            { ...f.body, [field]: incorrect, satoshis: String(100 + extra) },
+            f.sellerKey
+          ),
+          context = { ...f.context, settlement: f.json(packet) },
+          delivered = await f.deliver(context)
+        expect(() =>
+          bindLCHOverlayCovenantProfileSettlement(context, f.terms, f.prepared, delivered, f.txid)
+        ).toThrow('exact prepared purchase')
+        expect(
+          bindLCHOverlayCovenantProfileSettlement(
+            f.context,
+            f.terms,
+            f.prepared,
+            f.delivered,
+            f.txid
+          ).packet
         ).toEqual(f.packet)
       }
     )

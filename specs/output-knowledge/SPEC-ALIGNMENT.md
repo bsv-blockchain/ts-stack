@@ -47,6 +47,11 @@ may install different transaction domains without adopting its revenue model.
       and keep original promise validation separate from new-work windows.
       This component does not migrate native buyer/seller custody or prove roles,
       chain currentness or release-policy satisfaction.
+- [x] Authenticate and bind the exact current immutable settlement/evidence
+      representation through separately selected interfaces, sharing all existing
+      signature, consent, full purchase commitment, historical release and
+      POTATOES checks. Representation remains separate from Bitcoin validity,
+      currentness, native custody and entitlement acceptance.
 - [ ] Integrate the revised immutable collector extension and current alias chain
       assessment with replacement-family/native buyer and seller recovery.
 - [ ] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias

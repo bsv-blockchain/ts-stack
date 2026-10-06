@@ -2542,3 +2542,39 @@ export async function authenticateCurrentStandingConsent(
   return terms
 }
 ```
+
+## Current collector delivery bindings
+
+Check the signed current representation before passing its evidence to independently
+installed purchase, chain and release verifiers. This stage does not accept an
+entitlement, issue a License or decrypt content. Retain the historical release
+transaction separately from any later alias evidence.
+
+```ts compile
+// example-id: immutable-collector-delivery-bindings
+import {
+  bindLCHOverlayCovenantProfileSettlement,
+  type LCHOverlayCovenantProfileTerms,
+  type UnverifiedLCHOverlayContext
+} from '@bsv/lch/overlay-covenant'
+import type {
+  OutputSignedPurchaseTerms as CurrentDeliveryPromise,
+  OutputPurchaseEnvelope as CurrentDeliveryEnvelope
+} from '@bsv/sdk'
+
+export function parseCurrentCollectorDelivery(
+  context: UnverifiedLCHOverlayContext,
+  terms: LCHOverlayCovenantProfileTerms,
+  promise: CurrentDeliveryPromise,
+  delivered: CurrentDeliveryEnvelope,
+  historicalReleaseTxid: string
+) {
+  return bindLCHOverlayCovenantProfileSettlement(
+    context,
+    terms,
+    promise,
+    delivered,
+    historicalReleaseTxid
+  )
+}
+```

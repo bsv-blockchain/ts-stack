@@ -120,6 +120,24 @@ budgets. All 69 compiled documentation examples pass against 24 exact tarballs.
 The example compiler caught a duplicate local import name in the combined
 consumer; the corrected example uses a distinct local alias.
 
+The current covenant settlement interface now binds the entire immutable
+descriptor and original signed consent/promise, purchase commitment, settlement,
+historical release and POTATOES. Its bounded evidence decoder checks the seller's
+genesis authorization while leaving complete reserve-stage/activation history,
+actual input Scripts, currentness, role and release verification to installed
+independent verifiers. The historical public interfaces and all original binding
+checks remain; both interfaces share one settlement pipeline.
+
+The complete controlled LCH profile passes 268 tests in 41 suites in 111.019
+seconds, including original and additive 300-case properties. The current wrapper,
+historical wrapper and shared settlement pipeline have complete statement, branch,
+function and line coverage. Existing packed/browser budgets and all 70 compiled
+examples against 24 exact tarballs pass. The registry retains its complete source
+unions, 143 targets and 390 execution rows. The preceding pushed terms/source-quality
+batch at `337692aefbb088d2f9ccfcb520675432baac37eb` passes the strict hosted Sonar
+gate with zero new findings and zero unreviewed hotspots; that result does not
+qualify later source or complete the full checkpoint.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

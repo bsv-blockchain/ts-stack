@@ -41,6 +41,12 @@ and descriptor, policy consent, selected capability and content commitments.
 canonical decimal U64 string. Authenticate roles and independently verify actual
 authorized lineage, active stage and the installed current chain view before
 financial work; no terms parser supplies those proofs or invokes a wallet.
+The current `decodeLCHOverlayCovenantProfilePurchaseEvidence` and
+`bindLCHOverlayCovenantProfileSettlement` interfaces check the complete immutable
+descriptor and exact original consent, signed settlement/POTATOES and historical
+release bindings. Independent complete reserve-stage/activation history, actual
+Script execution and release-policy checks remain required. These representation
+interfaces neither issue a License nor authorize decryption or native alias reuse.
 The existing covenant buyer/seller classes below retain the earlier contract;
 their migration to the current verifiers, collector and alias owner remains open.
 Paid lookup and ordinary BRC-170 continue using their existing separate paths.

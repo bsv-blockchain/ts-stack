@@ -259,6 +259,15 @@ promise without imposing a new expiry check; the separate
 is a canonical decimal U64 string. Independent authorized lineage, active stage,
 current chain view, role authority and release verification remain required.
 
+`decodeLCHOverlayCovenantProfilePurchaseEvidence` authenticates the current closed
+evidence representation and seller genesis authorization.
+`bindLCHOverlayCovenantProfileSettlement` binds its complete immutable descriptor,
+original consent and promise, settlement, purchase commitment, historical release
+and POTATOES. Both share the existing complete settlement pipeline. Decoding or
+binding provides no Bitcoin, role, unspentness, License or decryption verdict;
+install independent full verifiers before accepting delivery. Historical release
+and current-alias transport evidence remain separate.
+
 `decodeLCHCollectorRevenue` and the existing covenant buyer/seller adapters retain
 pre-replacement behavior for compatibility. They are not current-family adapters.
 The decoder/binding predicates alone do not authenticate the Offer. Neither

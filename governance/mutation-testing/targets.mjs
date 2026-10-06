@@ -3331,7 +3331,11 @@ export function buildMutationTargets(repositoryRoot) {
         '../../sdk/src/script/templates/RevenueListingProfile.ts',
         '../../sdk/src/script/templates/RevenueListingKeys.ts'
       ],
-      mutate: ['src/overlayAcquisitionCovenantSettlement.ts'],
+      mutate: [
+        'src/overlayAcquisitionCovenantSettlement.ts',
+        'src/overlayAcquisitionCovenantSettlementCore.ts',
+        'src/overlayAcquisitionCovenantProfileSettlement.ts'
+      ],
       ...jestTarget(
         'jest.config.js',
         ['<rootDir>/test/overlay-acquisition*.test.ts', '<rootDir>/test/key-delivery.test.ts'],

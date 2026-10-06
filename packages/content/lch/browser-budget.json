@@ -17,7 +17,9 @@
     "validateLCHCollectorPreparation",
     "validateLCHOverlayCovenantProfileTerms",
     "validateLCHOverlayCovenantProfilePromise",
-    "validateLCHOverlayCovenantProfileWindow"
+    "validateLCHOverlayCovenantProfileWindow",
+    "decodeLCHOverlayCovenantProfilePurchaseEvidence",
+    "bindLCHOverlayCovenantProfileSettlement"
   ],
   "maximumBytes": {
     "vite": {
@@ -53,7 +55,9 @@
         "validateLCHCollectorPreparation",
         "validateLCHOverlayCovenantProfileTerms",
         "validateLCHOverlayCovenantProfilePromise",
-        "validateLCHOverlayCovenantProfileWindow"
+        "validateLCHOverlayCovenantProfileWindow",
+        "decodeLCHOverlayCovenantProfilePurchaseEvidence",
+        "bindLCHOverlayCovenantProfileSettlement"
       ],
       "maximumBytes": {
         "vite": {
@@ -81,7 +85,9 @@
         "validateLCHCollectorPreparation",
         "validateLCHOverlayCovenantProfileTerms",
         "validateLCHOverlayCovenantProfilePromise",
-        "validateLCHOverlayCovenantProfileWindow"
+        "validateLCHOverlayCovenantProfileWindow",
+        "decodeLCHOverlayCovenantProfilePurchaseEvidence",
+        "bindLCHOverlayCovenantProfileSettlement"
       ],
       "prohibitedExports": [
         "SQLiteProtectedOperationObjectStore",
