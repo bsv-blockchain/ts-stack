@@ -1375,6 +1375,12 @@ branches, 42.57% functions, and 45.46% lines; that collection includes imported
 `out/src` code as well as source files. Use the exact run's coverage report,
 rather than comparing unlike source-only and combined collections.
 
+`pnpm test:property` selects every registered Wallet Toolbox property suite, including
+the portable BRC-38/39 suites. Keep the manual-test ignore option before the
+boolean runner options and file list: Jest treats it as an array and otherwise
+consumes appended file paths as exclusions. The root governance regression checks
+the actual Jest argument parser and the complete registered selection.
+
 Operational repair, migration, export, and long-running service procedures are
 not tests. They live under [`operator/`](./operator/README.md), produce an exact
 dry-run plan by default, and require explicit confirmation before they write
