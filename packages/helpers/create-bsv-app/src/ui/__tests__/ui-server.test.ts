@@ -176,6 +176,38 @@ test('GET / in add mode seeds only the manifest capabilities', async () => {
   }
 })
 
+test('--ui flags seed the page and flag-only values (bsvDir) reach the generated config', async () => {
+  const target = join(dir, 'app')
+  const srv = await startUiServer({
+    existing: null,
+    targetDir: target,
+    flags: { name: 'flagged', network: 'main', bsvDir: 'lib/bsv' },
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const seed = pageSeed(await (await fetch(srv.url)).text())
+    expect(seed).toMatchObject({ name: 'flagged', network: 'main', bsvDir: 'lib/bsv' })
+    expect(seed.capabilities).toEqual(expect.arrayContaining(['wallet-connect', 'wallet-login']))
+    // the page submits only visible schema fields, so bsvDir is absent from the body
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify({
+        mode: 'new',
+        name: 'flagged',
+        frontend: 'react',
+        capabilities: ['wallet-connect']
+      })
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).written).toContain('lib/bsv/auth.ts')
+    const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.bsvDir).toBe('lib/bsv')
+  } finally {
+    srv.close()
+  }
+})
+
 test('POST /generate (valid new draft) scaffolds, resolves done, and 200s', async () => {
   const calls: string[][] = []
   const fake: RunCommand = (command, args) => {

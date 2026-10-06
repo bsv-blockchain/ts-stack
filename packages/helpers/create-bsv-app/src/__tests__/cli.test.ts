@@ -535,4 +535,21 @@ describe('run --ui', () => {
     expect(seen).toEqual([{ targetDir: dir }])
     expect(res.written).toContain('src/bsv/auth.ts')
   })
+
+  test('passes the parsed CLI flags through to startUi', async () => {
+    const seen: unknown[] = []
+    const stub = async (o: { targetDir: string; flags?: unknown }): Promise<RunResult> => {
+      seen.push(o.flags)
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: []
+      }
+    }
+    await run(['--dir', dir, '--ui', '--bsv-dir', 'lib/bsv', '--network', 'main'], undefined, {
+      startUi: stub
+    })
+    expect(seen).toEqual([{ bsvDir: 'lib/bsv', network: 'main' }])
+  })
 })

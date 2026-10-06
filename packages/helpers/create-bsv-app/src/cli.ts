@@ -13,6 +13,7 @@ import { getStarter } from './starters.js'
 export type StartUi = (opts: {
   existing: ProjectManifest | null
   targetDir: string
+  flags?: ConfigDraft
   runCommand?: RunCommand
 }) => Promise<RunResult>
 
@@ -42,7 +43,7 @@ Options:
   --capabilities <names>       Add comma-separated BSV capabilities
   --package-manager <name>     Use npm, pnpm, yarn, or bun
   --network <main|test|ttn>    Select the BSV network
-  --yes                        Accept defaults without prompting
+  --yes                        Resolve from flags without prompting
   --force                      Overwrite conflicting generated files
   --ui                         Open the browser-based configurator
   --glue | --no-glue          Enable or disable integration glue
@@ -211,11 +212,17 @@ export async function run(
       (async (o: {
         existing: ProjectManifest | null
         targetDir: string
+        flags?: ConfigDraft
         runCommand?: RunCommand
       }) => {
         return await (await import('./ui/ui-server.js')).runUi(o)
       })
-    return await startUi({ existing, targetDir: initialTargetDir, runCommand: deps?.runCommand })
+    return await startUi({
+      existing,
+      targetDir: initialTargetDir,
+      flags: args.draft,
+      runCommand: deps?.runCommand
+    })
   }
 
   const config = await resolveCliConfig(args, initialTargetDir, provider)

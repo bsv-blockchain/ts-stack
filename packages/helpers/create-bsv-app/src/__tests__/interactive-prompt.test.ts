@@ -4,9 +4,7 @@ const intro = jest.fn()
 const outro = jest.fn()
 const cancel = jest.fn()
 const isCancel = jest.fn(() => false)
-const text = jest.fn(async ({ message }: { message: string }) =>
-  message === 'Project name' ? 'interactive-demo' : 'src/bsv'
-)
+const text = jest.fn(async () => 'interactive-demo')
 const confirm = jest.fn(async () => true)
 const multiselect = jest.fn(async (_opts: { initialValues?: string[] }) => ['wallet-login'])
 const select = jest.fn(async ({ message }: { message: string }) => {

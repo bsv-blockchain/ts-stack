@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals'
-import { serializeSchema, buildPage } from '../ui-page'
+import { serializeSchema, buildPage, VISIBLE_DRAFT_SRC } from '../ui-page'
 import type { ProjectManifest } from '../../config/project-manifest'
 
 describe('serializeSchema', () => {
@@ -133,5 +133,51 @@ describe('buildPage', () => {
     expect(() =>
       buildPage({ schema: [], seed: {}, scriptNonce: '"><script>alert(1)</script>' })
     ).toThrow('scriptNonce must be a base64url token')
+  })
+})
+
+type VisibleDraft = (schema: unknown, draft: Record<string, unknown>) => Record<string, unknown>
+const visibleDraft = new Function(`${VISIBLE_DRAFT_SRC}
+return visibleDraft`)() as VisibleDraft
+
+/** The page's in-memory draft for a fresh new-mode run (schema defaults, all capabilities ticked). */
+function newModeDraft(): Record<string, unknown> {
+  return {
+    mode: 'new',
+    starter: 'custom',
+    name: 'demo',
+    frontend: 'react',
+    frontendVariant: 'react-ts',
+    backend: 'express',
+    capabilities: ['wallet-connect', 'wallet-login'],
+    glue: true,
+    packageManager: 'npm',
+    network: 'test',
+    install: true
+  }
+}
+
+describe('visibleDraft (submit payload)', () => {
+  test('add mode without a manifest drops the hidden new-mode stack fields', () => {
+    const draft: Record<string, unknown> = { ...newModeDraft(), mode: 'add' }
+    const payload = visibleDraft(serializeSchema(null), draft)
+    expect(payload).toEqual({ mode: 'add', capabilities: ['wallet-connect', 'wallet-login'] })
+    expect(draft.frontend).toBe('react') // in-page draft untouched so toggling back restores it
+  })
+
+  test('a repository starter drops the hidden capabilities, glue, network and stack', () => {
+    const payload = visibleDraft(serializeSchema(null), { ...newModeDraft(), starter: 'meter' })
+    expect(payload).toEqual({
+      mode: 'new',
+      starter: 'meter',
+      name: 'demo',
+      packageManager: 'npm',
+      install: true
+    })
+  })
+
+  test('keeps non-schema keys such as bsvDir', () => {
+    const payload = visibleDraft(serializeSchema(null), { ...newModeDraft(), bsvDir: 'lib/bsv' })
+    expect(payload).toEqual({ ...newModeDraft(), bsvDir: 'lib/bsv' })
   })
 })

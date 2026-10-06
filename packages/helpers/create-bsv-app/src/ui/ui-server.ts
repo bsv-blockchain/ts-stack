@@ -103,12 +103,13 @@ async function handleGenerate(
   res: ServerResponse,
   existing: ProjectManifest | null,
   targetDir: string,
+  flagOnly: ConfigDraft,
   runCommand: RunCommand | undefined,
   resolveDone: (r: RunResult) => void
 ): Promise<void> {
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
-    const config = resolveDraft(seedDraft(existing, draft))
+    const config = resolveDraft(seedDraft(existing, { ...flagOnly, ...draft }))
     // force:false — preserve existing capability files, matching the CLI default (the user re-runs with intent but we never clobber their edits)
     const result = applyConfig(config, targetDir, { runCommand, force: false })
     sendJson(res, 200, { targetDir: result.targetDir, written: result.written, deps: result.deps })
@@ -151,11 +152,12 @@ async function handlePlan(
   req: IncomingMessage,
   res: ServerResponse,
   existing: ProjectManifest | null,
-  targetDir: string
+  targetDir: string,
+  flagOnly: ConfigDraft
 ): Promise<void> {
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
-    const config = resolveDraft(seedDraft(existing, draft))
+    const config = resolveDraft(seedDraft(existing, { ...flagOnly, ...draft }))
     const caps = resolveCapabilities(config.capabilities, { expandRequires: config.mode === 'new' })
     const files = planPaths(config, caps).map(p => ({
       path: p,
@@ -176,6 +178,8 @@ async function handlePlan(
 export async function startUiServer(opts: {
   existing: ProjectManifest | null
   targetDir: string
+  /** CLI flags given alongside `--ui`. */
+  flags?: ConfigDraft
   deps?: { runCommand?: RunCommand }
 }): Promise<UiServer> {
   const { existing, targetDir } = opts
@@ -188,9 +192,9 @@ export async function startUiServer(opts: {
           .map(c => ({ label: c.title }))
       : []
   const schema = serializeSchema(existing)
-  const seed = seedDraft(existing, {})
+  const seed = seedDraft(existing, opts.flags ?? {})
   // new mode pre-selects every offerable capability, matching the terminal flow
-  if (existing === null) {
+  if (existing === null && seed.mode === 'new') {
     const offerable =
       schema.flatMap(s => s.fields).find(f => f.key === 'capabilities')?.options ?? []
     seed.capabilities = mergeCapabilityIds(
@@ -198,6 +202,11 @@ export async function startUiServer(opts: {
       offerable.map(o => o.value)
     )
   }
+  // flags with no UI field (e.g. --bsv-dir) are never posted back, so the server re-applies them
+  const uiKeys = new Set(schema.flatMap(s => s.fields.map(f => f.key)))
+  const flagOnly = Object.fromEntries(
+    Object.entries(opts.flags ?? {}).filter(([key]) => !uiKeys.has(key))
+  ) as ConfigDraft
   const html = buildPage({
     schema,
     seed,
@@ -235,11 +244,12 @@ export async function startUiServer(opts: {
             res,
             existing,
             targetDir,
+            flagOnly,
             opts.deps?.runCommand,
             resolveDone
           )
         if (req.method === 'POST' && req.url === '/plan')
-          return await handlePlan(req, res, existing, targetDir)
+          return await handlePlan(req, res, existing, targetDir, flagOnly)
         sendJson(res, 404, { error: 'not found' })
       } catch (error) {
         if (error instanceof UiRequestError) {
@@ -268,6 +278,7 @@ export async function startUiServer(opts: {
 export interface RunUiOpts {
   existing: ProjectManifest | null
   targetDir: string
+  flags?: ConfigDraft
   runCommand?: RunCommand
   openBrowser?: (url: string) => void
 }
@@ -276,6 +287,7 @@ export async function runUi(opts: RunUiOpts): Promise<RunResult> {
   const srv = await startUiServer({
     existing: opts.existing,
     targetDir: opts.targetDir,
+    flags: opts.flags,
     deps: { runCommand: opts.runCommand }
   })
   const open = opts.openBrowser ?? ((url: string) => defaultOpenBrowser(url))
