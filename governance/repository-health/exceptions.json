@@ -433,25 +433,6 @@
       "created": "2026-10-02",
       "reviewBy": "2026-11-01",
       "removeWhen": "Remove the patch, exact-version package extension and scoped removal together after an official compatible Metro/file-map release removes the affected dependency path; require the complete watcher oracle, fresh unexcluded audit, frozen graph and packed Metro/Hermes platform checks before retirement."
-    },
-    {
-      "id": "standalone-nodemon-chokidar-advisory-repair",
-      "category": "override",
-      "target": "Nodemon-parent chokidar4.0.3 in infra/uhrp-server-basic, infra/uhrp-server-cloud-bucket and infra/wab",
-      "owner": "ts-stack-maintainers",
-      "reason": "No compatible released Nodemon update removes high GHSA-vfj7-8cjw-p6xm from its Chokidar3/braces graph. Nodemon already expands watch globs into literal directories. A source-owned adapter restores the former anymatch3 ignore predicate, including literal-directory recursion, custom cwd, regex/functions and dotfile behavior, while retaining the actual CLI, manual restart, Node/ts-node preloads and shutdown. WAB replaces ts-node-dev with the same tested watcher instead of forcing its unsupported glob API through Chokidar4. Only each Nodemon parent receives the substitution; production service startup and storage/HTTP contracts are unchanged. This is a temporary dependency repair, not an advisory exclusion.",
-      "evidence": [
-        "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
-        "https://github.com/paulmillr/chokidar/releases/tag/4.0.3",
-        "https://github.com/remy/nodemon/blob/v3.1.14/bin/nodemon.js",
-        "infra/uhrp-server-basic/dev/bin/nodemon.js",
-        "infra/uhrp-server-basic/dev/check-watch.cjs",
-        "governance/service-runtime-copy-policy.json",
-        "https://github.com/bsv-blockchain/ts-stack/discussions/757"
-      ],
-      "created": "2026-10-03",
-      "reviewBy": "2026-11-03",
-      "removeWhen": "Remove all three scoped substitutions and the compatibility adapter together after an official compatible Nodemon release removes the affected dependency closure and preserves the full ignore/restart/preload/manual-restart/shutdown contract; require fresh frozen unexcluded audits, complete service builds/tests and protected Linux image qualification before retirement."
     }
   ]
 }

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-10-03",
+  "lastReviewed": "2026-10-06",
   "owner": "ts-stack-maintainers",
-  "rationale": "Standalone image build contexts retain a small number of runtime sources that are canonically owned elsewhere. These copies are synchronized byte-for-byte so published packages and official images cannot drift. The same rule owns standalone development watcher adapters and their native regression tests.",
+  "rationale": "Standalone image build contexts retain a small number of runtime sources that are canonically owned elsewhere. These copies are synchronized byte-for-byte so published packages and official images cannot drift.",
   "copies": [
     {
       "canonicalSource": "infra/uhrp-server-basic/src/resourceLimits.ts",
@@ -112,20 +112,6 @@
     {
       "canonicalSource": "infra/uhrp-server-basic/src/chirp/bodyMiddleware.ts",
       "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/bodyMiddleware.ts"]
-    },
-    {
-      "canonicalSource": "infra/uhrp-server-basic/dev/bin/nodemon.js",
-      "synchronizedSources": [
-        "infra/uhrp-server-cloud-bucket/dev/bin/nodemon.js",
-        "infra/wab/dev/bin/nodemon.js"
-      ]
-    },
-    {
-      "canonicalSource": "infra/uhrp-server-basic/dev/check-watch.cjs",
-      "synchronizedSources": [
-        "infra/uhrp-server-cloud-bucket/dev/check-watch.cjs",
-        "infra/wab/dev/check-watch.cjs"
-      ]
     }
   ]
 }
