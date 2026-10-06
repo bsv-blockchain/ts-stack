@@ -1278,7 +1278,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
     const child = await this.getPublicKey({
       protocolID: [2, '3241645161d8'],
       keyID: 'brc197 authority',
-      counterparty: 'anyone'
+      counterparty: 'anyone',
+      forSelf: true
     })
     if (
       result.profile !== BRC197_INTERNALIZATION_PROFILE ||

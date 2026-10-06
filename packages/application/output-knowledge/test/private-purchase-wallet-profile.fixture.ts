@@ -77,19 +77,21 @@ function nativeFundingChain(originalAnchor: Transaction) {
   }
   const chain = { network: 'mock' as const, genesisHash: headers[0].hash }
   const chains: ChainViewResolver = {
-    resolve: async (view: ReturnType<typeof context>['view']) => ({
-      view,
-      tracker: {
-        currentHeight: async () => 101,
-        isValidRootForHeight: async (root: string, height: number) =>
-          headers[height]?.merkleRoot === root
-      },
-      header: async (height: number) => {
-        const header = headers[height]
-        if (!header) throw new Error('Missing synthetic native header')
-        return header
-      }
-    })
+    resolve: (view: ReturnType<typeof context>['view']) =>
+      Promise.resolve({
+        view,
+        tracker: {
+          currentHeight: () => Promise.resolve(101),
+          isValidRootForHeight: (root: string, height: number) =>
+            Promise.resolve(headers[height]?.merkleRoot === root)
+        },
+        header: (height: number) => {
+          const header = headers[height]
+          return header
+            ? Promise.resolve(header)
+            : Promise.reject(new Error('Missing synthetic native header'))
+        }
+      })
   }
   const currentContext = () => {
     const current = context()

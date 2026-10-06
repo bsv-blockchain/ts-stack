@@ -54,6 +54,28 @@ export interface SpentInputTransition {
   setSpentBy: boolean
 }
 
+/** Keep each ownership write ordered, including iterator closing on failure.
+ * Parallel writes could change conflict handling and rollback transitions. */
+async function internalizeInSeries<T>(values: readonly T[], visit: (value: T) => Promise<void>): Promise<void> {
+  const iterator: Iterator<T> = values[Symbol.iterator]()
+  async function next(): Promise<void> {
+    const item = iterator.next()
+    if (item.done) return
+    try {
+      await visit(item.value)
+    } catch (error) {
+      try {
+        iterator.return?.()
+      } catch {
+        // A for-of body failure retains its original error during iterator closing.
+      }
+      throw error
+    }
+    await next()
+  }
+  await next()
+}
+
 /**
  * Mark every storage row at each consumed-input outpoint as spent — across
  * all users that track that outpoint. An on-chain spend invalidates the UTXO
@@ -95,23 +117,23 @@ export async function markUserInputsSpent(
   if (outpoints.length === 0) return []
   const transitioned: SpentInputTransition[] = []
   await storage.transaction(async trx => {
-    for (const op of outpoints) {
+    await internalizeInSeries(outpoints, async op => {
       const matches = await storage.findOutputs({
         partial: { txid: op.txid, vout: op.vout },
         noScript: true,
         trx
       })
-      for (const o of matches) {
-        if (!o.spendable) continue
-        if (o.spentBy != null && o.spentBy !== transactionId) continue
+      await internalizeInSeries(matches, async o => {
+        if (!o.spendable) return
+        if (o.spentBy != null && o.spentBy !== transactionId) return
         const setSpentBy = o.userId === userId
         const update: Partial<TableOutput> = setSpentBy
           ? { spendable: false, spentBy: transactionId }
           : { spendable: false }
         await storage.updateOutput(verifyId(o.outputId), update, trx)
         transitioned.push({ outputId: verifyId(o.outputId), setSpentBy })
-      }
-    }
+      })
+    })
   }, trx)
   return transitioned
 }
@@ -139,10 +161,10 @@ export async function restoreInputsToSpendable(
 ): Promise<void> {
   if (transitions.length === 0) return
   await storage.transaction(async trx => {
-    for (const t of transitions) {
+    await internalizeInSeries(transitions, async t => {
       const update: Partial<TableOutput> = t.setSpentBy ? { spendable: true, spentBy: undefined } : { spendable: true }
       await storage.updateOutput(verifyId(t.outputId), update, trx)
-    }
+    })
   }, trx)
 }
 
@@ -683,24 +705,24 @@ class InternalizeActionContext {
   }
 
   private async mergeWalletPayments(transactionId: number, trx?: TrxToken): Promise<void> {
-    for (const payment of this.walletPayments) {
-      if (payment.ignore) continue
+    await internalizeInSeries(this.walletPayments, async payment => {
+      if (payment.ignore) return
       if (payment.eo != null) {
         await this.mergeWalletPaymentForOutput(transactionId, payment, trx)
       } else {
         await this.storeNewWalletPaymentForOutput(transactionId, payment, trx)
       }
-    }
+    })
   }
 
   private async mergeBasketInsertions(transactionId: number, trx?: TrxToken): Promise<void> {
-    for (const basket of this.basketInsertions) {
+    await internalizeInSeries(this.basketInsertions, async basket => {
       if (basket.eo != null) {
         await this.mergeBasketInsertionForOutput(transactionId, basket, trx)
       } else {
         await this.storeNewBasketInsertionForOutput(transactionId, basket, trx)
       }
-    }
+    })
   }
 
   private async retireNoSendWithProof(transactionId: number, bump: MerklePath, trx?: TrxToken): Promise<void> {
@@ -868,21 +890,21 @@ class InternalizeActionContext {
     await this.storage.transaction(async trx => {
       await this.addLabels(transactionId, trx)
 
-      for (const payment of this.walletPayments) {
+      await internalizeInSeries(this.walletPayments, async payment => {
         await this.storeNewWalletPaymentForOutput(transactionId, payment, trx)
-      }
+      })
 
-      for (const basket of this.basketInsertions) {
+      await internalizeInSeries(this.basketInsertions, async basket => {
         await this.storeNewBasketInsertionForOutput(transactionId, basket, trx)
-      }
+      })
     })
   }
 
   async addLabels(transactionId: number, trx?: TrxToken) {
-    for (const label of this.vargs.labels) {
+    await internalizeInSeries(this.vargs.labels, async label => {
       const txLabel = await this.storage.findOrInsertTxLabel(this.userId, label, trx)
       await this.storage.findOrInsertTxLabelMap(verifyId(transactionId), verifyId(txLabel.txLabelId), trx)
-    }
+    })
   }
 
   async markInputsSpent(transactionId: number, trx?: TrxToken): Promise<void> {
@@ -896,9 +918,9 @@ class InternalizeActionContext {
   }
 
   async addBasketTags(basket: BasketInsertionX, outputId: number, trx?: TrxToken) {
-    for (const tag of basket.tags || []) {
+    await internalizeInSeries(basket.tags || [], async tag => {
       await this.storage.tagOutput({ outputId, userId: this.userId }, tag, trx)
-    }
+    })
   }
 
   async storeNewWalletPaymentForOutput(transactionId: number, payment: WalletPaymentX, trx?: TrxToken): Promise<void> {

@@ -5668,3 +5668,107 @@ original complete cohort also awaits the new frozen qualification. These source
 corrections, guides and compiled API example do not finish Checkpoint 2; full current
 alias custody, native profile routes and activation gates, HTTP composition, final
 whole mutation reconciliation and exact published-head hosted gates remain open.
+
+The subsequent coherent frozen run started with the complete original ten-file
+funding selection. It passed 60 cases and failed four new selected-intake cases
+in 19.202 Jest seconds, before the later buyer/profile/state/Chaintracks cohorts.
+Every capture had negative bounded fault-marker triage and no timeout; bounded
+resource removal and independent inventories proved the container and volume
+absent. The public-key API defaults to the counterparty side of BRC-42 derivation,
+whereas this recipient intake needs the identity owner's child. The selected
+capability and signer now explicitly request `forSelf: true`; ordinary defaults
+remain unchanged. Independent pure SDK mathematics compares eleven disclosed
+synthetic actors against both the wallet helper and normative child calculation,
+and confirms the default counterparty point differs. This is a source correction
+and mathematical component check, not native receipt or spending qualification.
+The refreshed whole canonical wallet inventory has 938 distinct sites, retaining
+all original selectors, source/support unions, thresholds and property controls.
+
+### Exact-head source findings and recipient-side correction
+
+The `76c5853df` hosted run passed the Chaintracks wallet shard after the original
+fixture selected an ephemeral port. Its separate zero-new Sonar gate reported
+sixteen findings: twelve serial awaits in the newly factored storage intake core
+and four no-await asynchronous synthetic tracker methods. The storage core now
+uses one private serial iterator, preserving write order, early skips and original
+errors during iterator closing. The fixture returns explicit resolved or rejected
+promises, retaining its original synthetic headers and chain checks. No test,
+property count, deadline, selector, assertion or quality rule changed. Full wallet
+and application type checks and repository lint pass for this working source.
+
+Together with the explicit recipient-side child selection described above, the
+complete canonical funding inventory contains 946 distinct sites, including both
+entire intake cores and their wrappers. The original 143 targets, 390 execution
+rows, full ten-suite funding and nine-suite payment cohorts remain unchanged;
+the payment inventory remains 408 sites. These are inventory and source-preparation
+receipts, not a mutation campaign or native qualification. Frozen native v4 was
+superseded before admission or execution. A new source/controller agreement and
+complete ordinary Linux qualification are required before crediting these changes.
+
+The next complete frozen Linux funding run (`v5`) passed 63 of 64 tests in the
+original ten suites (nine passing suites, one failing suite; 20.391 Jest seconds,
+20.781 captured seconds). Every captured step stayed within its bound without a
+native-fault marker or supervisor timeout. The container and volume were actually
+removed and independently absent; the coordination resource calendar was removed
+and read back. Buyer nine, current-profile three, state-clock nineteen and
+Chaintracks seventeen remained unrun after the ordinary assertion failure.
+These receipts remain failed and unrun evidence, respectively.
+
+The explicit recipient-side `forSelf: true` correction passed the positive credit,
+negative ownership and original generated remittance tests. The new eight-recipient
+example stopped at its first actor after receipt, reopen, idempotent intake, exact
+protected-child input selection and independent Script verification succeeded.
+Its final assertion prematurely expected the stored output to be spent after a
+default automatic-batch `noSend` action. The established action-batch implementation
+instead reserves that output, excludes it from the wallet's public spendable
+view, and persists its spent flag when the batch commits.
+
+The source correction exercises all eight disclosed recipients separately in
+default automatic and explicit legacy modes. It checks the actual reservation
+and public output view, completes the original action through public `sendWith`
+using the existing mocked post service, retains the stored spent-output and
+transaction assertions, and reopens again to check persisted literal metadata and
+spend ownership. No production batch behavior, ordinary wallet default, test
+budget, selector or mutation setting changed. This expanded example is source
+prepared and remains unqualified until a fresh complete frozen run passes.
+Actual fresh peer860 source division ACK `DC_kwDOSLqBrM4BHnd8` covers these owned
+source changes only; a new full source/runtime/controller tuple and actual
+runtime ACK are still required before execution. No held569 private source or
+qualification was adopted.
+
+### Complete selected-wallet functional qualification
+
+The fresh frozen `v6` Linux run passed all five complete cohorts: original
+funding (10 suites, 65 tests), buyer payment (9 suites, 91 tests), current
+Script profile (3 suites, 31 tests), application state and clock (19 suites,
+301 tests), and Chaintracks (1 suite, 17 tests). In total, 42 suites and 505
+tests passed. Both original 300-history recovery properties retained their
+minimum runs, seed and deadlines. All eight disclosed recipient actors completed
+receipt, reopen, protected spending, public batch commit and a second reopen in
+both default automatic and explicit legacy modes.
+
+The frozen tracked-source manifest is
+`ea53abbd1893932500b4b7d1f971719c3fedda13148baed40a954252b4a5db47`;
+the independently checked built-runtime manifest is
+`5a55a4c27ffb88068cd77860767ce88fc9f3dabf5dfeccbbbacc4bdbb0212076`.
+Both were rechecked before and after execution. Every capture passed bounded
+fault-marker triage without a supervisor timeout. The owned container and volume
+were physically removed and independent successful inventories proved their
+absence; the coordination resource calendar was removed and read back. The
+later documentation updates are outside this frozen source snapshot and require
+separate committed-head root checks.
+
+These are functional component results. The recipient example proves ownership
+and wallet lifecycle using disclosed synthetic child outputs; it does not prove
+every native covenant route or the complete buyer, seller, admission and HTTP
+composition. The previous failed runs remain failed evidence. This run is not a
+performance qualification, a mutation campaign or exact-head hosted approval.
+
+The published `76c5853df` head still has unresolved application performance
+checks. A CPU-only diagnostic on unchanged public purchase fixtures found repeated
+construction of the same original transaction within a single recovery call.
+A private call-local prototype preserves candidate bytes and independently parses
+the returned funded transaction; it has not been adopted or qualified. Durable
+multi-alias custody, full native route and activation preflight coverage, complete
+HTTP demonstrations, final mutation reconciliation and terminal successful
+exact-head hosted gates remain required for Checkpoint 2.

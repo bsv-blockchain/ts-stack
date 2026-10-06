@@ -18,6 +18,12 @@ and counterparty `"anyone"`. Payout remittance carries literal
 `derivationPrefix: "brc197"`, `derivationSuffix: "authority"` and the generator
 public key as sender. These strings are not ordinary BRC-29 Base64 fields.
 The ordinary `internalizeAction` API and its validation remain unchanged.
+
+A recipient checks its own child with `getPublicKey({ protocolID: [2,
+"3241645161d8"], keyID: "brc197 authority", counterparty: "anyone",
+forSelf: true })`. The public-key API defaults to the counterparty side; omitting
+`forSelf: true` selects a different point. Signing and spending remain protected
+inside the recipient wallet and use its own derived private child.
 Never encode the literals to make that ordinary method accept them: encoding
 would select a different child and could strand a payout.
 
@@ -43,6 +49,14 @@ existing evidence, transactional ownership, merge, spent-input and rollback
 pipeline. Stored managed-output metadata retains the literal invoice fields.
 No root or child private scalar leaves a wallet API.
 
+Protected spending follows the wallet's existing lifecycle. In default automatic
+batch mode, a `noSend` action reserves its input and removes it from wallet-visible
+spendable outputs. The stored spent flag changes when the batch commits through
+`sendWith`; staging alone is not a persisted spend. Explicit legacy mode retains
+its existing immediate persistence. Applications must retain and complete the
+original action through the selected wallet lifecycle rather than interpreting a
+raw storage flag as permission to spend a reserved output again.
+
 The ordinary validator is reused for every other argument with call-local
 Base64 validation scaffolding. Those placeholder bytes never enter derivation,
 remittance, signing or storage. Fixed fields are independently checked first
@@ -62,10 +76,13 @@ a License, or permission to take another wallet action. A leaking public-child
 scalar would reveal its root because the derivation tweak is public; this
 profile makes no privacy claim.
 
-This branch's selected intake is under qualification. The added native credit,
-idempotence, wrong-recipient/wrong-Script, unsupported-writer and generated
-remittance tests are source-prepared; they have not yet passed a frozen native
-run. Full eight-recipient receipt, reopen and actual protected spending, every
-profile route, activation-before-funding and the final package/platform/mutation
-campaign remain Checkpoint 2 gates. Do not treat this guide or a capability
-shape as proof that those gates have passed.
+The complete frozen Linux funding and intake profile passes all 65 tests in its
+original ten suites, including credit, idempotence, wrong-recipient/wrong-Script,
+unsupported-writer and generated remittance checks. Eight independent recipients
+receive public synthetic fixed-child P2PKH payments, reopen, spend through their
+protected wallets, commit and reopen again in both automatic and legacy modes.
+The native purchase, current Script, state-clock and Chaintracks regression
+profiles also pass. This is component evidence. Every protected profile route,
+activation-before-funding, durable alias recovery and the final hosted,
+package/platform/mutation campaign remain Checkpoint 2 gates. A capability shape
+or a passing receipt example does not establish those broader prerequisites.

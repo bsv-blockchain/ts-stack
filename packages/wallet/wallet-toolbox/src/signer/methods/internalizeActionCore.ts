@@ -112,7 +112,7 @@ export async function internalizeActionCore(
     if (p == null) throw new WERR_INVALID_PARAMETER('paymentRemittance', `valid for protocol ${o.protocol}`)
 
     if (selected) {
-      const child = wallet.keyDeriver.derivePublicKey(brc29ProtocolID, 'brc197 authority', 'anyone').toString()
+      const child = wallet.keyDeriver.derivePublicKey(brc29ProtocolID, 'brc197 authority', 'anyone', true).toString()
       if (
         child !== brc197ChildPublicKey(auth.identityKey) ||
         output.lockingScript.toHex() !== brc197ExpectedLockingScript(auth.identityKey)

@@ -9,6 +9,7 @@ import { fundingFixture } from '../../src/storage/fundingRecovery/__tests__/fund
 import { P2PKH, WalletProtocol } from '@bsv/sdk'
 import { isManagedChangeOutput } from '../../src/storage/methods/managedChange'
 import { _tu, TestWalletNoSetup } from '../utils/TestUtilsWalletStorage'
+import { Wallet } from '../../src/Wallet'
 
 describe('internalizeAction managed-change policy', () => {
   jest.setTimeout(30000)
@@ -271,7 +272,9 @@ describe('explicit local BRC-197 fixed-child ownership', () => {
     const fixture = fundingFixture(ctx)
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
     const child = brc197ChildPublicKey(ctx.identityKey)
-    expect(child).toBe(ctx.keyDeriver.derivePublicKey([2, '3241645161d8'], 'brc197 authority', 'anyone').toString())
+    expect(child).toBe(
+      ctx.keyDeriver.derivePublicKey([2, '3241645161d8'], 'brc197 authority', 'anyone', true).toString()
+    )
     expect(await ctx.wallet.getBrc197InternalizationCapabilities()).toEqual({
       profile: BRC197_INTERNALIZATION_PROFILE,
       recipientIdentityKey: ctx.identityKey,
@@ -353,78 +356,142 @@ describe('explicit local BRC-197 fixed-child ownership', () => {
     expect(await ctx.wallet.balance()).toBe(before)
   })
 
-  test('eight independent recipients retain literal metadata across reopen and spend through the protected wallet', async () => {
-    for (let recipient = 0; recipient < 8; recipient++) {
-      // Disclosed synthetic actors and proofs; no network broadcast or identity scalar
-      // is obtained from a wallet API. Each recipient owns a distinct SQLite file.
-      const rootKeyHex = new PrivateKey(91 + recipient).toHex()
-      const databaseName = `brc197-recipient-${recipient}`
-      const filePath = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
-      let local = await _tu.createSQLiteTestWallet({ databaseName, filePath, rootKeyHex })
-      try {
-        const fixture = fundingFixture(local)
-        fixture.source.outputs[0].satoshis = 2000000
-        fixture.source.merklePath = undefined
-        // Rebuild the disclosed proof after changing the synthetic source value.
-        fixture.source.merklePath = new MerklePath(1234, [[{ offset: 0, hash: fixture.source.id('hex'), txid: true }]])
-        fixture.tx.inputs[0].sourceTXID = fixture.source.id('hex')
-        fixture.tx.outputs[1].satoshis = 1000000
-        const capability = await local.wallet.getBrc197InternalizationCapabilities()
-        expect(capability.recipientIdentityKey).toBe(local.identityKey)
-        expect(capability.childPublicKey).toBe(brc197ChildPublicKey(local.identityKey))
-        fixture.tx.outputs[1].lockingScript = new P2PKH().lock(
-          PublicKey.fromString(capability.childPublicKey).toAddress()
-        )
-        jest.spyOn(local.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
-        const args: Brc197InternalizeActionArgs = {
-          profile: BRC197_INTERNALIZATION_PROFILE,
-          recipientIdentityKey: local.identityKey,
-          tx: fixture.tx.toAtomicBEEF(),
-          outputs: [
-            {
-              outputIndex: 1,
-              protocol: 'wallet payment',
-              paymentRemittance: {
-                derivationPrefix: 'brc197',
-                derivationSuffix: 'authority',
-                senderIdentityKey: BRC197_COUNTERPARTY
-              }
-            }
-          ],
-          description: 'Public synthetic recipient payout'
+  test.each(['auto', 'legacy'] as const)(
+    'eight independent recipients retain literal metadata across reopen and spend through the protected wallet (%s)',
+    async mode => {
+      for (let recipient = 0; recipient < 8; recipient++) {
+        // Disclosed synthetic actors and proofs; no network broadcast or identity scalar
+        // is obtained from a wallet API. Each recipient owns a distinct SQLite file.
+        const rootKeyHex = new PrivateKey(91 + recipient).toHex()
+        const databaseName = `brc197-recipient-${mode}-${recipient}`
+        const filePath = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
+        const open = async () => {
+          const reopened = await _tu.createSQLiteTestWallet({ databaseName, filePath, rootKeyHex })
+          if (mode === 'legacy') {
+            reopened.wallet = new Wallet({
+              chain: reopened.chain,
+              keyDeriver: reopened.keyDeriver,
+              storage: reopened.storage,
+              services: reopened.services,
+              monitor: reopened.monitor,
+              actionBatchMode: mode
+            })
+          }
+          return reopened
         }
-        expect((await local.wallet.internalizeBrc197Action(args)).satoshis).toBe(1000000)
-        await local.wallet.destroy()
-        local = await _tu.createSQLiteTestWallet({ databaseName, filePath, rootKeyHex })
-        jest.spyOn(local.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
-        expect(await local.wallet.balance()).toBe(1000000)
-        expect((await local.wallet.internalizeBrc197Action(args)).satoshis).toBe(0)
-        const row = (
-          await local.activeStorage.findOutputs({ partial: { userId: local.userId, txid: fixture.tx.id('hex') } })
-        )[0]
-        expect(row.derivationPrefix).toBe('brc197')
-        expect(row.derivationSuffix).toBe('authority')
-        expect(row.senderIdentityKey).toBe(BRC197_COUNTERPARTY)
-        const result = await local.wallet.createAction({
-          description: 'Spend fixed-child payment after reopen',
-          outputs: [{ satoshis: 900000, lockingScript: '51', outputDescription: 'Public synthetic destination' }],
-          options: { noSend: true, randomizeOutputs: false }
-        })
-        expect(result.tx).toBeDefined()
-        const spend = Transaction.fromAtomicBEEF(result.tx!)
-        expect(spend.inputs).toHaveLength(1)
-        expect(spend.inputs[0].sourceTXID).toBe(fixture.tx.id('hex'))
-        expect(spend.inputs[0].sourceOutputIndex).toBe(1)
-        expect(spend.inputs[0].unlockingScript?.toHex()).not.toBe('')
-        expect(await spend.verify(fixture.tracker)).toBe(true)
-        expect((await local.activeStorage.findOutputs({ partial: { outputId: row.outputId } }))[0].spendable).toBe(
-          false
-        )
-      } finally {
-        await local.wallet.destroy()
+        let local = await open()
+        try {
+          const fixture = fundingFixture(local)
+          fixture.source.outputs[0].satoshis = 2000000
+          fixture.source.merklePath = undefined
+          // Rebuild the disclosed proof after changing the synthetic source value.
+          fixture.source.merklePath = new MerklePath(1234, [
+            [{ offset: 0, hash: fixture.source.id('hex'), txid: true }]
+          ])
+          fixture.tx.inputs[0].sourceTXID = fixture.source.id('hex')
+          fixture.tx.outputs[1].satoshis = 1000000
+          const capability = await local.wallet.getBrc197InternalizationCapabilities()
+          expect(capability.recipientIdentityKey).toBe(local.identityKey)
+          expect(capability.childPublicKey).toBe(brc197ChildPublicKey(local.identityKey))
+          fixture.tx.outputs[1].lockingScript = new P2PKH().lock(
+            PublicKey.fromString(capability.childPublicKey).toAddress()
+          )
+          jest.spyOn(local.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
+          const args: Brc197InternalizeActionArgs = {
+            profile: BRC197_INTERNALIZATION_PROFILE,
+            recipientIdentityKey: local.identityKey,
+            tx: fixture.tx.toAtomicBEEF(),
+            outputs: [
+              {
+                outputIndex: 1,
+                protocol: 'wallet payment',
+                paymentRemittance: {
+                  derivationPrefix: 'brc197',
+                  derivationSuffix: 'authority',
+                  senderIdentityKey: BRC197_COUNTERPARTY
+                }
+              }
+            ],
+            description: 'Public synthetic recipient payout'
+          }
+          expect((await local.wallet.internalizeBrc197Action(args)).satoshis).toBe(1000000)
+          await local.wallet.destroy()
+          local = await open()
+          jest.spyOn(local.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
+          jest.spyOn(local.activeStorage, 'getServices').mockReturnValue(local.services)
+          _tu.mockPostServicesAsSuccess([local])
+          expect(await local.wallet.balance()).toBe(1000000)
+          expect((await local.wallet.internalizeBrc197Action(args)).satoshis).toBe(0)
+          const row = (
+            await local.activeStorage.findOutputs({ partial: { userId: local.userId, txid: fixture.tx.id('hex') } })
+          )[0]
+          expect(row.derivationPrefix).toBe('brc197')
+          expect(row.derivationSuffix).toBe('authority')
+          expect(row.senderIdentityKey).toBe(BRC197_COUNTERPARTY)
+          const result = await local.wallet.createAction({
+            description: 'Spend fixed-child payment after reopen',
+            outputs: [{ satoshis: 900000, lockingScript: '51', outputDescription: 'Public synthetic destination' }],
+            options: { noSend: true, randomizeOutputs: false }
+          })
+          expect(result.tx).toBeDefined()
+          const spend = Transaction.fromAtomicBEEF(result.tx!)
+          expect(spend.inputs).toHaveLength(1)
+          expect(spend.inputs[0].sourceTXID).toBe(fixture.tx.id('hex'))
+          expect(spend.inputs[0].sourceOutputIndex).toBe(1)
+          expect(spend.inputs[0].unlockingScript?.toHex()).not.toBe('')
+          expect(await spend.verify(fixture.tracker)).toBe(true)
+          expect(local.wallet.actionBatch.mode).toBe(mode)
+          expect(local.wallet.actionBatch.hasWorkspace).toBe(mode === 'auto')
+          const outpoint = `${fixture.tx.id('hex')}.1`
+          expect(
+            (await local.wallet.listOutputs({ basket: 'default' })).outputs.map(output => output.outpoint)
+          ).not.toContain(outpoint)
+          expect(await local.wallet.balance()).toBeLessThan(100000)
+          if (mode === 'auto') {
+            // noSend reserves the input in the default workspace. The stored
+            // spend flag changes at commit, rather than when the action is staged.
+            expect(await local.activeStorage.findReservedActionBatchOutputIds([row.outputId])).toContain(row.outputId)
+            expect((await local.activeStorage.findOutputs({ partial: { outputId: row.outputId } }))[0].spendable).toBe(
+              true
+            )
+          }
+          const committed = await local.wallet.createAction({
+            description: 'Persist protected child spend through public sendWith',
+            options: { sendWith: [result.txid!], acceptDelayedBroadcast: false }
+          })
+          expect(committed.sendWithResults).toContainEqual(expect.objectContaining({ txid: result.txid }))
+          expect(local.services.postBeef).toHaveBeenCalledTimes(1)
+          expect(local.wallet.actionBatch.hasWorkspace).toBe(false)
+          expect(await local.activeStorage.findReservedActionBatchOutputIds([row.outputId])).toEqual([])
+          expect((await local.activeStorage.findOutputs({ partial: { outputId: row.outputId } }))[0].spendable).toBe(
+            false
+          )
+          const storedSpend = await local.activeStorage.findTransactions({
+            partial: { userId: local.userId, txid: result.txid },
+            noRawTx: true
+          })
+          expect(storedSpend).toHaveLength(1)
+          expect((await local.activeStorage.findOutputs({ partial: { outputId: row.outputId } }))[0].spentBy).toBe(
+            storedSpend[0].transactionId
+          )
+          await local.wallet.destroy()
+          local = await open()
+          expect((await local.activeStorage.findOutputs({ partial: { outputId: row.outputId } }))[0]).toMatchObject({
+            spendable: false,
+            spentBy: storedSpend[0].transactionId,
+            derivationPrefix: 'brc197',
+            derivationSuffix: 'authority',
+            senderIdentityKey: BRC197_COUNTERPARTY
+          })
+          expect(
+            (await local.wallet.listOutputs({ basket: 'default' })).outputs.map(output => output.outpoint)
+          ).not.toContain(outpoint)
+        } finally {
+          await local.wallet.destroy()
+        }
       }
     }
-  })
+  )
 
   test('reports an unsupported active writer before a caller can lock listing value', async () => {
     const inherited = ctx.activeStorage.internalizeBrc197Action

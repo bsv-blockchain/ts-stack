@@ -119,6 +119,15 @@ may install different transaction domains without adopting its revenue model.
       Unchanged wire purchases and complete split/payout histories are component
       evidence. Both retirement Scripts execute; selected-chain retirement,
       all native/adaptor replacements and buyer/seller composition remain open.
+- [x] Provide the separately selected native format-two purchase adapter and local
+      fixed-child intake without changing ordinary wallet validation or defaults.
+      Complete synthetic funding, genesis, activation and protected purchase
+      recovery pass the original native suite and both 300-history properties.
+      Eight independent fixed-child recipients retain literal metadata through
+      receipt, reopen, protected spending, public commit and a second reopen in
+      both automatic and legacy modes. This component evidence does not qualify
+      all native profile routes, creation preflight, alias reconciliation or
+      complete buyer/seller/admission/HTTP composition.
 - [ ] Replace the superseded program, metadata, fixtures and ABI with both frozen
       programs and component manifests. Activation: 33406 program bytes,
       SHA256 `5152517f75ac4159aa5d34211f45ce12cd85386a8d1414169886b0d64dac1dea`.
