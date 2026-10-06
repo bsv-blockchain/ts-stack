@@ -182,7 +182,9 @@ export function decodeLCHOverlayBinding(input: unknown): LCHOverlayBinding {
   }
   return binding
 }
-/** C's exact initial schedule, checked by the same BRC-197 state validator as Script tooling. */
+/** Historical pre-replacement collector schedule retained for compatibility.
+ * Current immutable C uses decodeLCHCollectorRevenueProfile instead.
+ */
 export function decodeLCHCollectorRevenue(input: unknown): RevenueListingState {
   const value = map(input, 'Collector revenue')
   closed(value, ['version', 'family', 'initialRevenue', 'amendment', 'remainders', 'retirement'])

@@ -1,3 +1,15 @@
+---
+id: revenue-listing-profile
+title: 'Immutable Two-Stage Listing Profile'
+kind: guide
+version: '3.1.0'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
+review_cadence_days: 30
+status: experimental
+tags: [utxo, sdk, scripts, revenue]
+---
+
 # Immutable two-stage listing profile
 
 The optional sale-listing exemplar in BRC PR295 has two literal Bitcoin Script

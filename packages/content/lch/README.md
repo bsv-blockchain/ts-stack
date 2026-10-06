@@ -239,12 +239,21 @@ the coordinated SDK3 output-protocol and revenue-listing companions. Ordinary
 imports and `CORE_CAPABILITIES` retain their BRC-170 behavior and SDK2 support.
 
 `decodeLCHOverlayBinding` checks the exact seller key, chain, canonical HTTPS
-base and mode-specific anchor/policy fields. `decodeLCHCollectorRevenue` checks
-the initial collector schedule with the same state validator as the executable
-BRC-197 family, including sorted unique recipients and integer weights. Alignment to the revised
-immutable schedule, expiry height and fixed-child remittance remains an explicit
-acceptance requirement; the earlier collector extension is not the current contract.
-These representation checks do not establish seller/genesis authority.
+base and mode-specific anchor/policy fields. The current immutable C extension
+uses `decodeLCHCollectorRevenueProfile` and `bindLCHCollectorRevenueProfile`
+from `@bsv/lch/overlay-covenant`.
+They require the exact family, expiry height, immutable schedule, fixed-child
+derivation, permissionless payout, retained remainders and both retirement routes.
+CBOR recipient keys become lowercase hex and the complete schedule/expiry/family
+must match the descriptor. `validateLCHCollectorPreparation` requires an
+independently verified active stage and current chain height strictly below
+expiry; retained delivery obligations do not repeat this new-work check.
+
+`decodeLCHCollectorRevenue` and the existing covenant buyer/seller adapters retain
+pre-replacement behavior for compatibility. They are not current-family adapters.
+The revised collector component does not authenticate the Offer or establish
+activation ancestry, chain currentness, wallet remittance or alias recovery.
+Those separately installed integrations remain open before advertising C.
 
 `decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR
 objects and exact UTF-8 JCS settlement/evidence bytes. It checks the 2 MiB

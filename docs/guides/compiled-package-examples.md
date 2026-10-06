@@ -2481,3 +2481,30 @@ export async function verifyImmutableListingPurchase(
   return { purchaseCommitment: result.purchaseCommitment, lineage: result.lineage }
 }
 ```
+
+## Current immutable collector consent
+
+Use the covenant entry for the current collector representation. The caller
+independently authenticates the Offer, obtains the verified current-family history
+and installed chain height, and fences that context through new financial work.
+These binding predicates perform no chain lookup or wallet action and are not
+repeated to revoke an already accepted delivery obligation.
+
+```ts compile
+// example-id: immutable-collector-consent
+import {
+  bindLCHCollectorRevenueProfile,
+  validateLCHCollectorPreparation
+} from '@bsv/lch/overlay-covenant'
+import type { RevenueListingProfileLineageResult as CollectorHistoryResult } from '@bsv/output-knowledge/revenue-listing'
+
+export function compareImmutableCollectorConsent(
+  authenticatedOfferExtension: unknown,
+  history: Extract<CollectorHistoryResult, { status: 'verified' }>,
+  installedCurrentHeight: string
+) {
+  const binding = bindLCHCollectorRevenueProfile(authenticatedOfferExtension, history.descriptor)
+  validateLCHCollectorPreparation(binding.descriptor, history.stage, installedCurrentHeight)
+  return binding.collector
+}
+```

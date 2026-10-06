@@ -24,6 +24,18 @@ covenant and reference-application demonstrations remain unfinished checkpoint-t
 work. The concrete paid-lookup seller and authenticated native-wallet recovery
 flow are implemented and locally tested.
 
+The current C target is PR295's immutable collector extension. Use
+`decodeLCHCollectorRevenueProfile` from `@bsv/lch/overlay-covenant` to own
+its exact CBOR fields and
+`bindLCHCollectorRevenueProfile` to compare the entire recipient schedule,
+family and expiry height against the immutable listing descriptor.
+`validateLCHCollectorPreparation` checks a locally verified active stage and
+current height strictly below expiry before new work. It does not query a chain,
+authenticate an Offer, fund a transaction or revoke a retained obligation.
+The existing covenant buyer/seller classes below retain the earlier contract;
+their migration to the current verifiers, collector and alias owner remains open.
+Paid lookup and ordinary BRC-170 continue using their existing separate paths.
+
 ## Original consent before financial work
 
 Install `LCHOverlayPaidDomain` with complete original Header bytes, signed Offer,

@@ -35,6 +35,12 @@ may install different transaction domains without adopting its revenue model.
       bind it to reserved results/POTATOES and independently installed buyer/seller
       verifier results, and preserve historical entitlement during alias evidence
       changes. Component tests remain distinct from replacement-family qualification.
+- [x] Provide independently selected current C decoding and complete descriptor
+      binding, including immutable recipient slots, exact family/expiry, fixed
+      derivation, payout, remainder and retirement rules. A separate new-work
+      predicate requires verified active stage/current height below expiry;
+      no retained obligation is re-evaluated as a new preparation. These helpers
+      do not migrate buyer/seller custody or establish chain authority.
 - [ ] Integrate the revised immutable collector extension and current alias chain
       assessment with replacement-family/native buyer and seller recovery.
 - [ ] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias

@@ -961,6 +961,7 @@ test('optional LCH acquisition qualifies every whole module and its complete cry
   assert.deepEqual(target.mutate, [
     'src/overlayAcquisition.ts',
     'src/overlayAcquisitionCodec.ts',
+    'src/overlayAcquisitionCollectorProfile.ts',
     'src/overlayAcquisitionPolicy.ts',
     'src/overlayAcquisitionTerms.ts',
     'src/overlayAcquisitionConsent.ts',

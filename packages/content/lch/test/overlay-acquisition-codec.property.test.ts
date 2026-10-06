@@ -2,6 +2,11 @@ import { expect, it } from '@jest/globals'
 import fc from 'fast-check'
 import { canonicalOutputJSON } from '@bsv/sdk'
 import {
+  bindLCHCollectorRevenueProfile,
+  validateLCHCollectorPreparation
+} from '../src/overlayCovenant.js'
+import { collectorFixture } from './overlay-acquisition-collector-profile.fixture.js'
+import {
   decodeDeterministicCbor,
   encodeDeterministicCbor,
   objectId,
@@ -109,6 +114,34 @@ it('preserves byte-exact envelopes across both modes and refuses ambiguous evide
           )
         ).rejects.toThrow('unknown fields')
         expect(encodeDeterministicCbor(value as unknown as LCHValue)).toEqual(original)
+      }
+    )
+  )
+}, 180000)
+
+it('retains exact immutable collector schedules and strict preparation expiry across current CBOR profiles', () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: 1, max: 499999999 }),
+      fc.integer({ min: 1, max: 10000 }),
+      (expiry, weight) => {
+        const f = collectorFixture(expiry, weight),
+          bytes = encodeDeterministicCbor(f.collector as unknown as LCHValue),
+          decoded = decodeDeterministicCbor(bytes),
+          bound = bindLCHCollectorRevenueProfile(decoded, f.descriptor)
+        expect(encodeDeterministicCbor(decoded)).toEqual(bytes)
+        expect(bound.collector.initialRevenue).toEqual(f.descriptor.initialRevenue)
+        expect(() =>
+          validateLCHCollectorPreparation(bound.descriptor, 'active', String(expiry - 1))
+        ).not.toThrow()
+        expect(() =>
+          validateLCHCollectorPreparation(bound.descriptor, 'active', String(expiry))
+        ).toThrow('New preparation')
+        bound.collector.initialRevenue.recipients[0].weight = 0
+        expect(
+          bindLCHCollectorRevenueProfile(decoded, f.descriptor).collector.initialRevenue
+            .recipients[0].weight
+        ).toBe(weight)
       }
     )
   )

@@ -3256,6 +3256,7 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [
         'src/overlayAcquisition.ts',
         'src/overlayAcquisitionCodec.ts',
+        'src/overlayAcquisitionCollectorProfile.ts',
         'src/overlayAcquisitionPolicy.ts',
         'src/overlayAcquisitionTerms.ts',
         'src/overlayAcquisitionConsent.ts',

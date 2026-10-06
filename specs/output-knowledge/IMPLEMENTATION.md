@@ -85,6 +85,18 @@ Historical exports remain compatible and are explicitly identified as superseded
 Native wallet/alias ownership, collector/currentness integration and complete
 checkpoint qualification remain open.
 
+The optional LCH covenant entry now also exposes exact current collector decoding,
+complete descriptor binding and a strict new-preparation stage/height predicate.
+Every CBOR field and all eight recipient slots are checked with the current SDK
+schedule/descriptor validators. Superseded revisions and mutable rule labels are
+refused by this interface; the historical decoder retains its earlier contract.
+The complete LCH suite passes 257 tests in 39 suites with its original coverage
+and 300-run property controls; the current helper has complete coverage. A further
+positive eight-recipient case and the original/current codec properties pass in
+the focused seven-test profile. Packed exports and original browser budgets pass.
+These helpers neither authenticate Offers nor provide native currentness/alias
+custody; full current buyer/seller integration remains open.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

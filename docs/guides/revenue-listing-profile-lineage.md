@@ -6,7 +6,7 @@ version: '0.1.0'
 last_updated: '2026-10-05'
 last_verified: '2026-10-05'
 review_cadence_days: 30
-status: draft
+status: experimental
 tags: [utxo, scripts, evidence, overlays]
 ---
 

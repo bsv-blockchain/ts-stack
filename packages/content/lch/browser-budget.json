@@ -11,7 +11,11 @@
     "parseLCH",
     "encryptSegmented"
   ],
-  "prohibitedExports": [],
+  "prohibitedExports": [
+    "decodeLCHCollectorRevenueProfile",
+    "bindLCHCollectorRevenueProfile",
+    "validateLCHCollectorPreparation"
+  ],
   "maximumBytes": {
     "vite": {
       "raw": 750000,
@@ -38,7 +42,13 @@
         "validateLCHOverlayCovenantPromise",
         "validateLCHOverlayCovenantWindow"
       ],
-      "prohibitedExports": ["SQLiteProtectedOperationObjectStore", "NodeProtectedPayloadCodec"],
+      "prohibitedExports": [
+        "SQLiteProtectedOperationObjectStore",
+        "NodeProtectedPayloadCodec",
+        "decodeLCHCollectorRevenueProfile",
+        "bindLCHCollectorRevenueProfile",
+        "validateLCHCollectorPreparation"
+      ],
       "maximumBytes": {
         "vite": {
           "raw": 308000,
@@ -59,7 +69,10 @@
         "lchOverlayCovenantEntitlementDigest",
         "bindLCHOverlayCovenantSettlement",
         "decodeLCHOverlayCovenantPurchaseEvidence",
-        "validateLCHOverlayCovenantTerms"
+        "validateLCHOverlayCovenantTerms",
+        "decodeLCHCollectorRevenueProfile",
+        "bindLCHCollectorRevenueProfile",
+        "validateLCHCollectorPreparation"
       ],
       "prohibitedExports": [
         "SQLiteProtectedOperationObjectStore",
