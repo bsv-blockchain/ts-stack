@@ -187,8 +187,8 @@ function fieldOptions(f, mode) {
 export const PAGE_COMMAND_SRC = String.raw`function buildCommand(d, dir) {
   var p = ['npx create-bsv-app', '--mode', d.mode || 'new'];
   if (dir && dir !== '.') p.push('--dir', JSON.stringify(dir));
+  if (d.name) p.push('--name', JSON.stringify(d.name));
   if ((d.mode || 'new') === 'new') {
-    if (d.name) p.push('--name', JSON.stringify(d.name));
     if (d.starter) p.push('--starter', d.starter);
     if (d.frontend && d.frontend !== 'none') p.push('--frontend', d.frontend);
     if (d.frontend === 'react' && d.frontendVariant) p.push('--variant', d.frontendVariant);
@@ -210,8 +210,8 @@ function buildTokens(d, dir) {
   function flag(f, v, col) { t.push({ t: ' ' + f + ' ', c: FLAG }); if (v !== undefined) t.push({ t: v, c: col || VAL }); }
   flag('--mode', d.mode || 'new');
   if (dir && dir !== '.') flag('--dir', '"' + dir + '"', STR);
+  if (d.name) flag('--name', '"' + d.name + '"', STR);
   if ((d.mode || 'new') === 'new') {
-    if (d.name) flag('--name', '"' + d.name + '"', STR);
     if (d.starter) flag('--starter', d.starter);
     if (d.frontend && d.frontend !== 'none') flag('--frontend', d.frontend);
     if (d.frontend === 'react' && d.frontendVariant) flag('--variant', d.frontendVariant);

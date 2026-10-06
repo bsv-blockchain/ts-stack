@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { CLI_HELP, parseArgs, run } from '../cli'
 import type { RunCommand } from '../scaffold/base-scaffolder'
 import type { RunResult } from '../pipeline'
@@ -550,6 +550,32 @@ describe('run --ui', () => {
     await run(['--dir', dir, '--ui', '--bsv-dir', 'lib/bsv', '--network', 'main'], undefined, {
       startUi: stub
     })
-    expect(seen).toEqual([{ bsvDir: 'lib/bsv', network: 'main' }])
+    // the name is defaulted from the target directory, as for --yes
+    expect(seen).toEqual([{ bsvDir: 'lib/bsv', network: 'main', name: basename(dir) }])
+  })
+
+  test('rejects flags the form cannot correct before starting the UI, as --yes does', async () => {
+    let started = false
+    const stub = async (o: { targetDir: string }): Promise<RunResult> => {
+      started = true
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: []
+      }
+    }
+    const yes = ['--dir', dir, '--frontend', 'react', '--yes']
+    for (const flags of [
+      ['--capabilities', 'wallet-login,nope'],
+      ['--bsv-dir', '../outside']
+    ]) {
+      const expected = await run([...yes, ...flags]).catch((e: Error) => e)
+      expect(expected).toHaveProperty('name', 'ConfigError')
+      await expect(
+        run(['--dir', dir, '--ui', ...flags], undefined, { startUi: stub })
+      ).rejects.toThrow((expected as Error).message)
+    }
+    expect(started).toBe(false)
   })
 })

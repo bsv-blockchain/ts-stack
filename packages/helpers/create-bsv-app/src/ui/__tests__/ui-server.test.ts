@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync, readFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startUiServer, runUi } from '../ui-server'
+import { run } from '../../cli'
 import { serializeSchema, PAGE_DRAFT_SRC } from '../ui-page'
 import * as pipeline from '../../pipeline'
 import type { UiServer } from '../ui-server'
@@ -687,5 +688,76 @@ test('the page gets the target directory for the copied command', async () => {
     expect(html).toContain('window.__TARGET_DIR__ = "../proj";')
   } finally {
     srv.close()
+  }
+})
+
+/** Starts the UI server the way `run` wires `--ui`, without opening a browser. */
+async function uiFromCli(argv: string[]): Promise<UiServer> {
+  let srv: UiServer | undefined
+  await run(argv, undefined, {
+    startUi: async o => {
+      srv = await startUiServer({ ...o, deps: { runCommand: noopRun } })
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: []
+      }
+    }
+  })
+  if (srv === undefined) throw new Error('UI server not started')
+  return srv
+}
+
+test('--ui defaults the name to the target directory, as --yes does, so add mode works without a project', async () => {
+  const target = join(dir, 'my-app')
+  mkdirSync(target)
+  const srv = await uiFromCli(['--ui', '--dir', target])
+  try {
+    const html = await (await fetch(srv.url)).text()
+    expect(pagePayload(html).name).toBe('my-app')
+    const headers = await uiHeaders(srv.url)
+    const body = JSON.stringify(pagePayload(html, { mode: 'add', capabilities: ['wallet-login'] }))
+    const plan = await (await fetch(`${srv.url}/plan`, { method: 'POST', headers, body })).json()
+    expect(plan.error).toBeUndefined()
+    const gen = await fetch(`${srv.url}/generate`, { method: 'POST', headers, body })
+    expect(gen.status).toBe(200)
+    expect(JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8')).name).toBe('my-app')
+  } finally {
+    srv.close()
+  }
+})
+
+test('--ui --name wins over the directory default', async () => {
+  const srv = await uiFromCli(['--ui', '--dir', dir, '--name', 'flagged'])
+  try {
+    const html = await (await fetch(srv.url)).text()
+    expect(pagePayload(html).name).toBe('flagged')
+    expect(pagePayload(html, { mode: 'add' })).not.toHaveProperty('name')
+  } finally {
+    srv.close()
+  }
+})
+
+test('--ui on a manifest project keeps its name in add mode and uses the directory name in new mode', async () => {
+  const target = join(dir, 'fresh-dir')
+  mkdirSync(target)
+  writeFileSync(join(target, 'bsv-scaffold.json'), JSON.stringify(reactManifest), 'utf8')
+  const applySpy = jest.spyOn(pipeline, 'applyConfig')
+  const srv = await uiFromCli(['--ui', '--dir', target])
+  try {
+    const html = await (await fetch(srv.url)).text()
+    // matches --yes --mode new in this directory
+    expect(pagePayload(html, { mode: 'new' }).name).toBe('fresh-dir')
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify(pagePayload(html, { capabilities: ['wallet-login'] }))
+    })
+    expect(res.status).toBe(200)
+    expect(applySpy.mock.calls[0]?.[0]).toMatchObject({ mode: 'add', name: 'demo' })
+  } finally {
+    srv.close()
+    applySpy.mockRestore()
   }
 })

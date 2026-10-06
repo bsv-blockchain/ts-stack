@@ -379,6 +379,14 @@ describe('command', () => {
     expect(text(d, '.')).toBe(expected)
   })
 
+  test('add mode keeps --name so the copied command works without a project', () => {
+    const d = { mode: 'add', name: 'my-app', capabilities: ['wallet-login'] }
+    const expected =
+      'npx create-bsv-app --mode add --name "my-app" --capabilities wallet-login --yes'
+    expect(buildCommand(d, '.')).toBe(expected)
+    expect(text(d, '.')).toBe(expected)
+  })
+
   test('names a non-default target directory with --dir, quoted like --name', () => {
     const d = { mode: 'new', name: 'demo' }
     const expected = 'npx create-bsv-app --mode new --dir "../proj" --name "demo" --yes'
