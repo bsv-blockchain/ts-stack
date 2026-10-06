@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 
 import {
   calculateMutationMetrics,
   evaluateMutationReport,
   parseArguments,
+  REPOSITORY_ROOT,
   selectAffectedMutationTargets,
   strykerEnvironment,
   targetsForUnresolvedMutationRange
@@ -160,6 +163,298 @@ test('mutation report evaluation ratchets score, coverage, and invalid outcomes'
       'one has 1 survived mutants that ran no tests; the test runner selected nothing, so the score is not evidence',
       'one has 1 invalid mutants; maximum is 0'
     ]
+  )
+})
+
+test('additional package-relative fixture inputs select their target without replacing existing inputs', () => {
+  const target = {
+    packageDirectory: 'packages/one',
+    propertyTest: 'packages/one/test/value.property.test.ts',
+    mutate: ['src/value.ts:10-20'],
+    additionalInputs: ['./test/fixtures/source.ts'],
+    runnerOptions: {
+      jest: {
+        configFile: 'jest.config.cjs',
+        config: { testMatch: ['<rootDir>/test/value*.test.ts'] }
+      }
+    }
+  }
+  const precise = {
+    one: target,
+    two: {
+      ...target,
+      packageDirectory: 'packages/two',
+      propertyTest: 'packages/two/test/value.property.test.ts'
+    }
+  }
+  for (const input of [
+    'src/value.ts',
+    'test/value.property.test.ts',
+    'jest.config.cjs',
+    'test/value.test.ts',
+    'test/fixtures/source.ts'
+  ]) {
+    assert.deepEqual(selectAffectedMutationTargets(precise, [`packages/one/${input}`]), ['one'])
+    assert.deepEqual(selectAffectedMutationTargets(precise, [`packages/two/${input}`]), ['two'])
+  }
+  for (const input of [
+    'test/fixtures/other.ts',
+    'test/fixtures/source.ts.extra',
+    'src/other.ts',
+    'packages/one/test/fixtures/source.ts'
+  ]) {
+    assert.deepEqual(selectAffectedMutationTargets(precise, [`packages/one/${input}`]), [])
+  }
+  assert.deepEqual(selectAffectedMutationTargets(precise, ['test/fixtures/source.ts']), [])
+  assert.deepEqual(
+    selectAffectedMutationTargets(precise, ['packages/one/test/fixtures/source.ts'], {
+      changedTargetIds: ['two']
+    }),
+    ['one', 'two']
+  )
+
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)
+  assert.equal(Object.keys(canonical).length, 57)
+  assert.deepEqual(canonical['wallet-retained-snapshot'].additionalInputs, [
+    'test/utils/snapshotRelationFixtures.ts',
+    'test/utils/snapshotCertificateFixtures.ts',
+    'test/utils/snapshotGlobalFixtures.ts',
+    'test/utils/snapshotHistoricalMigrations.ts',
+    'test/utils/snapshotSqliteFixtures.ts',
+    'test/utils/snapshotSqliteIdentityFixture.ts',
+    'test/utils/snapshotSqliteMaintenanceFixture.ts',
+    'test/storage/snapshotHistoricalMigrations.cjs',
+    'test/storage/snapshotSqliteGenerationCrash.cjs'
+  ])
+  assert.deepEqual(
+    selectAffectedMutationTargets(canonical, [
+      'packages/wallet/wallet-toolbox/test/utils/snapshotRelationFixtures.ts'
+    ]),
+    ['wallet-retained-snapshot']
+  )
+  for (const input of [
+    'src/storage/schema/snapshotCertificateIndexMigration.ts',
+    'src/storage/schema/snapshotGlobalIndexMigration.ts',
+    'src/storage/schema/snapshotGlobalIndexTriggers.ts',
+    'test/utils/snapshotCertificateFixtures.ts',
+    'test/utils/snapshotGlobalFixtures.ts',
+    'src/storage/schema/snapshotRelationIndexMigration.ts',
+    'src/storage/schema/snapshotProfileIndexMigration.ts',
+    'src/storage/snapshot/RetainedReadSnapshot.property.test.ts'
+  ]) {
+    assert.ok(
+      selectAffectedMutationTargets(canonical, [
+        `packages/wallet/wallet-toolbox/${input}`
+      ]).includes('wallet-retained-snapshot')
+    )
+  }
+})
+
+test('retained snapshot mutation execution recycles workers while other wallet defaults remain intact', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  assert.equal(targets['wallet-retained-snapshot'].runnerOptions.maxTestRunnerReuse, 8)
+  assert.equal(targets['wallet-snapshot-archive'].runnerOptions.maxTestRunnerReuse, undefined)
+  assert.equal(targets['wallet-snapshot-remote-http'].runnerOptions.maxTestRunnerReuse, undefined)
+})
+
+test('journal mutation registration retains its complete source, canonical tests and fixture ownership', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['wallet-snapshot-journal']
+  assert.deepEqual(target.mutate, [
+    'src/storage/snapshot/journal/SnapshotJournalRevision.ts',
+    'src/storage/snapshot/journal/SnapshotJournalRevisionSql.ts',
+    'src/storage/snapshot/journal/SnapshotJournalPage.ts',
+    'src/storage/snapshot/journal/SnapshotJournalSqliteClock.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlClock.ts',
+    'src/storage/snapshot/journal/SnapshotJournalSqliteObservers.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlObservers.ts',
+    'src/storage/snapshot/journal/SnapshotJournalBootstrap.ts',
+    'src/storage/snapshot/journal/SnapshotJournalHighWater.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlSource.ts',
+    'src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts',
+    'src/storage/snapshot/journal/SnapshotJournalReceipt.ts',
+    'src/storage/snapshot/journal/SnapshotJournalCaptureFence.ts',
+    'src/storage/snapshot/journal/SnapshotJournalConnections.ts',
+    'src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts',
+    'src/storage/snapshot/journal/SnapshotJournalCapture.ts',
+    'src/storage/snapshot/journal/SnapshotJournalCollection.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMaintenance.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMaintenanceFence.ts',
+    'src/storage/snapshot/journal/SnapshotJournalMaintenanceTask.ts'
+  ])
+  assert.deepEqual(target.additionalInputs, [
+    'test/fixtures/snapshotJournal/mysql-generation-ddl-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-generation-metadata-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-generation-state-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-intent-metadata-fixture.json',
+    'test/fixtures/snapshotJournal/mysql-source-metadata-fixture.json',
+    'test/utils/snapshotArchiveFixtures.ts',
+    'test/utils/snapshotSqliteFixtures.ts',
+    'test/utils/snapshotHistoricalMigrations.ts',
+    'test/storage/snapshotJournalNativeFixture.cjs',
+    'test/storage/snapshotJournalMysqlConnection.cjs',
+    'test/storage/snapshotJournalMysql.cjs',
+    'test/storage/snapshotJournalMysqlServerCrash.cjs',
+    'test/storage/snapshotJournalReceiptMysql.cjs',
+    'test/storage/snapshotJournalCaptureMysql.cjs',
+    'test/storage/snapshotJournalCaptureMysqlChild.cjs',
+    'test/storage/snapshotJournalCaptureProcessLoss.cjs',
+    'test/storage/snapshotJournalCaptureSqlite.cjs',
+    'test/storage/snapshotJournalRetentionChild.cjs',
+    'test/storage/snapshotJournalRetentionCuts.cjs',
+    'test/storage/snapshotJournalRetentionMysql.cjs',
+    'test/storage/snapshotJournalRetentionMysqlRc.cjs',
+    'test/storage/snapshotJournalRetentionMysqlRr.cjs',
+    'test/storage/snapshotJournalRetentionProcessLoss.cjs',
+    'test/storage/snapshotJournalRetentionSqlite.cjs',
+    'test/storage/snapshotJournalMaintenanceFixture.cjs',
+    'test/storage/snapshotJournalMaintenanceCuts.cjs',
+    'test/storage/snapshotJournalMaintenanceChild.cjs',
+    'test/storage/snapshotJournalMaintenanceProcessLoss.cjs',
+    'test/storage/snapshotJournalMaintenanceWal.cjs',
+    'test/storage/snapshotJournalMaintenanceMysqlRc.cjs',
+    'test/storage/snapshotJournalMaintenanceMysqlRr.cjs',
+    'test/storage/snapshotJournalSqliteCrash.cjs',
+    'test/storage/runSnapshotJournalMysql.cjs',
+    'test/storage/snapshotArchiveDocker.cjs'
+  ])
+  assert.equal(target.runnerOptions.maxTestRunnerReuse, 8)
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/storage/snapshot/journal/*.test.ts'
+  ])
+  for (const input of target.additionalInputs)
+    assert.ok(
+      selectAffectedMutationTargets(buildMutationTargets(REPOSITORY_ROOT), [
+        'packages/wallet/wallet-toolbox/' + input
+      ]).includes('wallet-snapshot-journal')
+    )
+})
+
+test('every inherited snapshot-sync target keeps the complete journal tests for owned provider ranges', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  for (const name of [
+    'wallet-snapshot-sync',
+    'wallet-snapshot-sync-destination',
+    'wallet-snapshot-sync-rows'
+  ]) {
+    assert.ok(
+      targets[name].runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/src/storage/snapshot/journal/*.test.ts'
+      )
+    )
+    assert.ok(
+      targets[name].runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/src/storage/snapshot/SnapshotSync*.test.ts'
+      )
+    )
+  }
+})
+
+test('adaptive paging owns its complete controller without removing the existing snapshot caller target', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const target = targets['wallet-adaptive-sync-budget']
+  assert.deepEqual(target.mutate, ['src/storage/sync/SyncPageBudget.ts'])
+  assert.deepEqual(target.additionalInputs, ['src/storage/snapshot/runSnapshotSyncSession.ts'])
+  assert.deepEqual(target.runnerOptions.jest.config.testMatch, [
+    '<rootDir>/src/storage/sync/SyncPageBudget.test.ts',
+    '<rootDir>/src/storage/sync/SyncPageBudget.property.test.ts',
+    '<rootDir>/src/storage/snapshot/SnapshotSyncSession.test.ts'
+  ])
+  assert.ok(
+    targets['wallet-snapshot-sync'].mutate.includes(
+      'src/storage/snapshot/runSnapshotSyncSession.ts'
+    )
+  )
+  assert.deepEqual(
+    selectAffectedMutationTargets(targets, [
+      'packages/wallet/wallet-toolbox/src/storage/sync/SyncPageBudget.ts'
+    ]),
+    ['wallet-adaptive-sync-budget']
+  )
+  const affected = selectAffectedMutationTargets(targets, [
+    'packages/wallet/wallet-toolbox/src/storage/snapshot/runSnapshotSyncSession.ts'
+  ])
+  assert.ok(affected.includes('wallet-adaptive-sync-budget'))
+  assert.ok(affected.includes('wallet-snapshot-sync'))
+})
+
+test('portable streaming keeps every complete source module and original behavioral suite', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const modules = [
+    ['wallet-portable-canonical-chunks', 'CanonicalPortableChunks'],
+    ['wallet-portable-packed-row', 'Brc38PackedRow'],
+    ['wallet-portable-source-stream', 'Brc38Stream'],
+    ['wallet-portable-knex-source', 'Brc38KnexSource'],
+    ['wallet-portable-json-stream', 'Brc38JsonStream'],
+    ['wallet-portable-brc39-frame', 'Brc39Frame'],
+    ['wallet-portable-brc39-node', 'Brc39StreamNode'],
+    ['wallet-portable-private-file', 'Brc39PrivateFileNode']
+  ]
+  const originalSuites = [
+    'Brc38JsonStream.property.test.ts',
+    'Brc38JsonStream.test.ts',
+    'Brc38KnexSource.test.ts',
+    'Brc38PackedRow.test.ts',
+    'Brc38Stream.test.ts',
+    'Brc39Frame.property.test.ts',
+    'Brc39Frame.test.ts',
+    'Brc39PrivateFileNode.test.ts',
+    'Brc39StreamNode.test.ts',
+    'CanonicalPortableChunks.property.test.ts',
+    'CanonicalPortableChunks.test.ts'
+  ].map(name => `<rootDir>/src/storage/portable/${name}`)
+  for (const [id, source] of modules) {
+    const target = targets[id]
+    assert.deepEqual(target.mutate, [`src/storage/portable/${source}.ts`])
+    const selectedSuites = target.runnerOptions.jest.config.testMatch
+    assert.deepEqual(selectedSuites.slice(0, originalSuites.length), originalSuites)
+    assert.deepEqual(selectedSuites.slice(originalSuites.length), [
+      '<rootDir>/src/storage/portable/EntryPoints.test.ts'
+    ])
+    assert.deepEqual(target.additionalInputs, [
+      'src/storage/portable/index.ts',
+      'src/storage/portable/stream.ts',
+      'src/storage/portable/node.ts'
+    ])
+    assert.ok(
+      selectAffectedMutationTargets(targets, [
+        `packages/wallet/wallet-toolbox/src/storage/portable/${source}.ts`
+      ]).includes(id)
+    )
+    assert.ok(
+      selectAffectedMutationTargets(targets, [
+        'packages/wallet/wallet-toolbox/src/storage/portable/EntryPoints.test.ts'
+      ]).includes(id)
+    )
+  }
+})
+
+test('snapshot sync owns every inherited manager region and complete primary selection', () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['wallet-snapshot-sync']
+  const file = 'src/storage/WalletStorageManager.ts'
+  const lines = readFileSync(
+    `${REPOSITORY_ROOT}/packages/wallet/wallet-toolbox/${file}`,
+    'utf8'
+  ).split('\n')
+  const expected = [
+    ['private async runSnapshotCopy(', 'async syncFromReader('],
+    ['async syncFromReader(', '    let inserts = 0'],
+    ['async syncFromReaderResumable(', '    const generation ='],
+    ['async syncToWriterResumable(', 'async syncToWriter('],
+    ['async syncToWriter(', '    let inserts = 0'],
+    ['async updateBackups(', 'async setActive('],
+    ['async setActive(', 'getStoreEndpointURL('],
+    ['private async withAccess<R>(', 'runAsWriter<R>(']
+  ].map(([startMarker, endMarker]) => {
+    const start = lines.findIndex(line => line.includes(startMarker))
+    const end = lines.findIndex((line, index) => index > start && line.includes(endMarker))
+    assert.ok(start >= 0 && end > start)
+    return `${file}:${start + 1}-${end}`
+  })
+  assert.deepEqual(
+    target.mutate.filter(specification => specification.startsWith(`${file}:`)),
+    expected
   )
 })
 

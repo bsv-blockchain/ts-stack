@@ -5,8 +5,11 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 import { REPOSITORY_ROOT } from './repository-health.mjs'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { partitionedMutationTargets, partitionMutationTarget } from './mutation-partitions.mjs'
 
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
+const MUTATION_PATH = join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml')
 const CONFORMANCE_PATH = join(REPOSITORY_ROOT, '.github/workflows/conformance.yml')
 const RUNTIME_PATH = join(REPOSITORY_ROOT, '.github/workflows/container-runtime-contract.yml')
 const WALLET_MOBILE_COVERAGE_PATH = join(
@@ -23,6 +26,50 @@ function workflowJobBlocks(workflow) {
     source: jobs.slice(match.index, matches[index + 1]?.index ?? jobs.length)
   }))
 }
+
+function assertWalletMutationTimeout(job, defaultMinutes) {
+  const targets =
+    '["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-journal","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'
+  const expected = `    timeout-minutes: \${{ contains(fromJSON('${targets}'), matrix.target) && 90 || ${defaultMinutes} }}`
+  assert.equal(job.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
+}
+
+test('CI downloads every canonical execution partition before verifying its complete union', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const partitioned = partitionedMutationTargets(Object.keys(targets), targets)
+  assert.ok(partitioned.length > 0)
+  assert.ok(partitioned.includes('wallet-snapshot-sync'))
+  assert.deepEqual(
+    partitionMutationTarget('wallet-snapshot-sync', targets['wallet-snapshot-sync']).map(
+      part => part.id
+    ),
+    ['session', 'checkpoint', 'copy', 'storage', 'primary']
+  )
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const gate = workflowJobBlocks(workflow).find(job => job.name === 'mutation-quality').source
+  const verify = gate.indexOf(
+    '      - name: Require every selected canonical partition target gate'
+  )
+  assert.ok(verify > 0)
+  const downloads = gate
+    .slice(0, verify)
+    .split(/^ {6}- /m)
+    .filter(step => step.startsWith('uses: actions/download-artifact@'))
+  for (const target of partitioned) {
+    const selected = downloads.filter(step =>
+      step.includes(`          path: .mutation-parts/${target}\n`)
+    )
+    assert.equal(selected.length, 1, `${target} requires exactly one artifact download`)
+    assert.ok(
+      selected[0].includes(
+        `        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), '${target}')\n`
+      )
+    )
+    assert.ok(selected[0].includes(`          pattern: mutation-${target}-*\n`))
+    assert.match(selected[0], /^uses: actions\/download-artifact@[a-f0-9]{40} /)
+  }
+  assert.match(gate.slice(verify), /--target "\$target" --directory "\.mutation-parts\/\$target"/)
+})
 
 test('CI shares one audited build across coverage and browser consumer lanes', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
@@ -123,10 +170,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
     if (job.name === 'mutation-tests') {
-      assert.match(
-        job.source,
-        /^    timeout-minutes: \$\{\{ contains\(fromJSON\('[^']+'\), matrix\.target\) && 90 \|\| 45 \}\}$/m
-      )
+      assertWalletMutationTimeout(job, 45)
     } else {
       assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
     }
@@ -137,6 +181,25 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
     /^    if: always\(\) && !cancelled\(\) && needs\.infra-scope\.result == 'success' && needs\.infra-scope\.outputs\.has-infra == 'true'$/m
   )
   assert.match(workflow, /\( "\$INFRA_RESULT" != "success" && "\$INFRA_RESULT" != "skipped" \)/)
+})
+
+test('wallet mutation allowances preserve other limits and complete campaign execution', () => {
+  for (const [path, defaultMinutes, maxParallel] of [
+    [CI_PATH, 45, 6],
+    [MUTATION_PATH, 45, 20]
+  ]) {
+    const job = workflowJobBlocks(readFileSync(path, 'utf8')).find(
+      job => job.name === 'mutation-tests'
+    )
+    assert.ok(job, path)
+    assertWalletMutationTimeout(job, defaultMinutes)
+    assert.match(job.source, /^ {6}fail-fast: false$/m)
+    assert.match(job.source, new RegExp(`^      max-parallel: ${maxParallel}$`, 'm'))
+    assert.match(
+      job.source,
+      /^ {8}run: node scripts\/mutation-testing\.mjs --target "\$\{\{ matrix\.target \}\}" --partition "\$\{\{ matrix\.partition \}\}"$/m
+    )
+  }
 })
 
 test('specialized workflows are bounded and required conformance checks always run on PRs', () => {
@@ -351,6 +414,77 @@ test('every HTTP latency scenario retains its own required coverage execution', 
   assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
 })
 
+function nativeWalletFixtureSteps() {
+  const wallet = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    job => job.name === 'coverage-wallet'
+  ).source
+  const matches = [...wallet.matchAll(/^ {6}- /gm)]
+  const steps = matches.map((match, index) =>
+    wallet.slice(match.index, matches[index + 1]?.index ?? wallet.length)
+  )
+  return { wallet, steps }
+}
+
+function onlyFixtureStep(steps, command) {
+  const matches = steps.filter(step => step.split('\n').includes(`        run: ${command}`))
+  assert.equal(matches.length, 1)
+  const step = matches[0]
+  assert.match(step, /^ {8}if: matrix.id == 'shard-1'$/m)
+  assert.match(step, /^ {8}working-directory: packages\/wallet\/wallet-toolbox$/m)
+  assert.doesNotMatch(step, /continue-on-error/)
+  return steps.indexOf(step)
+}
+
+function assertNativeWalletJob(wallet) {
+  assert.match(wallet, /^ {4}needs: prepare$/m)
+  assert.match(wallet, /^ {4}timeout-minutes: 40$/m)
+  assert.match(wallet, /^ {4}permissions:\n {6}contents: read\n {4}strategy:/m)
+  assert.doesNotMatch(wallet, /continue-on-error/)
+  // This gate runs before dependency installation; validate the governed native
+  // job's explicit matrix and service block without loading a workspace parser.
+  assert.match(
+    wallet,
+    /^ {4}strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}include:\n {10}- \{ id: shard-1, shard: 1 \}\n {10}- \{ id: shard-2, shard: 2 \}\n {10}- \{ id: shard-3, shard: 3 \}\n {10}- \{ id: shard-4, shard: 4 \}\n {10}- \{ id: sync-http-0, latency: 0 \}\n {10}- \{ id: sync-http-1000, latency: 1000 \}\n {4}services:$/m
+  )
+  assert.match(
+    wallet,
+    /^ {6}postgres:\n {8}image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef(?: #[^\n]*)?$/m
+  )
+  assert.match(wallet, /^ {8}ports:\n {10}- 5432:5432\n {8}options: >-$/m)
+}
+
+test('native snapshot process-loss proof uses the same-head build in exactly one required wallet shard', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const proof = onlyFixtureStep(steps, 'node test/storage/snapshotArchiveCrash.cjs')
+  const restored = steps.findIndex(step =>
+    step.includes('run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz')
+  )
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
+  )
+  assert.ok(restored >= 0 && restored < proof && proof < coverage)
+  assertNativeWalletJob(wallet)
+})
+
+test('native MySQL uses a bounded pinned fixture in the existing required wallet shard', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const provision = onlyFixtureStep(
+    steps,
+    'node test/storage/snapshotArchiveDocker.cjs provision-hosted-image'
+  )
+  const proof = onlyFixtureStep(steps, 'node test/storage/runSnapshotArchiveMysql.cjs')
+  for (const index of [provision, proof]) {
+    assert.match(steps[index], /^ {8}timeout-minutes: 5$/m)
+    assert.match(steps[index], /^ {8}env:\n {10}TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'\n {8}run:/m)
+  }
+  const sqlite = onlyFixtureStep(steps, 'node test/storage/snapshotArchiveCrash.cjs')
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
+  )
+  assert.ok(sqlite < provision && provision < proof && proof < coverage)
+  assertNativeWalletJob(wallet)
+})
+
 test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {
   const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
     candidate => candidate.name === 'mutation-quality'
@@ -386,4 +520,39 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     env: { PREPARE_RESULT: 'failure', MUTATION_TARGETS: '[]', MUTATION_RESULT: 'skipped' }
   })
   assert.notEqual(failedBuild.status, 0)
+})
+
+test('journal native recovery remains mandatory alongside all archive fixture families', () => {
+  const { wallet, steps } = nativeWalletFixtureSteps()
+  const archive = onlyFixtureStep(steps, 'node test/storage/runSnapshotArchiveMysql.cjs')
+  const sqlite = onlyFixtureStep(steps, 'node test/storage/snapshotJournalSqliteCrash.cjs')
+  const mysql = onlyFixtureStep(steps, 'node test/storage/runSnapshotJournalMysql.cjs')
+  const coverage = steps.findIndex(step =>
+    step.includes('name: Generate wallet-toolbox coverage shard')
+  )
+  assert.match(steps[sqlite], /^ {8}timeout-minutes: 3$/m)
+  assert.match(steps[mysql], /^ {8}timeout-minutes: 10$/m)
+  assert.ok(steps[mysql].includes("TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'"))
+  assert.ok(archive < sqlite && sqlite < mysql && mysql < coverage)
+  assertNativeWalletJob(wallet)
+})
+
+test('actual pinned inventory runs as a required installed-tool regression before build reuse', () => {
+  const jobs = workflowJobBlocks(readFileSync(CI_PATH, 'utf8'))
+  const health = jobs.find(job => job.name === 'repository-health').source
+  const prepare = jobs.find(job => job.name === 'prepare').source
+  assert.ok(health.includes('node --test scripts/*.test.mjs'))
+  assert.ok(!health.includes('mutation-partitions-engine.integration.mjs'))
+  const install = prepare.indexOf('run: pnpm install --frozen-lockfile --ignore-scripts')
+  const verify = prepare.indexOf(
+    'run: node --test scripts/mutation-partitions-engine.integration.mjs'
+  )
+  const build = prepare.indexOf('- name: Build workspace')
+  assert.ok(install >= 0 && install < verify && verify < build)
+  const steps = prepare.split(/^ {6}- /m)
+  const selected = steps.filter(step =>
+    step.includes('run: node --test scripts/mutation-partitions-engine.integration.mjs')
+  )
+  assert.equal(selected.length, 1)
+  assert.ok(!selected[0].includes('if:') && !selected[0].includes('continue-on-error'))
 })

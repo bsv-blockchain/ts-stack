@@ -15,7 +15,14 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The isolated SDK3 retirement candidate removes the obsolete serial-DID token
+The unpublished 3.0 candidate adds bounded BRC-118 payment transport to `AuthFetch` and corrects recipient-side BRC-29 derivation. See the [BRC-118 integration and migration guide](../../guides/brc118-payments.md) for preparation, negotiation, exact-byte authentication and uncertain-payment recovery. Existing nonempty non-multipart signing preimages and the 8 KiB header selection default are preserved.
+
+Ordinary HTTP fallback retains native text, URLSearchParams, typed Blob and
+FormData serialization and inferred Content-Type, including cached peers.
+Mutable inputs are copied before asynchronous work; explicit headers prevail.
+Authenticated payment retries retain their owned-byte snapshots.
+
+The integrated SDK3 candidate removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.
 Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
@@ -107,13 +114,13 @@ clients share the same regression coverage and a portable conformance vector.
 No API, wire or account-data migration is required; only clients already bundling
 the affected hardened SDK need a dependency update for this defect.
 
-The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
+The included 2.8.3 compatibility fixes repair HTTP wallet discovery with an explicit BRC100
 originator and binds the default JSON transport fetch receiver for browsers.
 It restores signed `listActions` net amounts with the historical wire encoding,
 matching JSON validation; count, length and individual output bounds stay intact.
 Apps affected by these client defects can update the SDK without changing calls.
 Wallets retain the existing BRC100 contract; an ecosystem-wide application
-migration is not required. The candidate is not published until the protected
+migration is not required. The 3.0.0 candidate remains unpublished until its protected
 release workflow completes.
 
 The action-history compatibility regression affects signed `listActions` values

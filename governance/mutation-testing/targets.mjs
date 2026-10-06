@@ -17,10 +17,16 @@ function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker
   return `${filePath}:${startIndex + 1}-${endIndex}`
 }
 
-function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelated = false } = {}) {
+function jestTarget(
+  configFile,
+  testMatch,
+  { esm = false, config = {}, findRelated = false, buildCommand, maxTestRunnerReuse } = {}
+) {
   return {
     testRunner: 'jest',
     runnerOptions: {
+      ...(buildCommand ? { buildCommand } : {}),
+      ...(maxTestRunnerReuse === undefined ? {} : { maxTestRunnerReuse }),
       jest: {
         projectType: 'custom',
         configFile,
@@ -39,6 +45,61 @@ function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelat
   }
 }
 
+function portableStreamMutationTargets(repositoryRoot) {
+  const definitions = [
+    [
+      'wallet-portable-canonical-chunks',
+      'CanonicalPortableChunks',
+      'CanonicalPortableChunks.property.test.ts'
+    ],
+    ['wallet-portable-packed-row', 'Brc38PackedRow', 'Brc38PackedRow.test.ts'],
+    ['wallet-portable-source-stream', 'Brc38Stream', 'Brc38Stream.test.ts'],
+    ['wallet-portable-knex-source', 'Brc38KnexSource', 'Brc38KnexSource.test.ts'],
+    ['wallet-portable-json-stream', 'Brc38JsonStream', 'Brc38JsonStream.property.test.ts'],
+    ['wallet-portable-brc39-frame', 'Brc39Frame', 'Brc39Frame.property.test.ts'],
+    ['wallet-portable-brc39-node', 'Brc39StreamNode', 'Brc39StreamNode.test.ts'],
+    ['wallet-portable-private-file', 'Brc39PrivateFileNode', 'Brc39PrivateFileNode.test.ts']
+  ]
+  const testMatch = [
+    '<rootDir>/src/storage/portable/Brc38JsonStream.property.test.ts',
+    '<rootDir>/src/storage/portable/Brc38JsonStream.test.ts',
+    '<rootDir>/src/storage/portable/Brc38KnexSource.test.ts',
+    '<rootDir>/src/storage/portable/Brc38PackedRow.test.ts',
+    '<rootDir>/src/storage/portable/Brc38Stream.test.ts',
+    '<rootDir>/src/storage/portable/Brc39Frame.property.test.ts',
+    '<rootDir>/src/storage/portable/Brc39Frame.test.ts',
+    '<rootDir>/src/storage/portable/Brc39PrivateFileNode.test.ts',
+    '<rootDir>/src/storage/portable/Brc39StreamNode.test.ts',
+    '<rootDir>/src/storage/portable/CanonicalPortableChunks.property.test.ts',
+    '<rootDir>/src/storage/portable/CanonicalPortableChunks.test.ts',
+    '<rootDir>/src/storage/portable/EntryPoints.test.ts'
+  ]
+  return Object.fromEntries(
+    definitions.map(([id, source, property]) => [
+      id,
+      {
+        packageDirectory: 'packages/wallet/wallet-toolbox',
+        manifest: 'packages/wallet/wallet-toolbox/package.json',
+        propertyTest: `packages/wallet/wallet-toolbox/src/storage/portable/${property}`,
+        mutate: [`src/storage/portable/${source}.ts`],
+        additionalInputs: [
+          'src/storage/portable/index.ts',
+          'src/storage/portable/stream.ts',
+          'src/storage/portable/node.ts'
+        ],
+        ...jestTarget('jest.config.cjs', testMatch, {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        })
+      }
+    ])
+  )
+}
+
 function vitestTarget(configFile) {
   return {
     testRunner: 'vitest',
@@ -49,6 +110,195 @@ function vitestTarget(configFile) {
       }
     }
   }
+}
+
+// Preserve the complete original snapshot-sync source ranges and selected tests.
+// Each disjoint group runs the same behavioral suite and its own strict gate.
+function snapshotSyncMutationTargets(repositoryRoot) {
+  const complete = {
+    packageDirectory: 'packages/wallet/wallet-toolbox',
+    manifest: 'packages/wallet/wallet-toolbox/package.json',
+    propertyTest:
+      'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts',
+    mutate: [
+      'src/utility/runInSeries.ts',
+      'src/storage/sync/syncCheckpoint.ts',
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/sync/syncSession.ts',
+        'async function committedCheckpoint(',
+        '/** One page in flight;'
+      ),
+      'src/storage/snapshot/SnapshotSync.ts',
+      'src/storage/snapshot/SnapshotSyncRows.ts',
+      'src/storage/snapshot/KnexSnapshotSyncDestination.ts',
+      'src/storage/snapshot/runSnapshotSyncSession.ts',
+      'src/storage/schema/snapshotSyncMigration.ts',
+      'src/storage/schema/entities/mergeSyncChunkEntities.ts',
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/sync/syncSession.ts',
+        'if (chunk.user != null && session.activeStorage',
+        "notify('preparing', { readMs })"
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/methods/validateSyncProof.ts',
+        'if (!(candidate.rawTx instanceof Uint8Array',
+        '  try {'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/StorageKnex.ts',
+        'this.snapshotSyncEnabled = options.snapshotSync',
+        'this.preparedBeefPolicy ='
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/schema/entities/EntityProvenTxReq.ts',
+        'override async mergeExisting(',
+        'export interface ProvenTxReqHistorySummaryApi'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/StorageKnex.ts',
+        'override getSnapshotSync():',
+        'protected override supportsNoSendExpiryPersistence()'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/StorageKnex.ts',
+        'override async destroy(): Promise<void>',
+        'override async migrate('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'private async runSnapshotCopy(',
+        'async syncFromReader('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncFromReader(',
+        '    let inserts = 0'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncFromReaderResumable(',
+        '    const generation ='
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncToWriterResumable(',
+        'async syncToWriter('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async syncToWriter(',
+        '    let inserts = 0'
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async updateBackups(',
+        'async setActive('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'async setActive(',
+        'getStoreEndpointURL('
+      ),
+      sourceLineRange(
+        repositoryRoot,
+        'packages/wallet/wallet-toolbox',
+        'src/storage/WalletStorageManager.ts',
+        'private async withAccess<R>(',
+        'runAsWriter<R>('
+      )
+    ],
+    ...jestTarget(
+      'jest.config.cjs',
+      [
+        '<rootDir>/src/storage/snapshot/SnapshotSync*.test.ts',
+        '<rootDir>/src/storage/snapshot/ConcurrentSnapshotSyncSource.test.ts',
+        '<rootDir>/src/storage/snapshot/ConcurrentSnapshotArchiveSource.test.ts',
+        '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts',
+        '<rootDir>/src/storage/schema/snapshotSyncMigration.test.ts',
+        '<rootDir>/src/storage/methods/validateSyncProof.test.ts',
+        '<rootDir>/src/storage/sync/syncFailure.test.ts',
+        '<rootDir>/src/storage/sync/syncSession.test.ts',
+        '<rootDir>/src/storage/sync/syncCheckpoint.test.ts',
+        '<rootDir>/src/utility/__tests__/runInSeries.test.ts',
+        '<rootDir>/src/storage/snapshot/journal/*.test.ts'
+      ],
+      {
+        config: {
+          moduleNameMapper: {
+            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+            '^(\\.{1,2}/.*)\\.js$': '$1'
+          }
+        }
+      }
+    )
+  }
+  const destination = new Set([
+    'src/storage/snapshot/KnexSnapshotSyncDestination.ts',
+    'src/storage/schema/snapshotSyncMigration.ts'
+  ])
+  const rows = new Set([
+    'src/storage/snapshot/SnapshotSyncRows.ts',
+    'src/storage/schema/entities/mergeSyncChunkEntities.ts',
+    'src/storage/schema/entities/EntityProvenTxReq.ts',
+    'src/storage/methods/validateSyncProof.ts'
+  ])
+  const groups = {
+    'wallet-snapshot-sync': [],
+    'wallet-snapshot-sync-destination': [],
+    'wallet-snapshot-sync-rows': []
+  }
+  const propertyTests = {
+    'wallet-snapshot-sync': complete.propertyTest,
+    'wallet-snapshot-sync-destination':
+      'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncDestination.property.test.ts',
+    'wallet-snapshot-sync-rows':
+      'packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncRows.property.test.ts'
+  }
+  for (const range of complete.mutate) {
+    const file = range.replace(/:\d+(?:-\d+)?$/, '')
+    let name = 'wallet-snapshot-sync'
+    if (destination.has(file)) name = 'wallet-snapshot-sync-destination'
+    else if (rows.has(file)) name = 'wallet-snapshot-sync-rows'
+    groups[name].push(range)
+  }
+  return Object.fromEntries(
+    Object.entries(groups).map(([name, mutate]) => [
+      name,
+      {
+        ...complete,
+        mutate,
+        propertyTest: propertyTests[name]
+      }
+    ])
+  )
 }
 
 export function buildMutationTargets(repositoryRoot) {
@@ -230,6 +480,515 @@ export function buildMutationTargets(repositoryRoot) {
         }
       )
     },
+    'wallet-read-snapshot-consistency': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      additionalInputs: [
+        'test/storage/snapshotArchiveMysql.cjs',
+        'test/storage/runSnapshotArchiveMysql.cjs',
+        'test/storage/snapshotArchiveDocker.cjs',
+        'test/storage/snapshotMysqlFixtureGroups.cjs',
+        'test/utils/mysqlReadSnapshotFixture.ts'
+      ],
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/portable/mysqlReadSnapshot.property.test.ts',
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          '// Only provider-owned snapshot callbacks',
+          'interface KnexTelemetryQuery'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async readSnapshot<T>',
+          'override supportsRetainedReadSnapshot(): boolean'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'private async readMySQLSnapshot<T>',
+          'override getSnapshotSync():'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async findProvenTxs(',
+          'override async findStaleMerkleRoots('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async findSyncStates(',
+          'override async findTransactions('
+        )
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/portable/snapshot.test.ts',
+          '<rootDir>/src/storage/portable/mysqlSnapshot.test.ts',
+          '<rootDir>/src/storage/snapshot/StorageKnex.retainedSnapshot.test.ts',
+          '<rootDir>/src/storage/snapshot/KnexWalletReadSnapshot.test.ts',
+          '<rootDir>/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
+          '<rootDir>/src/storage/portable/mysqlReadSnapshot.property.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-retained-snapshot': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      additionalInputs: [
+        'test/utils/snapshotRelationFixtures.ts',
+        'test/utils/snapshotCertificateFixtures.ts',
+        'test/utils/snapshotGlobalFixtures.ts',
+        'test/utils/snapshotHistoricalMigrations.ts',
+        'test/utils/snapshotSqliteFixtures.ts',
+        'test/utils/snapshotSqliteIdentityFixture.ts',
+        'test/utils/snapshotSqliteMaintenanceFixture.ts',
+        'test/storage/snapshotHistoricalMigrations.cjs',
+        'test/storage/snapshotSqliteGenerationCrash.cjs'
+      ],
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/RetainedReadSnapshot.ts',
+        'src/storage/snapshot/KnexWalletReadSnapshot.ts',
+        'src/storage/schema/snapshotSqlMigration.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/schema/KnexMigrations.ts',
+          'migrations[SNAPSHOT_SQLITE_INDEX_MIGRATION] = {',
+          'migrations[SYNC_TRANSFER_MIGRATION] = {'
+        ),
+        'src/storage/schema/snapshotProfileIndexMigration.ts',
+        'src/storage/schema/snapshotRelationIndexMigration.ts',
+        'src/storage/schema/snapshotCertificateIndexMigration.ts',
+        'src/storage/schema/snapshotGlobalIndexMigration.ts',
+        'src/storage/schema/snapshotGlobalIndexModel.ts',
+        'src/storage/schema/snapshotGlobalIndexMysql.ts',
+        'src/storage/schema/snapshotGlobalIndexSqlite.ts',
+        'src/storage/schema/snapshotSqliteSchemaObservations.ts',
+        'src/storage/schema/snapshotGlobalIndexBootstrap.ts',
+        'src/storage/schema/snapshotGlobalIndexTriggers.ts',
+        'src/storage/schema/snapshotSqliteIdentity.ts',
+        'src/storage/schema/snapshotSqliteIdentityObservations.ts',
+        'src/storage/schema/snapshotSqliteMembership.ts',
+        'src/storage/schema/snapshotSqliteIndexGeneration.ts',
+        'src/storage/schema/snapshotSqliteIndexBootstrap.ts',
+        'src/storage/schema/snapshotSqliteIndexState.ts',
+        'src/storage/schema/snapshotSqliteIndexRetirement.ts',
+        'src/storage/schema/snapshotSqliteLegacyOwnership.ts',
+        'src/storage/schema/snapshotSqliteIndexMigration.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override supportsRetainedReadSnapshot(): boolean',
+          'private async readMySQLSnapshot<T>'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'async openSnapshotJournalSource(',
+          'recoverSnapshotArchiveSources(): Promise<void>'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async destroy(): Promise<void>',
+          'override async migrate('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageKnex.ts',
+          'override async dropAllData(): Promise<void>',
+          'override async transaction<T>'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/wallet/wallet-toolbox',
+          'src/storage/StorageProvider.ts',
+          'supportsRetainedReadSnapshot(): boolean',
+          'protected supportsActionBatchPersistence(): boolean'
+        )
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/*.test.ts',
+          '<rootDir>/src/storage/schema/snapshotSqliteIdentityObservations.test.ts',
+          '<rootDir>/src/storage/schema/snapshotSqliteSchemaObservations.test.ts',
+          '<rootDir>/src/storage/schema/snapshotSqliteDefinitions.test.ts',
+          '<rootDir>/src/storage/snapshot/journal/SnapshotJournalCapture*.test.ts',
+          '<rootDir>/src/storage/snapshot/journal/SnapshotJournalConnections.test.ts',
+          '<rootDir>/src/storage/snapshot/journal/SnapshotJournalMaintenance*.test.ts',
+          '<rootDir>/src/storage/__test/StorageKnexMigrationFailure.security.test.ts'
+        ],
+        {
+          maxTestRunnerReuse: 8,
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-snapshot-journal': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      additionalInputs: [
+        'test/fixtures/snapshotJournal/mysql-generation-ddl-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-generation-metadata-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-generation-state-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-intent-metadata-fixture.json',
+        'test/fixtures/snapshotJournal/mysql-source-metadata-fixture.json',
+        'test/utils/snapshotArchiveFixtures.ts',
+        'test/utils/snapshotSqliteFixtures.ts',
+        'test/utils/snapshotHistoricalMigrations.ts',
+        'test/storage/snapshotJournalNativeFixture.cjs',
+        'test/storage/snapshotJournalMysqlConnection.cjs',
+        'test/storage/snapshotJournalMysql.cjs',
+        'test/storage/snapshotJournalMysqlServerCrash.cjs',
+        'test/storage/snapshotJournalReceiptMysql.cjs',
+        'test/storage/snapshotJournalCaptureMysql.cjs',
+        'test/storage/snapshotJournalCaptureMysqlChild.cjs',
+        'test/storage/snapshotJournalCaptureProcessLoss.cjs',
+        'test/storage/snapshotJournalCaptureSqlite.cjs',
+        'test/storage/snapshotJournalRetentionChild.cjs',
+        'test/storage/snapshotJournalRetentionCuts.cjs',
+        'test/storage/snapshotJournalRetentionMysql.cjs',
+        'test/storage/snapshotJournalRetentionMysqlRc.cjs',
+        'test/storage/snapshotJournalRetentionMysqlRr.cjs',
+        'test/storage/snapshotJournalRetentionProcessLoss.cjs',
+        'test/storage/snapshotJournalRetentionSqlite.cjs',
+        'test/storage/snapshotJournalMaintenanceFixture.cjs',
+        'test/storage/snapshotJournalMaintenanceCuts.cjs',
+        'test/storage/snapshotJournalMaintenanceChild.cjs',
+        'test/storage/snapshotJournalMaintenanceProcessLoss.cjs',
+        'test/storage/snapshotJournalMaintenanceWal.cjs',
+        'test/storage/snapshotJournalMaintenanceMysqlRc.cjs',
+        'test/storage/snapshotJournalMaintenanceMysqlRr.cjs',
+        'test/storage/snapshotJournalSqliteCrash.cjs',
+        'test/storage/runSnapshotJournalMysql.cjs',
+        'test/storage/snapshotArchiveDocker.cjs'
+      ],
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/journal/SnapshotJournal.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/journal/SnapshotJournalRevision.ts',
+        'src/storage/snapshot/journal/SnapshotJournalRevisionSql.ts',
+        'src/storage/snapshot/journal/SnapshotJournalPage.ts',
+        'src/storage/snapshot/journal/SnapshotJournalSqliteClock.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlClock.ts',
+        'src/storage/snapshot/journal/SnapshotJournalSqliteObservers.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlObservers.ts',
+        'src/storage/snapshot/journal/SnapshotJournalBootstrap.ts',
+        'src/storage/snapshot/journal/SnapshotJournalHighWater.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlSource.ts',
+        'src/storage/snapshot/journal/SnapshotJournalSqliteGeneration.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlIntent.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMysqlGeneration.ts',
+        'src/storage/snapshot/journal/SnapshotJournalReceipt.ts',
+        'src/storage/snapshot/journal/SnapshotJournalCaptureFence.ts',
+        'src/storage/snapshot/journal/SnapshotJournalConnections.ts',
+        'src/storage/snapshot/journal/SnapshotJournalCaptureBackend.ts',
+        'src/storage/snapshot/journal/SnapshotJournalCapture.ts',
+        'src/storage/snapshot/journal/SnapshotJournalCollection.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMaintenance.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMaintenanceFence.ts',
+        'src/storage/snapshot/journal/SnapshotJournalMaintenanceTask.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/storage/snapshot/journal/*.test.ts'], {
+        maxTestRunnerReuse: 8,
+        config: {
+          moduleNameMapper: {
+            '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+            '^(\\.{1,2}/.*)\\.js$': '$1'
+          }
+        }
+      })
+    },
+    'wallet-snapshot-archive': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/KnexSnapshotArchiveStore.ts',
+        'src/storage/snapshot/archive/SnapshotArchive.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveSql.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveClosure.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveSource.ts',
+        'src/storage/snapshot/archive/captureKnexSnapshotArchive.ts',
+        'src/storage/snapshot/archive/captureSnapshotArchiveSource.ts',
+        'src/storage/schema/snapshotArchiveMigration.ts'
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveStore.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveCapture.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveDirectory.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts',
+          '<rootDir>/src/storage/snapshot/ConcurrentSnapshotArchiveSource.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-snapshot-remote-directory': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts',
+      mutate: ['src/storage/snapshot/archive/SnapshotArchiveDirectory.ts'],
+      ...jestTarget(
+        'jest.config.cjs',
+        ['<rootDir>/src/storage/snapshot/archive/SnapshotArchiveDirectory*.test.ts'],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-snapshot-remote-service': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/SnapshotArchiveRequest.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveService.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveSql.ts',
+        'src/storage/schema/snapshotArchiveRequestMigration.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveOwner.ts',
+        'src/storage/schema/snapshotArchiveOwnerMigration.ts',
+        'src/storage/schema/snapshotArchiveGuardMigration.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveGuard.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveGuardRegistry.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveGuardBackend.ts'
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveRequest.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveStore.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRequestStore.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveService.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveGuard*.test.ts',
+          '<rootDir>/src/storage/snapshot/ConcurrentSnapshotArchiveSource.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-snapshot-remote-http': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/SnapshotArchiveProtocol.ts',
+        'src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveTransport.ts',
+        ...[
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'async processSyncChunk(',
+            'async getSyncChunk('
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'if (properties.snapshotArchive != null)',
+            'return value as RemoteStorageSettings'
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'this.snapshotWallet = wallet',
+            'this.endpointUrl ='
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'protected async authenticatedFetch(',
+            'protected async traceRpcCall<T>('
+          ],
+          [
+            'src/storage/remoting/StorageClientBase.ts',
+            'if (settings.snapshotArchive !== undefined',
+            'this.settings = settings'
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private readonly snapshotArchivesEnabled:',
+            'private readonly app ='
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'this.snapshotArchivesEnabled =',
+            '// Keep legacy configurations working'
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private async handleRpcRequestCore(',
+            'private async sendOversizedSyncResponse('
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            '...(await this.snapshotArchiveSettings())',
+            'this.finishRpcLogging(logger, result)'
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private async snapshotArchiveSettings(',
+            'private async dispatchSyncTransfer('
+          ],
+          [
+            'src/storage/remoting/StorageServer.ts',
+            'private createSnapshotArchiveRpc(',
+            'private async traceRpcStep<T>('
+          ],
+          ['src/storage/remoting/StorageServer.ts', 'public start(): void', 'validateDate(date:']
+        ].map(([filePath, startMarker, endMarker]) =>
+          sourceLineRange(
+            repositoryRoot,
+            'packages/wallet/wallet-toolbox',
+            filePath,
+            startMarker,
+            endMarker
+          )
+        )
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchive*.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/RemoteSnapshotReaderHttp.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRpc.test.ts',
+          '<rootDir>/src/storage/remoting/__test/BinaryJson.test.ts',
+          '<rootDir>/src/storage/remoting/__test/KnexPaymentReplayStore.test.ts',
+          '<rootDir>/src/storage/remoting/__test/KnexSessionManager.test.ts',
+          '<rootDir>/src/storage/remoting/__test/RateLimitPolicy.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageServerRpc.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClientBase.*.test.ts',
+          '<rootDir>/src/storage/sync/syncCheckpoint.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClient.security.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClient.transport.security.test.ts',
+          '<rootDir>/src/storage/remoting/__test/StorageClient.telemetry.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-snapshot-remote-reader': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/RemoteSnapshotReader.property.test.ts',
+      mutate: [
+        'src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveAdmission.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts',
+        'src/storage/snapshot/archive/SnapshotArchiveCleanup.ts',
+        'src/storage/snapshot/archive/RemoteSnapshotLease.ts',
+        'src/storage/snapshot/archive/RemoteSnapshotRows.ts',
+        'src/storage/snapshot/archive/RemoteSnapshotPageReader.ts',
+        'src/storage/snapshot/archive/openRemoteSnapshot.ts',
+        'src/storage/snapshot/SnapshotCursor.ts',
+        'src/storage/snapshot/SnapshotCancelledError.ts'
+      ],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/snapshot/archive/RemoteSnapshot*.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveReader*.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveAdmission.test.ts',
+          '<rootDir>/src/storage/snapshot/archive/SnapshotArchiveTransportFailure.test.ts',
+          '<rootDir>/src/storage/snapshot/SnapshotCursor.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    'wallet-adaptive-sync-budget': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/storage/sync/SyncPageBudget.property.test.ts',
+      mutate: ['src/storage/sync/SyncPageBudget.ts'],
+      additionalInputs: ['src/storage/snapshot/runSnapshotSyncSession.ts'],
+      ...jestTarget(
+        'jest.config.cjs',
+        [
+          '<rootDir>/src/storage/sync/SyncPageBudget.test.ts',
+          '<rootDir>/src/storage/sync/SyncPageBudget.property.test.ts',
+          '<rootDir>/src/storage/snapshot/SnapshotSyncSession.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
+    },
+    ...portableStreamMutationTargets(repositoryRoot),
+    ...snapshotSyncMutationTargets(repositoryRoot),
     'overlay-linkage': {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',
@@ -537,10 +1296,10 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/middleware/auth-express-middleware/src/__tests/authMiddlewareHelpers.property.test.ts',
       mutate: [
-        'src/authMiddlewareHelpers.ts:96-103',
-        'src/authMiddlewareHelpers.ts:154-163',
-        'src/authMiddlewareHelpers.ts:180-184',
-        'src/authMiddlewareHelpers.ts:206-233'
+        'src/authMiddlewareHelpers.ts:99-114',
+        'src/authMiddlewareHelpers.ts:155-164',
+        'src/authMiddlewareHelpers.ts:181-185',
+        'src/authMiddlewareHelpers.ts:198-238'
       ],
       ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/authMiddlewareHelpers*.test.ts'])
     },
@@ -549,7 +1308,7 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/middleware/payment-express-middleware/package.json',
       propertyTest:
         'packages/middleware/payment-express-middleware/src/__tests/PaymentReplayStore.property.test.ts',
-      mutate: ['src/index.ts:27-44'],
+      mutate: ['src/index.ts:30-47'],
       ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/PaymentReplayStore*.test.ts'])
     },
     'wallet-script-encoding': {

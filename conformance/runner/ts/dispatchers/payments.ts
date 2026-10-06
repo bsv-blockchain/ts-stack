@@ -18,6 +18,46 @@
  */
 
 import { expect } from '@jest/globals'
+import { AuthFetch, type WalletInterface } from '@bsv/sdk'
+import { buildMultipartPayment } from '@bsv/sdk/auth/utils/paymentTransport'
+import { toHex, Writer } from '@bsv/sdk/primitives/utils'
+
+async function dispatchBRC118(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): Promise<void> {
+  const payload =
+    input.payload_base64 === null
+      ? undefined
+      : {
+          bytes: new Uint8Array(Buffer.from(input.payload_base64 as string, 'base64')),
+          contentType: input.payload_content_type as string
+        }
+  const encoded = buildMultipartPayment(
+    input.payment_json as string,
+    payload,
+    1024 * 1024,
+    input.boundary as string
+  )
+  expect(Buffer.from(encoded.body).toString('base64')).toBe(expected.body_base64)
+  const client = new AuthFetch({} as WalletInterface) as unknown as {
+    serializeRequest(
+      method: string,
+      headers: Record<string, string>,
+      body: Uint8Array,
+      url: URL,
+      nonce: number[]
+    ): Promise<Writer>
+  }
+  const writer = await client.serializeRequest(
+    input.method as string,
+    input.headers as Record<string, string>,
+    encoded.body,
+    new URL(`https://fixture.invalid${input.path as string}${input.query as string}`),
+    Array.from(Buffer.from(input.request_id_hex as string, 'hex'))
+  )
+  expect(toHex(writer.toArray())).toBe(expected.request_preimage_hex)
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -336,7 +376,7 @@ function dispatchBRC121(input: Record<string, unknown>, expected: Record<string,
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
-export const categories: ReadonlyArray<string> = ['brc29-payment-protocol', 'brc121']
+export const categories: ReadonlyArray<string> = ['brc29-payment-protocol', 'brc121', 'brc118']
 
 export function dispatch(
   category: string,
@@ -344,6 +384,8 @@ export function dispatch(
   expected: Record<string, unknown>
 ): void | Promise<void> {
   switch (category) {
+    case 'brc118':
+      return dispatchBRC118(input, expected)
     case 'brc29-payment-protocol':
       return dispatchBRC29PaymentProtocol(input, expected)
     case 'brc121':

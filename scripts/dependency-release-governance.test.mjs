@@ -23,12 +23,16 @@ test('dependency and release governance is internally complete', () => {
 
   const overrides = collectOverrides()
   assert.equal(overrides.length, 27)
+  assert.deepEqual(
+    overrides.filter(entry => entry.selector === 'nodemon'),
+    []
+  )
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
   assert.equal(
-    overrides.find(entry => entry.selector === 'brace-expansion@<5.0.11')?.value,
-    '5.0.11'
+    overrides.find(entry => entry.selector === 'brace-expansion@<5.0.12')?.value,
+    '5.0.12'
   )
   assert.equal(overrides.find(entry => entry.selector === 'engine.io@<6.6.10')?.value, '6.6.10')
   assert.equal(overrides.filter(entry => entry.selector === 'toml@<4.2.0').length, 1)

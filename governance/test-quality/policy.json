@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-27",
+  "lastReviewed": "2026-10-05",
   "ownerDefinitions": ["ts-stack-maintainers"],
   "propertyTesting": {
     "library": "fast-check",
@@ -518,6 +518,253 @@
         ],
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-10-12"
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/RetainedReadSnapshot.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet retained database-view admission, expiry, cancellation and physical cleanup ownership, profile-bound keyset cursors and bounded packed payload admission",
+        "target": "Randomized read, cancellation, close and expiry schedules with an independent admission and cleanup model; randomized source profiles, payload/page limits and independent writes against pinned SQL views",
+        "invariants": [
+          "At most one database read is admitted and concurrent or nested reads do not queue.",
+          "Closing, cancellation and expiry reject later admission and discard late successful results.",
+          "Capacity remains occupied until physical reads and transaction cleanup settle.",
+          "Every completed lifecycle removes its expiry timer and rejects further reads.",
+          "Pinned keyset traversal returns every original owned row and tombstone exactly once under independent writes, within both page limits; cursor retries repeat the same page.",
+          "Auxiliary profile membership equals committed source ownership through generated insert, update, move, delete, rollback, repeated migration and rebuild schedules.",
+          "Numeric relationship membership equals the OR of current parent owners through generated map/parent rekeys, profile moves, tombstones, physical deletions, rollback and repeated migration; each ownership basis is retained independently."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/journal/SnapshotJournal.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet exact journal revisions, bounded metadata pages and bootstrap, full-table observers, source binding and owned crash-resumable generation lifecycle",
+        "target": "Generated exact signed63 revision and metadata cursor schedules, plus thirteen-table insert/update/rekey/replacement/delete/rollback histories checked against independent source ownership oracles",
+        "invariants": [
+          "Canonical decimal revisions compare exactly across the signed63 domain, including values above Number precision.",
+          "Bounded metadata pages preserve composite byte ordering, fixed upper bounds and examined-row limits without skipping tied revisions.",
+          "Generated source changes retain exact physical generations and ownership across all thirteen standard tables, including replacement, rollback and observer order variations.",
+          "Invalid source/schema or ownership evidence never silently adopts foreign DDL, and interrupted installation resumes only the persisted epoch and exact authorized next object."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/sync/SyncPageBudget.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet adaptive sync page work and payload forecasts, caller limits and current-table transition isolation",
+        "target": "Bounded generated table, fixed/marginal cost and payload transitions with independent caller/charge limits",
+        "invariants": [
+          "Row and byte ceilings and the caller cursor remain unchanged and each request stays within the caller row bound.",
+          "Observed actual payload charges conservatively limit subsequent page requests without granting allocation or physical quota authority.",
+          "A known next-table transition discards previous workload forecasts before its first read; same-table observations persist.",
+          "Proof page ceilings, independent session state, minimum300 runs and original interrupt-as-failure controls remain."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSync.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet durable profile-bound snapshot merges, normalized ID mappings, acknowledged cursors and primary-generation fencing",
+        "target": "Randomized bounded SQL page, stale preparation, acknowledgement loss and source-view replacement schedules with an independent profile/content oracle",
+        "invariants": [
+          "Only the acknowledged destination cursor advances after each atomic page commit.",
+          "Concurrent prepared pages cannot overwrite a newer checkpoint, and replacing a source view fences its old pages.",
+          "Incoming IDs and parent references are mapped within one wallet profile without duplicating logical records.",
+          "A restart explicitly begins the replacement view at its first table while preserving existing destination data and legacy checkpoints."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncDestination.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet durable snapshot destination binding, atomic checkpoint admission and primary-generation fencing",
+        "target": "Randomized original profile metadata, same-view binding drift, independent profiles and replacement views",
+        "invariants": [
+          "Same-view metadata changes reject without modifying the durable checkpoint.",
+          "A replacement view starts at table zero with a fresh session while preserving another profile."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/SnapshotSyncRows.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet bounded snapshot row detachment and profile/source-scoped normalized parent and child ID mapping",
+        "target": "Randomized overlapping incoming IDs across profiles and sources with independent expected mapping and persisted-row oracles",
+        "invariants": [
+          "Incoming parent IDs resolve only within the selected profile and source storage.",
+          "Only newly learned child IDs are persisted, existing parent and foreign mappings remain unchanged, and missing parents reject."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet coherent SQL snapshot capture and staging, profile closure, immutable receipts, quotas and cleanup accounting",
+        "target": "Persistent bounded archive staging across capture retries, incomplete captures, independent readers and expired/cancelled cleanup",
+        "invariants": [
+          "A partial or expired capture is never readable as a completed archive.",
+          "Exact page retries preserve immutable bytes and the independent hash-chain receipt without double charging.",
+          "The authenticated profile cannot read or release another profile's archive.",
+          "Capacity remains reserved through interrupted cleanup and is released exactly once after every page is deleted.",
+          "A complete SQL capture contains the selected profile\u2019s original rows; cancellation removes all staged pages and reservations without activating wallet data."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet authenticated snapshot receipt directories, original binding bytes, complete table hash chains and page inclusion",
+        "target": "Generated complete table ranges, independent receipt hashes and changed-byte rejection",
+        "invariants": [
+          "Every bounded receipt chain preserves all thirteen table positions and row totals.",
+          "Arbitrary table pages match their previously verified receipt before decoding.",
+          "Changed payload, receipt or previously pinned root bytes reject.",
+          "Caller mutation does not alter verified receipt positions or metadata."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet remote snapshot creation request identity, durable receipt publication, bounded reservation, exact source ownership, backend guards and physical cleanup recovery",
+        "target": "Generated SQL claim, retry, capture publication, cross-controller cancellation, delayed native close, guarded recovery and successor ownership schedules",
+        "invariants": [
+          "A retry returns the original request and immutable ready archive without a second admission or writer token.",
+          "Pending requests reserve the same shared capacity used by local archives before source acquisition.",
+          "Archive assignment and ready receipt publication commit atomically.",
+          "Remote cancellation, repeated reaping and incorrect acknowledgements retain pages and quota while the exact source owner remains.",
+          "Terminal requests retain bounded receipts and release their logical reservation exactly once after the source owner acknowledges physical cleanup.",
+          "Backend guards retain quota through native close; recovery fences the exact terminal owner and old acknowledgements cannot release a successor."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet authenticated snapshot HTTP negotiation, exact protocol fields, profile binding, immutable client receipts and bounded transport lifecycle",
+        "target": "Generated deadline-bound requests, exact RPC shapes and client receipt validation",
+        "invariants": [
+          "Requests and receipts retain the original immutable identity and deadline across start/status retries.",
+          "Every RPC accepts only its exact typed fields and never an internal ownership token.",
+          "Ready receipts bind one archive/root while every distinct terminal state remains explicit.",
+          "Unexpected identity, expiry or ownership fields are rejected rather than silently normalized."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/snapshot/archive/RemoteSnapshotReader.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet immutable remote snapshot row decoding, fixed archive cursors, bounded leases, exact admission recovery and pending cleanup",
+        "target": "Generated packed frame and page boundaries, immutable retry positions and per-page allocation accounting",
+        "invariants": [
+          "Every generated row is returned exactly once in original source order across arbitrary frame and caller-page boundaries.",
+          "The archive position binds the exact frame and last consumed row without reading preceding tables.",
+          "Same-position retries reproduce identical rows, cursor and allocation charge.",
+          "A cursor for another archive is rejected and each opened reader cancels its original immutable request exactly once."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/mysqlReadSnapshot.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet callback-owned coherent transaction classification, exact proof/checkpoint consistent reads and preservation of writable authority locks",
+        "target": "Generated direct/retained read schedules across providers with interleaved independent writable transactions, partial/exact selectors and callback failures",
+        "invariants": [
+          "Provider-owned coherent snapshots never request writable row locks.",
+          "Independent ordinary transactions preserve each existing exact-selector lock requirement.",
+          "Snapshot classification follows the transaction token across provider instances and never marks an independent transaction.",
+          "Direct and retained callbacks preserve exact failure causes and release their database connection.",
+          "Every generated schedule preserves the complete selector/query count without an unbounded queue."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/CanonicalPortableChunks.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Allocation-bounded canonical RFC8785 portable serialization and detached source ownership",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Exact independent canonical JSON spelling and raw UTF16 property ordering are retained under arbitrary bounded chunk widths.",
+          "Finite scalar, Unicode, array-position, ownership and allocation limits refuse invalid values without publishing partial success."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38PackedRow.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Bounded packed-row binary, date and historical JSON projection preserving exact legacy portable semantics",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Generated packed binary and historical optional JSON fields preserve the independent legacy oracle without mutating captured source rows.",
+          "Per-row allocation admission precedes materialization and never grants whole-process or native quota authority."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38Stream.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Complete thirteen-table canonical stream framing, original source validation and awaited cleanup before completion",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Generated thirteen-table documents retain original header/source IDs and exact canonical legacy bytes across bounded chunks.",
+          "Complete source semantic validation and awaited physical release must precede completion or an authentication tag."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38KnexSource.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Coherent retained SQLite/MySQL thirteen-table keyset sources, bounded payload admission and profile closure",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Generated page widths and native independent-writer schedules retain the exact original thirteen-table coherent source and profile closure.",
+          "Keyset ordering, original source provenance and bounded admitted pages remain fixed throughout the retained view."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/Brc38JsonStream.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Bounded strict UTF8 and complete BRC38 document framing into private staging with semantic completion and cleanup",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Generated byte partitions and document ordering preserve every required table and row against the independent legacy semantic oracle.",
+          "Truncation, cancellation or private staging failure cannot validate or activate data and must await owned cleanup."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/Brc39Frame.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Bounded standard WDAT envelope framing and explicit KDF/file admission preserving complete ciphertext and tag",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Independent standard envelope bytes preserve complete ciphertext and tag through arbitrary bounded fragmentation.",
+          "Generated authenticated document schedules refuse corruption and retain canonical KDF and private semantic-validation requirements."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/Brc39StreamNode.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Node BRC39 native AEAD, canonical Argon2id/NFC, owned key/password cleanup and private staging backpressure",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Generated bounded encrypted exports preserve independent AEAD/legacy bytes and complete tag verification with canonical NFC and Argon2id rules.",
+          "Owned password/key bytes and source/output operations settle and clean up on cancellation or any exact-cause failure before publication."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/storage/portable/Brc39PrivateFileNode.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Node private authenticated-file quarantine, bounded serial I/O, complete verification and physical cleanup",
+        "target": "Complete original generated behavioral suite with independent byte, semantic, lifecycle and resource oracles",
+        "invariants": [
+          "Generated private-file operations retain exact bytes across bounded short reads/writes and independently verified complete authentication/semantics.",
+          "Readers, writers and private paths remain owned through settlement and cleanup; provisional data never activates a wallet."
+        ]
       }
     ],
     "exclusions": [

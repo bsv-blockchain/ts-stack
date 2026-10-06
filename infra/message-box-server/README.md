@@ -9,6 +9,15 @@ The maintained source lives in
 [`bsv-blockchain/ts-stack`](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server).
 The service is distributed as a container; it is not a public npm package.
 
+The standalone lock selects `@fastify/busboy` 3.2.2 within its existing
+transitive dependency range, addressing
+[GHSA-xjh9-v7x6-24jw](https://github.com/advisories/GHSA-xjh9-v7x6-24jw) and
+[GHSA-x8mw-p69m-v3mx](https://github.com/advisories/GHSA-x8mw-p69m-v3mx).
+No service API, request ceiling, runtime requirement or database migration
+changes. Use the frozen lock and the protected container release process;
+existing deployed images receive the fix only through a separately authorized
+image promotion.
+
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for all runtime ceilings, BRC-105 pricing, capacity evidence, and HPA prerequisites.
 

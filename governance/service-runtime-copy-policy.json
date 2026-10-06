@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-09-27",
+  "lastReviewed": "2026-10-06",
   "owner": "ts-stack-maintainers",
   "rationale": "Standalone image build contexts retain a small number of runtime sources that are canonically owned elsewhere. These copies are synchronized byte-for-byte so published packages and official images cannot drift.",
   "copies": [

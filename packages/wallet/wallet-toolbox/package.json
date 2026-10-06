@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.14.6",
+  "version": "2.15.0",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {
@@ -27,7 +27,17 @@
       "types": "./out/src/*.d.ts",
       "require": "./out/src/*.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./portable": {
+      "types": "./out/src/storage/portable/stream.d.ts",
+      "require": "./out/src/storage/portable/stream.js",
+      "default": "./out/src/storage/portable/stream.js"
+    },
+    "./portable/node": {
+      "types": "./out/src/storage/portable/node.d.ts",
+      "require": "./out/src/storage/portable/node.js",
+      "default": "./out/src/storage/portable/node.js"
+    }
   },
   "files": [
     "out/src/",
@@ -55,7 +65,7 @@
     "test": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --watchman=false",
     "test:watch": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|client/test|mobile/test' --watch",
     "test:coverage": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --coverage --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/utility/__tests/actionBatchPack.property.test.ts --testPathIgnorePatterns=man.test.ts",
+    "test:property": "node ../../../scripts/check-wallet-property-command.mjs && jest --testPathIgnorePatterns=man.test.ts --runInBand --watchman=false --runTestsByPath src/utility/__tests/actionBatchPack.property.test.ts src/storage/snapshot/RetainedReadSnapshot.property.test.ts src/storage/snapshot/SnapshotSync.property.test.ts src/storage/snapshot/SnapshotSyncDestination.property.test.ts src/storage/snapshot/SnapshotSyncRows.property.test.ts src/storage/snapshot/archive/KnexSnapshotArchiveStore.property.test.ts src/storage/snapshot/archive/SnapshotArchiveDirectory.property.test.ts src/storage/snapshot/archive/SnapshotArchiveService.property.test.ts src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts src/storage/snapshot/archive/RemoteSnapshotReader.property.test.ts src/storage/snapshot/journal/SnapshotJournal.property.test.ts src/storage/portable/mysqlReadSnapshot.property.test.ts src/storage/sync/SyncPageBudget.property.test.ts src/storage/portable/CanonicalPortableChunks.property.test.ts src/storage/portable/Brc38PackedRow.test.ts src/storage/portable/Brc38Stream.test.ts src/storage/portable/Brc38KnexSource.test.ts src/storage/portable/Brc38JsonStream.property.test.ts src/storage/portable/Brc39Frame.property.test.ts src/storage/portable/Brc39StreamNode.test.ts src/storage/portable/Brc39PrivateFileNode.test.ts",
     "test:manual": "pnpm build && node ../../../scripts/run-governed-test.mjs manual",
     "test:live": "pnpm build && node ../../../scripts/run-governed-test.mjs live",
     "operator:build": "pnpm build && tsc --project operator/tsconfig.json --pretty false",
@@ -63,16 +73,20 @@
     "bench:action-batch": "pnpm build && jest --runInBand --runTestsByPath benchmarks/action-batch.bench.test.ts --testPathIgnorePatterns=man.test.ts",
     "bench:create-action-funding": "pnpm build && jest --runInBand --runTestsByPath benchmarks/create-action-funding.bench.test.ts --testPathIgnorePatterns=man.test.ts",
     "bench:create-action-beef": "pnpm build && jest --runInBand --runTestsByPath benchmarks/create-action-beef.bench.test.ts --testPathIgnorePatterns=man.test.ts",
-    "bench:storage-sync": "pnpm build && jest --runInBand --runTestsByPath benchmarks/storage-sync.bench.test.ts --testPathIgnorePatterns=man.test.ts",
+    "bench:storage-sync": "pnpm build && jest --runInBand --runTestsByPath benchmarks/storage-sync.bench.test.ts benchmarks/resumable-sync.bench.test.ts --testPathIgnorePatterns=man.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/{README.md,jest.config.cjs,package.json,tsconfig*.json}\"",
     "lint": "oxlint src test benchmarks examples operator --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageKnex,Services,Setup,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,DurableFileBulkFileDownloadBudget,BulkFileDataCacheFs,NodeBulkFileDataValidator,sdk --entry-exports \"./out/src/sdk=WalletError|WERR_BAD_REQUEST|WERR_INTERNAL|WERR_INVALID_PARAMETER|WERR_UNAUTHORIZED\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageKnex,Services,Setup,WalletPermissionsManager,WalletSettingsManager,LocalChainTracker,FixedWindowBulkFileDownloadBudget,DurableFileBulkFileDownloadBudget,BulkFileDataCacheFs,NodeBulkFileDataValidator,sdk --entry-exports \"./out/src/sdk=WalletError|WERR_BAD_REQUEST|WERR_INTERNAL|WERR_INVALID_PARAMETER|WERR_UNAUTHORIZED;./portable=canonicalPortableChunks|projectBrc38PackedRow|createBrc38Stream|readBrc38JsonStream|Brc39StreamFrame|encodeBrc39StreamPrefix|BRC39_STREAM_DEFAULT_KDF;./portable/node=canonicalPortableChunks|projectBrc38PackedRow|createBrc38Stream|readBrc38JsonStream|Brc39StreamFrame|encodeBrc39StreamPrefix|BRC39_STREAM_DEFAULT_KDF|openBrc38KnexSource|encryptBrc39StreamToQuarantine|decryptBrc39StreamToQuarantine|createBrc39NodeFileQuarantine\" && tsc --project test/consumer/tsconfig.json",
     "typecheck": "tsc --build --pretty false && tsc --project examples/tsconfig.json --pretty false && tsc --project operator/tsconfig.json --noEmit --pretty false",
     "build": "tsc --build",
     "prepublishOnly": "pnpm build",
     "doc": "ts2md",
-    "sync-versions": "node syncVersions.js"
+    "sync-versions": "node syncVersions.js",
+    "test:snapshot-archive-crash": "pnpm build && node test/storage/snapshotArchiveCrash.cjs",
+    "test:snapshot-archive-mysql": "pnpm build && node test/storage/runSnapshotArchiveMysql.cjs",
+    "test:snapshot-journal-crash": "pnpm build && node test/storage/snapshotJournalSqliteCrash.cjs",
+    "test:snapshot-journal-mysql": "pnpm build && node test/storage/runSnapshotJournalMysql.cjs"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
@@ -124,6 +138,16 @@
   "peerDependenciesMeta": {
     "@bsv/sdk": {
       "optional": false
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "portable": [
+        "out/src/storage/portable/stream.d.ts"
+      ],
+      "portable/node": [
+        "out/src/storage/portable/node.d.ts"
+      ]
     }
   }
 }

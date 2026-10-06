@@ -46,6 +46,14 @@ const decodedData = OpReturn.decode(lockingScript)
 console.log(decodedData) // ['APP', '{"action":"vote"}']
 ```
 
+## CommonJS compatibility
+
+The 1.10.3 candidate fixes SDK default-import double wrapping in CommonJS.
+Both module formats retain the same root/wildcard exports and script encodings.
+Packed acceptance constructs and signs scripts, including Mandala, multisig,
+MultiPushDrop and R1K1 recovery, with published SDK 2.8.0 and the candidate SDK.
+This source candidate is not yet published.
+
 ## What it provides
 
 - **OpReturn** — Non-spendable data storage; create and decode OP_RETURN scripts

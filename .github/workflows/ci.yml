@@ -257,6 +257,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Verify pinned mutation partition inventory
+        run: node --test scripts/mutation-partitions-engine.integration.mjs
+
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
 
@@ -498,7 +501,9 @@ jobs:
     runs-on: ubuntu-latest
     # The governed air-gap codec target currently instruments 352 mutants and
     # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
+    # Complete snapshot source-guard service qualification took 58m35s locally,
+    # before hosted checkout/install. Preserve the 45-minute default elsewhere.
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-journal","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -602,6 +607,36 @@ jobs:
         with:
           pattern: mutation-wallet-retained-snapshot-*
           path: .mutation-parts/wallet-retained-snapshot
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-sync')
+        with:
+          pattern: mutation-wallet-snapshot-sync-*
+          path: .mutation-parts/wallet-snapshot-sync
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-journal')
+        with:
+          pattern: mutation-wallet-snapshot-journal-*
+          path: .mutation-parts/wallet-snapshot-journal
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-remote-http')
+        with:
+          pattern: mutation-wallet-snapshot-remote-http-*
+          path: .mutation-parts/wallet-snapshot-remote-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-remote-service')
+        with:
+          pattern: mutation-wallet-snapshot-remote-service-*
+          path: .mutation-parts/wallet-snapshot-remote-service
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-archive')
+        with:
+          pattern: mutation-wallet-snapshot-archive-*
+          path: .mutation-parts/wallet-snapshot-archive
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-snapshot-remote-reader')
+        with:
+          pattern: mutation-wallet-snapshot-remote-reader-*
+          path: .mutation-parts/wallet-snapshot-remote-reader
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
@@ -998,6 +1033,36 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Verify native snapshot crash recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        run: node test/storage/snapshotArchiveCrash.cjs
+      - name: Provision pinned native snapshot MySQL fixture
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 5
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/snapshotArchiveDocker.cjs provision-hosted-image
+      - name: Verify native snapshot MySQL recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 5
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/runSnapshotArchiveMysql.cjs
+      - name: Verify native journal SQLite recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 3
+        run: node test/storage/snapshotJournalSqliteCrash.cjs
+      - name: Verify native journal MySQL recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 10
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/runSnapshotJournalMysql.cjs
       - name: Generate wallet-toolbox coverage shard
         env:
           WALLET_SHARD: ${{ matrix.shard }}

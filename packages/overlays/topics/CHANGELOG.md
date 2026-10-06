@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Dependency update (2.0.0 candidate)
+
+- Refresh the packed templates range to include its CommonJS interoperability
+  repair. This dependency repair is independent of the API removals below.
+
 ### Removed (2.0.0 candidate)
 
 - Remove `tm_did` / `ls_did`, `DIDTopicManager`, `createDIDLookupService`,

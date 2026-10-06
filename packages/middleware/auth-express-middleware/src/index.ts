@@ -1,3 +1,6 @@
+import { RawRequestBodyReader, RawRequestBodyError } from './rawRequestBody.js'
+import { isMultipartPaymentType } from '@bsv/sdk/auth/utils/paymentTransport'
+import { decodePaymentPayload } from '@bsv/sdk/auth/utils/decodePaymentPayload'
 import { Reader, Writer, toArray, toBase64, toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -90,7 +93,11 @@ export interface AuthTransportLimits {
 export interface AuthRequest extends Request {
   auth?: {
     identityKey: PubKeyHex
+    /** Raw-byte receiver support; set only after successful mutual authentication. */
+    supportsMultipart?: boolean
   }
+  /** Exact authenticated application body. Payment middleware replaces this with the inner body. */
+  rawBody?: Uint8Array
 }
 
 export interface CertificateApprovalStore {
@@ -131,6 +138,8 @@ export class InMemoryCertificateApprovalStore implements CertificateApprovalStor
 // Developers may optionally provide a handler for incoming certificates.
 export interface AuthMiddlewareOptions {
   wallet: WalletInterface
+  /** Collect bounded raw bytes before auth. Install before any body parser. Required for BRC-118. */
+  captureRawBody?: boolean
   // Optional session store. Default is in-process synchronous `SessionManager`.
   // Pass an `AsyncSessionManager` (Redis/SQL-backed, etc.) to share state
   // across load-balanced instances; Peer awaits internally so both work.
@@ -1990,6 +1999,22 @@ function buildResponsePayload(
   return writer.toArray()
 }
 
+function validateAuthMiddlewareSettings(options: AuthMiddlewareOptions): void {
+  const { allowUnauthenticated, logLevel, onCertificatesReceived } = options
+  if (allowUnauthenticated !== undefined && typeof allowUnauthenticated !== 'boolean') {
+    throw new TypeError('allowUnauthenticated must be a boolean.')
+  }
+  if (options.captureRawBody !== undefined && typeof options.captureRawBody !== 'boolean') {
+    throw new TypeError('captureRawBody must be a boolean.')
+  }
+  if (logLevel !== undefined && !(['debug', 'info', 'warn', 'error'] as const).includes(logLevel)) {
+    throw new TypeError('logLevel must be debug, info, warn, or error.')
+  }
+  if (onCertificatesReceived !== undefined && typeof onCertificatesReceived !== 'function') {
+    throw new TypeError('onCertificatesReceived must be a function.')
+  }
+}
+
 /**
  * Creates an Express middleware that handles authentication via BSV-SDK.
  *
@@ -2022,15 +2047,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
     }
     throw new TypeError('You must configure the auth middleware with a wallet.')
   }
-  if (allowUnauthenticated !== undefined && typeof allowUnauthenticated !== 'boolean') {
-    throw new TypeError('allowUnauthenticated must be a boolean.')
-  }
-  if (logLevel !== undefined && !(['debug', 'info', 'warn', 'error'] as const).includes(logLevel)) {
-    throw new TypeError('logLevel must be debug, info, warn, or error.')
-  }
-  if (onCertificatesReceived !== undefined && typeof onCertificatesReceived !== 'function') {
-    throw new TypeError('onCertificatesReceived must be a function.')
-  }
+  validateAuthMiddlewareSettings(options)
 
   const transport = new ExpressTransport(
     allowUnauthenticated ?? false,
@@ -2069,6 +2086,60 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
   transport.setPeer(peer)
   const telemetry = new Telemetry(telemetryConfig)
 
+  const rawReader =
+    options.captureRawBody === true
+      ? new RawRequestBodyReader(
+          transportLimits?.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES,
+          transportLimits?.requestTimeoutMs ?? 30_000,
+          transportLimits?.maxPendingRequests ?? 1_000
+        )
+      : undefined
+  const dispatch = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (rawReader !== undefined) {
+        await rawReader.capture(req, res)
+        if (req.path === WELL_KNOWN_AUTH_PATH) {
+          req.body = decodePaymentPayload(req.body, 'application/json')
+        }
+      }
+      const verifiedNext: NextFunction = (error?: unknown): void => {
+        if (error !== undefined) {
+          next(error)
+          return
+        }
+        if (rawReader?.hasCaptured(req) === true && req.path !== WELL_KNOWN_AUTH_PATH) {
+          if (req.auth !== undefined && req.auth.identityKey !== 'unknown')
+            req.auth.supportsMultipart = true
+          req.rawBody = req.body
+          const contentType = req.headers['content-type']
+          if (typeof contentType !== 'string' || !isMultipartPaymentType(contentType)) {
+            try {
+              req.body = decodePaymentPayload(req.rawBody, contentType)
+            } catch {
+              res.status(400).json({
+                status: 'error',
+                code: 'ERR_AUTH_MALFORMED',
+                description: 'Invalid authenticated application body.'
+              })
+              return
+            }
+          }
+        }
+        next()
+      }
+      await transport.handleIncomingRequest(req, res, verifiedNext, onCertificatesReceived)
+    } catch (error) {
+      if (error instanceof RawRequestBodyError && !res.headersSent && !res.destroyed) {
+        res.setHeader('Connection', 'close')
+        res.status(error.status).json({
+          status: 'error',
+          code: 'ERR_AUTH_BODY',
+          description: 'The request body could not be accepted.'
+        })
+      } else throw error
+    }
+  }
+
   return (req, res, next) => {
     if (logger && logLevel && isLogLevelEnabled(logLevel, 'debug')) {
       getLogMethod(logger, 'debug')('[createAuthMiddleware] Incoming request to auth middleware', {
@@ -2078,7 +2149,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
       })
     }
     if (!telemetry.enabled) {
-      void transport.handleIncomingRequest(req, res, next, onCertificatesReceived).catch(next)
+      void dispatch(req, res, next).catch(next)
       return
     }
 
@@ -2125,11 +2196,9 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
       end(res.writableEnded ? 'ok' : 'cancelled', undefined, 'connection_closed')
     })
 
-    void transport
-      .handleIncomingRequest(req, res, tracedNext, onCertificatesReceived)
-      .catch(error => {
-        end('error', error, 'middleware_error')
-        next(error)
-      })
+    void dispatch(req, res, tracedNext).catch(error => {
+      end('error', error, 'middleware_error')
+      next(error)
+    })
   }
 }

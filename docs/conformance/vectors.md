@@ -27,7 +27,7 @@ conformance/vectors/
   broadcast/{arc-submit,merkle-path-validation,merkle-service}.json
   messaging/{authsocket,brc31/authrite-signature,message-box-http}.json
   overlay/{lookup,submit,topic-management}.json
-  payments/{brc121,brc29-payment-protocol}.json
+  payments/{brc118,brc121,brc29-payment-protocol}.json
   regressions/*.json (12 files)
   sdk/compat/bsm.json
   sdk/crypto/{aes,ecdsa,ecies,hash160,hmac,ripemd160,sha256,signature}.json

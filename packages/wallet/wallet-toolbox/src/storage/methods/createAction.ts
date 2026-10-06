@@ -5,6 +5,7 @@ import {
   validateSatoshis
 } from '@bsv/sdk/wallet/validationHelpers'
 import { Beef, OriginatorDomainNameStringUnder250Bytes, Random, Script, TelemetrySpan } from '@bsv/sdk'
+import { repairBeefProofs } from './repairBeefProofs'
 import { toBase64 } from '@bsv/sdk/primitives/utils'
 import {
   generateChangeSdk,
@@ -2003,6 +2004,11 @@ async function mergeAllocatedChangeBeefs(
       })
     }
   )
+  // Standalone offline storage historically permits construction without
+  // services. Configured wallets validate even prepared/embedded ancestry
+  // before returning proofs to their signer; offline callers retain their
+  // existing responsibility to validate before signing or broadcasting.
+  if (storage._services != null) beef = await repairBeefProofs(storage, beef)
   const inputBeef = await traceStorageStep(
     storage,
     'wallet.storage.create_action.beef_trim_serialize',

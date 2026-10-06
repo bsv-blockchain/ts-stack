@@ -73,6 +73,9 @@ function targetInputPatterns(target) {
   for (const mutate of target.mutate ?? []) {
     patterns.push(`${packageDirectory}/${mutate.replace(/:\d+(?:-\d+)?$/, '')}`)
   }
+  for (const input of target.additionalInputs ?? []) {
+    patterns.push(`${packageDirectory}/${normalized(input)}`)
+  }
   if (typeof target.propertyTest === 'string') patterns.push(normalized(target.propertyTest))
   const jest = target.runnerOptions?.jest
   const vitest = target.runnerOptions?.vitest

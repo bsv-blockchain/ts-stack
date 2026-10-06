@@ -9,6 +9,7 @@ import {
   WERR_INSUFFICIENT_FUNDS,
   WERR_BROADCAST_UNAVAILABLE,
   WERR_NETWORK_CHAIN,
+  WERR_INVALID_MERKLE_ROOT,
   WERR_INVALID_OPERATION,
   WERR_MISSING_PARAMETER,
   WERR_BAD_REQUEST,
@@ -435,4 +436,27 @@ describe('WalletError tests', () => {
       unknown: 2
     })
   })
+})
+
+test('preserves typed proof failure and recovery context across remote JSON', () => {
+  const error = new WERR_INVALID_MERKLE_ROOT('11'.repeat(32), 100, '22'.repeat(32), '33'.repeat(32))
+  error.message += ' Retry canonical recovery.'
+  const result = WalletErrorFromJson(JSON.parse(error.toJson()))
+  expect(result).toBeInstanceOf(WERR_INVALID_MERKLE_ROOT)
+  expect(result.toJson()).toEqual(error.toJson())
+  for (const changes of [
+    { blockHeight: -1 },
+    { blockHeight: NaN },
+    { blockHeight: 1.5 },
+    { blockHash: {} },
+    { merkleRoot: 'x'.repeat(65) },
+    { txid: [] },
+    { message: 'x'.repeat(4097) }
+  ]) {
+    expect(() => WalletErrorFromJson({ ...JSON.parse(error.toJson()), ...changes })).toThrow(
+      'Invalid remote wallet error'
+    )
+  }
+  const noTxid = new WERR_INVALID_MERKLE_ROOT('11'.repeat(32), 0, '22'.repeat(32))
+  expect(WalletErrorFromJson(JSON.parse(noTxid.toJson())).toJson()).toBe(noTxid.toJson())
 })
