@@ -426,7 +426,7 @@ This composition currently exercises the historical single-program sale-listing
 family. It is compatibility and integration evidence, rather than qualification
 of the current optional BRC-197 two-stage exemplar. The current exemplar's native
 wallet, alias and selected-chain integration remains tracked in the
-[specification alignment record](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+[specification alignment record](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
 
 The executable `PrivatePurchaseNative.integration.test.ts` demonstration composes
 these public implementations with actual Wallet Toolbox SQLite action recovery,
