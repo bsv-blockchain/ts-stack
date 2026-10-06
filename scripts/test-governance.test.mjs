@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import test from 'node:test'
 
 import { resolveGovernedTest } from './run-governed-test.mjs'
@@ -156,24 +155,24 @@ test('governed test runner rejects traversal and wrong test modes', () => {
   }
 })
 
-test('wallet property command selects every registered suite with the actual Jest parser', async () => {
+test('wallet property command keeps every registered suite after its runner options', () => {
   const manifest = 'packages/wallet/wallet-toolbox/package.json'
   const packageDirectory = path.dirname(path.join(REPOSITORY_ROOT, manifest))
   const wallet = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, manifest), 'utf8'))
-  const walletRequire = createRequire(path.join(packageDirectory, 'package.json'))
-  const jestRequire = createRequire(walletRequire.resolve('jest/package.json'))
-  const { buildArgv } = jestRequire('jest-cli')
-  const tokens = wallet.scripts['test:property'].split(' ')
-  assert.equal(tokens.shift(), 'jest')
-  const declared = tokens.filter(value => value.startsWith('src/') && value.endsWith('.test.ts'))
+  const prefix = 'node ../../../scripts/check-wallet-property-command.mjs && jest '
+  assert.ok(wallet.scripts['test:property'].startsWith(prefix))
+  const tokens = wallet.scripts['test:property'].slice(prefix.length).split(' ')
+  const options = [
+    '--testPathIgnorePatterns=man.test.ts',
+    '--runInBand',
+    '--watchman=false',
+    '--runTestsByPath'
+  ]
+  assert.deepEqual(tokens.slice(0, options.length), options)
+  const declared = tokens.slice(options.length)
   const registered = policy.propertyTesting.suites
     .filter(suite => suite.manifest === manifest)
     .map(suite => path.relative(packageDirectory, path.join(REPOSITORY_ROOT, suite.path)))
-  assert.deepEqual(new Set(declared), new Set(registered))
-  const actual = await buildArgv(tokens)
-  assert.deepEqual(actual._, declared)
-  assert.deepEqual(actual.testPathIgnorePatterns, ['man.test.ts'])
-  assert.equal(actual.runInBand, true)
-  assert.equal(actual.runTestsByPath, true)
-  assert.equal(actual.watchman, false)
+  assert.ok(declared.every(value => value.startsWith('src/') && value.endsWith('.test.ts')))
+  assert.deepEqual([...declared].sort(), [...registered].sort())
 })
