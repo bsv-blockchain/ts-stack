@@ -295,10 +295,16 @@ const rangePlans = new Map(
       'lch-overlay-covenant-terms',
       [
         [
-          'src/overlayAcquisitionCovenantTerms.ts',
+          'src/overlayAcquisitionCovenantTermsCore.ts',
           {
             label: 'terms',
-            starts: [1, 132, 167, 225, 288, 402]
+            markers: [
+              'function validateCovenantOfferMechanism(offer: SignedObject) {',
+              'async function authenticateCovenantOffer<D extends LCHCovenantDescriptor, C>(',
+              'async function authenticateCovenantConsent<D extends LCHCovenantDescriptor, C>(',
+              'async function validateCovenantCapabilityAndPolicy<D extends LCHCovenantDescriptor, C>(',
+              'export function validateLCHCovenantPromiseCore('
+            ]
           }
         ],
         [
@@ -683,6 +689,13 @@ const refinedFileParts = new Map([
 // Keep the complete presently type-only module in a nonempty execution part.
 // Future executable content in that module remains part of the same full union.
 const rangeCompanions = new Map([
+  [
+    'lch-overlay-covenant-terms',
+    new Map([
+      ['src/overlayAcquisitionCovenantTerms.ts', 'terms-1'],
+      ['src/overlayAcquisitionCovenantProfileTerms.ts', 'terms-1']
+    ])
+  ],
   ['private-purchase-http', new Map([['src/PrivatePurchaseHTTPPorts.ts', 'routes-1']])],
   ['root-eviction-storage', new Map([['src/root-eviction/RootEvictionStorage.ts', 'database-1']])]
 ])

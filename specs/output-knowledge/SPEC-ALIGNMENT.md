@@ -41,6 +41,12 @@ may install different transaction domains without adopting its revenue model.
       predicate requires verified active stage/current height below expiry;
       no retained obligation is re-evaluated as a new preparation. These helpers
       do not migrate buyer/seller custody or establish chain authority.
+- [x] Authenticate current immutable standing-Offer terms and individual consent
+      through a separately selected current descriptor/collector interface. Share
+      the complete existing consent pipeline, preserve historical public behavior,
+      and keep original promise validation separate from new-work windows.
+      This component does not migrate native buyer/seller custody or prove roles,
+      chain currentness or release-policy satisfaction.
 - [ ] Integrate the revised immutable collector extension and current alias chain
       assessment with replacement-family/native buyer and seller recovery.
 - [ ] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias

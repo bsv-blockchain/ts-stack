@@ -249,10 +249,21 @@ must match the descriptor. `validateLCHCollectorPreparation` requires an
 independently verified active stage and current chain height strictly below
 expiry; retained delivery obligations do not repeat this new-work check.
 
+`validateLCHOverlayCovenantProfileTerms`, selected through the covenant entry,
+authenticates the current standing Offer and individual signed License Request,
+complete immutable collector/descriptor binding, capability, policy consent and
+content commitments. It uses the same consent pipeline as the historical terms
+interface. `validateLCHOverlayCovenantProfilePromise` checks a frozen original
+promise without imposing a new expiry check; the separate
+`validateLCHOverlayCovenantProfileWindow` checks new work. Installed chain height
+is a canonical decimal U64 string. Independent authorized lineage, active stage,
+current chain view, role authority and release verification remain required.
+
 `decodeLCHCollectorRevenue` and the existing covenant buyer/seller adapters retain
 pre-replacement behavior for compatibility. They are not current-family adapters.
-The revised collector component does not authenticate the Offer or establish
-activation ancestry, chain currentness, wallet remittance or alias recovery.
+The decoder/binding predicates alone do not authenticate the Offer. Neither
+terms validation nor those predicates establish activation ancestry, chain
+currentness, wallet remittance or alias recovery.
 Those separately installed integrations remain open before advertising C.
 
 `decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR

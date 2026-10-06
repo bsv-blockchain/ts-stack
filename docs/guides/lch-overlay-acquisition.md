@@ -3,8 +3,8 @@ id: lch-overlay-acquisition
 title: 'LCH Overlay Acquisition'
 kind: guide
 version: '0.3.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [lch, overlay, acquisition, custody, payment]
@@ -32,6 +32,15 @@ family and expiry height against the immutable listing descriptor.
 `validateLCHCollectorPreparation` checks a locally verified active stage and
 current height strictly below expiry before new work. It does not query a chain,
 authenticate an Offer, fund a transaction or revoke a retained obligation.
+For the complete current consent representation, select
+`validateLCHOverlayCovenantProfileTerms` from the same covenant entry. It verifies
+the signed standing Offer, original signed individual Request, complete collector
+and descriptor, policy consent, selected capability and content commitments.
+`validateLCHOverlayCovenantProfilePromise` validates the frozen accepted promise;
+`validateLCHOverlayCovenantProfileWindow` checks new work. Height input is a
+canonical decimal U64 string. Authenticate roles and independently verify actual
+authorized lineage, active stage and the installed current chain view before
+financial work; no terms parser supplies those proofs or invokes a wallet.
 The existing covenant buyer/seller classes below retain the earlier contract;
 their migration to the current verifiers, collector and alias owner remains open.
 Paid lookup and ordinary BRC-170 continue using their existing separate paths.

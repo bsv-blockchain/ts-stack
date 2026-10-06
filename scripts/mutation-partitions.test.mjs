@@ -104,6 +104,26 @@ test('semantic execution ranges retain the complete source line union and every 
   )
 })
 
+test('standing covenant terms retain their seven semantic partitions and complete historical and current companions', () => {
+  const canonical = buildMutationTargets(REPOSITORY_ROOT)['lch-overlay-covenant-terms'],
+    parts = partitionMutationTarget('lch-overlay-covenant-terms', canonical)
+  assert.deepEqual(
+    parts.map(part => part.id),
+    ['terms-1', 'terms-2', 'terms-3', 'terms-4', 'terms-5', 'terms-6', 'consent-1']
+  )
+  for (const file of [
+    'src/overlayAcquisitionCovenantTerms.ts',
+    'src/overlayAcquisitionCovenantProfileTerms.ts'
+  ]) {
+    assert.ok(parts[0].target.mutate.includes(file))
+    assert.equal(
+      parts.flatMap(part => part.target.mutate).filter(value => value === file).length,
+      1
+    )
+  }
+  assert.deepEqual(parts.at(-1).target.mutate, ['src/overlayAcquisitionConsent.ts:1-80'])
+})
+
 test('recovery store partitions preserve its canonical interval and future companion sources', () => {
   const id = 'wallet-recovery-store',
     canonical = buildMutationTargets(REPOSITORY_ROOT)[id],

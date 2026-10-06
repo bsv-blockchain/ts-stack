@@ -97,6 +97,29 @@ the focused seven-test profile. Packed exports and original browser budgets pass
 These helpers neither authenticate Offers nor provide native currentness/alias
 custody; full current buyer/seller integration remains open.
 
+The separately selected current standing-Offer terms interface now authenticates
+the exact immutable collector and descriptor, signed individual consent,
+capability, policy and content commitments. The shared consent pipeline retains
+the historical wrapper's public interfaces and behavior. Frozen promise checks
+remain distinct from new-work time windows and installed-height checks. These
+interfaces establish no lineage, role, unspentness or release authority and
+perform no wallet action; buyer/seller and native alias integration remain open.
+
+The controlled complete LCH profile passes 263 tests in 40 suites with minimum
+300 generated cases and seed 3242026. Current terms and the historical wrapper
+have complete coverage; the shared pipeline has 99.05% statements and 94.04%
+branches. Independent pinned-engine instrumentation proves all 525 canonical
+terms cases occur exactly once across the same seven semantic partitions,
+preserving all original runner settings and the complete 390-row matrix. This
+is inventory evidence, not a completed mutation campaign. The prior stale-wrapper
+mapping failure is retained. The SDK source-quality refactor also preserves
+programs, witnesses and public APIs: 414 SDK tests and 100 selected lineage tests
+pass under the original controls; final hosted analysis remains separate.
+Clean LCH and SDK packed exports and every existing browser entry pass unchanged
+budgets. All 69 compiled documentation examples pass against 24 exact tarballs.
+The example compiler caught a duplicate local import name in the combined
+consumer; the corrected example uses a distinct local alias.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

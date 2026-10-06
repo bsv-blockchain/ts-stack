@@ -8,6 +8,11 @@ import {
   validateLCHOverlayCovenantWindow
 } from '../src/overlayAcquisitionCovenantTerms.js'
 import { lchCovenantFixture } from './overlay-acquisition-covenant.fixture.js'
+import { lchCovenantProfileFixture } from './overlay-acquisition-covenant-profile.fixture.js'
+import {
+  validateLCHOverlayCovenantProfileTerms,
+  validateLCHOverlayCovenantProfilePromise
+} from '../src/overlayAcquisitionCovenantProfileTerms.js'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number(process.env.FAST_CHECK_NUM_RUNS),
@@ -80,5 +85,48 @@ it('late binds independent buyers while retaining exact standing rights and refu
         expect(f.descriptor.termsDigest).toBe(offerId)
       }
     )
+  )
+}, 180000)
+
+it('binds current immutable collector terms and late buyer consent without changing the standing Offer', async () => {
+  const f = await lchCovenantProfileFixture(),
+    offerId = f.descriptor.termsDigest
+  await fc.assert(
+    fc.asyncProperty(fc.integer({ min: 90, max: 1000 }), async key => {
+      const buyer = await WalletBRC77Signer.create({
+          wallet: new ProtoWallet(new PrivateKey(key))
+        }),
+        original = await f.requestFor(buyer),
+        terms = await validateLCHOverlayCovenantProfileTerms({
+          ...f.input,
+          request: original.requestBytes,
+          prepare: original.prepare
+        }),
+        prepare = original.prepare,
+        packet = f.signedTerms({
+          acquisitionId: outputPacketDigest('purchase', {
+            chain: prepare.listing.chain,
+            seller: f.descriptor.seller,
+            recipient: prepare.recipient,
+            topic: prepare.topic,
+            requestId: prepare.requestId
+          }),
+          requestDigest: outputPacketDigest('purchase-request', prepare),
+          recipient: prepare.recipient
+        })
+      expect(terms.prepare.termsDigest).toBe(offerId)
+      expect(terms.policy.buyer).toBe(prepare.recipient)
+      expect(terms.descriptor).toEqual(f.descriptor)
+      expect(validateLCHOverlayCovenantProfilePromise(terms, packet)).toEqual(packet)
+      await expect(
+        validateLCHOverlayCovenantProfileTerms({
+          ...f.input,
+          request: original.requestBytes,
+          prepare: original.prepare,
+          descriptor: { ...f.descriptor, expiryHeight: f.descriptor.expiryHeight + 1 }
+        })
+      ).rejects.toThrow('listing descriptor or initial revenue')
+      expect(f.descriptor.termsDigest).toBe(offerId)
+    })
   )
 }, 180000)

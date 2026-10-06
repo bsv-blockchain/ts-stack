@@ -1213,6 +1213,8 @@ test('standing covenant terms retain complete modes, consent and prior cryptogra
     target = configured['lch-overlay-covenant-terms']
   assert.deepEqual(target.mutate, [
     'src/overlayAcquisitionCovenantTerms.ts',
+    'src/overlayAcquisitionCovenantTermsCore.ts',
+    'src/overlayAcquisitionCovenantProfileTerms.ts',
     'src/overlayAcquisitionConsent.ts'
   ])
   assert.deepEqual(target.runnerOptions.jest.config.testMatch, [

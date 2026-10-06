@@ -14,7 +14,10 @@
   "prohibitedExports": [
     "decodeLCHCollectorRevenueProfile",
     "bindLCHCollectorRevenueProfile",
-    "validateLCHCollectorPreparation"
+    "validateLCHCollectorPreparation",
+    "validateLCHOverlayCovenantProfileTerms",
+    "validateLCHOverlayCovenantProfilePromise",
+    "validateLCHOverlayCovenantProfileWindow"
   ],
   "maximumBytes": {
     "vite": {
@@ -47,7 +50,10 @@
         "NodeProtectedPayloadCodec",
         "decodeLCHCollectorRevenueProfile",
         "bindLCHCollectorRevenueProfile",
-        "validateLCHCollectorPreparation"
+        "validateLCHCollectorPreparation",
+        "validateLCHOverlayCovenantProfileTerms",
+        "validateLCHOverlayCovenantProfilePromise",
+        "validateLCHOverlayCovenantProfileWindow"
       ],
       "maximumBytes": {
         "vite": {
@@ -72,7 +78,10 @@
         "validateLCHOverlayCovenantTerms",
         "decodeLCHCollectorRevenueProfile",
         "bindLCHCollectorRevenueProfile",
-        "validateLCHCollectorPreparation"
+        "validateLCHCollectorPreparation",
+        "validateLCHOverlayCovenantProfileTerms",
+        "validateLCHOverlayCovenantProfilePromise",
+        "validateLCHOverlayCovenantProfileWindow"
       ],
       "prohibitedExports": [
         "SQLiteProtectedOperationObjectStore",

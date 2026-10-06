@@ -13,3 +13,4 @@ export * from './overlayAcquisitionCovenant.js'
 export * from './overlayAcquisitionCovenantSeller.js'
 
 export * from './overlayAcquisitionCollectorProfile.js'
+export * from './overlayAcquisitionCovenantProfileTerms.js'

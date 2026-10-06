@@ -2508,3 +2508,37 @@ export function compareImmutableCollectorConsent(
   return binding.collector
 }
 ```
+
+## Current standing Offer authentication
+
+Authenticate current consent and compare it with the independently verified
+listing selected by the original request. The caller obtains that history and
+current height from its installed chain owner and fences that view through any
+later financial work. This terms interface does not replace role authority,
+unspentness, protected custody or purchase/release verification.
+
+```ts compile
+// example-id: immutable-standing-offer-consent
+import {
+  validateLCHOverlayCovenantProfileTerms,
+  validateLCHCollectorPreparation as validateCurrentConsentPreparation,
+  type LCHOverlayCovenantProfileTermsInput
+} from '@bsv/lch/overlay-covenant'
+import { canonicalOutputJSON as currentConsentJSON } from '@bsv/sdk'
+import type { RevenueListingProfileLineageResult as CurrentConsentHistory } from '@bsv/output-knowledge/revenue-listing'
+
+export async function authenticateCurrentStandingConsent(
+  input: LCHOverlayCovenantProfileTermsInput,
+  history: Extract<CurrentConsentHistory, { status: 'verified' }>,
+  installedCurrentHeight: string
+) {
+  const terms = await validateLCHOverlayCovenantProfileTerms(input)
+  if (
+    currentConsentJSON(history.descriptor) !== currentConsentJSON(terms.descriptor) ||
+    currentConsentJSON(history.target) !== currentConsentJSON(terms.prepare.listing)
+  )
+    throw new Error('Verified history differs from the exact consented listing')
+  validateCurrentConsentPreparation(terms.descriptor, history.stage, installedCurrentHeight)
+  return terms
+}
+```
