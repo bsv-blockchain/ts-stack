@@ -142,11 +142,17 @@ export {
   parsePrivatePurchaseProgress,
   privatePurchaseEnvelope,
   privatePurchaseOperation,
+  type PrivatePurchaseCandidateProfile,
   type PrivatePurchaseProgress,
   type PrivatePurchaseEvent
 } from './PrivatePurchaseProgress.js'
 export {
   SQLitePrivatePurchaseStore,
+  SQLitePrivatePurchaseCommitmentStore,
+  type PrivatePurchaseStoreOwner,
+  type PrivatePurchaseState,
+  type PrivatePurchaseCommitmentState,
+  type PrivatePurchaseCommitmentLoaded,
   type PrivatePurchaseCustody,
   type PrivatePurchaseStoreLimits,
   type PrivatePurchaseLoaded

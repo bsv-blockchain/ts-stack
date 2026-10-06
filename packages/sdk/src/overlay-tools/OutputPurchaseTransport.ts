@@ -14,10 +14,13 @@ import {
   parseOutputPurchaseSubmit,
   verifyOutputPurchaseTerms,
   verifyOutputPurchaseEnvelope,
+  verifyOutputPurchaseCommitmentEnvelope,
+  parseOutputPurchaseCommitmentBinding,
   type OutputPurchasePrepare,
   type OutputPurchaseSubmit,
   type OutputSignedPurchaseTerms,
-  type OutputPurchaseEnvelope
+  type OutputPurchaseEnvelope,
+  type OutputPurchaseCommitmentBinding
 } from './OutputPurchaseProtocol.js'
 import { OutputFiniteHTTP } from './internal/OutputFiniteHTTP.js'
 
@@ -33,8 +36,19 @@ interface CommonOptions {
 }
 interface OperationOptions {
   prepare: { operation: 'prepare' }
-  submit: { operation: 'submit'; terms: unknown; candidate: unknown }
-  recover: { operation: 'recover'; terms: unknown; candidate?: unknown }
+  submit: {
+    operation: 'submit'
+    terms: unknown
+    candidate: unknown
+    commitmentBinding?: OutputPurchaseCommitmentBinding
+  }
+  recover: {
+    operation: 'recover'
+    terms: unknown
+    candidate?: unknown
+    /** Retain the original funded candidate when selecting this companion. */
+    commitmentBinding?: OutputPurchaseCommitmentBinding
+  }
 }
 export type OutputPurchaseTransportOptions<Operation extends OutputPurchaseOperation> =
   CommonOptions & { operation: Operation } & OperationOptions[Operation]
@@ -62,6 +76,7 @@ export class OutputPurchaseTransport<Operation extends OutputPurchaseOperation> 
   private readonly original: OutputPurchasePrepare
   private readonly terms?: OutputSignedPurchaseTerms
   private readonly candidate?: OutputPurchaseSubmit
+  private readonly commitmentBinding?: OutputPurchaseCommitmentBinding
   private readonly operation: Operation
   private readonly body: string
   private readonly url: string
@@ -108,6 +123,18 @@ export class OutputPurchaseTransport<Operation extends OutputPurchaseOperation> 
         this.candidate !== undefined,
         'Purchase submit requires the original signed transaction'
       )
+    if ('commitmentBinding' in options && options.commitmentBinding !== undefined) {
+      outputAssert(
+        this.operation !== 'prepare' && this.terms !== undefined && this.candidate !== undefined,
+        'Purchase commitment transport requires original terms and funded candidate'
+      )
+      this.commitmentBinding = parseOutputPurchaseCommitmentBinding(options.commitmentBinding)
+      outputAssert(
+        this.commitmentBinding.domainProfile === this.terms.body.domainProfile,
+        'Purchase commitment binding changed domain',
+        'context-changed'
+      )
+    }
     let request: unknown = this.original
     if (this.operation === 'submit') request = this.candidate
     else if (this.operation !== 'prepare')
@@ -173,15 +200,17 @@ export class OutputPurchaseTransport<Operation extends OutputPurchaseOperation> 
       Math.min(4194304, this.selection.profile.maxResponseBytes),
       signal
     )
-    // Transport authentication precedes closed decoding. POTATOES binds the
-    // original transaction, but STEAK still is not mining or domain eligibility.
+    // Transport authentication precedes closed decoding. POTATOES binds its
+    // historical release transaction; economic equivalence and eligibility
+    // still require the independently installed full domain verifier.
     const parsed = parseOutputJSON(bytes, {
       bytes: Math.min(4194304, this.selection.profile.maxResponseBytes)
     })
-    return (
-      this.operation === 'prepare'
-        ? this.bindTerms(parsed)
-        : verifyOutputPurchaseEnvelope(parsed, this.terms!, this.candidate?.txid)
-    ) as OutputPurchaseTransportResults[Operation]
+    if (this.operation === 'prepare')
+      return this.bindTerms(parsed) as OutputPurchaseTransportResults[Operation]
+    const result = this.commitmentBinding
+      ? verifyOutputPurchaseCommitmentEnvelope(parsed, this.terms!, this.commitmentBinding)
+      : verifyOutputPurchaseEnvelope(parsed, this.terms!, this.candidate?.txid)
+    return result as OutputPurchaseTransportResults[Operation]
   }
 }

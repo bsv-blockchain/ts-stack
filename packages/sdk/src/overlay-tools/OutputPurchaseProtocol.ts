@@ -35,6 +35,11 @@ const terms = s.object({
 const signedTerms = s.object({ body: terms, signature: s.bytes })
 const submit = s.object({ version: s.literal(1), acquisitionId: s.hex, txid: s.hex, beef: s.bytes })
 const recover = s.object({ version: s.literal(1), acquisitionId: s.hex })
+const commitmentBinding = s.object({
+  profile: s.literal('full-purchase-commitment-v1'),
+  domainProfile: s.iri,
+  purchaseCommitment: s.hex
+})
 const potatoes = s.object({
   body: s.object(
     {
@@ -113,6 +118,9 @@ export type OutputPurchaseRecover = ReturnType<typeof recover>
 export type OutputSignedPotatoes = ReturnType<typeof potatoes>
 export type OutputPurchaseResult = ReturnType<typeof result>
 export type OutputPurchaseEnvelope = ReturnType<typeof envelope>
+/** Local, explicitly selected binding supplied by an independent full domain
+ * verifier. It is never a wire request or proof of transaction equivalence. */
+export type OutputPurchaseCommitmentBinding = ReturnType<typeof commitmentBinding>
 /** Transport evidence only. Independently verify the complete transaction,
  * purchase commitment and selected-chain placement before using this alias.
  */
@@ -125,6 +133,9 @@ export const parseOutputPurchaseSubmit = (input: unknown): OutputPurchaseSubmit 
   s.normalized(input, submit)
 export const parseOutputPurchaseRecover = (input: unknown): OutputPurchaseRecover =>
   s.normalized(input, recover)
+export const parseOutputPurchaseCommitmentBinding = (
+  input: unknown
+): OutputPurchaseCommitmentBinding => s.normalized(input, commitmentBinding)
 export const parseOutputPotatoes = (input: unknown): OutputSignedPotatoes =>
   s.normalized(input, potatoes)
 
@@ -287,4 +298,32 @@ export function verifyOutputPurchaseEnvelope(
     )
   }
   return parsed
+}
+
+/** Explicit economic-identity transport companion. Authenticate the response's
+ * historical release txid without requiring it to equal the original funded
+ * txid. The independent domain must verify BOTH complete transactions against
+ * this same identity before accepting rights; neither this check nor currentAlias
+ * establishes Bitcoin validity, chain currentness or usable secret material.
+ * The existing exact-txid verifier and omitted transport option remain unchanged.
+ */
+export function verifyOutputPurchaseCommitmentEnvelope(
+  input: unknown,
+  originalTerms: OutputSignedPurchaseTerms,
+  expectedBinding: OutputPurchaseCommitmentBinding
+): OutputPurchaseEnvelope {
+  const original = parseOutputPurchaseTerms(originalTerms),
+    binding = parseOutputPurchaseCommitmentBinding(expectedBinding),
+    parsed = parseOutputPurchaseEnvelope(input)
+  outputAssert(
+    binding.domainProfile === original.body.domainProfile,
+    'Purchase commitment binding changed domain',
+    'context-changed'
+  )
+  return verifyOutputPurchaseEnvelope(
+    parsed,
+    original,
+    'txid' in parsed.result ? parsed.result.txid : undefined,
+    binding.purchaseCommitment
+  )
 }

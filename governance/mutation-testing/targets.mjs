@@ -644,6 +644,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/private-purchase-coordinator.test.ts',
+          '<rootDir>/test/private-purchase-coordinator-commitment.test.ts',
           '<rootDir>/test/private-purchase-coordination.property.test.ts',
           '<rootDir>/test/private-purchase-evidence.test.ts',
           '<rootDir>/test/private-purchase-evidence.property.test.ts'
@@ -678,6 +679,8 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts',
       additionalInputs: [
+        'test/private-purchase-progress-commitment.test.ts',
+        'test/private-purchase-store-commitment.test.ts',
         'src/private/**',
         'src/storage/**',
         'test/protected-ledger-fixture.ts',
@@ -710,7 +713,9 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/private-purchase-native-clock.property.test.ts',
           '<rootDir>/test/private-purchase-state.property.test.ts',
           '<rootDir>/test/private-purchase-progress.test.ts',
-          '<rootDir>/test/private-purchase-store.test.ts'
+          '<rootDir>/test/private-purchase-store.test.ts',
+          '<rootDir>/test/private-purchase-progress-commitment.test.ts',
+          '<rootDir>/test/private-purchase-store-commitment.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
@@ -721,6 +726,8 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/application/output-knowledge/test/private-purchase-state.property.test.ts',
       additionalInputs: [
+        'test/private-purchase-progress-commitment.test.ts',
+        'test/private-purchase-store-commitment.test.ts',
         'src/private/**',
         'src/storage/**',
         'test/private-purchase-contract.fixture.ts',
@@ -740,6 +747,8 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/test/private-purchase-progress.test.ts',
           '<rootDir>/test/private-purchase-store.test.ts',
+          '<rootDir>/test/private-purchase-progress-commitment.test.ts',
+          '<rootDir>/test/private-purchase-store-commitment.test.ts',
           '<rootDir>/test/private-purchase-state.property.test.ts',
           '<rootDir>/test/protected-ledger-prepared.test.ts',
           '<rootDir>/test/private-purchase-native-clock.test.ts',

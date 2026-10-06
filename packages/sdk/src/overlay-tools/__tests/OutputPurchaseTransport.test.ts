@@ -4,7 +4,8 @@ import {
   SimplifiedFetchTransport,
   CompletedProtoWallet,
   OUTPUT_PROFILES,
-  signOutputPacket
+  signOutputPacket,
+  outputPacketDigest
 } from '../../../mod.js'
 import { OutputPurchaseTransport, OutputPurchaseServiceError } from '../OutputPurchaseTransport.js'
 import {
@@ -13,6 +14,85 @@ import {
   purchaseSeller
 } from './OutputPurchaseTransport.fixture.js'
 afterEach(() => jest.restoreAllMocks())
+it.each(['submit', 'recover'] as const)(
+  'owns an explicitly verified full identity for %s while retaining the original funded request',
+  async operation => {
+    const f = purchaseTransportFixture(operation),
+      candidate = structuredClone(f.candidate),
+      binding = {
+        profile: 'full-purchase-commitment-v1' as const,
+        domainProfile: f.body.domainProfile,
+        purchaseCommitment: 'ab'.repeat(32)
+      },
+      client = new OutputPurchaseTransport({ ...f.options, commitmentBinding: binding }),
+      alias = 'cd'.repeat(32),
+      evidence = { ...f.evidence, txid: alias },
+      packet = {
+        result: {
+          ...f.envelope.result,
+          txid: alias,
+          purchaseCommitment: binding.purchaseCommitment,
+          potatoes: signOutputPacket(
+            'potatoes',
+            {
+              ...f.potatoes,
+              txid: alias,
+              purchaseCommitment: binding.purchaseCommitment,
+              evidenceDigest: outputPacketDigest('release-evidence', evidence)
+            },
+            purchaseSeller
+          )
+        },
+        releaseEvidence: evidence
+      },
+      fetch = jest
+        .spyOn(AuthFetch.prototype, 'fetch')
+        .mockImplementation(async () => f.response(packet))
+    binding.purchaseCommitment = 'ef'.repeat(32)
+    f.candidate.txid = '99'.repeat(32)
+    expect(await client.send()).toEqual(packet)
+    const [url, init] = fetch.mock.calls.at(-1)!
+    expect(url).toBe('https://provider.example.test/api/overlay/v1/purchases/' + operation)
+    expect(JSON.parse(init!.body as string)).toEqual(
+      operation === 'submit' ? candidate : { version: 1, acquisitionId: candidate.acquisitionId }
+    )
+    expect(JSON.parse(init!.body as string)).not.toHaveProperty('commitmentBinding')
+    expect(new Headers(init!.headers).get('x-bsv-payment')).toBeNull()
+    // The same response still fails on the historical default transport.
+    await expect(f.client.send()).rejects.toThrow('transaction mismatch')
+    packet.result.purchaseCommitment = 'ef'.repeat(32)
+    packet.result.potatoes = signOutputPacket(
+      'potatoes',
+      { ...packet.result.potatoes.body, purchaseCommitment: packet.result.purchaseCommitment },
+      purchaseSeller
+    )
+    await expect(client.send()).rejects.toThrow('commitment mismatch')
+  }
+)
+it('requires the explicit local profile, signed domain and original funded candidate before selecting economic binding', () => {
+  const f = purchaseTransportFixture('recover'),
+    binding = {
+      profile: 'full-purchase-commitment-v1' as const,
+      domainProfile: f.body.domainProfile,
+      purchaseCommitment: 'ab'.repeat(32)
+    }
+  for (const change of [
+    { candidate: undefined },
+    { operation: 'prepare' },
+    { commitmentBinding: { ...binding, profile: 'unknown' } },
+    { commitmentBinding: { ...binding, domainProfile: 'urn:other:domain' } },
+    { commitmentBinding: { ...binding, purchaseCommitment: 'ab' } }
+  ])
+    expect(
+      () =>
+        new OutputPurchaseTransport({
+          ...f.options,
+          commitmentBinding: binding,
+          ...change
+        } as never)
+    ).toThrow()
+  expect(f.fetchClient).not.toHaveBeenCalled()
+})
 it.each(['prepare', 'submit', 'recover'] as const)(
   'owns and authenticates the original %s with no HTTP charge',
   async operation => {

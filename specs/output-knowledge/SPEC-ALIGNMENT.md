@@ -28,6 +28,17 @@ may install different transaction domains without adopting its revenue model.
       Preserve unsigned discovery, omitted-hook defaults and read-only finalized
       recovery. This component alone does not provide alias reconciliation or
       replacement-family native wallet composition.
+- [x] Provide an explicitly selected sealed native commitment owner with
+      version-two state, retaining the historical constructor, pin interface and
+      version-one declarations. Independently verified owned commitment and
+      synchronous method identities remain fenced through native reservation,
+      admission and first signed delivery. This component still pins one exact
+      txid; per-alias custody and selected-chain reconciliation remain open below.
+- [x] Add a separately selected SDK commitment-bound envelope verifier and local
+      transport binding for submit/recover. Retain original signed domain and
+      funded candidate, all signature/release checks and exact-txid defaults.
+      This authenticates response representation; independent full transaction
+      equivalence, native alias custody and wallet reconciliation remain separate.
 - [ ] Reserve one economic candidate identity per acquisition and retain exact
       raw transaction, admission work and release assessment separately per alias.
       Repeated aliases cannot charge again or create another private release.

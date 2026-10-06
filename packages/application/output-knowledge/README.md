@@ -100,7 +100,12 @@ may explicitly select the `native-observation-v1` local clock profile; it derive
 bounded progress writes from their authorizing transaction observation. Existing
 constructors and commits retain their default behavior. Restore each obligation
 with its original authenticated profile; changing an installation is not migration
-of existing custody. The purchase guide includes actual native six-route and
+of existing custody. The explicitly selected `SQLitePrivatePurchaseCommitmentStore`
+uses sealed version-two state and retains an independently verified full purchase
+commitment through native reservation, admission and signed delivery. Historical
+version-one custody and public declarations remain unchanged. This companion
+still pins an exact submitted txid; per-alias custody and selected-chain alias
+reconciliation remain separate integration work. The purchase guide includes actual native six-route and
 authenticated Engine/Mongo/LCH demonstrations with their assurance limits.
 
 The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,

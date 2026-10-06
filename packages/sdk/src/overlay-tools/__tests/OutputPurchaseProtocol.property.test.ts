@@ -3,7 +3,8 @@ import { outputPacketDigest, signOutputPacket } from '../OutputProtocol.js'
 import {
   parseOutputPurchaseEnvelope,
   verifyOutputPurchaseTerms,
-  verifyOutputPurchaseEnvelope
+  verifyOutputPurchaseEnvelope,
+  verifyOutputPurchaseCommitmentEnvelope
 } from '../OutputPurchaseProtocol.js'
 import PrivateKey from '../../primitives/PrivateKey.js'
 import { toBase64 } from '../../primitives/utils.js'
@@ -68,8 +69,29 @@ test('reserved commitments bind all 32 bytes and current aliases never rewrite h
           commitment
         )
         expect(verified).toEqual(envelope)
+        const binding = {
+          profile: 'full-purchase-commitment-v1' as const,
+          domainProfile: original.body.domainProfile,
+          purchaseCommitment: commitment
+        }
+        expect(verifyOutputPurchaseCommitmentEnvelope(envelope, original, binding)).toEqual(
+          envelope
+        )
+        const equivalentResponse = {
+          ...envelope,
+          result: { ...envelope.result, txid: envelope.currentAlias.txid }
+        }
+        expect(
+          verifyOutputPurchaseCommitmentEnvelope(equivalentResponse, original, binding)
+        ).toEqual(equivalentResponse)
         const changed = new Uint8Array(bytes)
         changed[position] ^= 1
+        expect(() =>
+          verifyOutputPurchaseCommitmentEnvelope(equivalentResponse, original, {
+            ...binding,
+            purchaseCommitment: Buffer.from(changed).toString('hex')
+          })
+        ).toThrow('commitment mismatch')
         expect(() =>
           verifyOutputPurchaseEnvelope(
             envelope,

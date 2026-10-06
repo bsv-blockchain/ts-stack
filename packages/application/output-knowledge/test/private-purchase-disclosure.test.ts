@@ -5,6 +5,88 @@ import { PrivatePurchaseDisclosure } from '../src/private/PrivatePurchaseDisclos
 import type { ProtectedLedgerView } from '../src/private/ProtectedLedgerCodec.js'
 import { purchaseDisclosureFixture as fixture } from './private-purchase-disclosure.fixture.js'
 
+it('authorizes explicit commitment custody and rechecks exact private bytes and current permission at enqueue', () => {
+  const f = fixture('full-purchase-commitment-v1'),
+    initial = f.access.guard(f.f.id, f.caller.buyer, f.caller.current, f.f.f.original.request),
+    prepared = f.f.owner.store.prepare(f.f.custody, f.f.clock, initial)
+  expect(prepared.state.format).toBe('private-purchase-state/2')
+  const terms = f.disclosure.prepare(f.f.id, f.caller, { terms: true }),
+    send = jest.fn((_body: string, _headers: unknown) => {})
+  terms.enqueue(send)
+  expect(JSON.parse(send.mock.calls[0][0])).toEqual(f.f.custody.original.terms)
+  f.f.deliver()
+  const result = f.disclosure.prepare(f.f.id, f.caller)
+  expect(JSON.parse(result.body)).toEqual(f.f.f.envelope())
+  expect(JSON.parse(result.body)).toHaveProperty(
+    'result.purchaseCommitment',
+    f.f.purchaseCommitment
+  )
+  f.setPermitted(false)
+  expect(() => result.enqueue(send)).toThrow(expect.objectContaining({ code: 'not-found' }))
+  expect(send).toHaveBeenCalledTimes(1)
+})
+
+it.each([undefined, 'full-purchase-commitment-v1'] as const)(
+  'refuses cross-profile access before exposing private request data to policy (%s)',
+  profile => {
+    const f = fixture(profile),
+      policy = jest.fn(() => true),
+      wrong = new PrivatePurchaseAccess(
+        f.f.owner.domain,
+        f.f.f.original.request.topic,
+        policy,
+        profile === undefined ? 'full-purchase-commitment-v1' : undefined
+      )
+    f.f.prepare()
+    expect(() =>
+      f.f.owner.store.load(
+        f.f.id,
+        f.caller.buyer,
+        f.f.clock,
+        wrong.guard(f.f.id, f.caller.buyer, f.caller.current)
+      )
+    ).toThrow(expect.objectContaining({ code: 'unavailable' }))
+    expect(policy).not.toHaveBeenCalled()
+  }
+)
+
+it('keeps wrong-recipient behavior and sealed profile checks ahead of private policy reads', () => {
+  const f = fixture('full-purchase-commitment-v1'),
+    wrongBuyer = new PrivateKey(45).toPublicKey().toString()
+  f.f.deliver()
+  const prior = f.decisions.length
+  expect(() => f.disclosure.prepare(f.f.id, { ...f.caller, buyer: wrongBuyer })).toThrow(
+    expect.objectContaining({ code: 'not-found' })
+  )
+  expect(f.decisions).toHaveLength(prior)
+  const guard = f.access.guard(f.f.id, f.caller.buyer, f.caller.current),
+    loaded = f.f.owner.store.load(f.f.id, f.caller.buyer, f.f.clock, f.f.guard)!,
+    // Owned shape-only refusal case; this view does not claim sealed-ledger authority.
+    view: ProtectedLedgerView = {
+      revision: loaded.revision,
+      observedAt: loaded.observedAt,
+      get: () => ({
+        ...loaded.row,
+        value: {
+          format: 'private-purchase-state/2',
+          recipient: f.caller.buyer,
+          candidateProfile: 'wrong'
+        }
+      })
+    }
+  expect(() => guard(view)).toThrow(expect.objectContaining({ code: 'unavailable' }))
+  expect(f.decisions).toHaveLength(prior)
+  expect(
+    () =>
+      new PrivatePurchaseAccess(
+        f.f.owner.domain,
+        f.f.f.original.request.topic,
+        () => true,
+        'wrong' as never
+      )
+  ).toThrow(expect.objectContaining({ code: 'unsupported' }))
+})
+
 it('refuses and drains a control authority that returns a promise', () => {
   const f = fixture(),
     send = jest.fn()

@@ -158,3 +158,49 @@ it('preserves one original transaction and exact private result through 300 nati
     )
   )
 }, 180000)
+
+it('preserves explicit commitment custody and original signed delivery through 300 native restarts', () => {
+  fc.assert(
+    fc.property(
+      fc.record({
+        nativeClock: fc.boolean(),
+        stop: fc.integer({ min: 0, max: 3 }),
+        retries: fc.integer({ min: 0, max: 3 })
+      }),
+      schedule => {
+        const f = purchaseStoreFixture(
+          {},
+          schedule.nativeClock ? 'native-observation-v1' : undefined,
+          'full-purchase-commitment-v1'
+        )
+        try {
+          let owner = f.owner,
+            retained = f.prepare()
+          if (schedule.stop === 1) retained = f.pin()
+          if (schedule.stop === 2) retained = f.admit()
+          if (schedule.stop === 3) retained = f.deliver()
+          const exact = structuredClone(retained.state)
+          for (let i = 0; i <= schedule.retries; i++) {
+            f.close(owner.domain)
+            owner = f.open()
+            const reopened = owner.store.load(f.id, f.buyer, f.clock, f.guard)!
+            expect(reopened.state).toEqual(exact)
+            expect(reopened.candidate).toEqual(retained.candidate)
+            expect(reopened.progress.purchaseCommitment).toBe(
+              schedule.stop === 0 ? undefined : f.purchaseCommitment
+            )
+            if (schedule.stop === 3) {
+              let result: unknown
+              owner.store.disclose(reopened, f.buyer, f.clock, f.guard, value => {
+                result = value
+              })
+              expect(result).toEqual(f.f.envelope())
+            }
+          }
+        } finally {
+          f.dispose()
+        }
+      }
+    )
+  )
+}, 180000)

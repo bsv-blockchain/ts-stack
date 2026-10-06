@@ -1126,3 +1126,25 @@ test('public retained BEEF is one complete critical module with the full native 
   assert.equal(entry.maximumNoCoverage, 0)
   assert.equal(entry.maximumInvalid, 0)
 })
+
+test('wallet property command keeps every registered suite after its runner options', () => {
+  const manifest = 'packages/wallet/wallet-toolbox/package.json'
+  const packageDirectory = path.dirname(path.join(REPOSITORY_ROOT, manifest))
+  const wallet = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, manifest), 'utf8'))
+  const prefix = 'node ../../../scripts/check-wallet-property-command.mjs && jest '
+  assert.ok(wallet.scripts['test:property'].startsWith(prefix))
+  const tokens = wallet.scripts['test:property'].slice(prefix.length).split(' ')
+  const options = [
+    '--testPathIgnorePatterns=man.test.ts',
+    '--runInBand',
+    '--watchman=false',
+    '--runTestsByPath'
+  ]
+  assert.deepEqual(tokens.slice(0, options.length), options)
+  const declared = tokens.slice(options.length)
+  const registered = policy.propertyTesting.suites
+    .filter(suite => suite.manifest === manifest)
+    .map(suite => path.relative(packageDirectory, path.join(REPOSITORY_ROOT, suite.path)))
+  assert.ok(declared.every(value => value.startsWith('src/') && value.endsWith('.test.ts')))
+  assert.deepEqual([...declared].sort(), [...registered].sort())
+})

@@ -34,6 +34,10 @@ export interface PrivatePurchasePreparation {
  * It is never a verdict accepted from an HTTP request or a catalogue report.
  */
 export interface PrivatePurchaseValidation {
+  /** Full immutable identity from independent complete domain verification.
+   * Required by the explicitly selected full-purchase-commitment-v1 owner;
+   * omitted by historical exact-txid domains. Never infer it from equal outputs. */
+  readonly purchaseCommitment?: string
   checkCurrent(): void
 }
 export interface PrivatePurchaseDomain {

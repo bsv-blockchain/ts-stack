@@ -6,8 +6,10 @@ import {
   OutputPurchaseTransport,
   Transaction,
   Utils,
-  decodeOutputBytes
+  decodeOutputBytes,
+  type OutputPurchaseEnvelope
 } from '@bsv/sdk'
+import { revenueListingPurchaseCommitment } from '@bsv/sdk/script/templates/RevenueListingSpend'
 import {
   chains,
   context,
@@ -17,6 +19,28 @@ import {
 } from '../../../../application/output-knowledge/test/revenue-lineage-fixture.js'
 import type { ChainViewResolver } from '../../../../application/output-knowledge/src/index.js'
 import { privatePurchaseNativeFixture } from './PrivatePurchaseNative.fixture.js'
+
+// Compare the complete stored original transaction's identity after the existing
+// independent domain/Script/License checks. A digest alone is not their oracle.
+function expectRetainedCommitment(
+  f: Awaited<ReturnType<typeof privatePurchaseNativeFixture>>,
+  delivered: OutputPurchaseEnvelope
+): void {
+  if (delivered.result.status !== 'delivered') throw new Error('Fixture delivery missing')
+  const retained = f.active.store.load(
+    delivered.result.acquisitionId,
+    f.asset.prepare.recipient,
+    f.clock,
+    () => {}
+  )!
+  expect(retained.state.format).toBe('private-purchase-state/2')
+  const candidate = retained.candidate!,
+    original = Transaction.fromBEEF(decodeOutputBytes(candidate.beef, 524288), candidate.txid),
+    commitment = revenueListingPurchaseCommitment(original)
+  expect(retained.progress.purchaseCommitment).toBe(commitment)
+  expect(delivered.result.purchaseCommitment).toBe(commitment)
+  expect(delivered.result.potatoes.body.purchaseCommitment).toBe(commitment)
+}
 
 async function retryClockConflict<T>(operation: () => Promise<T>, remaining = 8): Promise<T> {
   try {
@@ -43,6 +67,7 @@ it('constructs one real native purchase, authenticates submission, retains actua
     await owned.buyer.validate()
     const delivered = await owned.buyer.usableResult()
     expect(delivered.result.status).toBe('delivered')
+    expectRetainedCommitment(f, delivered)
     expect(await f.playback(delivered)).toEqual(f.asset.plaintext)
     expect(f.native.counts.prepare).toBe(1)
     expect(f.native.counts.finalize).toBe(1)
@@ -55,6 +80,7 @@ it('constructs one real native purchase, authenticates submission, retains actua
     owned = await f.openBuyer(false, wallet.payment)
     await owned.buyer.recover()
     const recovered = await owned.buyer.usableResult()
+    expectRetainedCommitment(f, recovered)
     expect(recovered).toEqual(delivered)
     expect(await f.playback(recovered)).toEqual(f.asset.plaintext)
     f.setPermitted(false)
@@ -96,6 +122,7 @@ it.each(['prepare', 'finalize', 'delivery'] as const)(
       await retryClockConflict(() => reopened.buyer.advance())
       expect(await reopened.buyer.validate()).toBe('usable')
       const result = await reopened.buyer.usableResult()
+      expectRetainedCommitment(f, result)
       expect(await f.playback(result)).toEqual(f.asset.plaintext)
       expect(f.native.counts.prepare).toBe(1)
       expect(f.native.counts.finalize).toBe(1)

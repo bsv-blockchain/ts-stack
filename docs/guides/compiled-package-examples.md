@@ -2673,3 +2673,74 @@ function attachPurchaseFundingFence(
 }
 void attachPurchaseFundingFence
 ```
+
+## Explicit native purchase commitment owner
+
+Select this local owner before preparation, with an independently installed full
+transaction-domain verifier. The historical class keeps its existing public
+declarations. This example checks the packed interface; it neither opens custody
+nor verifies a transaction, and adds no alias or release authority.
+
+```ts compile
+// example-id: private-purchase-commitment-owner
+import {
+  SQLitePrivatePurchaseStore as HistoricalPurchaseOwner,
+  SQLitePrivatePurchaseCommitmentStore as CommitmentPurchaseOwner,
+  PrivatePurchaseAccess as CommitmentPurchaseAccess,
+  type PrivatePurchaseCoordinatorOptions as CommitmentCoordinatorOptions
+} from '@bsv/output-knowledge/private/node'
+
+function selectCommitmentOwner(
+  args: ConstructorParameters<typeof CommitmentPurchaseOwner>
+): CommitmentCoordinatorOptions['store'] {
+  return new CommitmentPurchaseOwner(...args)
+}
+function selectCommitmentAccess(
+  domain: ConstructorParameters<typeof CommitmentPurchaseAccess>[0],
+  topic: string,
+  policy: ConstructorParameters<typeof CommitmentPurchaseAccess>[2]
+): CommitmentPurchaseAccess {
+  return new CommitmentPurchaseAccess(domain, topic, policy, 'full-purchase-commitment-v1')
+}
+function historicalStateFormat(
+  value: NonNullable<ReturnType<HistoricalPurchaseOwner['load']>>
+): 'private-purchase-state/1' {
+  return value.state.format
+}
+function commitmentStateFormat(
+  value: NonNullable<ReturnType<CommitmentPurchaseOwner['load']>>
+): 'private-purchase-state/2' {
+  return value.state.format
+}
+void selectCommitmentOwner
+void selectCommitmentAccess
+void historicalStateFormat
+void commitmentStateFormat
+```
+
+## Explicit purchase transport identity binding
+
+The application derives this local binding through its complete independent
+transaction-domain verifier and retains the original funded candidate. This
+example checks the packed API; constructing a finite transport does not verify
+Bitcoin, authorize new funding or establish transaction equivalence or rights.
+
+```ts compile
+// example-id: private-purchase-commitment-transport
+import {
+  OutputPurchaseTransport as BoundPurchaseTransport,
+  type OutputPurchaseTransportOptions as BoundPurchaseOptions,
+  type OutputPurchaseCommitmentBinding as VerifiedPurchaseBinding
+} from '@bsv/sdk'
+
+function selectCommitmentRecovery(
+  original: BoundPurchaseOptions<'recover'>,
+  independentlyVerified: VerifiedPurchaseBinding
+): BoundPurchaseTransport<'recover'> {
+  return new BoundPurchaseTransport({
+    ...original,
+    commitmentBinding: independentlyVerified
+  })
+}
+void selectCommitmentRecovery
+```

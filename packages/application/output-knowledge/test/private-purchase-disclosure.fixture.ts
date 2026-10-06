@@ -2,10 +2,11 @@ import { outputPacketDigest } from '@bsv/sdk'
 import { PrivatePurchaseAccess } from '../src/private/PrivatePurchaseAccess.js'
 import { PrivatePurchaseDisclosure } from '../src/private/PrivatePurchaseDisclosure.js'
 import { purchaseStoreFixture } from './private-purchase-store.fixture.js'
+import type { PrivatePurchaseCandidateProfile } from '../src/private/PrivatePurchaseProgress.js'
 
 /** Native private access/disclosure; lifecycle bytes are not chain proof. */
-export function purchaseDisclosureFixture() {
-  const f = purchaseStoreFixture()
+export function purchaseDisclosureFixture(candidateProfile?: PrivatePurchaseCandidateProfile) {
+  const f = purchaseStoreFixture({}, undefined, candidateProfile)
   let permitted = true,
     authenticated = true,
     control = true
@@ -16,7 +17,8 @@ export function purchaseDisclosureFixture() {
     (request, _buyer, mode) => {
       decisions.push({ mode, request })
       return permitted
-    }
+    },
+    candidateProfile
   )
   const caller = {
     buyer: f.buyer,

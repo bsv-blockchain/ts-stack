@@ -3,11 +3,14 @@ import { createSecretKey } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { signPurchaseFixturePacket } from './private-purchase-signing.fixture.js'
 import { outputAssert } from '@bsv/sdk'
 import { NodeProtectedPayloadCodec } from '../src/private/NodeProtectedPayloadCodec.js'
 import { PrivateServiceDomain } from '../src/private/PrivateServiceDomain.js'
 import {
   SQLitePrivatePurchaseStore,
+  SQLitePrivatePurchaseCommitmentStore,
+  type PrivatePurchaseStoreOwner,
   type PrivatePurchaseStoreLimits
 } from '../src/private/SQLitePrivatePurchaseStore.js'
 import { purchaseProgressFixture } from './private-purchase-progress.fixture.js'
@@ -21,9 +24,11 @@ afterEach(() => {
 /** Actual protected native storage with public fixture keys and unproved lifecycle-only candidate bytes. */
 export function purchaseStoreFixture(
   overrides: Partial<PrivatePurchaseStoreLimits> = {},
-  clockProfile?: 'native-observation-v1'
+  clockProfile?: 'native-observation-v1',
+  candidateProfile?: 'full-purchase-commitment-v1'
 ) {
   const f = purchaseProgressFixture(),
+    purchaseCommitment = candidateProfile ? 'a4'.repeat(32) : undefined,
     directory = mkdtempSync(join(tmpdir(), 'private-purchase-store-')),
     path = join(directory, 'private.db'),
     index = createSecretKey(Buffer.alloc(32, 83)),
@@ -58,6 +63,23 @@ export function purchaseStoreFixture(
       material: 'cHVibGljLXRlc3Qtc2VjcmV0'
     },
     opened = new Set<PrivateServiceDomain>()
+  if (purchaseCommitment !== undefined) {
+    const originalEnvelope = f.envelope
+    f.envelope = () => {
+      const envelope = originalEnvelope()
+      if (envelope.result.status !== 'delivered') throw new Error('Fixture delivery missing')
+      envelope.result = {
+        ...envelope.result,
+        purchaseCommitment,
+        potatoes: signPurchaseFixturePacket(
+          'potatoes',
+          { ...envelope.result.potatoes.body, purchaseCommitment },
+          f.f.key
+        )
+      }
+      return envelope
+    }
+  }
   let now = '20',
     permitted = true
   const clock = () => now,
@@ -72,10 +94,17 @@ export function purchaseStoreFixture(
       new NodeProtectedPayloadCodec({ resolve: () => payload }, 'payload', 2 * 1048576)
     )
     opened.add(domain)
-    return {
+    const Store = candidateProfile
+      ? SQLitePrivatePurchaseCommitmentStore
+      : SQLitePrivatePurchaseStore
+    const store: PrivatePurchaseStoreOwner = new Store(
       domain,
-      store: new SQLitePrivatePurchaseStore(domain, f.f.contracts, limits, policy, clockProfile)
-    }
+      f.f.contracts,
+      limits,
+      policy,
+      clockProfile
+    )
+    return { domain, store }
   }
   const owner = open(true),
     id = f.original.terms.body.acquisitionId,
@@ -98,7 +127,7 @@ export function purchaseStoreFixture(
   function pin() {
     const p = prepare()
     now = '29'
-    return owner.store.pin(id, buyer, p.row.revision, candidate, clock, guard)
+    return owner.store.pin(id, buyer, p.row.revision, candidate, clock, guard, purchaseCommitment)
   }
   function admit() {
     const p = pin()
@@ -124,6 +153,7 @@ export function purchaseStoreFixture(
     limits,
     config,
     policy,
+    purchaseCommitment,
     custody,
     id,
     buyer,

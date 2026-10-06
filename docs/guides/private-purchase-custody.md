@@ -96,7 +96,7 @@ recoverable after its original deadline.
 
 ## Retain cumulative proof separately
 
-For the complete BRC-196 reference profile, install `SQLitePrivatePurchaseEvidence`
+For cumulative same-transaction proof retention, install `SQLitePrivatePurchaseEvidence`
 on the same original `PrivateServiceDomain` and contracts, and supply it as the
 coordinator's `evidence` option before the first preparation. Explicitly configure
 `maximumCandidateBytes`, `maximumUpdates`, `maximumTransactions` and
@@ -224,6 +224,37 @@ of the published source.
 
 ## One original buyer and native wallet action
 
+### Select commitment-bound transport separately
+
+The SDK's `verifyOutputPurchaseEnvelope` retains its exact historical-txid
+contract, including when its optional expected commitment is supplied. The
+separate `verifyOutputPurchaseCommitmentEnvelope` accepts a local
+`OutputPurchaseCommitmentBinding` with `profile: 'full-purchase-commitment-v1'`,
+the original signed `domainProfile` and the independently verified full 32-byte
+`purchaseCommitment`. It authenticates the complete response and its historical
+release transaction without requiring that txid to equal the original funded
+candidate. Every reserved response must match the bound commitment. Original
+terms, recipient, signature, policy, STEAK, POTATOES and release-evidence checks
+remain in the shared verifier. Prepared and unpinned expired responses still
+contain no commitment.
+
+Select this companion explicitly with `commitmentBinding` in
+`OutputPurchaseTransport` submit or recover options. Both operations retain the
+original signed terms and complete original funded candidate; preparation cannot
+select the companion. The constructor owns the binding and checks its domain.
+It changes no HTTP request body and requests no payment. Omitted options retain
+the original transport behavior. A retained binding is an input from an independent
+domain verifier, rather than authority inferred from the seller's response.
+
+This is transport authentication, rather than transaction-alias validation.
+Before accepting rights, independently verify both the complete original funded
+transaction and the actual released transaction, including every input, outputs,
+receipt and domain lineage, against the same full commitment. Independently check
+selected-chain placement before displaying a current alias. An envelope's
+`currentAlias` never rewrites historical signed release evidence or grants rights.
+The native buyer's existing default path still selects exact-txid transport;
+native alias custody and wallet reconciliation require their separate integration.
+
 `@bsv/output-knowledge/private/purchase-buyer` supplies the portable
 `PrivatePurchaseBuyer`, its installation-binding helper and initial control value,
 and interchangeable payment/validation ports. The independent
@@ -280,7 +311,7 @@ entitlement does not repeat a new-funding expiry check. Installing the companion
 alone does not implement transaction-alias reconciliation or establish Script,
 lineage, inclusion or licensing validity.
 
-`WalletToolboxPurchasePayment` installs the original wallet/storage/chain/originator
+The historical `WalletToolboxPurchasePayment` adapter installs the original wallet/storage/chain/originator
 and independently selected seller, actual covenant family, chain-view resolver,
 verification identity and synchronous current-context guard. It authenticates the
 signed complete genesis package and independently checks lineage before creating
@@ -290,7 +321,7 @@ uses the actual predecessor, required successor/recipient receipt and native
 wallet arguments receive the original bytes. It requests no seller signature and
 never broadcasts. Fees and native funding signatures remain wallet obligations.
 
-The current script profile permits at most one native P2PKH change output. Install
+This historical script adapter permits at most one native P2PKH change output. Install
 the existing Wallet Toolbox managed-change policy with
 `maxOutputsPerAction: 1` and `migrationInputsPerAction: 0` for this owner, and preserve
 that installation through reopen. Native commission, migration or additional
@@ -321,9 +352,48 @@ synthetic keys and isolated databases are used; no live chain or broadcast is
 claimed. The authenticated HTTP, retained topic admission and LCH playback
 composition described below exercises these components together.
 
+## Choose immutable candidate custody explicitly
+
+`SQLitePrivatePurchaseCommitmentStore`, exported from `private/node`, installs the
+local `full-purchase-commitment-v1` companion. Its constructor accepts the same
+domain, contracts, limits, validation policy and optional clock profile as the
+historical owner. Its sealed state uses `private-purchase-state/2` and records the
+candidate profile. The original `SQLitePrivatePurchaseStore` retains its
+five-argument constructor, exact-txid behavior and version-one state declarations.
+Neither owner reads the other's obligations as its own. Select and identify the
+owner before preparation; changing a class does not migrate custody.
+
+Construct the matching `PrivatePurchaseAccess` with
+`'full-purchase-commitment-v1'` as its fourth argument. The existing three-argument
+constructor continues to accept only the historical state format. The explicit
+companion requires both the protected version-two state and its sealed candidate
+profile before reading original private request chunks or invoking application
+policy. Recipient checks still precede those reads, and native permission is
+checked again at physical response enqueue. Selecting one owner cannot implicitly
+authorize access to obligations created under another profile.
+
+With the companion installed, the domain's `verify` result supplies an own data
+property `purchaseCommitment` containing the independently verified full 32-byte
+identity, alongside an owned synchronous `checkCurrent` method. The coordinator
+captures both and checks their identity before and after invoking the guard, across
+awaited admission and issuance, and inside native commit guards. A label, seller
+claim or digest calculation without complete domain verification is insufficient.
+An absent, inherited, accessor or changed commitment cannot reserve a purchase.
+Preparation and unpinned expiry omit the commitment; every pinned status and the
+first signed POTATOES packet contain the same immutable commitment. Capacity
+checks include both future digest fields before preparation leaves the owner.
+
+The persistence companion currently retains one exact submitted transaction. It
+does not implement per-txid alias custody, mined-alias selection or native wallet
+alias reconciliation. These remain separate requirements for the updated BRC-196
+reference profile. A domain that permits equivalent transactions must independently
+verify every transaction and define its equivalence rule; adding this field alone
+does not authorize another transaction, charge or private release. Other domains
+may keep the historical exact-txid owner.
+
 ## Choose the native purchase clock profile explicitly
 
-`SQLitePrivatePurchaseStore` accepts an optional fifth constructor argument,
+Both native purchase owners accept an optional fifth constructor argument,
 `'native-observation-v1'`. Install it when creating new purchase custody if progress
 must be derived from the protected ledger's transaction clock observation. The
 profile uses the additive synchronous `SQLiteProtectedLedger.commitPrepared`
@@ -351,6 +421,12 @@ requests or fences. This is a local persistence choice and changes no wire packe
 or payment authorization.
 
 ## Run the native licensed-purchase composition
+
+This composition currently exercises the historical single-program sale-listing
+family. It is compatibility and integration evidence, rather than qualification
+of the current optional BRC-197 two-stage exemplar. The current exemplar's native
+wallet, alias and selected-chain integration remains tracked in the
+[specification alignment record](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
 
 The executable `PrivatePurchaseNative.integration.test.ts` demonstration composes
 these public implementations with actual Wallet Toolbox SQLite action recovery,

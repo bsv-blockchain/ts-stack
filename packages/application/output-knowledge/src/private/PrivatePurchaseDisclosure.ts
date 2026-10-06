@@ -8,7 +8,7 @@ import {
 } from '@bsv/sdk'
 import type { PrivatePurchaseCaller, PrivatePurchaseAccessPort } from './PrivatePurchasePorts.js'
 import type { PrivatePurchaseContracts } from './PrivatePurchaseContracts.js'
-import type { SQLitePrivatePurchaseStore } from './SQLitePrivatePurchaseStore.js'
+import type { PrivatePurchaseStoreOwner } from './SQLitePrivatePurchaseStore.js'
 import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
 
 /** Authenticate/sign prepared HTTP bytes first, then enqueue exactly once under
@@ -18,7 +18,7 @@ export class PrivatePurchaseDisclosure {
   private readonly unchanged: readonly (() => boolean)[]
   constructor(
     private readonly domain: PrivateServiceDomain,
-    private readonly store: Pick<SQLitePrivatePurchaseStore, 'load' | 'disclose' | 'discloseTerms'>,
+    private readonly store: Pick<PrivatePurchaseStoreOwner, 'load' | 'disclose' | 'discloseTerms'>,
     private readonly contracts: PrivatePurchaseContracts,
     private readonly access: PrivatePurchaseAccessPort,
     private readonly clock: () => string,

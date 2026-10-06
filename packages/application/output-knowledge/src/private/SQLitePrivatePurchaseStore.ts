@@ -26,6 +26,7 @@ import {
   parsePrivatePurchaseProgress,
   privatePurchaseEnvelope,
   PRIVATE_PURCHASE_PROGRESS_BYTES,
+  type PrivatePurchaseCandidateProfile,
   type PrivatePurchaseProgress,
   type PrivatePurchaseEvent
 } from './PrivatePurchaseProgress.js'
@@ -59,7 +60,7 @@ export interface PrivatePurchaseStoreLimits {
   maximumOutcomeBytes: number
   maximumBatchBytes: number
 }
-interface State {
+export interface PrivatePurchaseState {
   format: 'private-purchase-state/1'
   clockProfile?: 'native-observation-v1'
   recipient: string
@@ -67,6 +68,10 @@ interface State {
   original: PrivateAcquisitionPayload
   candidate: PrivateAcquisitionPayload
   result: PrivateAcquisitionPayload
+}
+export interface PrivatePurchaseCommitmentState extends Omit<PrivatePurchaseState, 'format'> {
+  format: 'private-purchase-state/2'
+  candidateProfile: PrivatePurchaseCandidateProfile
 }
 export interface PrivatePurchaseLoaded {
   revision: string
@@ -76,8 +81,22 @@ export interface PrivatePurchaseLoaded {
   progress: PrivatePurchaseProgress
   candidate: OutputPurchaseSubmit | null
   /** Internal descriptors; no private plaintext or readiness verdict. */
-  state: State
+  state: PrivatePurchaseState
 }
+
+export interface PrivatePurchaseCommitmentLoaded extends Omit<PrivatePurchaseLoaded, 'state'> {
+  state: PrivatePurchaseCommitmentState
+}
+type CoreLoaded<S extends PrivatePurchaseState | PrivatePurchaseCommitmentState> = Omit<
+  PrivatePurchaseLoaded,
+  'state'
+> & {
+  state: S
+}
+/** Either explicitly selected native owner; it does not initialize or migrate custody. */
+export type PrivatePurchaseStoreOwner = PrivatePurchaseStoreCore<
+  PrivatePurchaseState | PrivatePurchaseCommitmentState
+>
 
 function remaining(status: PrivatePurchaseProgress['status']): number {
   switch (status) {
@@ -114,18 +133,21 @@ function authorize(guard: ProtectedLedgerGuard, view: ProtectedLedgerView): void
  * candidate and result completion slots are reserved before preparation leaves
  * the owner. A missing database/fence/payload is never repaired with new terms.
  */
-export class SQLitePrivatePurchaseStore {
+class PrivatePurchaseStoreCore<S extends PrivatePurchaseState | PrivatePurchaseCommitmentState> {
   private readonly limits: PrivatePurchaseStoreLimits
   private readonly payloads: PrivateAcquisitionPayloads
   private readonly policy: PrivatePurchaseCustody['validationPolicy']
   private readonly clockProfile?: 'native-observation-v1'
+  private readonly economicProfile?: PrivatePurchaseCandidateProfile
   constructor(
     private readonly domain: PrivateServiceDomain,
     private readonly contracts: PrivatePurchaseContracts,
     limits: PrivatePurchaseStoreLimits,
     policy: PrivatePurchaseCustody['validationPolicy'],
-    clockProfile?: 'native-observation-v1'
+    clockProfile?: 'native-observation-v1',
+    candidateProfile?: PrivatePurchaseCandidateProfile
   ) {
+    this.economicProfile = candidateProfile
     outputAssert(
       clockProfile === undefined || clockProfile === 'native-observation-v1',
       'Unsupported purchase clock profile'
@@ -163,6 +185,18 @@ export class SQLitePrivatePurchaseStore {
       'Purchase native domain differs from installation',
       'context-changed'
     )
+  }
+  /** The explicit sealed local candidate contract, not a domain verdict. */
+  candidateProfile(): PrivatePurchaseCandidateProfile | undefined {
+    return this.economicProfile
+  }
+  private nativeState(input: Omit<PrivatePurchaseState, 'format'>): S {
+    // Only the two explicit exported constructors select S and the matching mode.
+    return (
+      this.economicProfile
+        ? { ...input, format: 'private-purchase-state/2', candidateProfile: this.economicProfile }
+        : { ...input, format: 'private-purchase-state/1' }
+    ) as S
   }
   private address(id: string) {
     return this.domain.identity.address('acquisition', {
@@ -227,6 +261,7 @@ export class SQLitePrivatePurchaseStore {
           status: 'delivered',
           acquisitionId: body.acquisitionId,
           txid: '0'.repeat(64),
+          ...(this.economicProfile ? { purchaseCommitment: '0'.repeat(64) } : {}),
           recoveryUntil: body.recoveryUntil,
           steak: {},
           potatoes: {
@@ -238,6 +273,7 @@ export class SQLitePrivatePurchaseStore {
               recipient: body.recipient,
               topic: body.topic,
               txid: '0'.repeat(64),
+              ...(this.economicProfile ? { purchaseCommitment: '0'.repeat(64) } : {}),
               assetId: body.assetId,
               termsDigest: body.termsDigest,
               releasePolicy: body.releasePolicy,
@@ -276,7 +312,11 @@ export class SQLitePrivatePurchaseStore {
           this.limits.maximumOriginalBytes
         )
       ),
-      progress = parsePrivatePurchaseProgress(value.progress, custody.original)
+      progress = parsePrivatePurchaseProgress(
+        value.progress,
+        custody.original,
+        this.economicProfile
+      )
     return { originalPayload, candidatePayload, resultPayload, custody, progress }
   }
   private requirePayloadReservations(
@@ -356,12 +396,12 @@ export class SQLitePrivatePurchaseStore {
     row: ProtectedLedgerRecord,
     buyer: string,
     view: ProtectedLedgerView
-  ): PrivatePurchaseLoaded | undefined {
+  ): CoreLoaded<S> | undefined {
     const value = row.value
     closedOutputObject(
       value,
       ['format', 'recipient', 'progress', 'original', 'candidate', 'result'],
-      ['clockProfile']
+      ['clockProfile', 'candidateProfile']
     )
     outputAssert(
       value.clockProfile === this.clockProfile,
@@ -369,7 +409,9 @@ export class SQLitePrivatePurchaseStore {
       'context-changed'
     )
     outputAssert(
-      value.format === 'private-purchase-state/1',
+      value.format ===
+        (this.economicProfile ? 'private-purchase-state/2' : 'private-purchase-state/1') &&
+        value.candidateProfile === this.economicProfile,
       'Unsupported purchase state',
       'unavailable'
     )
@@ -399,15 +441,14 @@ export class SQLitePrivatePurchaseStore {
       'Purchase candidate differs from its reserved transaction',
       'unavailable'
     )
-    const state: State = {
-      format: 'private-purchase-state/1',
+    const state = this.nativeState({
       ...(this.clockProfile ? { clockProfile: this.clockProfile } : {}),
       recipient: buyer,
       progress,
       original: originalPayload,
       candidate: candidatePayload,
       result: resultPayload
-    }
+    })
     return {
       revision: view.revision,
       observedAt: view.observedAt,
@@ -423,11 +464,11 @@ export class SQLitePrivatePurchaseStore {
     buyerInput: string,
     clock: () => string,
     guard: ProtectedLedgerGuard
-  ): PrivatePurchaseLoaded | undefined {
+  ): CoreLoaded<S> | undefined {
     const id = outputHex32(idInput),
       buyer = outputIdentity(buyerInput),
       address = this.address(id)
-    let loaded: PrivatePurchaseLoaded | undefined
+    let loaded: CoreLoaded<S> | undefined
     this.domain.ledger.read([address], clock, view => {
       authorize(guard, view)
       const row = view.get(address)
@@ -440,7 +481,7 @@ export class SQLitePrivatePurchaseStore {
     input: PrivatePurchaseCustody,
     clock: () => string,
     guard: ProtectedLedgerGuard
-  ): PrivatePurchaseLoaded {
+  ): CoreLoaded<S> {
     const custody = this.custody(input),
       id = custody.original.terms.body.acquisitionId,
       buyer = custody.original.request.recipient,
@@ -462,7 +503,7 @@ export class SQLitePrivatePurchaseStore {
       'Purchase reservation/fence already exists',
       'unavailable'
     )
-    let plan: ReturnType<SQLitePrivatePurchaseStore['preparationPlan']> | undefined
+    let plan: ReturnType<PrivatePurchaseStoreCore<S>['preparationPlan']> | undefined
     const check = (view: ProtectedLedgerView) => {
       authorize(guard, view)
       outputAssert(
@@ -507,7 +548,7 @@ export class SQLitePrivatePurchaseStore {
       'context-changed'
     )
     custody.original = this.contracts.original({ ...custody.original, createdAt: observedAt })
-    const progress = createPrivatePurchaseProgress(custody.original),
+    const progress = createPrivatePurchaseProgress(custody.original, this.economicProfile),
       original = this.payloads.reserve(
         id,
         progress.requestDigest,
@@ -530,15 +571,14 @@ export class SQLitePrivatePurchaseStore {
         'result',
         this.limits.maximumResultBytes
       ),
-      state: State = {
-        format: 'private-purchase-state/1',
+      state = this.nativeState({
         ...(this.clockProfile ? { clockProfile: this.clockProfile } : {}),
         recipient: buyer,
         progress,
         original: original.descriptor,
         candidate: candidate.descriptor,
         result: result.descriptor
-      },
+      }),
       changes: ProtectedLedgerChange[] = [
         {
           ...address,
@@ -571,7 +611,7 @@ export class SQLitePrivatePurchaseStore {
     expected: string,
     clock: () => string,
     guard: ProtectedLedgerGuard
-  ): PrivatePurchaseLoaded {
+  ): CoreLoaded<S> {
     const loaded = this.load(id, buyer, clock, guard)
     outputAssert(loaded, 'Purchase not found', 'not-found')
     outputAssert(
@@ -588,9 +628,18 @@ export class SQLitePrivatePurchaseStore {
     expected: string,
     input: unknown,
     clock: () => string,
-    guard: ProtectedLedgerGuard
-  ): PrivatePurchaseLoaded {
-    const candidate = parseOutputPurchaseSubmit(input),
+    guard: ProtectedLedgerGuard,
+    purchaseCommitment?: string
+  ): CoreLoaded<S> {
+    outputAssert(
+      this.economicProfile !== undefined || purchaseCommitment === undefined,
+      'Purchase commitment requires its explicit candidate profile',
+      'unsupported'
+    )
+    const identity = this.economicProfile
+        ? { purchaseCommitment: outputHex32(purchaseCommitment) }
+        : {},
+      candidate = parseOutputPurchaseSubmit(input),
       loaded = this.require(id, buyer, expected, clock, guard)
     outputAssert(
       candidate.acquisitionId === loaded.progress.acquisitionId,
@@ -599,7 +648,8 @@ export class SQLitePrivatePurchaseStore {
     )
     if (loaded.candidate !== null) {
       outputAssert(
-        loaded.candidate.txid === candidate.txid,
+        loaded.candidate.txid === candidate.txid &&
+          loaded.progress.purchaseCommitment === identity.purchaseCommitment,
         'Purchase is reserved for another transaction',
         'conflict'
       )
@@ -608,8 +658,9 @@ export class SQLitePrivatePurchaseStore {
     const progress = advancePrivatePurchaseProgress(
       loaded.progress,
       loaded.custody.original,
-      { type: 'pin', txid: candidate.txid },
-      loaded.observedAt
+      { type: 'pin', txid: candidate.txid, ...identity },
+      loaded.observedAt,
+      this.economicProfile
     )
     this.commitPayload(
       loaded,
@@ -618,7 +669,7 @@ export class SQLitePrivatePurchaseStore {
       encoded(candidate, this.limits.maximumCandidateBytes),
       clock,
       guard,
-      { type: 'pin', txid: candidate.txid }
+      { type: 'pin', txid: candidate.txid, ...identity }
     )
     return this.require(id, buyer, String(BigInt(expected) + 1n), clock, guard)
   }
@@ -629,13 +680,14 @@ export class SQLitePrivatePurchaseStore {
     event: Exclude<PrivatePurchaseEvent, { type: 'pin' | 'delivered' }>,
     clock: () => string,
     guard: ProtectedLedgerGuard
-  ): PrivatePurchaseLoaded {
+  ): CoreLoaded<S> {
     const loaded = this.require(id, buyer, expected, clock, guard),
       progress = advancePrivatePurchaseProgress(
         loaded.progress,
         loaded.custody.original,
         event,
-        loaded.observedAt
+        loaded.observedAt,
+        this.economicProfile
       )
     if (canonicalOutputJSON(progress) === canonicalOutputJSON(loaded.progress)) return loaded
     // Capacity promised before payment includes the entire retained admission
@@ -655,7 +707,7 @@ export class SQLitePrivatePurchaseStore {
     envelopeInput: unknown,
     clock: () => string,
     guard: ProtectedLedgerGuard
-  ): PrivatePurchaseLoaded {
+  ): CoreLoaded<S> {
     const loaded = this.require(id, buyer, expected, clock, guard),
       envelope = envelopeInput as OutputPurchaseEnvelope
     if (loaded.progress.status === 'delivered') {
@@ -672,14 +724,20 @@ export class SQLitePrivatePurchaseStore {
       loaded.progress,
       loaded.custody.original,
       { type: 'delivered', envelope },
-      loaded.observedAt
+      loaded.observedAt,
+      this.economicProfile
     )
     outputAssert(
       progress.delivery!.schema === loaded.custody.schema,
       'Purchase delivery secret schema differs',
       'conflict'
     )
-    const result = privatePurchaseEnvelope(progress, loaded.custody.original, envelope)
+    const result = privatePurchaseEnvelope(
+      progress,
+      loaded.custody.original,
+      envelope,
+      this.economicProfile
+    )
     outputAssert(result.result.status === 'delivered', 'Purchase delivery is incomplete')
     decodeOutputBytes(result.result.potatoes.body.secret, loaded.custody.maximumSecretBytes)
     this.commitPayload(
@@ -694,7 +752,7 @@ export class SQLitePrivatePurchaseStore {
     return this.require(id, buyer, String(BigInt(expected) + 1n), clock, guard)
   }
   private commitPayload(
-    loaded: PrivatePurchaseLoaded,
+    loaded: CoreLoaded<S>,
     progress: PrivatePurchaseProgress,
     purpose: 'candidate' | 'result',
     payload: string,
@@ -720,8 +778,8 @@ export class SQLitePrivatePurchaseStore {
     )
   }
   private commit(
-    loaded: PrivatePurchaseLoaded,
-    state: State,
+    loaded: CoreLoaded<S>,
+    state: S,
     additional: ProtectedLedgerChange[],
     clock: () => string,
     guard: ProtectedLedgerGuard,
@@ -750,7 +808,8 @@ export class SQLitePrivatePurchaseStore {
             loaded.progress,
             loaded.custody.original,
             retainedEvent,
-            view.observedAt
+            view.observedAt,
+            this.economicProfile
           )
           return changes(progress)
         },
@@ -785,7 +844,7 @@ export class SQLitePrivatePurchaseStore {
   }
   /** Synchronous current authorization and exact retained bytes at the physical disclosure boundary. */
   disclose(
-    loaded: PrivatePurchaseLoaded,
+    loaded: CoreLoaded<S>,
     buyer: string,
     clock: () => string,
     guard: ProtectedLedgerGuard,
@@ -807,7 +866,12 @@ export class SQLitePrivatePurchaseStore {
                 this.limits.maximumResultBytes
               )
             : undefined
-        const envelope = privatePurchaseEnvelope(current.progress, current.custody.original, result)
+        const envelope = privatePurchaseEnvelope(
+          current.progress,
+          current.custody.original,
+          result,
+          this.economicProfile
+        )
         const selection = this.contracts.restore(current.custody.original.capability)
         canonicalOutputJSON(envelope, { bytes: selection.profile.maxResponseBytes })
         return envelope
@@ -819,7 +883,7 @@ export class SQLitePrivatePurchaseStore {
    * remains payable, under the same native physical enqueue gate as recovery.
    */
   discloseTerms(
-    loaded: PrivatePurchaseLoaded,
+    loaded: CoreLoaded<S>,
     buyer: string,
     clock: () => string,
     guard: ProtectedLedgerGuard,
@@ -847,11 +911,11 @@ export class SQLitePrivatePurchaseStore {
     )
   }
   private enqueue<T>(
-    loaded: PrivatePurchaseLoaded,
+    loaded: CoreLoaded<S>,
     buyer: string,
     clock: () => string,
     guard: ProtectedLedgerGuard,
-    select: (current: PrivatePurchaseLoaded, view: ProtectedLedgerView) => T,
+    select: (current: CoreLoaded<S>, view: ProtectedLedgerView) => T,
     send: (value: T) => void
   ): void {
     outputAssert(
@@ -888,5 +952,43 @@ export class SQLitePrivatePurchaseStore {
         outputAssert(attempted === undefined, 'Purchase result enqueue must finish synchronously')
       }
     )
+  }
+}
+
+/** Historical exact-txid owner. Existing constructor, records and returned state
+ * declarations remain unchanged; it cannot reinterpret commitment custody. */
+export class SQLitePrivatePurchaseStore extends PrivatePurchaseStoreCore<PrivatePurchaseState> {
+  constructor(
+    domain: PrivateServiceDomain,
+    contracts: PrivatePurchaseContracts,
+    limits: PrivatePurchaseStoreLimits,
+    policy: PrivatePurchaseCustody['validationPolicy'],
+    clockProfile?: 'native-observation-v1'
+  ) {
+    super(domain, contracts, limits, policy, clockProfile)
+  }
+  override pin(
+    id: string,
+    buyer: string,
+    expected: string,
+    input: unknown,
+    clock: () => string,
+    guard: ProtectedLedgerGuard
+  ): PrivatePurchaseLoaded {
+    return super.pin(id, buyer, expected, input, clock, guard)
+  }
+}
+
+/** Explicit immutable economic-identity companion. Complete independent domain
+ * verification precedes pinning; aliases and Bitcoin facts remain separate. */
+export class SQLitePrivatePurchaseCommitmentStore extends PrivatePurchaseStoreCore<PrivatePurchaseCommitmentState> {
+  constructor(
+    domain: PrivateServiceDomain,
+    contracts: PrivatePurchaseContracts,
+    limits: PrivatePurchaseStoreLimits,
+    policy: PrivatePurchaseCustody['validationPolicy'],
+    clockProfile?: 'native-observation-v1'
+  ) {
+    super(domain, contracts, limits, policy, clockProfile, 'full-purchase-commitment-v1')
   }
 }

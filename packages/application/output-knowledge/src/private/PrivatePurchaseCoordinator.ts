@@ -32,18 +32,18 @@ import {
   type PrivatePurchaseValidation
 } from './PrivatePurchasePorts.js'
 import type { ProtectedLedgerGuard } from './ProtectedLedgerCodec.js'
+import type { PrivatePurchaseCandidateProfile } from './PrivatePurchaseProgress.js'
 import type {
   PrivatePurchaseEvidence,
   PrivatePurchaseEvidencePlan,
   PrivatePurchaseEvidenceView
 } from './PrivatePurchaseEvidence.js'
-import type {
-  PrivatePurchaseLoaded,
-  SQLitePrivatePurchaseStore
-} from './SQLitePrivatePurchaseStore.js'
+import type { PrivatePurchaseStoreOwner } from './SQLitePrivatePurchaseStore.js'
+
+type PrivatePurchaseLoaded = NonNullable<ReturnType<PrivatePurchaseStoreOwner['load']>>
 
 export interface PrivatePurchaseCoordinatorOptions {
-  store: SQLitePrivatePurchaseStore
+  store: PrivatePurchaseStoreOwner
   contracts: PrivatePurchaseContracts
   access: PrivatePurchaseAccessPort
   domain: PrivatePurchaseDomain
@@ -75,11 +75,13 @@ export class PrivatePurchaseCoordinator {
   private readonly installed: ReturnType<PrivatePurchaseContracts['configuration']>
   private readonly policy: { id: string; digest: string }
   private readonly unchanged: readonly (() => boolean)[]
+  private readonly candidateProfile?: PrivatePurchaseCandidateProfile
   private readonly work: BoundedOutputWork
   private readonly stopping = new AbortController()
   private readonly physical = new Set<Promise<void>>()
   constructor(options: PrivatePurchaseCoordinatorOptions) {
     this.ports = Object.freeze({ ...options })
+    this.candidateProfile = options.store.candidateProfile()
     this.installed = options.contracts.configuration()
     this.policy = {
       id: outputString(options.validationPolicy.id),
@@ -92,6 +94,7 @@ export class PrivatePurchaseCoordinator {
     )
     this.unchanged = [
       pin(options.store, 'load'),
+      pin(options.store, 'candidateProfile'),
       pin(options.store, 'prepare'),
       pin(options.store, 'pin'),
       pin(options.store, 'advance'),
@@ -237,11 +240,18 @@ export class PrivatePurchaseCoordinator {
       this.requireCurrent(caller, signal)
       const guard = this.guard(candidate.acquisitionId, caller, signal, loaded.custody.original)
       const proof = this.ports.evidence
-        ? await this.proofPlan(loaded, candidate, caller, signal, guard)
+        ? await this.proofPlan(
+            loaded,
+            candidate,
+            caller,
+            signal,
+            guard,
+            validation.purchaseCommitment
+          )
         : undefined
       const validated: ProtectedLedgerGuard = view => {
         guard(view)
-        validation()
+        validation.checkCurrent()
         proof?.checkCurrent(view)
       }
       // Retain the first financial candidate before proof custody. A lost
@@ -252,7 +262,8 @@ export class PrivatePurchaseCoordinator {
         loaded.row.revision,
         candidate,
         this.ports.clock,
-        validated
+        validated,
+        validation.purchaseCommitment
       )
       proof?.retain(this.ports.clock, validated)
       await this.progress(candidate.acquisitionId, caller, signal)
@@ -340,15 +351,9 @@ export class PrivatePurchaseCoordinator {
     const progress = loaded.progress,
       id = progress.acquisitionId
     outputAssert(proof.candidate, 'Original purchase candidate is unavailable', 'unavailable')
-    const validation = this.validation(
-      await this.ports.domain.verify(
-        structuredClone(proof.candidate),
-        structuredClone(loaded.custody),
-        signal
-      )
-    )
+    const validation = await this.verifyCandidate(proof.candidate, loaded, caller, signal)
     this.requireCurrent(caller, signal)
-    validation()
+    validation.checkCurrent()
     const outcome = ownPrivatePurchaseAdmissionOutcome(
       await this.ports.admission.recover(
         {
@@ -362,7 +367,7 @@ export class PrivatePurchaseCoordinator {
             this.requireCurrent(caller, signal)
             const current = this.ports.store.load(id, caller.buyer, this.ports.clock, view => {
               currentGuard(view)
-              validation()
+              validation.checkCurrent()
             })
             outputAssert(
               current?.row.revision === loaded.row.revision,
@@ -396,7 +401,7 @@ export class PrivatePurchaseCoordinator {
       this.ports.clock,
       view => {
         currentGuard(view)
-        validation()
+        validation.checkCurrent()
       }
     )
     return false
@@ -411,6 +416,9 @@ export class PrivatePurchaseCoordinator {
     const progress = loaded.progress,
       id = progress.acquisitionId
     outputAssert(proof.candidate, 'Original purchase candidate is unavailable', 'unavailable')
+    const verified = this.candidateProfile
+      ? await this.verifyCandidate(proof.candidate, loaded, caller, signal)
+      : undefined
     const assessment = await this.ports.release.assess(
       structuredClone(loaded.custody),
       structuredClone(progress),
@@ -428,6 +436,7 @@ export class PrivatePurchaseCoordinator {
       })
     canonicalOutputJSON(releaseEvidence, { bytes: 131072 })
     checkRelease()
+    verified?.checkCurrent()
     if (this.ports.evidence) this.ports.store.load(id, caller.buyer, this.ports.clock, currentGuard)
     const secret = await this.ports.domain.issue(
       structuredClone(loaded.custody),
@@ -439,6 +448,7 @@ export class PrivatePurchaseCoordinator {
     this.requireCurrent(caller, signal)
     decodeOutputBytes(secret, loaded.custody.maximumSecretBytes)
     checkRelease()
+    verified?.checkCurrent()
     if (this.ports.evidence) this.ports.store.load(id, caller.buyer, this.ports.clock, currentGuard)
     const potatoesBody = {
       version: 1,
@@ -448,6 +458,9 @@ export class PrivatePurchaseCoordinator {
       recipient: body.recipient,
       topic: body.topic,
       txid: progress.txid!,
+      ...(progress.purchaseCommitment === undefined
+        ? {}
+        : { purchaseCommitment: progress.purchaseCommitment }),
       assetId: body.assetId,
       termsDigest: body.termsDigest,
       releasePolicy: body.releasePolicy,
@@ -472,6 +485,9 @@ export class PrivatePurchaseCoordinator {
           version: 1,
           acquisitionId: id,
           txid: progress.txid,
+          ...(progress.purchaseCommitment === undefined
+            ? {}
+            : { purchaseCommitment: progress.purchaseCommitment }),
           status: 'delivered',
           steak: progress.admission!.steak,
           potatoes,
@@ -483,6 +499,7 @@ export class PrivatePurchaseCoordinator {
       view => {
         currentGuard(view)
         checkRelease()
+        verified?.checkCurrent()
       }
     )
     return false
@@ -492,17 +509,48 @@ export class PrivatePurchaseCoordinator {
     loaded: PrivatePurchaseLoaded,
     caller: PrivatePurchaseCaller,
     signal: AbortSignal
-  ): Promise<() => void> {
-    const check = this.validation(
-      await this.ports.domain.verify(
-        structuredClone(candidate),
-        structuredClone(loaded.custody),
-        signal
-      )
+  ): Promise<PrivatePurchaseValidation> {
+    const assessment = await this.ports.domain.verify(
+      structuredClone(candidate),
+      structuredClone(loaded.custody),
+      signal
     )
+    const check = this.validation(assessment)
     this.requireCurrent(caller, signal)
-    check()
-    return check
+    if (!this.candidateProfile) {
+      check()
+      return { checkCurrent: check }
+    }
+    const commitment = outputHex32(
+      Object.getOwnPropertyDescriptor(assessment, 'purchaseCommitment')?.value
+    )
+    const method: unknown = Object.getOwnPropertyDescriptor(assessment, 'checkCurrent')?.value
+    outputAssert(
+      typeof method === 'function',
+      'Purchase commitment guard must be owned',
+      'context-changed'
+    )
+    outputAssert(
+      loaded.progress.purchaseCommitment === undefined ||
+        loaded.progress.purchaseCommitment === commitment,
+      'Purchase candidate changes the original commitment',
+      'conflict'
+    )
+    const unchanged = () => {
+      outputAssert(
+        Object.getOwnPropertyDescriptor(assessment, 'purchaseCommitment')?.value === commitment &&
+          Object.getOwnPropertyDescriptor(assessment, 'checkCurrent')?.value === method,
+        'Verified purchase commitment changed',
+        'context-changed'
+      )
+    }
+    const guarded = () => {
+      unchanged()
+      check()
+      unchanged()
+    }
+    guarded()
+    return { purchaseCommitment: commitment, checkCurrent: guarded }
   }
   private readProof(
     loaded: PrivatePurchaseLoaded,
@@ -540,7 +588,8 @@ export class PrivatePurchaseCoordinator {
     incoming: OutputPurchaseSubmit,
     caller: PrivatePurchaseCaller,
     signal: AbortSignal,
-    guard: ProtectedLedgerGuard
+    guard: ProtectedLedgerGuard,
+    expectedCommitment?: string
   ): Promise<PrivatePurchaseEvidencePlan> {
     const proof = this.ports.evidence!.propose(
       loaded.custody.original,
@@ -561,11 +610,16 @@ export class PrivatePurchaseCoordinator {
       typeof retain === 'function' && retain.constructor.name !== 'AsyncFunction',
       'Purchase evidence retention must be synchronous'
     )
-    const validation = await this.verifyCandidate(candidate, loaded, caller, signal),
-      current: ProtectedLedgerGuard = view => {
-        check(view)
-        validation()
-      }
+    const validation = await this.verifyCandidate(candidate, loaded, caller, signal)
+    outputAssert(
+      validation.purchaseCommitment === expectedCommitment,
+      'Combined purchase proof changes the verified commitment',
+      'conflict'
+    )
+    const current: ProtectedLedgerGuard = view => {
+      check(view)
+      validation.checkCurrent()
+    }
     return {
       candidate,
       checkCurrent: current,
@@ -599,10 +653,17 @@ export class PrivatePurchaseCoordinator {
     if (proof.candidate !== null) return proof
     outputAssert(loaded.candidate, 'Original purchase candidate is unavailable', 'unavailable')
     const validation = await this.verifyCandidate(loaded.candidate, loaded, caller, signal),
-      plan = await this.proofPlan(loaded, loaded.candidate, caller, signal, guard)
+      plan = await this.proofPlan(
+        loaded,
+        loaded.candidate,
+        caller,
+        signal,
+        guard,
+        validation.purchaseCommitment
+      )
     plan.retain(this.ports.clock, view => {
       guard(view)
-      validation()
+      validation.checkCurrent()
       proof.checkCurrent(view)
     })
     return this.readProof(loaded, guard)
@@ -689,6 +750,7 @@ export class PrivatePurchaseCoordinator {
     return (
       !signal.aborted &&
       this.unchanged.every(check => check()) &&
+      this.ports.store.candidateProfile() === this.candidateProfile &&
       permitted(caller.current()) &&
       !signal.aborted
     )

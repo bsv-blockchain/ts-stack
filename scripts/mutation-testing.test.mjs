@@ -1200,11 +1200,30 @@ test('private purchase preparation and native state retain complete qualificatio
   assert.deepEqual(state.runnerOptions.jest.config.testMatch, [
     '<rootDir>/test/private-purchase-progress.test.ts',
     '<rootDir>/test/private-purchase-store.test.ts',
+    '<rootDir>/test/private-purchase-progress-commitment.test.ts',
+    '<rootDir>/test/private-purchase-store-commitment.test.ts',
     '<rootDir>/test/private-purchase-state.property.test.ts',
     '<rootDir>/test/protected-ledger-prepared.test.ts',
     '<rootDir>/test/private-purchase-native-clock.test.ts',
     '<rootDir>/test/private-purchase-native-clock.property.test.ts'
   ])
+  for (const path of [
+    'test/private-purchase-progress-commitment.test.ts',
+    'test/private-purchase-store-commitment.test.ts'
+  ]) {
+    assert.ok(state.additionalInputs.includes(path))
+    assert.ok(configured['private-purchase-native-clock'].additionalInputs.includes(path))
+    assert.ok(
+      configured['private-purchase-native-clock'].runnerOptions.jest.config.testMatch.includes(
+        '<rootDir>/' + path
+      )
+    )
+  }
+  assert.ok(
+    configured['private-purchase-coordination'].runnerOptions.jest.config.testMatch.includes(
+      '<rootDir>/test/private-purchase-coordinator-commitment.test.ts'
+    )
+  )
   assert.equal(
     state.propertyTest,
     'packages/application/output-knowledge/test/private-purchase-state.property.test.ts'

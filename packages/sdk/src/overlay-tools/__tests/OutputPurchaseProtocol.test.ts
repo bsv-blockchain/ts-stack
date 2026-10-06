@@ -17,6 +17,8 @@ import {
   PrivateKey,
   signOutputPacket,
   verifyOutputPurchaseEnvelope,
+  verifyOutputPurchaseCommitmentEnvelope,
+  parseOutputPurchaseCommitmentBinding,
   verifyOutputPurchaseTerms,
   type OutputPurchasePrepare,
   type OutputPurchaseTerms,
@@ -142,6 +144,13 @@ describe('BRC-196 closed purchase envelopes and original-contract bindings', () 
         vector.envelope.result.purchaseCommitment
       )
       expect(result).toEqual(vector.envelope)
+      expect(
+        verifyOutputPurchaseCommitmentEnvelope(vector.envelope, terms, {
+          profile: 'full-purchase-commitment-v1',
+          domainProfile: terms.body.domainProfile,
+          purchaseCommitment: vector.envelope.result.purchaseCommitment
+        })
+      ).toEqual(vector.envelope)
       expect(result.result.status).toBe('delivered')
     }
   })
@@ -171,6 +180,96 @@ describe('BRC-196 closed purchase envelopes and original-contract bindings', () 
     }
     return { ...original, terms, envelope, purchaseCommitment }
   }
+
+  it('explicitly binds a different signed historical release txid to the retained complete domain identity', () => {
+    const f = committedFixture(),
+      alias = 'cd'.repeat(32),
+      binding = {
+        profile: 'full-purchase-commitment-v1' as const,
+        domainProfile: f.terms.body.domainProfile,
+        purchaseCommitment: f.purchaseCommitment
+      },
+      evidence = { ...f.evidence, txid: alias },
+      packet = {
+        result: {
+          ...f.envelope.result,
+          txid: alias,
+          potatoes: signOutputPacket(
+            'potatoes',
+            {
+              ...f.envelope.result.potatoes.body,
+              txid: alias,
+              evidenceDigest: outputPacketDigest('release-evidence', evidence)
+            },
+            sellerKey
+          )
+        },
+        releaseEvidence: evidence,
+        currentAlias: { txid, beef: 'AQ==' }
+      }
+    expect(verifyOutputPurchaseCommitmentEnvelope(packet, f.terms, binding)).toEqual(packet)
+    expect(() => verifyOutputPurchaseEnvelope(packet, f.terms, txid, f.purchaseCommitment)).toThrow(
+      'transaction mismatch'
+    )
+    expect(() =>
+      verifyOutputPurchaseCommitmentEnvelope(packet, f.terms, {
+        ...binding,
+        domainProfile: 'urn:other:domain'
+      })
+    ).toThrow('binding changed domain')
+    expect(() =>
+      verifyOutputPurchaseCommitmentEnvelope(packet, f.terms, {
+        ...binding,
+        purchaseCommitment: 'ef'.repeat(32)
+      })
+    ).toThrow('commitment mismatch')
+    expect(() =>
+      verifyOutputPurchaseCommitmentEnvelope(
+        { ...packet, releaseEvidence: f.evidence },
+        f.terms,
+        binding
+      )
+    ).toThrow('evidence differ')
+    packet.result.potatoes.signature = signOutputPacket(
+      'potatoes',
+      { ...packet.result.potatoes.body, secret: 'AQ==' },
+      sellerKey
+    ).signature
+    expect(() => verifyOutputPurchaseCommitmentEnvelope(packet, f.terms, binding)).toThrow(
+      'signature failed'
+    )
+  })
+
+  it('owns a closed explicitly selected local binding and retains unpinned status semantics', () => {
+    const f = committedFixture(),
+      binding = {
+        profile: 'full-purchase-commitment-v1' as const,
+        domainProfile: f.terms.body.domainProfile,
+        purchaseCommitment: f.purchaseCommitment
+      },
+      owned = parseOutputPurchaseCommitmentBinding(binding)
+    for (const status of ['prepared', 'expired']) {
+      const packet = {
+        result: {
+          version: 1,
+          acquisitionId: f.terms.body.acquisitionId,
+          recoveryUntil: f.terms.body.recoveryUntil,
+          status
+        }
+      }
+      expect(verifyOutputPurchaseCommitmentEnvelope(packet, f.terms, binding)).toEqual(packet)
+    }
+    for (const changed of [
+      { ...binding, profile: 'unknown' },
+      { ...binding, domainProfile: 'relative' },
+      { ...binding, purchaseCommitment: 'ab' },
+      { ...binding, extra: true },
+      Object.create(binding)
+    ])
+      expect(() => parseOutputPurchaseCommitmentBinding(changed)).toThrow()
+    binding.purchaseCommitment = 'ef'.repeat(32)
+    expect(owned.purchaseCommitment).toBe(f.purchaseCommitment)
+  })
 
   it('retains a current alias separately from the exact historical signed release', () => {
     const { envelope, terms, purchaseCommitment } = committedFixture()

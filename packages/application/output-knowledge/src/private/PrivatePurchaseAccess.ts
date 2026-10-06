@@ -18,6 +18,7 @@ import {
 } from './PrivateAcquisitionPayloads.js'
 import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
 import type { ProtectedLedgerGuard, ProtectedLedgerView } from './ProtectedLedgerCodec.js'
+import type { PrivatePurchaseCandidateProfile } from './PrivatePurchaseProgress.js'
 
 /** Current permission shares native purchase custody. Match recipient ownership
  * before reading original chunks; a lookup catalogue is not recovery authority.
@@ -33,9 +34,15 @@ export class PrivatePurchaseAccess {
       buyer: string,
       mode: 'initial' | 'retained',
       view: ProtectedLedgerView
-    ) => boolean
+    ) => boolean,
+    private readonly candidateProfile?: PrivatePurchaseCandidateProfile
   ) {
     this.topic = outputString(topic)
+    outputAssert(
+      candidateProfile === undefined || candidateProfile === 'full-purchase-commitment-v1',
+      'Unsupported purchase access candidate profile',
+      'unsupported'
+    )
     outputAssert(
       typeof policy === 'function' && policy.constructor.name !== 'AsyncFunction',
       'Purchase access policy must be synchronous'
@@ -67,7 +74,10 @@ export class PrivatePurchaseAccess {
       if (row) {
         if (row.value.recipient !== buyer) throw missing()
         outputAssert(
-          row.value.format === 'private-purchase-state/1',
+          this.candidateProfile
+            ? row.value.format === 'private-purchase-state/2' &&
+                row.value.candidateProfile === this.candidateProfile
+            : row.value.format === 'private-purchase-state/1',
           'Purchase access state differs',
           'unavailable'
         )

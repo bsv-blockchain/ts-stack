@@ -20,6 +20,9 @@ import { parseOutputSTEAK } from '@bsv/sdk/overlay-tools/OutputObservation'
 import type { PrivatePurchaseOriginal } from './PrivatePurchaseContracts.js'
 
 export const PRIVATE_PURCHASE_PROGRESS_BYTES = 524288
+/** Explicit local immutable-candidate companion. It does not establish domain
+ * validity; the installed full verifier supplies the commitment before pinning. */
+export type PrivatePurchaseCandidateProfile = 'full-purchase-commitment-v1'
 type PurchaseDecision = Extract<OutputPurchaseResult, { status: 'admission-rejected' }>['decision']
 export interface PrivatePurchaseProgress {
   format: 'private-purchase-progress/1'
@@ -31,6 +34,8 @@ export interface PrivatePurchaseProgress {
   recoveryUntil: string
   status: OutputPurchaseResult['status']
   txid: string | null
+  /** Present only after pinning under the explicitly installed companion. */
+  purchaseCommitment?: string
   operationId: string | null
   admission: { steak: STEAK; acceptedAt: string; assessmentContextId: string } | null
   decision: PurchaseDecision | null
@@ -39,22 +44,34 @@ export interface PrivatePurchaseProgress {
   delivery: { digest: string; issuedAt: string; schema: string } | null
 }
 export type PrivatePurchaseEvent =
-  | { type: 'pin'; txid: string }
+  | { type: 'pin'; txid: string; purchaseCommitment?: string }
   | { type: 'admitted'; steak: STEAK; acceptedAt: string; assessmentContextId: string }
   | { type: 'admission-rejected'; reason: string; evidence: string }
   | { type: 'delivery-failed'; reason: string; evidence: string }
   | { type: 'delivered'; envelope: OutputPurchaseEnvelope }
   | { type: 'expire' }
 
-function ownedEvent(input: PrivatePurchaseEvent): PrivatePurchaseEvent {
+function ownedEvent(
+  input: PrivatePurchaseEvent,
+  profile?: PrivatePurchaseCandidateProfile
+): PrivatePurchaseEvent {
   const value = ownOutputJSON(input).value
   closedOutputObject(
     value,
     ['type'],
-    ['txid', 'steak', 'acceptedAt', 'assessmentContextId', 'reason', 'evidence', 'envelope']
+    [
+      'txid',
+      'purchaseCommitment',
+      'steak',
+      'acceptedAt',
+      'assessmentContextId',
+      'reason',
+      'evidence',
+      'envelope'
+    ]
   )
   const fields: Record<string, readonly string[]> = {
-    pin: ['txid'],
+    pin: ['txid', ...(profile ? ['purchaseCommitment'] : [])],
     admitted: ['steak', 'acceptedAt', 'assessmentContextId'],
     'admission-rejected': ['reason', 'evidence'],
     'delivery-failed': ['reason', 'evidence'],
@@ -93,7 +110,13 @@ function response(progress: PrivatePurchaseProgress): OutputPurchaseEnvelope {
       acquisitionId: progress.acquisitionId,
       recoveryUntil: progress.recoveryUntil
     },
-    reserved = { ...common, txid: progress.txid },
+    reserved = {
+      ...common,
+      txid: progress.txid,
+      ...(progress.purchaseCommitment === undefined
+        ? {}
+        : { purchaseCommitment: progress.purchaseCommitment })
+    },
     admitted = { ...reserved, steak: progress.admission?.steak }
   switch (progress.status) {
     case 'prepared':
@@ -151,24 +174,32 @@ function purchaseDelivery(
   return { digest: outputHex32(input.digest), issuedAt, schema: outputString(input.schema) }
 }
 
-function purchaseProgressReservation(input: unknown, original: PrivatePurchaseOriginal) {
+function purchaseProgressReservation(
+  input: unknown,
+  original: PrivatePurchaseOriginal,
+  profile?: PrivatePurchaseCandidateProfile
+) {
   const value = input
-  closedOutputObject(value, [
-    'format',
-    'acquisitionId',
-    'requestDigest',
-    'recipient',
-    'createdAt',
-    'updatedAt',
-    'recoveryUntil',
-    'status',
-    'txid',
-    'operationId',
-    'admission',
-    'decision',
-    'releaseEvidence',
-    'delivery'
-  ])
+  closedOutputObject(
+    value,
+    [
+      'format',
+      'acquisitionId',
+      'requestDigest',
+      'recipient',
+      'createdAt',
+      'updatedAt',
+      'recoveryUntil',
+      'status',
+      'txid',
+      'operationId',
+      'admission',
+      'decision',
+      'releaseEvidence',
+      'delivery'
+    ],
+    profile ? ['purchaseCommitment'] : []
+  )
   const body = original.terms.body
   outputAssert(
     value.format === 'private-purchase-progress/1' &&
@@ -193,7 +224,8 @@ function purchaseProgressReservation(input: unknown, original: PrivatePurchaseOr
 
 function purchaseProgressPosition(
   value: Record<string, unknown>,
-  original: PrivatePurchaseOriginal
+  original: PrivatePurchaseOriginal,
+  profile?: PrivatePurchaseCandidateProfile
 ) {
   const status = value.status as PrivatePurchaseProgress['status'],
     unpinned = status === 'prepared' || status === 'expired',
@@ -212,6 +244,12 @@ function purchaseProgressPosition(
     'Purchase progress fields differ from its status',
     'unavailable'
   )
+  if (profile)
+    outputAssert(
+      Object.hasOwn(value, 'purchaseCommitment') === !unpinned,
+      'Purchase commitment differs from its reservation status',
+      'unavailable'
+    )
   const txid = value.txid === null ? null : outputHex32(value.txid),
     operationId = value.operationId === null ? null : outputHex32(value.operationId)
   outputAssert(
@@ -231,7 +269,8 @@ function validatePurchaseProgressResult(
     const checked = verifyOutputPurchaseEnvelope(
       response(progress),
       original.terms,
-      txid ?? undefined
+      txid ?? undefined,
+      progress.purchaseCommitment
     )
     if ('decision' in checked.result) {
       outputAssert(
@@ -254,11 +293,21 @@ function validatePurchaseProgressResult(
 /** Representation and transition checks only. Installed validators and effect owners establish the premises. */
 export function parsePrivatePurchaseProgress(
   input: unknown,
-  original: PrivatePurchaseOriginal
+  original: PrivatePurchaseOriginal,
+  profile?: PrivatePurchaseCandidateProfile
 ): PrivatePurchaseProgress {
+  outputAssert(
+    profile === undefined || profile === 'full-purchase-commitment-v1',
+    'Unsupported purchase candidate profile',
+    'unsupported'
+  )
   const captured = ownOutputJSON(input, { bytes: PRIVATE_PURCHASE_PROGRESS_BYTES }).value
-  const { value, body, createdAt, updatedAt } = purchaseProgressReservation(captured, original)
-  const { status, txid, operationId } = purchaseProgressPosition(value, original)
+  const { value, body, createdAt, updatedAt } = purchaseProgressReservation(
+    captured,
+    original,
+    profile
+  )
+  const { status, txid, operationId } = purchaseProgressPosition(value, original, profile)
   const admission = purchaseAdmission(value.admission, body.topic, createdAt, updatedAt),
     delivery = purchaseDelivery(value.delivery, admission, updatedAt)
   const progress: PrivatePurchaseProgress = {
@@ -271,6 +320,9 @@ export function parsePrivatePurchaseProgress(
     recoveryUntil: body.recoveryUntil,
     status,
     txid,
+    ...(value.purchaseCommitment === undefined
+      ? {}
+      : { purchaseCommitment: outputHex32(value.purchaseCommitment) }),
     operationId,
     admission,
     decision: value.decision as unknown as PurchaseDecision | null,
@@ -289,7 +341,8 @@ export function parsePrivatePurchaseProgress(
 }
 
 export function createPrivatePurchaseProgress(
-  original: PrivatePurchaseOriginal
+  original: PrivatePurchaseOriginal,
+  profile?: PrivatePurchaseCandidateProfile
 ): PrivatePurchaseProgress {
   const body = original.terms.body
   return parsePrivatePurchaseProgress(
@@ -309,7 +362,8 @@ export function createPrivatePurchaseProgress(
       releaseEvidence: null,
       delivery: null
     },
-    original
+    original,
+    profile
   )
 }
 
@@ -317,10 +371,11 @@ export function advancePrivatePurchaseProgress(
   input: PrivatePurchaseProgress,
   original: PrivatePurchaseOriginal,
   eventInput: PrivatePurchaseEvent,
-  nowInput: string
+  nowInput: string,
+  profile?: PrivatePurchaseCandidateProfile
 ): PrivatePurchaseProgress {
-  const event = ownedEvent(eventInput),
-    progress = parsePrivatePurchaseProgress(input, original),
+  const event = ownedEvent(eventInput, profile),
+    progress = parsePrivatePurchaseProgress(input, original, profile),
     now = outputU64(nowInput)
   outputAssert(
     now >= outputU64(progress.updatedAt),
@@ -329,9 +384,10 @@ export function advancePrivatePurchaseProgress(
   )
   if (event.type === 'pin') {
     const txid = outputHex32(event.txid)
+    const commitment = profile ? outputHex32(event.purchaseCommitment) : undefined
     if (progress.txid !== null) {
       outputAssert(
-        progress.txid === txid,
+        progress.txid === txid && progress.purchaseCommitment === commitment,
         'Purchase is reserved for another transaction',
         'conflict'
       )
@@ -343,6 +399,7 @@ export function advancePrivatePurchaseProgress(
       'expired'
     )
     progress.txid = txid
+    if (commitment !== undefined) progress.purchaseCommitment = commitment
     progress.operationId = privatePurchaseOperation(original, txid)
     progress.status = 'admission-pending'
   } else if (event.type === 'expire') {
@@ -386,7 +443,12 @@ export function advancePrivatePurchaseProgress(
       'Purchase has no admitted delivery obligation',
       'conflict'
     )
-    const envelope = verifyOutputPurchaseEnvelope(event.envelope, original.terms, progress.txid!),
+    const envelope = verifyOutputPurchaseEnvelope(
+        event.envelope,
+        original.terms,
+        progress.txid!,
+        progress.purchaseCommitment
+      ),
       result = envelope.result
     outputAssert(
       result.status === 'delivered' &&
@@ -404,22 +466,28 @@ export function advancePrivatePurchaseProgress(
     }
   }
   progress.updatedAt = now.toString()
-  return parsePrivatePurchaseProgress(progress, original)
+  return parsePrivatePurchaseProgress(progress, original, profile)
 }
 
 /** Only supply delivered bytes loaded from the original protected result reservation. */
 export function privatePurchaseEnvelope(
   progressInput: PrivatePurchaseProgress,
   original: PrivatePurchaseOriginal,
-  delivered?: unknown
+  delivered?: unknown,
+  profile?: PrivatePurchaseCandidateProfile
 ): OutputPurchaseEnvelope {
-  const progress = parsePrivatePurchaseProgress(progressInput, original)
+  const progress = parsePrivatePurchaseProgress(progressInput, original, profile)
   if (progress.status !== 'delivered') {
     outputAssert(delivered === undefined, 'Pending purchase cannot disclose a private result')
     return response(progress)
   }
   outputAssert(delivered !== undefined, 'Original purchase delivery is unavailable', 'unavailable')
-  const checked = verifyOutputPurchaseEnvelope(delivered, original.terms, progress.txid!),
+  const checked = verifyOutputPurchaseEnvelope(
+      delivered,
+      original.terms,
+      progress.txid!,
+      progress.purchaseCommitment
+    ),
     result = checked.result
   outputAssert(
     result.status === 'delivered' &&

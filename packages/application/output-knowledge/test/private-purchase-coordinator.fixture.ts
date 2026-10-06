@@ -55,6 +55,7 @@ export function purchaseCoordinatorFixture(
       outputAssert(validation, 'Purchase candidate invalid', 'invalid')
       await Promise.resolve()
       return {
+        ...(f.purchaseCommitment === undefined ? {} : { purchaseCommitment: f.purchaseCommitment }),
         checkCurrent: () => {
           outputAssert(validation, 'Purchase context changed', 'context-changed')
         }

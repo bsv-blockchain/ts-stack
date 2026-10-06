@@ -49,7 +49,7 @@ import { PrivatePurchaseContracts } from '../../../../application/output-knowled
 import { PrivatePurchaseCoordinator } from '../../../../application/output-knowledge/src/private/PrivatePurchaseCoordinator.js'
 import { PrivatePurchaseAccess } from '../../../../application/output-knowledge/src/private/PrivatePurchaseAccess.js'
 import { PrivatePurchaseDisclosure } from '../../../../application/output-knowledge/src/private/PrivatePurchaseDisclosure.js'
-import { SQLitePrivatePurchaseStore } from '../../../../application/output-knowledge/src/private/SQLitePrivatePurchaseStore.js'
+import { SQLitePrivatePurchaseCommitmentStore } from '../../../../application/output-knowledge/src/private/SQLitePrivatePurchaseStore.js'
 import { SQLitePrivatePurchaseEvidence } from '../../../../application/output-knowledge/src/private/SQLitePrivatePurchaseEvidence.js'
 import { SDKPrivateReleaseEvidence } from '../../../../application/output-knowledge/src/private/SDKPrivateReleaseEvidence.js'
 import { RevenueListingLineageVerifier } from '../../../../application/output-knowledge/src/revenue-listing/RevenueListingLineageVerifier.js'
@@ -430,7 +430,7 @@ export async function privatePurchaseNativeFixture(verification?: {
         codec
       ),
       closeDomain = track(() => domain.close()),
-      store = new SQLitePrivatePurchaseStore(
+      store = new SQLitePrivatePurchaseCommitmentStore(
         domain,
         contracts,
         limits,
@@ -438,7 +438,12 @@ export async function privatePurchaseNativeFixture(verification?: {
         'native-observation-v1'
       ),
       evidence = new SQLitePrivatePurchaseEvidence(domain, contracts, proofLimits),
-      access = new PrivatePurchaseAccess(domain, asset.prepare.topic, current),
+      access = new PrivatePurchaseAccess(
+        domain,
+        asset.prepare.topic,
+        current,
+        'full-purchase-commitment-v1'
+      ),
       coordinator = new PrivatePurchaseCoordinator({
         store,
         contracts,

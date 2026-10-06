@@ -190,12 +190,62 @@ Full original registry/partition controls, packed consumers and every browser
 entry pass under unchanged controls/budgets; all 72 compiled examples pass
 against 24 exact package tarballs.
 
-Hosted source806f other-package coverage fails six native HTTP integration
-assertions because the coordinator's progress/result/POTATOES omit the mandatory
-listing purchase commitment. This is an implementation gap, not evidence of an
-Actions incident or a native runtime fault. The current coordinator and native
-one-economic-purchase/per-alias custody, financial fences, protected child-wallet
-integration and combined current admission/HTTP/workbench still require work.
+The native immutable-identity component adds an explicitly selected
+`SQLitePrivatePurchaseCommitmentStore`, sharing the complete native pipeline with
+the historical owner. The original constructor, pin method and version-one state
+declarations remain unchanged. New custody seals version-two state and its
+candidate profile; neither reader implicitly adopts the other profile. The
+coordinator retains independently verified own commitment/method identities
+through awaited verification, admission and issuance and rechecks them in native
+writer guards. Every pinned status and the signed first POTATOES packet contain
+the same full digest. The component still pins an exact submitted txid.
+
+Component evidence includes all 16 new commitment unit cases and the complete
+28-suite regression union. Its first run passed 485 cases and failed one new
+generated fixture setup that attempted admission twice. After correcting only
+that setup, both cases in the complete state property file pass, retaining all
+original and additive 300-run profiles at seed3242026. The full package typecheck
+and all 121 registry controls pass. Independent complete canonical inventory
+proofs retain every mutant exactly once: state1065, coordinator580 and
+native-clock1550, with the original143 targets and390 execution rows. These
+inventory checks are not an executed mutation campaign.
+
+The SDK now provides an explicit local full-commitment transport binding and a
+separate envelope verifier. It authenticates the historical result/release txid
+against the matching signed domain and full identity while sharing every existing
+signature, original-term, recipient, policy, STEAK and POTATOES check. The original
+exact-txid verifier and omitted transport behavior remain unchanged. Submit and
+recovery retain the complete original funded candidate; preparation cannot select
+the companion and request bodies never carry the local binding. Bitcoin/alias
+verification and native buyer/wallet custody remain separate integration work.
+Both complete original target test sets pass under their original module profiles:
+38 protocol cases in three CommonJS suites and271 HTTP cases in13 ESM suites,
+including all original and added300-run properties at seed3242026. An initial
+mixed-module invocation and two new negative-signature fixture expectations failed
+and remain recorded; neither source controls nor corpus bytes were weakened.
+The complete SDK build, packed ESM/CJS/UMD API checks and original browser
+profile also pass (3.537,40.031 and39.941 seconds respectively).
+
+Hosted source889 fails six native HTTP integration assertions because its
+historical owner omits the mandatory listing purchase commitment. Selecting the
+new owner locally exposed a further integration gap: actual access guards recognize
+only version-one custody and refuse the new state before funding. The native
+six-case composition therefore remains failed pending an explicitly selected
+matching access profile and requalification; passing mock-access component results
+do not establish a hosted fix. Durable
+one-economic-purchase/per-alias custody, protected child-wallet integration and
+the combined current admission/HTTP/workbench also still require work.
+The own wallet property command now runs its installed-Jest selector preflight
+and preserves all eleven original action/funding suites. The complete actual
+command passes12 generated cases across all11 suites in18.759 seconds, retaining
+min300/seed3242026. A cold root regression checks selector interpretation. No
+other branch's snapshot/schema tests or qualification are imported.
+
+The final selected core packed-consumer and original browser profiles pass
+in9.499 and60.267 seconds; all75 compiled examples pass against24 exact package
+tarballs in10.090 seconds. All121 original/additive registry controls pass in
+3.370 seconds. These consumer and inventory checks do not replace the final
+complete mutation campaign or current-family integration.
 No previous hosted or mutation receipt qualifies these new components.
 
 ## Historical foundation and qualification record
