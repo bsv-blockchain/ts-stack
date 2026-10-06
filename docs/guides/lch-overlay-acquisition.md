@@ -4,7 +4,7 @@ title: 'LCH Overlay Acquisition'
 kind: guide
 version: '0.3.0'
 last_updated: '2026-10-06'
-last_verified: '2026-10-05'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: experimental
 tags: [lch, overlay, acquisition, custody, payment]
@@ -427,8 +427,11 @@ and the original property remain alongside it through the shared pipeline.
 
 These current portable buyer/seller components do not qualify a native wallet
 action, real topical admission, multi-alias custody or selected-chain release.
-The existing hosted native HTTP integration exposed a missing mandatory purchase
-commitment in coordinator results/POTATOES. The coordinator, native alias/action
-owner, fixed-child signing/remittance, expiry finality and complete authenticated
-HTTP/workbench demonstrations still require current integration and qualification
-before advertising the full C profile or requesting checkpoint-two review.
+An earlier hosted native HTTP integration exposed a missing mandatory purchase
+commitment in coordinator results/POTATOES. The separately installed commitment
+owner and matching access profile address that representation boundary; those
+historical-family component results do not qualify this complete current flow.
+Native alias/action ownership, all fixed-child signing/remittance routes, expiry
+finality and complete authenticated HTTP/workbench demonstrations still require
+current integration and qualification before advertising the full C profile or
+requesting checkpoint-two review.

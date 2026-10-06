@@ -4,7 +4,7 @@ title: 'Verifying Revenue Listing Histories'
 kind: guide
 version: '1.1.0'
 last_updated: '2026-10-06'
-last_verified: '2026-10-02'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, sdk, scripts, revenue, evidence]
