@@ -64,7 +64,7 @@
   "scripts": {
     "start": "ts-node -r ./src/telemetry.ts src/index.ts",
     "start:prod": "node --require ./out/src/telemetry.js --max-http-header-size=512000 out/src/index.js",
-    "dev": "nodemon --watch .env --watch src --exec \"node --inspect=0.0.0.0 -r ts-node/register -r ./src/telemetry.ts src/index.ts\"",
+    "dev": "node dev-watch.mjs --inspect=0.0.0.0 --import ./src/telemetry.ts src/index.ts",
     "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -82,10 +82,10 @@
     "@typescript/native": "npm:typescript@7.0.2",
     "ejs": "^6.0.1",
     "jest": "^30.5.1",
-    "nodemon": "^3.1.14",
     "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
+    "tsx": "^4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

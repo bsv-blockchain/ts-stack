@@ -16,7 +16,7 @@
   "main": "dist/server.js",
   "scripts": {
     "start": "tsc && node --require ./dist/telemetry.js dist/server.js",
-    "dev": "ts-node-dev --respawn --require ./src/telemetry.ts src/server.ts",
+    "dev": "node dev-watch.mjs --import ./src/telemetry.ts src/server.ts",
     "build": "tsc",
     "lint": "oxlint src --deny-warnings",
     "migrate": "knex --knexfile knexfile.ts migrate:latest",
@@ -61,7 +61,7 @@
     "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "license": "SEE LICENSE IN LICENSE.txt"
