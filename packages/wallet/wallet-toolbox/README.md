@@ -671,11 +671,24 @@ WebAssembly global is absent. Native and JavaScript results both pass the same
 byte-type and exact-length validation.
 
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
-backward-compatible WAB authentication response. Normal verified lookup and
-lineage resolution always run first. The WAB pin is considered only when those
-checks leave multiple valid UMP tokens, and only when the pinned outpoint is
-present in the verified candidates. A pin cannot introduce an outpoint that the
-wallet did not independently retrieve and validate.
+backward-compatible WAB authentication response. When verified lookup returns
+competing records, the pin anchors its own update lineage. A password or token
+update that consumes the pinned outpoint supersedes it, including a multi-hop
+update whose old pin is available only in authenticated token ancestry.
+Each token input must prove spend authorization, including across confirmation;
+ordinary funding inputs do not establish token lineage. Unmined updates also
+require complete funding ancestry. A truncated input reference cannot override
+the verified pin. An unrelated historical continuation
+cannot override that lineage. A pin cannot
+introduce an unverified token or resolve competing descendants of a spent pin.
+Clients link explicit overlay history past confirmed Merkle anchors. UMP hosts
+must request retained token lineage with a history decider and preserve it in
+lookup BEEF (`@bsv/overlay` 2.6.4 and `@bsv/overlay-topics` 2.0.1, or equivalent
+custom hosting). If an older host names an absent pin but omits its authenticated
+source, lookup remains indeterminate instead of choosing an unrelated continuation.
+Ordinary lineage resolution still applies when no pin relationship is present.
+Operators should clear redundant pins after unpinned lookup independently returns
+the correct current token; pinning is a recovery measure for remaining forks.
 
 UMP renewal consumes only the exact canonical predecessor returned for its
 outpoint. Its signed fields, presentation/recovery hashes, and locally derived
