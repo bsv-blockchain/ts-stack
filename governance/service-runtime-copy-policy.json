@@ -114,17 +114,10 @@
       "synchronizedSources": ["infra/uhrp-server-cloud-bucket/src/chirp/bodyMiddleware.ts"]
     },
     {
-      "canonicalSource": "infra/uhrp-server-basic/dev/bin/nodemon.js",
+      "canonicalSource": "infra/uhrp-server-basic/dev-watch.mjs",
       "synchronizedSources": [
-        "infra/uhrp-server-cloud-bucket/dev/bin/nodemon.js",
-        "infra/wab/dev/bin/nodemon.js"
-      ]
-    },
-    {
-      "canonicalSource": "infra/uhrp-server-basic/dev/check-watch.cjs",
-      "synchronizedSources": [
-        "infra/uhrp-server-cloud-bucket/dev/check-watch.cjs",
-        "infra/wab/dev/check-watch.cjs"
+        "infra/uhrp-server-cloud-bucket/dev-watch.mjs",
+        "infra/wab/dev-watch.mjs"
       ]
     }
   ]
