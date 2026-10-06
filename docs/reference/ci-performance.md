@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.3'
+version: '1.8.4'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -14,7 +14,8 @@ tags: [reference, ci, performance, github-actions]
 
 The existing `CI` manual dispatch has an optional
 `application-performance-diagnostics` input, disabled by default. It measures the
-unchanged native alias-disclosure property on an isolated hosted Linux runner
+unchanged native alias-disclosure property and current private purchase HTTP
+composition on an isolated hosted Linux runner
 in the existing package-artifact job, before complete artifact verification.
 Its additional work does not consume either ordinary application coverage
 job's original time budget. A maintainer can also
@@ -48,6 +49,18 @@ cancellation or source guard failure stops that diagnostic job. Raw logs, CPU pr
 application values never enter the uploaded report. Each file is opened once; its
 descriptor supplies both the size check and bounded read, without following
 symlinks.
+
+The separate `--native-http` selection measures all four original current-profile
+HTTP integration cases in the `private-esm` project with coverage. Their
+120-second case limits and the buyer's 30-second work guard are unchanged. This
+diagnostic has a 600-second child bound within its own 900-second calendar and
+uses the same log/profile bounds, source guards and complete process drainage.
+It freezes the additional built Overlay, Overlay Express and LCH inputs and the
+exact cached MongoDB 8.2.6 executable before starting the fixture. Missing or
+ambiguous binaries refuse the measurement; runtime downloads are disabled and
+version checking remains enabled. The complete ordinary suite still qualifies
+the integration. The two fixed selectors have distinct report directories and
+identities; neither accepts arbitrary paths or test-name filters.
 
 The uploaded `application-performance-diagnostic-<run>-<attempt>` artifact
 contains checked-out source and PR-head/runtime identity, exit and drain evidence, and bounded self and

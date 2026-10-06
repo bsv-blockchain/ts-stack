@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
+  applicationDiagnosticSelection,
   diagnosticMayContinueValidation,
   readBoundedProfile,
   summarizeCPUProfile,
@@ -156,6 +157,38 @@ test('nonfinite and before-start cumulative timestamps remain invalid, including
   }
 })
 
+test('fixed property and native HTTP diagnostics retain their original complete selectors and case controls', () => {
+  const property = applicationDiagnosticSelection(),
+    native = applicationDiagnosticSelection('native-http')
+  assert.equal(property.selector, 'test/private-purchase-alias-disclosure.property.test.ts')
+  assert.equal(property.packageDirectory, 'packages/application/output-knowledge')
+  assert.equal(property.profile, 'property.cpuprofile')
+  assert.equal(property.deadlineSeconds, 210)
+  assert.equal(property.testCaseMilliseconds, 180000)
+  assert.equal(property.requiresMongo, false)
+  assert.equal(
+    native.selector,
+    'src/__tests__/PrivatePurchaseProfileAliasNative.integration.test.ts'
+  )
+  assert.equal(native.packageDirectory, 'packages/overlays/overlay-express')
+  assert.equal(native.deadlineSeconds, 600)
+  assert.equal(native.testCaseMilliseconds, 120000)
+  assert.equal(native.nativeCases, 4)
+  assert.equal(native.requiresMongo, true)
+  assert.notEqual(native.outputPrefix, property.outputPrefix)
+  assert.ok(Object.isFrozen(property) && Object.isFrozen(native))
+  const source = fs.readFileSync(
+    new URL('../packages/overlays/overlay-express/' + native.selector, import.meta.url),
+    'utf8'
+  )
+  assert.equal(source.match(/}, 120000\)/g).length, 4)
+  for (const kind of ['unknown', '../test', null, false])
+    assert.throws(
+      () => applicationDiagnosticSelection(kind),
+      /Unknown application diagnostic selector/
+    )
+})
+
 test('hosted timing is explicitly opt-in and preserves the ordinary artifact and coverage gates', () => {
   const workflow = fs.readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
   assert.match(workflow, /application-performance-diagnostics:\n(?:.*\n){2}        default: false/)
@@ -163,23 +196,32 @@ test('hosted timing is explicitly opt-in and preserves the ordinary artifact and
     '      - name: Measure the unchanged application property on hosted Linux'
   )
   const upload = workflow.indexOf('      - name: Preserve bounded application function timing')
+  const native = workflow.indexOf(
+    '      - name: Measure the unchanged native purchase HTTP composition on hosted Linux'
+  )
   const complete = workflow.indexOf(
     '      - name: Compile documentation examples against exact package tarballs'
   )
   assert.ok(measure > 0 && upload > measure && complete > upload)
+  assert.ok(native > measure && native < upload)
   const optional = workflow.slice(measure, complete)
   assert.equal(
     optional.match(
       /github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics/g
     ).length,
-    2
+    3
   )
   assert.equal(
     optional.match(
       /github.event_name == 'pull_request' && contains\(github.event.pull_request.labels.\*.name, 'ci:application-performance-diagnostics'\)/g
     ).length,
-    2
+    3
   )
+  assert.match(
+    optional,
+    /run: node scripts\/output-knowledge-performance-diagnostic\.mjs --native-http/
+  )
+  assert.match(optional, /MONGOMS_DOWNLOAD_DIR: \$\{\{ runner.temp \}\}\/mongodb-binaries/)
   assert.match(optional, /path: \.coverage-output\/performance-diagnostic-\*\//)
   assert.equal(optional.includes('property.cpuprofile'), false)
   assert.ok(workflow.slice(complete).includes('node scripts/output-knowledge-coverage.mjs collect'))

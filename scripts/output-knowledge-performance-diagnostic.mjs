@@ -339,6 +339,82 @@ export function diagnosticMayContinueValidation(phase, property) {
   )
 }
 
+/** Fixed diagnostic selectors only; neither replaces complete qualification. */
+export function applicationDiagnosticSelection(kind = 'property') {
+  assert.ok(['property', 'native-http'].includes(kind), 'Unknown application diagnostic selector')
+  if (kind === 'native-http')
+    return Object.freeze({
+      packageDirectory: 'packages/overlays/overlay-express',
+      selector: 'src/__tests__/PrivatePurchaseProfileAliasNative.integration.test.ts',
+      phase: 'unchanged-native-http-with-coverage',
+      profile: 'native-http.cpuprofile',
+      outputPrefix: 'performance-diagnostic-native-http',
+      deadlineSeconds: 600,
+      testCaseMilliseconds: 120000,
+      nativeCases: 4,
+      requiresMongo: true
+    })
+  return Object.freeze({
+    packageDirectory: 'packages/application/output-knowledge',
+    selector: 'test/private-purchase-alias-disclosure.property.test.ts',
+    phase: 'unchanged-property-with-coverage',
+    profile: 'property.cpuprofile',
+    outputPrefix: 'performance-diagnostic',
+    deadlineSeconds: 210,
+    testCaseMilliseconds: 180000,
+    nativeCases: null,
+    requiresMongo: false
+  })
+}
+
+function validateDiagnosticSource(root, cwd, selection) {
+  const testSource = fs.readFileSync(path.join(cwd, selection.selector), 'utf8')
+  if (!selection.requiresMongo) {
+    assert.match(testSource, /MIN_PROPERTY_RUNS = 300/)
+    assert.match(testSource, /seed : 3242026/)
+    assert.match(testSource, /interruptAfterTimeLimit: 150000/)
+    assert.match(testSource, /markInterruptAsFailure: true/)
+    assert.match(testSource, /}, 180000\)/)
+    return
+  }
+  assert.equal(testSource.match(/}, 120000\)/g)?.length, selection.nativeCases)
+  assert.match(
+    fs.readFileSync(
+      path.join(cwd, 'src/__tests__/PrivatePurchaseProfileAliasNative.fixture.ts'),
+      'utf8'
+    ),
+    /createMongoReplicaFixture\(\)/
+  )
+  assert.match(
+    fs.readFileSync(
+      path.join(root, 'packages/overlays/overlay/src/__tests/mongo/MongoReplicaFixture.ts'),
+      'utf8'
+    ),
+    /binary: \{ version: '8\.2\.6' \}/
+  )
+}
+
+function freezeNativeDiagnosticRuntime(root, selection, walk, freeze) {
+  if (!selection.requiresMongo) return null
+  for (const directory of [
+    'packages/overlays/overlay/dist',
+    'packages/overlays/overlay-express/dist',
+    'packages/content/lch/dist'
+  ])
+    walk(path.join(root, directory))
+  assert.ok(process.env.RUNNER_TEMP, 'Hosted native runtime directory is required')
+  const cache = path.join(process.env.RUNNER_TEMP, 'mongodb-binaries')
+  assert.equal(process.env.MONGOMS_DOWNLOAD_DIR, cache, 'Unselected Mongo runtime directory')
+  assert.equal(fs.realpathSync(cache), cache, 'Mongo runtime directory must be owned')
+  const candidates = fs.readdirSync(cache).filter(name => /^mongod.*8\.2\.6$/.test(name))
+  assert.equal(candidates.length, 1, 'Exactly one cached fixed Mongo binary is required')
+  const binary = path.join(cache, candidates[0]),
+    stat = fs.lstatSync(binary)
+  assert.ok(stat.isFile() && (stat.mode & 0o111) !== 0, 'Mongo runtime must be an executable file')
+  freeze(binary)
+  return binary
+}
+
 async function main() {
   assert.equal(process.platform, 'linux', 'Application diagnostics require hosted Linux')
   assert.equal(process.env.GITHUB_ACTIONS, 'true')
@@ -346,7 +422,12 @@ async function main() {
   assert.match(process.env.OUTPUT_KNOWLEDGE_SOURCE_HEAD ?? '', /^[0-9a-f]{40}$/)
   assert.match(process.env.GITHUB_RUN_ID ?? '', /^[1-9]\d*$/)
   assert.match(process.env.GITHUB_RUN_ATTEMPT ?? '', /^[1-9]\d*$/)
-  assert.equal(process.argv.length, 2, 'This diagnostic has one fixed unchanged property selector')
+  assert.ok(
+    process.argv.length === 2 || (process.argv.length === 3 && process.argv[2] === '--native-http'),
+    'Only fixed unchanged diagnostic selectors are permitted'
+  )
+  const kind = process.argv.length === 2 ? 'property' : 'native-http',
+    selection = applicationDiagnosticSelection(kind)
   const started = performance.now(),
     until = Date.now() + 900000
   let cancelled = false
@@ -359,14 +440,9 @@ async function main() {
   const checkWindow = () =>
     assert.equal(aborted(), null, 'Diagnostic calendar or cancellation guard')
   const root = fileURLToPath(new URL('..', import.meta.url)),
-    cwd = path.join(root, 'packages/application/output-knowledge'),
-    selector = 'test/private-purchase-alias-disclosure.property.test.ts',
-    testSource = fs.readFileSync(path.join(cwd, selector), 'utf8')
-  assert.match(testSource, /MIN_PROPERTY_RUNS = 300/)
-  assert.match(testSource, /seed : 3242026/)
-  assert.match(testSource, /interruptAfterTimeLimit: 150000/)
-  assert.match(testSource, /markInterruptAsFailure: true/)
-  assert.match(testSource, /}, 180000\)/)
+    cwd = path.join(root, selection.packageDirectory),
+    selector = selection.selector
+  validateDiagnosticSource(root, cwd, selection)
   assert.equal(
     execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
     process.env.GITHUB_SHA
@@ -400,6 +476,7 @@ async function main() {
     'packages/application/output-knowledge/dist'
   ])
     walk(path.join(root, directory))
+  const mongoBinary = freezeNativeDiagnosticRuntime(root, selection, walk, freeze)
   const guard = () => {
     for (const [file, expected] of frozen) {
       checkWindow()
@@ -414,13 +491,18 @@ async function main() {
     node: process.version,
     architecture: process.arch,
     selector,
+    diagnosticKind: kind,
     calendarUntil: new Date(until).toISOString(),
     calendarSeconds: 900,
     propertySHA256: hash(path.join(cwd, selector)),
-    minimumPropertyRuns: 300,
-    seed: 3242026,
-    interruptAsFailureMilliseconds: 150000,
-    testCaseMilliseconds: 180000,
+    minimumPropertyRuns: kind === 'property' ? 300 : null,
+    seed: kind === 'property' ? 3242026 : null,
+    interruptAsFailureMilliseconds: kind === 'property' ? 150000 : null,
+    testCaseMilliseconds: selection.testCaseMilliseconds,
+    nativeCases: selection.nativeCases,
+    mongo: mongoBinary
+      ? { version: '8.2.6', binary: path.basename(mongoBinary), sha256: frozen.get(mongoBinary) }
+      : null,
     frozenInputDigest: createHash('sha256')
       .update(JSON.stringify([...frozen]))
       .digest('hex'),
@@ -432,7 +514,7 @@ async function main() {
   const output = path.join(
     root,
     '.coverage-output',
-    `performance-diagnostic-${identity.run}-${identity.attempt}`
+    `${selection.outputPrefix}-${identity.run}-${identity.attempt}`
   )
   fs.mkdirSync(path.dirname(output), { recursive: true })
   fs.mkdirSync(output)
@@ -446,6 +528,12 @@ async function main() {
       FAST_CHECK_PATH: '',
       NODE_OPTIONS: ''
     }
+  if (mongoBinary) {
+    env.MONGOMS_SYSTEM_BINARY = mongoBinary
+    env.MONGOMS_SYSTEM_BINARY_VERSION_CHECK = 'true'
+    env.MONGOMS_RUNTIME_DOWNLOAD = 'false'
+    env.MONGOMS_DOWNLOAD_DIR = path.dirname(mongoBinary)
+  }
   const write = () =>
     fs.writeFileSync(
       path.join(output, 'diagnostic.json'),
@@ -483,19 +571,20 @@ async function main() {
     write()
     assert.ok(safe(health) && health.exitCode === 0, 'Driver health is not qualified')
     guard()
-    report.phase = 'unchanged-property-with-coverage'
+    report.phase = selection.phase
     measured = await supervise(
       [
         '--cpu-prof',
         `--cpu-prof-interval=${CPU_SAMPLING_INTERVAL_MICROSECONDS}`,
         `--cpu-prof-dir=${directory}`,
-        '--cpu-prof-name=property.cpuprofile',
+        `--cpu-prof-name=${selection.profile}`,
         '--experimental-vm-modules',
         'node_modules/jest/bin/jest.js',
         '--runInBand',
         '--watchman=false',
         '--config',
         'jest.config.js',
+        ...(selection.requiresMongo ? ['--selectProjects', 'private-esm'] : []),
         '--coverage',
         `--coverageDirectory=${path.join(directory, 'coverage')}`,
         '--runTestsByPath',
@@ -503,11 +592,11 @@ async function main() {
       ],
       cwd,
       path.join(directory, 'property.log'),
-      210,
+      selection.deadlineSeconds,
       env,
       aborted
     )
-    results.push({ phase: 'unchanged-property-with-coverage', ...measured })
+    results.push({ phase: selection.phase, ...measured })
     write()
     assert.ok(
       safe(measured) && [0, 1].includes(measured.exitCode),
@@ -517,7 +606,7 @@ async function main() {
     guard()
     report.phase = 'profile-file-bound'
     const parsed = readBoundedProfile(
-      path.join(directory, 'property.cpuprofile'),
+      path.join(directory, selection.profile),
       MAX_PROFILE,
       report,
       checkWindow
