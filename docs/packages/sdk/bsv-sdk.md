@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '3.0.0'
+version: '3.1.0'
 npm: '@bsv/sdk'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -21,7 +21,7 @@ Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
 qualification remains a draft prerequisite; existing SDK2 floors are preserved.
 
-The 3.0.0 source candidate adds explicitly selected BRC-192–194 output observation,
+The SDK3.1 source candidate adds explicitly selected BRC-192–194 output observation,
 lookup, proposal put/get/finalize and signed capability representations, bounded protocol JSON and packet
 verification. Existing lookup, submit and wallet interfaces retain their behavior.
 Stateful orchestration is provided by the separate
@@ -628,3 +628,14 @@ signature, policy/channel and active-expiry checks. Finalization exposes
 `OutputProposalServiceError` represents only authenticated validated provider
 errors; local transport failures remain distinct. Follow the [proposal guide](../../guides/non-final-proposals.md)
 for persistence, freshness, recovery and independent application/evidence checks.
+
+## Faucet output authorization
+
+The source candidate adds exact completed-action binding for independently
+validated local storage fees and change. The SDK capability marker is
+`completeBoundAction.outputAuthorizationVersion=1`; upgrade the wallet and SDK together.
+Existing SDK2 peers retain strict behavior. The separate SDK3 migration still
+applies; SDK2 consumers need an additive backport or that migration. Serialized
+wallet results do not carry local authority. The fee fix does not change signup
+persistence or interrupted-funding reconciliation. See the package README and
+[release and migration ledger](../../reference/package-api-migrations.md).

@@ -17,6 +17,15 @@ attention to changes that materially alter behavior or extend functionality.
 - The previously recorded 2.14.5 no-send ownership corrections remain included.
   This candidate has not been published and does not complete private acquisition.
 
+## wallet-toolbox 2.14.6
+
+- WAB faucet redemption accepts the local signer's independently validated
+  service charge and derived change, with exact SDK transaction binding. Empty
+  wallets no longer reject legitimate fee outputs financed by the faucet input.
+  Upgrade the SDK alongside the toolbox to enable the new capability. Older SDK
+  peers retain strict behavior; serialization discards local output authority.
+  Signup interruption/retry persistence remains unchanged.
+
 ## wallet-toolbox 2.14.5
 
 - `WalletPermissionsManager` retires no-send transaction ownership and reference

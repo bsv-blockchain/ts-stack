@@ -1,7 +1,15 @@
 import Transaction from '../transaction/Transaction.js'
 import Script from '../script/Script.js'
 import type UnlockingScript from '../script/UnlockingScript.js'
-import type { CreateActionArgs, SignActionOptions, WalletInterface } from './Wallet.interfaces.js'
+import type {
+  CreateActionArgs,
+  CreateActionResult,
+  SignActionOptions,
+  WalletInterface
+} from './Wallet.interfaces.js'
+
+/** Capability marker for caller-installed additional-output authorization. */
+export const BOUND_ACTION_OUTPUT_AUTHORIZATION_VERSION = 1
 
 const MAX_ACTION_TRANSACTION_BYTES = 256 * 1024 * 1024
 const MAX_SATOSHIS = 21e14
@@ -207,6 +215,20 @@ export interface BoundActionOptions {
    * amount with a fee-adjusted value inside the authorized range.
    */
   outputSatoshisRanges?: Record<string, { minimumSatoshis: number; maximumSatoshis: number }>
+  /**
+   * Explicit caller-installed policy for additional outputs. The result is
+   * untrusted: authorize only outputs independently verified by local policy,
+   * never fields or labels supplied by a remote wallet. Each authorization is
+   * bound to one exact output index, script and amount before any input signer
+   * runs. Omission retains the default external-input value restriction.
+   */
+  authorizeAdditionalOutputs?: (result: CreateActionResult) => BoundActionOutputAuthorization[]
+}
+
+export interface BoundActionOutputAuthorization {
+  outputIndex: number
+  lockingScript: string
+  satoshis: number
 }
 
 interface OutputSatoshisRange {
@@ -590,10 +612,42 @@ function inputSatoshis(transaction: Transaction, inputIndex: number): number {
   return satoshis(sourceOutput.satoshis, `Wallet input ${inputIndex} source output`)
 }
 
+function normalizeAdditionalOutputAuthorizations(value: unknown): BoundActionOutputAuthorization[] {
+  const snapshot = snapshotActionData(value, 'Additional output authorizations')
+  if (!arrayIsArray(snapshot)) throw new Error('Additional output authorizations must be an array')
+  const result = new ArrayConstructor<BoundActionOutputAuthorization>(snapshot.length)
+  for (let index = 0; index < snapshot.length; index++) {
+    const entry = dataRecord(snapshot[index], `Additional output authorization ${index}`)
+    const keys = objectKeys(entry)
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+      if (
+        keys[keyIndex] !== 'outputIndex' &&
+        keys[keyIndex] !== 'lockingScript' &&
+        keys[keyIndex] !== 'satoshis'
+      ) {
+        throw new Error(
+          `Additional output authorization ${index} field ${keyIndex} must be index, script or amount`
+        )
+      }
+    }
+    const outputIndex = entry.outputIndex
+    if (!isSafeInteger(outputIndex) || outputIndex < 0 || outputIndex > 0xffffffff) {
+      throw new Error('Additional output authorization index is invalid')
+    }
+    result[index] = {
+      outputIndex,
+      lockingScript: hex(entry.lockingScript, `Additional output authorization ${index} script`),
+      satoshis: satoshis(entry.satoshis, `Additional output authorization ${index} amount`)
+    }
+  }
+  return result
+}
+
 function bindRequestedAction(
   args: CreateActionArgs,
   candidate: Transaction,
   outputSatoshisRanges: ReadonlyArray<OutputSatoshisRange | undefined>,
+  additionalOutputs: ReadonlyArray<BoundActionOutputAuthorization>,
   trustedRequestedInputSatoshis?: readonly number[]
 ): number[] {
   if (candidate.version !== (args.version ?? 1)) {
@@ -768,7 +822,32 @@ function bindRequestedAction(
   if (candidateOutputValue > candidateInputValue) {
     throw new Error('Wallet signable transaction spends more than its inputs')
   }
-  const additionalOutputValue = candidateOutputValue - requestedOutputValue
+  let authorizedAdditionalOutputValue = 0
+  for (let index = 0; index < additionalOutputs.length; index++) {
+    const authorization = additionalOutputs[index]
+    const output =
+      authorization.outputIndex < candidateOutputs.length
+        ? candidateOutputs[authorization.outputIndex]
+        : undefined
+    if (
+      output == null ||
+      matchedCandidateOutputs[authorization.outputIndex] === true ||
+      output.lockingScript !== authorization.lockingScript ||
+      output.satoshis !== authorization.satoshis
+    ) {
+      throw new Error(
+        `Wallet transaction omitted, duplicated or substituted an authorized additional output at authorization ${index}`
+      )
+    }
+    matchedCandidateOutputs[authorization.outputIndex] = true
+    authorizedAdditionalOutputValue = addSatoshis(
+      authorizedAdditionalOutputValue,
+      output.satoshis,
+      'Authorized additional output value'
+    )
+  }
+  const additionalOutputValue =
+    candidateOutputValue - requestedOutputValue - authorizedAdditionalOutputValue
   if (additionalOutputValue > walletInputValue) {
     throw new Error('Wallet used a requested input to fund an unrequested output')
   }
@@ -818,9 +897,9 @@ async function abortBestEffort(
 /**
  * Complete a createAction/signAction flow while binding every caller-requested
  * input and output before signing, and binding the returned signed transaction
- * to that authorized partial template. Requested inputs may fund only requested
- * outputs and transaction fees; wallet-added inputs must fully fund every
- * additional wallet-managed output.
+ * to that authorized partial template. Requested inputs may fund requested or
+ * explicitly locally authorized outputs and transaction fees; wallet-added inputs
+ * must fully fund every other output.
  */
 export async function completeBoundAction(
   wallet: WalletInterface,
@@ -860,9 +939,23 @@ export async function completeBoundAction(
   const boundOptionKeys = objectKeys(boundOptions)
   for (let keyIndex = 0; keyIndex < boundOptionKeys.length; keyIndex++) {
     const key = boundOptionKeys[keyIndex]
-    if (key !== 'inputSigners' && key !== 'outputSatoshisRanges') {
+    if (
+      key !== 'inputSigners' &&
+      key !== 'outputSatoshisRanges' &&
+      key !== 'authorizeAdditionalOutputs'
+    ) {
       throw new Error(`Unknown bound action option "${key}"`)
     }
+  }
+  const authorizeAdditionalOutputs = objectGetOwnPropertyDescriptor(
+    boundOptions,
+    'authorizeAdditionalOutputs'
+  )?.value
+  if (
+    authorizeAdditionalOutputs !== undefined &&
+    typeof authorizeAdditionalOutputs !== 'function'
+  ) {
+    throw new Error('Additional output authorization must be a caller-installed function')
   }
   const inputSignersValue = objectGetOwnPropertyDescriptor(boundOptions, 'inputSigners')?.value
   const inputSigners = dataRecord(inputSignersValue ?? {}, 'Input signers') as Record<
@@ -959,6 +1052,11 @@ export async function completeBoundAction(
   }
 
   try {
+    const additionalOutputs =
+      authorizeAdditionalOutputs === undefined
+        ? []
+        : normalizeAdditionalOutputAuthorizations(authorizeAdditionalOutputs(rawCreateResult))
+    assertSharedIntrinsicsUnchanged(sharedIntrinsicState)
     const partial = parseAtomicBEEF(
       bytes(objectGetOwnPropertyDescriptor(signable, 'tx')?.value, 'Wallet signable transaction')
     )
@@ -966,6 +1064,7 @@ export async function completeBoundAction(
       authorizedArgs,
       partial,
       normalizedRanges,
+      additionalOutputs,
       ownedTrustedRequestedInputSatoshis
     )
     const authorizedPartial = parseAtomicBEEF(atomicBEEF(partial))
@@ -1051,3 +1150,7 @@ export async function completeBoundAction(
     throw error
   }
 }
+
+// A property on the existing function permits legacy-peer feature detection
+// without importing the entire SDK namespace (or a missing named ESM export).
+completeBoundAction.outputAuthorizationVersion = BOUND_ACTION_OUTPUT_AUTHORIZATION_VERSION

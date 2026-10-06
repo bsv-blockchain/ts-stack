@@ -214,7 +214,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### Added (3.0.0 candidate)
+### Added (3.1 source candidate)
+
+- Add full input-zero purchase commitment calculation, fixed public BRC-197 child derivation and commitment/current-alias BRC-196 wire bindings. Exact historical release identity remains unchanged. Replacement-family/wallet/native-alias integration is still open; earlier six-route reference receipts do not qualify BRC PR295.
 
 - Add opt-in `OutputPurchaseTransport` for exact retained BRC-196 prepare/submit/recover exchanges, original recipient/domain/release/transaction binding and authenticated errors without HTTP payment. Its optional wallet identity fence shares the existing finite deadline; durable custody, new-work authorization, Script validation and usable private material remain separate. Existing transport APIs and defaults are preserved.
 
@@ -239,6 +241,10 @@ All notable changes to this project will be documented in this file. The format 
 - Add `retainOutputCapability` and `restoreOutputCapability` for bounded local retention of the original signed manifest, selector and freshness policy. Recovery revalidates the original selection without substituting current discovery or treating manifest expiry as loss of an existing obligation. Local storage integrity, current authorization and operation deadlines remain required. No existing API or stored encoding changes.
 - Add bounded common packet-service error parsing and exact BRC-193 HTTP mappings, including `not-found` responses and explicit capacity minimums. Errors cannot carry successful cursors or trigger automatic payment; local cancellation and storage revision failures retain their existing behavior.
 - Add `AuthFetch.fetch(..., { allowPayments: false })` to disable automatic BRC-105 payment for unpaid authenticated requests. The opt-out survives authentication recovery and caller option mutation; omission or `true` preserves existing payment behavior. Ordinary HTTP fallback errors are unchanged. No migration is required for existing callers.
+
+- Add caller-installed additional-output authorization to `completeBoundAction`.
+  Bind independently verified local outputs by exact index, script and amount
+  while preserving the default external-input restriction and value conservation.
 
 ### Removed (3.0.0 candidate)
 
