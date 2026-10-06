@@ -1,7 +1,13 @@
 import { expect, it } from '@jest/globals'
-import { createSecretKey, generateKeyPairSync, createDecipheriv, hkdfSync } from 'node:crypto'
+import {
+  createCipheriv,
+  createSecretKey,
+  generateKeyPairSync,
+  createDecipheriv,
+  hkdfSync
+} from 'node:crypto'
 import { NodeProtectedPayloadCodec } from '../src/private/NodeProtectedPayloadCodec.js'
-import { canonicalOutputJSON, type OutputJSONObject } from '@bsv/sdk'
+import { canonicalOutputJSON, decodeOutputBytes, type OutputJSONObject } from '@bsv/sdk'
 
 // Public synthetic test keys only.
 const keys = new Map([
@@ -276,3 +282,74 @@ it('distinguishes malformed framing from a well-shaped envelope that fails authe
     })
   )
 })
+
+it('reads independently encrypted original Buffer-key envelopes through both readers', () => {
+  const format = 'output-protected-payload/1' as const
+  const salt = Buffer.alloc(32, 0x67),
+    nonce = Buffer.alloc(12, 0x89),
+    value = Buffer.from([0, 7, 128, 255])
+  const derived = Buffer.from(hkdfSync('sha256', Buffer.alloc(32, 0x31), salt, format, 32))
+  try {
+    const cipher = createCipheriv('aes-256-gcm', derived, nonce, { authTagLength: 16 })
+    cipher.setAAD(Buffer.from(canonicalOutputJSON({ format, keyId: 'key-a', binding })))
+    const envelope = {
+      format,
+      keyId: 'key-a',
+      salt: salt.toString('base64'),
+      nonce: nonce.toString('base64'),
+      ciphertext: Buffer.concat([cipher.update(value), cipher.final()]).toString('base64'),
+      tag: cipher.getAuthTag().toString('base64')
+    }
+    expect(codec().open(binding, envelope)).toEqual(Uint8Array.from(value))
+    expect(codec().openSerialized(binding, JSON.stringify(envelope), 512)).toEqual(
+      Uint8Array.from(value)
+    )
+  } finally {
+    derived.fill(0)
+  }
+})
+
+it.each([
+  ['salt', 32],
+  ['nonce', 12],
+  ['tag', 16],
+  ['ciphertext', 128]
+] as const)(
+  'retains SDK canonical base64 refusals for %s through both readers',
+  (field, maximum) => {
+    const envelope = codec().seal(binding, Uint8Array.of(7))
+    for (const encoded of [
+      'A',
+      'AA',
+      'AAA',
+      'AA===',
+      '====',
+      'AA-_',
+      'AA==\n',
+      ' A==',
+      'AB==',
+      'AAB=',
+      '=AAA',
+      'AAAA====',
+      Buffer.alloc(maximum + 1).toString('base64'),
+      Buffer.alloc(maximum + 3).toString('base64')
+    ]) {
+      let expected: unknown
+      try {
+        decodeOutputBytes(encoded, maximum)
+      } catch (error) {
+        expected = error
+      }
+      // The independent protocol oracle must reject each tested representation.
+      expect(expected).toBeDefined()
+      const { code, message } = expected as { code: string; message: string }
+      const malformed = { ...envelope, [field]: encoded }
+      expect(() => codec().open(binding, malformed)).toThrow(
+        expect.objectContaining({ code, message })
+      )
+      expect(() => codec().openSerialized(binding, JSON.stringify(malformed), 512)).toThrow(
+        expect.objectContaining({ code, message })
+      )
+    }
+  }
+)

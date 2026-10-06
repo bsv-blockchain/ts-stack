@@ -3,10 +3,11 @@
 This inventory tracks completion of the approved BRC-192–199 reference
 implementation. It complements the chronological [implementation record](./IMPLEMENTATION.md).
 The current specification baseline is [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
-at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Its pre-adoption replacement
-requires fresh alignment and qualification. Historical integration evidence for
-the earlier exemplar does not qualify the replacement. The outstanding contract
-changes are tracked in [specification alignment](./SPEC-ALIGNMENT.md).
+at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. The source now implements its
+pre-adoption replacement; complete current-source qualification remains required.
+Historical integration evidence for the earlier exemplar does not qualify the
+replacement. Implemented contract alignment and remaining qualification are
+tracked in [specification alignment](./SPEC-ALIGNMENT.md).
 Passing a component test does not complete an end-to-end row. Integration marks
 below describe demonstrated reference workflows, not production deployment or
 final hosted qualification. The final review checkpoint additionally requires the
@@ -106,8 +107,10 @@ wallet funding/reopen, authenticated HTTP, original retained admission, private
 custody and recipient-bound LCH decryption, including lost replies and concurrent
 buyers. The earlier complete host union passed 878 tests. Those purchase receipts
 predate PR295 and do not qualify its replacement Script, signing, finality or
-alias-recovery contract. The native purchase composition must be adapted and
-revalidated against the current family before its acceptance rows can close.
+alias-recovery contract. The native purchase composition now uses the current
+family, protected fixed-child authority and same-writer alias custody. Its
+complete runtime and final-source qualification must pass before those
+acceptance rows can close.
 
 These integration receipts establish concrete progress. They still require
 complete published-source and final qualification evidence. Native protected

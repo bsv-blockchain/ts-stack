@@ -2,9 +2,9 @@
 id: private-publication-storage
 title: 'Private Publication Storage'
 kind: guide
-version: '1.0.1'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+version: '1.0.2'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: experimental
 tags: [overlay, custody, recovery, wallet]
@@ -12,12 +12,14 @@ tags: [overlay, custody, recovery, wallet]
 
 # Native private publication storage
 
-This branch contains an internal Node reference foundation for BRC-195 publication.
-It is not yet an advertised private-publication endpoint or a public package entry.
-The installed Bitcoin/schema validator, actual topic admission bridge, durable
-lookup binding, HTTP authentication and final response enqueue still have to be
-composed and qualified. A stored or parsed phase is not independent evidence that
-those external effects occurred.
+This guide describes the Node storage foundation for BRC-195 publication. The
+optional `private/node` package entry exposes the foundation and its separate
+[verified publication composition](./verified-private-publication.md), including
+Bitcoin/schema validation, retained topic admission, durable lookup binding,
+HTTP authentication and final response enqueue. Installing the storage owner
+alone does not install those services. Complete exact-source qualification of
+the composition remains a checkpoint requirement. A stored or parsed phase is
+not independent evidence that those external effects occurred.
 
 ## One authoritative private domain
 

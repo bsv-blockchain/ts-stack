@@ -2,9 +2,9 @@
 id: protected-private-service-storage
 title: 'Protected Private-Service Storage'
 kind: guide
-version: '1.0.0'
-last_updated: '2026-10-04'
-last_verified: '2026-10-04'
+version: '1.0.1'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: experimental
 tags: [overlays, privacy, storage]
@@ -25,8 +25,8 @@ records. These records do not belong in the public catalogue or ordinary output
 journal. Addresses are opaque service-local identifiers. A service must derive
 retry addresses with a stable keyed index or allocate and retain unpredictable
 identities; it must not place raw buyer identities, credentials, keys or private
-request bodies in SQL indexes. The future service facade owns that mapping and
-its immutable binding.
+request bodies in SQL indexes. The installed private-service facades own the
+mapping and its immutable binding.
 
 Creation is explicit and exclusive. Opening requires the same external store
 identity, binding, limits and custody; it never initializes missing state.
@@ -51,6 +51,15 @@ and invoked with the original receiver and the same owned envelope; custom reade
 dispatch is preserved. Only the installed default reader takes the optimized path.
 This is local
 framing, not a new wire profile or a cache of custody or authentication.
+
+At each cipher invocation the codec creates a fresh native secret-key object
+from the newly derived bytes. It retains no derived key between calls. Canonical
+standard Base64 fields use bounded native byte decoding rather than an
+intermediate JavaScript number array; encoded and decoded size limits, alphabet,
+padding-bit checks and error order remain the same as the SDK decoder. The
+AES-256-GCM/HKDF algorithms, salt, nonce, tag, associated data and persisted
+envelope are unchanged. Existing envelopes require no migration, and every read
+still resolves current custody and authenticates the complete binding afresh.
 
 The ledger uses that serialized path within the original SQL read bound.
 The bounded plaintext parser returns an independent value and its validated canonical

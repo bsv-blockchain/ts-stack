@@ -1,8 +1,15 @@
-import { createCipheriv, createDecipheriv, hkdfSync, KeyObject, randomBytes } from 'node:crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  createSecretKey,
+  hkdfSync,
+  KeyObject,
+  randomBytes
+} from 'node:crypto'
 import {
   canonicalOutputJSON,
   closedOutputObject,
-  decodeOutputBytes,
+  outputAssert,
   outputString,
   parseOutputJSON,
   OutputProtocolError,
@@ -71,7 +78,9 @@ export class NodeProtectedPayloadCodec {
       const salt = randomBytes(32)
       derived = Buffer.from(hkdfSync('sha256', key, salt, FORMAT, 32))
       const nonce = randomBytes(12)
-      const cipher = createCipheriv('aes-256-gcm', derived, nonce, { authTagLength: 16 })
+      const cipher = createCipheriv('aes-256-gcm', createSecretKey(derived), nonce, {
+        authTagLength: 16
+      })
       cipher.setAAD(aad)
       const ciphertext = Buffer.concat([cipher.update(bytes), cipher.final()])
       return {
@@ -138,7 +147,9 @@ export class NodeProtectedPayloadCodec {
     let derived: Buffer | undefined
     try {
       derived = Buffer.from(hkdfSync('sha256', key, salt, FORMAT, 32))
-      const decipher = createDecipheriv('aes-256-gcm', derived, nonce, { authTagLength: 16 })
+      const decipher = createDecipheriv('aes-256-gcm', createSecretKey(derived), nonce, {
+        authTagLength: 16
+      })
       decipher.setAAD(aad)
       decipher.setAuthTag(tag)
       tentative = decipher.update(ciphertext)
@@ -186,7 +197,16 @@ function associatedData(binding: OutputJSONObject, keyId: string): Buffer {
 }
 
 function bytes(input: string, maximum: number, exact?: number): Buffer {
-  const result = Buffer.from(decodeOutputBytes(input, maximum))
+  // Envelope fields and installed capacities are already validated. Preserve
+  // the SDK's canonical base64 rules and error order without a number[] copy.
+  outputAssert(input.length <= 4 * Math.ceil(maximum / 3), 'Decoded byte limit', 'limited')
+  outputAssert(
+    input.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(input),
+    'Noncanonical base64'
+  )
+  const result = Buffer.from(input, 'base64')
+  outputAssert(result.byteLength <= maximum, 'Decoded byte limit', 'limited')
+  outputAssert(result.toString('base64') === input, 'Nonzero base64 padding bits')
   if (exact !== undefined && result.byteLength !== exact)
     throw new OutputProtocolError('invalid', 'Invalid protected payload framing')
   return result
