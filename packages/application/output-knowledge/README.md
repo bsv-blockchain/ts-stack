@@ -52,6 +52,15 @@ and successor history succeed. These portable components leave asset authority,
 currentness, native wallet/alias custody and private release to installed owners.
 See the [current-profile guide](../../../docs/guides/revenue-listing-profile-lineage.md).
 
+The same optional entry supplies `RevenueListingProfileAuthority`. Its asynchronous
+creation preflight checks an installed BRC-100 wallet's actual identity, own fixed
+child and protected signing before funding. Split and early-retirement signatures
+use that child; genesis packets use a distinct BRC-77 message-signing child.
+Explicit originator and synchronous authorization fences surround every wallet
+await. No scalar is exported and no funds are allocated. Full economic approval,
+native wallet recovery and chain authority remain separate responsibilities. See
+the [protected signing guide](../../../docs/guides/revenue-listing-profile-authority.md).
+
 ### Historical compatible interfaces
 
 The older interfaces below preserve the superseded pre-adoption family, including

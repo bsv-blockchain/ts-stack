@@ -2857,3 +2857,44 @@ async function recoverCurrentNativePurchase(
 }
 void recoverCurrentNativePurchase
 ```
+
+## Protected current listing authority
+
+The current immutable exemplar keeps identity-root secrets inside a BRC-100
+wallet. Await its actual protected child-signing preflight before funding. The
+application still approves the complete plan and transaction independently.
+These declarations demonstrate the packed optional entry; they do not allocate
+funds, broadcast or claim native route qualification.
+
+```ts compile
+// example-id: protected-current-listing-authority
+import type { WalletInterface } from '@bsv/sdk'
+import type { PreparedRevenueListingProfileSpend } from '@bsv/sdk/script/templates/RevenueListingProfileSpend'
+import { RevenueListingProfileAuthority } from '@bsv/output-knowledge/revenue-listing'
+
+declare const wallet: WalletInterface
+declare const selectedSeller: string
+declare const originator: string
+declare const prepared: PreparedRevenueListingProfileSpend
+declare const descriptor: unknown
+declare const genesisOutpoint: unknown
+declare function assertInstalledSigningAuthorization(): void
+declare function assertCompleteFundedPlanApproved(): void
+declare function assertReserveGenesisApproved(): void
+
+const authority = await RevenueListingProfileAuthority.create({
+  wallet,
+  identity: selectedSeller,
+  originator,
+  checkCurrent: assertInstalledSigningAuthorization
+})
+assertCompleteFundedPlanApproved()
+const request = prepared.signingRequests()[0]
+const completed = prepared.complete(
+  request === undefined ? {} : { seller: await authority.signTransaction(request) }
+)
+prepared.assertFinalLayout(completed)
+assertReserveGenesisApproved()
+const genesisAuthorization = await authority.signGenesis(descriptor, genesisOutpoint)
+console.log(authority.identity, completed.id('hex'), genesisAuthorization.body.listingId)
+```

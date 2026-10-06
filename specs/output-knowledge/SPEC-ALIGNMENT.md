@@ -99,6 +99,13 @@ may install different transaction domains without adopting its revenue model.
 
 ## Optional Script exemplar
 
+- [x] Provide an explicitly selected protected `RevenueListingProfileAuthority`
+      with actual own-child signing preflight before funding, explicit originator,
+      synchronous authorization fences around every wallet await, canonical low-S
+      transaction signatures and separate BRC-77 genesis authorization. The whole
+      authority selection passes 62 tests in three suites; all three original
+      current-profile suites also pass 31 tests. These port-level tests do not
+      qualify native seller signing, creation resources or all native routes.
 - [x] Provide fixed public child derivation, matching the three independent
       current-family root/child vectors and BRC-100 wallet derivation across the
       full property profile. This does not sign, activate or internalize funds.
@@ -144,8 +151,10 @@ may install different transaction domains without adopting its revenue model.
       early seller-child retirement and permissionless expiry retirement. Reject
       merge and schedule amendment. Changed distributions require a new lineage.
 - [ ] Apply zero-locktime/all-final rules per route, with the specified exception
-      for unsigned expiry retirement. At expiry height it remains non-consuming;
-      strict height finality first permits inclusion at expiryHeight + 1. Test
+      for unsigned expiry retirement. Inclusion in candidate block expiryHeight
+      remains forbidden; strict height finality first permits inclusion in block
+      expiryHeight + 1. An observed tip at expiryHeight evaluates that next block.
+      Pre-maturity intent remains non-consuming. Test
       reconciliation under both nonfinal-policy settings without wallet effects.
 - [ ] Validate activation before genesis funding, all eight recipient slots,
       fixed-child recipient spending, exact external funding and final top-up,

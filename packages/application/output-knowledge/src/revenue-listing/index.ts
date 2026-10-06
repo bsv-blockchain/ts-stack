@@ -25,3 +25,6 @@ export { parseRevenueListingProfileLineagePackage } from './ProfileLineagePackag
 export type { RevenueListingProfileLineagePackage } from './ProfileLineagePackage.js'
 export { RevenueListingProfilePurchaseVerifier } from './RevenueListingProfilePurchaseVerifier.js'
 export type { RevenueListingProfilePurchaseResult } from './RevenueListingProfilePurchaseVerifier.js'
+
+export { RevenueListingProfileAuthority } from './RevenueListingProfileAuthority.js'
+export type { RevenueListingProfileAuthorityOptions } from './RevenueListingProfileAuthority.js'

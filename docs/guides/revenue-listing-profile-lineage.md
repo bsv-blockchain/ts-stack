@@ -22,6 +22,12 @@ the SDK's pinned two-stage `RevenueListingProfile`. Earlier names without
 implement the replacement family. Other transaction domains do not require
 this exemplar.
 
+The separately selected `RevenueListingProfileAuthority` uses protected BRC-100
+child signing and BRC-77 genesis authorization. Its actual signing preflight
+must precede funding; it does not replace the full lineage, funded-plan and
+permission checks described here. See the
+[protected signing guide](./revenue-listing-profile-authority.md).
+
 An owned lineage package contains the immutable descriptor, seller's BRC-77
 `sale-genesis` authorization, exact target outpoint and sorted distinct listing
 transactions with BEEF. The listing ID commits to the complete descriptor,

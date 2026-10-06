@@ -5813,3 +5813,41 @@ ordinary remote-wallet fetch failure in the existing fragmented-batch fixture;
 its transport cause remains under investigation. Native route, alias, seller and
 HTTP compositions, final mutation reconciliation and exact-head hosted gates
 remain open. These passing components do not complete Checkpoint 2.
+
+### Protected current signing authority
+
+The optional revenue entry separately exports `RevenueListingProfileAuthority`.
+Its asynchronous installation checks the selected BRC-100 identity, own fixed
+child and actual child signing before funding. It owns each approved input-zero
+request, verifies the active program and canonical low-S `ALL|FORKID` result,
+and uses the distinct BRC-77 message-signing child for genesis authorization.
+Explicit originator and synchronous authorization fences surround every wallet
+await. The application still approves the full funded economics, lineage, roles
+and genesis transaction independently. Existing historical authority exports and
+defaults remain unchanged.
+
+Frozen run `v9` passes the whole authority selection: three suites and 62 tests,
+including the original properties and additive current-profile property with
+the original 300-run minimum and seed 3242026. The three original current-profile
+suites also pass all 31 tests. Captured cohort times are 34.819 and 87.202 seconds;
+these are functional component results, not hosted performance qualification.
+The complete authority inventory has 342 distinct canonical source sites, with
+all original 143 targets, 390 execution rows and other target objects retained.
+
+The 5,294-file source manifest is
+`11da060153b603515d1a7cb0cfdf7f5c5c5905138955365c7dcf70c77f8b6936`;
+the 2,020-file runtime-source manifest is
+`a7ae0f5f57377070107f5ad5dd7fc72c301ed4be9eac27543a9d220e36b3ab8f`.
+The separate 3,642-file built-artifact manifest is
+`13d5ed418147787f71f05fb16fccf675d7f751e2b49deeba41225384f1e8ed03`.
+Source and actual built artifacts were rechecked before and after the cohorts.
+Every capture passed bounded fault-marker triage without timeout. Successful
+independent inventories prove the container and volume absent, and the resource
+calendar removal was read back. Later documentation changes require fresh root
+and compiled-example checks before pushing.
+
+These tests exercise protected wallet ports with disclosed synthetic authorities.
+They do not establish actual native seller signing, creation fee/resource
+preflight, all native routes, alias custody, admission or HTTP composition. Those
+remaining integrations and complete final-source qualification keep Checkpoint 2
+open.

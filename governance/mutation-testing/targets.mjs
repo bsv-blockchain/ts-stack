@@ -535,14 +535,24 @@ export function buildMutationTargets(repositoryRoot) {
         'src/revenue-listing/**',
         'test/revenue-authority-fixture.ts',
         'test/revenue-lineage-fixture.ts',
-        'test/fixtures/revenue-listing/**'
+        'test/fixtures/revenue-listing/**',
+        'test/revenue-profile-authority.fixture.ts',
+        'test/revenue-profile.fixture.ts',
+        '../../sdk/src/script/templates/RevenueListingProfile.ts',
+        '../../sdk/src/script/templates/RevenueListingKeys.ts',
+        '../../sdk/src/script/templates/RevenueListingProfilePlan.ts',
+        '../../sdk/src/script/templates/RevenueListingProfileSpend.ts'
       ],
-      mutate: ['src/revenue-listing/RevenueListingAuthority.ts'],
+      mutate: [
+        'src/revenue-listing/RevenueListingAuthority.ts',
+        'src/revenue-listing/RevenueListingProfileAuthority.ts'
+      ],
       ...jestTarget(
         'jest.config.js',
         [
           '<rootDir>/test/revenue-authority.test.ts',
-          '<rootDir>/test/revenue-authority.property.test.ts'
+          '<rootDir>/test/revenue-authority.property.test.ts',
+          '<rootDir>/test/revenue-profile-authority.test.ts'
         ],
         { esm: true, buildCommand: 'pnpm build' }
       )
