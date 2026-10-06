@@ -657,8 +657,14 @@ export async function privatePurchaseProfileAliasNativeFixture(
       // Isolated fixture adapter maps the explicitly selected HTTPS endpoint to
       // loopback while preserving the real authenticated bytes. TLS/certificate
       // validation is not established by this local demonstration.
-      const response = await fetch(origin + url.pathname, init),
+      const failureCount = failures.length,
+        response = await fetch(origin + url.pathname, init),
         bytes = await response.arrayBuffer()
+      // The synthetic in-process adapter has independent access to the service
+      // error already retained by call(). Keep its identity for bounded conflict
+      // reconciliation and show the actual cause when a positive integration fails.
+      // The production HTTP control vocabulary and authenticated exchange stay exact.
+      if (!response.ok && failures.length > failureCount) throw failures.at(-1)
       const delivered =
         response.ok &&
         url.pathname.includes('/overlay/v1/purchases/') &&

@@ -13,6 +13,11 @@ on:
         type: boolean
         default: false
         required: false
+      application-performance-diagnostics:
+        description: Measure the unchanged alias disclosure property before complete coverage
+        type: boolean
+        default: false
+        required: false
 
 permissions: {}
 
@@ -1337,6 +1342,18 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Measure the unchanged application property on hosted Linux
+        if: github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics && matrix.application == 1
+        run: node scripts/output-knowledge-performance-diagnostic.mjs
+      - name: Preserve bounded application function timing
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics && matrix.application == 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: application-performance-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .coverage-output/performance-diagnostic-*/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
       - name: Generate complete application coverage shard
         if: matrix.application != 0
         run: >-

@@ -2,15 +2,43 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.7.0'
-last_updated: '2026-10-04'
-last_verified: '2026-10-04'
+version: '1.8.0'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
 ---
 
 # CI Performance Governance
+
+The existing `CI` manual dispatch has an optional
+`application-performance-diagnostics` input, disabled by default. It measures the
+unchanged native alias-disclosure property on an isolated hosted Linux runner
+before the complete first application coverage shard. Use
+`gh workflow run ci.yml --ref <branch> -f application-performance-diagnostics=true`
+for an explicitly requested measurement. Ordinary pull-request runs, complete
+test discovery, both coverage shards, merge gates and mutation qualification
+remain unchanged.
+
+The repository-only diagnostic retains the original minimum 300 runs, seed
+3242026, replay-free profile, 150-second interruption-as-failure budget and
+180-second case deadline. It first checks the built-in SQLite driver, binds the
+complete tracked source, built SDK/wallet/application bytes and Node binary, and
+runs one serial property with coverage and CPU profiling. Every child has a
+finite deadline within an immutable 900-second calendar and Boolean fault, case-timeout and output triage. Cancellation
+and every exit drain the complete process group through bounded TERM/KILL.
+Timing extraction requires unchanged inputs, all guards clear and an absent
+group; otherwise only Boolean metadata is retained. Raw logs, CPU profiles and
+application values never enter the uploaded report.
+
+The uploaded `application-performance-diagnostic-<run>-<attempt>` artifact
+contains source/runtime identity, exit and drain evidence, and bounded self and
+inclusive function timing. Profiling overhead is included. A valid measurement
+can describe a property-budget interruption; it never qualifies the property,
+coverage, mutation campaign or checkpoint. The complete ordinary coverage run
+still follows and must pass independently. No performance improvement is claimed
+until comparable measurements and full unchanged qualification support it.
 
 The weekly `CI performance trend` workflow classifies successful pull-request
 CI runs as full-scope (at least 50 executed, non-skipped jobs) or targeted,
