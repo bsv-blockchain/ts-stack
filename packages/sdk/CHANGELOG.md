@@ -214,6 +214,18 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Identity search recovery (3.2.0 candidate)
+
+- Match `any` queries against saved contact names and keys, retain exact named
+  selectors and return contact-only matches in parallel searches without
+  duplicating their public-certificate overrides.
+- Add opt-in `contactErrorMode`, `contactTimeoutMs` and `onContactError` to both
+  resolution option types. Fallback bounds optional contact loading while
+  preserving public lookup errors and trust checks. Legacy callers retain their
+  defaults and original contact failures.
+- No wire, wallet permission, certificate, or persistence migration. UIs must
+  adopt recovery explicitly and distinguish lookup errors from empty results.
+
 - Add caller-installed additional-output authorization to `completeBoundAction`.
   Bind independently verified local outputs by exact index, script and amount
   while preserving the default external-input restriction and value conservation.

@@ -82,7 +82,7 @@
       "outputFilename": "docs/reference/identity.md",
       "firstHeadingLevel": 1,
       "noDetailsSummary": true,
-      "filenameSubString": "identity"
+      "filenameSubString": "/src/identity/"
     },
     {
       "inputFilename": "src/kvstore/index.ts",

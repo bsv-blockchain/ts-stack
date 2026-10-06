@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '3.1.0'
+version: '3.2.0'
 npm: '@bsv/sdk'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -20,6 +20,17 @@ validation module. Native identity, certificate and authentication APIs remain.
 Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
 qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+The 3.2.0 source candidate fixes saved-contact `any` searches and retains
+contact-only matches in parallel public searches. Both identity-resolution
+methods accept opt-in bounded contact recovery through `contactErrorMode`,
+`contactTimeoutMs` and `onContactError`. Legacy defaults and contact failures
+are preserved; public-discovery errors, certificate checks and wallet
+permission gates remain intact. See the [SDK README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
+for integration details. Consumers must adopt recovery explicitly and render
+lookup errors separately from successful empty results. A contact deadline
+does not cancel an underlying wallet request or permission prompt. This
+candidate is not publication or a deployed search-component update.
 
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact
