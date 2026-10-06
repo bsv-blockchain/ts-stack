@@ -35,6 +35,7 @@ export async function lchOverlayCovenantEntitlementDigest(
       'listing-covenant'
     ),
     potatoes = { ...result.potatoes.body }
+  Reflect.deleteProperty(delivered, 'currentAlias')
   Reflect.deleteProperty(potatoes, 'secret')
   Reflect.deleteProperty(potatoes, 'issuedAt')
   const settlement = decodeLCHOverlayJSON(context.settlement)

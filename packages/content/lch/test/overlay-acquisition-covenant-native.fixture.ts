@@ -16,7 +16,10 @@ import {
   type OutputReleaseEvidence
 } from '@bsv/sdk'
 import { revenueListingId } from '@bsv/sdk/script/templates/RevenueListing'
-import { RevenueListingSpend } from '@bsv/sdk/script/templates/RevenueListingSpend'
+import {
+  RevenueListingSpend,
+  revenueListingPurchaseCommitment
+} from '@bsv/sdk/script/templates/RevenueListingSpend'
 import { afterEach } from '@jest/globals'
 import { createSecretKey } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -187,6 +190,7 @@ export async function lchNativeCovenantFixture(
       txid: purchase.txid,
       beef: purchase.beef
     },
+    purchaseCommitment = revenueListingPurchaseCommitment(purchased),
     release: OutputReleaseEvidence = {
       chain: point.chain,
       txid: purchase.txid,
@@ -207,6 +211,7 @@ export async function lchNativeCovenantFixture(
       previous: point,
       successor: { ...point, txid: purchase.txid },
       txid: purchase.txid,
+      purchaseCommitment,
       satoshis: f.descriptor.purchasePrice,
       releasePolicy: release.policy,
       releaseEvidenceDigest: outputPacketDigest('release-evidence', release),
@@ -275,6 +280,7 @@ export async function lchNativeCovenantFixture(
         status: 'delivered',
         acquisitionId: prepared.body.acquisitionId,
         txid: purchase.txid,
+        purchaseCommitment,
         recoveryUntil: prepared.body.recoveryUntil,
         steak: { [f.prepare.topic]: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [0] } },
         potatoes: signOutputPacket(
@@ -287,6 +293,7 @@ export async function lchNativeCovenantFixture(
             recipient: prepared.body.recipient,
             topic: prepared.body.topic,
             txid: purchase.txid,
+            purchaseCommitment,
             assetId: prepared.body.assetId,
             termsDigest: prepared.body.termsDigest,
             releasePolicy: release.policy,
@@ -352,7 +359,7 @@ export async function lchNativeCovenantFixture(
             'Purchase not independently verified: ' + canonicalOutputJSON(verified)
           )
           guard()
-          return { checkCurrent: guard }
+          return { purchaseCommitment: verified.purchaseCommitment, checkCurrent: guard }
         },
         release: async (evidence, expected, signal) => {
           counts.release++
@@ -397,6 +404,7 @@ export async function lchNativeCovenantFixture(
     lineage,
     genesis,
     purchased,
+    purchaseCommitment,
     terms,
     prepared,
     submission,

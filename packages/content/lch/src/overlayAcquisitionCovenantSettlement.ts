@@ -56,6 +56,7 @@ export interface LCHCovenantSettlementBody {
   previous: OutputOutpoint
   successor: OutputOutpoint
   txid: string
+  purchaseCommitment: string
   satoshis: string
   releasePolicy: OutputReleasePolicy
   releaseEvidenceDigest: string
@@ -106,6 +107,7 @@ export function decodeLCHCovenantSettlement(
     'previous',
     'successor',
     'txid',
+    'purchaseCommitment',
     'satoshis',
     'releasePolicy',
     'releaseEvidenceDigest',
@@ -130,6 +132,7 @@ export function decodeLCHCovenantSettlement(
     previous: parseOutputOutpoint(value.previous),
     successor: parseOutputOutpoint(value.successor),
     txid: outputHex32(value.txid),
+    purchaseCommitment: outputHex32(value.purchaseCommitment),
     satoshis: outputU64(value.satoshis).toString(),
     releasePolicy: parseOutputReleasePolicy(value.releasePolicy),
     releaseEvidenceDigest: outputHex32(value.releaseEvidenceDigest),
@@ -278,6 +281,7 @@ export function bindLCHOverlayCovenantSettlement(
         outputIndex: 0
       }) &&
       body.txid === expectedTxid &&
+      body.purchaseCommitment === result.purchaseCommitment &&
       body.satoshis === terms.policy.satoshis.toString() &&
       same(body.releasePolicy, prepared.body.releasePolicy) &&
       body.releaseEvidenceDigest === outputPacketDigest('release-evidence', release) &&

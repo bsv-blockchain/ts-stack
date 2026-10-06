@@ -92,6 +92,7 @@ export async function lchCovenantSellerFixture(fixtureOptions: { detached?: bool
             'Independent full purchase failed: ' + canonicalOutputJSON(result)
           )
           return {
+            purchaseCommitment: result.purchaseCommitment,
             checkCurrent: () => {
               outputAssert(f.options.current(), 'Context changed', 'context-changed')
             }

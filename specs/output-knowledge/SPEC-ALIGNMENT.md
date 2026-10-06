@@ -31,8 +31,12 @@ may install different transaction domains without adopting its revenue model.
 - [ ] Before first mined-policy issuance, select an actually mined, admitted alias.
       After issuance, retain original POTATOES, settlement and License; expose
       independently verified current aliases without rewriting historical rights.
-- [ ] Sign and verify the purchase commitment in the BRC-198 settlement and carry
-      it through buyer/seller validation, immutable entitlement and playback.
+- [x] Require the full purchase commitment in the signed BRC-198 C settlement,
+      bind it to reserved results/POTATOES and independently installed buyer/seller
+      verifier results, and preserve historical entitlement during alias evidence
+      changes. Component tests remain distinct from replacement-family qualification.
+- [ ] Integrate the revised immutable collector extension and current alias chain
+      assessment with replacement-family/native buyer and seller recovery.
 - [ ] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias
       equivalence belongs to the acquisition domain, not Bitcoin fact identity.
 

@@ -51,6 +51,7 @@ export async function lchCovenantSettlementFixture() {
     }),
     terms = await validateLCHOverlayCovenantTerms(f.input),
     txid = '44'.repeat(32),
+    purchaseCommitment = '65'.repeat(32),
     release: OutputReleaseEvidence = {
       chain,
       txid,
@@ -77,6 +78,7 @@ export async function lchCovenantSettlementFixture() {
       previous: f.prepare.listing,
       successor: { chain, txid, outputIndex: 0 },
       txid,
+      purchaseCommitment,
       satoshis: '100',
       releasePolicy: release.policy,
       releaseEvidenceDigest: outputPacketDigest('release-evidence', release),
@@ -106,6 +108,7 @@ export async function lchCovenantSettlementFixture() {
           recipient: prepared.body.recipient,
           topic: prepared.body.topic,
           txid,
+          purchaseCommitment,
           assetId: prepared.body.assetId,
           termsDigest: prepared.body.termsDigest,
           releasePolicy: prepared.body.releasePolicy,
@@ -123,6 +126,7 @@ export async function lchCovenantSettlementFixture() {
         status: 'delivered',
         acquisitionId: prepared.body.acquisitionId,
         txid,
+        purchaseCommitment,
         recoveryUntil: prepared.body.recoveryUntil,
         steak: {
           [prepared.body.topic]: { outputsToAdmit: [], coinsToRetain: [], coinsRemoved: [] }
@@ -139,6 +143,7 @@ export async function lchCovenantSettlementFixture() {
     terms,
     prepared,
     txid,
+    purchaseCommitment,
     release,
     evidence,
     body,

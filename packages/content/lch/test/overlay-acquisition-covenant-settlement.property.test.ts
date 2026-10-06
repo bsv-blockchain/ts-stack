@@ -29,6 +29,7 @@ it('refuses independently signed wrong economic and request commitments under ge
         'acquisitionId',
         'listingId',
         'txid',
+        'purchaseCommitment',
         'releaseEvidenceDigest'
       ),
       fc.uint8Array({ minLength: 32, maxLength: 32 }),

@@ -2336,3 +2336,25 @@ export function bindHistoricalPurchase(
 This pure step neither funds nor signs and does not establish secret usability.
 The complete replacement Script, wallet, alias-recovery and LCH compositions
 remain distinct checkpoint requirements.
+
+## Independently verified covenant commitment
+
+The optional LCH covenant proof port returns the full digest only after the
+installed transaction domain succeeds. Its guard remains tied to the selected
+chain and authorization context. This adapter neither calculates truth from a
+remote claimed digest nor creates an entitlement by itself.
+
+```ts compile
+// example-id: independently-verified-lch-commitment
+import type { RevenueListingPurchaseResult as LCHCommitmentPurchaseResult } from '@bsv/output-knowledge/revenue-listing'
+import type { LCHOverlayVerifiedCovenantPurchase as LCHCommitmentVerifiedPurchase } from '@bsv/lch/overlay-covenant'
+
+export function lchCommitmentFromVerifiedPurchase(
+  result: LCHCommitmentPurchaseResult,
+  checkCurrent: () => void
+): LCHCommitmentVerifiedPurchase {
+  if (result.status !== 'verified') throw new Error('Complete purchase verification is required')
+  checkCurrent()
+  return { purchaseCommitment: result.purchaseCommitment, checkCurrent }
+}
+```

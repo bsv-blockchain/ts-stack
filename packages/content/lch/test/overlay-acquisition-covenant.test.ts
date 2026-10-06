@@ -2,6 +2,7 @@ import { expect, it } from '@jest/globals'
 import { canonicalOutputJSON, Utils } from '@bsv/sdk'
 import { ATOMIC_BEEF } from '@bsv/sdk/transaction/Beef'
 import { WalletBRC78KeyDelivery, signObject, type KeyGrant } from '../src/index.js'
+import { lchOverlayCovenantEntitlementDigest } from '../src/overlayAcquisitionCovenantEntitlement.js'
 import { LCHOverlayCovenantDomain } from '../src/overlayAcquisitionCovenant.js'
 import { lchNativeCovenantFixture } from './overlay-acquisition-covenant-native.fixture.js'
 
@@ -201,7 +202,7 @@ it('requires a complete synchronous owned guard after actual independent purchas
         purchase: async (...args) => {
           const actual = await f.options.verification.purchase(...args)
           actual.checkCurrent()
-          return guard() as { checkCurrent(): void }
+          return Object.assign(guard(), { purchaseCommitment: actual.purchaseCommitment })
         }
       }
     })
@@ -286,4 +287,45 @@ it('pins the independently retained historical revocation source before new work
   revocations.id = 'changed'
   await expect(f.domain.preflight(f.prepare, f.prepared, signal)).rejects.toThrow('changed')
   expect(f.counts.purchase).toBe(0)
+}, 60000)
+
+it('refuses a verifier commitment that differs from the signed historical settlement before recording rights', async () => {
+  const f = await lchNativeCovenantFixture(),
+    signal = new AbortController().signal,
+    domain = await LCHOverlayCovenantDomain.create({
+      ...f.options,
+      verification: {
+        ...f.options.verification,
+        purchase: async (...args) => {
+          const actual = await f.options.verification.purchase(...args)
+          actual.checkCurrent()
+          return { purchaseCommitment: '00'.repeat(32), checkCurrent: () => actual.checkCurrent() }
+        }
+      }
+    })
+  await domain.initializeCustody(f.objects)
+  await expect(
+    domain.verify(f.prepare, f.prepared, f.submission, f.delivered, signal)
+  ).rejects.toThrow('independently verified purchase commitment')
+  await expect(domain.playback(f.delivered, signal)).rejects.toThrow('not been locally verified')
+  expect(f.counts.release).toBe(0)
+}, 60000)
+
+it('retains historical offline entitlement when independently assessed alias transport evidence is added or replaced', async () => {
+  const f = await lchNativeCovenantFixture(),
+    signal = new AbortController().signal
+  await f.domain.verify(f.prepare, f.prepared, f.submission, f.delivered, signal)
+  const original = canonicalOutputJSON(f.delivered),
+    digest = await lchOverlayCovenantEntitlementDigest(f.delivered)
+  for (const currentAlias of [
+    { txid: f.submission.txid, beef: f.submission.beef },
+    // Unverified transport bytes neither grant rights nor assert currentness.
+    { txid: '55'.repeat(32), beef: 'AA==' }
+  ]) {
+    const current = { ...f.delivered, currentAlias }
+    expect(await lchOverlayCovenantEntitlementDigest(current)).toBe(digest)
+    expect(await f.domain.playback(current, signal)).toEqual(f.plaintext)
+    expect(canonicalOutputJSON(f.delivered)).toBe(original)
+  }
+  expect(f.counts.purchase).toBe(1)
 }, 60000)

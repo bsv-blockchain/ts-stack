@@ -1274,6 +1274,7 @@ test('complete covenant buyer retains native fixture closure and the prior compl
     target = configured['lch-overlay-covenant']
   assert.deepEqual(target.mutate, [
     'src/overlayAcquisitionCovenant.ts',
+    'src/overlayAcquisitionCovenantProof.ts',
     'src/overlayAcquisitionCovenantEntitlement.ts',
     'src/overlayAcquisitionEntitlement.ts',
     'src/keyRecovery.ts'

@@ -244,6 +244,10 @@ the full covenant reference flow.
 
 ## Concrete covenant buyer and settlement
 
+This section targets [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
+at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Current acceptance and open
+integration work are recorded in [specification alignment](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+
 Install `LCHOverlayCovenantDomain` from `@bsv/lch/overlay-covenant` with the
 complete original Header, reusable standing Offer, individual signed Request,
 outer preparation, exact descriptor and independently selected capability.
@@ -255,12 +259,20 @@ The installed `verification.preparation` must authenticate the authorized genesi
 every related listing transition and the exact prepared outpoint before wallet
 construction. `RevenueListingLineageVerifier` provides the complete Script and
 selected-chain implementation. The installed `verification.purchase` must
-validate the actual full transaction and both histories of any merge, and bind
+validate the actual full transaction and its complete authorized lineage, and bind
 the original acquisition ID, request digest, buyer, descriptor, price and receipt.
+The current BRC-197 v1 target has activation followed by four active routes; merge
+and schedule amendment are outside it.
 `RevenueListingPurchaseVerifier` provides that implementation. Their independently
 selected chain context and currentness are local installation responsibilities.
 The release port separately assesses the originally selected release policy.
-Every port must return an owned synchronous `checkCurrent()` guard; unresolved,
+The purchase port additionally returns the independently verified full 32-byte
+`purchaseCommitment`, calculated from the authenticated input-zero preimage
+before scalar reduction. The seller places it in the signed C settlement, and
+the buyer requires it to match the independently verified transaction and the
+reserved result/POTATOES. An inherited, accessor-backed, missing or changed
+commitment cannot become a positive assessment. Every port must return an owned
+synchronous `checkCurrent()` guard; unresolved,
 limited, cancelled or changed proof contexts cannot become positive receipts.
 
 `decodeLCHOverlayCovenantPurchaseEvidence` parses a closed portable lineage package
@@ -289,6 +301,10 @@ reissue may vary signature and encrypted grant randomness without changing right
 every grant is authenticated again before use. The unverified
 `lchOverlayCovenantEntitlementDigest` is only a representation fingerprint, useful
 inside that protected positive receipt. It is never a remote authorization token.
+`currentAlias` is independently assessed transport evidence and is excluded from
+this historical fingerprint. Changing it cannot rewrite signed settlement,
+License, release evidence or original transaction; it grants no new rights.
+Already verified offline playback does not depend on a new online alias lookup.
 
 The disclosed synthetic native fixture executes actual genesis and purchase
 transactions against the installed BRC-197 family, verifies their complete BEEF
@@ -344,7 +360,10 @@ missing keys, wrong issuer, fabricated proof, incomplete admission, original-byt
 substitution, detached source bounds, changed or asynchronous guards, finite
 signed-authority archives, catalogue withdrawal and Offer expiry. At least 300
 seeded histories preserve original custody while current access controls issuance.
-The local native wallet test separately funds/signs/recovers all six routes,
-including retained payout remainders, unanimous amendment and external retirement
-top-up. These component receipts do not complete the combined native wallet,
-actual topical-admission, authenticated HTTP and workbench acceptance row.
+The previous native wallet and covenant receipts used the superseded exemplar.
+The revised two-stage frozen Script, immutable revenue extension, fixed-child
+signing/remittance, native per-alias recovery, expiry finality and independent
+selected-chain alias assessment must be integrated and qualified before the C
+profile is advertised. This commitment-binding batch does not qualify that
+replacement or complete the combined native wallet, actual topical-admission,
+authenticated HTTP and workbench acceptance row.

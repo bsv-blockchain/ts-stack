@@ -33,6 +33,7 @@ it('refuses every substituted signed settlement commitment', async () => {
       { previous: f.body.successor },
       { successor: { ...f.body.successor, outputIndex: 1 } },
       { txid: '00'.repeat(32) },
+      { purchaseCommitment: '00'.repeat(32) },
       { satoshis: '101' },
       { releasePolicy: { kind: 'mined', confirmations: 1 } },
       { releaseEvidenceDigest: '00'.repeat(32) },
@@ -172,4 +173,27 @@ it('rejects noncanonical, open, wrongly signed and malformed representations', a
     expect(() => decodeLCHOverlayCovenantPurchaseEvidence(f.json(evidence))).toThrow()
   const value = decodeLCHOverlayCovenantPurchaseEvidence(f.context.purchaseEvidence!)
   expect(Utils.toBase64(f.json(value))).toBe(Utils.toBase64(f.context.purchaseEvidence!))
+})
+
+it('requires a full signed commitment and binds it to both reserved result and POTATOES', async () => {
+  const f = await lchCovenantSettlementFixture()
+  for (const purchaseCommitment of [undefined, '', '65', 'FF'.repeat(32), '65'.repeat(33)]) {
+    const body = { ...f.body } as Record<string, unknown>
+    if (purchaseCommitment === undefined) delete body.purchaseCommitment
+    else body.purchaseCommitment = purchaseCommitment
+    const packet = signOutputPacket('lch-covenant-settlement', body, f.sellerKey)
+    expect(() => decodeLCHCovenantSettlement(f.json(packet), f.descriptor.seller)).toThrow()
+  }
+  const bound = bindLCHOverlayCovenantSettlement(
+    f.context,
+    f.terms,
+    f.prepared,
+    f.delivered,
+    f.txid
+  )
+  expect(bound.packet.body.purchaseCommitment).toBe(f.purchaseCommitment)
+  expect(bound.delivered.result.status).toBe('delivered')
+  if (bound.delivered.result.status !== 'delivered') throw new Error('Missing delivery')
+  expect(bound.delivered.result.purchaseCommitment).toBe(f.purchaseCommitment)
+  expect(bound.delivered.result.potatoes.body.purchaseCommitment).toBe(f.purchaseCommitment)
 })

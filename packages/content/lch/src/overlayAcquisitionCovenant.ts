@@ -16,6 +16,10 @@ import {
 } from '@bsv/sdk'
 import { decodeDeterministicCbor, encodeDeterministicCbor } from './cbor.js'
 import { LCHReader } from './core.js'
+import {
+  retainLCHCovenantPurchaseAssessment,
+  type LCHOverlayVerifiedCovenantPurchase
+} from './overlayAcquisitionCovenantProof.js'
 import { lchOverlayCovenantEntitlementDigest } from './overlayAcquisitionCovenantEntitlement.js'
 import { LCHOverlayPaidCustody, type LCHOverlayObjectCustody } from './overlayAcquisitionCustody.js'
 import { lchAssert } from './errors.js'
@@ -68,7 +72,7 @@ export interface LCHOverlayCovenantVerification {
     evidence: LCHOverlayCovenantPurchaseEvidence,
     original: { request: OutputPurchasePrepare; terms: OutputSignedPurchaseTerms; seller: string },
     signal: AbortSignal
-  ): Promise<{ checkCurrent(): void }>
+  ): Promise<LCHOverlayVerifiedCovenantPurchase>
   release(
     evidence: OutputReleaseEvidence,
     expected: OutputReleaseBinding,
@@ -486,7 +490,7 @@ export class LCHOverlayCovenantDomain {
       'ERR_LCH_PAYMENT',
       'Original wallet transaction differs from the purchased subject'
     )
-    const purchase = this.assessment(
+    const verified = retainLCHCovenantPurchaseAssessment(
       await this.ports.verification.purchase(
         bound.evidence,
         {
@@ -497,7 +501,13 @@ export class LCHOverlayCovenantDomain {
         signal
       )
     )
+    const purchase = () => verified.checkCurrent()
     purchase()
+    lchAssert(
+      bound.packet.body.purchaseCommitment === verified.purchaseCommitment,
+      'ERR_LCH_PAYMENT',
+      'Settlement differs from independently verified purchase commitment'
+    )
     this.current(signal)
     const release = this.assessment(
       await this.ports.verification.release(

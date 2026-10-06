@@ -216,6 +216,23 @@ The npm artifact also carries a scoped [third-party notice](./THIRD_PARTY_NOTICE
 
 ## Optional private-overlay representations
 
+The current implementation target is BRC PR295 at
+`1b9a75e497b5856675af1ce01fd86843c37d07f9`. The optional covenant profile is
+under pre-adoption replacement: the two-stage frozen Script, immutable schedule,
+fixed-child wallet and native alias integration still require qualification.
+Earlier native exemplar evidence does not establish those revised contracts.
+See [current alignment](../../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+
+Covenant settlements now require the full `purchaseCommitment`, identically
+bound to the reserved BRC-196 result and signed POTATOES. Both independently
+installed purchase proof ports return that digest with an owned synchronous
+`checkCurrent()` guard. The buyer compares the verifier result with the signed
+settlement before recording rights; the seller signs the independently verified
+digest. A claimed digest does not replace full Bitcoin, Script or lineage checks.
+Current-alias transport evidence is excluded from the historical entitlement
+fingerprint. Adding it neither grants rights nor asserts selected-chain currentness,
+and does not add a new online requirement to already verified offline playback.
+
 The separate `@bsv/lch/overlay-acquisition` entry implements the BRC-198 wire
 representations for paid-lookup and listing-covenant acquisition. It requires
 the coordinated SDK3 output-protocol and revenue-listing companions. Ordinary
@@ -224,8 +241,9 @@ imports and `CORE_CAPABILITIES` retain their BRC-170 behavior and SDK2 support.
 `decodeLCHOverlayBinding` checks the exact seller key, chain, canonical HTTPS
 base and mode-specific anchor/policy fields. `decodeLCHCollectorRevenue` checks
 the initial collector schedule with the same state validator as the executable
-BRC-197 family, including sorted unique recipients, integer weights and the
-unanimous-consent, retained-remainder and external retirement top-up rules.
+BRC-197 family, including sorted unique recipients and integer weights. Alignment to the revised
+immutable schedule, expiry height and fixed-child remittance remains an explicit
+acceptance requirement; the earlier collector extension is not the current contract.
 These representation checks do not establish seller/genesis authority.
 
 `decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR

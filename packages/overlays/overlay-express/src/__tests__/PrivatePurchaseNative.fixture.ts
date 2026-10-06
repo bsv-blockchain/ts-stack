@@ -326,7 +326,7 @@ export async function privatePurchaseNativeFixture(verification?: {
         'Complete selected purchase refused: ' + canonicalOutputJSON(result)
       )
       stillCurrent()
-      return { checkCurrent: stillCurrent }
+      return { purchaseCommitment: result.purchaseCommitment, checkCurrent: stillCurrent }
     },
     releaseAssessment = async (
       evidence: Parameters<typeof release.verify>[0],

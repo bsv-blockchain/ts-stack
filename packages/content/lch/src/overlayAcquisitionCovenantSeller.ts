@@ -23,6 +23,10 @@ import {
   revenueListingId,
   type RevenueListingDescriptor
 } from '@bsv/sdk/script/templates/RevenueListing'
+import {
+  retainLCHCovenantPurchaseAssessment,
+  type LCHOverlayVerifiedCovenantPurchase
+} from './overlayAcquisitionCovenantProof.js'
 import { snapshotBytes, snapshotLCHRecord } from './boundary.js'
 import { decodeDeterministicCbor, encodeDeterministicCbor } from './cbor.js'
 import { LCH_IRI, LCH_MECHANISMS } from './constants.js'
@@ -89,7 +93,7 @@ export interface LCHOverlayCovenantSellerVerification {
     evidence: OutputEvidence,
     original: { request: OutputPurchasePrepare; terms: OutputSignedPurchaseTerms; seller: string },
     signal: AbortSignal
-  ): Promise<{ checkCurrent(): void }>
+  ): Promise<LCHOverlayVerifiedCovenantPurchase>
   release(
     evidence: OutputReleaseEvidence,
     expected: OutputReleaseBinding,
@@ -572,7 +576,7 @@ export class LCHOverlayCovenantSeller {
       'Purchase names another original request'
     )
     const evidence = { txid: candidate.txid, outputIndex: 0, beef: candidate.beef },
-      verified = this.assessment(
+      verified = retainLCHCovenantPurchaseAssessment(
         await this.ports.verification.purchase(
           evidence,
           {
@@ -584,11 +588,12 @@ export class LCHOverlayCovenantSeller {
         )
       )
     this.check(signal)
-    verified()
+    verified.checkCurrent()
     return {
+      purchaseCommitment: verified.purchaseCommitment,
       checkCurrent: () => {
         this.check(signal)
-        verified()
+        verified.checkCurrent()
       }
     }
   }
@@ -621,7 +626,7 @@ export class LCHOverlayCovenantSeller {
       'Issuance requires the original admitted purchase'
     )
     const evidence = this.purchaseEvidence(custody, material, candidate, release),
-      purchase = this.assessment(
+      verified = retainLCHCovenantPurchaseAssessment(
         await this.ports.verification.purchase(
           evidence.purchase,
           { request: own(original.request), terms: own(original.terms), seller: this.seller },
@@ -639,7 +644,8 @@ export class LCHOverlayCovenantSeller {
           signal
         )
       ),
-      issuedAt = outputU64(this.ports.clock()).toString()
+      issuedAt = outputU64(this.ports.clock()).toString(),
+      purchase = () => verified.checkCurrent()
     lchAssert(
       outputU64(material.selectedAt) <= outputU64(progress.admission!.acceptedAt) &&
         outputU64(progress.admission!.acceptedAt) <= outputU64(release.acceptedAt) &&
@@ -696,6 +702,7 @@ export class LCHOverlayCovenantSeller {
           outputIndex: 0
         },
         txid: candidate.txid,
+        purchaseCommitment: verified.purchaseCommitment,
         satoshis: terms.policy.satoshis.toString(),
         releasePolicy: own(release.policy),
         releaseEvidenceDigest: outputPacketDigest('release-evidence', release),

@@ -27,6 +27,21 @@ the fixed public child derivation for subsequent Script/wallet integration. Thes
 calculations do not themselves establish Bitcoin validity, authorized activation,
 selected-chain settlement, secret usability or native alias recovery.
 
+The LCH alignment batch adds the full commitment to the closed, signed C
+settlement and binds it to reserved results/POTATOES and independent buyer/seller
+purchase-verifier results. Owned synchronous assessments pin both the digest and
+guard through asynchronous issuance. Historical entitlement fingerprints exclude
+unverified current-alias transport fields; those fields neither grant new rights
+nor impose an online dependency on previously verified offline playback.
+
+Local evidence includes the complete LCH suite (38 suites, 252 tests), original
+300-run property profiles, its unchanged coverage gate, packed exports and
+unchanged browser budgets. The new assessment module has complete statement,
+branch, function and line coverage. Four compiled LCH examples use four exact
+package tarballs. Workspace typechecks include the native HTTP proof adapter's
+new return field. This is component evidence: the two-stage Script, immutable
+collector terms, child-wallet and durable multi-alias integration remain open.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

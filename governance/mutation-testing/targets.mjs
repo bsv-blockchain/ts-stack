@@ -3343,6 +3343,7 @@ export function buildMutationTargets(repositoryRoot) {
       ],
       mutate: [
         'src/overlayAcquisitionCovenant.ts',
+        'src/overlayAcquisitionCovenantProof.ts',
         'src/overlayAcquisitionCovenantEntitlement.ts',
         'src/overlayAcquisitionEntitlement.ts',
         'src/keyRecovery.ts'
