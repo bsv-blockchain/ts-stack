@@ -1079,6 +1079,8 @@ test('relocated LCH overlay tests retain their independent application dependenc
     assert.equal(target.packageDirectory, 'packages/content/lch')
     assert.ok(target.additionalInputs.includes('../../application/output-knowledge/src/**'))
     assert.ok(target.additionalInputs.includes('test/overlay-acquisition*.ts'))
+    for (const source of ['RevenueListingProfile.ts', 'RevenueListingKeys.ts'])
+      assert.ok(target.additionalInputs.includes(`../../sdk/src/script/templates/${source}`))
     assert.ok(
       target.runnerOptions.jest.config.testMatch.includes(
         '<rootDir>/test/overlay-acquisition*.test.ts'
