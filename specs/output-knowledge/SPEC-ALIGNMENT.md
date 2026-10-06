@@ -60,6 +60,13 @@ may install different transaction domains without adopting its revenue model.
       full commitment before accepting License/key rights. Retained recovery and
       offline playback never become new preparations. Native action/alias and
       seller integration remain separate open rows.
+- [x] Add an explicitly selected current immutable seller over the complete shared
+      issuance pipeline. Preserve all original historical interfaces/installation
+      IDs and full proof/role/CEK/License checks. New preparation retains/rechecks
+      owned active-stage/installed-height and same-view/Offer/bounded-window
+      guards; retained issuance never applies a new-work expiry predicate.
+      Current buyer/seller synthetic Script and protected playback evidence
+      remains separate from native wallet/alias/admission/HTTP qualification.
 - [ ] Integrate the revised immutable collector extension and current alias chain
       assessment with replacement-family/native buyer and seller recovery.
 - [ ] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias

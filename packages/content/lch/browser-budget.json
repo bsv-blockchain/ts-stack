@@ -20,7 +20,8 @@
     "validateLCHOverlayCovenantProfileWindow",
     "decodeLCHOverlayCovenantProfilePurchaseEvidence",
     "bindLCHOverlayCovenantProfileSettlement",
-    "LCHOverlayCovenantProfileDomain"
+    "LCHOverlayCovenantProfileDomain",
+    "LCHOverlayCovenantProfileSeller"
   ],
   "maximumBytes": {
     "vite": {
@@ -59,7 +60,8 @@
         "validateLCHOverlayCovenantProfileWindow",
         "decodeLCHOverlayCovenantProfilePurchaseEvidence",
         "bindLCHOverlayCovenantProfileSettlement",
-        "LCHOverlayCovenantProfileDomain"
+        "LCHOverlayCovenantProfileDomain",
+        "LCHOverlayCovenantProfileSeller"
       ],
       "maximumBytes": {
         "vite": {
@@ -90,7 +92,8 @@
         "validateLCHOverlayCovenantProfileWindow",
         "decodeLCHOverlayCovenantProfilePurchaseEvidence",
         "bindLCHOverlayCovenantProfileSettlement",
-        "LCHOverlayCovenantProfileDomain"
+        "LCHOverlayCovenantProfileDomain",
+        "LCHOverlayCovenantProfileSeller"
       ],
       "prohibitedExports": [
         "SQLiteProtectedOperationObjectStore",

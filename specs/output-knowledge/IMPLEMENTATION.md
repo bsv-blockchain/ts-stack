@@ -167,6 +167,37 @@ registry/partition controls pass with whole new buyer sources and both required
 current fixture support paths. Native action/alias custody, the current seller,
 combined admission/HTTP examples and final complete qualification remain open.
 
+The separately selected `LCHOverlayCovenantProfileSeller` now shares the complete
+original issuance pipeline with the historical seller. All five original public
+interfaces are retained, as are its installation adapter identity, protected
+material and full proof/role/CEK/License checks. The distinct current installation
+binds immutable C terms and prevents historical custody reinterpretation. New
+preparation retains/rechecks owned active stage, installed height and same-view,
+Offer and bounded preparation-time guards before promising material. Retained
+issuance continues verifying the actual original admitted subject, full commitment
+and release without turning recovery into new funding.
+
+The complete LCH profile passes 280 tests in 43 suites in 150.650 seconds with
+all original and additive 300-case properties at seed3242026. Current/historical
+seller wrappers have complete statement, branch, function and line coverage;
+the complete shared seller core has 100% statements/functions/lines and 98.66%
+branches. Current fixtures execute the exact immutable reserve/activation/purchase
+programs and complete selected-chain/BEEF proofs, then use actual licensed
+ciphertext and protected buyer custody/playback. Stage/height/Offer/preparation
+cutoffs, wrong original candidate, incomplete admission, custody identity and
+retained catalogue-withdrawal/expiry are covered. Historical seller tests remain.
+Full original registry/partition controls, packed consumers and every browser
+entry pass under unchanged controls/budgets; all 72 compiled examples pass
+against 24 exact package tarballs.
+
+Hosted source806f other-package coverage fails six native HTTP integration
+assertions because the coordinator's progress/result/POTATOES omit the mandatory
+listing purchase commitment. This is an implementation gap, not evidence of an
+Actions incident or a native runtime fault. The current coordinator and native
+one-economic-purchase/per-alias custody, financial fences, protected child-wallet
+integration and combined current admission/HTTP/workbench still require work.
+No previous hosted or mutation receipt qualifies these new components.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They

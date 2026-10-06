@@ -1327,7 +1327,11 @@ test('complete covenant buyer retains native fixture closure and the prior compl
 test('complete covenant seller retains independent verification and every inherited fixture input', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
   const target = configured['lch-overlay-covenant-seller']
-  assert.deepEqual(target.mutate, ['src/overlayAcquisitionCovenantSeller.ts'])
+  assert.deepEqual(target.mutate, [
+    'src/overlayAcquisitionCovenantSeller.ts',
+    'src/overlayAcquisitionCovenantSellerCore.ts',
+    'src/overlayAcquisitionCovenantProfileSeller.ts'
+  ])
   assert.deepEqual(
     target.runnerOptions.jest.config.testMatch,
     configured['lch-overlay-covenant'].runnerOptions.jest.config.testMatch

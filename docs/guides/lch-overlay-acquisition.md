@@ -50,7 +50,7 @@ interfaces neither issue a License nor authorize decryption or native alias reus
 Select `LCHOverlayCovenantProfileDomain` for the current buyer described below.
 The existing `LCHOverlayCovenantDomain` and `LCHOverlayCovenantSeller` retain the
 earlier contract for compatibility. Current native buyer/action/alias custody
-and the current seller integration remain open.
+integration remains open. The current seller is described below.
 Paid lookup and ordinary BRC-170 continue using their existing separate paths.
 
 ## Original consent before financial work
@@ -354,19 +354,27 @@ decrypts actual ciphertext after reopen and expiry. The additive property checks
 at least 300 accepted/expired funding-window cases without revoking an already
 verified entitlement. The complete original historical buyer tests and property
 remain unchanged. Neither fixture is mainnet evidence or a native wallet action;
-current seller, actual topical admission and the reusable native alias/action
-owner still need the combined reference workflow before checkpoint acceptance.
+Actual topical admission and the reusable native alias/action owner still need
+the combined current buyer/seller reference workflow before checkpoint acceptance.
 
 ## Concrete covenant seller and retained purchase evidence
 
-The preserved historical `LCHOverlayCovenantSeller` implements the protected
-purchase coordinator's earlier domain port. It is not the current immutable
-profile seller; that separately selected integration remains open. Its installation ID binds seller/issuer identities, verifier and retained
+Select `LCHOverlayCovenantProfileSeller` for the current immutable collector.
+It shares the complete issuance pipeline with the preserved historical
+`LCHOverlayCovenantSeller`, whose interfaces and installation identity remain
+compatible. The distinct current installation prevents either class from
+reinterpreting the other's protected material. Its installation ID binds
+seller/issuer identities, verifier and retained
 revocation-source IDs, authority network, content ceiling and purchase interval.
 The catalogue supplies complete original Header/Offer, descriptor, authorized
 lineage, finite role paths and actual whole-Asset CEKs. Preparation owns these
 bytes, checks consent and key commitments, and independently executes full genesis
 and lineage verification before returning private material and a bounded promise.
+The current lineage port supplies owned active stage and canonical installed
+height with a synchronous same-view guard. The returned preparation guard also
+rechecks height below expiry, the Offer window and the bounded preparation cutoff.
+The coordinator must retain and recheck it immediately before promising material.
+These are new-work checks, never a predicate repeated on retained issuance.
 The coordinator reserves that material and future completion slots before signed
 terms leave the host. CEKs belong to protected off-chain custody and never to
 public lookup, ordinary topical metadata or GASP payloads.
@@ -393,16 +401,20 @@ recipient License and encrypted key grants. It makes no wallet, admission,
 broadcast or HTTP payment call. The coordinator retains the first complete result
 bytes; later recovery returns that same result without another issuance or payment.
 
-The seller component tests use the registered executable, genuine public-fixture
-Bitcoin/BEEF/genesis/purchase evidence and actual buyer decryption. They cover
-missing keys, wrong issuer, fabricated proof, incomplete admission, original-byte
-substitution, detached source bounds, changed or asynchronous guards, finite
-signed-authority archives, catalogue withdrawal and Offer expiry. At least 300
-seeded histories preserve original custody while current access controls issuance.
-The previous native wallet and covenant receipts used the superseded exemplar.
-The revised two-stage frozen Script, immutable revenue extension, fixed-child
-signing/remittance, native per-alias recovery, expiry finality and independent
-selected-chain alias assessment must be integrated and qualified before the C
-profile is advertised. This commitment-binding batch does not qualify that
-replacement or complete the combined native wallet, actual topical-admission,
-authenticated HTTP and workbench acceptance row.
+The current component fixture uses exact pinned immutable reserve-stage,
+activation and purchase programs with complete independently verified synthetic
+Bitcoin/genesis/BEEF history and actual current-buyer decryption. It covers owned
+stage/height, Offer and preparation cutoffs, invalid stage/height/accessor reports,
+distinct custody identities, original purchase association, missing admission and
+retained issuance after catalogue withdrawal and expiry. The additive property
+checks at least 300 accepted/expired preparation windows while preserving the
+original verified obligation and custody. All original historical seller tests
+and the original property remain alongside it through the shared pipeline.
+
+These current portable buyer/seller components do not qualify a native wallet
+action, real topical admission, multi-alias custody or selected-chain release.
+The existing hosted native HTTP integration exposed a missing mandatory purchase
+commitment in coordinator results/POTATOES. The coordinator, native alias/action
+owner, fixed-child signing/remittance, expiry finality and complete authenticated
+HTTP/workbench demonstrations still require current integration and qualification
+before advertising the full C profile or requesting checkpoint-two review.

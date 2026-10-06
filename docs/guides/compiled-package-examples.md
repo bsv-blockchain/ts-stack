@@ -2190,8 +2190,8 @@ export { openCovenantEntitlement, verifyAndPlayCovenantContent }
 
 ## Pure covenant seller with protected coordinator custody
 
-This example preserves the historical seller API; current immutable seller
-integration is separately tracked in specification alignment.
+This example preserves the historical seller API. Select the current immutable
+seller in the example below for the revised collector profile.
 
 The seller adapter verifies the installed full purchase and release boundaries.
 It receives exact retained BEEF from the coordinator during issuance. Wallet,
@@ -2629,4 +2629,27 @@ async function acceptImmutableDelivery(
   return domain.playback(delivered, signal)
 }
 export { prepareImmutableBuyer, acceptImmutableDelivery }
+```
+
+## Current immutable collector seller
+
+The coordinator owns protected candidate/material custody, actual topic admission,
+release selection and first response bytes. The seller performs no wallet or
+admission effects. Its lineage port returns owned stage/height and a synchronous
+same-view guard; the coordinator rechecks preparation before promising material.
+
+```ts compile
+// example-id: immutable-collector-seller
+import {
+  LCHOverlayCovenantProfileSeller,
+  type LCHOverlayCovenantProfileSellerOptions
+} from '@bsv/lch/overlay-covenant'
+import type { PrivatePurchaseDomain as ImmutableSellerDomainPort } from '@bsv/output-knowledge/private/node'
+
+function installImmutableCollectorSeller(
+  options: LCHOverlayCovenantProfileSellerOptions
+): ImmutableSellerDomainPort {
+  return new LCHOverlayCovenantProfileSeller(options)
+}
+export { installImmutableCollectorSeller }
 ```

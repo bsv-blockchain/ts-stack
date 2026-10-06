@@ -277,8 +277,8 @@ complete original funded wallet transaction and released transaction, including
 every actual input Script, and require their identical full purchase commitment.
 The domain checks roles, License, Agreement and recipient-bound keys, then records
 positive entitlement. Historical delivery, reopen and offline playback do not
-repeat a new-funding expiry predicate. Native action/alias custody and the current
-seller remain separate integration work.
+repeat a new-funding expiry predicate. Native action/alias custody remains separate integration work; the current
+seller is described below.
 
 `decodeLCHCollectorRevenue`, `LCHOverlayCovenantDomain` and
 `LCHOverlayCovenantSeller` retain pre-replacement behavior for compatibility.
@@ -286,7 +286,7 @@ They are historical APIs, not current-family adapters.
 The decoder/binding predicates alone do not authenticate the Offer. Neither
 terms validation nor those predicates establish activation ancestry, chain
 currentness, wallet remittance or alias recovery.
-Those separately installed integrations remain open before advertising C.
+The combined native/admission/alias integrations remain open before advertising C.
 
 `decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR
 objects and exact UTF-8 JCS settlement/evidence bytes. It checks the 2 MiB
@@ -370,3 +370,16 @@ the complete future C response before preparation. Catalogue withdrawal or an
 expired new-Offer window cannot erase the retained obligation. See the
 [acquisition guide](../../../docs/guides/lch-overlay-acquisition.md) for installation,
 private custody, recovery and the remaining combined-workflow qualification.
+
+`LCHOverlayCovenantProfileSeller` selects the current immutable collector seller
+and shares the complete original seller pipeline. Install actual complete
+reserve-stage/activation lineage, purchase and release verifiers. Preparation
+returns owned active-stage/installed-height and same-view/time fences; the
+coordinator retains and rechecks them before promising private material. The
+seller retains whole-Asset CEKs and original consent, verifies the actual admitted
+subject and full purchase commitment, authenticates roles and issues exact
+settlement, Agreement and recipient-bound License/key grants. Recovery does not
+apply a new-funding expiry check. Distinct installation identity prevents reuse of
+historical custody under current semantics. Current native alias/action ownership,
+commitment-bearing coordinator packets, actual admission and the complete HTTP
+workbench remain separate qualification requirements.
