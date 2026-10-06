@@ -18,7 +18,12 @@ const declared = tokens.filter(value => value.startsWith('src/') && value.endsWi
 const registered = policy.propertyTesting.suites
   .filter(suite => suite.manifest === manifest)
   .map(suite => path.relative(packageDirectory, path.join(root, suite.path)))
-assert.deepEqual([...declared].sort(), [...registered].sort())
+function comparePaths(left, right) {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+assert.deepEqual([...declared].sort(comparePaths), [...registered].sort(comparePaths))
 
 // Resolve the same installed parser as the wallet's Jest command, without discovering tests.
 const walletRequire = createRequire(path.join(packageDirectory, 'package.json'))
