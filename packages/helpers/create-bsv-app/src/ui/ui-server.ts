@@ -194,24 +194,28 @@ export async function startUiServer(opts: {
   const schema = serializeSchema(existing)
   // the page posts only visible fields; CLI flags fill every other key, so a posted value wins
   const flags = opts.flags ?? {}
-  const seed = seedDraft(existing, flags)
-  // new mode pre-selects every offerable capability, matching the terminal flow
-  if (existing === null && seed.mode === 'new') {
-    const offerable =
-      schema.flatMap(s => s.fields).find(f => f.key === 'capabilities')?.options ?? []
-    seed.capabilities = mergeCapabilityIds(
-      seed.capabilities ?? [],
-      offerable.map(o => o.value)
-    )
-  }
+  const offeredInNew =
+    schema.flatMap(s => s.fields).find(f => f.key === 'capabilities')?.modeOptions?.new ?? []
+  // new mode pre-selects every offered capability, matching the terminal flow
+  const preTick = (d: ConfigDraft): ConfigDraft =>
+    d.mode === 'new'
+      ? {
+          ...d,
+          capabilities: mergeCapabilityIds(
+            d.capabilities ?? [],
+            offeredInNew.map(o => o.value)
+          )
+        }
+      : d
   const html = buildPage({
     schema,
-    seed,
+    seed: preTick(seedDraft(existing, flags)),
     modeSeeds: {
-      new: seedDraft(existing, { ...flags, mode: 'new' }),
+      new: preTick(seedDraft(existing, { ...flags, mode: 'new' })),
       add: seedDraft(existing, { ...flags, mode: 'add' })
     },
     flags,
+    targetDir,
     included,
     sessionToken,
     scriptNonce

@@ -18,7 +18,8 @@ export type ConfigProvider = (ctx: {
   flags: ConfigDraft
 }) => Promise<ProjectConfig>
 
-function optionsFor(
+/** Options offered for `field` in `mode`; the `--ui` page offers the same per mode. */
+export function optionsFor(
   field: ConfigField,
   existing: ProjectManifest | null,
   mode: 'new' | 'add'

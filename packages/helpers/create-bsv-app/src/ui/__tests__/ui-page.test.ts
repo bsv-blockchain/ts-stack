@@ -1,7 +1,8 @@
 import { describe, expect, test } from '@jest/globals'
-import { serializeSchema, buildPage, PAGE_DRAFT_SRC } from '../ui-page'
-import type { ProjectManifest } from '../../config/project-manifest'
-import { seedDraft } from '../../config/draft'
+import { serializeSchema, buildPage, PAGE_DRAFT_SRC, PAGE_COMMAND_SRC } from '../ui-page'
+import { remainingCapabilityIds, type ProjectManifest } from '../../config/project-manifest'
+import { seedDraft, type ConfigDraft } from '../../config/draft'
+import { listCapabilities } from '../../registry'
 
 describe('serializeSchema', () => {
   test('fresh (new mode): capabilities options include wallet-login but NOT wallet-connect', () => {
@@ -138,10 +139,28 @@ describe('buildPage', () => {
 })
 
 type Draft = Record<string, unknown>
-const { initialDraft, visibleDraft } = new Function(`${PAGE_DRAFT_SRC}
-return { initialDraft: initialDraft, visibleDraft: visibleDraft }`)() as {
-  initialDraft: (schema: unknown, seed: Draft) => Draft
-  visibleDraft: (schema: unknown, draft: Draft, hidden?: Draft) => Draft
+const { initialDraft, visibleDraft, payloadOf, modeDrafts, fieldOptions } =
+  new Function(`${PAGE_DRAFT_SRC}
+return { initialDraft, visibleDraft, payloadOf, modeDrafts, fieldOptions }`)() as {
+    initialDraft: (schema: unknown, seed: Draft) => Draft
+    visibleDraft: (schema: unknown, draft: Draft, hidden?: Draft) => Draft
+    payloadOf: (
+      schema: unknown,
+      draft: Draft,
+      modeSeeds: Record<string, Draft>,
+      seed: Draft
+    ) => Draft
+    modeDrafts: (
+      schema: unknown,
+      seed: Draft,
+      modeSeeds: Record<string, Draft>
+    ) => Record<string, Draft>
+    fieldOptions: (field: unknown, mode: string) => Array<{ value: string }>
+  }
+const { buildCommand, buildTokens } = new Function(`${PAGE_COMMAND_SRC}
+return { buildCommand, buildTokens }`)() as {
+  buildCommand: (d: Draft, dir: string) => string
+  buildTokens: (d: Draft, dir: string) => Array<{ t: string }>
 }
 
 /** The page's in-memory draft for a fresh new-mode run (schema defaults, all capabilities ticked). */
@@ -261,7 +280,110 @@ describe('page wiring', () => {
     })
     expect(withFlags).toContain('window.__FLAGS__ = {"bsvDir":"lib/bsv"};')
     expect(withFlags).toContain('Object.assign({}, FLAGS, payload())')
-    expect(withFlags.split('buildCommand(commandDraft())').length - 1).toBe(1)
-    expect(withFlags.split('buildTokens(commandDraft())').length - 1).toBe(1)
+    expect(withFlags.split('buildCommand(commandDraft(), TARGET_DIR)').length - 1).toBe(1)
+    expect(withFlags.split('buildTokens(commandDraft(), TARGET_DIR)').length - 1).toBe(1)
+  })
+
+  test('embeds the target directory for the command', () => {
+    const page = buildPage({ schema: [], seed: {}, targetDir: '../proj' })
+    expect(page).toContain('window.__TARGET_DIR__ = "../proj";')
+  })
+
+  test('payload() uses the per-mode seeds', () => {
+    expect(html).toContain(
+      'function payload() { return payloadOf(SCHEMA, draft, MODE_SEEDS, SEED); }'
+    )
+  })
+
+  test('a draft edit clears the last Generate error, so the live plan error shows', () => {
+    // every edit handler re-fetches the plan
+    expect(html).toMatch(/function fetchPlan\(\) \{\n\s*state\.error = '';/u)
+  })
+})
+
+/** The server's per-mode seeds for `flags`, as `startUiServer` embeds them. */
+function modeSeedsFor(m: ProjectManifest | null, flags: ConfigDraft): Record<string, Draft> {
+  return {
+    new: seedDraft(m, { ...flags, mode: 'new' }) as Draft,
+    add: seedDraft(m, { ...flags, mode: 'add' }) as Draft
+  }
+}
+
+describe('modeDrafts', () => {
+  test('new-only fields start from the new-mode seed, so flags survive flipping a project to New', () => {
+    const flags = { name: 'flagged', network: 'main' } as const
+    const schema = serializeSchema(manifest)
+    const drafts = modeDrafts(
+      schema,
+      seedDraft(manifest, flags) as Draft,
+      modeSeedsFor(manifest, flags)
+    )
+    expect(drafts.new).toMatchObject({ mode: 'new', name: 'flagged', network: 'main' })
+    expect(drafts.add).toMatchObject({ mode: 'add', capabilities: [] })
+  })
+})
+
+describe('payloadOf', () => {
+  test('hidden fields take the seed for the current mode, not the initial seed', () => {
+    const m: ProjectManifest = { ...manifest, starter: { id: 'custom', kind: 'generated' } }
+    const flags = { mode: 'new', starter: 'meter' } as const
+    const payload = payloadOf(
+      serializeSchema(m),
+      { mode: 'add', capabilities: [] },
+      modeSeedsFor(m, flags),
+      seedDraft(m, flags) as Draft
+    )
+    expect(payload).toEqual({ mode: 'add', capabilities: [] })
+  })
+})
+
+describe('fieldOptions', () => {
+  test('capabilities offer the terminal options for each mode', () => {
+    const m: ProjectManifest = { ...manifest, capabilities: ['wallet-login'] }
+    const caps = serializeSchema(m)
+      .flatMap(s => s.fields)
+      .find(f => f.key === 'capabilities')
+    const all = listCapabilities()
+    const values = (mode: string): string[] => fieldOptions(caps, mode).map(o => o.value)
+    expect(values('new')).toEqual(all.filter(c => c.defaultSelected !== true).map(c => c.id))
+    expect(values('add')).toEqual(
+      remainingCapabilityIds(
+        m,
+        all.map(c => c.id)
+      )
+    )
+    expect(values('add')).toContain('wallet-connect')
+    expect(values('add')).not.toContain('wallet-login')
+  })
+})
+
+describe('command', () => {
+  const text = (d: Draft, dir: string): string =>
+    buildTokens(d, dir)
+      .map(t => t.t)
+      .join('')
+      .replace(/\s+/gu, ' ')
+      .trim()
+
+  test('add mode keeps the install, glue and package-manager flags', () => {
+    const d = {
+      mode: 'add',
+      packageManager: 'pnpm',
+      install: false,
+      glue: false,
+      capabilities: ['wallet-login']
+    }
+    const expected =
+      'npx create-bsv-app --mode add --package-manager pnpm --skip-install --no-glue --capabilities wallet-login --yes'
+    expect(buildCommand(d, '.')).toBe(expected)
+    expect(text(d, '.')).toBe(expected)
+  })
+
+  test('names a non-default target directory with --dir, quoted like --name', () => {
+    const d = { mode: 'new', name: 'demo' }
+    const expected = 'npx create-bsv-app --mode new --dir "../proj" --name "demo" --yes'
+    expect(buildCommand(d, '../proj')).toBe(expected)
+    expect(text(d, '../proj')).toBe(expected)
+    expect(buildCommand(d, '.')).toBe('npx create-bsv-app --mode new --name "demo" --yes')
   })
 })

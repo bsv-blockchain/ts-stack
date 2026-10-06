@@ -1,23 +1,27 @@
-import { configSchema, type ConfigSchema } from '../config/schema.js'
-import { listCapabilities } from '../registry.js'
-import { remainingCapabilityIds, type ProjectManifest } from '../config/project-manifest.js'
-export function serializeSchema(existing: ProjectManifest | null): ConfigSchema {
-  const allIds = listCapabilities().map(c => c.id)
-  const defaultIds = new Set(
-    listCapabilities()
-      .filter(c => c.defaultSelected === true)
-      .map(c => c.id)
-  )
-  const offerable =
-    existing === null
-      ? allIds.filter(id => !defaultIds.has(id))
-      : remainingCapabilityIds(existing, allIds)
+import {
+  configSchema,
+  type ConfigField,
+  type ConfigSection,
+  type FieldOption
+} from '../config/schema.js'
+import type { ProjectManifest } from '../config/project-manifest.js'
+import { optionsFor } from '../prompts.js'
+
+/** A field as sent to the page; `modeOptions` are the options offered in each mode. */
+export type PageField = ConfigField & { modeOptions?: Record<'new' | 'add', FieldOption[]> }
+export type PageSchema = Array<Omit<ConfigSection, 'fields'> & { fields: PageField[] }>
+
+/** The config schema with capabilities narrowed per mode, as the terminal offers them. */
+export function serializeSchema(existing: ProjectManifest | null): PageSchema {
   return configSchema.map(section => ({
     ...section,
     fields: section.fields.map(field => {
       if (field.key !== 'capabilities') return { ...field }
-      const options = (field.options ?? []).filter(o => offerable.includes(o.value))
-      return { ...field, options }
+      const modeOptions = {
+        new: optionsFor(field, existing, 'new'),
+        add: optionsFor(field, existing, 'add')
+      }
+      return { ...field, options: modeOptions[existing === null ? 'new' : 'add'], modeOptions }
     })
   }))
 }
@@ -126,6 +130,10 @@ const LOGO_SVG =
  * `visibleDraft(schema, draft, hidden)`: the visible schema fields, in schema order; a hidden
  * field takes `hidden[key]` (the server's seed for the mode) for later `when` checks, never the
  * stale page value, as in the terminal where hidden fields only ever hold seed values.
+ * `payloadOf(schema, draft, modeSeeds, seed)`: what the page renders and submits.
+ * `modeDrafts(schema, seed, modeSeeds)`: one draft per mode, each from that mode's seed, so a
+ * field starts from the flags and seed of the mode it is shown in, as in the terminal.
+ * `fieldOptions(field, mode)`: the options offered for a field in a mode.
  */
 export const PAGE_DRAFT_SRC = String.raw`function whenMatches(when, draft) {
   if (!when) return true;
@@ -156,16 +164,79 @@ function visibleDraft(schema, draft, hidden) {
     });
   });
   return out;
+}
+function payloadOf(schema, draft, modeSeeds, seed) {
+  return visibleDraft(schema, draft, modeSeeds[draft.mode] || seed);
+}
+function modeDrafts(schema, seed, modeSeeds) {
+  var drafts = {};
+  ['new', 'add'].forEach(function (m) {
+    drafts[m] = initialDraft(schema, modeSeeds[m] || seed);
+    drafts[m].mode = m;
+  });
+  return drafts;
+}
+function fieldOptions(f, mode) {
+  return (f.modeOptions && f.modeOptions[mode]) || f.options || [];
+}`
+
+/**
+ * Client-side source of the copyable command: `buildCommand(d, dir)` and its coloured
+ * `buildTokens(d, dir)`; `dir` is the target directory, omitted when it is `.`.
+ */
+export const PAGE_COMMAND_SRC = String.raw`function buildCommand(d, dir) {
+  var p = ['npx create-bsv-app', '--mode', d.mode || 'new'];
+  if (dir && dir !== '.') p.push('--dir', JSON.stringify(dir));
+  if ((d.mode || 'new') === 'new') {
+    if (d.name) p.push('--name', JSON.stringify(d.name));
+    if (d.starter) p.push('--starter', d.starter);
+    if (d.frontend && d.frontend !== 'none') p.push('--frontend', d.frontend);
+    if (d.frontend === 'react' && d.frontendVariant) p.push('--variant', d.frontendVariant);
+    if (d.backend && d.backend !== 'none') p.push('--backend', d.backend);
+    if (d.bsvDir) p.push('--bsv-dir', d.bsvDir);
+    if (d.network) p.push('--network', d.network);
+  }
+  if (d.packageManager) p.push('--package-manager', d.packageManager);
+  if (d.install === false) p.push('--skip-install');
+  /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false */
+  if (d.glue === false) p.push('--no-glue');
+  if (d.capabilities && d.capabilities.length) p.push('--capabilities', d.capabilities.join(','));
+  p.push('--yes');
+  return p.join(' ');
+}
+function buildTokens(d, dir) {
+  var FLAG = '#7fd6a0', VAL = '#c8d0da', STR = '#e0b25a';
+  var t = [{ t: 'npx create-bsv-app', c: VAL }];
+  function flag(f, v, col) { t.push({ t: ' ' + f + ' ', c: FLAG }); if (v !== undefined) t.push({ t: v, c: col || VAL }); }
+  flag('--mode', d.mode || 'new');
+  if (dir && dir !== '.') flag('--dir', '"' + dir + '"', STR);
+  if ((d.mode || 'new') === 'new') {
+    if (d.name) flag('--name', '"' + d.name + '"', STR);
+    if (d.starter) flag('--starter', d.starter);
+    if (d.frontend && d.frontend !== 'none') flag('--frontend', d.frontend);
+    if (d.frontend === 'react' && d.frontendVariant) flag('--variant', d.frontendVariant);
+    if (d.backend && d.backend !== 'none') flag('--backend', d.backend);
+    if (d.bsvDir) flag('--bsv-dir', d.bsvDir);
+    if (d.network) flag('--network', d.network);
+  }
+  if (d.packageManager) flag('--package-manager', d.packageManager);
+  if (d.install === false) flag('--skip-install');
+  /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false */
+  if (d.glue === false) flag('--no-glue');
+  if (d.capabilities && d.capabilities.length) flag('--capabilities', d.capabilities.join(','));
+  flag('--yes');
+  return t;
 }`
 
 const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static page (no dependencies).
- * Reads window.__SCHEMA__ / __SEED__ / __MODE_SEEDS__ / __FLAGS__ / __INCLUDED__ and POSTs the visible fields to /generate.
+ * Reads window.__SCHEMA__ / __SEED__ / __MODE_SEEDS__ / __FLAGS__ / __TARGET_DIR__ / __INCLUDED__ and POSTs the visible fields to /generate.
  * Optional globals: __ACCENT__ (hex), __CMD_LABEL__ (string), __DEMO__ (bool, skips server). */
 (function () {
   var SCHEMA = window.__SCHEMA__ || [];
   var SEED = window.__SEED__ || {};
   var MODE_SEEDS = window.__MODE_SEEDS__ || {};
   var FLAGS = window.__FLAGS__ || {};
+  var TARGET_DIR = window.__TARGET_DIR__ || '.';
   var INCLUDED = window.__INCLUDED__ || [{ label: '@bsv/sdk' }, { label: 'AGENTS.md' }];
   var SESSION_TOKEN = window.__SESSION_TOKEN__ || '';
   var ACCENT = window.__ACCENT__ || '#2196F3';
@@ -193,7 +264,13 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
   };
 
   /* schema fields only; the server re-applies CLI flags and the existing manifest */
-  var draft = initialDraft(SCHEMA, SEED);
+  var drafts = modeDrafts(SCHEMA, SEED, MODE_SEEDS);
+  var draft = drafts[SEED.mode] || drafts.new;
+  /* switching mode switches to that mode's draft */
+  function setField(key, value) {
+    if (key === 'mode' && drafts[value]) draft = drafts[value];
+    else draft[key] = value;
+  }
 
   function el(tag, attrs, kids) {
     var n = document.createElement(tag);
@@ -217,58 +294,18 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
   ${PAGE_DRAFT_SRC}
 
   /* only fields visible under the current draft are rendered, previewed or submitted */
-  function payload() { return visibleDraft(SCHEMA, draft, MODE_SEEDS[draft.mode] || SEED); }
+  function payload() { return payloadOf(SCHEMA, draft, MODE_SEEDS, SEED); }
   function shown(f) { return f.key in payload(); }
   /* the command reflects CLI flags the same way the server merges them */
   function commandDraft() { return Object.assign({}, FLAGS, payload()); }
 
   /* ---- command ---- */
-  function buildCommand(d) {
-    var p = ['npx create-bsv-app', '--mode', d.mode || 'new'];
-    if ((d.mode || 'new') === 'new') {
-      if (d.name) p.push('--name', JSON.stringify(d.name));
-      if (d.starter) p.push('--starter', d.starter);
-      if (d.frontend && d.frontend !== 'none') p.push('--frontend', d.frontend);
-      if (d.frontend === 'react' && d.frontendVariant) p.push('--variant', d.frontendVariant);
-      if (d.backend && d.backend !== 'none') p.push('--backend', d.backend);
-      if (d.bsvDir) p.push('--bsv-dir', d.bsvDir);
-      if (d.network) p.push('--network', d.network);
-    }
-    if (d.packageManager) p.push('--package-manager', d.packageManager);
-    if (d.install === false) p.push('--skip-install');
-    /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false */
-    if (d.glue === false) p.push('--no-glue');
-    if (d.capabilities && d.capabilities.length) p.push('--capabilities', d.capabilities.join(','));
-    p.push('--yes');
-    return p.join(' ');
-  }
-
-  function buildTokens(d) {
-    var FLAG = '#7fd6a0', VAL = '#c8d0da', STR = '#e0b25a';
-    var t = [{ t: 'npx create-bsv-app', c: VAL }];
-    function flag(f, v, col) { t.push({ t: ' ' + f + ' ', c: FLAG }); if (v !== undefined) t.push({ t: v, c: col || VAL }); }
-    flag('--mode', d.mode || 'new');
-    if ((d.mode || 'new') === 'new') {
-      if (d.name) flag('--name', '"' + d.name + '"', STR);
-      if (d.starter) flag('--starter', d.starter);
-      if (d.frontend && d.frontend !== 'none') flag('--frontend', d.frontend);
-      if (d.frontend === 'react' && d.frontendVariant) flag('--variant', d.frontendVariant);
-      if (d.backend && d.backend !== 'none') flag('--backend', d.backend);
-      if (d.bsvDir) flag('--bsv-dir', d.bsvDir);
-      if (d.network) flag('--network', d.network);
-    }
-    if (d.packageManager) flag('--package-manager', d.packageManager);
-    if (d.install === false) flag('--skip-install');
-    /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false */
-    if (d.glue === false) flag('--no-glue');
-    if (d.capabilities && d.capabilities.length) flag('--capabilities', d.capabilities.join(','));
-    flag('--yes');
-    return t;
-  }
+  ${PAGE_COMMAND_SRC}
 
   /* RECONCILIATION 3: real impact via /plan — computeFiles() deleted */
   var planTimer = null;
   function fetchPlan() {
+    state.error = ''; /* every draft edit re-plans: a past Generate error no longer applies */
     if (window.__DEMO__) { state.plan = []; return; }
     clearTimeout(planTimer);
     planTimer = setTimeout(function () {
@@ -322,7 +359,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
       var seg = el('div', { class: 'seg' });
       (f.options || []).forEach(function (o) {
         var b = el('button', { class: 'seg-btn' + (draft[f.key] === o.value ? ' on' : ''), text: o.label });
-        b.onclick = function () { draft[f.key] = o.value; renderForm(); renderRail(); fetchPlan(); };
+        b.onclick = function () { setField(f.key, o.value); renderForm(); renderRail(); fetchPlan(); };
         seg.appendChild(b);
       });
       return seg;
@@ -335,7 +372,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
         s.appendChild(opt);
       });
       if (draft[f.key] === undefined && f.options && f.options.length) draft[f.key] = f.options[0].value;
-      s.onchange = function () { draft[f.key] = s.value; renderForm(); renderRail(); fetchPlan(); };
+      s.onchange = function () { setField(f.key, s.value); renderForm(); renderRail(); fetchPlan(); };
       return s;
     }
     if (f.type === 'toggle') {
@@ -348,7 +385,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     }
     // multiselect
     var box = el('div');
-    (f.options || []).forEach(function (o) {
+    fieldOptions(f, draft.mode).forEach(function (o) {
       var on = (draft[f.key] || []).indexOf(o.value) !== -1;
       var txt = el('span', {}, [el('span', { class: 'ot', text: o.label })]);
       if (o.hint) txt.appendChild(el('span', { class: 'oh', text: o.hint }));
@@ -428,7 +465,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     rail.appendChild(el('div', { class: 'label', text: CMD_LABEL }));
 
     var term = el('div', { class: 'term' }, [el('span', { class: 'prompt', text: '$ ' })]);
-    buildTokens(commandDraft()).forEach(function (tk) { var s = el('span', { text: tk.t }); s.style.color = tk.c; term.appendChild(s); });
+    buildTokens(commandDraft(), TARGET_DIR).forEach(function (tk) { var s = el('span', { text: tk.t }); s.style.color = tk.c; term.appendChild(s); });
     rail.appendChild(term);
 
     if (INCLUDED.length) {
@@ -496,7 +533,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
   }
 
   function copyCmd() {
-    try { navigator.clipboard && navigator.clipboard.writeText(buildCommand(commandDraft())); } catch (e) {}
+    try { navigator.clipboard && navigator.clipboard.writeText(buildCommand(commandDraft(), TARGET_DIR)); } catch (e) {}
     state.copied = true; renderRail();
     clearTimeout(copyCmd._t);
     copyCmd._t = setTimeout(function () { state.copied = false; renderRail(); }, 1500);
@@ -555,6 +592,8 @@ export function buildPage(opts: {
   modeSeeds?: { new: unknown; add: unknown }
   /** CLI flags given alongside `--ui`, merged under the payload for the command preview. */
   flags?: unknown
+  /** Target directory, as given on the CLI, for the command preview. */
+  targetDir?: string
   included?: Array<{ label: string }>
   accent?: string
   commandLabel?: string
@@ -580,6 +619,9 @@ export function buildPage(opts: {
     ';\n' +
     'window.__FLAGS__ = ' +
     scriptJson(opts.flags ?? {}) +
+    ';\n' +
+    'window.__TARGET_DIR__ = ' +
+    scriptJson(opts.targetDir ?? '.') +
     ';\n' +
     'window.__INCLUDED__ = ' +
     scriptJson(opts.included ?? []) +

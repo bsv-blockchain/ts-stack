@@ -149,18 +149,23 @@ function pageSeed(html: string): Draft {
   return pageGlobal(html, '__SEED__')
 }
 
-const { initialDraft, visibleDraft } = new Function(`${PAGE_DRAFT_SRC}
-return { initialDraft: initialDraft, visibleDraft: visibleDraft }`)() as {
-  initialDraft: (schema: unknown, seed: Draft) => Draft
-  visibleDraft: (schema: unknown, draft: Draft, hidden?: Draft) => Draft
+const { modeDrafts, payloadOf } = new Function(`${PAGE_DRAFT_SRC}
+return { modeDrafts, payloadOf }`)() as {
+  modeDrafts: (
+    schema: unknown,
+    seed: Draft,
+    modeSeeds: Record<string, Draft>
+  ) => Record<string, Draft>
+  payloadOf: (schema: unknown, draft: Draft, modeSeeds: Record<string, Draft>, seed: Draft) => Draft
 }
 
-/** What the shipped page posts after the user applies `edit` to its initial draft. */
+/** What the shipped page posts after the user picks `edit.mode` (if any) and applies `edit`. */
 function pagePayload(html: string, edit: Draft = {}): Draft {
   const schema = pageGlobal(html, '__SCHEMA__')
-  const draft = { ...initialDraft(schema, pageSeed(html)), ...edit }
+  const seed = pageSeed(html)
   const seeds = pageGlobal(html, '__MODE_SEEDS__') as Record<string, Draft>
-  return visibleDraft(schema, draft, seeds[String(draft.mode)])
+  const draft = { ...modeDrafts(schema, seed, seeds)[String(edit.mode ?? seed.mode)], ...edit }
+  return payloadOf(schema, draft, seeds, seed)
 }
 
 test('GET / in new mode seeds every offerable capability as selected', async () => {
@@ -584,8 +589,12 @@ test('flipping an existing project to new mode does not carry its targets or bsv
     deps: { runCommand: noopRun }
   })
   try {
-    const body = pagePayload(await (await fetch(srv.url)).text(), {
+    const html = await (await fetch(srv.url)).text()
+    // as with --mode new in the terminal, the name starts empty rather than from the manifest
+    expect(pagePayload(html, { mode: 'new' }).name).toBeUndefined()
+    const body = pagePayload(html, {
       mode: 'new',
+      name: 'fresh',
       backend: 'express',
       capabilities: ['wallet-connect']
     })
@@ -623,6 +632,59 @@ test('add mode without a detectable project reports the actual config error', as
     expect(gen.status).toBe(400)
     expect(await gen.json()).toEqual({ error: 'Invalid config: name is required' })
     expect(runCommand).not.toHaveBeenCalled()
+  } finally {
+    srv.close()
+  }
+})
+
+test('flipping a project to New applies new-only CLI flags, as --mode new does', async () => {
+  const srv = await startUiServer({
+    existing: reactManifest,
+    targetDir: dir,
+    flags: { network: 'main' },
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const body = pagePayload(await (await fetch(srv.url)).text(), { mode: 'new' })
+    expect(body).toMatchObject({ mode: 'new', network: 'main' })
+  } finally {
+    srv.close()
+  }
+})
+
+test('new mode pre-ticks every offered capability even when a project exists', async () => {
+  const srv = await startUiServer({
+    existing: reactManifest,
+    targetDir: dir,
+    flags: { mode: 'new' },
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const html = await (await fetch(srv.url)).text()
+    const offered =
+      serializeSchema(null)
+        .flatMap(s => s.fields)
+        .find(f => f.key === 'capabilities')
+        ?.options?.map(o => o.value) ?? []
+    expect(offered.length).toBeGreaterThan(0)
+    const seeds = pageGlobal(html, '__MODE_SEEDS__') as Record<string, Draft>
+    expect(pageSeed(html).capabilities).toEqual(expect.arrayContaining(offered))
+    expect(seeds.new.capabilities).toEqual(expect.arrayContaining(offered))
+    expect(seeds.add.capabilities).toEqual([]) // add mode never pre-ticks
+  } finally {
+    srv.close()
+  }
+})
+
+test('the page gets the target directory for the copied command', async () => {
+  const srv = await startUiServer({
+    existing: null,
+    targetDir: '../proj',
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const html = await (await fetch(srv.url)).text()
+    expect(html).toContain('window.__TARGET_DIR__ = "../proj";')
   } finally {
     srv.close()
   }
