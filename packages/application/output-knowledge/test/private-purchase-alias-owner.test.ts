@@ -439,7 +439,10 @@ it('rolls back every failure-result slot when its final reserved row conflicts i
 })
 
 it('uses a separately bounded native batch above the protocol packet limit for both first reservation and terminal failure', () => {
-  const f = purchaseAliasOwnerFixture(8, 24 * 1048576)
+  // The fixture reserves 4 MiB and permits 64 KiB of local batch framing.
+  // Exercise a valid installed bound above the protocol ceiling. The complete
+  // native HTTP fixture separately uses a 24 MiB batch in a 32 MiB domain.
+  const f = purchaseAliasOwnerFixture(8, 4 * 1048576 + 32768)
   f.prepare()
   const candidate = f.f.variant(27),
     retained = f.retain(candidate)

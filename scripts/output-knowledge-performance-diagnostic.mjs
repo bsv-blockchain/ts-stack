@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const MAX_LOG = 16 * 1024 * 1024
 const MAX_PROFILE = 64 * 1024 * 1024
+const CPU_SAMPLING_INTERVAL_MICROSECONDS = 10000
 const markers = [
   'Segmentation fault',
   'Bus error',
@@ -367,7 +368,7 @@ async function main() {
       .update(JSON.stringify([...frozen]))
       .digest('hex'),
     profilingOverheadIncluded: true,
-    samplingIntervalMicroseconds: 1000,
+    samplingIntervalMicroseconds: CPU_SAMPLING_INTERVAL_MICROSECONDS,
     fullFunctionalQualified: false,
     fullCampaignQualified: false
   }
@@ -429,7 +430,7 @@ async function main() {
     measured = await supervise(
       [
         '--cpu-prof',
-        '--cpu-prof-interval=1000',
+        `--cpu-prof-interval=${CPU_SAMPLING_INTERVAL_MICROSECONDS}`,
         `--cpu-prof-dir=${directory}`,
         '--cpu-prof-name=property.cpuprofile',
         '--experimental-vm-modules',

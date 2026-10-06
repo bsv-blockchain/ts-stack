@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.0'
+version: '1.8.1'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -32,7 +32,11 @@ The repository-only diagnostic retains the original minimum 300 runs, seed
 3242026, replay-free profile, 150-second interruption-as-failure budget and
 180-second case deadline. It first checks the built-in SQLite driver, binds the
 complete tracked source, built SDK/wallet/application bytes and Node binary, and
-runs one serial property with coverage and CPU profiling. Every child has a
+runs one serial property with coverage and CPU profiling. The diagnostic uses a
+fixed 10,000-microsecond sampling interval, recorded in its identity, to reduce
+profile size within the unchanged 64 MiB file bound. Oversized profiles are
+refused before their contents are read. This is a sampling choice for diagnosis;
+it changes no application property or qualification control. Every child has a
 finite deadline within an immutable 900-second calendar and Boolean fault, case-timeout and output triage. Cancellation
 and every exit drain the complete process group through bounded TERM/KILL.
 Timing extraction requires unchanged inputs, all guards clear and an absent
