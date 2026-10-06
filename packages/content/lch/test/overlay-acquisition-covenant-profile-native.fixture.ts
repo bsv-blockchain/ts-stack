@@ -27,6 +27,7 @@ import { NodeProtectedPayloadCodec } from '../../../application/output-knowledge
 import { SDKPrivateReleaseEvidence } from '../../../application/output-knowledge/src/private/SDKPrivateReleaseEvidence.js'
 import { RevenueListingProfileLineageVerifier } from '../../../application/output-knowledge/src/revenue-listing/RevenueListingProfileLineageVerifier.js'
 import { RevenueListingProfilePurchaseVerifier } from '../../../application/output-knowledge/src/revenue-listing/RevenueListingProfilePurchaseVerifier.js'
+import type { VerificationContext } from '../../../application/output-knowledge/src/ports.js'
 import {
   assembleLineage,
   lineageLimits
@@ -60,6 +61,23 @@ afterEach(async () => {
   await [...cleanups].reduce((pending, close) => pending.then(close), Promise.resolve())
   cleanups.clear()
 })
+
+/** Bind the selected verification premises, not a fresh computation's clock or
+ * deadline. Every actual verification still receives its finite time budget. */
+function candidateSelection(context: VerificationContext): string {
+  return canonicalOutputJSON({
+    id: context.id,
+    partition: context.partition,
+    generation: context.generation,
+    view: context.view,
+    policyDigest: context.policyDigest,
+    limits: {
+      bytes: context.limits.bytes,
+      transactions: context.limits.transactions,
+      dependencies: context.limits.dependencies
+    }
+  })
+}
 
 /** Current immutable reserve-stage/activation/purchase Scripts and actual encrypted
  * protected buyer custody, using the historical fixture ONLY for disclosed mature
@@ -366,10 +384,14 @@ export async function lchNativeCovenantProfileFixture(
   }
   let candidateChecks = 0
   let now = '22',
-    allowed = true
+    allowed = true,
+    verificationGeneration = '0'
   const counts = { preparation: 0, purchase: 0, release: 0 },
     selectedChains = selected?.chains ?? chains,
-    selectedContext = () => selected?.context ?? bitcoinContext(),
+    selectedContext = () => ({
+      ...(selected?.context ?? bitcoinContext()),
+      generation: verificationGeneration
+    }),
     lineageVerifier = new RevenueListingProfileLineageVerifier(family, selectedChains),
     purchaseVerifier = new RevenueListingProfilePurchaseVerifier(family, selectedChains),
     releaseVerifier = new SDKPrivateReleaseEvidence(selectedChains),
@@ -395,6 +417,7 @@ export async function lchNativeCovenantProfileFixture(
               ) => {
                 candidateChecks++
                 const context = selectedContext(),
+                  selection = candidateSelection(context),
                   verified = await purchaseVerifier.verify(candidate, original, context, signal)
                 outputAssert(
                   verified.status === 'verified',
@@ -403,7 +426,7 @@ export async function lchNativeCovenantProfileFixture(
                 const checkCurrent = () => {
                   guard()
                   outputAssert(
-                    canonicalOutputJSON(selectedContext()) === canonicalOutputJSON(context),
+                    candidateSelection(selectedContext()) === selection,
                     'Candidate verification context changed',
                     'context-changed'
                   )
@@ -524,6 +547,9 @@ export async function lchNativeCovenantProfileFixture(
     },
     setAccess: (value: boolean) => {
       allowed = value
+    },
+    setVerificationGeneration: (value: string) => {
+      verificationGeneration = value
     },
     purchaseBEEF: () => Beef.fromBinaryStrict(decodeOutputBytes(submission.beef, 2097152))
   }

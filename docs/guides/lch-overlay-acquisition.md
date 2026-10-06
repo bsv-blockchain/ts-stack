@@ -342,6 +342,14 @@ License, record entitlement, or authorize playback. Reported aliases require the
 buyer's separate fresh selected-chain verification before use as currentness;
 the original paid candidate and License remain unchanged.
 
+The native candidate fixture binds the verification identity, partition,
+generation, selected view, policy and resource bounds, together with current
+access. Refreshing the computation clock and deadline does not change those
+selected premises. Every actual Script verification still receives and honors
+its finite deadline. A changed verification generation or selected view refuses
+the returned candidate guard; refreshing a work budget never supplies a new
+chain or permission verdict.
+
 The release port separately assesses the originally selected release policy.
 The purchase port additionally returns the independently verified full 32-byte
 `purchaseCommitment`, calculated from the authenticated input-zero preimage

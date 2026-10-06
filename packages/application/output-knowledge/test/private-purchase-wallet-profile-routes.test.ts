@@ -607,6 +607,7 @@ it.each(['auto', 'legacy'] as const)(
               .spendable
           ).toBe(true)
         }
+        expect(recipient.broadcast).not.toHaveBeenCalled()
         // Complete the native local journal through the public API. This owned,
         // synthetic response performs no network call and proves no mining.
         jest.spyOn(reopened.active, 'getServices').mockReturnValue(reopened.services)
@@ -664,7 +665,8 @@ it.each(['auto', 'legacy'] as const)(
         ).not.toContain(outpoint)
         await second.close()
         expect(canonicalOutputJSON(args.outputs[0].paymentRemittance)).toContain('brc197')
-        expect(recipient.broadcast).not.toHaveBeenCalled()
+        expect(recipient.broadcast).toBe(syntheticPost)
+        expect(recipient.broadcast).toHaveBeenCalledTimes(1)
         await reopened.close()
       }
       expect(f.native.broadcast).not.toHaveBeenCalled()

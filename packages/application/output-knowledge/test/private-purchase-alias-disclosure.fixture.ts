@@ -7,15 +7,17 @@ import { purchaseAliasCoordinatorFixture } from './private-purchase-alias-coordi
 
 /** Actual native HTTP custody fence with controlled domain/admission/chain
  * premises. The independent SDK corpus separately exercises genuine SPV. */
-export async function purchaseAliasDisclosureFixture() {
+export async function purchaseAliasDisclosureFixture(options: { prepareOnly?: boolean } = {}) {
   const f = purchaseAliasCoordinatorFixture()
   try {
     await f.prepare()
     const paid = f.f.f.variant(70)
-    await f.submit(paid)
-    f.setMined(true)
     const selected = f.f.f.variant(71)
-    await f.submit(selected)
+    if (options.prepareOnly !== true) {
+      await f.submit(paid)
+      f.setMined(true)
+      await f.submit(selected)
+    }
     const native = () =>
       new PrivatePurchaseDisclosure(
         f.installation.serviceDomain,

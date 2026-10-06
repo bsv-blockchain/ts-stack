@@ -188,7 +188,13 @@ it('rolls back earlier alias writes when the final core row conflicts inside the
   expect(afterAliases.outcomes).toEqual(aliases.outcomes)
   expect(afterAliases.completedAt).toEqual(aliases.completedAt)
   for (const check of [aliases.checkCurrent, afterAliases.checkCurrent])
-    expect(() => f.base.owner.domain.ledger.read([], f.f.clock, check)).not.toThrow()
+    expect(() =>
+      f.base.owner.domain.ledger.read(
+        [{ kind: before.row.kind, key: before.row.key }],
+        f.f.clock,
+        check
+      )
+    ).not.toThrow()
 })
 
 it('requires explicit state3 access and checks recipient custody before application permission', () => {

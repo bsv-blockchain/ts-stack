@@ -1,4 +1,4 @@
-import { expect, it } from '@jest/globals'
+import { expect, it, jest } from '@jest/globals'
 import { LCHOverlayCovenantProfileDomain } from '../src/overlayAcquisitionCovenantProfile.js'
 import { lchNativeCovenantProfileFixture } from './overlay-acquisition-covenant-profile-native.fixture.js'
 
@@ -11,6 +11,25 @@ it('independently verifies complete current Script and original preparation befo
   expect(f.candidateChecks()).toBe(1)
   expect(f.counts).toEqual({ preparation: 0, purchase: 0, release: 0 })
   await expect(f.domain.playback(f.delivered, signal)).rejects.toThrow('not been locally verified')
+}, 60000)
+
+it('keeps a verified candidate guard current across computation-clock refresh while refusing a changed verification generation', async () => {
+  const f = await lchNativeCovenantProfileFixture({ candidateBinding: true }),
+    signal = new AbortController().signal,
+    binding = await f.domain.candidateBinding!(f.prepare, f.prepared, f.submission, signal),
+    clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2000)
+  try {
+    expect(binding.checkCurrent()).toBeUndefined()
+    f.setVerificationGeneration('1')
+    expect(() => binding.checkCurrent()).toThrow('Candidate verification context changed')
+    f.setVerificationGeneration('0')
+    expect(binding.checkCurrent()).toBeUndefined()
+    expect(binding.purchaseCommitment).toBe(f.purchaseCommitment)
+    expect(f.candidateChecks()).toBe(1)
+    expect(f.counts).toEqual({ preparation: 0, purchase: 0, release: 0 })
+  } finally {
+    clock.mockRestore()
+  }
 }, 60000)
 
 it('reopens full-candidate custody and verifies historical purchase after the new-funding cutoff without granting playback', async () => {

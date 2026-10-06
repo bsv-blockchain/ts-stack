@@ -144,7 +144,7 @@ it('omits an optional alias that exceeds the complete response budget and leaves
 })
 
 it('keeps synchronous default disclosure and preparation free of currentness calls', async () => {
-  const x = await purchaseAliasDisclosureFixture()
+  const x = await purchaseAliasDisclosureFixture({ prepareOnly: true })
   try {
     const assess = jest.fn(async () => {
       throw Error('Must not assess preparation')
@@ -154,6 +154,8 @@ it('keeps synchronous default disclosure and preparation free of currentness cal
     const terms = await adapter.prepareAsync(x.id, x.caller, { terms: true })
     expect(JSON.parse(terms.body).body.acquisitionId).toBe(x.id)
     expect(assess).not.toHaveBeenCalled()
+    expect(x.f.load().progress.status).toBe('prepared')
+    expect(x.f.base.counts.issue).toBe(0)
   } finally {
     await x.f.dispose()
   }
@@ -221,7 +223,7 @@ it('keeps a nonqualifying orphaned-alias assessment separate from historical cus
     expect(x.f.base.counts.issue).toBe(1)
     await expect(
       adapter.prepareAsync(x.id, { ...x.caller, buyer: '02' + '44'.repeat(32) })
-    ).rejects.toMatchObject({ code: 'unauthorized' })
+    ).rejects.toMatchObject({ code: 'not-found' })
     x.f.installation.serviceDomain.close()
     await expect(adapter.prepareAsync(x.id, x.caller)).rejects.toThrow()
   } finally {
