@@ -1,10 +1,196 @@
 import { expect, it, jest } from '@jest/globals'
-import { canonicalOutputJSON } from '@bsv/sdk'
+import {
+  canonicalOutputJSON,
+  outputPacketDigest,
+  type OutputPurchaseEnvelope,
+  type OutputPurchaseTransport
+} from '@bsv/sdk'
+import { signPurchaseFixturePacket } from './private-purchase-signing.fixture.js'
 import {
   PrivatePurchaseBuyer,
   privatePurchaseBuyerBinding
 } from '../src/private/PrivatePurchaseBuyer.js'
 import { purchaseBuyerFixture } from './private-purchase-buyer.fixture.js'
+
+it.each(['signature', 'request', 'domain'] as const)(
+  'rechecks changed %s bytes through repeated original terms validation',
+  async kind => {
+    const f = purchaseBuyerFixture()
+    let changed = false
+    const owner = await f.open(true, {}, ports => {
+      const read = ports.objects.read.bind(ports.objects)
+      jest.spyOn(ports.objects, 'read').mockImplementation(async (id, binding) => {
+        const saved = await read(id, binding)
+        if (!changed || binding.role !== 'terms' || saved.state !== 'stored') return saved
+        const original = JSON.parse(new TextDecoder().decode(saved.bytes))
+        saved.bytes.fill(0)
+        if (kind === 'signature') original.signature = 'AA=='
+        else {
+          if (kind === 'request') original.body.requestDigest = 'c3'.repeat(32)
+          else original.body.domainProfile = 'urn:test:unsupported-domain'
+          original.signature = signPurchaseFixturePacket(
+            'purchase-terms',
+            original.body,
+            f.server.f.f.f.key
+          ).signature
+        }
+        return { ...saved, bytes: new TextEncoder().encode(canonicalOutputJSON(original)) }
+      })
+    })
+    const result = await owner.buyer.advance()
+    expect(await owner.buyer.recover()).toEqual(result)
+    changed = true
+    await expect(owner.buyer.recover()).rejects.toThrow()
+    changed = false
+    expect(await owner.buyer.recover()).toEqual(result)
+    expect(f.counts.finish).toBe(1)
+    expect(f.server.counts.issue).toBe(1)
+    f.setAccess(false)
+    await expect(owner.buyer.recover()).rejects.toThrow('access')
+  }
+)
+
+it('reserves commitment custody before preparation, retains the verified identity once and reopens historical rights', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1'),
+    verified = jest.spyOn(f.partial.validation, 'candidateBinding'),
+    owner = await f.open(true)
+  expect(f.reservations).toEqual([
+    'request',
+    'contract',
+    'terms',
+    'plan',
+    'candidate',
+    'result',
+    'commitment'
+  ])
+  expect(f.calls).toEqual([])
+  expect(f.counts.finish).toBe(0)
+  const result = await owner.buyer.advance()
+  expect(result).toHaveProperty('result.purchaseCommitment', f.server.f.purchaseCommitment)
+  expect(verified).toHaveBeenCalledTimes(1)
+  expect(verified.mock.calls[0][2]).toEqual(f.server.f.candidate)
+  expect(await owner.buyer.validate()).toBe('usable')
+  await f.close(owner)
+  f.setNow('100000')
+  const reopened = await f.open()
+  // Retained identity is immutable evidence, not a new current-chain assessment.
+  verified.mockImplementation(async () => {
+    throw new Error('No new chain gate')
+  })
+  expect(await reopened.buyer.recover()).toEqual(result)
+  expect(await reopened.buyer.usableResult()).toEqual(result)
+  expect(f.counts.finish).toBe(1)
+  expect(f.server.counts.issue).toBe(1)
+  expect(f.bindingChecks()).toBe(1)
+})
+
+it('recovers a lost protected identity write without replacing the funded candidate or verifying it again', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1')
+  let cut = true
+  const first = await f.open(true, {}, ports => {
+    const put = ports.objects.put.bind(ports.objects)
+    jest.spyOn(ports.objects, 'put').mockImplementation(async (id, binding, bytes) => {
+      const result = await put(id, binding, bytes)
+      if (cut && binding.role === 'commitment') {
+        cut = false
+        throw new Error('Lost committed identity reply')
+      }
+      return result
+    })
+  })
+  await expect(first.buyer.advance()).rejects.toThrow('Lost committed identity reply')
+  await f.close(first)
+  const next = await f.open()
+  await next.buyer.recover()
+  expect((await next.buyer.advance()).result.status).toBe('delivered')
+  expect(f.bindingChecks()).toBe(1)
+  expect(f.counts.finish).toBe(1)
+})
+
+it.each(['missing', 'inherited', 'accessor', 'mutable', 'promise'] as const)(
+  'refuses a %s candidate identity before submitting retained financial bytes',
+  async kind => {
+    const f = purchaseBuyerFixture('full-purchase-commitment-v1')
+    f.partial.validation.candidateBinding = async () => {
+      const purchaseCommitment = f.server.f.purchaseCommitment!
+      if (kind === 'missing') return { checkCurrent: () => {} } as never
+      if (kind === 'inherited')
+        return Object.assign(Object.create({ purchaseCommitment }), { checkCurrent: () => {} })
+      if (kind === 'accessor')
+        return {
+          get purchaseCommitment() {
+            return purchaseCommitment
+          },
+          checkCurrent: () => {}
+        }
+      const result = { purchaseCommitment, checkCurrent: () => {} }
+      result.checkCurrent =
+        kind === 'promise'
+          ? ((() => Promise.reject(new Error('Deferred identity guard'))) as never)
+          : () => {
+              result.purchaseCommitment = 'b4'.repeat(32)
+            }
+      return result
+    }
+    const owner = await f.open(true)
+    await expect(owner.buyer.advance()).rejects.toThrow()
+    expect(f.calls).toEqual(['prepare'])
+    expect(f.counts.finish).toBe(1)
+    expect(f.server.counts.issue).toBe(0)
+  }
+)
+
+it('checks the saved domain and identity before retaining an authenticated response', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1'),
+    send = f.wire.getMockImplementation()!
+  f.wire.mockImplementation(async function (this: OutputPurchaseTransport<'prepare'>, ...args) {
+    const packet = (await send.apply(this, args)) as unknown as OutputPurchaseEnvelope
+    if ('result' in packet && packet.result.status === 'delivered')
+      packet.result.purchaseCommitment = 'b4'.repeat(32)
+    return packet as never
+  })
+  const owner = await f.open(true)
+  await expect(owner.buyer.advance()).rejects.toThrow()
+  expect(await owner.buyer.status()).toBe('funded')
+  expect(f.counts.finish).toBe(1)
+})
+
+it('leaves independent released-subject verification mandatory for a signed alias representation', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1'),
+    send = f.wire.getMockImplementation()!,
+    aliasTxid = 'cd'.repeat(32),
+    verify = jest
+      .spyOn(f.partial.validation, 'verify')
+      .mockRejectedValue(new Error('Released Script unresolved'))
+  // Controlled representation only; no claim of Bitcoin alias validity.
+  f.wire.mockImplementation(async function (this: OutputPurchaseTransport<'prepare'>, ...args) {
+    const packet = (await send.apply(this, args)) as unknown as OutputPurchaseEnvelope
+    if ('result' in packet && packet.result.status === 'delivered') {
+      packet.result.txid = aliasTxid
+      packet.releaseEvidence!.txid = aliasTxid
+      packet.result.potatoes = signPurchaseFixturePacket(
+        'potatoes',
+        {
+          ...packet.result.potatoes.body,
+          txid: aliasTxid,
+          evidenceDigest: outputPacketDigest('release-evidence', packet.releaseEvidence)
+        },
+        f.server.f.f.f.key
+      )
+    }
+    return packet as never
+  })
+  const owner = await f.open(true),
+    received = await owner.buyer.advance()
+  expect(received).toHaveProperty('result.txid', aliasTxid)
+  await expect(owner.buyer.validate()).rejects.toThrow('Released Script unresolved')
+  expect(verify.mock.calls[0][2]).toEqual(f.server.f.candidate)
+  expect(verify.mock.calls[0][3]).toEqual(received)
+  expect(await owner.buyer.status()).toBe('received')
+  await expect(owner.buyer.usableResult()).rejects.toThrow('not usable')
+  expect(f.counts.finish).toBe(1)
+})
+
 it('retains one original purchase in protected native custody and reopens usable rights after expiry', async () => {
   const f = purchaseBuyerFixture(),
     owner = await f.open(true)

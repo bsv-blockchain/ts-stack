@@ -39,6 +39,14 @@ may install different transaction domains without adopting its revenue model.
       funded candidate, all signature/release checks and exact-txid defaults.
       This authenticates response representation; independent full transaction
       equivalence, native alias custody and wallet reconciliation remain separate.
+- [x] Add an explicitly selected protected buyer commitment companion over the
+      complete existing pipeline. Reserve a seventh object before preparation or
+      funding; retain the verified identity beside the original funded bytes;
+      authenticate submit/recover responses and recover lost protected-write replies
+      without another payment. Defaults retain six objects, the original binding,
+      exact-txid checks and historical read-only recovery. Independent released
+      transaction and License/key validation remains mandatory. This component
+      does not supply native alias custody or replacement-family wallet composition.
 - [ ] Reserve one economic candidate identity per acquisition and retain exact
       raw transaction, admission work and release assessment separately per alias.
       Repeated aliases cannot charge again or create another private release.

@@ -1,18 +1,23 @@
 ---
 id: revenue-listing-codec
-title: 'Authenticated Revenue Listing Scripts'
+title: 'Historical Revenue Listing Script Codec'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, sdk, scripts, revenue]
 ---
 
-# Authenticated Revenue Listing Scripts
+# Historical Revenue Listing Script Codec
 
-The unpublished SDK candidate provides the BRC-197 locking-script and revenue-state
+This guide covers the retained earlier codec and executable family. It does not
+describe the current BRC-197 programs, immutable schedule or expiry rules.
+New installations use the [immutable two-stage profile](./revenue-listing-profile.md);
+the earlier codec remains available only for explicitly selected compatibility.
+
+The historical SDK interface provides the locking-script and revenue-state
 codec at `@bsv/sdk/script/templates/RevenueListing`. It uses portable byte arrays,
 BigInt and the SDK's existing cryptographic primitives. The module is a separate
 entry point; importing the ordinary SDK does not add this codec or an executable
@@ -36,7 +41,7 @@ function recognize(program: Uint8Array, script: Uint8Array, descriptorInput: unk
 
 The constructor requires exactly 39,580 bytes with the registered SHA-256
 `ae47a6cc9bdc955d6aa73cdc459bbd6bbe493419dcf3ed3fc952a95c8c510716`.
-It takes an owned copy. Obtain those bytes from the [approved BRC-197 artifact](https://github.com/bsv-blockchain/BRCs/blob/9dade70dd17d48efb087a2c5da56bb53c164383e/tokens/media/0197/program.hex)
+It takes an owned copy. Obtain those bytes from the [frozen earlier-draft artifact](https://github.com/bsv-blockchain/BRCs/blob/9dade70dd17d48efb087a2c5da56bb53c164383e/tokens/media/0197/program.hex)
 by decoding its hex, and pin the source in the application build. A compiler
 version, matching source text or recognizable `ROSL` prefix is insufficient.
 The exact program remains outside the core SDK bundle and has no automatic

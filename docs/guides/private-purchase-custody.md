@@ -255,11 +255,38 @@ selected-chain placement before displaying a current alias. An envelope's
 The native buyer's existing default path still selects exact-txid transport;
 native alias custody and wallet reconciliation require their separate integration.
 
+The buyer can explicitly select `candidateProfile: 'full-purchase-commitment-v1'`
+before constructing its storage binding. Its independent validation port then
+supplies `candidateBinding(request, terms, candidate, signal)`, verifying the
+complete original transaction, every input, domain history and acquisition. The
+result owns the full 32-byte commitment and a synchronous `checkCurrent` guard.
+Identity and method changes, asynchronous guards and incomplete verification
+refuse submission while retaining the original funded candidate for recovery.
+
+This installation reserves a seventh immutable protected object of 8192 bytes
+before preparation or finance. Storage configuration must permit at least seven
+objects and bind the selected profile; existing six-object owners cannot be
+reinterpreted. The original funded transaction and exact commitment are separate
+immutable records. A retry after a lost identity-write reply reads the existing
+record. Historical recovery authenticates the saved domain/identity without
+introducing a new chain predicate or financial action. A missing identity beside
+an already delivered result is unavailable, rather than authority to initialize
+replacement custody.
+
+The explicit buyer passes that protected binding to the SDK transport. It may
+retain a signed response whose historical release names a different transaction,
+but that response remains received until the installed `verify` independently
+checks both original and released subjects, release policy and usable private
+rights. The original funded transaction is always passed to that verifier.
+`currentAlias` cannot replace either subject or confer entitlement. This buyer
+companion does not implement the provider's per-txid alias journal, native wallet
+alias reconciliation or the current exemplar's wallet construction.
+
 `@bsv/output-knowledge/private/purchase-buyer` supplies the portable
 `PrivatePurchaseBuyer`, its installation-binding helper and initial control value,
 and interchangeable payment/validation ports. The independent
 `@bsv/output-knowledge/private/purchase-wallet` entry supplies
-`WalletToolboxPurchasePayment`, separating native Script/lineage-aware transaction
+the retained historical `WalletToolboxPurchasePayment`, separating native Script/lineage-aware transaction
 construction from authenticated HTTP orchestration. Neither entry imports a native
 wallet or Node storage implementation. A native host
 may supply the existing Wallet Toolbox `RecoverableActionController`; a browser
@@ -269,7 +296,7 @@ BRC-100 wallet interface cannot establish recovery of a lost action reply.
 Compute `privatePurchaseBuyerBinding` from the independently selected retained
 capability, original request, installed wallet payment configuration and independent
 validation identity. Create protected control and object owners with that exact
-binding. Explicit initialization reserves six immutable objects: request,
+binding. The default installation reserves six immutable objects: request,
 contract, signed terms, wallet plan, complete signed candidate and delivered result.
 The control journal needs at least 16384 bytes; the object installation needs six
 slots and a maximum object ceiling of 4194304 bytes. Request/candidate and
@@ -281,7 +308,8 @@ account for aggregate reserved storage, and back up the owners together.
 the exact original binding, every reservation and retained request/contract; it
 does not initialize missing custody or discover a replacement seller. Large
 signed lineage and BEEF reside in separate protected objects, rather than the
-small control value. Successful retention proves custody only. The application
+small control value. The explicitly selected commitment companion additionally
+reserves the seventh object described above. Successful retention proves custody only. The application
 must supply independent preflight, delivered-material verification and current
 usability, for example the covenant LCH domain. A seller signature or STEAK
 cannot supply those premises.
@@ -351,6 +379,13 @@ authorized genesis and selected synthetic header history independently. Public
 synthetic keys and isolated databases are used; no live chain or broadcast is
 claimed. The authenticated HTTP, retained topic admission and LCH playback
 composition described below exercises these components together.
+
+The buyer owns one `OutputPurchaseTermsVerifier` for its retained original request
+and selected seller. Every terms read still parses the full returned packet and
+checks its request association and BRC-77 signature. Neither signed responses nor
+verification verdicts are cached. Domain constraints, original candidate and
+release evidence, current access, and material usability are checked by their
+independent installed ports at the relevant boundary.
 
 ## Choose immutable candidate custody explicitly
 
@@ -508,7 +543,12 @@ mining claim. The independent release-policy adapters and economic script routes
 have their own qualification; this test alone does not establish their complete
 composition or checkpoint readiness.
 
-## Exercise every economic route with the native wallet
+## Historical economic route compatibility with the native wallet
+
+The following retained tests exercise the earlier sale-listing family. Merge,
+schedule amendment and root transaction signatures are historical compatibility
+behavior; they do not implement or qualify the current immutable two-stage
+profile. Its separately selected native adapter remains an integration requirement.
 
 `private-purchase-wallet-routes.test.ts` funds and signs purchase, split, merge,
 payout, amendment and retirement through the actual Wallet Toolbox SQLite owner.

@@ -5505,3 +5505,121 @@ This component neither manufactures a purchase commitment nor implements native
 alias/action reconciliation. Coordinator commitment persistence, replacement-family
 native composition, all per-txid admission/release facts and complete final-head
 qualification remain open checkpoint-two requirements.
+
+## Explicit purchase-commitment companions
+
+The explicitly selected `SQLitePrivatePurchaseCommitmentStore` seals version-two
+state and retains the independently verified full purchase commitment through
+native reservation, admission and first signed delivery. The original store's
+five-argument constructor, version-one declarations and exact-txid pin remain
+compatible. The separately selected SDK envelope verifier and transport binding
+retain the signed domain and original funded candidate while authenticating
+recovered release representation. Complete Bitcoin equivalence and private
+entitlement verification remain installed domain responsibilities.
+
+Component qualification for the preceding published `d6b2c754` batch includes
+all 38 original SDK purchase protocol cases, all 271 complete SDK transport cases,
+the original property budgets/seed, and all six historical native authenticated
+Engine/Mongo/LCH composition cases (139.211 seconds). These historical Script
+composition results do not qualify the current two-stage exemplar or aliases.
+
+The buyer now explicitly selects `candidateProfile: "full-purchase-commitment-v1"`
+with an independently installed complete candidate verifier. It reserves a
+seventh bounded protected object before preparation or funding, owns the full
+commitment and synchronous guard across awaits, and binds the retained identity
+to the exact original funded bytes and signed domain. A lost protected-write reply
+recovers that same object without another verifier/financial operation. Omitted
+selection retains the original six objects, installation binding, wire formats
+and exact-txid authentication. Inherited, accessor, missing, changed and
+asynchronous guards are refused. Authentication cannot substitute for independent
+original/released transaction, License and key checks; historical recovery and
+playback never apply a new-preparation expiry predicate.
+
+The complete original nine-file buyer cohort passes all 76 cases in 343.836
+seconds, including all original properties and the new 300-run protected-identity
+recovery property. The full original state/native-clock union passes all 301 cases
+in 19 suites (74.069 seconds). Both ran serially on Linux arm64 Node 24.19.0 with
+pnpm 10.33.2, the original 300-run minimum, seed 3242026 and unchanged deadlines.
+The runtime closure was frozen at SHA256
+`5a417e5536af33d6aeb9af581c4160744c0e3cfb1c9e96ddaadfacff30b5fd6e`
+with source and built-artifact rechecks, known healthy public SQLite drivers,
+network withdrawal before tests and verified container/volume removal afterwards.
+The driver receipt hashes its actually loaded packaged binding; earlier failed
+setup attempts are not qualification. Later documentation clarification is
+qualified separately by the package/example/root documentation controls.
+
+Two actual strict Sonar findings on `d6b2c754` prompted behavior-preserving fixes:
+the complete pin transition moves to one helper retaining ordered checks and the
+duplicate's original early return; the historical constructor explicitly fixes
+the internal legacy mode. Independent canonical inventories prove the complete,
+duplicate-free original source unions: state 1071, coordination 580 and native
+clock 1556 mutants. Only the two changed inventory goldens are updated. All 143
+targets, 390 execution rows, original selectors, thresholds and controls remain.
+Registry/partition regression controls pass all 121 cases. This is inventory and
+ordinary-regression evidence, not a mutation-execution campaign or a hosted
+zero-finding claim.
+
+The retained historical codec, authority and six-route spend guides are now
+explicitly labeled and linked to the current profile. The current profile's
+native wallet, durable per-txid alias admission/release records, selected-chain
+recovery, full current HTTP composition, final complete mutation campaign and
+exact-head hosted gates remain open checkpoint-two requirements.
+
+### Owned original terms normalization — 2026-10-05
+
+The published `d6b2c754` application coverage shard failed when its original
+300-case buyer history property reached the unchanged 150-second interrupt
+after 297 cases. No assertion or counterexample was reported. That run is
+failed; its partial execution does not qualify the property or this revision.
+The two exact-head Sonar findings are addressed by the preceding complete
+progress helper and explicit historical store mode described above.
+
+The additive SDK `OutputPurchaseTermsVerifier` owns the normalized original
+request and selected seller. Every call parses the complete returned terms,
+recomputes the full original-request association and invokes BRC-77 signature
+verification. It retains no response or verification verdict. The existing
+function forwards the same ordered checks and keeps its signature and errors.
+The buyer creates and pins this verifier while retaining its separate domain,
+access, funding, release and rights checks. A tentative returned-terms cache was
+removed before native qualification; no such cache remains in the source.
+
+The complete original SDK protocol selection passes 39 tests in three suites;
+the complete original transport selection passes 271 tests in thirteen suites.
+The original property controls remain at least 300 cases with seed 3242026.
+Regressions check original-request ownership, detached returned packets, fresh
+signature and association refusal, and selected-seller binding. Core typecheck,
+build and the full duplicate-free state/coordination/native-clock inventories
+pass with the original 1,071/580/1,556 sites, 143 targets and 390 rows.
+
+Core packed exports pass, and the complete browser suite passes in 63.320 seconds
+under its original bundle ceilings and test controls. The new compiled snippet
+first exposed duplicate import names in the combined consumer. Aliasing only
+that snippet's imports corrects the error; all 77 compiled examples then pass
+against 24 exact package tarballs. The failed attempt is retained separately.
+The three changed historical guides are reviewed as compatibility documents and
+link the current immutable profile; their review dates now describe that actual
+review, not current-family runtime qualification.
+
+The complete original Linux buyer/wallet selection now passes all 79 cases in
+nine suites under the original complete coverage instrumentation (350.660
+seconds). The full original state/native-clock selection passes all 301 cases
+in nineteen suites (76.061 seconds). Both retain the 300-case minimum, seed
+3242026 and original property/test deadlines. The frozen 2,011-file runtime
+closure is SHA256
+`7f32060b12bb68b5efc74b10e96b52a0a552ce2a9cb008b6f8c9ffb067b1d7af`;
+the complete 5,281-file source manifest is SHA256
+`b52bd1c277a06225b483fb09d460d7aa3d9a8e0a4f234b153cca60c26d0adb2f`.
+Source files are rechecked before and after builds and after both selections.
+The Linux arm64 Node 24.19.0 runtime uses the healthy packaged SQLite 13.0.3
+binding SHA256
+`8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485`;
+network access is withdrawn before tests. Physical container and volume removal
+is verified afterwards. Coverage from this selection is component evidence,
+not proof of the final aggregate coverage gate. Later documentation review
+dates and this evidence text are outside that frozen source snapshot and need
+the separate committed documentation/root checks.
+
+The replacement-family native wallet and alias custody, full current HTTP
+composition, complete final mutation campaign and exact-head hosted gates
+remain required. These component results do not complete checkpoint two or
+qualify a later source head.

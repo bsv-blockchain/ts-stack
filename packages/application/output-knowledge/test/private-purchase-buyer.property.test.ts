@@ -114,3 +114,53 @@ it('preserves one financial operation over 300 interrupted native buyer/seller h
     )
   )
 }, 180000)
+
+it('retains one protected full identity through generated lost replies and historical recovery', async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      fc.constantFrom('none' as const, 'prepare' as const, 'finish' as const, 'submit' as const),
+      fc.array(fc.constantFrom('recover', 'reopen', 'deny'), { minLength: 1, maxLength: 5 }),
+      fc.boolean(),
+      async (lost, history, expire) => {
+        const f = purchaseBuyerFixture('full-purchase-commitment-v1')
+        let owner = await f.open(true)
+        if (lost !== 'none') f.lose(lost)
+        try {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              await owner.buyer.advance()
+            } catch (error) {
+              expect((error as Error).message.startsWith('Lost original')).toBe(true)
+            }
+          }
+          expect(await owner.buyer.validate()).toBe('usable')
+          const historical = await owner.buyer.usableResult()
+          expect(historical).toHaveProperty(
+            'result.purchaseCommitment',
+            f.server.f.purchaseCommitment
+          )
+          expect(f.bindingChecks()).toBe(1)
+          if (expire) f.setNow('100000')
+          for (const operation of history) {
+            if (operation === 'reopen') {
+              const next = await f.open()
+              await f.close(owner)
+              owner = next
+            } else if (operation === 'deny') {
+              f.setAccess(false)
+              await expect(owner.buyer.recover()).rejects.toThrow('access')
+              f.setAccess(true)
+            } else expect(await owner.buyer.recover()).toEqual(historical)
+            expect(await owner.buyer.usableResult()).toEqual(historical)
+            expect(f.bindingChecks()).toBe(1)
+            expect(f.counts.finish).toBe(1)
+            expect(f.server.counts.issue).toBe(1)
+            expect(f.activeOwners()).toBe(1)
+          }
+        } finally {
+          await f.dispose()
+        }
+      }
+    )
+  )
+}, 180000)

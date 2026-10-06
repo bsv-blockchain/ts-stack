@@ -33,6 +33,17 @@ export type PrivatePurchaseBuyerPaymentOutcome =
  * never establish Script/lineage, release satisfaction, License or usable keys. */
 export interface PrivatePurchaseBuyerValidation {
   readonly id: string
+  /** Optional complete original-candidate verifier for the explicitly selected
+   * commitment owner. A digest calculation or response label is insufficient.
+   * The returned own data and synchronous guard remain stable through retention;
+   * installed verification of the released subject and usable rights is separate.
+   */
+  candidateBinding?(
+    request: OutputPurchasePrepare,
+    terms: OutputSignedPurchaseTerms,
+    candidate: OutputPurchaseSubmit,
+    signal: AbortSignal
+  ): Promise<{ readonly purchaseCommitment: string; checkCurrent(): void }>
   preflight(
     request: OutputPurchasePrepare,
     terms: OutputSignedPurchaseTerms | null,

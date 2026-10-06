@@ -965,7 +965,9 @@ export class SQLitePrivatePurchaseStore extends PrivatePurchaseStoreCore<Private
     policy: PrivatePurchaseCustody['validationPolicy'],
     clockProfile?: 'native-observation-v1'
   ) {
-    super(domain, contracts, limits, policy, clockProfile)
+    // Fix the historical owner to the legacy mode while retaining its public
+    // five-argument constructor; the internal companion mode is not inherited.
+    super(domain, contracts, limits, policy, clockProfile, undefined)
   }
   override pin(
     id: string,

@@ -3,8 +3,8 @@ id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
 version: '1.1.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: [guide, typescript, packages, consumers, examples]
@@ -52,6 +52,35 @@ function installedProposalAdmission(
   })
 }
 void installedProposalAdmission
+```
+
+## Repeated terms verification against one retained request
+
+A resumed purchase can check several returned terms packets against the same
+original request. This verifier owns the normalized request and selected seller.
+Every call parses the complete returned packet and independently verifies its
+request association and BRC-77 signature. It retains no response or verification
+verdict. Domain eligibility, current authorization and usable private material
+remain separate checks. The existing `verifyOutputPurchaseTerms` function uses
+the same checks and remains available for a single call.
+
+```ts compile
+// example-id: purchase-original-request-verifier
+import {
+  OutputPurchaseTermsVerifier,
+  type OutputPurchasePrepare as RetainedTermsRequest,
+  type OutputSignedPurchaseTerms as RecheckedSignedTerms
+} from '@bsv/sdk/overlay-tools/OutputPurchaseProtocol'
+
+function verifyReturnedTerms(
+  originalRequest: RetainedTermsRequest,
+  selectedSeller: string,
+  responses: readonly unknown[]
+): RecheckedSignedTerms[] {
+  const verifier = new OutputPurchaseTermsVerifier(originalRequest, selectedSeller)
+  return responses.map(response => verifier.verify(response))
+}
+void verifyReturnedTerms
 ```
 
 ## Original root coordination contracts
@@ -2743,4 +2772,31 @@ function selectCommitmentRecovery(
   })
 }
 void selectCommitmentRecovery
+```
+
+## Explicit buyer identity custody
+
+Select the profile before creating the protected state and object owners. The
+seventh reservation precedes funding. This example checks packed interfaces;
+the installed verifier must independently validate the complete original subject.
+
+```ts compile
+// example-id: private-purchase-buyer-commitment-binding
+import {
+  privatePurchaseBuyerBinding as purchaseIdentityBinding,
+  type PrivatePurchaseBuyerOptions as PurchaseIdentityOptions
+} from '@bsv/output-knowledge/private/purchase-buyer'
+
+function selectPurchaseIdentity(
+  installation: Pick<PurchaseIdentityOptions, 'original' | 'trust' | 'payment' | 'validation'>,
+  verifier: NonNullable<PurchaseIdentityOptions['validation']['candidateBinding']>
+) {
+  const selected = {
+    ...installation,
+    candidateProfile: 'full-purchase-commitment-v1' as const,
+    validation: { ...installation.validation, candidateBinding: verifier }
+  }
+  return { selected, binding: purchaseIdentityBinding(selected) }
+}
+void selectPurchaseIdentity
 ```

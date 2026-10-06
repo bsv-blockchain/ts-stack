@@ -1,18 +1,23 @@
 ---
 id: revenue-listing-spends
-title: 'Planning and Signing Revenue Listing Transactions'
+title: 'Historical Revenue Listing Transaction Planning'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, sdk, scripts, revenue, wallet]
 ---
 
-# Planning and Signing Revenue Listing Transactions
+# Historical Revenue Listing Transaction Planning
 
-The unpublished SDK candidate separates the BRC-197 locking-script codec,
+This guide preserves the earlier sale-listing family for compatibility. Its
+merge, amendment and root-authority routes are not part of the current BRC-197.
+New installations use the [immutable two-stage profile](./revenue-listing-profile.md),
+including its separate planner and protected seller-child signing interface.
+
+The historical SDK interface separates the locking-script codec,
 economic plan, funded transaction, and signing authority. Applications explicitly
 import `RevenueListingPlan` or `RevenueListingSpend` under
 `@bsv/sdk/script/templates/`. The default SDK exports and bundles are unchanged.

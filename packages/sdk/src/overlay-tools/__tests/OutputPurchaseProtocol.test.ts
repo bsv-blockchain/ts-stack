@@ -20,6 +20,7 @@ import {
   verifyOutputPurchaseCommitmentEnvelope,
   parseOutputPurchaseCommitmentBinding,
   verifyOutputPurchaseTerms,
+  OutputPurchaseTermsVerifier,
   type OutputPurchasePrepare,
   type OutputPurchaseTerms,
   type OutputReleaseEvidence,
@@ -106,6 +107,36 @@ function fixture() {
 }
 
 describe('BRC-196 closed purchase envelopes and original-contract bindings', () => {
+  it('owns original request normalization without retaining a verified packet or signature result', () => {
+    const f = fixture(),
+      verifier = new OutputPurchaseTermsVerifier(f.request, seller),
+      expected = structuredClone(f.terms)
+    f.request.requestId = 'changed-owner-request'
+    f.request.listing.chain.network = 'other-chain'
+    expect(verifier.verify(f.terms)).toEqual(expected)
+    const exposed = verifier.verify(f.terms)
+    exposed.body.domainEvidence.bytes = 'AQ=='
+    exposed.body.listing.txid = 'cd'.repeat(32)
+    expect(verifier.verify(f.terms)).toEqual(expected)
+    expect(() => verifier.verify({ ...f.terms, signature: 'AA==' })).toThrow()
+    expect(() =>
+      verifier.verify(
+        signOutputPacket(
+          'purchase-terms',
+          {
+            ...f.terms.body,
+            requestDigest: 'cd'.repeat(32)
+          },
+          sellerKey
+        )
+      )
+    ).toThrow('selected request')
+    expect(() =>
+      new OutputPurchaseTermsVerifier(fixture().request, recipient).verify(f.terms)
+    ).toThrow('selected request')
+    expect(verifier.verify(f.terms)).toEqual(expected)
+  })
+
   it('matches both unchanged signed purchase examples from the current independent BRC corpus', () => {
     const bytes = readFileSync(resolve(__dirname, 'fixtures/purchase-commitment-wire.json.gz'))
     const vectors = JSON.parse(gunzipSync(bytes).toString('utf8'))

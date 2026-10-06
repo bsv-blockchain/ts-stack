@@ -30,6 +30,7 @@ import {
   type PrivatePurchaseBuyerOptions
 } from '../src/private/PrivatePurchaseBuyer.js'
 import { purchaseCoordinatorFixture } from './private-purchase-coordinator.fixture.js'
+import { purchaseStoreFixture } from './private-purchase-store.fixture.js'
 import { custody } from './protected-operation-object.fixture.js'
 const cleanup = new Set<() => Promise<void>>()
 afterEach(async () => {
@@ -39,8 +40,11 @@ afterEach(async () => {
 })
 /** Actual independent SQLite protected owners and native seller journal. Wallet,
  * domain and admission premises remain controlled lifecycle fixtures here. */
-export function purchaseBuyerFixture() {
-  const server = purchaseCoordinatorFixture(),
+export function purchaseBuyerFixture(candidateProfile?: 'full-purchase-commitment-v1') {
+  const server = purchaseCoordinatorFixture(
+      {},
+      candidateProfile ? purchaseStoreFixture({}, undefined, candidateProfile) : undefined
+    ),
     contract = server.f.f.f,
     directory = mkdtempSync(join(tmpdir(), 'purchase-buyer-')),
     codec = custody(),
@@ -63,9 +67,11 @@ export function purchaseBuyerFixture() {
     finalized = false,
     valid = true,
     usable = true,
+    bindingChecks = 0,
     lost: 'prepare' | 'finish' | 'submit' | undefined
   const counts = { plan: 0, recover: 0, finish: 0, preflight: 0, verify: 0, usable: 0 },
-    calls: string[] = []
+    calls: string[] = [],
+    reservations: string[] = []
   const payment: PrivatePurchaseBuyerOptions['payment'] = {
     maximumCandidateBytes: 65536,
     configuration: {
@@ -99,6 +105,21 @@ export function purchaseBuyerFixture() {
   }
   const validation: PrivatePurchaseBuyerOptions['validation'] = {
     id: 'urn:test:purchase-buyer-domain',
+    ...(candidateProfile
+      ? {
+          candidateBinding: async () => {
+            bindingChecks++
+            await Promise.resolve()
+            outputAssert(valid, 'Controlled invalid candidate')
+            return {
+              purchaseCommitment: server.f.purchaseCommitment!,
+              checkCurrent: () => {
+                outputAssert(valid, 'Controlled candidate context changed')
+              }
+            }
+          }
+        }
+      : {}),
     preflight: async () => {
       counts.preflight++
       await Promise.resolve()
@@ -120,6 +141,7 @@ export function purchaseBuyerFixture() {
       trust,
       payment,
       validation,
+      ...(candidateProfile ? { candidateProfile } : {}),
       wallet: new CompletedProtoWallet(new PrivateKey(44)),
       clock: () => now,
       current: () => allowed
@@ -131,7 +153,7 @@ export function purchaseBuyerFixture() {
       storeId: '96'.repeat(32),
       recipient: contract.request.recipient,
       binding,
-      maximumObjects: 6,
+      maximumObjects: candidateProfile ? 7 : 6,
       maximumObjectBytes: 4194304
     }
   const stores: {
@@ -139,7 +161,11 @@ export function purchaseBuyerFixture() {
       objects: SQLiteProtectedOperationObjectStore
     }[] = [],
     buyers: PrivatePurchaseBuyer[] = []
-  async function open(create = false, overrides: Partial<PrivatePurchaseBuyerOptions> = {}) {
+  async function open(
+    create = false,
+    overrides: Partial<PrivatePurchaseBuyerOptions> = {},
+    install?: (ports: PrivatePurchaseBuyerOptions) => void
+  ) {
     const base = create
         ? SQLiteOperationStateStore.create(
             join(directory, 'state.sqlite'),
@@ -163,41 +189,52 @@ export function purchaseBuyerFixture() {
       ),
       ports = { ...partial, state, objects, ...overrides }
     stores.push({ state, objects })
+    if (create && candidateProfile) {
+      const reserve = objects.reserve.bind(objects)
+      jest.spyOn(objects, 'reserve').mockImplementation(async (...args) => {
+        const result = await reserve(...args)
+        reservations.push(args[1].role as string)
+        return result
+      })
+    }
+    install?.(ports)
     const buyer = await PrivatePurchaseBuyer[create ? 'initialize' : 'open'](ports)
     buyers.push(buyer)
     return { buyer, ports, state, objects }
   }
-  const send = jest
-    .spyOn(OutputPurchaseTransport.prototype, 'send')
-    .mockImplementation(async function (this: OutputPurchaseTransport<'prepare'>) {
-      const operation = (this as unknown as { operation: string }).operation
-      calls.push(operation)
-      let result: OutputSignedPurchaseTerms | OutputPurchaseEnvelope
-      if (operation === 'prepare') {
-        await server.prepare()
-        const loaded = server.current()!
-        let disclosed: unknown
-        server.owner.store.discloseTerms(
-          loaded,
-          server.f.buyer,
-          server.f.clock,
-          server.f.guard,
-          terms => {
-            disclosed = terms
-          }
-        )
-        result = parseOutputPurchaseTerms(disclosed)
-      } else {
-        if (operation === 'submit') await server.submit()
-        else await server.recover()
-        result = parseOutputPurchaseEnvelope(server.projected())
-      }
-      if (lost === operation) {
-        lost = undefined
-        throw new Error('Lost original ' + operation + ' reply')
-      }
-      return result as OutputSignedPurchaseTerms
-    })
+  const send: jest.SpiedFunction<
+    OutputPurchaseTransport<'prepare' | 'submit' | 'recover'>['send']
+  > = jest.spyOn(OutputPurchaseTransport.prototype, 'send').mockImplementation(async function (
+    this: OutputPurchaseTransport<'prepare'>
+  ) {
+    const operation = (this as unknown as { operation: string }).operation
+    calls.push(operation)
+    let result: OutputSignedPurchaseTerms | OutputPurchaseEnvelope
+    if (operation === 'prepare') {
+      await server.prepare()
+      const loaded = server.current()!
+      let disclosed: unknown
+      server.owner.store.discloseTerms(
+        loaded,
+        server.f.buyer,
+        server.f.clock,
+        server.f.guard,
+        terms => {
+          disclosed = terms
+        }
+      )
+      result = parseOutputPurchaseTerms(disclosed)
+    } else {
+      if (operation === 'submit') await server.submit()
+      else await server.recover()
+      result = parseOutputPurchaseEnvelope(server.projected())
+    }
+    if (lost === operation) {
+      lost = undefined
+      throw new Error('Lost original ' + operation + ' reply')
+    }
+    return result as OutputSignedPurchaseTerms
+  })
   async function close(owner: Awaited<ReturnType<typeof open>>) {
     await owner.buyer.stop()
     await owner.state.close()
@@ -229,7 +266,10 @@ export function purchaseBuyerFixture() {
     partial,
     counts,
     calls,
+    reservations,
     binding,
+    bindingChecks: () => bindingChecks,
+    wire: send,
     directory,
     open,
     close,

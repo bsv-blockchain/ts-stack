@@ -1,16 +1,22 @@
 ---
 id: revenue-listing-authority
-title: 'Dedicated Revenue Listing Authorities'
+title: 'Historical Revenue Listing Authorities'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, scripts, revenue, signing, custody]
 ---
 
-# Dedicated Revenue Listing Authorities
+# Historical Revenue Listing Authorities
+
+This guide describes the earlier root-authority family retained for compatibility.
+It is not the current BRC-197 signing model. The
+[immutable two-stage profile](./revenue-listing-profile.md) uses fixed public
+child derivation and protected child transaction signing; its identity root
+never signs a transaction or receives a payout. Select that profile for new work.
 
 An authority key identifies who may administer a listing or consent to a revenue
 schedule change. The funding wallet supplies fee inputs, signs its own inputs and
@@ -19,7 +25,7 @@ retains its own operation state. These are separate responsibilities. The option
 and an explicit software reference adapter for a separately provisioned authority
 key. Nothing signs as a consequence of lookup, ingestion or history verification.
 
-The seller identity in a BRC-197 descriptor must authorize both the BRC-77
+In this historical descriptor, the seller identity must authorize both the BRC-77
 `sale-genesis` packet and the seller's Script signatures. A BRC-100 wallet protocol
 derivation may expose a suitable Script public key while its ordinary BRC-77
 messages identify a different root. Verifying either signature against a different

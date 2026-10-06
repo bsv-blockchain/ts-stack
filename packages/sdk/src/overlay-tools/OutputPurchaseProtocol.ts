@@ -178,40 +178,55 @@ export function parseOutputPurchaseEnvelope(input: unknown): OutputPurchaseEnvel
   return parsed
 }
 
+/** Owned original request normalization. Each call independently checks the complete
+ * returned packet, its request/seller association and BRC-77 signature. No verified
+ * result, authorization, expiry, chain assessment or rights decision is retained. */
+export class OutputPurchaseTermsVerifier {
+  private readonly request: OutputPurchasePrepare
+  private readonly seller: string
+  constructor(originalRequest: OutputPurchasePrepare, selectedSeller: string) {
+    this.request = parseOutputPurchasePrepare(originalRequest)
+    this.seller = s.identity(selectedSeller)
+  }
+  verify(input: unknown): OutputSignedPurchaseTerms {
+    const request = this.request,
+      seller = this.seller
+    const packet = parseOutputPurchaseTerms(input),
+      body = packet.body
+    const acquisitionId = outputPacketDigest('purchase', {
+      chain: request.listing.chain,
+      seller,
+      recipient: request.recipient,
+      topic: request.topic,
+      requestId: request.requestId
+    })
+    outputAssert(
+      body.seller === seller &&
+        body.acquisitionId === acquisitionId &&
+        body.requestDigest === outputPacketDigest('purchase-request', request) &&
+        body.recipient === request.recipient &&
+        body.topic === request.topic &&
+        body.assetId === request.assetId &&
+        body.termsDigest === request.termsDigest &&
+        canonicalOutputJSON(body.listing) === canonicalOutputJSON(request.listing),
+      'Purchase terms differ from selected request'
+    )
+    outputAssert(
+      verifyOutputPacket('purchase-terms', packet, seller),
+      'Purchase terms signature failed',
+      'unauthorized'
+    )
+    return packet
+  }
+}
+
 /** Verify original seller terms against a separately retained complete request and selected seller. */
 export function verifyOutputPurchaseTerms(
   input: unknown,
   originalRequest: OutputPurchasePrepare,
   selectedSeller: string
 ): OutputSignedPurchaseTerms {
-  const request = parseOutputPurchasePrepare(originalRequest),
-    seller = s.identity(selectedSeller)
-  const packet = parseOutputPurchaseTerms(input),
-    body = packet.body
-  const acquisitionId = outputPacketDigest('purchase', {
-    chain: request.listing.chain,
-    seller,
-    recipient: request.recipient,
-    topic: request.topic,
-    requestId: request.requestId
-  })
-  outputAssert(
-    body.seller === seller &&
-      body.acquisitionId === acquisitionId &&
-      body.requestDigest === outputPacketDigest('purchase-request', request) &&
-      body.recipient === request.recipient &&
-      body.topic === request.topic &&
-      body.assetId === request.assetId &&
-      body.termsDigest === request.termsDigest &&
-      canonicalOutputJSON(body.listing) === canonicalOutputJSON(request.listing),
-    'Purchase terms differ from selected request'
-  )
-  outputAssert(
-    verifyOutputPacket('purchase-terms', packet, seller),
-    'Purchase terms signature failed',
-    'unauthorized'
-  )
-  return packet
+  return new OutputPurchaseTermsVerifier(originalRequest, selectedSeller).verify(input)
 }
 
 /**

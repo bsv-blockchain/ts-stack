@@ -15,9 +15,11 @@ acceptance verifies exact signed envelopes and retains local receipt decisions.
 Optional current-channel queries, authenticated source grammar and independent
 provider/generation projection are available. The optional compound SQLite
 proposal/current-feed/session owner is implemented with atomic visibility fences,
-future-event reservations and bounded expiry. Concrete native examples now compose private publication/acquisition, licensed
-purchase and independent root serving with real Engine/Mongo and authenticated
-HTTP. Final package/platform and complete campaign qualification remain pending;
+future-event reservations and bounded expiry. Concrete native examples compose private publication/acquisition, historical
+licensed-purchase support and independent root serving with real Engine/Mongo
+and authenticated HTTP. Current optional-profile native wallet and alias
+integration remains in progress. Final package/platform and complete campaign
+qualification remain pending;
 downstream application adoption follows the second review checkpoint.
 The internal [native private-publication foundation](../../../docs/guides/private-publication-storage.md)
 now binds protected material, permanent request fences and ordered durable phases.
@@ -85,7 +87,9 @@ prepared-purchase section before composing it with a wallet or host.
 Its optional bounded local refusal reason helps distinguish preparation and ABI
 failures while preserving status/dependencies; it is not a wire or global verdict.
 
-The `private/node` entry also exports `PrivatePurchaseContracts`, `PrivatePurchaseCoordinator`,
+## Private purchase custody and buyer
+
+The `private/node` entry exports `PrivatePurchaseContracts`, `PrivatePurchaseCoordinator`,
 `PrivatePurchaseAccess`, `PrivatePurchaseDisclosure`, purchase progress functions
 `SQLitePrivatePurchaseStore` and `SQLitePrivatePurchaseEvidence`. They retain the exact preparation,
 one native admission intent and first signed result, with reserved completion
@@ -105,13 +109,14 @@ uses sealed version-two state and retains an independently verified full purchas
 commitment through native reservation, admission and signed delivery. Historical
 version-one custody and public declarations remain unchanged. This companion
 still pins an exact submitted txid; per-alias custody and selected-chain alias
-reconciliation remain separate integration work. The purchase guide includes actual native six-route and
-authenticated Engine/Mongo/LCH demonstrations with their assurance limits.
+reconciliation remain separate integration work. The purchase guide labels the earlier native six-route and authenticated
+Engine/Mongo/LCH demonstrations as historical-profile evidence.
 
 The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,
 `privatePurchaseBuyerBinding` and `PRIVATE_PURCHASE_BUYER_INITIAL`. The separate
-`private/purchase-wallet` entry exports `WalletToolboxPurchasePayment` without
-authenticated HTTP orchestration. Six protected object reservations precede seller
+`private/purchase-wallet` entry exports the historical
+`WalletToolboxPurchasePayment` without authenticated HTTP orchestration. Six
+protected object reservations precede seller
 preparation and wallet work. The small durable control journal contains no large
 lineage, BEEF or delivered secret. `recover` reads the original wallet intent and
 seller obligation; `advance` explicitly permits new work under the original
@@ -127,6 +132,18 @@ retained across awaits and checked through the native wallet effect callback.
 Unsigned discovery, omitted-hook behavior and finalized read-only recovery retain
 their existing paths. Bind the companion in the validation installation ID;
 it does not supply alias ownership or replace independent delivered verification.
+
+The buyer may explicitly select `candidateProfile: "full-purchase-commitment-v1"`
+and an independently installed `validation.candidateBinding` verifier. That
+installation reserves a seventh protected object before preparation or funding,
+retains the verified full commitment beside the exact original funded candidate,
+and authenticates submit/recover responses under that identity. A lost identity
+write reply recovers the retained object; it cannot create another financial
+operation. Historical responses and independently validated playback do not
+become new preparations. Response authentication does not establish Bitcoin
+alias equivalence, selected-chain currentness or License/key validity; complete
+original and released transaction verification remains mandatory. This companion
+does not complete the current-profile native wallet or host alias journal.
 
 ## Durable progressive and live provider
 

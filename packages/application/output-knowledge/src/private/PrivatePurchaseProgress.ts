@@ -383,25 +383,7 @@ export function advancePrivatePurchaseProgress(
     'context-changed'
   )
   if (event.type === 'pin') {
-    const txid = outputHex32(event.txid)
-    const commitment = profile ? outputHex32(event.purchaseCommitment) : undefined
-    if (progress.txid !== null) {
-      outputAssert(
-        progress.txid === txid && progress.purchaseCommitment === commitment,
-        'Purchase is reserved for another transaction',
-        'conflict'
-      )
-      return progress
-    }
-    outputAssert(
-      progress.status === 'prepared' && now < outputU64(progress.recoveryUntil),
-      'Purchase recovery reservation expired',
-      'expired'
-    )
-    progress.txid = txid
-    if (commitment !== undefined) progress.purchaseCommitment = commitment
-    progress.operationId = privatePurchaseOperation(original, txid)
-    progress.status = 'admission-pending'
+    if (!pinPrivatePurchaseProgress(progress, original, event, now, profile)) return progress
   } else if (event.type === 'expire') {
     if (progress.status !== 'prepared') return progress
     outputAssert(
@@ -467,6 +449,37 @@ export function advancePrivatePurchaseProgress(
   }
   progress.updatedAt = now.toString()
   return parsePrivatePurchaseProgress(progress, original, profile)
+}
+
+/** Returns false for an already retained pin, which must preserve its original
+ * update time and operation identity rather than applying a fresh transition. */
+function pinPrivatePurchaseProgress(
+  progress: PrivatePurchaseProgress,
+  original: PrivatePurchaseOriginal,
+  event: Extract<PrivatePurchaseEvent, { type: 'pin' }>,
+  now: bigint,
+  profile?: PrivatePurchaseCandidateProfile
+): boolean {
+  const txid = outputHex32(event.txid),
+    commitment = profile ? outputHex32(event.purchaseCommitment) : undefined
+  if (progress.txid !== null) {
+    outputAssert(
+      progress.txid === txid && progress.purchaseCommitment === commitment,
+      'Purchase is reserved for another transaction',
+      'conflict'
+    )
+    return false
+  }
+  outputAssert(
+    progress.status === 'prepared' && now < outputU64(progress.recoveryUntil),
+    'Purchase recovery reservation expired',
+    'expired'
+  )
+  progress.txid = txid
+  if (commitment !== undefined) progress.purchaseCommitment = commitment
+  progress.operationId = privatePurchaseOperation(original, txid)
+  progress.status = 'admission-pending'
+  return true
 }
 
 /** Only supply delivered bytes loaded from the original protected result reservation. */

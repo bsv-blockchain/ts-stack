@@ -6,6 +6,7 @@ import {
   canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
+  outputHex32,
   outputPacketDigest,
   outputString,
   outputU64,
@@ -13,8 +14,10 @@ import {
   parseOutputPurchaseSubmit,
   restoreOutputCapability,
   selectOutputCapability,
-  verifyOutputPurchaseTerms,
+  OutputPurchaseTermsVerifier,
   verifyOutputPurchaseEnvelope,
+  verifyOutputPurchaseCommitmentEnvelope,
+  parseOutputPurchaseCommitmentBinding,
   OutputPurchaseTransport,
   type OutputCapabilityRecoveryRequest,
   type OutputCapabilitySelection,
@@ -23,6 +26,7 @@ import {
   type OutputSignedPurchaseTerms,
   type OutputPurchaseSubmit,
   type OutputPurchaseEnvelope,
+  type OutputPurchaseCommitmentBinding,
   type OutputRetainedCapability,
   type WalletInterface
 } from '@bsv/sdk'
@@ -41,7 +45,7 @@ export const PRIVATE_PURCHASE_BUYER_INITIAL: Readonly<OutputJSONObject> = Object
   format: FORMAT,
   empty: true
 })
-type Role = 'request' | 'contract' | 'terms' | 'plan' | 'candidate' | 'result'
+type Role = 'request' | 'contract' | 'terms' | 'plan' | 'candidate' | 'result' | 'commitment'
 type Phase = 'ready' | 'prepared' | 'funding' | 'funded' | 'received' | 'validated' | 'usable'
 interface Progress {
   format: typeof FORMAT
@@ -58,6 +62,9 @@ export interface PrivatePurchaseBuyerOptions {
   objects: ProtectedOperationObjectStore
   payment: PrivatePurchaseBuyerPayment
   validation: PrivatePurchaseBuyerValidation
+  /** Explicit local owner selection. Binds a distinct installation and reserves
+   * a seventh immutable object before preparation or financial work. */
+  candidateProfile?: 'full-purchase-commitment-v1'
   wallet: WalletInterface
   clock(): string
   current(): boolean
@@ -78,8 +85,17 @@ function object(value: unknown, maximum: number): OutputJSONObject {
   return parsed
 }
 export function privatePurchaseBuyerBinding(
-  options: Pick<PrivatePurchaseBuyerOptions, 'original' | 'trust' | 'payment' | 'validation'>
+  options: Pick<
+    PrivatePurchaseBuyerOptions,
+    'original' | 'trust' | 'payment' | 'validation' | 'candidateProfile'
+  >
 ): OutputJSONObject {
+  outputAssert(
+    options.candidateProfile === undefined ||
+      options.candidateProfile === 'full-purchase-commitment-v1',
+    'Unsupported purchase buyer candidate profile',
+    'unsupported'
+  )
   outputAssert(
     options.trust.kind === 'topic' && options.trust.profile === OUTPUT_PROFILES.purchase,
     'Purchase buyer requires the selected topic purchase profile',
@@ -108,11 +124,12 @@ export function privatePurchaseBuyerBinding(
     contract: digest('contract', object(options.original.contract, 524288)),
     payment: object(options.payment.configuration, 16384),
     candidateBytes: options.payment.maximumCandidateBytes,
-    validation: outputString(options.validation.id)
+    validation: outputString(options.validation.id),
+    ...(options.candidateProfile ? { candidateProfile: options.candidateProfile } : {})
   }
 }
-/** Durable ownership of one original purchase. Six protected object slots are
- * reserved before preparation or financial work. Large lineage/BEEF/License
+/** Durable ownership of one original purchase. Six protected object slots (seven
+ * with explicit commitment custody) precede preparation or financial work. Large lineage/BEEF/License
  * bytes never enter the small control journal. Recovery reads the original
  * wallet action and seller obligation; it never prepares, signs or submits.
  * advance explicitly authorizes new work under the original cutoff and may
@@ -126,13 +143,17 @@ export class PrivatePurchaseBuyer {
   private readonly contract: OutputRetainedCapability
   private readonly trust: OutputCapabilityRecoveryRequest
   private readonly sizes: Record<Role, number>
+  private readonly roles: Role[]
+  private readonly candidateProfile?: 'full-purchase-commitment-v1'
   private readonly configurations: string[]
   private readonly pins: (() => boolean)[]
   private readonly stopping = new AbortController()
   private readonly physical = new Set<Promise<void>>()
   private readonly work: BoundedOutputWork
   private observedAt = 0n
+  private readonly termsVerifier: OutputPurchaseTermsVerifier
   private constructor(private readonly ports: PrivatePurchaseBuyerOptions) {
+    this.candidateProfile = ports.candidateProfile
     this.trust = {
       ...ports.trust,
       chain: structuredClone(ports.trust.chain),
@@ -144,6 +165,10 @@ export class PrivatePurchaseBuyer {
     this.selection = restoreOutputCapability(ports.original.contract, this.trust)
     this.contract = object(ports.original.contract, 524288) as unknown as OutputRetainedCapability
     this.request = parseOutputPurchasePrepare(ports.original.request)
+    this.termsVerifier = new OutputPurchaseTermsVerifier(
+      this.request,
+      this.selection.manifest.body.identity
+    )
     const requestBytes = Math.min(4194304, this.selection.profile.maxRequestBytes),
       responseBytes = Math.min(4194304, this.selection.profile.maxResponseBytes)
     this.sizes = {
@@ -152,8 +177,18 @@ export class PrivatePurchaseBuyer {
       terms: responseBytes,
       plan: 4194304,
       candidate: requestBytes,
-      result: responseBytes
+      result: responseBytes,
+      commitment: 8192
     }
+    this.roles = (Object.keys(this.sizes) as Role[]).filter(
+      role => role !== 'commitment' || this.candidateProfile !== undefined
+    )
+    if (this.candidateProfile)
+      outputAssert(
+        typeof ports.validation.candidateBinding === 'function',
+        'Purchase commitment buyer requires a complete candidate verifier',
+        'unsupported'
+      )
     outputAssert(
       Number.isSafeInteger(ports.payment.maximumCandidateBytes) &&
         ports.payment.maximumCandidateBytes > 0 &&
@@ -177,7 +212,7 @@ export class PrivatePurchaseBuyer {
     )
     outputAssert(
       ports.state.configuration.limits.stateBytes >= 16384 &&
-        ports.objects.configuration.maximumObjects >= 6 &&
+        ports.objects.configuration.maximumObjects >= this.roles.length &&
         ports.objects.configuration.maximumObjectBytes >= Math.max(...Object.values(this.sizes)),
       'Purchase buyer lacks complete future capacity',
       'limited'
@@ -196,8 +231,10 @@ export class PrivatePurchaseBuyer {
       pin(ports.payment, 'plan'),
       pin(ports.payment, 'recover'),
       pin(ports.payment, 'finish'),
+      pin(this.termsVerifier, 'verify'),
       pin(ports.validation, 'preflight'),
       pin(ports.validation, 'fundingPreflight', true),
+      pin(ports.validation, 'candidateBinding', true),
       pin(ports.validation, 'verify'),
       pin(ports.validation, 'usable'),
       pin(ports.wallet, 'getPublicKey'),
@@ -218,7 +255,7 @@ export class PrivatePurchaseBuyer {
   }
   static async initialize(ports: PrivatePurchaseBuyerOptions): Promise<PrivatePurchaseBuyer> {
     const buyer = new PrivatePurchaseBuyer(ports)
-    await (Object.keys(buyer.sizes) as Role[]).reduce(
+    await buyer.roles.reduce(
       (sequence, role) =>
         sequence.then(async () => {
           await ports.objects.reserve(buyer.id(role), buyer.role(role), buyer.sizes[role])
@@ -248,7 +285,7 @@ export class PrivatePurchaseBuyer {
   }
   private async initialized(): Promise<void> {
     await this.load()
-    await (Object.keys(this.sizes) as Role[]).reduce(
+    await this.roles.reduce(
       (sequence, role) =>
         sequence.then(async () => {
           const saved = await this.ports.objects.read(this.id(role), this.role(role))
@@ -283,6 +320,7 @@ export class PrivatePurchaseBuyer {
   private installed(): void {
     outputAssert(
       this.pins.every(check => check()) &&
+        this.ports.candidateProfile === this.candidateProfile &&
         this.configuration().every((value, index) => value === this.configurations[index]),
       'Purchase buyer installed capability changed',
       'context-changed'
@@ -384,11 +422,7 @@ export class PrivatePurchaseBuyer {
     )
   }
   private terms(input: unknown): OutputSignedPurchaseTerms {
-    const terms = verifyOutputPurchaseTerms(
-        input,
-        this.request,
-        this.selection.manifest.body.identity
-      ),
+    const terms = this.termsVerifier.verify(input),
       p = this.selection.profile.parameters
     outputAssert(
       (p.domainProfiles as string[]).includes(terms.body.domainProfile) &&
@@ -483,6 +517,131 @@ export class PrivatePurchaseBuyer {
       )
     }
   }
+  /** Own the immutable identity beside the original funded bytes. A retained
+   * identity authenticates history; it is never a current-chain/rights verdict. */
+  private async candidateIdentity(
+    terms: OutputSignedPurchaseTerms,
+    candidate: OutputPurchaseSubmit,
+    signal: AbortSignal,
+    create = false
+  ): Promise<{ binding: OutputPurchaseCommitmentBinding; checkCurrent(): void }> {
+    this.access(signal)
+    const saved = await this.get('commitment'),
+      candidateDigest = digest('candidate', candidate)
+    this.access(signal)
+    if (saved !== undefined) {
+      closedOutputObject(saved, ['format', 'candidateDigest', 'binding'])
+      const binding = parseOutputPurchaseCommitmentBinding(saved.binding)
+      outputAssert(
+        saved.format === 'private-purchase-candidate-binding/1' &&
+          saved.candidateDigest === candidateDigest &&
+          binding.profile === this.candidateProfile &&
+          binding.domainProfile === terms.body.domainProfile,
+        'Purchase buyer retained identity differs from its original candidate',
+        'unavailable'
+      )
+      return { binding, checkCurrent: () => this.access(signal) }
+    }
+    outputAssert(create, 'Purchase buyer original identity is unavailable', 'unavailable')
+    outputAssert(
+      (await this.get('result')) === undefined,
+      'Delivered purchase cannot initialize a missing identity',
+      'unavailable'
+    )
+    this.access(signal)
+    const assessment = await this.ports.validation.candidateBinding!(
+      structuredClone(this.request),
+      structuredClone(terms),
+      structuredClone(candidate),
+      signal
+    )
+    outputAssert(
+      assessment !== null && typeof assessment === 'object' && !Array.isArray(assessment),
+      'Purchase buyer identity assessment must be an object'
+    )
+    const purchaseCommitment = outputHex32(
+        Object.getOwnPropertyDescriptor(assessment, 'purchaseCommitment')?.value
+      ),
+      method: unknown = Object.getOwnPropertyDescriptor(assessment, 'checkCurrent')?.value
+    outputAssert(
+      typeof method === 'function' && method.constructor.name !== 'AsyncFunction',
+      'Purchase buyer identity requires an owned synchronous guard',
+      'context-changed'
+    )
+    const unchanged = () => {
+        this.access(signal)
+        outputAssert(
+          Object.getOwnPropertyDescriptor(assessment, 'purchaseCommitment')?.value ===
+            purchaseCommitment &&
+            Object.getOwnPropertyDescriptor(assessment, 'checkCurrent')?.value === method,
+          'Verified purchase buyer identity changed',
+          'context-changed'
+        )
+      },
+      checkCurrent = () => {
+        unchanged()
+        const result: unknown = method.call(assessment)
+        if (result instanceof Promise) void result.catch(() => undefined)
+        outputAssert(
+          result === undefined,
+          'Purchase identity guard did not finish',
+          'context-changed'
+        )
+        unchanged()
+      },
+      binding = parseOutputPurchaseCommitmentBinding({
+        profile: this.candidateProfile,
+        domainProfile: terms.body.domainProfile,
+        purchaseCommitment
+      })
+    checkCurrent()
+    await this.put('commitment', {
+      format: 'private-purchase-candidate-binding/1',
+      candidateDigest,
+      binding
+    })
+    checkCurrent()
+    return { binding, checkCurrent }
+  }
+  private async authenticated(
+    input: unknown,
+    terms: OutputSignedPurchaseTerms,
+    candidate: OutputPurchaseSubmit | undefined,
+    signal: AbortSignal
+  ): Promise<OutputPurchaseEnvelope> {
+    if (!this.candidateProfile) return verifyOutputPurchaseEnvelope(input, terms, candidate?.txid)
+    if (candidate === undefined) {
+      const envelope = verifyOutputPurchaseEnvelope(input, terms)
+      outputAssert(
+        envelope.result.status === 'prepared' || envelope.result.status === 'expired',
+        'Purchase identity response lacks its original funded candidate',
+        'unavailable'
+      )
+      return envelope
+    }
+    const identity = await this.candidateIdentity(terms, candidate, signal)
+    identity.checkCurrent()
+    return verifyOutputPurchaseCommitmentEnvelope(input, terms, identity.binding)
+  }
+  private async sendPurchase(
+    operation: 'submit' | 'recover',
+    terms: OutputSignedPurchaseTerms,
+    candidate: OutputPurchaseSubmit | undefined,
+    signal: AbortSignal
+  ): Promise<OutputPurchaseEnvelope> {
+    const identity =
+      this.candidateProfile && candidate !== undefined
+        ? await this.candidateIdentity(terms, candidate, signal, true)
+        : undefined
+    identity?.checkCurrent()
+    const transport =
+        operation === 'submit'
+          ? this.transport(operation, terms, candidate!, identity?.binding)
+          : this.transport(operation, terms, candidate, identity?.binding),
+      result = await transport.send(signal)
+    identity?.checkCurrent()
+    return result
+  }
   private transport(
     operation: 'prepare',
     terms?: never,
@@ -491,17 +650,20 @@ export class PrivatePurchaseBuyer {
   private transport(
     operation: 'submit',
     terms: OutputSignedPurchaseTerms,
-    candidate: OutputPurchaseSubmit
+    candidate: OutputPurchaseSubmit,
+    commitmentBinding?: OutputPurchaseCommitmentBinding
   ): OutputPurchaseTransport<'submit'>
   private transport(
     operation: 'recover',
     terms: OutputSignedPurchaseTerms,
-    candidate?: OutputPurchaseSubmit
+    candidate?: OutputPurchaseSubmit,
+    commitmentBinding?: OutputPurchaseCommitmentBinding
   ): OutputPurchaseTransport<'recover'>
   private transport(
     operation: 'prepare' | 'submit' | 'recover',
     terms?: OutputSignedPurchaseTerms,
-    candidate?: OutputPurchaseSubmit
+    candidate?: OutputPurchaseSubmit,
+    commitmentBinding?: OutputPurchaseCommitmentBinding
   ) {
     const common = {
       contract: this.contract,
@@ -513,20 +675,28 @@ export class PrivatePurchaseBuyer {
     }
     if (operation === 'prepare') return new OutputPurchaseTransport({ ...common, operation })
     if (operation === 'submit')
-      return new OutputPurchaseTransport({ ...common, operation, terms, candidate })
+      return new OutputPurchaseTransport({
+        ...common,
+        operation,
+        terms,
+        candidate,
+        commitmentBinding
+      })
     return new OutputPurchaseTransport({
       ...common,
       operation,
       terms,
+      ...(commitmentBinding ? { commitmentBinding } : {}),
       ...(candidate ? { candidate } : {})
     })
   }
   private async retain(
     input: OutputPurchaseEnvelope,
     terms: OutputSignedPurchaseTerms,
-    candidate?: OutputPurchaseSubmit
+    candidate?: OutputPurchaseSubmit,
+    signal: AbortSignal = this.stopping.signal
   ): Promise<OutputPurchaseEnvelope> {
-    const owned = verifyOutputPurchaseEnvelope(input, terms, candidate?.txid)
+    const owned = await this.authenticated(input, terms, candidate, signal)
     if (owned.result.status === 'delivered') {
       await this.put('result', owned)
       const { snapshot, progress } = await this.load()
@@ -556,7 +726,8 @@ export class PrivatePurchaseBuyer {
       return this.retain(
         retainedResult as unknown as OutputPurchaseEnvelope,
         terms,
-        this.candidate(rawCandidate, terms)
+        this.candidate(rawCandidate, terms),
+        signal
       )
     }
     const rawPlan = await this.get('plan')
@@ -581,10 +752,10 @@ export class PrivatePurchaseBuyer {
       candidate = rawCandidate === undefined ? undefined : this.candidate(rawCandidate, terms),
       result = await this.get('result')
     if (result !== undefined)
-      return this.retain(result as unknown as OutputPurchaseEnvelope, terms, candidate)
-    const recovered = await this.transport('recover', terms, candidate).send(signal)
+      return this.retain(result as unknown as OutputPurchaseEnvelope, terms, candidate, signal)
+    const recovered = await this.sendPurchase('recover', terms, candidate, signal)
     this.access(signal)
-    return this.retain(recovered, terms, candidate)
+    return this.retain(recovered, terms, candidate, signal)
   }
   /** Reads original wallet/server state; never prepares/signs/submits a transaction. */
   recover(signal?: AbortSignal): Promise<OutputPurchaseEnvelope | undefined> {
@@ -666,9 +837,9 @@ export class PrivatePurchaseBuyer {
       saved = await this.load()
       await this.save(saved.snapshot, { ...saved.progress, submitAttempted: true })
       this.access(active)
-      const delivered = await this.transport('submit', terms, candidate).send(active)
+      const delivered = await this.sendPurchase('submit', terms, candidate, active)
       this.access(active)
-      return this.retain(delivered, terms, candidate)
+      return this.retain(delivered, terms, candidate, active)
     })
   }
   validate(signal?: AbortSignal): Promise<'validated' | 'usable'> {
@@ -684,7 +855,7 @@ export class PrivatePurchaseBuyer {
       )
       const terms = this.terms(rawTerms),
         candidate = this.candidate(rawCandidate, terms),
-        delivered = verifyOutputPurchaseEnvelope(rawResult, terms, candidate.txid)
+        delivered = await this.authenticated(rawResult, terms, candidate, active)
       await this.ports.validation.verify(
         structuredClone(this.request),
         structuredClone(terms),
@@ -728,7 +899,7 @@ export class PrivatePurchaseBuyer {
       )
       const terms = this.terms(rawTerms),
         candidate = this.candidate(rawCandidate, terms),
-        delivered = verifyOutputPurchaseEnvelope(rawResult, terms, candidate.txid)
+        delivered = await this.authenticated(rawResult, terms, candidate, active)
       outputAssert(
         await this.ports.validation.usable(structuredClone(delivered), active),
         'Purchase buyer material is no longer usable',
