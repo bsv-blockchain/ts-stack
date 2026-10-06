@@ -20,7 +20,6 @@ import {
   type OutputOutpoint,
   type OutputPurchaseEnvelope,
   type OutputReleaseEvidence,
-  type OutputReleasePolicy,
   type OutputSignedPacket,
   type OutputSignedPurchaseTerms
 } from '@bsv/sdk'
