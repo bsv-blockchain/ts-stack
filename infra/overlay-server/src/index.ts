@@ -1,3 +1,4 @@
+import { createMandalaEngineOutputs } from './mandalaEngineOutputs.js'
 import { createMandalaStateStore } from './mandalaStateStore.js'
 import { WalletAdvertiser } from '@bsv/overlay-discovery-services'
 import OverlayExpress from '@bsv/overlay-express'
@@ -39,7 +40,8 @@ import {
   MandalaTopicManager,
   MandalaStorageManager,
   createMandalaLookupService,
-  InMemoryScreeningProvider
+  InMemoryScreeningProvider,
+  type EngineOutputReader
 } from '@bsv/overlay-topics'
 import * as overlayTopics from '@bsv/overlay-topics'
 import { PrivateKey, ProtoWallet, WalletInterface } from '@bsv/sdk'
@@ -434,9 +436,7 @@ const main = async () => {
     const mandalaVerifierWallet = new ProtoWallet(
       PrivateKey.fromHex(mandalaConfig.verifierPrivateKey)
     ) as unknown as WalletInterface
-    const mandalaAdminWallet = new ProtoWallet(
-      PrivateKey.fromHex(mandalaConfig.adminPrivateKey)
-    ) as unknown as WalletInterface
+    const trustedIssuer = PrivateKey.fromHex(mandalaConfig.adminPrivateKey).toPublicKey().toString()
     let mandalaStorage: MandalaStorageManager | undefined
     const requireMandalaStorage = (): MandalaStorageManager => {
       if (mandalaStorage === undefined) {
@@ -445,14 +445,21 @@ const main = async () => {
       return mandalaStorage
     }
     const mandalaStateStore = createMandalaStateStore(requireMandalaStorage)
+    const mandalaEngineOutputs: EngineOutputReader = createMandalaEngineOutputs(() => {
+      const engine = server.engine
+      if (engine === undefined) {
+        throw new Error('Mandala owner repair requires the overlay engine')
+      }
+      return engine.storage
+    })
     server.configureTopicManager(
       'tm_mandala',
       new MandalaTopicManager({
         verifierWallet: mandalaVerifierWallet,
+        trustedIssuers: [trustedIssuer],
         screeningProvider: new InMemoryScreeningProvider(mandalaConfig.sanctionedIdentityKeys),
-        adminWallet: mandalaAdminWallet,
-        adminProtocolID: [2, 'mandala admin'] as [2, string],
-        stateStore: mandalaStateStore
+        stateStore: mandalaStateStore,
+        engineOutputs: mandalaEngineOutputs
       })
     )
     server.configureLookupServiceWithMongo('ls_mandala', db => {

@@ -61,7 +61,7 @@ All critical configuration is supplied through environment variables. Create a `
 | `DISCOVERY_ROOT`               | `false`                                  | Explicitly register this public node as a SHIP/SLAP discovery root and bootstrap its advertisement lookups at its own HTTPS origin. |
 | `MANDALA_ENABLED`              | `false`                                  | Explicitly enable the regulated Mandala topic; disabled by default.                                                                 |
 | `MANDALA_VERIFIER_PRIVATE_KEY` | required when enabled                    | Dedicated 32-byte hex linkage-verifier root, distinct from the node and Mandala admin roots.                                        |
-| `MANDALA_ADMIN_PRIVATE_KEY`    | required when enabled                    | Dedicated 32-byte hex Mandala administrative root, distinct from the node and verifier roots.                                       |
+| `MANDALA_ADMIN_PRIVATE_KEY`    | required when enabled                    | Dedicated 32-byte hex root, distinct from the node and verifier roots. Its compressed public key is the sole trusted issuer.        |
 | `MANDALA_STATIC_DENYLIST_JSON` | `[]`                                     | Explicit JSON array of canonical compressed identity keys for reference/local screening.                                            |
 
 A complete example can be found in `docker-compose.yml`.
@@ -122,13 +122,13 @@ continuously maintained `ScreeningProvider`, custody the verifier and admin
 roots independently in HSM/KMS-backed systems, and define rotation and recovery.
 
 The Mandala manager and lookup share one lazily initialized storage manager.
-The admission adapter verifies admin outpoints against that store's per-asset
-history, including the asset, transaction ID and output index. This wiring uses
-the existing history API so it can compile with the currently locked package
-and consume Overlay Topics 1.8.0's stricter admission contract on upgrade.
-Before a deployed upgrade, follow the [Mandala migration guide](../../packages/overlays/topics/README.md#mandala-admission-and-the-180-upgrade)
-and audit historical admin and owner records. Source publication does not
-upgrade a running overlay or its locked dependencies automatically.
+The manager forwards the published `@bsv/overlay-topics` 2.0.0 state surface
+and reads admitted outputs from the overlay engine for owner-index repair.
+The administrative private key's compressed public key is the only trusted
+issuer. See [Mandala on BRC-162](../../packages/overlays/topics/README.md#mandala-on-brc-162)
+before enabling it on a node that already stored Mandala records. Source
+publication does not upgrade a running overlay or its locked dependencies
+automatically.
 
 ## UHRP discovery compatibility
 
