@@ -71,6 +71,7 @@ afterEach(async () => {
  */
 export async function lchNativeCovenantProfileFixture(
   fixtureOptions: {
+    candidateBinding?: boolean
     detached?: boolean
     provenPurchase?: boolean
     maximumRequestBytes?: number
@@ -363,6 +364,7 @@ export async function lchNativeCovenantProfileFixture(
       releaseEvidence: release
     }
   }
+  let candidateChecks = 0
   let now = '22',
     allowed = true
   const counts = { preparation: 0, purchase: 0, release: 0 },
@@ -384,6 +386,33 @@ export async function lchNativeCovenantProfileFixture(
       current: () => allowed,
       clock: () => now,
       verification: {
+        ...(fixtureOptions.candidateBinding
+          ? {
+              candidate: async (
+                candidate: import('@bsv/sdk').OutputEvidence,
+                original: import('../src/overlayAcquisitionCovenantProfile.js').LCHOverlayCovenantProfileOriginalPurchase,
+                signal: AbortSignal
+              ) => {
+                candidateChecks++
+                const context = selectedContext(),
+                  verified = await purchaseVerifier.verify(candidate, original, context, signal)
+                outputAssert(
+                  verified.status === 'verified',
+                  'Candidate not independently verified: ' + canonicalOutputJSON(verified)
+                )
+                const checkCurrent = () => {
+                  guard()
+                  outputAssert(
+                    canonicalOutputJSON(selectedContext()) === canonicalOutputJSON(context),
+                    'Candidate verification context changed',
+                    'context-changed'
+                  )
+                }
+                checkCurrent()
+                return { purchaseCommitment: verified.purchaseCommitment, checkCurrent }
+              }
+            }
+          : {}),
         id: 'full-current-immutable-family-and-retained-local-release',
         preparation: async (packet, request, descriptor, signal) => {
           counts.preparation++
@@ -486,6 +515,7 @@ export async function lchNativeCovenantProfileFixture(
     options,
     objects,
     counts,
+    candidateChecks: () => candidateChecks,
     deliver,
     delivered: await deliver(),
     reopen,

@@ -439,9 +439,17 @@ invokes reply accessors. On malformed replies, cleanup visits at most that same
 range, including after an oversized-length refusal. Detached buffers and failing
 cleanup descriptors cannot replace the original refusal. The companion remains
 responsible for buffers omitted from, or outside, the requested reply.
+A provider promise may reject before JavaScript exposes its reply to the buyer,
+including when promise resolution encounters a detached proxy. Such opaque
+companion failures produce `unavailable`; an existing `OutputProtocolError`
+keeps its original identity and code. No response buffers are accessible to
+the buyer in that case, so the companion remains responsible for their disposal.
 
 The buyer uses joint reads for original reservation checks and the complete
-terms/candidate/result set used in validation and playback. Existing financial
+terms/candidate/result set used in recovery, validation and playback. Recovery
+reads a fresh atomic set before reconciling the control journal. It authenticates
+the original signed terms, candidate identity and delivered envelope on every
+call; it never carries a custody snapshot or validation verdict between calls. Existing financial
 intent, phase CAS, recipient access, complete packet signatures, domain and
 release verification remain separate checks. A custody snapshot establishes no
 current chain, admission, mining, entitlement or spending authority. Every call

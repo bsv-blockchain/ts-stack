@@ -192,3 +192,35 @@ export {
   type PrivatePublicationLookupCaller,
   type PrivatePublicationLookupContextOptions
 } from './PrivatePublicationLookupContext.js'
+
+/** Explicit full-commitment alias custody; historical owners remain distinct. */
+export {
+  SQLitePrivatePurchaseAliases,
+  type PrivatePurchaseAliasLimits,
+  type PrivatePurchaseAliasSnapshot,
+  type PrivatePurchaseAliasWrite
+} from './SQLitePrivatePurchaseAliases.js'
+export { SQLitePrivatePurchaseAliasStore } from './SQLitePrivatePurchaseAliasStore.js'
+export type {
+  PrivatePurchaseAliasOwner,
+  PrivatePurchaseAliasedLoaded,
+  PrivatePurchaseAliasedState,
+  PrivatePurchaseAliasOwnerInstallation
+} from './PrivatePurchaseAliasOwnerPorts.js'
+export {
+  PrivatePurchaseAliasCoordinator,
+  type PrivatePurchaseAliasCoordinatorOptions,
+  type PrivatePurchaseAliasRecoveryReport
+} from './PrivatePurchaseAliasCoordinator.js'
+export {
+  SDKPrivatePurchaseAliasCurrentness,
+  type PrivatePurchaseAliasChainSelection,
+  type PrivatePurchaseAliasCurrentness,
+  type PrivatePurchaseAliasCurrentnessAssessment,
+  type PrivatePurchaseAliasCurrentnessSubject
+} from './SDKPrivatePurchaseAliasCurrentness.js'
+export {
+  PrivatePurchaseAliasDisclosure,
+  type PrivatePurchaseAliasDisclosureBase,
+  type PrivatePurchaseAliasReports
+} from './PrivatePurchaseAliasDisclosure.js'

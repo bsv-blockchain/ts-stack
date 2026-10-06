@@ -12,6 +12,15 @@ validation, protected operations, and root-host coordination. BRC-197 exercises
 those capabilities with one optional sale-listing profile. Other applications
 may install different transaction domains without adopting its revenue model.
 
+The current source now composes the immutable profile with a same-writer alias
+owner, independently checked selected-chain currentness, per-transaction admission,
+guarded asynchronous HTTP disclosure, free buyer alias recovery and complete LCH
+candidate binding. The protected wallet route and authenticated native HTTP
+fixtures use the current programs and fixed-child authority. These layers are
+implemented; their complete Linux, coverage, mutation and final hosted qualification
+is still pending. Open integration rows below require that evidence and do not
+assert that the corresponding source layer is absent.
+
 ## Purchase identity and recovery
 
 - [x] Extend closed SDK envelopes with optional `purchaseCommitment` and separate
@@ -55,7 +64,9 @@ may install different transaction domains without adopting its revenue model.
       native currentness fences for a separately installed effect owner. Existing
       exact-txid owners and public exports are unchanged. Source/registration
       review and strict compilation do not qualify native execution, economic
-      identity/result composition or chain authority; those rows remain open.
+      identity/result composition or chain authority. The separately installed
+      same-writer owner and currentness companions now provide that composition;
+      their runtime qualification rows remain open.
 - [ ] Reserve one economic candidate identity per acquisition and retain exact
       raw transaction, admission work and release assessment separately per alias.
       Repeated aliases cannot charge again or create another private release.
@@ -144,8 +155,8 @@ may install different transaction domains without adopting its revenue model.
       both automatic and legacy modes. This component evidence does not qualify
       all native profile routes, creation preflight, alias reconciliation or
       complete buyer/seller/admission/HTTP composition.
-- [ ] Replace the superseded program, metadata, fixtures and ABI with both frozen
-      programs and component manifests. Activation: 33406 program bytes,
+- [ ] Qualify both current frozen programs, literal metadata, fixtures, ABI and
+      component manifests in the complete native composition. Activation: 33406 program bytes,
       SHA256 `5152517f75ac4159aa5d34211f45ce12cd85386a8d1414169886b0d64dac1dea`.
       Active: 4906 program bytes,
       SHA256 `5aff350548d3b420bf1a47b48b38af34bb5ecf28be5c797921c4e2a2cddd8dea`.

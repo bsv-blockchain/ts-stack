@@ -319,6 +319,27 @@ The independently installed purchase port receives both the complete original
 funded wallet candidate and the released purchase evidence. Verify every actual
 input and original BEEF association for each, then require an identical full
 purchase commitment. Distinct txids remain distinct Bitcoin subjects.
+For an explicitly selected full-commitment buyer, install
+`verification.candidate` before creating or reopening this domain. The domain
+then exposes `candidateBinding(request, signedTerms, candidate, signal)` for the
+buyer's original funded subject and independently reported recovery aliases.
+Omitting that port preserves the prior installation identity and leaves the
+capability absent. Selecting it creates a distinct domain installation; it does
+not reinterpret an older protected obligation. The verification installation ID
+must bind its complete algorithms and independently selected chain policy.
+
+The candidate port receives complete `OutputEvidence` and the owned original
+request, signed terms and selected seller. Compose it with
+`RevenueListingProfilePurchaseVerifier.verify` and require a verified result
+before returning its full commitment plus a synchronous same-context guard.
+The domain authenticates its protected originals and the standing consent and
+signed promise again, checks acquisition identity, and retains the owned guard.
+This read-only boundary requires neither a secret nor manufactured release
+proof. It does not run preparation's new-funding height/time window, assess a
+License, record entitlement, or authorize playback. Reported aliases require the
+buyer's separate fresh selected-chain verification before use as currentness;
+the original paid candidate and License remain unchanged.
+
 The release port separately assesses the originally selected release policy.
 The purchase port additionally returns the independently verified full 32-byte
 `purchaseCommitment`, calculated from the authenticated input-zero preimage

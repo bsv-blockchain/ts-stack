@@ -1466,6 +1466,66 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-owner",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-owner.property.test.ts",
+      "risk": "critical",
+      "boundary": "Same-physical-ledger full-commitment core3 identity, native observation and immutable terminal result custody",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-currentness",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-currentness.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact-subject Script/SPV in independently selected authenticated ancestry with ephemeral placement guards",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-coordinator",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-coordinator.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded exact-job admission, selected first release and historical entitlement separation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Fresh optional chain report inside the same native physical HTTP disclosure view",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-buyer-alias",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-buyer-alias.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit uncharged buyer currentness recovery, independently verified domain identity and buyer chain placement",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-candidate",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-profile-candidate.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit complete-candidate LCH verifier and historical recovery guard",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

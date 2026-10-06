@@ -1,5 +1,6 @@
 import { expect, it, jest } from '@jest/globals'
 import {
+  OutputProtocolError,
   canonicalOutputJSON,
   outputPacketDigest,
   type OutputPurchaseEnvelope,
@@ -506,6 +507,25 @@ it.each([undefined, 'full-purchase-commitment-v1'] as const)(
         packet.result.potatoes.signature = 'AA=='
         return { ...saved, bytes: new TextEncoder().encode(canonicalOutputJSON(packet)) }
       })
+      if (ports.objectReadProfile) {
+        const joint = ports.objects.readMany!.bind(ports.objects)
+        jest.spyOn(ports.objects, 'readMany').mockImplementation(async requests => {
+          const statuses = await joint(requests)
+          if (changed)
+            requests.forEach((request, index) => {
+              const saved = statuses[index]
+              if (request.originalBinding.role !== 'result' || saved.state !== 'stored') return
+              const packet = JSON.parse(new TextDecoder().decode(saved.bytes))
+              saved.bytes.fill(0)
+              packet.result.potatoes.signature = 'AA=='
+              statuses[index] = {
+                ...saved,
+                bytes: new TextEncoder().encode(canonicalOutputJSON(packet))
+              }
+            })
+          return statuses
+        })
+      }
     })
     expect(await reopened.buyer.recover()).toEqual(delivered)
     changed = true
@@ -695,3 +715,37 @@ it.each(['oversized', 'accessor', 'detached', 'revoked'] as const)(
     expect(f.calls).toEqual([])
   }
 )
+
+it('preserves classified joint custody failures and bounds opaque provider failures before effects', async () => {
+  const f = purchaseBuyerFixture('full-purchase-commitment-v1')
+  let failure: unknown
+  const owner = await f.open(true, {}, ports => {
+    const read = ports.objects.readMany!.bind(ports.objects)
+    jest.spyOn(ports.objects, 'readMany').mockImplementation(async requests => {
+      if (failure !== undefined) throw failure
+      return read(requests)
+    })
+  })
+  for (const code of ['cancelled', 'context-changed', 'unavailable'] as const) {
+    failure = new OutputProtocolError(code, 'Classified joint refusal')
+    await expect(owner.buyer.advance()).rejects.toBe(failure)
+  }
+  const detached = Proxy.revocable({}, {})
+  detached.revoke()
+  for (const value of [
+    null,
+    'Opaque provider refusal',
+    detached.proxy,
+    new TypeError('Detached reply')
+  ]) {
+    failure = value
+    await expect(owner.buyer.advance()).rejects.toMatchObject({ code: 'unavailable' })
+  }
+  expect(f.counts.finish).toBe(0)
+  expect(f.calls).toEqual([])
+  failure = undefined
+  const delivered = await owner.buyer.advance()
+  expect(await owner.buyer.recover()).toEqual(delivered)
+  expect(await owner.buyer.validate()).toBe('usable')
+  expect(f.counts.finish).toBe(1)
+})

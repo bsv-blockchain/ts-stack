@@ -14,6 +14,14 @@ complete mutation campaign and successful applicable checks on the exact
 published PR commit. Their immutable run IDs and terminal results are recorded in
 the PR completion evidence; this document does not self-certify those gates.
 
+The current alias owner, coordinator, independent currentness, physical disclosure,
+buyer recovery and candidate-bound LCH layers are now assembled with current-profile
+wallet routes and authenticated native HTTP fixtures. The current source passes
+repository health, lint, formatting, types, build, audit and documentation checks;
+the composed application/native workflows remain unqualified. Their open rows
+require fresh runtime and final-source evidence, including complete coverage and
+mutation campaigns. Earlier integration receipts are retained as historical evidence.
+
 ## Public and private state discovery
 
 - [x] Demonstrate progressive initial ingestion and resumable live updates together
@@ -148,12 +156,21 @@ complete campaign or final PR gate.
   [acquisition recovery guide](../../docs/guides/private-acquisition-recovery.md)
   explain original quote, wallet and result custody and explicit usability checks.
 - Transactional private acquisition, topical STEAK/POTATOES and licensed
-  decryption: Overlay Express `src/__tests__/PrivatePurchaseNative.integration.test.ts`
-  and output-knowledge `test/private-purchase-wallet-routes.test.ts` are the
-  native integration owners. Update them to the current activation/active
-  family, fixed-child authority/remittance and commitment-based recovery before
-  treating them as current qualification. The purchase custody guide requires
-  the same alignment; earlier route and signer examples are superseded.
+  decryption: Overlay Express
+  `src/__tests__/PrivatePurchaseProfileAliasNative.integration.test.ts` composes
+  the current activation/active family, fixed-child authority, actual wallet,
+  Engine/Mongo admission, selected-chain aliases, LCH and authenticated physical
+  HTTP delivery. `src/__tests__/PrivatePurchaseAliasHTTP.integration.test.ts`
+  isolates the authenticated alias adapter. Output-knowledge
+  `test/private-purchase-wallet-routes.test.ts` exercises all current routes and
+  eight real fixed-child recipients; the alias owner/currentness/coordinator/
+  disclosure and buyer-alias suites qualify their independent boundaries.
+  These new fixtures require Linux validation before this acceptance row closes.
+  The [alias-custody guide](../../docs/guides/private-purchase-alias-custody.md)
+  describes the current composition. The retained
+  `PrivatePurchaseNative.integration.test.ts` and historical interfaces continue
+  to require compatibility coverage; their earlier receipts do not qualify the
+  current profile.
 - Independent root serving and retained public history: run Overlay Express
   `src/__tests__/PrivateOverlayHostRootServing.integration.test.ts` for both SHIP
   and SLAP. It composes actual Engine/Mongo, two independent root journals, finite

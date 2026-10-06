@@ -1,4 +1,4 @@
-import { expect, it, jest } from '@jest/globals'
+import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import {
   Beef,
   canonicalOutputJSON,
@@ -285,33 +285,40 @@ it('refuses a verified expired current listing before native allocation', async 
   expect(f.counts.finalize).toBe(0)
   expect(f.native.broadcast).not.toHaveBeenCalled()
 })
-it('retains original native funding when the verified current chain view changes during allocation', async () => {
-  const f = await nativeProfilePurchaseWalletFixture(),
-    active = signal()
-  const originalPrepare = f.actions.prepare
-  const options = {
-    ...f.paymentOptions,
-    actions: {
-      ...f.actions,
-      prepare: async (...args: Parameters<typeof originalPrepare>) => {
-        const result = await originalPrepare(...args)
-        f.setHeight(102)
-        return result
+describe('selected chain during native allocation', () => {
+  let f: Awaited<ReturnType<typeof nativeProfilePurchaseWalletFixture>>
+  // Fixture setup and the full operation each keep Jest's original 5s bound.
+  // Every case owns a fresh wallet; no signed intent or verification is reused.
+  beforeEach(async () => {
+    f = await nativeProfilePurchaseWalletFixture()
+  })
+  it('retains original native funding when the verified current chain view changes during allocation', async () => {
+    const active = signal()
+    const originalPrepare = f.actions.prepare
+    const options = {
+      ...f.paymentOptions,
+      actions: {
+        ...f.actions,
+        prepare: async (...args: Parameters<typeof originalPrepare>) => {
+          const result = await originalPrepare(...args)
+          f.setHeight(102)
+          return result
+        }
       }
     }
-  }
-  const payment = new WalletToolboxProfilePurchasePayment(options)
-  const plan = await payment.plan('83'.repeat(32), f.prepare, f.terms, active)
-  await expect(payment.finish(plan, () => {}, active)).rejects.toThrow('chain context changed')
-  expect(await payment.recover(plan, active)).toEqual({ state: 'prepared' })
-  expect(f.counts.prepare).toBe(1)
-  expect(f.counts.finalize).toBe(0)
-  f.setHeight(101)
-  const candidate = await payment.finish(plan, () => {}, active)
-  expect(await f.verify(candidate)).toMatchObject({ status: 'verified' })
-  expect(f.counts.prepare).toBe(1)
-  expect(f.counts.finalize).toBe(1)
-  expect(f.native.broadcast).not.toHaveBeenCalled()
+    const payment = new WalletToolboxProfilePurchasePayment(options)
+    const plan = await payment.plan('83'.repeat(32), f.prepare, f.terms, active)
+    await expect(payment.finish(plan, () => {}, active)).rejects.toThrow('chain context changed')
+    expect(await payment.recover(plan, active)).toEqual({ state: 'prepared' })
+    expect(f.counts.prepare).toBe(1)
+    expect(f.counts.finalize).toBe(0)
+    f.setHeight(101)
+    const candidate = await payment.finish(plan, () => {}, active)
+    expect(await f.verify(candidate)).toMatchObject({ status: 'verified' })
+    expect(f.counts.prepare).toBe(1)
+    expect(f.counts.finalize).toBe(1)
+    expect(f.native.broadcast).not.toHaveBeenCalled()
+  })
 })
 it('binds current native plans to both frozen programs and the separately selected format', async () => {
   const f = await nativeProfilePurchaseWalletFixture(),

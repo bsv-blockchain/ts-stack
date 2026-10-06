@@ -20,6 +20,7 @@ import {
 import { guardPrivatePurchaseResponse } from './PrivatePurchaseResponseGuard.js'
 import type {
   PrivatePurchaseHTTPCaller,
+  PrivatePurchaseHTTPDisclosure,
   PrivatePurchaseHTTPOperation,
   PrivatePurchaseRouteOptions
 } from './PrivatePurchaseHTTPPorts.js'
@@ -67,6 +68,7 @@ class PrivatePurchaseHTTPHandler {
   private readonly timeoutMs: number
   private readonly requestBytes: number
   private readonly responseBytes: number
+  private readonly prepareAsync: PrivatePurchaseHTTPDisclosure['prepareAsync']
   private activeRequests = 0
   private activeWork = 0
   private readonly principals = new Map<string, number>()
@@ -94,6 +96,12 @@ class PrivatePurchaseHTTPHandler {
       throw new TypeError(
         'Private purchase routes require authentication and a native disclosure owner'
       )
+    if (
+      input.disclosure.prepareAsync !== undefined &&
+      typeof input.disclosure.prepareAsync !== 'function'
+    )
+      throw new TypeError('Private purchase async disclosure must be an installed function')
+    this.prepareAsync = input.disclosure.prepareAsync
     this.raw = express.raw({ type: () => true, limit: this.requestBytes, inflate: false })
   }
 
@@ -255,9 +263,22 @@ class PrivatePurchaseHTTPHandler {
           caller
         )
       if (req.aborted || res.destroyed || res.writableEnded) return
-      const prepared = this.options.disclosure.prepare(outputHex32(id), caller, {
-        terms: operation === 'prepare'
-      })
+      if (this.options.disclosure.prepareAsync !== this.prepareAsync)
+        throw new OutputProtocolError(
+          'context-changed',
+          'Private purchase disclosure owner changed'
+        )
+      const preparation = { terms: operation === 'prepare' }
+      const prepared =
+        this.prepareAsync === undefined
+          ? this.options.disclosure.prepare(outputHex32(id), caller, preparation)
+          : await this.prepareAsync.call(
+              this.options.disclosure,
+              outputHex32(id),
+              caller,
+              preparation
+            )
+      if (req.aborted || res.destroyed || res.writableEnded) return
       if (
         typeof prepared.body !== 'string' ||
         Buffer.byteLength(prepared.body) > this.responseBytes

@@ -3719,6 +3719,85 @@ export function buildMutationTargets(repositoryRoot) {
       [String.raw`^(\.{1,2}/.*)\.js$`]: '$1'
     }
   }
+  // Independently register the complete candidate-binding companion while
+  // preserving the original covenant target and its full regression suite.
+  targets['lch-overlay-covenant-candidate'] = {
+    ...targets['lch-overlay-covenant'],
+    propertyTest:
+      'packages/content/lch/test/overlay-acquisition-covenant-profile-candidate.property.test.ts',
+    mutate: ['src/overlayAcquisitionCovenantCore.ts', 'src/overlayAcquisitionCovenantProfile.ts']
+  }
+  // Whole runtime companions retain every original regression selector. New
+  // properties exercise real native custody or genuine SDK selected ancestry.
+  const aliasCoreTests = [
+    '<rootDir>/test/private-purchase-alias-owner.test.ts',
+    '<rootDir>/test/private-purchase-alias-owner.property.test.ts',
+    '<rootDir>/test/private-purchase-alias-currentness.test.ts',
+    '<rootDir>/test/private-purchase-alias-currentness.property.test.ts',
+    '<rootDir>/test/private-purchase-alias-coordinator.test.ts',
+    '<rootDir>/test/private-purchase-alias-coordinator.property.test.ts',
+    '<rootDir>/test/private-purchase-alias-disclosure.test.ts',
+    '<rootDir>/test/private-purchase-alias-disclosure.property.test.ts',
+    '<rootDir>/test/private-purchase-buyer-alias.test.ts',
+    '<rootDir>/test/private-purchase-buyer-alias.property.test.ts'
+  ]
+  for (const id of [
+    'private-purchase-alias-state',
+    'private-purchase-alias-custody',
+    'private-purchase-state',
+    'private-purchase-native-clock',
+    'private-purchase-coordination',
+    'private-purchase-evidence',
+    'private-purchase-disclosure',
+    'private-purchase-buyer',
+    'protected-operation-objects'
+  ]) {
+    const selectors = targets[id].runnerOptions.jest.config.testMatch
+    targets[id].runnerOptions.jest.config.testMatch = [
+      ...selectors,
+      ...aliasCoreTests.filter(test => !selectors.includes(test))
+    ]
+    targets[id].additionalInputs = [
+      ...targets[id].additionalInputs,
+      'test/private-purchase-alias*.ts',
+      'test/private-purchase-buyer-alias*.ts',
+      'test/evidence-fixture.ts',
+      'test/fixtures/reconciliation-vectors.json'
+    ]
+  }
+  for (const [id, property, module] of [
+    [
+      'private-purchase-alias-owner',
+      'private-purchase-alias-owner',
+      'SQLitePrivatePurchaseAliasStore'
+    ],
+    [
+      'private-purchase-alias-currentness',
+      'private-purchase-alias-currentness',
+      'SDKPrivatePurchaseAliasCurrentness'
+    ],
+    [
+      'private-purchase-alias-coordinator',
+      'private-purchase-alias-coordinator',
+      'PrivatePurchaseAliasCoordinator'
+    ],
+    [
+      'private-purchase-alias-disclosure',
+      'private-purchase-alias-disclosure',
+      'PrivatePurchaseAliasDisclosure'
+    ],
+    [
+      'private-purchase-buyer-alias',
+      'private-purchase-buyer-alias',
+      'PrivatePurchaseBuyerAliasCurrentness'
+    ]
+  ]) {
+    targets[id] = {
+      ...structuredClone(targets['private-purchase-alias-custody']),
+      propertyTest: `packages/application/output-knowledge/test/${property}.property.test.ts`,
+      mutate: [`src/private/${module}.ts`]
+    }
+  }
   appendMutationBuildInputs(repositoryRoot, targets)
   return targets
 }

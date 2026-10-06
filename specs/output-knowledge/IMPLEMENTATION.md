@@ -248,6 +248,60 @@ tarballs in10.090 seconds. All121 original/additive registry controls pass in
 complete mutation campaign or current-family integration.
 No previous hosted or mutation receipt qualifies these new components.
 
+## Current alias implementation and qualification boundary
+
+The current implementation separates the first economic purchase and private grant
+from exact Bitcoin transaction aliases. `SQLitePrivatePurchaseAliasStore` composes
+original identity, prepaid completion capacity, first financial reservation and
+first signed result with `SQLitePrivatePurchaseAliases` in the same authenticated
+writer. Each raw txid retains its own admission work and outcome; equivalent
+purchase identity never combines Bitcoin fact identities or repeats payment.
+`PrivatePurchaseAliasCoordinator` performs fresh domain and selected-chain checks,
+retains independent per-txid admission and selects an admitted mined alias before
+first issuance when the original policy requires mining. Historical POTATOES,
+settlement, License and key remain the first retained bytes after issuance.
+
+`PrivatePurchaseAliasDisclosure` extends the original guarded native disclosure
+with an explicitly installed asynchronous assessment. An unavailable or orphaned
+optional current alias does not invalidate a historical grant; malformed,
+unauthenticated or conflicting returned identity remains a refusal. The actual
+HTTP adapter signs first and rechecks the same custody and assessment at physical
+enqueue. `PrivatePurchaseBuyerAliasCurrentness` and the buyer's separately invoked
+`currentAlias` operation independently check the provider's optional evidence
+against the buyer's own domain and selected chain. They never fund, submit,
+replace a private grant or re-gate previously verified offline playback.
+
+The optional joint-custody read strategy now uses a fresh atomic
+terms/candidate/result set for recovery as well as validation and playback.
+Every call still authenticates the original terms, full candidate identity and
+first signed result. Omitted selection retains individual reads and their original
+order. An opaque provider-promise failure becomes `unavailable`; classified
+protocol refusals retain their original object and code. An inaccessible reply's
+buffers remain the provider's disposal obligation. No state, signature, chain,
+admission or usability verdict is cached between calls.
+
+The distinct [alias-custody guide](../../docs/guides/private-purchase-alias-custody.md)
+explains this new owner; the [original custody guide](../../docs/guides/private-purchase-custody.md)
+continues to document the retained interfaces. Current LCH candidate binding,
+protected wallet route fixtures and authenticated native HTTP examples compose
+the optional immutable Script exemplar with these general ports. The new native
+composition includes reserve/activation/purchase, actual Engine admission,
+selected mined-first release, a distinct equivalent raw transaction, independent
+buyer-chain refusal, reopen and licensed playback. Source implementation and
+strict compilation do not establish runtime qualification of those workflows.
+
+Published `3815bc84962c0cf577c7c691313962b06dfb6dba` has terminal coverage failures:
+the unchanged native allocation/recovery case exceeded its 5-second bound, and
+the full-identity recovery property interrupted after 203 of its required 300
+cases. A malformed revoked joint response also escaped as a JavaScript TypeError.
+These results remain failed evidence. The new source corrects the response
+boundary and reduces repeated fresh recovery transactions; the native fixture
+separates fresh provisioning into a scoped 5-second hook while preserving the
+case's 5-second bound and complete recovery/retry/verification assertions. All
+original property counts, seeds, replay, case and interrupt controls remain.
+Linux behavior, full coverage and measured cost still require fresh validation;
+no performance or Checkpoint 2 result is claimed from these source changes.
+
 ## Protected recovery qualification
 
 The buyer now freshly authenticates a retained immutable result and heals a
@@ -5892,7 +5946,6 @@ They do not establish actual native seller signing, creation fee/resource
 preflight, all native routes, alias custody, admission or HTTP composition. Those
 remaining integrations and complete final-source qualification keep Checkpoint 2
 open.
-
 
 ### October 6 bounded alias custody foundation
 

@@ -61,7 +61,8 @@ export async function acquisitionNativeWalletFixture(
   chain: { network: 'main' | 'test' | 'mock'; genesisHash: string },
   tracker: ChainTracker,
   rootKey = 83,
-  managedChangePolicy?: { maxOutputsPerAction: number; migrationInputsPerAction: number }
+  managedChangePolicy?: { maxOutputsPerAction: number; migrationInputsPerAction: number },
+  actionBatchMode: 'auto' | 'legacy' = 'legacy'
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'acquisition-wallet-native-'))
   const opened = new Set<() => Promise<void>>()
@@ -100,7 +101,7 @@ export async function acquisitionNativeWalletFixture(
       keyDeriver,
       storage,
       services,
-      actionBatchMode: 'legacy'
+      actionBatchMode
     })
     const recovery = await SQLiteFundingRecoveryStore[create ? 'install' : 'open'](active, chain)
     const controller = new RecoverableFundingController(wallet, recovery)
@@ -115,7 +116,7 @@ export async function acquisitionNativeWalletFixture(
     }
     opened.delete(closeKnex)
     opened.add(close)
-    return { active, wallet, controller, identities, bridge, close }
+    return { active, wallet, controller, identities, bridge, services, close }
   }
   const close = async () => {
     await Array.from(opened).reduce(

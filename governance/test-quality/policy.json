@@ -1784,6 +1784,73 @@
           "Definitive exact-job outcomes and first native terminal times cannot regress under late replies.",
           "Current authority and same-physical-ledger guards precede every retained write and read; toy semantic fixtures confer no Script or chain authority."
         ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-alias-owner.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Same-physical-ledger full-commitment core3 identity, native observation and immutable terminal result custody",
+        "target": "Complete independently checked generated histories with min300/seed3242026/replay/150000 interrupt-as-failure/180000 case controls",
+        "invariants": [
+          "Two genuine native properties/min600 preserve first economic identity/time, exact raw candidate, all admitted/failure/result guards and byte-exact historical recovery across reopen and alias turnover.",
+          "All original whole-module targets, regression selectors, thresholds and persisted formats remain authoritative. Controlled domain and admission premises do not qualify BRC197 Script, production mining, private License or financial integration."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-alias-currentness.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Exact-subject Script/SPV in independently selected authenticated ancestry with ephemeral placement guards",
+        "target": "Complete independently checked generated histories with min300/seed3242026/replay/150000 interrupt-as-failure/180000 case controls",
+        "invariants": [
+          "One genuine SDK corpus property/min300 uses real proof-of-work checked ancestry and generated selected-view, availability and cancellation histories; no source label, stored verdict or mock tip establishes mining.",
+          "All original whole-module targets, regression selectors, thresholds and persisted formats remain authoritative. Controlled domain and admission premises do not qualify BRC197 Script, production mining, private License or financial integration."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-alias-coordinator.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Bounded exact-job admission, selected first release and historical entitlement separation",
+        "target": "Complete independently checked generated histories with min300/seed3242026/replay/150000 interrupt-as-failure/180000 case controls",
+        "invariants": [
+          "One genuine native property/min300 preserves one issuance and the original signed result through generated reopen, retry and selected-alias histories; unknown external jobs remain durable and transient errors remain pending.",
+          "All original whole-module targets, regression selectors, thresholds and persisted formats remain authoritative. Controlled domain and admission premises do not qualify BRC197 Script, production mining, private License or financial integration."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-alias-disclosure.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Fresh optional chain report inside the same native physical HTTP disclosure view",
+        "target": "Complete independently checked generated histories with min300/seed3242026/replay/150000 interrupt-as-failure/180000 case controls",
+        "invariants": [
+          "One genuine native property/min300 preserves immutable historical bytes and once-only physical responses through generated report availability, view change and reopen; no nested native read or report cache.",
+          "All original whole-module targets, regression selectors, thresholds and persisted formats remain authoritative. Controlled domain and admission premises do not qualify BRC197 Script, production mining, private License or financial integration."
+        ]
+      },
+      {
+        "path": "packages/application/output-knowledge/test/private-purchase-buyer-alias.property.test.ts",
+        "manifest": "packages/application/output-knowledge/package.json",
+        "risk": "critical",
+        "boundary": "Explicit uncharged buyer currentness recovery, independently verified domain identity and buyer chain placement",
+        "target": "Complete independently checked generated histories with min300/seed3242026/replay/150000 interrupt-as-failure/180000 case controls",
+        "invariants": [
+          "One genuine native buyer property/min300 preserves original grant, wallet effects and control revision through generated report availability, selected-view changes and reopen; currentness cannot rewrite usable historical rights.",
+          "All original whole-module targets, regression selectors, thresholds and persisted formats remain authoritative. Controlled domain and admission premises do not qualify BRC197 Script, production mining, private License or financial integration."
+        ]
+      },
+      {
+        "path": "packages/content/lch/test/overlay-acquisition-covenant-profile-candidate.property.test.ts",
+        "manifest": "packages/content/lch/package.json",
+        "risk": "critical",
+        "boundary": "Explicit complete-candidate LCH verifier and historical recovery guard",
+        "target": "Generated installed-verifier and access histories under the independently verified original purchase commitment",
+        "invariants": [
+          "The complete purchase commitment comes from independently executed Bitcoin, Script, lineage and signed original preparation verification.",
+          "Changes to the installed candidate verifier or local access invalidate the returned synchronous guard.",
+          "New-purchase time does not revoke a historical complete-candidate assessment; no private release, License or financial action is fabricated."
+        ]
       }
     ],
     "exclusions": [

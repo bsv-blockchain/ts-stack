@@ -1,5 +1,9 @@
 import { createRequire } from 'node:module'
 import {
+  Beef,
+  BigNumber,
+  KeyDeriver,
+  TransactionSignature,
   P2PKH,
   Hash,
   MerklePath,
@@ -13,10 +17,22 @@ import {
   canonicalOutputJSON,
   outputAssert,
   outputPacketDigest,
+  outputHex32,
+  parseOutputPurchasePrepare,
   signOutputPacket,
-  type OutputPurchasePrepare
+  type OutputPurchasePrepare,
+  type OutputReleasePolicy,
+  parseOutputReleasePolicy,
+  type OutputPurchaseSubmit
 } from '@bsv/sdk'
+import type { RevenueListingProfileAuthority } from '../src/revenue-listing/RevenueListingProfileAuthority.js'
+import type { ChainTracker } from '@bsv/sdk'
 import { RevenueListingProfileSpend } from '@bsv/sdk/script/templates/RevenueListingProfileSpend'
+import { revenueListingPurchaseCommitment } from '@bsv/sdk/script/templates/RevenueListingSpend'
+import {
+  parseRevenueListingProfileDescriptor,
+  type RevenueListingProfileDescriptor
+} from '@bsv/sdk/script/templates/RevenueListingProfile'
 import { assembleLineage, lineageLimits } from '../src/revenue-listing/LineagePackage.js'
 import {
   REVENUE_LISTING_LINEAGE_SCHEMA,
@@ -41,7 +57,12 @@ const publicGenesis = atGenesis()
 /** Disclosed independent easy-work funding checkpoint. The normative corpus's
  * checkpoint belongs to the seller root; a current integration must not sign that
  * root. This fresh checkpoint pays only the unrelated public funding actor. */
-function nativeFundingChain(originalAnchor: Transaction) {
+function nativeFundingChain(originalAnchor: Transaction, maximumHeight = 101) {
+  outputAssert(
+    Number.isSafeInteger(maximumHeight) && maximumHeight >= 101 && maximumHeight <= 4096,
+    'Invalid synthetic native header bound'
+  )
+  let selectedHeight = 101
   const anchor = new Transaction(
     originalAnchor.version,
     originalAnchor.inputs.map(input => ({ ...input })),
@@ -57,72 +78,190 @@ function nativeFundingChain(originalAnchor: Transaction) {
   )
   anchor.merklePath = new MerklePath(0, [[{ offset: 0, hash: anchor.id('hex'), txid: true }]])
   const headers: { height: number; raw: string; hash: string; merkleRoot: string }[] = []
-  for (let height = 0; height <= 101; height++) {
-    const bytes = Uint8Array.from(Utils.toArray(fixture.headers[0].raw, 'hex'))
-    const data = new DataView(bytes.buffer)
-    const root =
-      height === 0
-        ? anchor.id('hex')
-        : Utils.toHex(Hash.sha256(Utils.toArray(`native-current-header-${height}`, 'utf8')))
-    bytes.set(Utils.toArray(headers.at(-1)?.hash ?? '00'.repeat(32), 'hex').reverse(), 4)
-    bytes.set(Utils.toArray(root, 'hex').reverse(), 36)
-    data.setUint32(68, data.getUint32(68, true) + height * 600, true)
-    let hash = '',
-      nonce = 0
-    do {
-      data.setUint32(76, nonce++, true)
-      hash = Utils.toHex(Hash.hash256(Array.from(bytes)).reverse())
-    } while (BigInt('0x' + hash) > 0x7fffffn << 232n)
-    headers.push({ height, raw: Utils.toHex(Array.from(bytes)), hash, merkleRoot: root })
+  let purchaseRoot: string | undefined
+  function rebuildHeaders() {
+    headers.length = 0
+    for (let height = 0; height <= maximumHeight; height++) {
+      const bytes = Uint8Array.from(Utils.toArray(fixture.headers[0].raw, 'hex'))
+      const data = new DataView(bytes.buffer)
+      const root =
+        height === 0
+          ? anchor.id('hex')
+          : height === 102 && purchaseRoot !== undefined
+            ? purchaseRoot
+            : Utils.toHex(Hash.sha256(Utils.toArray(`native-current-header-${height}`, 'utf8')))
+      bytes.set(Utils.toArray(headers.at(-1)?.hash ?? '00'.repeat(32), 'hex').reverse(), 4)
+      bytes.set(Utils.toArray(root, 'hex').reverse(), 36)
+      data.setUint32(68, data.getUint32(68, true) + height * 600, true)
+      let hash = '',
+        nonce = 0
+      do {
+        data.setUint32(76, nonce++, true)
+        hash = Utils.toHex(Hash.hash256(Array.from(bytes)).reverse())
+      } while (BigInt('0x' + hash) > 0x7fffffn << 232n)
+      headers.push({ height, raw: Utils.toHex(Array.from(bytes)), hash, merkleRoot: root })
+    }
   }
+  rebuildHeaders()
   const chain = { network: 'mock' as const, genesisHash: headers[0].hash }
   const chains: ChainViewResolver = {
-    resolve: (view: ReturnType<typeof context>['view']) =>
-      Promise.resolve({
-        view,
+    resolve: (view: ReturnType<typeof context>['view']) => {
+      const tip = Number(view.tipHeight)
+      outputAssert(
+        Number.isSafeInteger(tip) && tip >= 101 && tip <= maximumHeight,
+        'Missing selected synthetic native view',
+        'context-changed'
+      )
+      outputAssert(
+        canonicalOutputJSON(view) === canonicalOutputJSON(currentContext(tip).view),
+        'Selected synthetic native view changed',
+        'context-changed'
+      )
+      return Promise.resolve({
+        view: structuredClone(view),
         tracker: {
-          currentHeight: () => Promise.resolve(101),
+          currentHeight: () => Promise.resolve(tip),
           isValidRootForHeight: (root: string, height: number) =>
-            Promise.resolve(headers[height]?.merkleRoot === root)
+            Promise.resolve(height <= tip && headers[height]?.merkleRoot === root)
         },
         header: (height: number) => {
-          const header = headers[height]
+          const header = height <= tip ? headers[height] : undefined
           return header
             ? Promise.resolve(header)
             : Promise.reject(new Error('Missing synthetic native header'))
         }
       })
+    }
   }
-  const currentContext = () => {
+  const currentContext = (height = selectedHeight) => {
+    outputAssert(headers[height] !== undefined, 'Missing selected synthetic native header')
     const current = context()
+    if (maximumHeight > 101) {
+      current.id = 'native-current-context-' + height
+      current.view.id = 'native-current-view-' + height
+    }
     current.view.chain = structuredClone(chain)
-    current.view.tipHash = headers[101].hash
+    current.view.tipHash = headers[height].hash
+    current.view.tipHeight = String(height)
     current.view.medianTimePast = String(
-      new DataView(Uint8Array.from(Utils.toArray(headers[96].raw, 'hex')).buffer).getUint32(
+      new DataView(Uint8Array.from(Utils.toArray(headers[height - 5].raw, 'hex')).buffer).getUint32(
         68,
         true
       )
     )
     return current
   }
-  return { anchor, chains, chain, currentContext }
+  return {
+    anchor,
+    chains,
+    chain,
+    currentContext,
+    selectPurchaseProof: (txid?: string) => {
+      outputAssert(maximumHeight >= 102, 'Synthetic proof extension was not installed')
+      const proof =
+        txid === undefined
+          ? undefined
+          : new MerklePath(102, [
+              [
+                { offset: 0, hash: '01'.repeat(32) },
+                { offset: 1, hash: outputHex32(txid), txid: true }
+              ]
+            ])
+      purchaseRoot = proof?.computeRoot()
+      rebuildHeaders()
+      selectedHeight = 102
+      return proof
+    },
+    setVerifiedHeight: (height: number) => {
+      outputAssert(
+        headers[height] !== undefined && height >= 101,
+        'Missing selected synthetic native header'
+      )
+      selectedHeight = height
+    }
+  }
 }
 
 /** Actual native wallet, disclosed synthetic mature-chain funding, complete
  * authenticated listing genesis and independently verified resulting purchase.
  * No HTTP/topic/mining/live-customer claim and no broadcast. */
+export interface NativeProfilePurchaseOptions {
+  revenue?: typeof fixture.descriptor.initialRevenue
+  purchasePrice?: string
+  genesisFeeSatoshis?: number
+  maximumVerifiedHeight?: number
+  actionBatchMode?: 'auto' | 'legacy'
+  /** Construct a neutral application listing against this disclosed funding
+   * checkpoint before any wallet preparation. Omission preserves the original
+   * route fixture; the application cannot replace the selected chain/anchor. */
+  application?: (funding: {
+    chain: { network: 'mock'; genesisHash: string }
+    anchor: { chain: { network: 'mock'; genesisHash: string }; txid: string; outputIndex: number }
+  }) => Promise<{
+    descriptor: RevenueListingProfileDescriptor
+    prepare: OutputPurchasePrepare
+    sellerKey: PrivateKey
+    buyerKeyCode: number
+    now: number
+    releasePolicy?: OutputReleasePolicy
+  }>
+  prepareGenesisAuthority?: (dependencies: {
+    descriptor: typeof fixture.descriptor
+    chain: { network: 'mock'; genesisHash: string }
+    tracker: ChainTracker
+  }) => Promise<RevenueListingProfileAuthority>
+}
+
 export async function nativeProfilePurchaseWalletFixture(
   maximumCandidateBytes = 524288,
-  expiryHeight = fixture.descriptor.expiryHeight
+  expiryHeight = fixture.descriptor.expiryHeight,
+  options: NativeProfilePurchaseOptions = {}
 ) {
   const original = structuredClone(publicGenesis),
     assembly = assembleLineage(original, lineageLimits({})),
     funding = nativeFundingChain(
-      assembly.beef.findAtomicTransaction(original.descriptor.lineageAnchor.txid)!
+      assembly.beef.findAtomicTransaction(original.descriptor.lineageAnchor.txid)!,
+      options.maximumVerifiedHeight ?? 101
     ),
     { anchor, chains, currentContext } = funding,
-    descriptor = structuredClone(original.descriptor)
+    application = await options.application?.({
+      chain: structuredClone(funding.chain),
+      anchor: { chain: structuredClone(funding.chain), txid: anchor.id('hex'), outputIndex: 0 }
+    }),
+    descriptor = structuredClone(application?.descriptor ?? original.descriptor)
+  if (application !== undefined) {
+    outputAssert(
+      options.revenue === undefined &&
+        options.purchasePrice === undefined &&
+        application.descriptor.expiryHeight === expiryHeight &&
+        canonicalOutputJSON(application.descriptor.chain) === canonicalOutputJSON(funding.chain) &&
+        canonicalOutputJSON(application.descriptor.lineageAnchor) ===
+          canonicalOutputJSON({
+            chain: funding.chain,
+            txid: anchor.id('hex'),
+            outputIndex: 0
+          }) &&
+        Number.isSafeInteger(application.now) &&
+        application.now >= 0 &&
+        Number.isSafeInteger(application.buyerKeyCode) &&
+        application.buyerKeyCode > 0,
+      'Application original must bind the selected synthetic funding and immutable schedule'
+    )
+    const ownedDescriptor = parseRevenueListingProfileDescriptor(application.descriptor),
+      ownedRequest = parseOutputPurchasePrepare(application.prepare)
+    outputAssert(
+      ownedDescriptor.seller === application.sellerKey.toPublicKey().toString() &&
+        ownedRequest.assetId === ownedDescriptor.assetId &&
+        ownedRequest.termsDigest === ownedDescriptor.termsDigest &&
+        ownedRequest.recipient ===
+          new PrivateKey(application.buyerKeyCode).toPublicKey().toString() &&
+        canonicalOutputJSON(ownedRequest.listing.chain) === canonicalOutputJSON(funding.chain),
+      'Application original buyer, seller, asset, terms and chain must match before wallet funding'
+    )
+  }
   descriptor.expiryHeight = expiryHeight
+  if (options.purchasePrice !== undefined) descriptor.purchasePrice = options.purchasePrice
+  if (options.revenue !== undefined) descriptor.initialRevenue = structuredClone(options.revenue)
   descriptor.chain = structuredClone(funding.chain)
   descriptor.lineageAnchor = {
     chain: structuredClone(funding.chain),
@@ -133,10 +272,24 @@ export async function nativeProfilePurchaseWalletFixture(
   view.view.chain = descriptor.chain
   const selected = { ...descriptor.chain, network: 'mock' as const },
     resolved = await chains.resolve(view.view, new AbortController().signal),
-    native = await acquisitionNativeWalletFixture(selected, resolved.tracker, 44, {
-      maxOutputsPerAction: 1,
-      migrationInputsPerAction: 0
-    }),
+    native = await acquisitionNativeWalletFixture(
+      selected,
+      resolved.tracker,
+      application?.buyerKeyCode ?? 44,
+      {
+        maxOutputsPerAction: 1,
+        migrationInputsPerAction: 0
+      },
+      options.actionBatchMode
+    ),
+    genesisAuthority =
+      options.prepareGenesisAuthority === undefined
+        ? undefined
+        : await options.prepareGenesisAuthority({
+            descriptor: structuredClone(descriptor),
+            chain: selected,
+            tracker: resolved.tracker
+          }),
     sender = new ProtoWallet(new PrivateKey(90)),
     senderIdentityKey = (await sender.getPublicKey({ identityKey: true })).publicKey,
     derivationPrefix = 'bmF0aXZlLWNvdmVuYW50',
@@ -173,12 +326,20 @@ export async function nativeProfilePurchaseWalletFixture(
           )
         },
         {
-          satoshis: amount - Number(descriptor.reserve) - 200000 - 1,
+          satoshis:
+            amount - Number(descriptor.reserve) - 200000 - (options.genesisFeeSatoshis ?? 1),
           lockingScript: new P2PKH().lock(PublicKey.fromString(fundingKey).toAddress())
         }
       ],
       0
     )
+  outputAssert(
+    options.genesisFeeSatoshis === undefined ||
+      (Number.isSafeInteger(options.genesisFeeSatoshis) &&
+        options.genesisFeeSatoshis > 0 &&
+        options.genesisFeeSatoshis < 100000),
+    'Invalid synthetic genesis fee'
+  )
   await genesis.sign()
   // Public activation spends the reserve listing and separate synthetic funding.
   // Seller identity root never signs either transaction. No derived private key
@@ -239,35 +400,41 @@ export async function nativeProfilePurchaseWalletFixture(
     description: 'Disclosed synthetic current-profile purchase funding'
   })
   const point = { chain: selected, txid: genesis.id('hex'), outputIndex: 0 },
-    sellerKey = new PrivateKey(fixture.testActors.seller.scalar),
+    sellerKey = application?.sellerKey ?? new PrivateKey(fixture.testActors.seller.scalar),
     lineage: RevenueListingProfileLineagePackage = {
       version: 1,
       descriptor,
-      genesis: signOutputPacket(
-        'sale-genesis',
-        {
-          version: 1 as const,
-          listingId: outputPacketDigest('sale-listing', descriptor),
-          genesis: point
-        },
-        sellerKey
-      ),
+      genesis:
+        genesisAuthority === undefined
+          ? signOutputPacket(
+              'sale-genesis',
+              {
+                version: 1 as const,
+                listingId: outputPacketDigest('sale-listing', descriptor),
+                genesis: point
+              },
+              sellerKey
+            )
+          : await genesisAuthority.signGenesis(descriptor, point),
       target: { ...point, txid: active.id('hex') },
       transactions: [
         { txid: point.txid, beef: Utils.toBase64(genesis.toAtomicBEEF()) },
         { txid: active.id('hex'), beef: Utils.toBase64(active.toAtomicBEEF()) }
       ].sort((a, b) => a.txid.localeCompare(b.txid))
     },
-    prepare: OutputPurchasePrepare = {
-      version: 1,
-      requestId: 'native-current-profile-purchase',
-      topic: 'tm_native_current_purchase',
-      listing: structuredClone(lineage.target),
-      assetId: descriptor.assetId,
-      termsDigest: descriptor.termsDigest,
-      recipient: native.native.identities.wallet,
-      request: 'AA=='
-    },
+    prepare: OutputPurchasePrepare =
+      application === undefined
+        ? {
+            version: 1,
+            requestId: 'native-current-profile-purchase',
+            topic: 'tm_native_current_purchase',
+            listing: structuredClone(lineage.target),
+            assetId: descriptor.assetId,
+            termsDigest: descriptor.termsDigest,
+            recipient: native.native.identities.wallet,
+            request: 'AA=='
+          }
+        : { ...structuredClone(application.prepare), listing: structuredClone(lineage.target) },
     terms = signOutputPacket(
       'purchase-terms',
       {
@@ -293,9 +460,11 @@ export async function nativeProfilePurchaseWalletFixture(
             new TextEncoder().encode(canonicalOutputJSON(lineage, { bytes: 4194304 }))
           )
         },
-        releasePolicy: { kind: 'local-admission' as const },
-        purchaseUntil: String(Math.floor(Date.now() / 1000) + 80),
-        recoveryUntil: String(Math.floor(Date.now() / 1000) + 172880)
+        releasePolicy: parseOutputReleasePolicy(
+          application?.releasePolicy ?? { kind: 'local-admission' }
+        ),
+        purchaseUntil: String((application?.now ?? Math.floor(Date.now() / 1000)) + 80),
+        recoveryUntil: String((application?.now ?? Math.floor(Date.now() / 1000)) + 172880)
       },
       sellerKey
     ),
@@ -369,8 +538,98 @@ export async function nativeProfilePurchaseWalletFixture(
     counts,
     lineage,
     selected,
+    chains,
+    currentContext,
+    setVerifiedHeight: (value: number) => {
+      funding.setVerifiedHeight(value)
+      height = value
+    },
     async reopen() {
       return open(await native.open())
+    },
+    /** Public synthetic fixture keys only. A distinct valid funding-input
+     * signature gives a second txid with the SAME full listing-input preimage.
+     * The fixed nonce belongs exclusively to this disclosed test key; it must
+     * never be used by a production signer. No second wallet action is made. */
+    async alternativeCandidate(candidate: OutputPurchaseSubmit): Promise<OutputPurchaseSubmit> {
+      const original = Beef.fromBinaryStrict(Utils.toArray(candidate.beef, 'base64')),
+        originalTx = original.findTransactionForSigning(candidate.txid)!,
+        changed = Transaction.fromHex(originalTx.toHex()),
+        publicKey = new KeyDeriver(
+          new PrivateKey(application?.buyerKeyCode ?? 44)
+        ).derivePrivateKey(
+          [2, '3241645161d8'],
+          `${derivationPrefix} ${derivationSuffix}`,
+          senderIdentityKey
+        )
+      for (let index = 0; index < changed.inputs.length; index++)
+        changed.inputs[index].sourceTransaction = originalTx.inputs[index].sourceTransaction
+      const index = changed.inputs.findIndex(
+        (input, position) =>
+          position > 0 && input.sourceTXID === genesis.id('hex') && input.sourceOutputIndex === 2
+      )
+      outputAssert(index >= 1, 'Expected disclosed native funding input')
+      const input = changed.inputs[index],
+        prior = input.sourceTransaction!.outputs[input.sourceOutputIndex]
+      outputAssert(
+        prior.lockingScript.toHex() ===
+          new P2PKH().lock(publicKey.toPublicKey().toAddress()).toHex(),
+        'Disclosed fixture key does not own selected funding output'
+      )
+      const scope = TransactionSignature.SIGHASH_ALL | TransactionSignature.SIGHASH_FORKID,
+        preimage = TransactionSignature.format({
+          sourceTXID: input.sourceTXID!,
+          sourceOutputIndex: input.sourceOutputIndex,
+          sourceSatoshis: prior.satoshis!,
+          transactionVersion: changed.version,
+          otherInputs: changed.inputs.filter((_, position) => position !== index),
+          outputs: changed.outputs,
+          inputIndex: index,
+          subscript: prior.lockingScript,
+          inputSequence: input.sequence!,
+          lockTime: changed.lockTime,
+          scope
+        }),
+        signature = publicKey.sign(Hash.sha256(preimage), undefined, true, new BigNumber(2)),
+        bytes = new TransactionSignature(signature.r, signature.s, scope).toChecksigFormat(),
+        key = publicKey.toPublicKey().encode(true) as number[]
+      input.unlockingScript = new UnlockingScript([
+        { op: bytes.length, data: bytes },
+        { op: key.length, data: key }
+      ])
+      outputAssert(
+        changed.id('hex') !== candidate.txid &&
+          revenueListingPurchaseCommitment(changed) ===
+            revenueListingPurchaseCommitment(originalTx),
+        'Alternative must change only raw identity, not the complete economic commitment'
+      )
+      const selected = await chains.resolve(currentContext().view, new AbortController().signal)
+      outputAssert(
+        await changed.verify(selected.tracker),
+        'Alternative synthetic Script verification failed'
+      )
+      const complete = new Beef()
+      complete.mergeTransaction(changed)
+      return {
+        ...candidate,
+        txid: changed.id('hex'),
+        beef: Utils.toBase64(complete.toBinaryAtomic(changed.id('hex')))
+      }
+    },
+    /** Commit a synthetic checked header tree at non-coinbase position1. This
+     * proves Script/SPV against fixture ancestry, never a production block body. */
+    proveCandidate(candidate: OutputPurchaseSubmit): OutputPurchaseSubmit {
+      const proof = funding.selectPurchaseProof(candidate.txid)!,
+        complete = Beef.fromBinaryStrict(Utils.toArray(candidate.beef, 'base64')),
+        raw = complete.findTransactionForSigning(candidate.txid)!.toBinary(),
+        index = complete.mergeBump(proof)
+      complete.mergeRawTx(raw, index)
+      height = 102
+      return { ...candidate, beef: Utils.toBase64(complete.toBinaryAtomic(candidate.txid)) }
+    },
+    regressProof() {
+      funding.selectPurchaseProof()
+      height = 102
     },
     async verify(candidate: { txid: string; beef: string }) {
       const current = currentContext()

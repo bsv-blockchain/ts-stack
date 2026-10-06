@@ -2682,7 +2682,52 @@ async function acceptImmutableDelivery(
   await domain.verify(original.prepare, signedTerms, originalFunded, delivered, signal)
   return domain.playback(delivered, signal)
 }
-export { prepareImmutableBuyer, acceptImmutableDelivery }
+/** A full-commitment installation selects this port BEFORE buyer construction.
+ * The selected context/current guard belongs to independently validated ancestry,
+ * never a catalogue's claimed height or txid. No release/License is invented. */
+function immutableCandidateVerification(
+  verifier: import('@bsv/output-knowledge/revenue-listing').RevenueListingProfilePurchaseVerifier,
+  selection: {
+    context(
+      signal: AbortSignal
+    ): Promise<import('@bsv/output-knowledge/revenue-listing').VerificationContext>
+    current(context: import('@bsv/output-knowledge/revenue-listing').VerificationContext): boolean
+  }
+): NonNullable<
+  import('@bsv/lch/overlay-covenant').LCHOverlayCovenantProfileVerification['candidate']
+> {
+  const verify = verifier.verify,
+    context = selection.context,
+    current = selection.current
+  return async (candidate, original, signal) => {
+    const selected = await context.call(selection, signal)
+    const guard = () => {
+      if (
+        signal.aborted ||
+        verifier.verify !== verify ||
+        selection.context !== context ||
+        selection.current !== current
+      )
+        throw new Error('Independent candidate verification context changed')
+      const checked: unknown = current.call(selection, structuredClone(selected))
+      if (checked instanceof Promise) void checked.catch(() => undefined)
+      if (
+        checked !== true ||
+        signal.aborted ||
+        verifier.verify !== verify ||
+        selection.context !== context ||
+        selection.current !== current
+      )
+        throw new Error('Independent candidate verification context changed')
+    }
+    guard()
+    const assessment = await verify.call(verifier, candidate, original, selected, signal)
+    guard()
+    if (assessment.status !== 'verified') throw new Error('Complete candidate was not verified')
+    return { purchaseCommitment: assessment.purchaseCommitment, checkCurrent: guard }
+  }
+}
+export { prepareImmutableBuyer, acceptImmutableDelivery, immutableCandidateVerification }
 ```
 
 ## Current immutable collector seller

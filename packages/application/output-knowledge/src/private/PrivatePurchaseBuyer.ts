@@ -19,6 +19,7 @@ import {
   verifyOutputPurchaseCommitmentEnvelope,
   parseOutputPurchaseCommitmentBinding,
   OutputPurchaseTransport,
+  OutputProtocolError,
   type OutputCapabilityRecoveryRequest,
   type OutputCapabilitySelection,
   type OutputJSONObject,
@@ -43,6 +44,8 @@ import type {
   PrivatePurchaseBuyerPayment,
   PrivatePurchaseBuyerValidation
 } from './PrivatePurchaseBuyerPorts.js'
+import type { PrivatePurchaseBuyerAliasCurrentness } from './PrivatePurchaseBuyerAliasCurrentness.js'
+import type { PrivatePurchaseAliasCurrentnessAssessment } from './SDKPrivatePurchaseAliasCurrentness.js'
 const FORMAT = 'private-purchase-buyer/1'
 export const PRIVATE_PURCHASE_BUYER_INITIAL: Readonly<OutputJSONObject> = Object.freeze({
   format: FORMAT,
@@ -327,9 +330,7 @@ export class PrivatePurchaseBuyer {
         'context-changed'
       )
     } else {
-      const statuses = await this.ports.objects.readMany(
-        this.roles.map(role => ({ id: this.id(role), originalBinding: this.role(role) }))
-      )
+      const statuses = await this.readStatuses(this.roles)
       try {
         this.installed()
         const owned = this.ownStatuses(statuses, this.roles.length)
@@ -466,6 +467,24 @@ export class PrivatePurchaseBuyer {
       }
     }
   }
+  private async readStatuses(roles: readonly Role[]): Promise<unknown> {
+    try {
+      // Promise assimilation may refuse a detached provider reply before the
+      // ownership validator receives it. The companion still owns its buffers.
+      return await this.ports.objects.readMany!(
+        roles.map(role => ({ id: this.id(role), originalBinding: this.role(role) }))
+      )
+    } catch (error) {
+      let classified = false
+      try {
+        classified = error instanceof OutputProtocolError
+      } catch {
+        // An opaque thrown value cannot establish a protocol refusal.
+      }
+      outputAssert(classified, 'Purchase buyer joint custody read failed', 'unavailable')
+      throw error
+    }
+  }
   private async getMany(roles: readonly Role[]): Promise<(OutputJSONObject | undefined)[]> {
     if (this.objectReadProfile === undefined || this.ports.objects.readMany === undefined) {
       const values: (OutputJSONObject | undefined)[] = []
@@ -476,9 +495,7 @@ export class PrivatePurchaseBuyer {
       }
       return readNext(0)
     }
-    const statuses = await this.ports.objects.readMany(
-      roles.map(role => ({ id: this.id(role), originalBinding: this.role(role) }))
-    )
+    const statuses = await this.readStatuses(roles)
     try {
       this.installed()
       const owned = this.ownStatuses(statuses, roles.length)
@@ -841,9 +858,21 @@ export class PrivatePurchaseBuyer {
     // commit, without rewriting the same retained bytes or consulting the seller.
     return this.received(await this.authenticated(input, terms, candidate, signal))
   }
+  private async recoveryObject(
+    original: readonly (OutputJSONObject | undefined)[] | undefined,
+    role: 'terms' | 'candidate' | 'result'
+  ): Promise<OutputJSONObject | undefined> {
+    if (original === undefined) return this.get(role)
+    return original[{ terms: 0, candidate: 1, result: 2 }[role]]
+  }
   private async reconcile(signal: AbortSignal): Promise<OutputPurchaseEnvelope | undefined> {
     this.access(signal)
-    const rawTerms = await this.get('terms')
+    // A selected companion supplies one fresh atomic original-object view.
+    // Omitted selection retains the individual reads and their original order.
+    const original = this.objectReadProfile
+      ? await this.getMany(['terms', 'candidate', 'result'])
+      : undefined
+    const rawTerms = await this.recoveryObject(original, 'terms')
     if (rawTerms === undefined) return undefined
     const terms = this.terms(rawTerms)
     let saved = await this.load()
@@ -851,9 +880,9 @@ export class PrivatePurchaseBuyer {
       await this.save(saved.snapshot, { ...saved.progress, phase: 'prepared' })
       saved = await this.load()
     }
-    const retainedResult = await this.get('result')
+    const retainedResult = await this.recoveryObject(original, 'result')
     if (retainedResult !== undefined) {
-      const rawCandidate = await this.get('candidate')
+      const rawCandidate = await this.recoveryObject(original, 'candidate')
       outputAssert(
         rawCandidate !== undefined,
         'Purchase buyer delivered result lacks its original candidate',
@@ -1012,6 +1041,102 @@ export class PrivatePurchaseBuyer {
         return 'usable'
       }
       return 'validated'
+    })
+  }
+  /** Explicit free fresh currentness recovery. This never rewrites the original
+   * protected grant, accepts a new secret/License, funds or submits. Historical
+   * usableResult/recover remain independent when the optional report is absent
+   * or the independently selected buyer chain rejects it. */
+  currentAlias(
+    assessor: PrivatePurchaseBuyerAliasCurrentness,
+    signal?: AbortSignal
+  ): Promise<PrivatePurchaseAliasCurrentnessAssessment | undefined> {
+    return this.run(signal, async active => {
+      this.access(active)
+      outputAssert(
+        this.candidateProfile === 'full-purchase-commitment-v1',
+        'Buyer alias currentness requires explicit full commitment ownership',
+        'unsupported'
+      )
+      const saved = await this.load()
+      const [rawTerms, rawCandidate, rawResult] = await this.getMany([
+        'terms',
+        'candidate',
+        'result'
+      ])
+      outputAssert(
+        rawTerms !== undefined && rawCandidate !== undefined && rawResult !== undefined,
+        'Buyer alias currentness lacks its original paid obligation',
+        'unavailable'
+      )
+      const terms = this.terms(rawTerms),
+        candidate = this.candidate(rawCandidate, terms)
+      const original = await this.authenticated(rawResult, terms, candidate, active)
+      outputAssert(
+        original.result.status === 'delivered',
+        'Buyer alias currentness requires its retained historical delivery',
+        'unavailable'
+      )
+      const identity = await this.candidateIdentity(terms, candidate, active)
+      identity.checkCurrent()
+      const received = await this.sendPurchase('recover', terms, candidate, active)
+      this.access(active)
+      identity.checkCurrent()
+      const assess = assessor.assess
+      outputAssert(typeof assess === 'function', 'Buyer alias assessor is required')
+      const report = await assess.call(
+        assessor,
+        structuredClone(this.request),
+        structuredClone(terms),
+        structuredClone(identity.binding),
+        received,
+        active
+      )
+      this.access(active)
+      outputAssert(
+        assessor.assess === assess,
+        'Buyer alias assessor changed during recovery',
+        'context-changed'
+      )
+      identity.checkCurrent()
+      const latest = await this.load()
+      outputAssert(
+        latest.snapshot.revision === saved.snapshot.revision &&
+          latest.progress.phase === saved.progress.phase,
+        'Buyer alias native state changed during currentness recovery',
+        'context-changed'
+      )
+      this.access(active)
+      if (!report) return undefined
+      const check = Object.getOwnPropertyDescriptor(report.placement, 'checkCurrent')?.value
+      outputAssert(
+        typeof check === 'function' && check.constructor.name !== 'AsyncFunction',
+        'Buyer alias report requires an owned synchronous guard'
+      )
+      const checkCurrent = () => {
+        this.access(active)
+        outputAssert(
+          assessor.assess === assess &&
+            Object.getOwnPropertyDescriptor(report.placement, 'checkCurrent')?.value === check,
+          'Buyer alias report owner changed',
+          'context-changed'
+        )
+        identity.checkCurrent()
+        const result: unknown = check.call(report.placement)
+        if (result instanceof Promise) void result.catch(() => undefined)
+        outputAssert(
+          result === undefined,
+          'Buyer alias report guard must finish synchronously',
+          'context-changed'
+        )
+        this.access(active)
+      }
+      checkCurrent()
+      return Object.freeze({
+        ...report,
+        currentAlias: Object.freeze({ ...report.currentAlias }),
+        placement: Object.freeze({ checkCurrent })
+      })
     })
   }
   async status(): Promise<Phase> {

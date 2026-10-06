@@ -10,3 +10,13 @@ export type {
   PrivatePurchaseBuyerPaymentOutcome,
   PrivatePurchaseBuyerValidation
 } from './PrivatePurchaseBuyerPorts.js'
+
+/** Portable, explicit fresh alias assessment; no native server owner is imported. */
+export { PrivatePurchaseBuyerAliasCurrentness } from './PrivatePurchaseBuyerAliasCurrentness.js'
+export {
+  SDKPrivatePurchaseAliasCurrentness,
+  type PrivatePurchaseAliasChainSelection,
+  type PrivatePurchaseAliasCurrentness,
+  type PrivatePurchaseAliasCurrentnessAssessment,
+  type PrivatePurchaseAliasCurrentnessSubject
+} from './SDKPrivatePurchaseAliasCurrentness.js'

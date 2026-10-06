@@ -1,5 +1,6 @@
 import {
   canonicalOutputJSON,
+  parseOutputReleasePolicy,
   OUTPUT_PROFILES,
   outputPacketDigest,
   selectOutputCapability,
@@ -9,6 +10,7 @@ import {
   type OutputChain,
   type OutputOutpoint,
   type OutputPurchasePrepare,
+  type OutputReleasePolicy,
   type OutputPurchaseTerms
 } from '@bsv/sdk'
 import {
@@ -42,6 +44,7 @@ export async function lchCovenantFixture(
     embedCiphertext?: boolean
     maximumRequestBytes?: number
     maximumResponseBytes?: number
+    releasePolicy?: OutputReleasePolicy
   } = {}
 ) {
   const now = options.now ?? 20,
@@ -49,7 +52,7 @@ export async function lchCovenantFixture(
     chain = f.acquire.listing.chain,
     topic = 'tm_licensed_asset',
     anchor = options.anchor ?? { chain, txid: '11'.repeat(32), outputIndex: 0 },
-    releasePolicy = { kind: 'local-admission' as const },
+    releasePolicy = parseOutputReleasePolicy(options.releasePolicy ?? { kind: 'local-admission' }),
     initialRevenue = {
       revision: '0',
       recipients: [

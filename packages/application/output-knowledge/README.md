@@ -104,6 +104,8 @@ The `private/node` entry exports `PrivatePurchaseContracts`, `PrivatePurchaseCoo
 one native admission intent and first signed result, with reserved completion
 capacity and current recipient checks at enqueue. They do not themselves verify
 a purchase, perform topic admission, satisfy a release policy or issue a licence.
+See [purchase alias custody and independent currentness](../../../docs/guides/private-purchase-alias-custody.md) for the explicit new native owner, per-alias admission, optional authenticated currentAlias response and free buyer assessment. Historical owners remain separate.
+
 See [original purchase custody](../../../docs/guides/private-purchase-custody.md)
 before installing the separately composed host and domain owners. The complete
 cumulative-proof profile installs the evidence owner before preparation, verifies
@@ -117,13 +119,20 @@ of existing custody. The explicitly selected `SQLitePrivatePurchaseCommitmentSto
 uses sealed version-two state and retains an independently verified full purchase
 commitment through native reservation, admission and signed delivery. Historical
 version-one custody and public declarations remain unchanged. This companion
-still pins an exact submitted txid. Internal alias metadata, the separately
-installed `SQLitePrivatePurchaseAliases` journal and selected-status projection
-now reserve complete raw candidates and exact admission jobs on the same native
-ledger. Their owned contributions can be composed with the eventual result owner
-in one writer. They do not establish domain validity or selected-chain authority.
-Economic reservation, historical-result composition, buyer/LCH/HTTP integration
-and native qualification remain separate work; no public alias entry is exposed. The purchase guide labels the earlier native six-route and authenticated
+still pins an exact submitted txid. The explicitly selected native alias owner retains complete raw candidates,
+independent admission jobs and one full economic commitment on the original
+protected ledger. Its coordinator progresses every unresolved candidate job,
+selects only independently verified current-chain aliases, and commits the first
+private release once. The optional asynchronous HTTP disclosure path checks
+native custody and selected-chain guards in the same physical enqueue transaction.
+Later alias reports preserve the exact historical signed release. A separate
+buyer companion independently verifies the reported candidate and its own selected
+chain through free recovery; it neither repays nor replaces the original License.
+The `private/node` and portable `private/purchase-buyer` entries expose the
+respective explicit companions. These components are under qualification; their
+source and interface descriptions are not full runtime or Checkpoint 2 evidence.
+BRC-197's immutable collector is one concrete exemplar of this architecture.
+The purchase guide labels the earlier native six-route and authenticated
 Engine/Mongo/LCH demonstrations as historical-profile evidence.
 
 The optional portable `private/purchase-buyer` entry exports `PrivatePurchaseBuyer`,
@@ -1389,7 +1398,9 @@ browser eviction or rollback of a complete valid database. See the
 The optional native `readMany` companion returns ordered original object statuses
 from one fresh authenticated read transaction. An explicit purchase-buyer
 `objectReadProfile: 'joint-custody-v1'` selects it for reservation checks and the
-terms/candidate/result set. Omitted selection retains individual reads, and
+terms/candidate/result set in recovery, validation and playback. Every recovery
+uses a fresh read and repeats authentication; it retains no validity cache.
+Omitted selection retains individual reads, and
 other backends must implement and qualify the companion before selecting it.
 It changes no persisted binding, financial intent or entitlement checks; it
 neither initializes missing objects nor caches validity between calls. See the

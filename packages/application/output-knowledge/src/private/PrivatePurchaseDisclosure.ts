@@ -7,18 +7,52 @@ import {
   parseOutputServiceError
 } from '@bsv/sdk'
 import type { PrivatePurchaseCaller, PrivatePurchaseAccessPort } from './PrivatePurchasePorts.js'
-import type { PrivatePurchaseContracts } from './PrivatePurchaseContracts.js'
+import type {
+  PrivatePurchaseContracts,
+  PrivatePurchaseOriginal
+} from './PrivatePurchaseContracts.js'
+import type { ProtectedLedgerGuard } from './ProtectedLedgerCodec.js'
+import type { OutputPurchaseEnvelope, OutputSignedPurchaseTerms } from '@bsv/sdk'
 import type { PrivatePurchaseStoreOwner } from './SQLitePrivatePurchaseStore.js'
 import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
+
+/** Common disclosure shape: each owner keeps its own native loaded type, phase,
+ * format and custody checks. This does not erase or convert either owner's state. */
+export interface PrivatePurchaseDisclosureOwner<Loaded> {
+  load(
+    id: string,
+    buyer: string,
+    clock: () => string,
+    guard: ProtectedLedgerGuard
+  ): Loaded | undefined
+  disclose(
+    loaded: Loaded,
+    buyer: string,
+    clock: () => string,
+    guard: ProtectedLedgerGuard,
+    send: (envelope: OutputPurchaseEnvelope) => void
+  ): void
+  discloseTerms(
+    loaded: Loaded,
+    buyer: string,
+    clock: () => string,
+    guard: ProtectedLedgerGuard,
+    send: (terms: OutputSignedPurchaseTerms) => void
+  ): void
+}
 
 /** Authenticate/sign prepared HTTP bytes first, then enqueue exactly once under
  * current native authority. Ordinary submit and BRC105 payment are untouched.
  */
-export class PrivatePurchaseDisclosure {
+export class PrivatePurchaseDisclosure<
+  Loaded extends { custody: { original: PrivatePurchaseOriginal } } = NonNullable<
+    ReturnType<PrivatePurchaseStoreOwner['load']>
+  >
+> {
   private readonly unchanged: readonly (() => boolean)[]
   constructor(
     private readonly domain: PrivateServiceDomain,
-    private readonly store: Pick<PrivatePurchaseStoreOwner, 'load' | 'disclose' | 'discloseTerms'>,
+    private readonly store: PrivatePurchaseDisclosureOwner<Loaded>,
     private readonly contracts: PrivatePurchaseContracts,
     private readonly access: PrivatePurchaseAccessPort,
     private readonly clock: () => string,
@@ -66,9 +100,47 @@ export class PrivatePurchaseDisclosure {
     )
   }
   prepare(idInput: string, supplied: PrivatePurchaseCaller, options: { terms?: boolean } = {}) {
+    return this.prepareCurrent(idInput, supplied, options)
+  }
+  /** Opt-in companion fence, evaluated against the SAME native view used to
+   * decrypt and enqueue. It must not perform another ledger read. */
+  prepareGuarded(
+    idInput: string,
+    supplied: PrivatePurchaseCaller,
+    additional: ProtectedLedgerGuard,
+    options: { terms?: boolean } = {}
+  ) {
+    outputAssert(
+      typeof additional === 'function' && additional.constructor.name !== 'AsyncFunction',
+      'Additional disclosure guard must be synchronous'
+    )
+    return this.prepareCurrent(idInput, supplied, options, additional)
+  }
+  private prepareCurrent(
+    idInput: string,
+    supplied: PrivatePurchaseCaller,
+    options: { terms?: boolean },
+    additional?: ProtectedLedgerGuard
+  ) {
     const id = outputHex32(idInput),
       caller = this.caller(supplied),
-      guard = this.access.guard(id, caller.buyer, () => this.current(caller)),
+      access = this.access.guard(id, caller.buyer, () => this.current(caller)),
+      guard: ProtectedLedgerGuard =
+        additional === undefined
+          ? access
+          : view => {
+              access(view)
+              if (additional) {
+                const result: unknown = additional(view)
+                if (result instanceof Promise) void result.catch(() => undefined)
+                outputAssert(
+                  result === undefined,
+                  'Additional disclosure guard must finish synchronously',
+                  'context-changed'
+                )
+                access(view)
+              }
+            },
       loaded = this.store.load(id, caller.buyer, this.clock, guard)
     outputAssert(loaded, 'Purchase not found', 'not-found')
     const selection = this.contracts.restore(loaded.custody.original.capability)

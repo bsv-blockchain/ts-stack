@@ -20,6 +20,13 @@ export interface PrivatePurchaseHTTPPrepared {
   enqueue(send: (body: string, headers: Readonly<Record<string, string>>) => void): void
 }
 export interface PrivatePurchaseHTTPDisclosure {
+  /** Opt-in fresh alias assessment. The prepared response must retain the native
+   * synchronous enqueue fence; this await never releases physical work capacity. */
+  prepareAsync?(
+    acquisitionId: string,
+    caller: PrivatePurchaseHTTPCaller,
+    options?: { terms?: boolean }
+  ): Promise<PrivatePurchaseHTTPPrepared>
   prepare(
     acquisitionId: string,
     caller: PrivatePurchaseHTTPCaller,

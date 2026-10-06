@@ -3,10 +3,12 @@ import {
   parseOutputPurchaseEnvelope,
   type OutputEvidence,
   type OutputPurchasePrepare,
+  type OutputPurchaseSubmit,
   type OutputSignedPurchaseTerms
 } from '@bsv/sdk'
 import type { RevenueListingProfileDescriptor } from '@bsv/sdk/script/templates/RevenueListingProfile'
 import { lchAssert } from './errors.js'
+import type { LCHOverlayVerifiedCovenantPurchase } from './overlayAcquisitionCovenantProof.js'
 import { toHex } from './hash.js'
 import { validateLCHCollectorPreparation } from './overlayAcquisitionCollectorProfile.js'
 import {
@@ -23,6 +25,7 @@ import {
 } from './overlayAcquisitionCovenantProfileSettlement.js'
 import {
   validateLCHOverlayCovenantProfileTerms,
+  validateLCHOverlayCovenantProfilePromise,
   validateLCHOverlayCovenantProfileWindow
 } from './overlayAcquisitionCovenantProfileTerms.js'
 import type { LCHOverlayObjectCustody } from './overlayAcquisitionCustody.js'
@@ -43,12 +46,25 @@ export interface LCHOverlayCovenantProfileVerification extends LCHCovenantVerifi
   RevenueListingProfileDescriptor,
   LCHOverlayCovenantProfilePreparation,
   LCHOverlayCovenantProfileOriginalPurchase
-> {}
+> {
+  /** Explicit complete candidate verifier, independent of private delivery.
+   * Execute Bitcoin/Script, complete listing lineage, signed preparation and
+   * every actual input association before returning the full commitment. Its
+   * guard binds the same selected verification context; a digest is no proof.
+   * Omission preserves the historical installation and exposes no binding hook. */
+  candidate?(
+    candidate: OutputEvidence,
+    original: LCHOverlayCovenantProfileOriginalPurchase,
+    signal: AbortSignal
+  ): Promise<LCHOverlayVerifiedCovenantPurchase>
+}
 export interface LCHOverlayCovenantProfileDomainOptions extends LCHCovenantDomainOptions<
   RevenueListingProfileDescriptor,
   LCHOverlayCovenantProfilePreparation,
   LCHOverlayCovenantProfileOriginalPurchase
-> {}
+> {
+  verification: LCHOverlayCovenantProfileVerification
+}
 function ownPreparation(
   descriptor: RevenueListingProfileDescriptor,
   assessment: LCHOverlayCovenantProfilePreparation
@@ -107,8 +123,54 @@ export class LCHOverlayCovenantProfileDomain extends LCHCovenantDomainCore<
   LCHOverlayCovenantProfilePreparation,
   LCHOverlayCovenantProfileOriginalPurchase
 > {
+  /** Present only when complete candidate verification was explicitly installed
+   * before creation or reopen. A full-commitment buyer can refuse a missing
+   * capability before preparation or finance. No private release is fabricated. */
+  readonly candidateBinding?: (
+    request: OutputPurchasePrepare,
+    challenge: OutputSignedPurchaseTerms,
+    candidate: OutputPurchaseSubmit,
+    signal: AbortSignal
+  ) => Promise<LCHOverlayVerifiedCovenantPurchase>
   private constructor(options: LCHOverlayCovenantProfileDomainOptions, retained?: Uint8Array) {
-    super(options, current, retained)
+    super(
+      options,
+      options.verification.candidate === undefined
+        ? current
+        : { ...current, adapter: 'immutable-standing-collector-full-commitment/1' },
+      retained
+    )
+    const candidate = options.verification.candidate,
+      owner = options.verification,
+      checkInstalled = () => {
+        lchAssert(
+          options.verification === owner && owner.candidate === candidate,
+          'ERR_LCH_LICENSE',
+          'Installed complete candidate verifier changed'
+        )
+      }
+    if (candidate !== undefined) {
+      lchAssert(
+        typeof candidate === 'function',
+        'ERR_LCH_PROFILE_UNSUPPORTED',
+        'Complete candidate verifier must be installed explicitly'
+      )
+      this.candidateBinding = (request, challenge, value, signal) =>
+        this.candidateBindingCore(
+          request,
+          challenge,
+          value,
+          async (terms, original, signal) => {
+            checkInstalled()
+            validateLCHOverlayCovenantProfilePromise(terms, original.terms)
+            const verified = await candidate.call(owner, original.candidate, original, signal)
+            checkInstalled()
+            return verified
+          },
+          checkInstalled,
+          signal
+        )
+    }
   }
   static async create(
     options: LCHOverlayCovenantProfileDomainOptions

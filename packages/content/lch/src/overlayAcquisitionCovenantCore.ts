@@ -2,6 +2,9 @@ import {
   canonicalOutputJSON,
   Beef,
   parseOutputPurchaseSubmit,
+  parseOutputPurchasePrepare,
+  parseOutputPurchaseTerms,
+  parseOutputEvidence,
   decodeOutputBytes,
   Hash,
   Utils,
@@ -409,6 +412,61 @@ export class LCHCovenantDomainCore<
     await this.retained().check()
     const checkCurrent = await this.preflightTerms(ownedRequest, ownedChallenge, signal)
     return { checkCurrent }
+  }
+  /** Read-only original candidate verification. It authenticates original
+   * custody and the independently installed complete verifier without inventing
+   * release evidence, accepting a License or applying a new-funding window. */
+  protected async candidateBindingCore(
+    request: OutputPurchasePrepare,
+    challenge: OutputSignedPurchaseTerms,
+    candidate: OutputPurchaseSubmit,
+    verify: (
+      terms: LCHCovenantTerms<D>,
+      original: O,
+      signal: AbortSignal
+    ) => Promise<LCHOverlayVerifiedCovenantPurchase>,
+    checkInstalled: () => void,
+    signal: AbortSignal
+  ): Promise<LCHOverlayVerifiedCovenantPurchase> {
+    this.current(signal)
+    checkInstalled()
+    const ownedRequest = parseOutputPurchasePrepare(JSON.parse(json(request))),
+      ownedChallenge = parseOutputPurchaseTerms(JSON.parse(json(challenge))),
+      ownedCandidate = parseOutputPurchaseSubmit(JSON.parse(json(candidate)))
+    await this.retained().check()
+    const prepared = await this.terms(signal)
+    lchAssert(
+      json(ownedRequest) === json(prepared.terms.prepare) &&
+        ownedCandidate.acquisitionId === ownedChallenge.body.acquisitionId,
+      'ERR_LCH_PAYMENT',
+      'Original LCH candidate association changed'
+    )
+    const evidence = parseOutputEvidence({
+        chain: prepared.terms.prepare.listing.chain,
+        txid: ownedCandidate.txid,
+        outputIndex: 0,
+        beef: ownedCandidate.beef
+      }),
+      assessment = retainLCHCovenantPurchaseAssessment(
+        await verify(
+          prepared.terms,
+          this.profile.original(
+            { request: ownedRequest, terms: ownedChallenge, seller: prepared.terms.policy.seller },
+            evidence
+          ),
+          signal
+        )
+      )
+    await this.retained().check()
+    const checkCurrent = () => {
+      this.current(signal)
+      checkInstalled()
+      assessment.checkCurrent()
+      checkInstalled()
+      this.current(signal)
+    }
+    checkCurrent()
+    return Object.freeze({ purchaseCommitment: assessment.purchaseCommitment, checkCurrent })
   }
   private assessment(input: { checkCurrent(): void }): () => void {
     const check = Object.getOwnPropertyDescriptor(input, 'checkCurrent')?.value as unknown

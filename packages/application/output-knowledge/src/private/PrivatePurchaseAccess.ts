@@ -35,7 +35,10 @@ export class PrivatePurchaseAccess {
       mode: 'initial' | 'retained',
       view: ProtectedLedgerView
     ) => boolean,
-    private readonly candidateProfile?: PrivatePurchaseCandidateProfile
+    private readonly candidateProfile?: PrivatePurchaseCandidateProfile,
+    /** Explicit installation for new alias-owned state3; historical formats are
+     * not silently reopened or migrated by this companion. */
+    private readonly ownerProfile?: 'alias-custody-v1'
   ) {
     this.topic = outputString(topic)
     outputAssert(
@@ -46,6 +49,12 @@ export class PrivatePurchaseAccess {
     outputAssert(
       typeof policy === 'function' && policy.constructor.name !== 'AsyncFunction',
       'Purchase access policy must be synchronous'
+    )
+    outputAssert(
+      ownerProfile === undefined ||
+        (ownerProfile === 'alias-custody-v1' && candidateProfile === 'full-purchase-commitment-v1'),
+      'Unsupported purchase access owner profile',
+      'unsupported'
     )
     this.payloads = new PrivateAcquisitionPayloads(domain.identity)
   }
@@ -75,7 +84,10 @@ export class PrivatePurchaseAccess {
         if (row.value.recipient !== buyer) throw missing()
         outputAssert(
           this.candidateProfile
-            ? row.value.format === 'private-purchase-state/2' &&
+            ? (this.ownerProfile === 'alias-custody-v1'
+                ? row.value.format === 'private-purchase-state/3' &&
+                  row.value.clockProfile === 'native-observation-v1'
+                : row.value.format === 'private-purchase-state/2') &&
                 row.value.candidateProfile === this.candidateProfile
             : row.value.format === 'private-purchase-state/1',
           'Purchase access state differs',

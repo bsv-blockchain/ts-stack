@@ -201,6 +201,12 @@ export class SQLitePrivatePurchaseAliases {
       pin(contracts, 'original')
     ]
   }
+  /** Owned local capacity descriptor for SAME-writer effect composition.
+   * It is not admission, chain or release authority. */
+  configuration(): PrivatePurchaseAliasLimits {
+    this.current()
+    return { ...this.limits }
+  }
   /** Composition requires the same physical owner and immutable contracts. */
   installedOn(domain: PrivateServiceDomain, contracts: PrivatePurchaseContracts): void {
     this.current()

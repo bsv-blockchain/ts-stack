@@ -52,7 +52,7 @@ test('every core overlay profile fingerprints its canonical and native fixture i
 
 test('proposal client and core qualify complete modules and retain cross-layer expiry coverage', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT)
-  assert.equal(Object.keys(configured).length, 145)
+  assert.equal(Object.keys(configured).length, 151)
   const client = configured['proposal-client-verification']
   assert.deepEqual(client.mutate, [
     'src/proposals/ProposalSourcePolicy.ts',
@@ -894,6 +894,19 @@ test('paid lookup and protected state retain whole-source and complete compatibi
   )
 })
 
+const currentAliasRegressionTests = [
+  '<rootDir>/test/private-purchase-alias-owner.test.ts',
+  '<rootDir>/test/private-purchase-alias-owner.property.test.ts',
+  '<rootDir>/test/private-purchase-alias-currentness.test.ts',
+  '<rootDir>/test/private-purchase-alias-currentness.property.test.ts',
+  '<rootDir>/test/private-purchase-alias-coordinator.test.ts',
+  '<rootDir>/test/private-purchase-alias-coordinator.property.test.ts',
+  '<rootDir>/test/private-purchase-alias-disclosure.test.ts',
+  '<rootDir>/test/private-purchase-alias-disclosure.property.test.ts',
+  '<rootDir>/test/private-purchase-buyer-alias.test.ts',
+  '<rootDir>/test/private-purchase-buyer-alias.property.test.ts'
+]
+
 test('immutable operation objects qualify all native/browser modules and complete retained compatibility', () => {
   const configured = buildMutationTargets(REPOSITORY_ROOT),
     objects = configured['protected-operation-objects']
@@ -909,7 +922,8 @@ test('immutable operation objects qualify all native/browser modules and complet
     '<rootDir>/test/operation-state*.test.ts',
     '<rootDir>/test/protected-ledger*.test.ts',
     '<rootDir>/test/protected-payload.test.ts',
-    '<rootDir>/test/protected-payload-serialized.test.ts'
+    '<rootDir>/test/protected-payload-serialized.test.ts',
+    ...currentAliasRegressionTests
   ])
   assert.equal(objects.runnerOptions.buildCommand, 'pnpm build')
   assert.equal(objects.runnerOptions.maxTestRunnerReuse, 8)
@@ -1117,7 +1131,7 @@ test('relocated LCH overlay tests retain their independent application dependenc
     )
     assert.equal(new RegExp(mappings[0][0]).test('../src/overlayAcquisition.js'), false)
   }
-  assert.equal(Object.keys(configured).length, 145)
+  assert.equal(Object.keys(configured).length, 151)
 })
 
 test('compound private builds retain every dependency and append the sequential helper input', () => {
@@ -1205,7 +1219,8 @@ test('private purchase preparation and native state retain complete qualificatio
     '<rootDir>/test/private-purchase-state.property.test.ts',
     '<rootDir>/test/protected-ledger-prepared.test.ts',
     '<rootDir>/test/private-purchase-native-clock.test.ts',
-    '<rootDir>/test/private-purchase-native-clock.property.test.ts'
+    '<rootDir>/test/private-purchase-native-clock.property.test.ts',
+    ...currentAliasRegressionTests
   ])
   for (const path of [
     'test/private-purchase-progress-commitment.test.ts',
