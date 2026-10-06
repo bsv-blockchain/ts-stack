@@ -101,4 +101,4 @@ minimum 300-run properties, ownership and bounded lifecycle checks. The chain
 is disclosed synthetic easy-work evidence, not a live purchase or native wallet
 containment proof. LCH collector integration, fixed-child remittance, durable
 alias custody and complete qualification remain checkpoint-two work in the
-[alignment inventory](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+[alignment inventory](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).

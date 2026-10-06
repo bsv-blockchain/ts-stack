@@ -49,7 +49,7 @@ current alias must not rewrite historical POTATOES, settlement, License or their
 release evidence. Before first issuance, mined-policy release may select a fully
 verified mined and admitted alias. Durable alias custody, bounded work and native
 recovery remain acceptance items in the
-[alignment inventory](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+[alignment inventory](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
 
 The same optional SDK family entry exports `revenueListingChildPublicKey(root)`
 and the fixed authority protocol/key constants. Public derivation follows
@@ -70,5 +70,5 @@ those integration steps.
 These helpers are implemented parts of an ongoing pre-adoption replacement.
 They do not qualify the complete replacement Script, native wallet, acquisition
 or LCH flow. The
-[checkpoint inventory](../../specs/output-knowledge/CHECKPOINT2.md) identifies
+[checkpoint inventory](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/CHECKPOINT2.md) identifies
 the remaining integration and exact-source qualification requirements.

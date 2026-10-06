@@ -246,7 +246,7 @@ the full covenant reference flow.
 
 This section targets [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
 at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Current acceptance and open
-integration work are recorded in [specification alignment](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+integration work are recorded in [specification alignment](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
 
 Install `LCHOverlayCovenantDomain` from `@bsv/lch/overlay-covenant` with the
 complete original Header, reusable standing Offer, individual signed Request,

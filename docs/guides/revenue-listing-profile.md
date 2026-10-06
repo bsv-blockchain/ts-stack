@@ -115,6 +115,6 @@ locks. The test signer uses only publicly disclosed offline toy identities; no
 private scalar crosses into the builder. These component receipts do not qualify
 native wallet remittance, signed lineage, miner policy, chain-currentness or
 private-release recovery. The
-[alignment record](../../specs/output-knowledge/SPEC-ALIGNMENT.md) tracks that
+[alignment record](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md) tracks that
 remaining integration. The superseded single-program planner and witness builder
 must not be selected for this replacement profile.
