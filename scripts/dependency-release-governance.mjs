@@ -621,6 +621,58 @@ function checkGovernance() {
   )
 }
 
+export function publishedInstallContexts(
+  report,
+  expectedNames = readJson(PROJECTS_PATH)
+    .projects.filter(project => project.release === 'npm-oidc')
+    .map(project => project.name)
+) {
+  if (
+    report?.schemaVersion !== 1 ||
+    !Array.isArray(report.errors) ||
+    report.errors.length !== 0 ||
+    !Array.isArray(report.packages) ||
+    report.packages.length !== expectedNames.length
+  ) {
+    throw new Error('Published install requires a complete successful verification report')
+  }
+  const expected = new Set(expectedNames)
+  const seen = new Set()
+  const exactVersion =
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
+  const packages = [...report.packages].sort((left, right) =>
+    compareText(left?.name ?? '', right?.name ?? '')
+  )
+  return packages.map((item, index) => {
+    if (
+      typeof item?.name !== 'string' ||
+      !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(item.name) ||
+      item.name.length > 214 ||
+      !expected.has(item.name) ||
+      seen.has(item.name) ||
+      typeof item.publishedLatest !== 'string' ||
+      item.publishedLatest.length > 100 ||
+      !exactVersion.test(item.publishedLatest) ||
+      !isNonEmptyString(item.integrity) ||
+      item.provenance !== true ||
+      !['current', 'first-party-release-held'].includes(item.status)
+    ) {
+      throw new Error('Published install report contains an invalid or duplicate package')
+    }
+    seen.add(item.name)
+    return {
+      name: item.name,
+      version: item.publishedLatest,
+      directory: `${String(index).padStart(2, '0')}-${item.name.replace(/^@/, '').replace('/', '-')}`,
+      manifest: {
+        name: 'ts-stack-published-verification',
+        private: true,
+        dependencies: { [item.name]: item.publishedLatest }
+      }
+    }
+  })
+}
+
 async function preparePublishedInstall(args) {
   const reportPath = argumentValue(args, '--report')
   const directory = argumentValue(args, '--directory')
@@ -628,33 +680,47 @@ async function preparePublishedInstall(args) {
     throw new Error('prepare-published-install requires --report and --directory')
   }
   const report = readJson(path.resolve(reportPath))
+  const contexts = publishedInstallContexts(report)
   const installPath = path.resolve(directory)
-  fs.mkdirSync(installPath, { recursive: true })
-  const dependencies = Object.fromEntries(
-    report.packages
-      .map(item => [item.name, item.publishedLatest])
-      .sort(([left], [right]) => compareText(left, right))
-  )
+  // A fresh directory prevents stale locks from being mistaken for this report.
+  fs.mkdirSync(installPath)
+  await mapWithConcurrency(contexts, 1, async context => {
+    const contextPath = path.join(installPath, context.directory)
+    fs.mkdirSync(contextPath)
+    fs.writeFileSync(
+      path.join(contextPath, 'package.json'),
+      `${JSON.stringify(context.manifest, null, 2)}\n`
+    )
+    await execFileAsync(
+      'npm',
+      [
+        'install',
+        '--package-lock-only',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--package-lock=true'
+      ],
+      { cwd: contextPath, encoding: 'utf8', timeout: 5 * 60_000 }
+    )
+  })
+  // Admit the context inventory only after every ordinary peer resolution passes.
   fs.writeFileSync(
-    path.join(installPath, 'package.json'),
+    path.join(installPath, 'contexts.json'),
     `${JSON.stringify(
-      { name: 'ts-stack-published-verification', private: true, dependencies },
+      {
+        schemaVersion: 1,
+        contexts: contexts.map(({ name, version, directory: contextDirectory }) => ({
+          name,
+          version,
+          directory: contextDirectory
+        }))
+      },
       null,
       2
     )}\n`
   )
-  await execFileAsync(
-    'npm',
-    [
-      'install',
-      '--package-lock-only',
-      '--ignore-scripts',
-      '--no-audit',
-      '--no-fund',
-      '--package-lock=true'
-    ],
-    { cwd: installPath, encoding: 'utf8', timeout: 5 * 60_000 }
-  )
+  console.log(`Prepared ${contexts.length} isolated locked published-package contexts.`)
 }
 
 async function verifyPublished(args) {
