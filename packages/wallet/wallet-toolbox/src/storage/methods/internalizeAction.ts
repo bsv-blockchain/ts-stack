@@ -658,7 +658,7 @@ class InternalizeActionContext {
     if (btx == null) throw new WERR_INTERNAL(`Could not find transaction ${this.txid} in AtomicBEEF`)
     const bump = this.ab.findBump(this.txid)
 
-    let pr: StorageProvenOrReq = { isNew: false, proven: undefined, req: undefined }
+    let pr: StorageProvenOrReq = { proven: undefined, req: undefined }
 
     await this.storage.transaction(async trx => {
       if (bump != null) {
@@ -694,9 +694,8 @@ class InternalizeActionContext {
 
     const transactionId = this.etx!.transactionId
 
-    if (pr.isNew) {
-      // This storage didn't know about this txid and the beef didn't include a mining proof.
-      // Assume the transaction has never been broadcast.
+    if (pr.proven == null) {
+      // The transaction is new to this user and the beef didn't include a mining proof.
       // Attempt to broadcast it to the network, throwing an error if it fails.
 
       // Skip looking up txids and building an aggregate beef,
