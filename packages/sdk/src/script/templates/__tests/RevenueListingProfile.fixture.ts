@@ -122,7 +122,10 @@ export async function construct(
   const prepared = builder.prepare(tx)
   const wallet = new ProtoWallet(new PrivateKey(fixture.testActors.seller.scalar))
   const signatures: { seller?: string } = {}
-  for (const request of prepared.signingRequests()) {
+  const requests = prepared.signingRequests()
+  expect(requests.length).toBeLessThanOrEqual(1)
+  const request = requests[0]
+  if (request !== undefined) {
     expect(request.identity).toBe(fixture.testActors.seller.identity)
     const publicKey = await wallet.getPublicKey({
       protocolID: [...request.protocolID],

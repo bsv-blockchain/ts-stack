@@ -273,6 +273,19 @@ function sellerSignature(input: string, publicKey: string, pre: number[]): numbe
   )
   return parsed.toChecksigFormat()
 }
+function activationWitness(descriptor: Descriptor, digest: bigint): PublicWitnessValue[] {
+  const values = linkage(descriptor.seller, digest)
+  for (const recipient of descriptor.initialRevenue.recipients)
+    values.push(...linkage(recipient.identity, digest))
+  for (let index = descriptor.initialRevenue.recipients.length; index < 8; index++)
+    values.push(...new Array<bigint>(11).fill(0n))
+  return values
+}
+function operationParameter(action: RevenueListingProfileAction): bigint {
+  if (action.operation === 'split') return BigInt(action.firstAmount)
+  if (action.operation === 'payout') return BigInt(action.units)
+  return 0n
+}
 function witness(
   tx: Transaction,
   descriptor: Descriptor,
@@ -292,33 +305,23 @@ function witness(
   const buyer = action.operation === 'purchase' ? PublicKey.fromString(action.recipient) : undefined
   const [buyerX, buyerY] = buyer === undefined ? [0n, 0n] : coordinates(buyer)
   const values: PublicWitnessValue[] = []
-  if (action.operation === 'activate') {
-    values.push(...linkage(descriptor.seller, digest))
-    for (const recipient of descriptor.initialRevenue.recipients)
-      values.push(...linkage(recipient.identity, digest))
-    for (let index = descriptor.initialRevenue.recipients.length; index < 8; index++)
-      values.push(...Array<bigint>(11).fill(0n))
-  }
+  if (action.operation === 'activate') values.push(...activationWitness(descriptor, digest))
   values.push(
     pre,
     prevouts.toArray(),
     BigInt(plan.operationCode),
     action.operation === 'purchase'
       ? toArray(action.acquisitionId, 'hex')
-      : Array<number>(32).fill(0),
+      : new Array<number>(32).fill(0),
     action.operation === 'purchase'
       ? toArray(action.requestDigest, 'hex')
-      : Array<number>(32).fill(0),
-    buyer === undefined ? Array<number>(33).fill(0) : (buyer.encode(true) as number[]),
+      : new Array<number>(32).fill(0),
+    buyer === undefined ? new Array<number>(33).fill(0) : (buyer.encode(true) as number[]),
     buyerX,
     buyerY,
-    action.operation === 'split'
-      ? BigInt(action.firstAmount)
-      : action.operation === 'payout'
-        ? BigInt(action.units)
-        : 0n,
+    operationParameter(action),
     change === undefined
-      ? Array<number>(20).fill(0)
+      ? new Array<number>(20).fill(0)
       : toArray(change.lockingScript.toHex().slice(6, 46), 'hex'),
     BigInt(change?.satoshis ?? 0),
     signature,
@@ -379,7 +382,11 @@ export class RevenueListingProfileSpend {
         : REVENUE_LISTING_ACTIVE_SCRIPT_BYTES) + 159
     const common = [bytes, 288, 1, 32, 32, 33, 33, 33, 8, 20, 8, 72, 33, 72, 72]
     const proof = [33, 33, 72, 72, 33, 33, 33, 33, 33, 33, 33]
-    const pushed = (length: number) => length + (length < 76 ? 1 : length <= 255 ? 2 : 3)
+    const pushed = (length: number) => {
+      if (length < 76) return length + 1
+      if (length <= 255) return length + 2
+      return length + 3
+    }
     return (
       common.reduce((sum, length) => sum + pushed(length), 0) +
       (this.action.operation === 'activate'

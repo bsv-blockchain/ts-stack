@@ -195,7 +195,10 @@ export async function construct(
   const prepared = builder.prepare(transaction),
     wallet = new ProtoWallet(new PrivateKey(fixture.testActors.seller.scalar)),
     signatures: { seller?: string } = {}
-  for (const request of prepared.signingRequests()) {
+  const requests = prepared.signingRequests()
+  if (requests.length > 1) throw new Error('Fixture permits at most one seller-child request')
+  const request = requests[0]
+  if (request !== undefined) {
     const key = await wallet.getPublicKey({
       protocolID: [...request.protocolID],
       keyID: request.keyID,

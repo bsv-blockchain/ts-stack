@@ -163,14 +163,70 @@ export function planRevenueListingProfileSpend(
   )
   const listingId = outputPacketDigest('sale-listing', descriptor)
   const script = source.lockingScript.toHex()
-  const continuing: RevenueListingProfileOutput[] = []
-  const payments: RevenueListingProfileOutput[] = []
   const codes = { activate: 0, purchase: 1, split: 2, payout: 4, retire: 5 } as const
   const operationCode = codes[action.operation]
+  const economics = economicOutputs(profile, descriptor, action, oldValue, script)
+  const { continuing, payments, payout, topUp, contribution } = economics
+  const receipt = receiptScript(action, descriptor.termsDigest, listingId, operationCode, economics)
+  const expiry = action.operation === 'retire' && action.authority === 'expiry'
+  if (expiry)
+    outputAssert(
+      action.lockHeight >= descriptor.expiryHeight && action.lockHeight < 500000000,
+      'Expiry retirement requires the committed height lock'
+    )
+  const needsSeller =
+    action.operation === 'split' || (action.operation === 'retire' && action.authority === 'seller')
+  return {
+    operation: action.operation,
+    operationCode,
+    listingId,
+    input: {
+      txid: tx.id('hex'),
+      outputIndex: previous.outputIndex,
+      satoshis: oldValue.toString(),
+      lockingScript: script
+    },
+    outputs: [
+      ...continuing,
+      ...(receipt === null ? [] : [output(1n, toHex(receipt))]),
+      ...payments
+    ],
+    schedule: descriptor.initialRevenue,
+    receiptIndex: receipt === null ? null : continuing.length,
+    payout: payout.toString(),
+    retirementTopUp: topUp.toString(),
+    minimumExternalFunding: contribution.toString(),
+    lockTime: expiry ? action.lockHeight : 0,
+    listingSequence: expiry ? 0xfffffffe : 0xffffffff,
+    requireAllFinalInputs: !expiry,
+    ...(needsSeller
+      ? {
+          sellerAuthorization: {
+            identity: descriptor.seller,
+            publicKey: revenueListingChildPublicKey(descriptor.seller),
+            protocolID: REVENUE_LISTING_AUTHORITY_PROTOCOL,
+            keyID: REVENUE_LISTING_AUTHORITY_KEY_ID,
+            counterparty: 'anyone' as const
+          }
+        }
+      : {})
+  }
+}
+
+function economicOutputs(
+  profile: RevenueListingProfile,
+  descriptor: ReturnType<typeof parseRevenueListingProfileDescriptor>,
+  action: RevenueListingProfileAction,
+  oldValue: bigint,
+  script: string
+) {
+  const reserve = outputU64(descriptor.reserve)
+  const continuing: RevenueListingProfileOutput[] = []
+  const payments: RevenueListingProfileOutput[] = []
   let payout = 0n,
     topUp = 0n,
     contribution = action.operation === 'activate' ? 0n : 1n
-  let commitment = Array<number>(32).fill(0)
+  let commitment = new Array<number>(32).fill(0)
   switch (action.operation) {
     case 'activate':
       continuing.push(output(reserve, profile.lock('active', descriptor).toHex()))
@@ -218,85 +274,50 @@ export function planRevenueListingProfileSpend(
       break
     }
   }
-  const receipt =
-    action.operation === 'activate'
-      ? null
-      : action.operation === 'purchase'
-        ? [
-            0,
-            0x6a,
-            0x4c,
-            0xa7,
-            0x52,
-            0x4f,
-            0x53,
-            0x4c,
-            1,
-            1,
-            ...toArray(listingId, 'hex'),
-            ...toArray(action.acquisitionId, 'hex'),
-            ...toArray(action.requestDigest, 'hex'),
-            ...toArray(action.recipient, 'hex'),
-            ...toArray(descriptor.termsDigest, 'hex')
-          ]
-        : [
-            0,
-            0x6a,
-            0x4c,
-            0x56,
-            0x52,
-            0x4f,
-            0x53,
-            0x4c,
-            1,
-            operationCode,
-            ...toArray(listingId, 'hex'),
-            ...le(1n, 4),
-            ...le(BigInt(continuing.length), 4),
-            ...le(payout, 8),
-            ...commitment
-          ]
-  const expiry = action.operation === 'retire' && action.authority === 'expiry'
-  if (expiry)
-    outputAssert(
-      action.lockHeight >= descriptor.expiryHeight && action.lockHeight < 500000000,
-      'Expiry retirement requires the committed height lock'
-    )
-  const needsSeller =
-    action.operation === 'split' || (action.operation === 'retire' && action.authority === 'seller')
-  return {
-    operation: action.operation,
+  return { continuing, payments, payout, topUp, contribution, commitment }
+}
+
+function receiptScript(
+  action: RevenueListingProfileAction,
+  termsDigest: string,
+  listingId: string,
+  operationCode: RevenueListingProfilePlan['operationCode'],
+  economics: ReturnType<typeof economicOutputs>
+): number[] | null {
+  if (action.operation === 'activate') return null
+  if (action.operation === 'purchase')
+    return [
+      0,
+      0x6a,
+      0x4c,
+      0xa7,
+      0x52,
+      0x4f,
+      0x53,
+      0x4c,
+      1,
+      1,
+      ...toArray(listingId, 'hex'),
+      ...toArray(action.acquisitionId, 'hex'),
+      ...toArray(action.requestDigest, 'hex'),
+      ...toArray(action.recipient, 'hex'),
+      ...toArray(termsDigest, 'hex')
+    ]
+  return [
+    0,
+    0x6a,
+    0x4c,
+    0x56,
+    0x52,
+    0x4f,
+    0x53,
+    0x4c,
+    1,
     operationCode,
-    listingId,
-    input: {
-      txid: tx.id('hex'),
-      outputIndex: previous.outputIndex,
-      satoshis: oldValue.toString(),
-      lockingScript: script
-    },
-    outputs: [
-      ...continuing,
-      ...(receipt === null ? [] : [output(1n, toHex(receipt))]),
-      ...payments
-    ],
-    schedule: descriptor.initialRevenue,
-    receiptIndex: receipt === null ? null : continuing.length,
-    payout: payout.toString(),
-    retirementTopUp: topUp.toString(),
-    minimumExternalFunding: contribution.toString(),
-    lockTime: expiry ? action.lockHeight : 0,
-    listingSequence: expiry ? 0xfffffffe : 0xffffffff,
-    requireAllFinalInputs: !expiry,
-    ...(needsSeller
-      ? {
-          sellerAuthorization: {
-            identity: descriptor.seller,
-            publicKey: revenueListingChildPublicKey(descriptor.seller),
-            protocolID: REVENUE_LISTING_AUTHORITY_PROTOCOL,
-            keyID: REVENUE_LISTING_AUTHORITY_KEY_ID,
-            counterparty: 'anyone' as const
-          }
-        }
-      : {})
-  }
+    ...toArray(listingId, 'hex'),
+    ...le(1n, 4),
+    ...le(BigInt(economics.continuing.length), 4),
+    ...le(economics.payout, 8),
+    ...economics.commitment
+  ]
 }
