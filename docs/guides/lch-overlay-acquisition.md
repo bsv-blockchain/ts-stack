@@ -3,7 +3,7 @@ id: lch-overlay-acquisition
 title: 'LCH Overlay Acquisition'
 kind: guide
 version: '0.3.0'
-last_updated: '2026-10-05'
+last_updated: '2026-10-06'
 last_verified: '2026-10-05'
 review_cadence_days: 30
 status: experimental
@@ -13,7 +13,7 @@ tags: [lch, overlay, acquisition, custody, payment]
 # LCH overlay acquisition
 
 The optional `@bsv/lch/overlay-acquisition` entry adds the proposed
-[BRC-198](https://github.com/bsv-blockchain/BRCs/pull/284) overlay profile to
+[BRC-198](https://github.com/bsv-blockchain/BRCs/pull/295) overlay profile to
 ordinary licensed content. Its wire codecs cover paid lookup and covenant
 context. Its concrete buyer domains implement fixed-render,
 whole-Asset, authorized collector acquisition through paid lookup and covenant

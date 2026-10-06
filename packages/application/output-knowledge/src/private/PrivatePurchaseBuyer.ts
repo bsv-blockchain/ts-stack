@@ -697,13 +697,27 @@ export class PrivatePurchaseBuyer {
     signal: AbortSignal = this.stopping.signal
   ): Promise<OutputPurchaseEnvelope> {
     const owned = await this.authenticated(input, terms, candidate, signal)
+    if (owned.result.status === 'delivered') await this.put('result', owned)
+    return this.received(owned)
+  }
+  private async received(owned: OutputPurchaseEnvelope): Promise<OutputPurchaseEnvelope> {
     if (owned.result.status === 'delivered') {
-      await this.put('result', owned)
       const { snapshot, progress } = await this.load()
       if (!['received', 'validated', 'usable'].includes(progress.phase))
         await this.save(snapshot, { ...progress, phase: 'received' })
     }
     return owned
+  }
+  private async retained(
+    input: OutputPurchaseEnvelope,
+    terms: OutputSignedPurchaseTerms,
+    candidate: OutputPurchaseSubmit | undefined,
+    signal: AbortSignal
+  ): Promise<OutputPurchaseEnvelope> {
+    // This call just read the first immutable object through its original
+    // protected binding. Authenticate it again, and reconcile a missing control
+    // commit, without rewriting the same retained bytes or consulting the seller.
+    return this.received(await this.authenticated(input, terms, candidate, signal))
   }
   private async reconcile(signal: AbortSignal): Promise<OutputPurchaseEnvelope | undefined> {
     this.access(signal)
@@ -723,7 +737,7 @@ export class PrivatePurchaseBuyer {
         'Purchase buyer delivered result lacks its original candidate',
         'unavailable'
       )
-      return this.retain(
+      return this.retained(
         retainedResult as unknown as OutputPurchaseEnvelope,
         terms,
         this.candidate(rawCandidate, terms),
@@ -752,7 +766,7 @@ export class PrivatePurchaseBuyer {
       candidate = rawCandidate === undefined ? undefined : this.candidate(rawCandidate, terms),
       result = await this.get('result')
     if (result !== undefined)
-      return this.retain(result as unknown as OutputPurchaseEnvelope, terms, candidate, signal)
+      return this.retained(result as unknown as OutputPurchaseEnvelope, terms, candidate, signal)
     const recovered = await this.sendPurchase('recover', terms, candidate, signal)
     this.access(signal)
     return this.retain(recovered, terms, candidate, signal)

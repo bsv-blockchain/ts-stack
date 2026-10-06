@@ -61,9 +61,10 @@ function failure(error: unknown): RevenueListingLineageResult {
 }
 
 /**
- * Full BRC-197 history: immutable chain evidence plus every actual covenant
+ * Historical pre-replacement family: immutable chain evidence plus every actual covenant
  * invocation back to the authorized genesis. This does not establish asset
  * authority, currentness, acquisition association, payment or private delivery.
+ * New installations use RevenueListingProfileLineageVerifier for current BRC-197.
  */
 export class RevenueListingLineageVerifier {
   private readonly limits: Readonly<RevenueListingLineageLimits>

@@ -30,8 +30,9 @@ import type { LCHOverlayObjectCustody } from './overlayAcquisitionCustody.js'
 import type { LCHOverlayAuthorityPath } from './overlayAcquisitionAuthority.js'
 import type { ContentSource, RevocationObservation, RevocationSource } from './types.js'
 
-/** Installed independent BRC-197 and release proof boundaries. Remote packets
+/** Installed historical-family and release proof boundaries. Remote packets
  * and collector signatures cannot implement these locally selected verifiers.
+ * Current BRC-197 installations use LCHOverlayCovenantProfileVerification.
  */
 export interface LCHOverlayCovenantVerification {
   readonly id: string

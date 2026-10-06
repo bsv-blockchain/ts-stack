@@ -150,7 +150,8 @@ function checkMergeInputs(inputs: RevenueListingPlan['inputs']): void {
 }
 
 /**
- * Plans exact mandatory outputs and authorities for all six BRC-197 routes.
+ * Plans exact mandatory outputs and authorities for the historical six-route family.
+ * The current BRC-197 profile uses its separate activation and four active routes.
  * It authenticates source bytes and family/state encoding, not Bitcoin validity,
  * genesis lineage, asset authority, currentness, consent or private entitlement.
  * Validate all listing histories before using this plan to request signatures.

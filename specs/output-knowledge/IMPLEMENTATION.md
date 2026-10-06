@@ -248,6 +248,42 @@ tarballs in10.090 seconds. All121 original/additive registry controls pass in
 complete mutation campaign or current-family integration.
 No previous hosted or mutation receipt qualifies these new components.
 
+## Protected recovery qualification
+
+The buyer now freshly authenticates a retained immutable result and heals a
+missing received-phase commit without writing the same protected result again.
+Initial and remote results still retain their first complete bytes. Every call
+keeps original terms, binding, access, installation, signature, currentness and
+usability checks; no authentication or chain verdict is cached across calls.
+The protected object plan returns fresh owned binding copies while preserving
+its constructor-validated immutable scalar configuration and capacity checks.
+
+The exact reviewed source manifest
+`43c81e9ebbb457278f4ab6a8cd47c5a1cf15570ff6604951a2880029b3bbe82c`
+passes all nine buyer suites (95 tests, 402.166 Jest seconds) and all 21
+protected-object/state/ledger/payload suites (532 tests, 26.434 seconds) on
+Linux arm64, Node 24.19.0 and the pinned public SQLite 13.0.3 binding.
+Both new historical/current recovery cases verify unchanged first bytes,
+reopen, fresh rejection of an altered POTATOES signature, no redundant result
+write, and one financial action and issuance. Every original property count,
+seed, replay setting, selection and deadline remains intact. All captured
+steps pass bounded fault/timeout triage; source and built runtime stay exact,
+and the owned container, volume and coordination calendar are released.
+
+This is component functional evidence. Buyer coverage instrumentation remains
+installed, while the unchanged complete package aggregate coverage obligation
+requires the full suite. It is not a mutation, performance, platform or
+checkpoint-two qualification. The published `bc941302` property's earlier
+150-second interruption after 213 of 300 generated cases remains failed
+historical evidence. The final branch still needs exact-head CI and the
+complete current-contract integrations and qualification in the alignment
+inventory.
+
+Historical codec, planner, lineage and LCH exports and fixed vectors remain
+available with explicit historical labels. Current guidance selects the
+replacement profile and PR295; neither old route semantics nor previous
+component passes are presented as its current contract.
+
 ## Historical foundation and qualification record
 
 The following milestones describe earlier source and contract versions. They
@@ -409,6 +445,11 @@ regression above includes these additions.
 These codecs authenticate statements and bindings, not complete
 acquisition, mining or decryption. Their [guide](../../docs/guides/private-overlay-release.md)
 keeps the remaining service obligations explicit.
+
+The following is the historical pre-replacement checklist. Its six-route
+listing experiment is superseded by PR295's immutable four-route active profile
+and separate activation stage; the current targets are in
+[SPEC-ALIGNMENT.md](./SPEC-ALIGNMENT.md).
 
 - Finish proposal contract configuration evolution, compaction preserving terminal
   fences and full service/admission/projection composition. Explicit restart-aware

@@ -3,7 +3,7 @@ id: revenue-listing-lineage
 title: 'Verifying Revenue Listing Histories'
 kind: guide
 version: '1.1.0'
-last_updated: '2026-10-02'
+last_updated: '2026-10-06'
 last_verified: '2026-10-02'
 review_cadence_days: 30
 status: experimental
@@ -20,7 +20,7 @@ qualify them for the replacement family.
 
 A matching locking script does not prove that an output belongs to an authorized
 listing. The optional @bsv/output-knowledge/revenue-listing entry verifies the
-proposed BRC-197 full-history profile: seller-authorized genesis, every listing
+historical pre-replacement full-history family: seller-authorized genesis, every listing
 predecessor through both sides of every merge, Bitcoin evidence under an installed
 immutable chain view, and every actual covenant invocation. It uses the exact
 authenticated [SDK executable codec](./revenue-listing-codec.md).

@@ -153,8 +153,9 @@ export function decodeRevenueListingState(
 }
 
 /**
- * Portable exact locking-script codec. Supply the frozen BRC-197 program once;
+ * Historical pre-replacement locking-script codec. Supply its frozen program once;
  * the constructor checks its length and registered digest and takes an owned copy.
+ * New installations use RevenueListingProfile for the current BRC-197 family.
  * No compiler, filesystem, network or key authority is implicit in this class.
  * Recognition is not lineage, currentness, spend verification or fulfillment.
  */

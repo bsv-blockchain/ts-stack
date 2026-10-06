@@ -1,5 +1,10 @@
 # Revenue listing fixtures
 
+This is the historical pre-replacement BRC-197 corpus. It preserves the original
+codec and spend contracts for existing consumers. The current reference profile
+has separate `revenue-listing-profile*.json.gz` fixtures; these historical bytes
+do not define that profile's activation or active routes.
+
 The codec and spend fixtures come from BRCs commit
 `9dade70dd17d48efb087a2c5da56bb53c164383e`, `tokens/media/0197`.
 `revenue-listing-transactions.json` is the original `transactions.json` and

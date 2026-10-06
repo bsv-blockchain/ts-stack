@@ -46,7 +46,8 @@ export interface LCHCovenantSettlementBody {
 }
 /** Portable representation. A signed genesis does not establish Bitcoin
  * ancestry, actual Script execution, currentness or an eligible purchase.
- * Install the complete BRC-197 verifier separately on each side.
+ * Install the complete matching historical-family verifier separately on each side.
+ * Current BRC-197 uses the separate LCHOverlayCovenantProfileLineage representation.
  */
 export interface LCHOverlayCovenantLineage {
   version: 1

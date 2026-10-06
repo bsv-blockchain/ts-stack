@@ -40,7 +40,8 @@ import type { LCHValue } from './types.js'
 
 /** Portable representation. A signed genesis does not establish Bitcoin
  * ancestry, actual Script execution, currentness or an eligible purchase.
- * Install the complete BRC-197 verifier separately on each side.
+ * Install the complete verifier for the selected historical or current
+ * reference family separately on each side.
  */
 export interface LCHCovenantLineage<D extends LCHCovenantDescriptor> {
   version: 1

@@ -1,9 +1,14 @@
 # Frozen revenue-listing lineage evidence
 
+This is the historical pre-replacement BRC-197 family, retained to verify the
+existing lineage interfaces. The current reference profile has a separate
+`current-profile.json.gz` fixture and verifier. Historical merge and
+amendment routes below are not routes of the current profile.
+
 These four files are copied unchanged from
 `bsv-blockchain/BRCs` commit
 `9dade70dd17d48efb087a2c5da56bb53c164383e`, under
-`tokens/media/0197/`. They accompany the proposed BRC-197 executable family:
+`tokens/media/0197/`. They accompany that historical executable family:
 
 - `transactions.json`: upstream manifest, including the public synthetic fixture
   keys, transaction identities, expected Script outcomes and evidence digests.

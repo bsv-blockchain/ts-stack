@@ -473,3 +473,49 @@ it.each([null, undefined, { state: 'unknown' }] as const)(
     expect(f.calls).toEqual(['prepare'])
   }
 )
+
+it.each([undefined, 'full-purchase-commitment-v1'] as const)(
+  'authenticates the retained %s result on each recovery without writing it again',
+  async profile => {
+    const f = purchaseBuyerFixture(profile)
+    let resultWrites = () => 0
+    const owner = await f.open(true, {}, ports => {
+        const put = jest.spyOn(ports.objects, 'put')
+        resultWrites = () =>
+          put.mock.calls.filter(([, binding]) => binding.role === 'result').length
+      }),
+      delivered = await owner.buyer.advance()
+    expect(resultWrites()).toBe(1)
+    expect(await owner.buyer.recover()).toEqual(delivered)
+    expect(await owner.buyer.advance()).toEqual(delivered)
+    expect(await owner.buyer.validate()).toBe('usable')
+    expect(await owner.buyer.usableResult()).toEqual(delivered)
+    expect(resultWrites()).toBe(1)
+    await f.close(owner)
+    let changed = false,
+      repeatedWrites = () => 0
+    const reopened = await f.open(false, {}, ports => {
+      const put = jest.spyOn(ports.objects, 'put'),
+        read = ports.objects.read.bind(ports.objects)
+      repeatedWrites = () => put.mock.calls.length
+      jest.spyOn(ports.objects, 'read').mockImplementation(async (id, binding) => {
+        const saved = await read(id, binding)
+        if (!changed || binding.role !== 'result' || saved.state !== 'stored') return saved
+        const packet = JSON.parse(new TextDecoder().decode(saved.bytes))
+        saved.bytes.fill(0)
+        packet.result.potatoes.signature = 'AA=='
+        return { ...saved, bytes: new TextEncoder().encode(canonicalOutputJSON(packet)) }
+      })
+    })
+    expect(await reopened.buyer.recover()).toEqual(delivered)
+    changed = true
+    await expect(reopened.buyer.recover()).rejects.toThrow()
+    changed = false
+    expect(await reopened.buyer.recover()).toEqual(delivered)
+    expect(await reopened.buyer.usableResult()).toEqual(delivered)
+    expect(repeatedWrites()).toBe(0)
+    expect(f.counts.finish).toBe(1)
+    expect(f.server.counts.issue).toBe(1)
+    expect(f.calls).toEqual(['prepare', 'submit'])
+  }
+)

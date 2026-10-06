@@ -104,7 +104,15 @@ export interface OperationObjectSlot {
 export class ProtectedOperationObjectPlan {
   private readonly installed: ProtectedOperationObjectConfiguration
   get configuration(): ProtectedOperationObjectConfiguration {
-    return operationObjectConfiguration(this.installed)
+    // Construction owns and validates the immutable installation. Give each
+    // caller a fresh binding copy without parsing the same public key again.
+    return {
+      storeId: this.installed.storeId,
+      recipient: this.installed.recipient,
+      binding: object(this.installed.binding, 16384),
+      maximumObjects: this.installed.maximumObjects,
+      maximumObjectBytes: this.installed.maximumObjectBytes
+    }
   }
   private readonly configurationDigest: string
   constructor(configuration: ProtectedOperationObjectConfiguration) {
@@ -120,7 +128,7 @@ export class ProtectedOperationObjectPlan {
       bindingDigest: operationObjectDigest(
         FORMAT + '\0' + canonicalOutputJSON(originalBinding, { bytes: 16384 })
       ),
-      maximumBytes: integer(maximumBytes, this.configuration.maximumObjectBytes),
+      maximumBytes: integer(maximumBytes, this.installed.maximumObjectBytes),
       originalBinding,
       receipt: null
     }
