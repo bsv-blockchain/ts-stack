@@ -15,12 +15,14 @@ export function nativeOutputBytes(
   )
   outputAssert(typeof input === 'string', 'Expected base64 bytes')
   outputAssert(input.length <= 4 * Math.ceil(maximumBytes / 3), 'Decoded byte limit', 'limited')
-  outputAssert(
-    input.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(input),
-    'Noncanonical base64'
-  )
+  outputAssert(input.length % 4 === 0, 'Noncanonical base64')
   const result = Buffer.from(input, 'base64')
+  const canonical = result.toString('base64')
+  // The required native round-trip already proves alphabet, padding and shape
+  // when equal. Otherwise retain syntax refusal before byte/padding refusal.
+  // Decode allocation remains bounded by the checked encoded length above.
+  outputAssert(canonical === input || /^[A-Za-z0-9+/]*={0,2}$/.test(input), 'Noncanonical base64')
   outputAssert(result.byteLength <= maximumBytes, 'Decoded byte limit', 'limited')
-  outputAssert(result.toString('base64') === input, 'Nonzero base64 padding bits')
+  outputAssert(canonical === input, 'Nonzero base64 padding bits')
   return result
 }

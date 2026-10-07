@@ -402,3 +402,40 @@ it('retains SDK byte-limit and input-type refusal order for the shared native de
     )
   }
 })
+
+it.each([
+  ['AAA-', 2],
+  ['AAA_', 2],
+  ['=AAA', 1],
+  ['A===', 1],
+  ['====', 1],
+  ['AA==AA==', 4],
+  ['AAAA\nAA=', 4],
+  ['AAAA AA=', 4],
+  ['AAAA\tAA=', 4],
+  ['AAAA\rAA=', 4],
+  ['AA\u0000=', 1],
+  ['AAé=', 1],
+  ['AA==', 0],
+  ['AB==', 0],
+  ['AB==', 1],
+  ['AAB=', 1],
+  ['AAB=', 2],
+  ['AAA-', 0],
+  ['AA==AA==', 3]
+] as const)(
+  'retains independent syntax/size/padding precedence for %p at %p bytes',
+  (input, maximum) => {
+    let expected: unknown
+    try {
+      decodeOutputBytes(input, maximum)
+    } catch (error) {
+      expected = error
+    }
+    expect(expected).toBeDefined()
+    const { code, message } = expected as { code: string; message: string }
+    expect(() => nativeOutputBytes(input, maximum)).toThrow(
+      expect.objectContaining({ code, message })
+    )
+  }
+)

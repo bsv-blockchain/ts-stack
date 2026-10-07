@@ -103,6 +103,12 @@ contract checks. Other accepted encodings retain the original ownership and
 normalization path, including negative zero. No custody value, schema decision,
 key, authority or chain assessment is retained between restores.
 
+The Node byte boundary owns a fresh Buffer under the original encoded-length
+ceiling. Its required native Base64 round-trip proves canonical alphabet and
+padding when the text matches. A mismatch still checks syntax before decoded
+size and padding-bit refusal, preserving the SDK's error order. Every call
+decodes independently; no byte representation or validation result is retained.
+
 Alias proposals use the shared bounded value-ownership helper before their complete
 purchase schema checks. A snapshot serializes its freshly constructed expected
 binding once, within that call, while every stored state, header and chunk binding
