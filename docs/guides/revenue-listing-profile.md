@@ -2,7 +2,7 @@
 id: revenue-listing-profile
 title: 'Immutable Two-Stage Listing Profile'
 kind: guide
-version: '3.1.0'
+version: '3.3.0'
 last_updated: '2026-10-05'
 last_verified: '2026-10-05'
 review_cadence_days: 30

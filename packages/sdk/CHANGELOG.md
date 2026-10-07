@@ -214,7 +214,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### Added (3.1 source candidate)
+### Added (3.3 source candidate)
 
 - Add the portable `RevenueListingProfile` two-stage literal codec, immutable public-child schedule and exact 717-byte metadata with required height expiry. Both locks match unchanged PR295 positive wire vectors. Recognition does not establish activation, lineage or transaction validity; the separate `RevenueListingProfilePlan` and `RevenueListingProfileSpend` entries add immutable route planning, owned complete funding layouts, full 114/15-value public witnesses, protected seller-child requests and full purchase commitments. Tests execute complete positive routes and all eight recipients. Native remittance, lineage and alias integration remain open.
 
@@ -231,8 +231,8 @@ All notable changes to this project will be documented in this file. The format 
 - Add closed BRC-196 purchase preparation, signed terms, submission, uncharged recovery and STEAK/POTATOES envelopes. Explicit verification binds the original selected seller/request and retained acquisition/transaction/private result; legacy STEAK is unchanged. Domain, release-policy, durable admission and recipient usability checks remain independent.
 - Add bounded BRC-195/196 release-policy and evidence representations, independently selected chain/transaction/policy binding, and exact registered BRC-77 processor-attestation verification. Parsing declared confirmation depth does not establish mining; acquisition durability, selected-chain verification and private delivery remain separate. Existing APIs and encodings are unchanged.
 - Construct protocol JSON maps with explicit own data fields, retaining accepted keys, null prototypes and ordinary property attributes. Add full-source mutation and generated round-trip/byte-bound qualification; existing JSON encodings and parser limits remain unchanged.
-- Add opt-in `RevenueListingPlan` and `RevenueListingSpend` entries for all six BRC-197 routes, exact mandatory outputs, retained remainders, explicit retirement top-up, per-input seller/unanimous consent signatures, funded snapshot ownership and final-layout checks. They never acquire keys, fund or broadcast. Complete lineage, BRC-100 wallet and fulfillment integration remain separate.
-- Add the separate `@bsv/sdk/script/templates/RevenueListing` codec for the frozen BRC-197 executable, exact descriptors and canonical 305-byte revenue schedules. Program bytes are explicitly supplied and authenticated; no root bundle, existing API or storage migration is required. Lineage, spend construction, wallet integration and fulfillment remain separate obligations.
+- Retain the historical opt-in `RevenueListingPlan` and `RevenueListingSpend` compatibility entries for all six former BRC-197 routes, exact mandatory outputs, retained remainders, explicit retirement top-up, per-input seller/unanimous consent signatures, funded snapshot ownership and final-layout checks. They never acquire keys, fund or broadcast. Complete lineage, BRC-100 wallet and fulfillment integration remain separate.
+- Retain the separate historical `@bsv/sdk/script/templates/RevenueListing` compatibility codec for the former BRC-197 executable, exact descriptors and canonical 305-byte revenue schedules. Program bytes are explicitly supplied and authenticated; no root bundle, existing API or storage migration is required. Lineage, spend construction, wallet integration and fulfillment remain separate obligations.
 
 - Add `OutputLookupTransport` for retained-contract BRC-193 HTTP open/read/close, explicit peer and signed contract binding, bounded original response bytes, unpaid error recovery and cancellation. Reads validate scope, limits, fixed deadlines and snapshot/live continuity without automatically persisting or advancing a cursor. Existing SDK defaults and endpoints remain unchanged. Callers must persist opening identity and atomically commit received groups with each checkpoint; this client component does not claim a complete durable service.
 
@@ -243,6 +243,18 @@ All notable changes to this project will be documented in this file. The format 
 - Add `retainOutputCapability` and `restoreOutputCapability` for bounded local retention of the original signed manifest, selector and freshness policy. Recovery revalidates the original selection without substituting current discovery or treating manifest expiry as loss of an existing obligation. Local storage integrity, current authorization and operation deadlines remain required. No existing API or stored encoding changes.
 - Add bounded common packet-service error parsing and exact BRC-193 HTTP mappings, including `not-found` responses and explicit capacity minimums. Errors cannot carry successful cursors or trigger automatic payment; local cancellation and storage revision failures retain their existing behavior.
 - Add `AuthFetch.fetch(..., { allowPayments: false })` to disable automatic BRC-105 payment for unpaid authenticated requests. The opt-out survives authentication recovery and caller option mutation; omission or `true` preserves existing payment behavior. Ordinary HTTP fallback errors are unchanged. No migration is required for existing callers.
+
+### Identity search recovery (3.2.0 candidate)
+
+- Match `any` queries against saved contact names and keys, retain exact named
+  selectors and return contact-only matches in parallel searches without
+  duplicating their public-certificate overrides.
+- Add opt-in `contactErrorMode`, `contactTimeoutMs` and `onContactError` to both
+  resolution option types. Fallback bounds optional contact loading while
+  preserving public lookup errors and trust checks. Legacy callers retain their
+  defaults and original contact failures.
+- No wire, wallet permission, certificate, or persistence migration. UIs must
+  adopt recovery explicitly and distinguish lookup errors from empty results.
 
 - Add caller-installed additional-output authorization to `completeBoundAction`.
   Bind independently verified local outputs by exact index, script and amount
