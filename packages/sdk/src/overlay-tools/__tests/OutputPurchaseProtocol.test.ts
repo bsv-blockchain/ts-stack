@@ -778,3 +778,52 @@ describe('BRC-196 closed purchase envelopes and original-contract bindings', () 
     )
   })
 })
+
+describe('fresh complete purchase ownership with pure nested representation checks', () => {
+  it('owns every nested result and validates changed caller data again', () => {
+    const { terms, envelope } = fixture()
+    const firstTerms = parseOutputPurchaseTerms(terms)
+    terms.body.releasePolicy = { kind: 'mined', confirmations: 2 }
+    expect(parseOutputPurchaseTerms(terms).body.releasePolicy).toEqual({
+      kind: 'mined',
+      confirmations: 2
+    })
+    expect(firstTerms.body.releasePolicy).toEqual({ kind: 'local-admission' })
+    terms.body.releasePolicy.confirmations = 0
+    expect(() => parseOutputPurchaseTerms(terms)).toThrow('Expected positive limit')
+
+    const firstEnvelope = parseOutputPurchaseEnvelope(envelope)
+    envelope.result.steak.tm_fixture.outputsToAdmit.push(1)
+    envelope.result.potatoes.body.secret = 'AQ=='
+    const nextEnvelope = parseOutputPurchaseEnvelope(envelope)
+    expect(nextEnvelope.result.status).toBe('delivered')
+    if (firstEnvelope.result.status !== 'delivered' || nextEnvelope.result.status !== 'delivered')
+      throw new Error('Expected delivered representation')
+    expect(firstEnvelope.result.steak.tm_fixture.outputsToAdmit).toEqual([0])
+    expect(firstEnvelope.result.potatoes.body.secret).toBe('AA==')
+    expect(nextEnvelope.result.steak.tm_fixture.outputsToAdmit).toEqual([0, 1])
+    expect(nextEnvelope.result.potatoes.body.secret).toBe('AQ==')
+    Object.assign(envelope.result.steak.tm_fixture, { authority: true })
+    expect(() => parseOutputPurchaseEnvelope(envelope)).toThrow('Unknown')
+  })
+
+  it('retains nested duplicate evidence and Unicode refusal before schema checks', () => {
+    const { terms, envelope } = fixture()
+    const encoded = JSON.stringify(terms)
+    const duplicate = encoded.replace(
+      '"releasePolicy":{"kind":"local-admission"}',
+      '"releasePolicy":{"kind":"local-admission","kind":"mined","confirmations":1}'
+    )
+    expect(duplicate).not.toBe(encoded)
+    expect(() => parseOutputPurchaseTerms(duplicate)).toThrow('Duplicate')
+    expect(() => parseOutputPurchaseTerms(new TextEncoder().encode(duplicate))).toThrow('Duplicate')
+    Object.assign(terms.body.releasePolicy, { unexpected: '\ud800' })
+    expect(() => parseOutputPurchaseTerms(terms)).toThrow('Unpaired JSON surrogate')
+    expect(() => parseOutputPurchaseTerms(JSON.stringify(terms))).toThrow('Unpaired JSON surrogate')
+    expect(() => parseOutputPurchaseEnvelope(new Uint8Array([0xc0, 0xaf]))).toThrow(
+      'Malformed UTF-8'
+    )
+    Object.assign(envelope.releaseEvidence.policy, { accepted: true })
+    expect(() => parseOutputPurchaseEnvelope(envelope)).toThrow('Unknown')
+  })
+})

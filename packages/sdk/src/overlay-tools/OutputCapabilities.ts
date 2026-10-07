@@ -46,6 +46,9 @@ export function parseOutputReleasePolicy(input: unknown): OutputReleasePolicy {
   return s.normalized(input, release)
 }
 
+/** @internal Pure child schema; the complete parent must already be freshly owned. */
+export { release as outputReleasePolicySchema }
+
 const profile = s.object({
   id: s.iri,
   authentication: s.literal('none', 'brc103'),

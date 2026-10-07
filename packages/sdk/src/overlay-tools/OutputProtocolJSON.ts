@@ -47,11 +47,14 @@ function limitsFor(limits: Partial<OutputJSONLimits>): OutputJSONLimits {
   return { ...OUTPUT_JSON_LIMITS, ...result }
 }
 
+/** @internal Fresh Unicode check shared by bounded strings and JSON framing. */
 function wellFormed(value: string): void {
   // In Unicode mode a valid pair is one code point outside this range. Only
   // lone UTF-16 surrogates match; reject them before TextEncoder replaces them.
   outputAssert(!/[\uD800-\uDFFF]/u.test(value), 'Unpaired JSON surrogate')
 }
+
+export { wellFormed as assertOutputJSONUnicode }
 
 /**
  * Parse bounded protocol JSON while retaining duplicate decoded keys long enough

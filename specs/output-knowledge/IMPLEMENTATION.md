@@ -6183,3 +6183,71 @@ source guards. Passing exits imply no count; ambiguous summaries imply none.
 No raw logs, counterexample bodies or application values are published.
 Fresh pure-root controls and all source-only checks precede publication;
 fresh hosted diagnosis and complete unchanged qualification are required.
+
+## October 7: bounded primitive string validation
+
+Actual e8f0c26d123549981d368394d1f3113416688aef hosted SDK262suites/8543tests
+passes, app2 64/986 and app3 63/930 pass, while disclosure interrupts after161
+of300 in app1. Its isolated bounded diagnostics confirm disclosure190/300 and
+coordinator215/300 interruptions with all reader/producer guards clear. All four
+native HTTP cases complete with exit0. These timing receipts do not qualify
+complete functionality or the checkpoint. Actual CodeQL37588814278 succeeds on
+merge1c5990aaa92f2eb95fa228c220f7854eedb2abf6, with the exact e8 tree and
+reviewed-main/head parents, two actual error-free analyses and zero open PR-ref
+alerts. Strict Sonar clears both previous findings and reports one diagnostic
+orchestration complexity finding. Extracting its metadata step retains all
+conditions and fresh source/triage/drain checks; no finding is suppressed.
+
+The SDK's bounded primitive-string helper previously invoked the entire
+canonical JSON serializer solely to obtain its fresh Unicode check. Its prior
+predicate already requires a nonempty primitive string with at most1024 UTF-16
+code units. Such a scalar has depth1, no arrays/maps/cycles/descriptors, and at
+most6146 canonical JSON bytes even if every code unit needs six-byte escaping.
+The fixed4MiB JSON limit therefore cannot fail on that path. The helper now
+calls the same shared Unicode validator directly, then applies the same1024-byte
+UTF-8 check. The exact type/code-unit, unpaired-surrogate and UTF-8 refusal order,
+messages and codes remain. Incoming JSON and complete packets still enforce
+all original structural and representation checks independently. No validation,
+string, schema, key or authority outcome is cached or carried between calls.
+
+An additive literal regression independently covers ASCII/control/escaping,
+BMP and paired Unicode, exact UTF-8 boundaries, lone surrogates and competing
+refusals. All original protocol-test and property bytes remain unchanged.
+SDK notes, generated migration guidance and the package guide describe the
+same behavior. Fresh complete source-only checks, actual hosted functionality,
+analyzers, artifacts and the full151/398 mutation campaign are still required.
+
+## October 7: fresh owned child schemas
+
+The same e8 hosted run completes application partition4, private-package
+coverage and the complete artifact/documentation-consumer lane successfully.
+These are preceding-source receipts, not qualification of the following change.
+The only remaining functional failure in that run is the original disclosure
+property interruption; strict Sonar also requires the scoped helper extraction.
+
+Public purchase and release parsers still freshly normalize their entire caller
+input before any schema work. For text/bytes this retains duplicate decoded
+keys until rejection; for program values it retains descriptors, Unicode,
+cycles, representation and independent ownership checks. The unchanged parent
+4MiB, depth32, array4096 and map256 bounds also bound every subtree: removing
+ancestors cannot increase any of those measures. Pure internal child schemas
+therefore validate the freshly owned nodes directly instead of invoking another
+complete public normalization on the same subtree. Every required/optional
+field, scalar, release-policy, policy/evidence-field and declared confirmation
+arithmetic check runs in the same order on every call. Child schema validation
+still constructs its own closed result. No external callback intervenes between
+parent normalization and these child checks.
+
+Standalone public parsers retain their complete fresh normalization. The main
+SDK entry explicitly preserves all existing JSON, capability and release
+exports and types while excluding internal helpers. No key, plaintext, ledger
+record, schema verdict, authorization, clock, chain assessment or accepted
+release is cached; postcallback custody and ledger rereads remain unchanged.
+Existing original mutation ranges include the new child helpers; no selector,
+source range, count, seed, threshold or deadline is reduced. Four appended
+independent cases cover caller mutations, independent nested results, original
+UTF-8 duplicate fields, Unicode refusal priority, unknown child fields, positive
+confirmation limits, exact depth and same-height header consistency. All
+original test prefixes and property bytes remain intact. Fresh source-only
+compilation, full inventory unions, root checks, exact-tarball bundle budgets,
+actual hosted tests/analyzers and the full151/398 campaign remain necessary.

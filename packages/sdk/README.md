@@ -450,6 +450,22 @@ wallet-derived locking key, and field signature before reading or spending it.
   after token recognition. Both paths retain Unicode validation, duplicate-key
   rejection and the same errors, limits and encoding inspection.
 
+  `outputString` retains its nonempty primitive, 1,024-code-unit and 1,024-byte
+  UTF-8 limits. It checks Unicode directly with the same fresh validator used by
+  JSON framing, preserving the original refusal order. A bounded scalar cannot
+  reach the serializer's structural or 4 MiB limits. Complete packets still
+  receive every recursive representation and schema check; no string or
+  validation result is cached.
+
+  Purchase and release parsers freshly normalize the complete caller packet
+  before validating its owned children. Internal child schemas apply every
+  closed-field, scalar and intrinsic arithmetic check directly, without another
+  copy of the same subtree. The parent's unchanged JSON bounds already cover
+  each subtree. Public standalone parsers still perform complete normalization
+  on every call; signatures, caller-selected bindings, release acceptance and
+  current authorization remain separate fresh checks. Internal schema helpers
+  are not exported from the SDK's main entry.
+
   `ownOutputJSON(value, limits)` validates a program value and returns its
   bounded canonical `text` and an independent `value` with those same data
   properties and null-prototype records. Nested arrays and records belong to

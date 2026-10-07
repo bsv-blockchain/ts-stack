@@ -232,3 +232,39 @@ describe('BRC-196 release representations and attributable processor acceptance'
     expect(getter).not.toHaveBeenCalled()
   })
 })
+
+describe('fresh release ownership and intrinsic checks after parent normalization', () => {
+  it('checks mutated policy and block arithmetic again without retaining a prior verdict', () => {
+    const input = mined()
+    const owned = parseOutputReleaseEvidence(input)
+    input.policy.confirmations = 4
+    expect(() => parseOutputReleaseEvidence(input)).toThrow('confirmation depth')
+    expect(owned.policy).toEqual({ kind: 'mined', confirmations: 3 })
+    input.policy.confirmations = 0
+    expect(() => parseOutputReleaseEvidence(input)).toThrow('Expected positive limit')
+    input.policy.confirmations = 1
+    input.blockEvidence.tipHeight = '100'
+    expect(() => parseOutputReleaseEvidence(input)).toThrow('Same-height release headers differ')
+    input.blockEvidence.tipHash = input.blockEvidence.blockHash
+    expect(parseOutputReleaseEvidence(input).blockEvidence!.tipHeight).toBe('100')
+    expect(owned.blockEvidence!.tipHeight).toBe('102')
+    Object.assign(input.policy, { releaseNow: true })
+    expect(() => parseOutputReleaseEvidence(input)).toThrow('Unknown')
+  })
+
+  it('rejects duplicate nested fields in original UTF-8 and preserves Unicode error order', () => {
+    const input = mined()
+    const encoded = JSON.stringify(input)
+    const duplicate = encoded.replace('"confirmations":3', '"confirmations":2,"confirmations":3')
+    expect(duplicate).not.toBe(encoded)
+    expect(() => parseOutputReleaseEvidence(duplicate)).toThrow('Duplicate')
+    expect(() => parseOutputReleaseEvidence(new TextEncoder().encode(duplicate))).toThrow(
+      'Duplicate'
+    )
+    Object.assign(input.policy, { unknown: '\udfff' })
+    expect(() => parseOutputReleaseEvidence(input)).toThrow('Unpaired JSON surrogate')
+    expect(() => parseOutputReleaseEvidence(JSON.stringify(input))).toThrow(
+      'Unpaired JSON surrogate'
+    )
+  })
+})

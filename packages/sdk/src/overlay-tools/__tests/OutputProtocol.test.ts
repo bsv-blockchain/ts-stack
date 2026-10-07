@@ -926,3 +926,39 @@ describe('fresh representation work preserves literal contracts', () => {
     }
   })
 })
+
+describe('bounded protocol string validation', () => {
+  it('preserves independent Unicode, code-unit, UTF-8 and refusal-order contracts', () => {
+    for (const [value, bytes] of [
+      ['a'.repeat(1024), 1024],
+      ['\u0000'.repeat(1024), 1024],
+      ['"'.repeat(1024), 1024],
+      ['\\'.repeat(1024), 1024],
+      ['é'.repeat(512), 1024],
+      ['😀'.repeat(256), 1024],
+      ['\uE000'.repeat(341) + 'a', 1024],
+      ['\u2028\u2029', 6]
+    ] as const) {
+      expect(Buffer.byteLength(value, 'utf8')).toBe(bytes)
+      expect(outputString(value)).toBe(value)
+    }
+    expect(Buffer.byteLength(JSON.stringify('\u0000'.repeat(1024)), 'utf8')).toBe(6146)
+    const rejected: [unknown, string][] = [
+      ['', 'Expected bounded string'],
+      [null, 'Expected bounded string'],
+      [1, 'Expected bounded string'],
+      [{ value: 'text' }, 'Expected bounded string'],
+      ['a'.repeat(1025), 'Expected bounded string'],
+      ['é'.repeat(513), 'String exceeds 1024 UTF-8 bytes'],
+      ['😀'.repeat(257), 'String exceeds 1024 UTF-8 bytes'],
+      ['\uD800', 'Unpaired JSON surrogate'],
+      ['\uDC00', 'Unpaired JSON surrogate'],
+      ['é'.repeat(512) + '\uD800', 'Unpaired JSON surrogate'],
+      ['a'.repeat(1024) + '\uD800', 'Expected bounded string']
+    ]
+    for (const [value, message] of rejected)
+      expect(() => outputString(value)).toThrow(
+        expect.objectContaining({ name: 'OutputProtocolError', code: 'invalid', message })
+      )
+  })
+})

@@ -516,6 +516,17 @@ function diagnosticEnvironment(mongoBinary) {
   return env
 }
 
+function collectPropertyExecution(selection, directory, measured, report, guard, checkWindow) {
+  if (selection.requiresMongo) return
+  report.phase = 'property-execution-metadata'
+  report.propertyExecution = readPropertyExecution(
+    path.join(directory, 'property.log'),
+    measured,
+    checkWindow
+  )
+  guard()
+}
+
 async function main() {
   assert.equal(process.platform, 'linux', 'Application diagnostics require hosted Linux')
   assert.equal(process.env.GITHUB_ACTIONS, 'true')
@@ -693,15 +704,7 @@ async function main() {
     )
     report.phase = 'post-property-source-guard'
     guard()
-    if (!selection.requiresMongo) {
-      report.phase = 'property-execution-metadata'
-      report.propertyExecution = readPropertyExecution(
-        path.join(directory, 'property.log'),
-        measured,
-        checkWindow
-      )
-      guard()
-    }
+    collectPropertyExecution(selection, directory, measured, report, guard, checkWindow)
     report.phase = 'profile-file-bound'
     const parsed = readBoundedProfile(
       path.join(directory, selection.profile),

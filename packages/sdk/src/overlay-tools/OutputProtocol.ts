@@ -5,6 +5,7 @@ import { toArray, toBase64, toHex } from '../primitives/utils.js'
 import * as SignedMessage from '../messages/SignedMessage.js'
 import { outputAssert, OutputProtocolError } from './OutputProtocolError.js'
 import {
+  assertOutputJSONUnicode,
   canonicalOutputJSON,
   isOutputPlainObject,
   OUTPUT_JSON_LIMITS,
@@ -133,8 +134,10 @@ export function outputString(value: unknown): string {
     typeof value === 'string' && value.length > 0 && value.length <= 1024,
     'Expected bounded string'
   )
-  // Canonicalization also rejects unpaired surrogates before encoding.
-  canonicalOutputJSON(value)
+  // A bounded primitive has no structural limits to check, and even escaping
+  // all 1024 code units fits 6146 JSON bytes, below the unchanged 4 MiB limit.
+  // Retain the exact fresh Unicode refusal before checking decoded UTF-8 size.
+  assertOutputJSONUnicode(value)
   outputAssert(utf8.encode(value).length <= 1024, 'String exceeds 1024 UTF-8 bytes')
   return value
 }

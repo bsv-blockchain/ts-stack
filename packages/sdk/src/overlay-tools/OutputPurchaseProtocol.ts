@@ -1,7 +1,7 @@
 import * as s from './OutputProtocolSchema.js'
-import { parseOutputReleasePolicy } from './OutputCapabilities.js'
-import { parseOutputSTEAK } from './OutputObservation.js'
-import { bindOutputReleaseEvidence, parseOutputReleaseEvidence } from './OutputReleaseProtocol.js'
+import { outputReleasePolicySchema } from './OutputCapabilities.js'
+import { outputSTEAKSchema } from './OutputObservation.js'
+import { bindOutputReleaseEvidence, outputReleaseEvidenceSchema } from './OutputReleaseProtocol.js'
 import { outputPacketDigest, outputU64, verifyOutputPacket } from './OutputProtocol.js'
 import { canonicalOutputJSON } from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'
@@ -28,7 +28,7 @@ const terms = s.object({
   termsDigest: s.hex,
   domainProfile: s.iri,
   domainEvidence: s.object({ schema: s.iri, bytes: s.bytes }),
-  releasePolicy: parseOutputReleasePolicy,
+  releasePolicy: outputReleasePolicySchema,
   purchaseUntil: s.u64,
   recoveryUntil: s.u64
 })
@@ -52,7 +52,7 @@ const potatoes = s.object({
       txid: s.hex,
       assetId: s.hex,
       termsDigest: s.hex,
-      releasePolicy: parseOutputReleasePolicy,
+      releasePolicy: outputReleasePolicySchema,
       evidenceDigest: s.hex,
       schema: s.iri,
       secret: s.bytes,
@@ -66,10 +66,10 @@ const potatoes = s.object({
 const common = { version: s.literal(1), acquisitionId: s.hex, recoveryUntil: s.u64 }
 const reserved = { ...common, txid: s.hex }
 const candidateIdentity = { purchaseCommitment: s.hex }
-const admitted = { ...reserved, steak: parseOutputSTEAK }
+const admitted = { ...reserved, steak: outputSTEAKSchema }
 const decision = s.object({
   reason: s.text,
-  policy: parseOutputReleasePolicy,
+  policy: outputReleasePolicySchema,
   evidence: s.bytes,
   decidedAt: s.u64,
   globalOutcome: s.literal('unknown')
@@ -105,7 +105,7 @@ const result = s.tagged('status', {
 const envelope = s.object(
   { result },
   {
-    releaseEvidence: parseOutputReleaseEvidence,
+    releaseEvidence: outputReleaseEvidenceSchema,
     currentAlias: s.object({ txid: s.hex, beef: s.bytes })
   }
 )

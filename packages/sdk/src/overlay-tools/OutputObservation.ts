@@ -33,6 +33,9 @@ const steak: s.Schema<Record<string, ReturnType<typeof admission>>> = value => {
 export const parseOutputSTEAK = (input: unknown): ReturnType<typeof steak> =>
   s.normalized(input, steak)
 
+/** @internal Pure child schema; the complete parent must already be freshly owned. */
+export { steak as outputSTEAKSchema }
+
 const simpleState = (status: 'active' | 'withdrawn' | 'expired') =>
   s.object({ status: s.literal(status), recordedAt: s.u64 })
 const finalization = { recordedAt: s.u64, operationId: s.requestId, txid: s.hex }
