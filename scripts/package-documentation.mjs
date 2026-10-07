@@ -235,8 +235,9 @@ and clean-consumer tests remain the executable type authority.
 ${summaryRows}
 
 \`none\` means the source manifest matches the recorded npm baseline. Any other
-value is an unpublished candidate. Publication, tags, releases, registry
-reconciliation, and infrastructure dependency synchronization remain separate,
+value records source ahead of that baseline; it does not establish the current
+registry state. Publication, tags, releases, registry reconciliation, and
+infrastructure dependency synchronization remain separate,
 explicitly authorized operations.
 
 ## Package entry points
