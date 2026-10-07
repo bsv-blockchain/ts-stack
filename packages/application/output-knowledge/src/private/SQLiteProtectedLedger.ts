@@ -3,7 +3,7 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import {
   ownOutputJSON,
   canonicalOutputJSON,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   incrementOutputU64,
   inspectOutputJSONEncoding,
   outputAssert,
@@ -51,6 +51,32 @@ interface ProtectedHeadSnapshot {
 }
 
 const FORMAT = 'output-protected-ledger/1'
+type ClosedFields = (value: unknown) => asserts value is Record<string, unknown>
+const envelopeFields: ClosedFields = createClosedOutputObjectValidator([
+  'format',
+  'keyId',
+  'salt',
+  'nonce',
+  'ciphertext',
+  'tag'
+])
+const headFields: ClosedFields = createClosedOutputObjectValidator([
+  'revision',
+  'observedAt',
+  'records',
+  'reservedBytes',
+  'reservedUpdates',
+  'inventory'
+])
+const commitOptionFields: ClosedFields = createClosedOutputObjectValidator(['maximumBatchBytes'])
+const changeFields: ClosedFields = createClosedOutputObjectValidator([
+  'kind',
+  'key',
+  'expectedRevision',
+  'reservedBytes',
+  'reservedUpdates',
+  'value'
+])
 const HEAD_BYTES = 16384
 const HEADER_COLUMNS = `CASE WHEN length(kind)<=32 THEN kind END AS kind,
   CASE WHEN length(key)=64 THEN key END AS key,
@@ -212,7 +238,7 @@ export class SQLiteProtectedLedger {
     // parsing owns the internal metadata without rechecking incoming syntax;
     // stored envelopes still use the duplicate-aware reader in headSnapshot.
     const sealed: unknown = JSON.parse(envelope)
-    closedOutputObject(sealed, ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
+    envelopeFields(sealed)
     if (insert)
       this.database
         .prepare('INSERT INTO protected_head VALUES (1,?,?)')
@@ -244,14 +270,7 @@ export class SQLiteProtectedLedger {
       row.envelope,
       HEAD_BYTES
     )
-    closedOutputObject(value, [
-      'revision',
-      'observedAt',
-      'records',
-      'reservedBytes',
-      'reservedUpdates',
-      'inventory'
-    ])
+    headFields(value)
     outputAssert(
       value.revision === revision &&
         Number.isSafeInteger(value.records) &&
@@ -263,7 +282,7 @@ export class SQLiteProtectedLedger {
     outputU64(value.observedAt)
     outputHex32(value.inventory)
     const envelope = parseOutputJSON(row.envelope, { bytes: this.envelopeBound(HEAD_BYTES) })
-    closedOutputObject(envelope, ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
+    envelopeFields(envelope)
     outputAssert(typeof envelope.keyId === 'string', 'Invalid protected ledger custody label')
     return {
       head: value as unknown as ProtectedLedgerHead,
@@ -496,7 +515,7 @@ export class SQLiteProtectedLedger {
   }
   private ownCommitOptions(input: ProtectedLedgerCommitOptions): ProtectedLedgerCommitOptions {
     const options = ownOutputJSON(input, { bytes: 1024 }).value
-    closedOutputObject(options, ['maximumBatchBytes'])
+    commitOptionFields(options)
     return {
       maximumBatchBytes: protectedInteger(
         options.maximumBatchBytes,
@@ -574,14 +593,7 @@ export class SQLiteProtectedLedger {
       'Protected ledger commit must contain 1–64 records'
     )
     const owned = inputs.map(change => {
-      closedOutputObject(change, [
-        'kind',
-        'key',
-        'expectedRevision',
-        'reservedBytes',
-        'reservedUpdates',
-        'value'
-      ])
+      changeFields(change)
       // The complete batch already owns this data-only value. Only the freshly
       // bounded immutable text enters the writer; another parsed copy is unused.
       const text = canonicalOutputJSON(change.value, {

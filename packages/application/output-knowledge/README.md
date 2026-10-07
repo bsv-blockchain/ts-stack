@@ -29,6 +29,11 @@ publisher disclosure and bounded restart recovery. Its
 [installation guide](../../../docs/guides/verified-private-publication.md) separates
 publication from the separately composed paid lookup and purchase/POTATOES owners.
 The package version does not indicate a published or production-qualified release.
+Private ledger, alias and purchase codecs capture their fixed field names once.
+Every input still receives complete ownership, prototype, symbol, descriptor,
+required/unknown-field and scalar checks. Encrypted records, revision, clock,
+authority and custody checks remain fresh; no record, secret or validation verdict
+is retained by a grammar. Explicit historical/current profile selection is unchanged.
 See the [implementation record](../../../specs/output-knowledge/IMPLEMENTATION.md)
 for exact component evidence and outstanding work.
 

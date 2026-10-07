@@ -248,17 +248,17 @@ test('semantic ranges retain future files and the exact original overlapping lin
     parts = partitionMutationTarget('private-purchase-state', selected)
   assert.deepEqual(
     parts.map(part => part.id),
-    ['progress-4', 'progress-5', 'progress-6', 'progress-7', 'remaining']
+    ['progress-1', 'progress-2', 'progress-3', 'progress-4', 'remaining']
   )
   assert.deepEqual(
     parts.flatMap(part => part.target.mutate),
     [
-      `${file}:120-139`,
-      `${file}:140-159`,
-      `${file}:150-159`,
-      `${file}:160-160`,
-      `${file}:160-176`,
-      `${file}:177-180`,
+      `${file}:120-133`,
+      `${file}:134-139`,
+      `${file}:140-152`,
+      `${file}:150-152`,
+      `${file}:153-160`,
+      `${file}:153-180`,
       future
     ]
   )

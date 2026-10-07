@@ -1,13 +1,25 @@
 import {
   ownOutputJSON,
   canonicalOutputJSON,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
   outputU64,
   type OutputJSONObject
 } from '@bsv/sdk'
 import { createHash } from 'node:crypto'
+
+type ClosedFields = (value: unknown) => asserts value is Record<string, unknown>
+// Only fixed field names are retained. Ownership, descriptors and values are
+// independently checked for every supplied record.
+const addressFields: ClosedFields = createClosedOutputObjectValidator(['kind', 'key'])
+const configurationFields: ClosedFields = createClosedOutputObjectValidator([
+  'storeId',
+  'binding',
+  'maximumRecords',
+  'maximumReservedBytes',
+  'maximumRecordBytes'
+])
 
 /** Internal ledger port. Service state machines own every record's semantics. */
 export const protectedLedgerKinds = [
@@ -101,7 +113,7 @@ export function protectedInteger(value: unknown, maximum: number): number {
 }
 export function protectedAddress(value: unknown): ProtectedLedgerAddress {
   const input = ownOutputJSON(value, { bytes: 1024 }).value
-  closedOutputObject(input, ['kind', 'key'])
+  addressFields(input)
   outputAssert(
     protectedLedgerKinds.includes(input.kind as ProtectedLedgerKind),
     'Invalid protected ledger record kind'
@@ -112,13 +124,7 @@ export function protectedConfiguration(
   value: ProtectedLedgerConfiguration
 ): ProtectedLedgerConfiguration {
   const input = ownOutputJSON(value, { bytes: 32768 }).value
-  closedOutputObject(input, [
-    'storeId',
-    'binding',
-    'maximumRecords',
-    'maximumReservedBytes',
-    'maximumRecordBytes'
-  ])
+  configurationFields(input)
   outputAssert(
     input.binding !== null && typeof input.binding === 'object' && !Array.isArray(input.binding),
     'Invalid protected ledger binding'

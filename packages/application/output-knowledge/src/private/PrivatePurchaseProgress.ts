@@ -3,7 +3,7 @@ import {
   ownOutputJSON,
   bindOutputReleaseEvidence,
   canonicalOutputJSON,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
   outputIdentity,
@@ -24,6 +24,68 @@ export const PRIVATE_PURCHASE_PROGRESS_BYTES = 524288
  * validity; the installed full verifier supplies the commitment before pinning. */
 export type PrivatePurchaseCandidateProfile = 'full-purchase-commitment-v1'
 type PurchaseDecision = Extract<OutputPurchaseResult, { status: 'admission-rejected' }>['decision']
+type ClosedFields = (value: unknown) => asserts value is Record<string, unknown>
+const eventFields: ClosedFields = createClosedOutputObjectValidator(
+  ['type'],
+  [
+    'txid',
+    'purchaseCommitment',
+    'steak',
+    'acceptedAt',
+    'assessmentContextId',
+    'reason',
+    'evidence',
+    'envelope'
+  ]
+)
+const admissionFields: ClosedFields = createClosedOutputObjectValidator([
+  'steak',
+  'acceptedAt',
+  'assessmentContextId'
+])
+const deliveryFields: ClosedFields = createClosedOutputObjectValidator([
+  'digest',
+  'issuedAt',
+  'schema'
+])
+const progressNames = [
+  'format',
+  'acquisitionId',
+  'requestDigest',
+  'recipient',
+  'createdAt',
+  'updatedAt',
+  'recoveryUntil',
+  'status',
+  'txid',
+  'operationId',
+  'admission',
+  'decision',
+  'releaseEvidence',
+  'delivery'
+]
+const progressFields: ClosedFields = createClosedOutputObjectValidator(progressNames)
+const committedProgressFields: ClosedFields = createClosedOutputObjectValidator(progressNames, [
+  'purchaseCommitment'
+])
+const transitionFields: Record<string, ClosedFields> = {
+  pin: createClosedOutputObjectValidator(['type', 'txid']),
+  admitted: createClosedOutputObjectValidator([
+    'type',
+    'steak',
+    'acceptedAt',
+    'assessmentContextId'
+  ]),
+  'admission-rejected': createClosedOutputObjectValidator(['type', 'reason', 'evidence']),
+  'delivery-failed': createClosedOutputObjectValidator(['type', 'reason', 'evidence']),
+  delivered: createClosedOutputObjectValidator(['type', 'envelope']),
+  expire: createClosedOutputObjectValidator(['type'])
+}
+const committedPinFields: ClosedFields = createClosedOutputObjectValidator([
+  'type',
+  'txid',
+  'purchaseCommitment'
+])
 export interface PrivatePurchaseProgress {
   format: 'private-purchase-progress/1'
   acquisitionId: string
@@ -56,31 +118,16 @@ function ownedEvent(
   profile?: PrivatePurchaseCandidateProfile
 ): PrivatePurchaseEvent {
   const value = ownOutputJSON(input).value
-  closedOutputObject(
-    value,
-    ['type'],
-    [
-      'txid',
-      'purchaseCommitment',
-      'steak',
-      'acceptedAt',
-      'assessmentContextId',
-      'reason',
-      'evidence',
-      'envelope'
-    ]
-  )
-  const fields: Record<string, readonly string[]> = {
-    pin: ['txid', ...(profile ? ['purchaseCommitment'] : [])],
-    admitted: ['steak', 'acceptedAt', 'assessmentContextId'],
-    'admission-rejected': ['reason', 'evidence'],
-    'delivery-failed': ['reason', 'evidence'],
-    delivered: ['envelope'],
-    expire: []
-  }
+  eventFields(value)
   const type = outputString(value.type)
-  outputAssert(Object.hasOwn(fields, type), 'Unsupported purchase transition', 'unsupported')
-  closedOutputObject(value, ['type', ...fields[type]])
+  outputAssert(
+    Object.hasOwn(transitionFields, type),
+    'Unsupported purchase transition',
+    'unsupported'
+  )
+  const close: ClosedFields =
+    type === 'pin' && profile ? committedPinFields : transitionFields[type]
+  close(value)
   return value as unknown as PrivatePurchaseEvent
 }
 
@@ -144,7 +191,7 @@ function purchaseAdmission(
   updatedAt: string
 ): PrivatePurchaseProgress['admission'] {
   if (input === null) return null
-  closedOutputObject(input, ['steak', 'acceptedAt', 'assessmentContextId'])
+  admissionFields(input)
   const steak = parseOutputSTEAK(input.steak),
     acceptedAt = outputU64(input.acceptedAt).toString()
   outputAssert(
@@ -163,7 +210,7 @@ function purchaseDelivery(
   updatedAt: string
 ): PrivatePurchaseProgress['delivery'] {
   if (input === null) return null
-  closedOutputObject(input, ['digest', 'issuedAt', 'schema'])
+  deliveryFields(input)
   const issuedAt = outputU64(input.issuedAt).toString()
   outputAssert(
     outputU64(issuedAt) >= outputU64(admission!.acceptedAt) &&
@@ -180,26 +227,8 @@ function purchaseProgressReservation(
   profile?: PrivatePurchaseCandidateProfile
 ) {
   const value = input
-  closedOutputObject(
-    value,
-    [
-      'format',
-      'acquisitionId',
-      'requestDigest',
-      'recipient',
-      'createdAt',
-      'updatedAt',
-      'recoveryUntil',
-      'status',
-      'txid',
-      'operationId',
-      'admission',
-      'decision',
-      'releaseEvidence',
-      'delivery'
-    ],
-    profile ? ['purchaseCommitment'] : []
-  )
+  const close: ClosedFields = profile ? committedProgressFields : progressFields
+  close(value)
   const body = original.terms.body
   outputAssert(
     value.format === 'private-purchase-progress/1' &&

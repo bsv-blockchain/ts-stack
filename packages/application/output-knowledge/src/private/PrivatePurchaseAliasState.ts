@@ -1,5 +1,5 @@
 import {
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
   ownOutputJSON,
@@ -41,9 +41,32 @@ export type PrivatePurchaseAliasRetention =
   | { status: 'pending'; reason: 'external-operations-unresolved' | 'cache-operations-unresolved' }
 
 const FORMAT = 'private-purchase-aliases/1'
+type ClosedFields = (value: unknown) => asserts value is Record<string, unknown>
+const entryFields: ClosedFields = createClosedOutputObjectValidator([
+  'txid',
+  'candidateDigest',
+  'operationId',
+  'admission'
+])
+const stateFields: ClosedFields = createClosedOutputObjectValidator([
+  'format',
+  'acquisitionId',
+  'requestDigest',
+  'owner',
+  'purchaseCommitment',
+  'original',
+  'historical',
+  'selected',
+  'unconfirmed',
+  'pending'
+])
+const retainedFields: ClosedFields = createClosedOutputObjectValidator([
+  'purchaseCommitment',
+  'entry'
+])
 function entry(input: unknown): PrivatePurchaseAliasEntry | null {
   if (input === null) return null
-  closedOutputObject(input, ['txid', 'candidateDigest', 'operationId', 'admission'])
+  entryFields(input)
   outputAssert(
     input.admission === 'retained' ||
       input.admission === 'pending' ||
@@ -60,18 +83,7 @@ function entry(input: unknown): PrivatePurchaseAliasEntry | null {
 }
 export function parsePrivatePurchaseAliasState(input: unknown): PrivatePurchaseAliasState {
   const value = ownOutputJSON(input, { bytes: 16384 }).value
-  closedOutputObject(value, [
-    'format',
-    'acquisitionId',
-    'requestDigest',
-    'owner',
-    'purchaseCommitment',
-    'original',
-    'historical',
-    'selected',
-    'unconfirmed',
-    'pending'
-  ])
+  stateFields(value)
   outputAssert(value.format === FORMAT, 'Unsupported purchase alias custody', 'unsupported')
   outputAssert(
     Array.isArray(value.unconfirmed) &&
@@ -224,7 +236,7 @@ export function retainPrivatePurchaseAlias(
 ): PrivatePurchaseAliasRetention {
   const state = parsePrivatePurchaseAliasState(input),
     owned = ownOutputJSON(verified, { bytes: 2048 }).value
-  closedOutputObject(owned, ['purchaseCommitment', 'entry'])
+  retainedFields(owned)
   const purchaseCommitment = outputHex32(owned.purchaseCommitment),
     candidate = entry(owned.entry)
   outputAssert(candidate !== null, 'Purchase alias candidate is required')

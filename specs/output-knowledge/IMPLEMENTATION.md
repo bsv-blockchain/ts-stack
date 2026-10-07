@@ -6442,3 +6442,26 @@ checks and the existing mutable-schema API. It introduces no value, schema
 verdict, authentication or currentness cache. Independent cases distinguish
 captured grammar from dynamic callback snapshots and fresh descriptor refusals.
 This candidate requires complete source, budget and hosted qualification.
+
+## October 7: fixed private grammars after the complete 9f1 baseline
+
+The published9f1 SDK262/8558, application2 64/986(coordinator119.24seconds),
+application3 63/930, application4 63/968, private-overlay53/889 including all
+four current native cases, LCH38/276 and artifacts81examples/24exact tarballs
+pass. Both actual CodeQL analyses are clean on an identical merge tree; actual
+Sonar has zero issues and unreviewed hotspots. All17 review threads are resolved.
+Application1 alone interrupts disclosure169/300 at unchanged150seconds, both
+in the first run and one full unchanged repeat. Neither reports a counterexample.
+All three new timing sets have negative/reordered samples and are excluded.
+These results do not complete Checkpoint2 or the unlaunched151/398 campaign.
+
+The next candidate extends captured fixed grammar into the private ledger, alias
+and purchase codecs. Only names and callback references are retained. Every
+object, descriptor, value, ciphertext, authority and currentness check remains
+fresh; public ownership and error/refusal order are preserved. Historical/current
+purchase selection chooses separate fixed grammars on each call. No input,
+normalization, authorization or verification verdict is cached. All original
+property and unit bodies, compiled examples, source ranges, counts, seeds, replay
+inputs, deadlines, thresholds and browser ceilings remain required. This
+candidate still requires complete strict source, inventory, package and hosted
+qualification before a performance or checkpoint claim.
