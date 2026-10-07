@@ -95,6 +95,20 @@ all of those roles serially. The extra pending capacity does not require copying
 an unresolved original into a second role. The maximum pass size is the sum of
 the installed role capacities, including the original and selected roles.
 
+Each native restore decrypts and authenticates the original custody afresh.
+Its bounded encoding inspection owns the parsed value and checks duplicate keys,
+Unicode, structural limits and both incoming and canonical byte limits. A canonical
+value can pass directly into the same closed schema, installed-policy and original
+contract checks. Other accepted encodings retain the original ownership and
+normalization path, including negative zero. No custody value, schema decision,
+key, authority or chain assessment is retained between restores.
+
+Alias proposals use the shared bounded value-ownership helper before their complete
+purchase schema checks. A snapshot serializes its freshly constructed expected
+binding once, within that call, while every stored state, header and chunk binding
+is independently serialized and compared. Every row still undergoes the original
+fresh authentication, capacity, digest, admission and native revision checks.
+
 Before a result transition, the owner compares the complete loaded native head
 and row revisions. The atomic write invalidates that old snapshot by design.
 Its returned read authenticates the caller and domain against the newly committed

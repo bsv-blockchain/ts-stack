@@ -1,5 +1,6 @@
 import {
   canonicalOutputJSON,
+  inspectOutputJSONEncoding,
   Hash,
   Utils,
   parseOutputPurchaseSubmit,
@@ -185,6 +186,21 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
   }
   private custody(input: unknown): PrivatePurchaseCustody {
     const value = ownOutputJSON(input, { bytes: this.limits.maximumOriginalBytes }).value
+    return this.custodyValue(value)
+  }
+  private restoredCustody(input: string): PrivatePurchaseCustody {
+    // Each call owns and validates freshly decrypted bytes, including duplicate,
+    // Unicode, structural and original/canonical byte bounds. Canonical text
+    // already has the same normalized, independent value as ownOutputJSON.
+    const inspected = inspectOutputJSONEncoding(
+      nativeOutputBytes(input, this.limits.maximumOriginalBytes),
+      { bytes: this.limits.maximumOriginalBytes }
+    )
+    // Retain the original normalization path for other accepted encodings,
+    // including negative zero, rather than changing stored-format acceptance.
+    return inspected.canonical ? this.custodyValue(inspected.value) : this.custody(inspected.value)
+  }
+  private custodyValue(value: unknown): PrivatePurchaseCustody {
     closedOutputObject(value, [
       'format',
       'original',
@@ -283,11 +299,8 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     if (outputIdentity(value.recipient) !== buyer) return undefined
     const originalPayload = parsePrivateAcquisitionPayload(value.original),
       resultPayload = parsePrivateAcquisitionPayload(value.result)
-    const custody = this.custody(
-        decoded(
-          this.payloads.read(originalPayload, this.rows(originalPayload, view)),
-          this.limits.maximumOriginalBytes
-        )
+    const custody = this.restoredCustody(
+        this.payloads.read(originalPayload, this.rows(originalPayload, view))
       ),
       original = custody.original
     this.validatePayloadReservations(original, originalPayload, resultPayload)

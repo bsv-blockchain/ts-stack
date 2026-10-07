@@ -441,9 +441,14 @@ export class SQLitePrivatePurchaseAliases {
     )
     const records = read.records as ProtectedLedgerRecord[],
       body = records[0].value
+    // This binding was constructed for this fresh snapshot from owned strings.
+    // Serialize it lazily once; every stored binding is still checked afresh.
+    let expectedBinding: string | undefined
+    const matchesBinding = (value: unknown): boolean =>
+      canonicalOutputJSON(value) === (expectedBinding ??= canonicalOutputJSON(binding))
     closedOutputObject(body, ['format', 'binding', 'state'])
     outputAssert(
-      body.format === FORMAT && canonicalOutputJSON(body.binding) === canonicalOutputJSON(binding),
+      body.format === FORMAT && matchesBinding(body.binding),
       'Alias original binding changed',
       'unavailable'
     )
@@ -478,7 +483,7 @@ export class SQLitePrivatePurchaseAliases {
           frame.format === FORMAT &&
             frame.role === role &&
             frame.index === index &&
-            canonicalOutputJSON(frame.binding) === canonicalOutputJSON(binding) &&
+            matchesBinding(frame.binding) &&
             chunkRow.reservedBytes === this.allowance(index) &&
             chunkRow.reservedUpdates === this.budget(chunkRow),
           'Alias native chunk reservation changed',
@@ -519,7 +524,7 @@ export class SQLitePrivatePurchaseAliases {
       outputAssert(
         header.format === FORMAT &&
           header.role === role &&
-          canonicalOutputJSON(header.binding) === canonicalOutputJSON(binding) &&
+          matchesBinding(header.binding) &&
           row.reservedBytes === OUTCOME_BYTES + 8192 &&
           row.reservedUpdates === this.budget(row) &&
           row.reservedUpdates >= this.updates(entry) &&
@@ -629,9 +634,7 @@ export class SQLitePrivatePurchaseAliases {
     guard: ProtectedLedgerGuard
   ): PrivatePurchaseAliasWrite {
     const candidate = parseOutputPurchaseSubmit(
-        parseOutputJSON(canonicalOutputJSON(input, { bytes: this.limits.maximumCandidateBytes }), {
-          bytes: this.limits.maximumCandidateBytes
-        })
+        ownOutputJSON(input, { bytes: this.limits.maximumCandidateBytes }).value
       ),
       snapshot = this.snapshot(original, clock, guard),
       entry: PrivatePurchaseAliasEntry = {

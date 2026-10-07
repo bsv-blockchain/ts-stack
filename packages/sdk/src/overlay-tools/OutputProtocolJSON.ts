@@ -213,31 +213,29 @@ class OutputJSONParser {
   private object(depth: number): OutputJSONObject {
     this.offset++
     this.whitespace()
-    // This fresh null-prototype record has no setters, including __proto__.
-    // Own data assignment retains decoded duplicate evidence without a second
-    // Map-to-object allocation at the end of every parsed record.
-    const result: OutputJSONObject = Object.create(null)
-    let count = 0,
-      previous: string | undefined
+    const fields = new Map<string, OutputJSON>()
+    let previous: string | undefined
     if (this.source[this.offset] === '}') {
       this.offset++
-      return result
+    } else {
+      for (;;) {
+        this.whitespace()
+        const key = this.string()
+        outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
+        outputAssert(fields.size < this.bounds.mapKeys, 'JSON map limit', 'limited')
+        this.encoding?.key(previous, key)
+        previous = key
+        this.whitespace()
+        outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
+        fields.set(key, this.value(depth + 1))
+        this.whitespace()
+        const end = this.source[this.offset++]
+        if (end === '}') break
+        outputAssert(end === ',', 'Expected JSON object separator')
+      }
     }
-    for (;;) {
-      this.whitespace()
-      const key = this.string()
-      outputAssert(!Object.hasOwn(result, key), 'Duplicate decoded JSON key')
-      outputAssert(count++ < this.bounds.mapKeys, 'JSON map limit', 'limited')
-      this.encoding?.key(previous, key)
-      previous = key
-      this.whitespace()
-      outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-      result[key] = this.value(depth + 1)
-      this.whitespace()
-      const end = this.source[this.offset++]
-      if (end === '}') return result
-      outputAssert(end === ',', 'Expected JSON object separator')
-    }
+    // One finalization creates own data properties without invoking setters.
+    return Object.setPrototypeOf(Object.fromEntries(fields), null)
   }
 
   private array(depth: number): OutputJSON[] {

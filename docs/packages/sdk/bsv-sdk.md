@@ -46,7 +46,9 @@ Unicode, structural and original/canonical byte bounds. The flag describes that
 input, not later mutations, and supplies no schema or authority decision. Ordinary
 `parseOutputJSON` acceptance remains unchanged. Canonical property ordering uses
 an explicit UTF-16 code-unit comparator, independent of locale. Parsed objects are fresh
-null-prototype data records, including special property names. Strict native string
+null-prototype data records, including special property names. Map-based duplicate
+detection and `Object.fromEntries` create own data properties without invoking setters.
+Strict native string
 parsing and every original duplicate, Unicode and resource check still run. No
 encoding, schema or authorization verdict is retained between calls.
 

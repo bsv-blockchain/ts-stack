@@ -217,7 +217,7 @@ All notable changes to this project will be documented in this file. The format 
 ### Added (3.3 source candidate)
 
 - Add `inspectOutputJSONEncoding` for fresh duplicate-aware, bounded parsing with a canonical-input flag and an independently owned value. The flag is not a schema, signature or authorization verdict. Ordinary parsing, canonical UTF-16 key order, literal/number encodings, limits and refusal order are preserved; optional inspection code stays separate from ordinary parser bundles.
-- Build fresh parsed objects directly as null-prototype data records and traverse canonical fields in order without per-field callbacks. Preserve special property names, decoded duplicate rejection, all bounds, exact encodings and refusal order.
+- Preserve Map-based duplicate detection and own-data-property construction for fresh null-prototype parsed records; traverse canonical fields in order without per-field callbacks. Preserve special property names, all bounds, exact encodings and refusal order.
 
 - Add the portable `RevenueListingProfile` two-stage literal codec, immutable public-child schedule and exact 717-byte metadata with required height expiry. Both locks match unchanged PR295 positive wire vectors. Recognition does not establish activation, lineage or transaction validity; the separate `RevenueListingProfilePlan` and `RevenueListingProfileSpend` entries add immutable route planning, owned complete funding layouts, full 114/15-value public witnesses, protected seller-child requests and full purchase commitments. Tests execute complete positive routes and all eight recipients. Complete native composition and final-source qualification remain open.
 
