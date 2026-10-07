@@ -5,8 +5,8 @@ kind: package
 domain: sdk
 version: '3.3.0'
 npm: '@bsv/sdk'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+last_updated: '2026-10-07'
+last_verified: '2026-10-07'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -46,9 +46,9 @@ Unicode, structural and original/canonical byte bounds. The flag describes that
 input, not later mutations, and supplies no schema or authority decision. Ordinary
 `parseOutputJSON` acceptance remains unchanged. Canonical property ordering uses
 an explicit UTF-16 code-unit comparator, independent of locale. Parsed objects are fresh
-null-prototype data records, including special property names. Map-based duplicate
-detection and `Object.fromEntries` create own data properties without invoking setters.
-Strict native string
+null-prototype data records, including special property names. A complete bounded validation pass uses fresh decoded-key Sets and array counts
+before native JSON construction. The newly constructed data graph is normalized to
+null-prototype records with ordinary own data properties. Strict native string
 parsing and every original duplicate, Unicode and resource check still run. No
 encoding, schema or authorization verdict is retained between calls.
 
@@ -131,6 +131,16 @@ for integration details. Consumers must adopt recovery explicitly and render
 lookup errors separately from successful empty results. A contact deadline
 does not cancel an underlying wallet request or permission prompt. This
 candidate is not publication or a deployed search-component update.
+
+The 3.2.1 source candidate aligns the Script interpreter with
+[SV Node v1.2.3](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.2.3).
+`OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operands are decoded through the node's
+checked int64 script-number path: an operand longer than nine bytes, or whose
+value lies outside the signed 64-bit range, is a script number overflow instead
+of being read from its first eight bytes, and `OP_SPLIT` also rejects a
+position above `INT32_MAX`. Operands of eight bytes or fewer are unchanged and
+no API, wire or wallet-data migration is required. This candidate is not
+publication.
 
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact

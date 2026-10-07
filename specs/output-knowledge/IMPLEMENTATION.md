@@ -6598,3 +6598,23 @@ deadlines, thresholds and ceilings remain required. Coherent source controls,
 complete inventory, actual hosted functionality/analyzers and the full mutation
 campaign/raw reconciliation are still required; source checks establish neither
 performance improvement nor Checkpoint2 readiness.
+
+## October 7: integrate the current main consensus correction
+
+Main `fb1b2dad56d207b21aa5f763f0c56113cacedd5d` introduces the reviewed
+SV Node v1.2.3 splice-operand correction from PR878. The existing additive SDK3.3
+version is retained together with all upstream interpreter changes, regressions,
+conformance vectors and consensus migration guidance. Authored release notes and
+changelog sections retain both contracts; shared parity, facts and migration pages
+are generated from the reconciled source. The SDK package guide now describes
+the complete bounded validation pass followed by native construction accurately.
+
+The new-main conflict prevented automatic Actions on93bf3e; it is a repository
+mergeability condition, not runtime evidence. Qualification must use the reconciled
+head, its reviewed main parent and complete merge tree. Earlier source checks and
+16a functional/analyzer results remain predecessor evidence only. Full exact-head
+functional, analyzer, platform, consumer and151/398 mutation qualification remain
+required before Checkpoint2 readiness. Original property controls, source ranges,
+counts, seeds, deadlines, thresholds, budget ceilings and every original example
+remain unchanged. No local SDK/application/native execution or performance claim
+is introduced by this merge.
