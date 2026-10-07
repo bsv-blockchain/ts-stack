@@ -24,7 +24,6 @@ import {
   protectedInventory,
   protectedUpdates,
   protectedRevisionCapacity,
-  protectedValue,
   type ProtectedLedgerAddress,
   type ProtectedLedgerChange,
   type ProtectedLedgerConfiguration,
@@ -209,7 +208,10 @@ export class SQLiteProtectedLedger {
     const text = canonicalOutputJSON(head, { bytes: HEAD_BYTES })
     // Always seal: a no-op read still validates current write custody and honors rotation.
     const envelope = this.encode(this.binding('head', { revision: head.revision }), text)
-    const sealed = parseOutputJSON(envelope, { bytes: this.envelopeBound(HEAD_BYTES) })
+    // encode just validated and generated this bounded canonical text. Native
+    // parsing owns the internal metadata without rechecking incoming syntax;
+    // stored envelopes still use the duplicate-aware reader in headSnapshot.
+    const sealed: unknown = JSON.parse(envelope)
     closedOutputObject(sealed, ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
     if (insert)
       this.database
@@ -484,7 +486,11 @@ export class SQLiteProtectedLedger {
         'Protected ledger local batch exceeds its byte allowance',
         'limited'
       )
-      result.push(parseOutputJSON(text, limits))
+      // Canonical generation already checked every representation/resource
+      // boundary. Copy only after the aggregate byte fence, before any effect.
+      // This plan is internal; public reads keep the protocol-owned records.
+      const value: unknown = JSON.parse(text)
+      result.push(value)
     }
     return result
   }
@@ -576,7 +582,15 @@ export class SQLiteProtectedLedger {
         'reservedUpdates',
         'value'
       ])
-      const { text } = protectedValue(change.value, this.configuration.maximumRecordBytes)
+      // The complete batch already owns this data-only value. Only the freshly
+      // bounded immutable text enters the writer; another parsed copy is unused.
+      const text = canonicalOutputJSON(change.value, {
+        bytes: this.configuration.maximumRecordBytes
+      })
+      outputAssert(
+        change.value !== null && typeof change.value === 'object' && !Array.isArray(change.value),
+        'Protected ledger record must be an object'
+      )
       return {
         ...protectedAddress({ kind: change.kind, key: change.key }),
         expectedRevision:

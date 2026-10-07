@@ -17,9 +17,9 @@ provider/generation projection are available. The optional compound SQLite
 proposal/current-feed/session owner is implemented with atomic visibility fences,
 future-event reservations and bounded expiry. Concrete native examples compose private publication/acquisition, historical
 licensed-purchase support and independent root serving with real Engine/Mongo
-and authenticated HTTP. Current optional-profile native wallet and alias
-integration remains in progress. Final package/platform and complete campaign
-qualification remain pending;
+and authenticated HTTP. Current optional-profile native wallet, alias, buyer/seller and authenticated
+HTTP layers are assembled. Their complete current-source integration, final
+package/platform and mutation-campaign qualification remain pending;
 downstream application adoption follows the second review checkpoint.
 The internal [native private-publication foundation](../../../docs/guides/private-publication-storage.md)
 now binds protected material, permanent request fences and ordered durable phases.

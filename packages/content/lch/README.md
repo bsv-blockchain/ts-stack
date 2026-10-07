@@ -277,8 +277,8 @@ complete original funded wallet transaction and released transaction, including
 every actual input Script, and require their identical full purchase commitment.
 The domain checks roles, License, Agreement and recipient-bound keys, then records
 positive entitlement. Historical delivery, reopen and offline playback do not
-repeat a new-funding expiry predicate. Native action/alias custody remains separate integration work; the current
-seller is described below.
+repeat a new-funding expiry predicate. Native action/alias custody is composed separately; complete current-source
+integration qualification remains required. The current seller is described below.
 
 `decodeLCHCollectorRevenue`, `LCHOverlayCovenantDomain` and
 `LCHOverlayCovenantSeller` retain pre-replacement behavior for compatibility.
@@ -286,7 +286,8 @@ They are historical APIs, not current-family adapters.
 The decoder/binding predicates alone do not authenticate the Offer. Neither
 terms validation nor those predicates establish activation ancestry, chain
 currentness, wallet remittance or alias recovery.
-The combined native/admission/alias integrations remain open before advertising C.
+The combined native/admission/alias layers are assembled; their complete
+current-source qualification remains open before advertising C.
 
 `decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR
 objects and exact UTF-8 JCS settlement/evidence bytes. It checks the 2 MiB

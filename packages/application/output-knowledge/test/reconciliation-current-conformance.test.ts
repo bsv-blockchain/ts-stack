@@ -137,6 +137,7 @@ describe('immutable PR295 reconciliation additions', () => {
       const frontiers: ReconciliationFrontier[] = []
       let position = 0
       let received = false
+      let receivedAt = '0'
       let verified = false
       let state: ReconciledState | undefined
       const names = new Map(
@@ -147,11 +148,13 @@ describe('immutable PR295 reconciliation additions', () => {
         for (const step of trace.steps) {
           if (step.op === 'view') {
             selected = context(step.id!)
-            frontiers.push({ at: String(++position), context: selected })
+            // The installed initial view precedes receipt position one.
+            if (frontiers.length > 0) position++
+            frontiers.push({ at: String(position), context: selected })
           } else if (step.op === 'receive') {
             expect(step.names).toEqual([corpus.expiryRetirement.name])
             received = true
-            position++
+            receivedAt = String(++position)
           } else if (step.op === 'verify') {
             expect(step.names).toEqual([corpus.expiryRetirement.name])
             verified = true
@@ -168,7 +171,11 @@ describe('immutable PR295 reconciliation additions', () => {
             ].map(name => {
               const source = corpus.transactions[name]
               const root = roots.has(name)
-              const firstRaw = { journalId: 'current-corpus', position: root ? '0' : '2', index: 0 }
+              const firstRaw = {
+                journalId: 'current-corpus',
+                position: root ? '0' : receivedAt,
+                index: 0
+              }
               return {
                 txid: source.txid,
                 rawTransaction: Utils.toBase64(Utils.toArray(source.raw, 'hex')),
@@ -176,7 +183,7 @@ describe('immutable PR295 reconciliation additions', () => {
                 firstRaw,
                 order: {
                   firstRaw,
-                  readyAt: root ? '0' : '2',
+                  readyAt: firstRaw.position,
                   depth: 0,
                   readyContextId: frontiers[0].context.id
                 },

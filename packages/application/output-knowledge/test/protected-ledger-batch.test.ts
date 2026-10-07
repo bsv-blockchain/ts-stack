@@ -221,3 +221,36 @@ it('counts UTF-8 and array framing exactly and keeps the enclosing depth limit',
     'JSON depth limit'
   )
 })
+
+it.each(['default', 'explicit'] as const)(
+  '%s writes retain literal special-key/Unicode bytes and own values before callbacks',
+  mode => {
+    const f = fixture(),
+      value = {
+        '2': 'two',
+        '10': 'ten',
+        ['__proto__']: { marker: 'data' },
+        nested: [-0, { constructor: 'own', text: '𝄞\n"' }]
+      },
+      input: ProtectedLedgerChange = { ...change(), reservedBytes: 512, value }
+    expect(
+      f.ledger.commit(
+        '0',
+        [input],
+        () => {
+          value['2'] = 'changed'
+          value['__proto__'].marker = 'changed'
+          return '100'
+        },
+        authorize,
+        mode === 'explicit' ? { maximumBatchBytes: 1024 } : undefined
+      )
+    ).toBe('1')
+    const stored = f.reopen().read([address()], clock, authorize).records[0]!.value
+    expect(canonicalOutputJSON(stored)).toBe(
+      '{"10":"ten","2":"two","__proto__":{"marker":"data"},"nested":[0,{"constructor":"own","text":"𝄞\\n\\\""}]}'
+    )
+    expect(Object.getPrototypeOf(stored)).toBeNull()
+    expect(Object.getPrototypeOf(stored['__proto__'])).toBeNull()
+  }
+)

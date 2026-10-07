@@ -149,6 +149,14 @@ describe('immutable PR295 proposal-channel corpus', () => {
       const epoch = await sessions.createEpoch()
       const opening = lookupSessionFixture('brc103', epoch, '0').value
       await sessions.initializeGuard('serving')
+      await expect(sessions.commit(opening)).rejects.toMatchObject({ code: 'unavailable' })
+      // A captured opening can only commit after all index timers through its
+      // evaluation time are processed, even for an otherwise empty index.
+      expect(await index.advanceTime(opening.time, 1)).toMatchObject({
+        complete: true,
+        expired: 0,
+        head: { processedThrough: opening.time, sequence: '0' }
+      })
       await sessions.commit(opening)
       const execute = async () => {
         if (principal === null) {

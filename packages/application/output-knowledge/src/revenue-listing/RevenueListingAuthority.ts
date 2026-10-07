@@ -24,6 +24,9 @@ import { requireLineage, type RevenueListingLineagePackage } from './LineagePack
 type Genesis = RevenueListingLineagePackage['genesis']
 
 /**
+ * Historical pre-replacement authority contract retained for compatibility.
+ * New installations select RevenueListingProfileAuthority for protected
+ * fixed-child signing under the current optional BRC-197 family.
  * Installed local authority, separate from the funding wallet. A hardware or
  * remote implementation must enforce its own authorization/consent policy.
  * Both operations use the same explicitly selected public identity.

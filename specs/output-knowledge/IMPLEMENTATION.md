@@ -1,7 +1,7 @@
 # Output knowledge implementation qualification
 
-This branch implements the application-neutral [BRC-192–199 packet](https://github.com/bsv-blockchain/BRCs/pull/284)
-with current amendments in [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
+This branch implements the application-neutral BRC-192–199 packet at the current
+[BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295) baseline
 at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. The specification checkpoint is
 approved for implementation. The implementation
 checkpoint remains open; neither an initial package version nor passing foundation
@@ -17,7 +17,10 @@ submission and GASP behavior remains available to applications that do not opt i
 family, stable purchase commitments, alias recovery and route-specific finality.
 BRC-197 is one optional transaction domain exercising the shared architecture.
 Its earlier program, signing and economic-route receipts do not qualify the
-replacement. Full current-source integration and hosted qualification remain open.
+replacement. The current layers are assembled; complete current-source
+integration and hosted qualification remain open. The component receipts below
+preserve the progression of this work. Use the [checkpoint inventory](./CHECKPOINT2.md)
+and [alignment inventory](./SPEC-ALIGNMENT.md) for current acceptance requirements.
 
 The first alignment batch extends closed purchase envelopes with commitments and
 separate current-alias evidence. It binds the full commitment in POTATOES without
@@ -5995,3 +5998,47 @@ runner, source range and qualification setting remain checked. Registration
 retains 151 targets and 398 execution rows; this inventory is not a successful
 mutation campaign. Complete current-source runtime and final qualification
 remain required before Checkpoint 2.
+
+## October 7: current trace ordering and generated ledger ownership
+
+Published `7802eab3a51ac4b2a172ab3c4fa4d8af4fcc4e2b` passes the installed
+engine control, SDK262 suites/8538 tests, browser/mobile profiles, docs81
+examples/24 exact tarballs, strict Sonar0 and actual CodeQL0. All15 review
+threads remain resolved. CI37572249166 still fails disclosure167/300 and
+coordinator210/300 at the original150-second controls, with no counterexample.
+The final shard reports16 new proposal-query adapter failures because it
+committed an opening before the index had processed its evaluation time. The
+adapter now asserts that refusal, processes the empty index through the exact
+opening time, and then commits. Frozen query/head digests and all expected
+observations remain unchanged. All current native HTTP cases also pass in the
+ordinary private package job (53 suites/889 tests); LCH45 suites/287 tests pass.
+Two new retirement trace bindings also failed because their initial context
+started at1. The adapter now installs the initial view at0 and retains actual
+receipt positions for readiness; the production reconciler and whole frozen
+corpus are unchanged. The isolated repair passes five complete compiler
+contexts47, all seven root52 checks and full inventory28.
+
+Fresh bounded hosted timing retains the exact source/run/runtime/selector
+identity and clear producer/reader guards and drained groups. The property
+measurement exits1; all four native HTTP diagnostic cases exit0. Timing is not
+complete functional or campaign qualification. It continues to identify
+structural JSON work after the Base64 repair.
+
+The next native ledger repair eliminates unused copies at generated-data
+boundaries. Generated head metadata and local plans are independently parsed
+after their original canonical representation and byte fences; they remain
+internal. The writer retains freshly bounded immutable record text without
+constructing a second unused parsed record. Incoming head/record text still
+uses duplicate-aware parsing, canonical inspection and its original schema
+checks. Public owned values, fresh ciphertext/custody/key resolution,
+authentication, rotation, zeroing, inventory, clock and guard behavior remain.
+Two additive literal regressions cover numeric/special keys, Unicode, negative
+zero, callback mutation and null-prototype records through both write modes.
+The ledger candidate passes all five compiler contexts48, all seven root53
+checks, installed source controls3/3 and full inventory29. The latter retains
+151 targets/398 rows and complete partition unions, with source-driven counts
+1565 for the native-clock target and905 for the ledger target. The combined
+query/trace/ledger repair still requires hosted qualification; no authority,
+schema, key, plaintext, row or validation verdict is cached. All
+original property/case counts, seeds, replay inputs, deadlines, mutation ranges
+and qualification thresholds remain.
