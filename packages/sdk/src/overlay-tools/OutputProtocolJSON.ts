@@ -192,11 +192,13 @@ class OutputJSONParser {
     this.offset = end < 0 ? this.source.length : end + 1
     outputAssert(end >= 0, 'Unterminated JSON string')
     const encoded = this.source.slice(start, this.offset)
+    // Fresh source validation already proves unescaped Unicode well-formed;
+    // ASCII quote boundaries cannot split a pair. Only decoding escapes can
+    // introduce a lone surrogate or change canonical string representation.
+    if (!/[^\u0020-\u005B\u005D-\uFFFF]/.test(encoded)) return encoded.slice(1, -1)
     let decoded: string
     try {
-      decoded = /[^\u0020-\u005B\u005D-\uFFFF]/.test(encoded)
-        ? (JSON.parse(encoded) as string)
-        : encoded.slice(1, -1)
+      decoded = JSON.parse(encoded) as string
     } catch {
       throw new OutputProtocolError('invalid', 'Malformed JSON string')
     }
@@ -300,12 +302,14 @@ export function canonicalOutputJSON(
   }
   function string(text: string, suffix = ''): void {
     outputAssert(text.length <= bounds.bytes, 'Output JSON byte limit', 'limited')
-    wellFormed(text)
     // Valid unescaped ASCII has identical JSON and UTF-8 code-unit lengths.
     // Escaped/control/Unicode strings retain native escaping and byte counting.
     if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(text)) {
       emit('"' + text + '"' + suffix, true)
-    } else emit(JSON.stringify(text) + suffix)
+    } else {
+      wellFormed(text)
+      emit(JSON.stringify(text) + suffix)
+    }
   }
   function array(node: unknown[], depth: number): void {
     outputAssert(node.length <= bounds.arrayElements, 'JSON array limit', 'limited')
@@ -325,8 +329,9 @@ export function canonicalOutputJSON(
   }
   function object(node: object, depth: number): void {
     outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
-    // RFC 8785 orders property names by UTF-16 code units, never locale rules.
-    const keys = Object.getOwnPropertyNames(node).sort((a, b) => +(a > b) - +(a < b))
+    // Native default sorting of these primitive strings uses the UTF-16
+    // ordering required by RFC 8785, independent of locale or numeric value.
+    const keys = Object.getOwnPropertyNames(node).sort()
     outputAssert(keys.length <= bounds.mapKeys, 'JSON map limit', 'limited')
     emit('{', true)
     let index = 0
@@ -351,7 +356,8 @@ export function canonicalOutputJSON(
     } else if (typeof node === 'string') {
       string(node)
     } else {
-      outputAssert(typeof node === 'object' && node !== null, 'Expected a JSON value')
+      // The preceding scalar branch has already handled null.
+      outputAssert(typeof node === 'object', 'Expected a JSON value')
       outputAssert(!ancestors.has(node), 'Cyclic JSON value')
       outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
       ancestors.add(node)

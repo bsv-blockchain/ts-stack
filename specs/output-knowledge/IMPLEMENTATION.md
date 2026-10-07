@@ -6082,3 +6082,61 @@ finding is dismissed or suppressed. The current commitment guide now names
 the current Profile purchase verifier and explicitly distinguishes the shared
 script-independent calculator from historical planners and verifiers.
 Current functional, source and analyzer requalification remains mandatory.
+
+## October 7: fresh analyzer closure and remaining representation cost
+
+Published `0938cd8a2108d5c7de540b542f1bfa2850f7b6e3` passes all262 SDK
+suites/8541 tests, including maximum-size escaped-quote positive and unterminated
+cases. Strict Sonar has zero new findings and unreviewed hotspots. Actual CodeQL
+run37581029668 analyzes merge92b0e4a8d99eb60092c0772254e3a45a63e01614:
+its tree equals the published head, its parents are reviewed main and that head,
+both analyses have no error, and the PR ref has zero open alerts. Finding324 is
+fixed through the linear scanner; no dismissal or suppression is used. Its
+review conversation is resolved. All infrastructure checks pass, including the
+previously interrupted Node checksum download. Packed documentation consumers
+pass all81 examples against24 exact tarballs.
+
+Current CI37581030052 still fails the original disclosure and coordinator
+properties at156/300 and241/300 respectively, under their unchanged150-second
+controls, without a counterexample. This does not qualify the complete source
+or the whole151-target/398-execution mutation campaign. Fresh bounded Linux
+profiles retain actual source, selectors, runtime, minimum counts, seed and
+case deadlines. Both producer and reader guards are clear and process groups
+are gone. The property diagnostic exits1; all four native purchase HTTP cases
+exit0. Only bounded identity/function metadata is admitted; raw CPU or native
+fault artifacts are neither downloaded nor replayed.
+
+The fresh property profile attributes about43 seconds inclusively to canonical
+JSON serialization, including about15 seconds of object self time, and about10
+seconds to closed-schema checks. These overlapping samples are not additive and
+do not prove a candidate improvement. The next source uses native default
+sorting of primitive property-name strings, whose UTF-16 ordering is the same
+as [RFC8785 section3.2.3](https://www.rfc-editor.org/rfc/rfc8785#section-3.2.3)
+and [ECMAScript CompareArrayElements](https://tc39.es/ecma262/multipage/indexed-collections.html#sec-comparearrayelements).
+
+Fresh source validation already proves unescaped parsed Unicode well-formed:
+string inputs receive the source check, and byte inputs receive fatal UTF-8
+decoding. ASCII quote boundaries cannot split a surrogate pair. Escaped tokens
+still receive native syntax validation, decoded-surrogate validation and
+canonical-encoding inspection. Canonical serialization uses the fresh ASCII
+predicate as its Unicode proof on that branch; every other string receives the
+original surrogate check before escaping or byte effects. No string, schema,
+authority or validation verdict survives in a cache.
+
+Closed objects retain the same captured required/optional iterator snapshot.
+Fresh array membership for at most16 captured names uses the same SameValueZero
+equality as a Set, avoiding only that extra temporary collection. Larger lists
+retain a fresh Set, preserving indexed validation instead of quadratic work. Missing/unknown messages are constructed
+only at their unchanged refusal points. Plain-object, symbol, required-field,
+unknown-field, hidden-field and accessor checks retain their order. Two additive
+literal tests cover independent recursive UTF-16/numeric-name ordering, UTF-8
+and escaped Unicode, lone-surrogate refusal, duplicate schema names, special
+keys and exact descriptor/refusal order. The complete original unit prefix and
+all property bodies/counts/seeds/deadlines remain unchanged.
+
+The original-custody guide now locally identifies its retained historical
+verifier and the independently installed current immutable/alias composition.
+The earlier compiled purchase example has the same explicit historical label;
+all81 example bodies and identifiers remain unchanged. Fresh compiler, root,
+source-inventory, bundle, hosted functionality and full mutation qualification
+are still required for this candidate before Checkpoint2.

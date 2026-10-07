@@ -841,3 +841,88 @@ describe('BRC-192 representation boundary', () => {
     }
   })
 })
+
+describe('fresh representation work preserves literal contracts', () => {
+  it('retains recursive RFC 8785 UTF-16 order and unescaped versus decoded Unicode inspection', () => {
+    // Independent ordering from RFC 8785 section 3.2.3, extended with numeric
+    // names whose lexical order differs from JavaScript enumeration order.
+    const input = {
+      דּ: 8,
+      '😀': 7,
+      '€': 6,
+      ö: 5,
+      '\u0080': 4,
+      '2': 3,
+      '10': 2,
+      '1': 1,
+      '\r': 0
+    }
+    const literal = '{"\\r":0,"1":1,"10":2,"2":3,"\u0080":4,"ö":5,"€":6,"😀":7,"דּ":8}'
+    expect(canonicalOutputJSON(input)).toBe(literal)
+    expect(canonicalOutputJSON([{ nested: input }])).toBe('[{"nested":' + literal + '}]')
+    for (const source of [literal, new TextEncoder().encode(literal)]) {
+      const inspected = inspectOutputJSONEncoding(source)
+      expect(inspected.canonical).toBe(true)
+      expect(inspected.value).toEqual(input)
+      expect(Object.getPrototypeOf(inspected.value)).toBe(null)
+    }
+    for (const source of ['"😀"', new TextEncoder().encode('"😀"')]) {
+      expect(inspectOutputJSONEncoding(source)).toEqual({ value: '😀', canonical: true })
+    }
+    expect(inspectOutputJSONEncoding('"\\ud83d\\ude00"')).toEqual({
+      value: '😀',
+      canonical: false
+    })
+    for (const source of ['"\\ud800"', '"\\udc00"']) {
+      for (const representation of [source, new TextEncoder().encode(source)]) {
+        expect(() => parseOutputJSON(representation)).toThrow('Unpaired JSON surrogate')
+        expect(() => inspectOutputJSONEncoding(representation)).toThrow('Unpaired JSON surrogate')
+      }
+    }
+    expect(() => canonicalOutputJSON({ '\ud800': 1 })).toThrow('Unpaired JSON surrogate')
+    expect(() => canonicalOutputJSON('\udc00')).toThrow('Unpaired JSON surrogate')
+  })
+
+  it('retains duplicate schema membership, special keys and exact missing/unknown/descriptor refusal order', () => {
+    const value = parseOutputJSON('{"__proto__":1,"constructor":2,"known":3}')
+    expect(() =>
+      closedOutputObject(value, ['known', '__proto__', 'known'], ['constructor', 'known'])
+    ).not.toThrow()
+    expect(() =>
+      closedOutputObject(value, ['absent'], ['__proto__', 'constructor', 'known'])
+    ).toThrow('Missing absent')
+    expect(() => closedOutputObject(value, ['known'], ['__proto__'])).toThrow('Unknown constructor')
+    const hidden = Object.defineProperty({ known: 3 }, 'extra', { value: 4 })
+    expect(() => closedOutputObject(hidden, ['known'])).toThrow('Unknown extra')
+    expect(() => closedOutputObject(hidden, ['known'], ['extra'])).toThrow(
+      'Accessor or hidden protocol field'
+    )
+    expect(() => closedOutputObject(hidden, ['absent'])).toThrow('Missing absent')
+    let getterReads = 0
+    const accessor = Object.defineProperty({}, 'known', {
+      enumerable: true,
+      get() {
+        getterReads++
+        return 3
+      }
+    })
+    expect(() => closedOutputObject(accessor, ['known'])).toThrow(
+      'Accessor or hidden protocol field'
+    )
+    expect(getterReads).toBe(0)
+    expect(() => closedOutputObject({ known: 3, [Symbol('extra')]: 4 }, ['absent'])).toThrow(
+      'Unexpected symbol key'
+    )
+    for (const size of [16, 17, 64]) {
+      const names = Array.from({ length: size }, (_, i) => `field-${i}`)
+      const larger = Object.fromEntries(names.map(name => [name, 1]))
+      expect(() => closedOutputObject(larger, names)).not.toThrow()
+      Object.defineProperty(larger, 'extra', { value: 2 })
+      expect(() => closedOutputObject(larger, names)).toThrow('Unknown extra')
+      expect(() => closedOutputObject(larger, names, ['extra'])).toThrow(
+        'Accessor or hidden protocol field'
+      )
+      expect(() => closedOutputObject(larger, ['absent', ...names])).toThrow('Missing absent')
+    }
+  })
+})

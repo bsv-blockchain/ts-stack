@@ -1970,9 +1970,12 @@ void recoverOriginalCovenantDelivery
 
 ## Prepared purchase verification
 
-The independently selected seller, original request/terms and trusted chain view
-remain caller-owned selections. This read-only verifier does not fund, admit or
-release anything.
+This example preserves the earlier revenue-listing family and its verifier.
+Current BRC-197 installations select the
+[current immutable listing verifier](#current-immutable-listing-verification)
+shown below. The independently selected seller, original request/terms and
+trusted chain view remain caller-owned selections. This read-only historical
+verifier does not fund, admit or release anything.
 
 ```ts compile
 // example-id: revenue-listing-purchase

@@ -3,8 +3,8 @@ id: private-purchase-custody
 title: 'Original Covenant Purchase Custody'
 kind: guide
 version: '1.0.1'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+last_updated: '2026-10-07'
+last_verified: '2026-10-07'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -20,9 +20,17 @@ independent domain and release verification, the actual topic admission owner an
 optional authenticated HTTP routes. Installing the native components alone does
 not enable an endpoint or change ordinary overlay submission.
 
-Unlike paid lookup acquisition, the purchase workflow pays through an actual
-listing covenant transaction. It does not reserve a seller wallet credit or
-charge an HTTP fee. A preparation retains the independently selected host and
+This guide preserves the original exact-transaction custody interfaces. They
+remain usable with independently specified acquisition domains; their
+historical revenue-listing example below does not select the current BRC-197
+family. Current immutable-profile installations use the
+[purchase alias composition](./private-purchase-alias-custody.md) and
+[current profile verifier](./revenue-listing-profile-lineage.md).
+
+Unlike paid lookup acquisition, this workflow pays through a transaction whose
+purchase conditions the installed domain independently verifies. A listing
+covenant is one exemplar. It does not reserve a seller wallet credit or charge
+an HTTP fee. A preparation retains the independently selected host and
 topic, authenticated capability, complete original request, seller-signed terms,
 domain evidence and disclosed release policy. The acquisition ID permanently
 identifies that original request and recipient; a retry cannot select new terms
@@ -40,9 +48,12 @@ An independently installed domain supplies verified listing authority, eligible
 terms, private readiness and bounded material. `prepare` creates an owned
 unsigned body; `authenticate` requires the exact original body signed by the
 selected seller. Neither method establishes Bitcoin, domain or currentness
-premises. For the BRC-197 profile, compose full genesis/lineage verification and
-`RevenueListingPurchaseVerifier` as described in the
-[lineage guide](./revenue-listing-lineage.md).
+premises. For the retained historical revenue-listing family, compose full
+genesis/lineage verification and `RevenueListingPurchaseVerifier` as described
+in the [historical lineage guide](./revenue-listing-lineage.md). The current
+immutable family instead selects `RevenueListingProfilePurchaseVerifier` and
+its independently installed alias-custody composition; the original verifier
+cannot establish the replacement-family contract.
 
 Before disclosing a payable preparation, `SQLitePrivatePurchaseStore.prepare`
 atomically reserves the original signed terms and protected material, a
