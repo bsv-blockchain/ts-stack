@@ -40,6 +40,24 @@ const safeMeasurement = {
   testCaseTimeoutMarker: false
 }
 
+test('monotonic timing refusals retain every original supervisor admission guard', () => {
+  for (const phase of ['monotonic-file-bound', 'monotonic-summary']) {
+    assert.equal(diagnosticMayContinueValidation(phase, safeMeasurement), true)
+    for (const change of [
+      { processGroupGone: false },
+      { timedOut: true },
+      { stopReason: 'source-changed' },
+      { signal: 'SIGTERM' },
+      { exitCode: 2 },
+      { knownNativeFaultMarker: true },
+      { boundedTriageExceeded: true },
+      { testCaseTimeoutMarker: true }
+    ])
+      assert.equal(diagnosticMayContinueValidation(phase, { ...safeMeasurement, ...change }), false)
+  }
+  assert.equal(diagnosticMayContinueValidation('monotonic-bootstrap', safeMeasurement), false)
+})
+
 test('property metadata exposes only an exact scalar outcome/count and never infers passing runs', () => {
   for (const [line, outcome, completedCases] of [
     ['    Property interrupted after 163 tests\r\n', 'interrupted', 163],

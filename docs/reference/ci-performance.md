@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.5'
+version: '1.8.6'
 last_updated: '2026-10-07'
 last_verified: '2026-10-07'
 review_cadence_days: 30
@@ -96,6 +96,26 @@ can describe a property-budget interruption; it never qualifies the property,
 coverage, mutation campaign or checkpoint. The complete ordinary coverage run
 must still pass independently. No performance improvement is claimed
 until comparable measurements and full unchanged qualification support it.
+
+The same hosted diagnostic also measures synchronous calls to the actual built-in
+SQLite database and statement methods, HKDF, hash creation/update/digest and
+cipher creation. A Linux-only preload delegates each call with its original
+receiver, arguments, result and thrown value, retaining only fixed method names,
+call counts and nanosecond totals from `process.hrtime.bigint`. No keys, SQL,
+application records or operation results enter this report. Counters have fixed
+method, count and total bounds; a failing or backward clock refuses the entire
+timing report without changing the wrapped operation. The supervisor admits the
+descriptor-bounded counter file only after its original execution, source and
+complete drainage guards pass. Missing or invalid counters supply no timings.
+
+These counters are synchronous inclusive durations with measurement overhead.
+Nested totals cannot be added as exclusive CPU time. Statement iterator creation
+does not measure later iteration, and asynchronous work is excluded. Counter
+admission is independent of CPU samples: negative deltas or reordered CPU samples
+remain excluded from performance conclusions, even when bounded scalar counters
+are usable. The preload is diagnostic only; complete ordinary uninstrumented
+coverage and mutation qualification remain mandatory with their unchanged tests,
+counts, seeds, replay settings, deadlines and thresholds.
 
 The weekly `CI performance trend` workflow classifies successful pull-request
 CI runs as full-scope (at least 50 executed, non-skipped jobs) or targeted,

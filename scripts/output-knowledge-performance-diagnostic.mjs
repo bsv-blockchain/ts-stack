@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { validateMonotonicTiming } from './output-knowledge-monotonic-timing.mjs'
 
 const MAX_LOG = 16 * 1024 * 1024
 const MAX_PROFILE = 64 * 1024 * 1024
@@ -325,7 +326,13 @@ async function supervise(arguments_, cwd, logfile, seconds, env, aborted) {
  * drained property measurement permits the ordinary artifact validation to continue.
  * Source/calendar guards must still pass immediately before returning. */
 export function diagnosticMayContinueValidation(phase, property) {
-  const timingOnly = new Set(['profile-file-bound', 'profile-json', 'profile-summary'])
+  const timingOnly = new Set([
+    'profile-file-bound',
+    'profile-json',
+    'profile-summary',
+    'monotonic-file-bound',
+    'monotonic-summary'
+  ])
   return (
     timingOnly.has(phase) &&
     property?.processGroupGone === true &&
@@ -499,13 +506,14 @@ function selectionFromArguments(args) {
   )
 }
 
-function diagnosticEnvironment(mongoBinary) {
+function diagnosticEnvironment(mongoBinary, monotonicFile) {
   const env = {
     ...process.env,
     FAST_CHECK_NUM_RUNS: '300',
     FAST_CHECK_SEED: '3242026',
     FAST_CHECK_PATH: '',
-    NODE_OPTIONS: ''
+    NODE_OPTIONS: '',
+    OUTPUT_KNOWLEDGE_MONOTONIC_FILE: monotonicFile
   }
   if (mongoBinary) {
     env.MONGOMS_SYSTEM_BINARY = mongoBinary
@@ -631,9 +639,10 @@ async function main() {
       phase: 'sqlite-health',
       refusal: null,
       timingCollected: false,
+      monotonicCollected: false,
       propertyExecution: null
     },
-    env = diagnosticEnvironment(mongoBinary)
+    env = diagnosticEnvironment(mongoBinary, path.join(directory, 'monotonic-timing.json'))
   const write = () =>
     fs.writeFileSync(
       path.join(output, 'diagnostic.json'),
@@ -678,6 +687,8 @@ async function main() {
         `--cpu-prof-interval=${CPU_SAMPLING_INTERVAL_MICROSECONDS}`,
         `--cpu-prof-dir=${directory}`,
         `--cpu-prof-name=${selection.profile}`,
+        '--import',
+        path.join(root, 'scripts/output-knowledge-monotonic-preload.mjs'),
         '--experimental-vm-modules',
         'node_modules/jest/bin/jest.js',
         '--runInBand',
@@ -705,6 +716,36 @@ async function main() {
     report.phase = 'post-property-source-guard'
     guard()
     collectPropertyExecution(selection, directory, measured, report, guard, checkWindow)
+    report.phase = 'monotonic-file-bound'
+    const monotonic = readBoundedProfile(
+      path.join(directory, 'monotonic-timing.json'),
+      32768,
+      {},
+      checkWindow
+    )
+    report.phase = 'monotonic-summary'
+    validateMonotonicTiming(monotonic)
+    assert.deepEqual(monotonic.rows.map(row => row.method).sort(), [
+      'DatabaseSync.close',
+      'DatabaseSync.exec',
+      'DatabaseSync.prepare',
+      'Hash.digest',
+      'Hash.update',
+      'StatementSync.all',
+      'StatementSync.get',
+      'StatementSync.iterate',
+      'StatementSync.run',
+      'crypto.createCipheriv',
+      'crypto.createDecipheriv',
+      'crypto.createHash',
+      'crypto.hkdfSync'
+    ])
+    guard()
+    fs.writeFileSync(
+      path.join(output, 'monotonic-timing.json'),
+      JSON.stringify({ identity, ...monotonic }, null, 2)
+    )
+    report.monotonicCollected = true
     report.phase = 'profile-file-bound'
     const parsed = readBoundedProfile(
       path.join(directory, selection.profile),

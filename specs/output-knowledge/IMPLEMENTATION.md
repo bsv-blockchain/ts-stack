@@ -6465,3 +6465,35 @@ property and unit bodies, compiled examples, source ranges, counts, seeds, repla
 inputs, deadlines, thresholds and browser ceilings remain required. This
 candidate still requires complete strict source, inventory, package and hosted
 qualification before a performance or checkpoint claim.
+
+## October 7: 5f0 qualification and bounded native-operation diagnostics
+
+CI37635025389 on5f0cc0f5cec3c4e8b823e035861cfe7f82cec5dd is terminal.
+SDK262/8558, application3 63/930 and application4 63/968 pass. Private-overlay
+53/889 includes all four current native HTTP composition cases; LCH38/276 and
+the artifact lane's81 compiled examples,24 exact tarballs and legacy SDK consumers
+pass. Conformance, code generation, containers, browser/mobile and the remaining
+applicable package lanes pass. Actual source-bound CodeQL analyses have zero open
+alerts; actual Sonar has zero blocking findings or unreviewed hotspots. All17
+review conversations remain resolved. The merge gate fails because disclosure
+interrupts166/300 and coordinator240/300 at their unchanged150-second limits.
+Neither reports a counterexample. Their remaining suites pass. This candidate
+does not satisfy Checkpoint2, and no unchanged retry is used to claim otherwise.
+
+All three current CPU profiles contain negative deltas and reordered samples;
+their function timings are excluded. A repository-only diagnostic companion
+therefore adds bounded monotonic synchronous counters around actual built-in
+SQLite and crypto methods in the same hosted diagnostic process. It delegates
+original receivers, arguments, return values and thrown errors without retaining
+operation data. Invalid clocks or counters refuse timing rather than repairing
+it. Inclusive totals include diagnostic overhead, cannot be added as exclusive
+CPU time and exclude asynchronous work and subsequent iterator consumption.
+This changes no public package, ordinary property body, selector, count, seed,
+replay, deadline, threshold, browser ceiling or qualification requirement.
+
+The new diagnostic code requires its own source controls and hosted execution;
+it supplies no improvement or functional qualification by itself. Full ordinary
+uninstrumented coverage must still pass on the final source before the untrimmed
+151-target/398-row mutation campaign and final checkpoint reconciliation. The
+seven prepared current-document/acceptance updates remain conditional and
+unapplied while the complete baseline is failing.
