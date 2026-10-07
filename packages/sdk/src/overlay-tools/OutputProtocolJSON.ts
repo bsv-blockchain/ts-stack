@@ -300,117 +300,121 @@ export function canonicalOutputJSON(
   value: unknown,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): string {
-  return new OutputJSONSerializer(value, limitsFor(limits)).text
+  return serializeOutputJSON(value, limitsFor(limits))
 }
 
-/** Each invocation owns its complete mutable framing state. Method code is
- * shared, but no input, representation result or validation verdict is held. */
-class OutputJSONSerializer {
-  #text = ''
-  readonly #ancestors = new Set<object>()
-  #bytes = 0
+/** Each invocation owns its complete mutable framing state. Shared functions
+ * never expose this private frame or retain an input or validation verdict. */
+interface OutputJSONFrame {
+  text: string
+  bytes: number
+  readonly bounds: OutputJSONLimits
+  readonly ancestors: Set<object>
+}
 
-  readonly #bounds: OutputJSONLimits
+function serializeOutputJSON(value: unknown, bounds: OutputJSONLimits): string {
+  const frame: OutputJSONFrame = { text: '', ancestors: new Set<object>(), bytes: 0, bounds }
+  visitOutputJSON(frame, value, 1)
+  return frame.text
+}
 
-  readonly text: string
+function emitOutputJSON(frame: OutputJSONFrame, chunk: string, knownASCII = false): void {
+  outputJSONLimit(chunk.length <= frame.bounds.bytes)
+  // JSON punctuation and escaped ASCII strings have one byte per code unit.
+  // Avoid allocating an encoded array for every delimiter and ASCII field.
+  frame.bytes +=
+    knownASCII || /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
+  outputJSONLimit(frame.bytes <= frame.bounds.bytes)
+  frame.text += chunk
+}
 
-  constructor(value: unknown, bounds: OutputJSONLimits) {
-    this.#bounds = bounds
-    this.#visit(value, 1)
-    this.text = this.#text
+function emitOutputJSONString(frame: OutputJSONFrame, text: string, suffix = ''): void {
+  outputJSONLimit(text.length <= frame.bounds.bytes)
+  // Valid unescaped ASCII has identical JSON and UTF-8 code-unit lengths.
+  // Escaped/control/Unicode strings retain native escaping and byte counting.
+  if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(text)) {
+    emitOutputJSON(frame, '"' + text + '"' + suffix, true)
+  } else {
+    wellFormed(text)
+    emitOutputJSON(frame, JSON.stringify(text) + suffix)
   }
-  #emit(chunk: string, knownASCII = false): void {
-    outputJSONLimit(chunk.length <= this.#bounds.bytes)
-    // JSON punctuation and escaped ASCII strings have one byte per code unit.
-    // Avoid allocating an encoded array for every delimiter and ASCII field.
-    this.#bytes +=
-      knownASCII || /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
-    outputJSONLimit(this.#bytes <= this.#bounds.bytes)
-    this.#text += chunk
+}
+
+function visitOutputJSONArray(frame: OutputJSONFrame, node: unknown[], depth: number): void {
+  outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
+  outputAssert(
+    Object.getOwnPropertyNames(node).length === node.length + 1 &&
+      Object.keys(node).length === node.length,
+    'Sparse or decorated JSON array'
+  )
+  emitOutputJSON(frame, '[', true)
+  for (let i = 0; i < node.length; i++) {
+    if (i > 0) emitOutputJSON(frame, ',', true)
+    const descriptor = Object.getOwnPropertyDescriptor(node, i)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
+    visitOutputJSON(frame, descriptor.value, depth + 1)
   }
-  #string(text: string, suffix = ''): void {
-    outputJSONLimit(text.length <= this.#bounds.bytes)
-    // Valid unescaped ASCII has identical JSON and UTF-8 code-unit lengths.
-    // Escaped/control/Unicode strings retain native escaping and byte counting.
-    if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(text)) {
-      this.#emit('"' + text + '"' + suffix, true)
-    } else {
-      wellFormed(text)
-      this.#emit(JSON.stringify(text) + suffix)
+  emitOutputJSON(frame, ']', true)
+}
+
+function visitOutputJSONObject(frame: OutputJSONFrame, node: object, depth: number): void {
+  outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
+  // RFC 8785 orders primitive property-name strings by UTF-16 code units.
+  const keys = Object.getOwnPropertyNames(node)
+  // These are fresh primitive names. Already ordered names need no sorting;
+  // any inversion still uses the original UTF-16 code-unit comparator.
+  // Begin with the first actual predecessor in this private primitive-name array.
+  for (let index = 1; index < keys.length; index++) {
+    if (keys[index] < keys[index - 1]) {
+      keys.sort((a, b) => +(a > b) - +(a < b))
+      break
     }
   }
-  #array(node: unknown[], depth: number): void {
-    outputJSONLimit(node.length <= this.#bounds.arrayElements, 3)
-    outputAssert(
-      Object.getOwnPropertyNames(node).length === node.length + 1 &&
-        Object.keys(node).length === node.length,
-      'Sparse or decorated JSON array'
-    )
-    this.#emit('[', true)
-    for (let i = 0; i < node.length; i++) {
-      if (i > 0) this.#emit(',', true)
-      const descriptor = Object.getOwnPropertyDescriptor(node, i)
-      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
-      this.#visit(descriptor.value, depth + 1)
-    }
-    this.#emit(']', true)
+  outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  emitOutputJSON(frame, '{', true)
+  let index = 0
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(node, key)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
+    if (index++ > 0) emitOutputJSON(frame, ',', true)
+    // The colon is the next byte before visiting the value. One emission
+    // retains the same byte-limit refusal before any value validation.
+    emitOutputJSONString(frame, key, ':')
+    visitOutputJSON(frame, descriptor.value, depth + 1)
   }
-  #object(node: object, depth: number): void {
-    outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
-    // RFC 8785 orders primitive property-name strings by UTF-16 code units.
-    const keys = Object.getOwnPropertyNames(node)
-    // These are fresh primitive names. Already ordered names need no sorting;
-    // any inversion still uses the original UTF-16 code-unit comparator.
-    // Begin with the first actual predecessor in this private primitive-name array.
-    for (let index = 1; index < keys.length; index++) {
-      if (keys[index] < keys[index - 1]) {
-        keys.sort((a, b) => +(a > b) - +(a < b))
-        break
-      }
-    }
-    outputJSONLimit(keys.length <= this.#bounds.mapKeys, 2)
-    this.#emit('{', true)
-    let index = 0
-    for (const key of keys) {
-      const descriptor = Object.getOwnPropertyDescriptor(node, key)
-      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
-      if (index++ > 0) this.#emit(',', true)
-      // The colon is the next byte before visiting the value. One emission
-      // retains the same byte-limit refusal before any value validation.
-      this.#string(key, ':')
-      this.#visit(descriptor.value, depth + 1)
-    }
-    this.#emit('}', true)
-  }
-  #visit(node: unknown, depth: number): void {
-    outputJSONLimit(depth <= this.#bounds.depth, 1)
-    const number = typeof node === 'number'
-    if (node === null || typeof node === 'boolean' || number) {
-      outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
-      // Safe integers never use exponent notation here; both encoders map -0 to 0.
-      this.#emit(String(node), true)
-    } else if (typeof node === 'string') {
-      this.#string(node)
-    } else {
-      // The preceding scalar branch has already handled null.
-      outputAssert(typeof node === 'object', 'Expected a JSON value')
-      outputAssert(!this.#ancestors.has(node), 'Cyclic JSON value')
-      outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
-      this.#ancestors.add(node)
-      if (Array.isArray(node)) this.#array(node, depth)
-      else this.#object(node, depth)
-      this.#ancestors.delete(node)
-    }
+  emitOutputJSON(frame, '}', true)
+}
+
+function visitOutputJSON(frame: OutputJSONFrame, node: unknown, depth: number): void {
+  outputJSONLimit(depth <= frame.bounds.depth, 1)
+  const number = typeof node === 'number'
+  if (node === null || typeof node === 'boolean' || number) {
+    outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
+    // Safe integers never use exponent notation here; both encoders map -0 to 0.
+    emitOutputJSON(frame, String(node), true)
+  } else if (typeof node === 'string') {
+    emitOutputJSONString(frame, node)
+  } else {
+    // The preceding scalar branch has already handled null.
+    outputAssert(typeof node === 'object', 'Expected a JSON value')
+    outputAssert(!frame.ancestors.has(node), 'Cyclic JSON value')
+    outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
+    frame.ancestors.add(node)
+    if (Array.isArray(node)) visitOutputJSONArray(frame, node, depth)
+    else visitOutputJSONObject(frame, node, depth)
+    frame.ancestors.delete(node)
   }
 }
 
 /** Normalize only the fresh, fully validated native JSON copy. No call state is retained. */
 function normalizeOwnedOutputJSON(node: OutputJSON): OutputJSON {
   if (node && typeof node === 'object') {
-    if (!Array.isArray(node)) Object.setPrototypeOf(node, null)
-    // Only private native JSON graphs reach this walker: dense array indices and
-    // record fields are ordinary own data properties. Visit those values once.
-    for (const child of Object.values(node)) normalizeOwnedOutputJSON(child)
+    if (Array.isArray(node)) {
+      for (const child of node) normalizeOwnedOutputJSON(child)
+    } else {
+      Object.setPrototypeOf(node, null)
+      for (const key of Object.keys(node)) normalizeOwnedOutputJSON(node[key])
+    }
   }
   return node
 }

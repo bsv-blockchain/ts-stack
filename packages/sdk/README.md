@@ -446,12 +446,13 @@ wallet-derived locking key, and field signature before reading or spending it.
   Parsing and canonical encoding enforce the same explicit byte and structural
   bounds; callers still validate each endpoint's closed schema.
   Canonical serialization creates a new private frame for each call, sharing
-  method code rather than allocating mutually captured closures. Reentrant
+  closed module functions over an explicit per-call record. No frame is exposed
+  to caller callbacks or retained after a call. Reentrant
   descriptor inspection and failed calls cannot reuse another frame's text,
   byte counter, bounds or ancestor set. Resource assertions retain their exact
   predicates and refusal messages. Validated safe integers use the same decimal
   text, including conversion of negative zero to zero. Ownership normalizes only
-  each fresh bounded native JSON copy with a private shared value walker; it retains
+  each fresh bounded native JSON copy with a private shared array/record walker; it retains
   no value or result between calls.
 
   Parsing first validates the complete immutable source without constructing an
@@ -464,8 +465,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   each fresh primitive-name array and uses the original explicit UTF-16 comparator
   whenever an indexed scan finds an inversion, including numeric-looking and
   supplementary keys. The scan allocates no per-object ordering callback. The
-  shared walker visits ordinary own values from the private native arrays and
-  records, preserving attributes and null prototypes. Every descriptor is still inspected in canonical order. No input or result
+  shared walker visits native array elements directly and record values through
+  their own keys, preserving attributes and null prototypes. Every descriptor is still inspected in canonical order. No input or result
   is retained between calls.
 
   `createClosedOutputObjectValidator(required, optional)` captures its field

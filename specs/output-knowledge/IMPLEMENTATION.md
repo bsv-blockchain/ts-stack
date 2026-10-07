@@ -6638,7 +6638,7 @@ per-call serializer copy-capture proposal was withdrawn after exceeding the
 unchanged LCH browser raw-size limit308000; neither that source nor its claims
 are adopted. Native parsing and independently owned normalization remain.
 
-The current source correction replaces the primitive-name ordering callback with
+Published9b9 replaces the primitive-name ordering callback with
 an indexed scan. The first inversion triggers the unchanged explicit UTF-16
 comparator. Only private native JSON graphs reach the shared normalization
 walker; dense arrays and records have ordinary own data properties. One own-value
@@ -6656,3 +6656,45 @@ runtime or performance evidence. Coherent source gates, unchanged packed budgets
 exact-head hosted functionality/analyzers and the complete151targets/398rows
 mutation campaign with independent raw reconciliation remain required for
 Checkpoint2. No runtime improvement is claimed.
+
+## October 7: complete9b9 reconciliation and explicit per-call traversal
+
+Exact-head9b9 CI37685534595 is terminal FAILED:39jobs pass, disclosure173/300
+and coordinator189/300 interrupt at their unchanged150-second property bounds,
+and the dependent merge gate fails. Four scope/dependent jobs skip. Neither
+property log reports a nonempty counterexample. SDK262/8585, app3 63/930,
+app4 63/968, wallet3 79/882 including original8_BEEF, private-overlay53/889,
+LCH38/276 and all browser/mobile/artifact consumer jobs pass. Codegen,
+conformance and container workflows pass. Sonar qualityOK has zero issues
+(including accepted/false-positive classifications) and zero unreviewed hotspots.
+Actual CodeQL analyses1911499982/1911557448 cover the complete reviewed-main
+plus9b9 tree with zero open PR-ref alerts;18 review threads are resolved.
+These receipts do not qualify the failed complete gate or a subsequent head.
+
+Current hosted diagnostic metadata retains all original controls and source
+digests. The native HTTP measurement exits successfully. Both property
+measurements report other-failure without an admitted completed-case count;
+these are unqualified diagnostic results. Disclosure/native CPU timing is valid;
+coordinator CPU timing has negative/reordered samples and is excluded in full.
+The valid disclosure trace includes substantial canonical traversal costs, but
+instrumentation overhead and runner variation preclude a comparative speed or
+causal claim. No raw counterexample or native-fault replay is used.
+
+The new source correction removes the internal serializer class and replaces
+its methods with shared closed module functions operating on a fresh explicit
+per-call record. Text, byte count, selected bounds and the fresh ancestor Set
+retain their original initialization. The frame never reaches a caller callback,
+escapes its invocation or supplies a reusable value/schema/authority verdict.
+Method bodies retain every original validation predicate, caller descriptor
+order, canonical emission and refusal boundary. The indexed canonical-name
+scan remains. Native copying remains; array normalization restores direct
+element traversal and records retain own-key traversal instead of allocating
+an extra values array. Public signatures and all original test bodies remain.
+
+Five complete virtual compiler contexts and a formal AST/private-frame check
+pass for this proposal. The inverse body transformation matches every original
+method; the factory initialization and private state flow are explicitly checked.
+The original216 normalizer is exact. Complete coherent source, artifact-budget,
+inventory and hosted functional/analyzer qualification are still required. No
+runtime or performance improvement is claimed. The complete151targets/398rows
+mutation campaign remains pending the green final-head baseline.

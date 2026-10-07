@@ -52,8 +52,10 @@ null-prototype records with ordinary own data properties. Strict native string
 parsing and every original duplicate, Unicode and resource check still run. No
 encoding, schema or authorization verdict is retained between calls. An indexed
 scan of fresh primitive names selects the same UTF-16 sort at the first inversion.
-The private native graph is normalized with one own-value traversal for dense
-arrays and records; caller values still receive every original validation check.
+The private native graph is normalized by visiting array elements and own
+record keys; caller values still receive every original validation check. Canonical
+serialization uses closed module functions with a fresh explicit per-call record,
+retaining no state between calls and exposing no frame to caller callbacks.
 
 `retainOutputCapability` captures a verified selection as bounded local replay
 material to persist atomically with an operation. `restoreOutputCapability`
