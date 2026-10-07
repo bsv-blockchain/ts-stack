@@ -6326,3 +6326,48 @@ array and object method bodies after private-state naming. The original browser
 ceilings remain enforced. Complete final-source compilation, root controls,
 untrimmed canonical inventory, exact-head hosted functionality/analyzers and
 the full151/398 campaign are still required before Checkpoint2 readiness.
+
+## October 7: direct parsed records and native canonical sorting
+
+Published75dff2e571e908f2a075a6ad003954a26932238e has terminal CI37605581577.
+SDK262/8552, application partitions1,3,4 at64/859,63/930,63/968,
+private HTTP53/889 including all current native alias cases, and documentation
+81examples/24exact tarballs pass. Legacy SDK2.8.9 and2.8.11 consumers pass.
+The only functional failure is the original coordinator property interruption
+at183/300 under the unchanged150-second bound; no counterexample is reported.
+Current Sonar revision has qualityOK, zero active issues and unreviewed hotspots.
+Actual CodeQL analyses bind merge7863957bcf039e3c27037f922dd33e300b665f0f,
+whose tree equals75df with reviewed-main/head parents, no analysis errors and
+zero open PR-ref alerts. Checkpoint2 and the complete151/398 campaign remain open.
+
+All six current diagnostic metadata files have exact source/merge/run and
+original selector/property hashes, counts, seeds and deadlines; producer and
+reader Boolean guards are clear and their complete groups are drained.
+Disclosure interrupts159/300 in this profiled run, despite the successful
+ordinary lane. Its valid overlapping function samples attribute11.143seconds
+of self time to parsed object construction and16.053seconds to serialized
+object construction. Coordinator interrupts187/300, but one negative timing
+delta and two reordered samples exclude its timings. All four native HTTP
+diagnostic cases exit0, with the same timing defects excluding their timings.
+These diagnostics supply neither full functional nor campaign qualification.
+
+The parser now constructs one fresh null-prototype data record per object.
+Every decoded key is checked for duplication before the map-size bound and
+before its colon/value is consumed, in the original order. A separate local
+count measures successfully inserted unique keys; numeric-looking names retain
+ordinary JavaScript own-key enumeration. Null-prototype assignment creates
+ordinary own writable/configurable/enumerable fields even for builtin-looking
+names, with no inherited setter or intermediate Map/final record copy. No
+partial record is exposed outside this parse. The serializer uses default
+native string sorting for its freshly captured primitive property-name array,
+which has the same UTF-16 order as the prior explicit comparator. All descriptor,
+Unicode, resource, cycle, schema, nested ownership and authorization checks
+remain; no input, record, grammar verdict or authority outcome is cached.
+
+Appended independent literals exercise builtin-looking fields and their exact
+data descriptors/prototypes, numeric and supplementary key order, escaped-key
+duplicates at the map bound, Unicode/size/syntax refusal priority and the full
+256-key boundary. All existing unit prefixes and141property files are retained.
+Complete fresh source-only checks, exact original browser ceilings, untrimmed
+151-target398-row inventory and hosted qualification are required before
+publication of this candidate or a claim of improvement.

@@ -454,6 +454,11 @@ wallet-derived locking key, and field signature before reading or spending it.
   each fresh bounded native JSON copy with a private shared walker; it retains
   no value or result between calls.
 
+  Parsing constructs fresh null-prototype records directly. Duplicate decoded
+  keys are rejected before the map-size fence or their value is read; keys such
+  as `__proto__` remain ordinary data. Canonical property ordering uses native
+  UTF-16 string sorting, including numeric-looking and supplementary keys.
+
   String tokens are bounded before decoding. Escaped strings and raw controls
   receive native JSON syntax validation; unescaped strings are copied directly
   after token recognition. Both paths retain Unicode validation, duplicate-key

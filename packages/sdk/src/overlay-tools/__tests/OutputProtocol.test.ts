@@ -1020,3 +1020,53 @@ describe('integer canonical text', () => {
     expect(inspectOutputJSONEncoding('1e15')).toMatchObject({ canonical: false })
   })
 })
+
+type ParsedProtocolObject = import('../OutputProtocolJSON.js').OutputJSONObject
+
+describe('decoded object ownership and key ordering', () => {
+  it('owns builtin-looking fields and preserves independent UTF-16 ordering literals', () => {
+    const source = '{"__proto__":{"polluted":true},"constructor":1,"prototype":2,"10":10,"2":2}'
+    const value = parseOutputJSON(source)
+    expect(Object.getPrototypeOf(value)).toBeNull()
+    expect(Object.getOwnPropertyNames(value)).toEqual([
+      '2',
+      '10',
+      '__proto__',
+      'constructor',
+      'prototype'
+    ])
+    expect(Object.getOwnPropertyDescriptor(value, '__proto__')).toEqual({
+      value: expect.objectContaining({ polluted: true }),
+      writable: true,
+      configurable: true,
+      enumerable: true
+    })
+    expect(Object.getPrototypeOf((value as ParsedProtocolObject).__proto__)).toBeNull()
+    expect(Object.hasOwn(Object.prototype, 'polluted')).toBe(false)
+    const expected = '{"10":10,"2":2,"__proto__":{"polluted":true},"constructor":1,"prototype":2}'
+    expect(canonicalOutputJSON(value)).toBe(expected)
+    expect(inspectOutputJSONEncoding(expected)).toMatchObject({ canonical: true })
+    const unicode = parseOutputJSON('{"\uE000":1,"😀":2,"\\r":3,"€":4,"1":5}')
+    expect(canonicalOutputJSON(unicode)).toBe('{"\\r":3,"1":5,"€":4,"😀":2,"\uE000":1}')
+    expect(parseOutputJSON('{}')).toEqual(Object.create(null))
+    expect(parseOutputJSON(source)).not.toBe(value)
+  })
+
+  it('retains decoded duplicate, map-size and malformed-value refusal priority', () => {
+    const refused: [string, string][] = [
+      ['{"a":0,"\\u0061":}', 'Duplicate decoded JSON key'],
+      ['{"__proto__":0,"\\u005f_proto__":}', 'Duplicate decoded JSON key'],
+      ['{"a":0,"b":}', 'JSON map limit'],
+      ['{"a":0,"\\ud800":}', 'Unpaired JSON surrogate']
+    ]
+    for (const [source, message] of refused)
+      expect(() => parseOutputJSON(source, { mapKeys: 1 })).toThrow(message)
+    const fields = Object.fromEntries(Array.from({ length: 256 }, (_, i) => ['k' + i, i]))
+    expect(
+      Object.keys(parseOutputJSON(JSON.stringify(fields)) as ParsedProtocolObject)
+    ).toHaveLength(256)
+    expect(() => parseOutputJSON(JSON.stringify({ ...fields, extra: 0 }))).toThrow('JSON map limit')
+    expect(() => parseOutputJSON('{"a":0,}')).toThrow('Expected JSON string')
+    expect(() => parseOutputJSON('{"a" 0}')).toThrow('Expected JSON colon')
+  })
+})
