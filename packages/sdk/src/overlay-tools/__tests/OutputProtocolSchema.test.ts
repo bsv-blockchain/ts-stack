@@ -537,3 +537,40 @@ test('native owned containers preserve special data keys and bypass inherited ar
     })
   }
 })
+
+import { inspectOutputJSONEncoding } from '../OutputProtocolJSON.js'
+
+test('full-text UTF-8 accounting keeps exact ASCII, Unicode and disguised-byte-view bounds', () => {
+  const encoder = new TextEncoder()
+  for (const value of [
+    'plain',
+    '\u0000',
+    '\u007F',
+    '\u0080',
+    '\uD7FF',
+    '\uE000',
+    '\uFFFF',
+    'é',
+    '😀'
+  ]) {
+    const text = JSON.stringify({ value }),
+      bytes = encoder.encode(text)
+    for (const input of [text, bytes]) {
+      const result = inspectOutputJSONEncoding(input, { bytes: bytes.length })
+      expect(result.canonical).toBe(true)
+      expect(result.value).toEqual({ value })
+      owned(result.value)
+      expect(() => inspectOutputJSONEncoding(input, { bytes: bytes.length - 1 })).toThrow(
+        expect.objectContaining({ code: 'limited' })
+      )
+    }
+    const disguised = Uint8Array.from(bytes)
+    Object.defineProperty(disguised, 'byteLength', { value: 1 })
+    expect(() => inspectOutputJSONEncoding(disguised, { bytes: 1 })).toThrow(
+      expect.objectContaining({ code: 'limited' })
+    )
+  }
+  for (const value of ['\uD800', '\uDFFF']) {
+    expect(() => inspectOutputJSONEncoding(JSON.stringify({ value }))).toThrow(invalid)
+  }
+})

@@ -67,6 +67,11 @@ function wellFormed(value: string): void {
 
 export { wellFormed as assertOutputJSONUnicode }
 
+/** Exact fresh UTF-8 length; ASCII code units each occupy one byte. */
+function outputJSONUTF8Length(value: string): number {
+  return /[\u0080-\uFFFF]/.test(value) ? encoder.encode(value).length : value.length
+}
+
 /**
  * Parse bounded protocol JSON while retaining duplicate decoded keys long enough
  * to reject them. JSON.parse alone loses that evidence. This does not validate a
@@ -90,7 +95,7 @@ export function inspectOutputJSONEncoding(
   const [source, bounds, bytes] = outputJSONSource(input, limits),
     // Count the decoded UTF-8 for byte inputs independently of overridable
     // byteLength properties, matching serialization of the parsed value.
-    originalBytes = typeof input === 'string' ? bytes : encoder.encode(source).length,
+    originalBytes = typeof input === 'string' ? bytes : outputJSONUTF8Length(source),
     encoding = new OutputJSONEncodingInspection(originalBytes),
     value = new OutputJSONParser(source, bounds, encoding).parse()
   // Parse every syntax/Unicode/duplicate/depth/item boundary first, as before.
@@ -107,7 +112,7 @@ function outputJSONSource(
   if (typeof input === 'string') {
     outputJSONLimit(input.length <= bounds.bytes)
     wellFormed(input)
-    bytes = encoder.encode(input).length
+    bytes = outputJSONUTF8Length(input)
     outputJSONLimit(bytes <= bounds.bytes)
     source = input
   } else {
@@ -165,49 +170,51 @@ class OutputJSONEncodingInspection implements OutputJSONEncodingObserver {
 }
 
 class OutputJSONParser {
-  #offset = 0
-
-  readonly #text: string
-  readonly #bounds: OutputJSONLimits
-  readonly #encoding?: OutputJSONEncodingObserver
+  readonly #frame: {
+    o: number
+    readonly t: string
+    readonly b: OutputJSONLimits
+    readonly e?: OutputJSONEncodingObserver
+  }
 
   constructor(text: string, bounds: OutputJSONLimits, encoding?: OutputJSONEncodingObserver) {
-    this.#text = text
-    this.#bounds = bounds
-    this.#encoding = encoding
+    this.#frame = { o: 0, t: text, b: bounds, e: encoding }
   }
 
   parse(): OutputJSON {
+    const frame = this.#frame
     const value = this.#value(1)
     this.#whitespace()
-    outputAssert(this.#offset === this.#text.length, 'Trailing JSON data')
+    outputAssert(frame.o === frame.t.length, 'Trailing JSON data')
     // Every value is decoded once into this private, bounded data-property graph.
     // Expose it only after complete syntax, duplicate, Unicode and resource checks.
     return value
   }
 
   #whitespace(): void {
-    while (' \r\n\t'.includes(this.#text[this.#offset] ?? '\0')) {
-      this.#offset++
-      this.#encoding?.whitespace()
+    const frame = this.#frame
+    while (' \r\n\t'.includes(frame.t[frame.o] ?? '\0')) {
+      frame.o++
+      frame.e?.whitespace()
     }
   }
 
   #string(): string {
-    outputAssert(this.#text[this.#offset] === '"', 'Expected JSON string')
-    const start = this.#offset++
+    const frame = this.#frame
+    outputAssert(frame.t[frame.o] === '"', 'Expected JSON string')
+    const start = frame.o++
     // Each quote search advances. Backslash runs preceding candidate quotes
     // cannot overlap, so even malformed tokens require only linear work.
     // Native decoding still validates all escapes and raw controls.
     let end = start
-    while ((end = this.#text.indexOf('"', end + 1)) >= 0) {
+    while ((end = frame.t.indexOf('"', end + 1)) >= 0) {
       let backslashStart = end
-      while (backslashStart > start && this.#text[backslashStart - 1] === '\\') backslashStart--
+      while (backslashStart > start && frame.t[backslashStart - 1] === '\\') backslashStart--
       if ((end - backslashStart) % 2 === 0) break
     }
-    this.#offset = end < 0 ? this.#text.length : end + 1
+    frame.o = end < 0 ? frame.t.length : end + 1
     outputAssert(end >= 0, 'Unterminated JSON string')
-    const encoded = this.#text.slice(start, this.#offset)
+    const encoded = frame.t.slice(start, frame.o)
     // Fresh text validation already proves unescaped Unicode well-formed;
     // ASCII quote boundaries cannot split a pair. Only decoding escapes can
     // introduce a lone surrogate or change canonical string representation.
@@ -219,30 +226,31 @@ class OutputJSONParser {
       throw new OutputProtocolError('invalid', 'Malformed JSON string')
     }
     wellFormed(decoded)
-    this.#encoding?.string(encoded, decoded)
+    frame.e?.string(encoded, decoded)
     return decoded
   }
 
   #object(depth: number): OutputJSONObject {
-    this.#offset++
+    const frame = this.#frame
+    frame.o++
     this.#whitespace()
     const fields = new Map<string, OutputJSON>()
     let previous: string | undefined
-    if (this.#text[this.#offset] === '}') {
-      this.#offset++
+    if (frame.t[frame.o] === '}') {
+      frame.o++
     } else {
       for (;;) {
         this.#whitespace()
         const key = this.#string()
         outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
-        outputJSONLimit(fields.size < this.#bounds.mapKeys, 2)
-        this.#encoding?.key(previous, key)
+        outputJSONLimit(fields.size < frame.b.mapKeys, 2)
+        frame.e?.key(previous, key)
         previous = key
         this.#whitespace()
-        outputAssert(this.#text[this.#offset++] === ':', 'Expected JSON colon')
+        outputAssert(frame.t[frame.o++] === ':', 'Expected JSON colon')
         fields.set(key, this.#value(depth + 1))
         this.#whitespace()
-        const end = this.#text[this.#offset++]
+        const end = frame.t[frame.o++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
@@ -251,27 +259,29 @@ class OutputJSONParser {
   }
 
   #array(depth: number): OutputJSON[] {
-    this.#offset++
+    const frame = this.#frame
+    frame.o++
     this.#whitespace()
     const values = new Map<number, OutputJSON>()
-    if (this.#text[this.#offset] === ']') {
-      this.#offset++
+    if (frame.t[frame.o] === ']') {
+      frame.o++
       return Array.from(values.values())
     }
     for (;;) {
-      outputJSONLimit(values.size < this.#bounds.arrayElements, 3)
+      outputJSONLimit(values.size < frame.b.arrayElements, 3)
       values.set(values.size, this.#value(depth + 1))
       this.#whitespace()
-      const end = this.#text[this.#offset++]
+      const end = frame.t[frame.o++]
       if (end === ']') return Array.from(values.values())
       outputAssert(end === ',', 'Expected JSON array separator')
     }
   }
 
   #value(depth: number): OutputJSON {
-    outputJSONLimit(depth <= this.#bounds.depth, 1)
+    const frame = this.#frame
+    outputJSONLimit(depth <= frame.b.depth, 1)
     this.#whitespace()
-    switch (this.#text[this.#offset]) {
+    switch (frame.t[frame.o]) {
       case '"':
         return this.#string()
       case '{':
@@ -279,18 +289,18 @@ class OutputJSONParser {
       case '[':
         return this.#array(depth)
       default: {
-        const rest = this.#text.slice(this.#offset)
+        const rest = frame.t.slice(frame.o)
         const token =
           /^(?:true|false|null)/.exec(rest)?.[0] ??
           /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(rest)?.[0]
         outputAssert(token !== undefined, 'Invalid JSON token')
-        this.#offset += token.length
+        frame.o += token.length
         const result: unknown = JSON.parse(token)
         outputAssert(
           typeof result !== 'number' || Number.isSafeInteger(result),
           'Protocol numbers must be safe integers'
         )
-        this.#encoding?.value(token, result as OutputJSONScalar)
+        frame.e?.value(token, result as OutputJSONScalar)
         return result as OutputJSONScalar
       }
     }

@@ -680,3 +680,10 @@ applies; SDK2 consumers need an additive backport or that migration. Serialized
 wallet results do not carry local authority. The fee fix does not change signup
 persistence or interrupted-funding reconciliation. See the package README and
 [release and migration ledger](../../reference/package-api-migrations.md).
+
+The bounded parser owns a fresh private cursor frame for each input. Complete
+syntax, duplicate, Unicode, integer and resource checks precede exposure. Proven
+ASCII text has one UTF-8 byte per code unit; non-ASCII text retains native encoding.
+Byte-view inspection counts decoded bytes independently of an overridable
+byteLength property. These per-call calculations retain no input or validation
+result between operations.

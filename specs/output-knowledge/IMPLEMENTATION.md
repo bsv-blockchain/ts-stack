@@ -6760,3 +6760,34 @@ Five compiler contexts and an inverse whole-module AST comparison pass for the
 proposal. Actual packed budgets, coherent source gates and fresh complete hosted
 functional/analyzer and mutation qualification remain required. Checkpoint2 is
 not achieved.
+
+## October 7: private cursor framing and exact full-text byte counting
+
+Published295e passes SDK262suites/8589tests, disclosure64suites/859tests,
+actual zero-new Sonar/CodeQL and all21review conversations. Its coordinator
+property still interrupts after215 of300 cases under its original150-second
+limit. The artifact/documentation consumer passes. Only its native HTTP CPU
+trace has valid timing; both property traces are excluded entirely for
+negative/reordered samples. The earlier valid coordinator trace and compiled
+source inspection inform the next bounded candidate; no comparative runtime
+or causal conclusion is established.
+
+The unexported parser now keeps its cursor and immutable text/bounds/observer
+references in one fresh private frame. Each parser method captures that private
+reference locally; offset updates, recursive reads, observer calls and every
+validation/refusal predicate retain their exact order. CommonJS emission reduces
+private-state helper call sites from53 to7 and private WeakMap slots from4 to1.
+This source fact does not itself qualify ESM or CommonJS runtime performance.
+
+Full-text byte counting uses the same ASCII equivalence already used during
+canonical generation: an ASCII code unit occupies exactly one UTF-8 byte.
+Every incoming string still receives fresh Unicode validation and both original
+byte fences. Non-ASCII text still uses native UTF-8 encoding; byte-view inspection
+still recomputes the decoded text's actual size independently of overridable
+byteLength properties. No input, schema, ciphertext, custody or authority result
+is cached, and no protected-store or cryptographic check is removed. An additive
+boundary case covers string/byte inputs, ASCII controls, multibyte text, exact
+limits, disguised byte views and lone-surrogate refusal. All original properties,
+units, examples and full151target/398row controls remain. Complete coherent
+source/artifact checks and fresh hosted functional/analyzer/mutation qualification
+remain required; Checkpoint2 is not achieved.
