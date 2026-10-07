@@ -6067,3 +6067,18 @@ duplicate keys, following tokens, and maximum-size plain, escaped and
 unterminated inputs. All original tests and qualification settings remain.
 This is a measured-bottleneck candidate; its functional and performance
 qualification is pending, and no current authority or validation is cached.
+
+The published token candidate `72638e45f9a37baa7b10350db40510fb44edc7cb`
+passes all262 SDK suites/8541 tests, including the three additive string
+boundary cases. Its exact-head Sonar gate has zero new findings and unreviewed
+hotspots. CodeQL reports new finding324 at the token regexp, so the next
+source replaces that matcher with advancing native quote searches and checks
+the parity of each immediately preceding backslash run. Each candidate quote
+advances, and the preceding runs are disjoint; no malformed token can cause
+superlinear search or regexp backtracking. Native syntax validation, Unicode,
+duplicates, offsets, errors and bounds remain. The existing maximum-size case
+also exercises many escaped quotes, both complete and unterminated. No analyzer
+finding is dismissed or suppressed. The current commitment guide now names
+the current Profile purchase verifier and explicitly distinguishes the shared
+script-independent calculator from historical planners and verifiers.
+Current functional, source and analyzer requalification remains mandatory.

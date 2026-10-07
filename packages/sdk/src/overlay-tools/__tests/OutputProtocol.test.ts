@@ -823,14 +823,20 @@ describe('BRC-192 representation boundary', () => {
       repetitions = (maximum - 2) / 2,
       escapedText = '"' + '\\\\'.repeat(repetitions) + '"',
       escaped = '\\'.repeat(repetitions),
-      unterminated = '"' + '\\\\'.repeat(repetitions) + '\\'
+      unterminated = '"' + '\\\\'.repeat(repetitions) + '\\',
+      escapedQuotes = '\\"'.repeat(repetitions),
+      quoteText = '"' + escapedQuotes + '"',
+      quotes = '"'.repeat(repetitions)
     expect(parseOutputJSON(plainText)).toBe(plain)
     expect(inspectOutputJSONEncoding(plainText)).toEqual({ value: plain, canonical: true })
     expect(parseOutputJSON(escapedText)).toBe(escaped)
     expect(inspectOutputJSONEncoding(escapedText)).toEqual({ value: escaped, canonical: true })
+    expect(parseOutputJSON(quoteText)).toBe(quotes)
+    expect(inspectOutputJSONEncoding(quoteText)).toEqual({ value: quotes, canonical: true })
     for (const read of [parseOutputJSON, inspectOutputJSONEncoding]) {
       expect(() => read('"' + 'x'.repeat(maximum - 1) + '"')).toThrow('Output JSON byte limit')
       expect(() => read(unterminated)).toThrow('Unterminated JSON string')
+      expect(() => read('"' + escapedQuotes)).toThrow('Unterminated JSON string')
       expect(() => read('"' + 'x'.repeat(maximum - 3) + '\n"')).toThrow('Malformed JSON string')
     }
   })

@@ -179,18 +179,19 @@ class OutputJSONParser {
 
   private string(): string {
     outputAssert(this.source[this.offset] === '"', 'Expected JSON string')
-    // The mutually exclusive chunks consume an ordinary run or a backslash
-    // plus exactly one UTF-16 code unit, up to the first unescaped quote.
-    // Raw controls deliberately remain tokens: native decoding refuses them.
-    const token = /"[^"\\]*(?:\\[\s\S][^"\\]*)*"/y
-    token.lastIndex = this.offset
-    const match = token.exec(this.source)
-    if (match === null) {
-      this.offset = this.source.length
-      throw new OutputProtocolError('invalid', 'Unterminated JSON string')
+    const start = this.offset++
+    // Each quote search advances. Backslash runs preceding candidate quotes
+    // cannot overlap, so even malformed tokens require only linear work.
+    // Native decoding still validates all escapes and raw controls.
+    let end = start
+    while ((end = this.source.indexOf('"', end + 1)) >= 0) {
+      let backslashStart = end
+      while (backslashStart > start && this.source[backslashStart - 1] === '\\') backslashStart--
+      if ((end - backslashStart) % 2 === 0) break
     }
-    this.offset = token.lastIndex
-    const encoded = match[0]
+    this.offset = end < 0 ? this.source.length : end + 1
+    outputAssert(end >= 0, 'Unterminated JSON string')
+    const encoded = this.source.slice(start, this.offset)
     let decoded: string
     try {
       decoded = /[^\u0020-\u005B\u005D-\uFFFF]/.test(encoded)

@@ -28,11 +28,17 @@ digest without reducing it modulo the curve order. It does not execute Script,
 authenticate genesis, resolve conflicts or establish mining. Accept its result
 only after the installed purchase domain verifies those independent premises.
 
-`RevenueListingPurchaseVerifier` returns `purchaseCommitment` only after its
-configured complete purchase verification succeeds. Qualifying that verifier for
-the replacement frozen Script family remains a separate implementation gate.
-Both unchanged signed purchase examples in the current independent BRC corpus
-match the SDK calculation and closed envelope checks.
+Current-family installations select `RevenueListingProfilePurchaseVerifier`
+from `@bsv/output-knowledge/revenue-listing`. It returns `purchaseCommitment`
+only after complete current-family Script, reserve-stage genesis, activation
+ancestry, Bitcoin evidence and original-request verification succeed. The
+current `RevenueListingProfileSpend.prepare(transaction)` also returns the
+construction commitment for a purchase; construction alone establishes none
+of those verification premises. The script-independent calculator above
+remains usable, but selecting it does not select the older planner or codec.
+`RevenueListingPurchaseVerifier` remains a separate historical interface for
+the superseded family. Both unchanged signed purchase examples in the current
+independent BRC corpus match the calculation and closed envelope checks.
 
 `verifyOutputPurchaseEnvelope` accepts an optional fourth argument containing
 the independently established commitment. It requires an identical commitment
