@@ -454,10 +454,13 @@ wallet-derived locking key, and field signature before reading or spending it.
   each fresh bounded native JSON copy with a private shared walker; it retains
   no value or result between calls.
 
-  Parsing retains decoded keys in a fresh Map, rejects duplicates before the
-  map-size fence or value parsing, then constructs ordinary own data fields with
-  native `Object.fromEntries` and gives the complete record a null prototype.
-  Keys such as `__proto__` remain ordinary data. Canonical property ordering checks
+  Parsing first validates the complete immutable source without constructing an
+  intermediate value graph. Each object retains only a fresh Set of decoded keys;
+  duplicates are rejected before the map-size fence or value parsing. Array counts
+  and key Sets advance only after successful values. Native JSON construction runs
+  only after complete syntax, Unicode, integer, resource and trailing-data checks.
+  The new private graph receives null-prototype records before being exposed;
+  keys such as `__proto__` remain ordinary writable data. Canonical property ordering checks
   each fresh primitive-name array and uses the original explicit UTF-16 comparator
   whenever it contains an inversion, including numeric-looking and supplementary
   keys. Every descriptor is still inspected in canonical order. No input or result
@@ -471,6 +474,9 @@ wallet-derived locking key, and field signature before reading or spending it.
   every field callback and complete input check still runs on each call.
   Mutable user-defined schema behavior is preserved. Only grammar is retained,
   never values, validation results, authorization or chain-currentness.
+  Shared normalization selects the fixed immutable default limits only by exact
+  primitive equality; different bounds remain freshly validated. Every supplied
+  value still receives full normalization and schema checks.
 
   String tokens are bounded before decoding. Escaped strings and raw controls
   receive native JSON syntax validation; unescaped strings are copied directly

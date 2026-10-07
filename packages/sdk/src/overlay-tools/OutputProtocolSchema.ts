@@ -11,6 +11,7 @@ import {
   outputU64
 } from './OutputProtocol.js'
 import {
+  OUTPUT_JSON_LIMITS,
   ownOutputJSON,
   parseOutputJSON,
   type OutputJSON,
@@ -139,10 +140,14 @@ export const extensions = { extensions: jsonMap, critical: array(iri, 32) }
 export const policy = fixedObject({ id: iri, digest: hex })
 
 export function normalized<T>(input: unknown, schema: Schema<T>, maximumBytes = 4194304): T {
+  // Only fixed default bounds are shared. Every supplied override and input
+  // still receives its own complete validation and normalization.
+  const limits =
+    maximumBytes === OUTPUT_JSON_LIMITS.bytes ? OUTPUT_JSON_LIMITS : { bytes: maximumBytes }
   const value =
     typeof input === 'string' || input instanceof Uint8Array
-      ? parseOutputJSON(input, { bytes: maximumBytes })
-      : ownOutputJSON(input, { bytes: maximumBytes }).value
+      ? parseOutputJSON(input, limits)
+      : ownOutputJSON(input, limits).value
   return schema(value)
 }
 

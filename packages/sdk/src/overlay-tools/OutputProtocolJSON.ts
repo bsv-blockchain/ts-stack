@@ -174,10 +174,13 @@ class OutputJSONParser {
   ) {}
 
   parse(): OutputJSON {
-    const result = this.value(1)
+    this.value(1)
     this.whitespace()
     outputAssert(this.offset === this.source.length, 'Trailing JSON data')
-    return result
+    // The complete immutable source has passed every duplicate, syntax, Unicode,
+    // integer and resource check. Native construction creates only own data
+    // fields; normalize this new private graph before exposing it to the caller.
+    return normalizeOwnedOutputJSON(JSON.parse(this.source) as OutputJSON)
   }
 
   private whitespace(): void {
@@ -217,10 +220,10 @@ class OutputJSONParser {
     return decoded
   }
 
-  private object(depth: number): OutputJSONObject {
+  private object(depth: number): void {
     this.offset++
     this.whitespace()
-    const fields = new Map<string, OutputJSON>()
+    const fields = new Set<string>()
     let previous: string | undefined
     if (this.source[this.offset] === '}') {
       this.offset++
@@ -234,36 +237,36 @@ class OutputJSONParser {
         previous = key
         this.whitespace()
         outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-        fields.set(key, this.value(depth + 1))
+        this.value(depth + 1)
+        fields.add(key)
         this.whitespace()
         const end = this.source[this.offset++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
-    // One finalization creates own data properties without invoking setters.
-    return Object.setPrototypeOf(Object.fromEntries(fields), null)
   }
 
-  private array(depth: number): OutputJSON[] {
+  private array(depth: number): void {
     this.offset++
     this.whitespace()
-    const result: OutputJSON[] = []
+    let count = 0
     if (this.source[this.offset] === ']') {
       this.offset++
-      return result
+      return
     }
     for (;;) {
-      outputJSONLimit(result.length < this.bounds.arrayElements, 3)
-      result.push(this.value(depth + 1))
+      outputJSONLimit(count < this.bounds.arrayElements, 3)
+      this.value(depth + 1)
+      count++
       this.whitespace()
       const end = this.source[this.offset++]
-      if (end === ']') return result
+      if (end === ']') return
       outputAssert(end === ',', 'Expected JSON array separator')
     }
   }
 
-  private value(depth: number): OutputJSON {
+  private value(depth: number): OutputJSONScalar | string | void {
     outputJSONLimit(depth <= this.bounds.depth, 1)
     this.whitespace()
     switch (this.source[this.offset]) {

@@ -6554,3 +6554,47 @@ All original property/unit bodies, example IDs and bodies, source ranges, counts
 seeds, replay inputs, deadlines, thresholds and package ceilings remain required.
 Complete coherent source controls, actual exact-head hosted qualification and
 full mutation/raw reconciliation are still needed before Checkpoint2 readiness.
+
+## October 7: complete 16a qualification and fresh native construction
+
+CI37660483099 on `16a2ff61de434d8216a6727e02dcc0df7c2b39e3` is terminal
+FAILED solely for disclosure166/300 and coordinator261/300 interruptions under
+the original150-second controls, without counterexamples, and the dependent
+merge gate. Their other1843tests pass. SDK262/8558, application3 63/930,
+application4 63/968, wallet3 79/882 including original8_BEEF, private-overlay53/889
+including all four native HTTP cases, LCH38/276 and all remaining applicable
+artifact/platform/conformance/container/code-generation lanes pass.
+Actual Sonar is clean. Actual CodeQL analyses1910221372/1910283346 have zero open
+PR alerts on analyzede1c5246f8705f2b167187b744b858865895ae144. Its parents and
+complete tree match reviewed-main plus16a; regenerated merge metadata364e2f98d9d8a7490882e9a75031e1cf6f7fffeb has identical parents/tree. All18 review
+threads are resolved. The complete151/398 campaign and Checkpoint2 remain open.
+
+The current diagnostic retains exact source, original controls, clear Boolean
+guards and drained children. Disclosure161/300 and coordinator187/300 interrupt;
+all four native HTTP cases pass. Only coordinator CPU timing is valid. Disclosure
+and native timings each contain two negative deltas/four reordered samples and
+are excluded in full. Independently valid SQLite/crypto totals21.152,21.054and5.470
+inclusive seconds include instrumentation and overlap. They qualify no function
+or campaign. The valid coordinator sample identifies object traversal, duplicate-
+aware parsing and closed-object validation as substantial JavaScript costs.
+
+The next coherent correction keeps a complete duplicate-aware validation pass
+but avoids building its intermediate value graph. Every object retains a fresh
+Set of decoded names. Duplicate checks precede the map bound, colon and value;
+only successful values advance key Sets and array counts. Native construction
+runs after complete syntax, Unicode, integer, depth, map, array, byte and trailing-
+data checks. The new private graph is normalized to the same null-prototype
+records and ordinary own data fields before exposure. Canonical encoding and
+its observer, negative-zero representation, ownership, closed schemas and all
+ciphertext/currentness/authority checks remain unchanged. There is no retained
+input or validation-result cache. Shared normalization selects immutable default
+bounds only by exact primitive equality; every different override remains freshly
+captured and validated.
+
+Five complete virtual compiler contexts and the adopted workspace build pass.
+Both exact-tarball SDK/LCH browser source/map/budget checks pass. All original
+property and unit bodies, examples, source ranges, counts, seeds, replay inputs,
+deadlines, thresholds and ceilings remain required. Coherent source controls,
+complete inventory, actual hosted functionality/analyzers and the full mutation
+campaign/raw reconciliation are still required; source checks establish neither
+performance improvement nor Checkpoint2 readiness.
