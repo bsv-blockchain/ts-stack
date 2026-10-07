@@ -304,10 +304,10 @@ export function verifyOutputPacket<T>(
     // Canonicalization and every representation/signer check still run on a
     // repeated packet. The domain-separated preimage and complete signature
     // both participate in this key; only successful BRC77 mathematics is cached.
-    const preimage = outputPacketPreimage(domain, packet.body),
+    const preimage = outputPacketPreimageBytes(domain, packet.body),
       key = toHex(sha256(preimage)) + ':' + toHex(sha256(signature))
     if (packetSignatures.has(key)) return true
-    const verified = SignedMessage.verify(preimage, signature)
+    const verified = SignedMessage.verify(Array.from(preimage), signature)
     if (verified) rememberMathematicalFact(packetSignatures, key)
     return verified
   } catch (error) {

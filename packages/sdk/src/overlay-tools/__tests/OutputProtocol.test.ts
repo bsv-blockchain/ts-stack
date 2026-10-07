@@ -104,6 +104,68 @@ describe('BRC-192 representation boundary', () => {
     }
   })
 
+  it('matches independent JSON escaping for every ASCII code unit and exact encoded fences', () => {
+    const values = ['', 'A'.repeat(65536), ' !#[]^~', 'é😀\u2028\u2029', 'A\u2028', 'A\u2029']
+    for (let code = 0; code < 128; code++) {
+      const unit = String.fromCharCode(code)
+      values.push(unit, 'left' + unit, unit + 'right', 'left' + unit + 'right')
+    }
+    for (const text of values) {
+      for (const value of [text, { a: text, m: [text, null, false, -0], z: text }]) {
+        const encoded = JSON.stringify(value),
+          bytes = new TextEncoder().encode(encoded).length
+        expect(canonicalOutputJSON(value, { bytes })).toBe(encoded)
+        expect(() => canonicalOutputJSON(value, { bytes: bytes - 1 })).toThrow(
+          expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+        )
+      }
+    }
+  })
+
+  it('keeps initial length and Unicode refusal ordering before ASCII serialization', () => {
+    for (const text of ['\ud800', '\udfff', 'valid\ud800tail', '\udfffvalid']) {
+      expect(() => canonicalOutputJSON(text)).toThrow(
+        expect.objectContaining({ code: 'invalid', message: 'Unpaired JSON surrogate' })
+      )
+      if (text.length > 1)
+        expect(() => canonicalOutputJSON(text, { bytes: text.length - 1 })).toThrow(
+          expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+        )
+    }
+  })
+
+  it('verifies independently signed long UTF-8 packets before and after mathematical reuse', () => {
+    const key = new PrivateKey(179),
+      identity = key.toPublicKey().toString(),
+      body = { a: 'A'.repeat(8192), z: 'é😀\n"\\' },
+      preimage = Array.from(
+        new TextEncoder().encode('BRC-OUTPUT/1/purchase-terms\0' + JSON.stringify(body))
+      ),
+      packet = { body, signature: toBase64(SignedMessage.sign(preimage, key)) }
+    for (let attempt = 0; attempt < 2; attempt++)
+      expect(verifyOutputPacket('purchase-terms', structuredClone(packet), identity)).toBe(true)
+    expect(
+      verifyOutputPacket(
+        'purchase-terms',
+        { ...packet, body: { ...body, a: body.a + 'B' } },
+        identity
+      )
+    ).toBe(false)
+    let reads = 0
+    const accessor = Object.defineProperty({}, 'a', {
+      enumerable: true,
+      get() {
+        reads++
+        return body.a
+      }
+    })
+    expect(() =>
+      verifyOutputPacket('purchase-terms', { ...packet, body: accessor }, identity)
+    ).toThrow(OutputProtocolError)
+    expect(reads).toBe(0)
+    expect(verifyOutputPacket('purchase-terms', packet, identity)).toBe(true)
+  })
+
   it('retains duplicate decoded-key checks through differently escaped delimiters and Unicode', () => {
     for (const key of ['quote"', 'backslash\\', 'control\n', 'é😀', 'A'.repeat(16384)]) {
       const escaped =

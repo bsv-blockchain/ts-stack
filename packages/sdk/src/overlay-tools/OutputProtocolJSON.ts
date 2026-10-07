@@ -210,18 +210,23 @@ export function canonicalOutputJSON(
   const chunks: string[] = []
   const ancestors = new Set<object>()
   let bytes = 0
-  function emit(chunk: string): void {
+  function emit(chunk: string, knownASCII = false): void {
     outputAssert(chunk.length <= bounds.bytes, 'Output JSON byte limit', 'limited')
     // JSON punctuation and escaped ASCII strings have one byte per code unit.
     // Avoid allocating an encoded array for every delimiter and ASCII field.
-    bytes += /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
+    bytes +=
+      knownASCII || /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
     outputAssert(bytes <= bounds.bytes, 'Output JSON byte limit', 'limited')
     chunks.push(chunk)
   }
   function string(text: string): void {
     outputAssert(text.length <= bounds.bytes, 'Output JSON byte limit', 'limited')
     wellFormed(text)
-    emit(JSON.stringify(text))
+    // Valid unescaped ASCII has identical JSON and UTF-8 code-unit lengths.
+    // Escaped/control/Unicode strings retain native escaping and byte counting.
+    if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(text)) {
+      emit('"' + text + '"', true)
+    } else emit(JSON.stringify(text))
   }
   function array(node: unknown[], depth: number): void {
     outputAssert(node.length <= bounds.arrayElements, 'JSON array limit', 'limited')
@@ -230,14 +235,14 @@ export function canonicalOutputJSON(
         Object.keys(node).length === node.length,
       'Sparse or decorated JSON array'
     )
-    emit('[')
+    emit('[', true)
     for (let i = 0; i < node.length; i++) {
-      if (i > 0) emit(',')
+      if (i > 0) emit(',', true)
       const descriptor = Object.getOwnPropertyDescriptor(node, i)
       outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
       visit(descriptor.value, depth + 1)
     }
-    emit(']')
+    emit(']', true)
   }
   function object(node: object, depth: number): void {
     outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
@@ -248,24 +253,24 @@ export function canonicalOutputJSON(
       return 0
     })
     outputAssert(keys.length <= bounds.mapKeys, 'JSON map limit', 'limited')
-    emit('{')
+    emit('{', true)
     keys.forEach((key, index) => {
       const descriptor = Object.getOwnPropertyDescriptor(node, key)
       outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
-      if (index > 0) emit(',')
+      if (index > 0) emit(',', true)
       string(key)
-      emit(':')
+      emit(':', true)
       visit(descriptor.value, depth + 1)
     })
-    emit('}')
+    emit('}', true)
   }
   function visit(node: unknown, depth: number): void {
     outputAssert(depth <= bounds.depth, 'JSON depth limit', 'limited')
     if (node === null || typeof node === 'boolean') {
-      emit(JSON.stringify(node))
+      emit(JSON.stringify(node), true)
     } else if (typeof node === 'number') {
       outputAssert(Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
-      emit(JSON.stringify(node))
+      emit(JSON.stringify(node), true)
     } else if (typeof node === 'string') {
       string(node)
     } else {

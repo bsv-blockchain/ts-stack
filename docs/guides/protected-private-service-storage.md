@@ -2,7 +2,7 @@
 id: protected-private-service-storage
 title: 'Protected Private-Service Storage'
 kind: guide
-version: '1.0.3'
+version: '1.0.4'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -64,10 +64,15 @@ The same internal Node byte decoder serves retained acquisition chunks and alias
 original/result storage and retained purchase access guards. It validates the complete SDK byte-limit and canonical
 encoding contract before returning independently owned bytes. Chunk digests,
 record parsing, financial bindings and disclosure guards still run; portable SDK
-decoders retain their original number-array interface. Packet digests hash the same
-freshly canonicalized typed preimage directly; public preimage arrays and the
-existing signing and verification paths keep their representation and behavior.
-No permission, packet, record, custody or currentness result is cached by these
+decoders retain their original number-array interface. Packet digests and the existing successful-mathematics cache key hash the same
+freshly canonicalized typed preimage directly. Public preimage arrays and the
+number-array input to BRC77 mathematical verification retain their exact bytes.
+Every verification still validates the complete packet, signer and canonical
+body before consulting that existing bounded cache. Canonical JSON emits validated
+unescaped ASCII strings and fixed delimiters directly; controls, quotes,
+backslashes and Unicode retain the full native escaping and UTF-8 byte checks.
+All structural, descriptor, surrogate, depth, size and error-order checks remain.
+No permission, record, custody or currentness result is cached by these
 representation changes.
 
 The ledger uses that serialized path within the original SQL read bound.
