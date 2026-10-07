@@ -6217,7 +6217,7 @@ SDK notes, generated migration guidance and the package guide describe the
 same behavior. Fresh complete source-only checks, actual hosted functionality,
 analyzers, artifacts and the full151/398 mutation campaign are still required.
 
-## October 7: fresh owned child schemas
+## October 7: fresh owned child schemas (candidate, superseded)
 
 The same e8 hosted run completes application partition4, private-package
 coverage and the complete artifact/documentation-consumer lane successfully.
@@ -6251,3 +6251,31 @@ confirmation limits, exact depth and same-height header consistency. All
 original test prefixes and property bytes remain intact. Fresh source-only
 compilation, full inventory unions, root checks, exact-tarball bundle budgets,
 actual hosted tests/analyzers and the full151/398 campaign remain necessary.
+
+## October 7: preserve complete nested canonical ownership
+
+Final source review identifies a compatibility effect omitted from the pure
+child candidate published in0fc67ad18a8e3d8c18298b6205d521bc9d50f21d. Raw
+parent JSON parsing preserves negative zero and insertion order. An existing
+nested program-ownership pass converts zero to canonical positive zero and
+orders record keys before child schemas run. Removing that pass can therefore
+change nested STEAK values/topic order and which unknown child key is refused
+first, even when the parent's structural bounds have been freshly checked.
+Bounded structure alone does not prove canonical value/order equivalence.
+
+Restore original complete nested normalization in purchase, policy, STEAK and
+release-evidence composition. Remove the candidate's pure child helper exports;
+all existing public main-entry exports remain available. Keep the independently
+proved bounded primitive Unicode check and guarded diagnostic orchestration fix.
+Within release parsing, capture the freshly owned policy once locally and apply
+all original field/depth/header checks in order. This retains no prior result.
+Independent literal regressions assert original raw-JSON zero conversion,
+canonical topic order and unknown-field refusal priority, alongside fresh
+ownership and the earlier boundary cases. No original test prefix, property
+file, seed, count, replay, deadline, range, threshold or bundle budget changes.
+
+The prior candidate's strict Sonar passes with revision0fc, zero active issues
+and zero unreviewed hotspots; conformance, code generation and container
+contracts also pass. Its pending/terminal runtime receipts do not qualify this
+correction. Fresh complete source/root/bundle and exact-head hosted qualification
+remain necessary before the full151/398 campaign and Checkpoint2 readiness.

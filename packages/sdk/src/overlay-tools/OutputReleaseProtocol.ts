@@ -1,5 +1,5 @@
 import * as s from './OutputProtocolSchema.js'
-import { outputReleasePolicySchema, type OutputReleasePolicy } from './OutputCapabilities.js'
+import { parseOutputReleasePolicy, type OutputReleasePolicy } from './OutputCapabilities.js'
 import {
   decodeOutputBytes,
   outputU64,
@@ -23,7 +23,7 @@ const block = s.object({
   chainPolicyDigest: s.hex
 })
 const release = s.object(
-  { chain: s.chain, txid: s.hex, policy: outputReleasePolicySchema, acceptedAt: s.u64 },
+  { chain: s.chain, txid: s.hex, policy: parseOutputReleasePolicy, acceptedAt: s.u64 },
   { processorEvidence: s.bytes, blockEvidence: block }
 )
 const processor = s.object({
@@ -51,14 +51,7 @@ export interface OutputReleaseBinding {
  * does not verify a processor signature, BEEF, headers, ancestry or currentness.
  */
 export function parseOutputReleaseEvidence(input: unknown): OutputReleaseEvidence {
-  return s.normalized(input, releaseValue)
-}
-
-/** @internal Fresh representation and arithmetic checks on a freshly owned child.
- * Complete parent normalization already enforces the same JSON limits for every
- * subtree. This never retains a schema result or makes an acceptance verdict. */
-function releaseValue(value: unknown): OutputReleaseEvidence {
-  const result = release(value),
+  const result = s.normalized(input, release),
     policy = result.policy
   outputAssert(
     Object.hasOwn(result, 'processorEvidence') === (policy.kind === 'processor-accepted') &&
@@ -81,8 +74,6 @@ function releaseValue(value: unknown): OutputReleaseEvidence {
   return result
 }
 
-export { releaseValue as outputReleaseEvidenceSchema }
-
 /** Bind a representation to caller-selected facts without making an acceptance verdict. */
 export function bindOutputReleaseEvidence(
   input: unknown,
@@ -93,7 +84,7 @@ export function bindOutputReleaseEvidence(
     s.object({
       chain: s.chain,
       txid: s.hex,
-      policy: outputReleasePolicySchema
+      policy: parseOutputReleasePolicy
     })
   )
   const evidence = parseOutputReleaseEvidence(input)

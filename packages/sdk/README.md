@@ -457,14 +457,13 @@ wallet-derived locking key, and field signature before reading or spending it.
   receive every recursive representation and schema check; no string or
   validation result is cached.
 
-  Purchase and release parsers freshly normalize the complete caller packet
-  before validating its owned children. Internal child schemas apply every
-  closed-field, scalar and intrinsic arithmetic check directly, without another
-  copy of the same subtree. The parent's unchanged JSON bounds already cover
-  each subtree. Public standalone parsers still perform complete normalization
-  on every call; signatures, caller-selected bindings, release acceptance and
-  current authorization remain separate fresh checks. Internal schema helpers
-  are not exported from the SDK's main entry.
+  Purchase and release parsers retain fresh complete normalization at both
+  public and nested packet boundaries. Nested ownership also preserves canonical
+  property order and zero representation when the original parent is raw JSON.
+  Every closed-field, scalar and intrinsic arithmetic check runs on each call;
+  signatures, caller-selected bindings, release acceptance and current
+  authorization remain separate fresh checks. No normalization or validation
+  result is cached.
 
   `ownOutputJSON(value, limits)` validates a program value and returns its
   bounded canonical `text` and an independent `value` with those same data

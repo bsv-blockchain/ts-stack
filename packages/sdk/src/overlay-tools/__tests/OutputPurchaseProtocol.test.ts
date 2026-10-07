@@ -827,3 +827,42 @@ describe('fresh complete purchase ownership with pure nested representation chec
     expect(() => parseOutputPurchaseEnvelope(envelope)).toThrow('Unknown')
   })
 })
+
+describe('original nested canonical ownership from noncanonical raw parent JSON', () => {
+  it('retains canonical topic ordering and positive zero in every STEAK array', () => {
+    const { envelope } = fixture()
+    const packet = {
+      ...envelope,
+      result: {
+        ...envelope.result,
+        steak: {
+          z_topic: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [0] },
+          a_topic: { outputsToAdmit: [], coinsToRetain: [0] }
+        }
+      }
+    }
+    const original = JSON.stringify(packet)
+      .replace('"outputsToAdmit":[0]', '"outputsToAdmit":[-0]')
+      .replace('"coinsRemoved":[0]', '"coinsRemoved":[-0]')
+      .replace('"coinsToRetain":[0]', '"coinsToRetain":[-0]')
+    expect(original.match(/\[-0\]/g)).toHaveLength(3)
+    for (const input of [original, new TextEncoder().encode(original)]) {
+      const parsed = parseOutputPurchaseEnvelope(input)
+      if (parsed.result.status !== 'delivered') throw new Error('Expected delivered representation')
+      const steak = parsed.result.steak
+      expect(Object.keys(steak)).toEqual(['a_topic', 'z_topic'])
+      expect(steak.z_topic.outputsToAdmit[0]).toBe(0)
+      expect(steak.z_topic.coinsRemoved![0]).toBe(0)
+      expect(steak.a_topic.coinsToRetain[0]).toBe(0)
+    }
+  })
+
+  it('retains canonical unknown-field refusal priority in a nested policy', () => {
+    const { terms } = fixture()
+    Object.assign(terms.body.releasePolicy, { z_unknown: true, a_unknown: true })
+    const original = JSON.stringify(terms)
+    expect(original.indexOf('z_unknown')).toBeLessThan(original.indexOf('a_unknown'))
+    expect(() => parseOutputPurchaseTerms(original)).toThrow('a_unknown')
+    expect(() => parseOutputPurchaseTerms(new TextEncoder().encode(original))).toThrow('a_unknown')
+  })
+})
