@@ -2167,6 +2167,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/quarantine.test.ts',
           '<rootDir>/test/verification-ledger.test.ts',
           '<rootDir>/test/reconciliation.test.ts',
+          '<rootDir>/test/reconciliation-current-conformance.test.ts',
           '<rootDir>/test/proposal-bitcoin-core.test.ts',
           '<rootDir>/test/bitcoin-knowledge.test.ts'
         ],
@@ -2237,6 +2238,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/quarantine.test.ts',
           '<rootDir>/test/verification-ledger.test.ts',
           '<rootDir>/test/reconciliation.test.ts',
+          '<rootDir>/test/reconciliation-current-conformance.test.ts',
           '<rootDir>/test/proposal-bitcoin-core.test.ts',
           '<rootDir>/test/proposal-knowledge-view.test.ts',
           '<rootDir>/test/proposal-knowledge-order.test.ts',
