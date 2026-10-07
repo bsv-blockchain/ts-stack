@@ -790,14 +790,15 @@ expiry. See the [profile guide](../../docs/guides/revenue-listing-profile.md).
 exact outputs and construct funded 114/15-value witnesses, requesting a protected
 seller-child signature only for split or early retirement. Complete positive
 transactions, all eight recipients and original property controls exercise these
-components. Fixed-child native remittance, signed activation lineage, selected-chain
-expiry finality and durable alias recovery still require integration. Earlier six-route codec
-and native receipts do not qualify the current profile. See
+components. Separately installed application and wallet companions compose fixed-child
+native remittance, signed activation lineage, selected-chain expiry finality and
+durable alias recovery. The current authenticated native fixtures exercise these
+boundaries together. Earlier six-route codec and native receipts remain historical
+compatibility evidence and do not qualify the current profile. See
 [specification alignment](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
 
-The SDK3.1 source candidate still contains the superseded `RevenueListing`,
-`RevenueListingPlan` and `RevenueListingSpend` interfaces while their integration
-is replaced. Their earlier single-program/revision/six-route behavior is historical
+The unpublished SDK3.3 source candidate preserves the superseded `RevenueListing`,
+`RevenueListingPlan` and `RevenueListingSpend` interfaces for existing consumers. Their earlier single-program/revision/six-route behavior is historical
 and must not be used to construct or qualify the PR295 exemplar. A portable codec
 recognizes bytes; it does not establish lineage, currentness, valid spending or
 fulfillment. Checkpoint two remains open until the complete replacement is qualified.
@@ -867,6 +868,6 @@ await completeBoundAction(wallet, args, {
 The new `BOUND_ACTION_OUTPUT_AUTHORIZATION_VERSION` export is `1`. The existing function also exposes `completeBoundAction.outputAuthorizationVersion=1`.
 Consumers supporting older SDK peers should detect that function property before supplying the new
 option; older SDKs retain their existing strict behavior. This additive API is
-included in the SDK 3.1 source candidate. The separate SDK3 identity migration
+included in the unpublished SDK 3.3 source candidate. The separate SDK3 identity migration
 still applies; SDK2 applications need an additive backport or a coordinated SDK3
 upgrade. No BRC-100 wire or wallet-data changes are introduced by this option.

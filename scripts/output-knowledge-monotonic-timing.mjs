@@ -72,16 +72,19 @@ export function createMonotonicTiming(clock = process.hrtime.bigint) {
 
 /** Admit complete scalar counters, never repaired, clamped or sampled timings. */
 export function validateMonotonicTiming(value) {
-  assert.deepEqual(Object.keys(value).sort(), [
-    'applicationValuesPrinted',
-    'clock',
-    'format',
-    'fullFunctionalQualified',
-    'instrumentationOverheadIncluded',
-    'refusal',
-    'rows',
-    'synchronousInclusive'
-  ])
+  assert.deepEqual(
+    Object.keys(value).sort((left, right) => +(left > right) - +(left < right)),
+    [
+      'applicationValuesPrinted',
+      'clock',
+      'format',
+      'fullFunctionalQualified',
+      'instrumentationOverheadIncluded',
+      'refusal',
+      'rows',
+      'synchronousInclusive'
+    ]
+  )
   assert.equal(value.format, 'output-knowledge-monotonic-timing/1')
   assert.equal(value.clock, 'process.hrtime.bigint')
   assert.equal(value.refusal, null, 'Monotonic timing refused')
@@ -92,12 +95,15 @@ export function validateMonotonicTiming(value) {
   assert.ok(Array.isArray(value.rows) && value.rows.length > 0 && value.rows.length <= MAX_METHODS)
   const names = new Set()
   for (const row of value.rows) {
-    assert.deepEqual(Object.keys(row).sort(), ['calls', 'method', 'nanoseconds'])
+    assert.deepEqual(
+      Object.keys(row).sort((left, right) => +(left > right) - +(left < right)),
+      ['calls', 'method', 'nanoseconds']
+    )
     assert.match(row.method, /^[A-Za-z][A-Za-z0-9.]{0,127}$/)
     assert.ok(!names.has(row.method), 'Duplicate timing method')
     names.add(row.method)
     assert.ok(Number.isSafeInteger(row.calls) && row.calls >= 0 && row.calls <= MAX_CALLS)
-    assert.match(row.nanoseconds, /^(0|[1-9][0-9]{0,15})$/)
+    assert.match(row.nanoseconds, /^(0|[1-9]\d{0,15})$/)
     assert.ok(BigInt(row.nanoseconds) <= MAX_TOTAL_NS)
     assert.ok(row.calls > 0 || row.nanoseconds === '0', 'Uncalled timing method')
   }

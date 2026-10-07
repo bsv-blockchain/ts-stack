@@ -2,9 +2,9 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.5'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+version: '0.1.6'
+last_updated: '2026-10-07'
+last_verified: '2026-10-07'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -331,13 +331,14 @@ advertising the composition as validated.
 
 ## Qualification status
 
-The source declarations and native composition interfaces undergo strict virtual
-compilation, lint and complete-definition preservation checks. Those checks do not execute tests or
-qualify SQLite, Bitcoin Script, topical admission, signing isolation or HTTP
-behavior. The prior alias-foundation native cohort exposed an incomplete-BEEF
-fixture; its failed seed and receipts are retained. The source correction restores
-funding ancestry without weakening the production completeness guard. Source
-review, changed-source native unit/property execution, original regressions,
-whole-source mutation testing, packed/browser/platform checks, actual domain and
-wallet-route demonstrations, and exact-head hosted CI remain necessary before
-this companion or Checkpoint 2 can be called complete.
+Strict compilation, lint and complete-definition preservation checks complement
+the Linux native composition, original unit/property regressions and wallet-route
+demonstrations; compilation alone establishes no runtime verdict. The complete
+current fixtures exercise SQLite, both Bitcoin programs, actual topical admission,
+protected fixed-child signing, native restart, selected-chain aliases and physical
+authenticated HTTP delivery. The earlier incomplete-BEEF fixture failure and its
+seed remain historical evidence. The correction restores funding ancestry without
+weakening the production completeness guard. The checkpoint inventory records the
+current reference workflows and reproduction selectors. Complete whole-source
+mutation, packed/browser/platform, conformance and exact published-head hosted
+checks remain separate final acceptance requirements, reconciled in the PR evidence.

@@ -303,7 +303,7 @@ export function canonicalOutputJSON(
 /** Each invocation owns its complete mutable framing state. Method code is
  * shared, but no input, representation result or validation verdict is held. */
 class OutputJSONSerializer {
-  readonly #chunks: string[] = []
+  #text = ''
   readonly #ancestors = new Set<object>()
   #bytes = 0
 
@@ -314,7 +314,7 @@ class OutputJSONSerializer {
   constructor(value: unknown, bounds: OutputJSONLimits) {
     this.#bounds = bounds
     this.#visit(value, 1)
-    this.text = this.#chunks.join('')
+    this.text = this.#text
   }
   #emit(chunk: string, knownASCII = false): void {
     outputJSONLimit(chunk.length <= this.#bounds.bytes)
@@ -323,7 +323,7 @@ class OutputJSONSerializer {
     this.#bytes +=
       knownASCII || /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
     outputJSONLimit(this.#bytes <= this.#bounds.bytes)
-    this.#chunks.push(chunk)
+    this.#text += chunk
   }
   #string(text: string, suffix = ''): void {
     outputJSONLimit(text.length <= this.#bounds.bytes)

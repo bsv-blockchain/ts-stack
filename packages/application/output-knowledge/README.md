@@ -18,8 +18,9 @@ proposal/current-feed/session owner is implemented with atomic visibility fences
 future-event reservations and bounded expiry. Concrete native examples compose private publication/acquisition, historical
 licensed-purchase support and independent root serving with real Engine/Mongo
 and authenticated HTTP. Current optional-profile native wallet, alias, buyer/seller and authenticated
-HTTP layers are assembled. Their complete current-source integration, final
-package/platform and mutation-campaign qualification remain pending;
+HTTP layers are assembled and exercised by complete current-profile Linux
+reference compositions. Final published-source and mutation-campaign qualification
+are separate acceptance gates recorded in the checkpoint inventory;
 downstream application adoption follows the second review checkpoint.
 The internal [native private-publication foundation](../../../docs/guides/private-publication-storage.md)
 now binds protected material, permanent request fences and ordered durable phases.
@@ -1196,9 +1197,10 @@ fences remain in this bounded reference journal; reaching capacity never resets
 the namespace.
 
 Authenticated HTTP, the concrete ordinary-admission adapter and bounded recovery
-scheduler are available as optional components. Full end-to-end qualification is
-still being connected. Service orchestration tests use explicit
-injected port outcomes. Separate evidence integration tests run actual SDK Script
+scheduler are available as optional components. The reference proposal pipeline
+composes actual Engine/Mongo, authenticated HTTP, provider/client custody, live
+finalization and expiry delivery, and restart without a second Open or submission.
+Service orchestration unit tests separately use explicit injected port outcomes. Separate evidence integration tests run actual SDK Script
 and Merkle checks on a signed PRP1 transaction against pinned synthetic header
 ancestry, then reserve its verified raw bytes in SQLite. They deliberately leave
 ordinary admission unresolved and do not substitute for HTTP or topic integration.

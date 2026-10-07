@@ -2,9 +2,9 @@
 id: lch-overlay-acquisition
 title: 'LCH Overlay Acquisition'
 kind: guide
-version: '0.3.0'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+version: '0.3.1'
+last_updated: '2026-10-07'
+last_verified: '2026-10-07'
 review_cadence_days: 30
 status: experimental
 tags: [lch, overlay, acquisition, custody, payment]
@@ -21,9 +21,10 @@ purchase. The covenant domain has a separate `@bsv/lch/overlay-covenant` entry. 
 minor API addition requiring the coordinated SDK3 output/revenue companions;
 ordinary imports, SDK2 peers and `CORE_CAPABILITIES` stay unchanged. The current
 covenant buyer, seller, alias and authenticated native HTTP composition is
-implemented; its complete fresh qualification remains unfinished checkpoint-two
-work. The concrete paid-lookup seller and authenticated native-wallet recovery
-flow are implemented and locally tested.
+implemented and exercised by current Linux reference compositions. The concrete
+paid-lookup seller and authenticated native-wallet recovery flow are also
+implemented. The checkpoint inventory distinguishes those demonstrated workflows
+from the complete mutation campaign and final published-source acceptance gates.
 
 The current C target is PR295's immutable collector extension. Use
 `decodeLCHCollectorRevenueProfile` from `@bsv/lch/overlay-covenant` to own
@@ -232,7 +233,9 @@ paid reply is lost after seller commit; buyer control, object, LCH and native ac
 custody reopen before unpaid recovery after Offer expiry and catalogue withdrawal.
 Exactly one payment header and one seller credit remain. The fixture uses signed
 synthetic funding and isolated loopback HTTP, never broadcasts, and does not qualify
-TLS, production publication or the unfinished operator/workbench demonstrations.
+production TLS, publication or deployment. Reproduction selectors, recovery
+procedures and the separate reference workbench are documented in the checkpoint
+inventory and their installation guides.
 
 ## Historical standing Offer and individual covenant consent
 
@@ -456,13 +459,16 @@ checks at least 300 accepted/expired preparation windows while preserving the
 original verified obligation and custody. All original historical seller tests
 and the original property remain alongside it through the shared pipeline.
 
-These current portable buyer/seller components do not qualify a native wallet
-action, real topical admission, multi-alias custody or selected-chain release.
-An earlier hosted native HTTP integration exposed a missing mandatory purchase
-commitment in coordinator results/POTATOES. The separately installed commitment
-owner and matching access profile address that representation boundary; those
-historical-family component results do not qualify this complete current flow.
-Native alias/action ownership, all fixed-child signing/remittance routes, expiry
-finality and complete authenticated HTTP/workbench demonstrations still require
-current integration and qualification before advertising the full C profile or
-requesting checkpoint-two review.
+These portable buyer/seller components alone provide no native wallet action,
+topical admission, multi-alias custody or selected-chain authority. The current
+reference composition separately installs the protected wallet, current immutable
+family, same-writer alias owner, independent currentness, coordinator and
+authenticated physical HTTP disclosure. It exercises complete genesis/activation
+ancestry, original funding and admission, mined-alias selection, immutable historical
+entitlement, lost replies, restart and actual licensed decryption. The separate
+wallet-route fixture exercises all fixed-child recipients and route-specific expiry
+finality. The earlier missing-commitment and incomplete-BEEF failures are historical
+evidence; they do not qualify this replacement. Reproduce the complete current
+selectors in the checkpoint inventory, preserving original controls. Advertising C
+requires the actually installed verifiers and capabilities; checkpoint acceptance
+also requires complete mutation and final published-source qualification.

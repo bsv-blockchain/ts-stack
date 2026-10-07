@@ -218,9 +218,10 @@ The npm artifact also carries a scoped [third-party notice](./THIRD_PARTY_NOTICE
 
 The current implementation target is BRC PR295 at
 `1b9a75e497b5856675af1ce01fd86843c37d07f9`. The optional covenant profile is
-under pre-adoption replacement: the two-stage frozen Script, immutable schedule,
-fixed-child wallet and native alias integration still require qualification.
-Earlier native exemplar evidence does not establish those revised contracts.
+implemented as separate optional components: the two-stage frozen Script, immutable
+schedule, fixed-child wallet and native alias custody. Current Linux compositions
+exercise them together; complete final-source acceptance is tracked separately.
+Earlier native exemplar receipts remain historical compatibility evidence.
 See [current alignment](../../../specs/output-knowledge/SPEC-ALIGNMENT.md).
 
 Covenant settlements now require the full `purchaseCommitment`, identically
@@ -277,8 +278,9 @@ complete original funded wallet transaction and released transaction, including
 every actual input Script, and require their identical full purchase commitment.
 The domain checks roles, License, Agreement and recipient-bound keys, then records
 positive entitlement. Historical delivery, reopen and offline playback do not
-repeat a new-funding expiry predicate. Native action/alias custody is composed separately; complete current-source
-integration qualification remains required. The current seller is described below.
+repeat a new-funding expiry predicate. Native action/alias custody is composed
+separately; current reference fixtures exercise it with the protected buyer and
+seller, actual admission and authenticated HTTP. The current seller is described below.
 
 `decodeLCHCollectorRevenue`, `LCHOverlayCovenantDomain` and
 `LCHOverlayCovenantSeller` retain pre-replacement behavior for compatibility.
@@ -286,8 +288,9 @@ They are historical APIs, not current-family adapters.
 The decoder/binding predicates alone do not authenticate the Offer. Neither
 terms validation nor those predicates establish activation ancestry, chain
 currentness, wallet remittance or alias recovery.
-The combined native/admission/alias layers are assembled; their complete
-current-source qualification remains open before advertising C.
+The combined native/admission/alias layers are assembled and exercised by current
+reference compositions. Advertising C still requires the installed full verifiers
+and capabilities; final checkpoint qualification is tracked separately.
 
 `decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR
 objects and exact UTF-8 JCS settlement/evidence bytes. It checks the 2 MiB
@@ -358,8 +361,11 @@ verified rights after Offer expiry without another purchase. The portable
 lineage and entitlement codecs remain representations rather than verdicts.
 Actual disclosed native tests execute the family scripts, complete synthetic
 chain evidence, encrypted SQLite restart and real ciphertext playback. The
-combined native wallet/seller/topical-admission workbench remains required before
-checkpoint-two acceptance. The ordinary and existing paid entries stay separate.
+current native composition combines protected wallet/seller custody, topical
+admission, per-alias recovery and physical authenticated delivery. Its reproducible
+selectors and limits are in the checkpoint inventory; complete mutation and final
+published-source checks remain separate review requirements. The ordinary and
+existing paid entries stay separate.
 
 `LCHOverlayCovenantSeller` is the preserved historical C seller domain. It retains
 complete original private CEKs and independently verifies genesis/lineage,

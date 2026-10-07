@@ -3,8 +3,10 @@
 This inventory tracks completion of the approved BRC-192–199 reference
 implementation. It complements the chronological [implementation record](./IMPLEMENTATION.md).
 The current specification baseline is [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
-at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. The source now implements its
-pre-adoption replacement; complete current-source qualification remains required.
+at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. The source implements its
+pre-adoption replacement, including the complete current native reference
+compositions. Final published-source acceptance additionally requires the complete
+governed mutation campaign and terminal successful applicable checks.
 Historical integration evidence for the earlier exemplar does not qualify the
 replacement. Implemented contract alignment and remaining qualification are
 tracked in [specification alignment](./SPEC-ALIGNMENT.md).
@@ -19,9 +21,12 @@ The current alias owner, coordinator, independent currentness, physical disclosu
 buyer recovery and candidate-bound LCH layers are now assembled with current-profile
 wallet routes and authenticated native HTTP fixtures. The current source passes
 repository health, lint, formatting, types, build, audit and documentation checks;
-the composed application/native workflows remain unqualified. Their open rows
-require fresh runtime and final-source evidence, including complete coverage and
-mutation campaigns. Earlier integration receipts are retained as historical evidence.
+the composed application/native workflows are exercised by the current Linux
+reference fixtures, actual wallet routes and authenticated HTTP. The acceptance
+rows describe that implemented and demonstrated composition. Complete mutation
+and exact final published-source qualification are additional checkpoint gates;
+the PR completion evidence records their immutable results. Earlier receipts
+remain historical evidence.
 
 ## Public and private state discovery
 
@@ -48,7 +53,7 @@ mutation campaigns. Earlier integration receipts are retained as historical evid
 
 ## Transactional private acquisition and the reference revenue family
 
-- [ ] Compose authorized reserve-stage genesis, verified public child-link
+- [x] Compose authorized reserve-stage genesis, verified public child-link
       activation and complete lineage validation with wallet-funded purchase,
       seller-child split, permissionless payout and seller-child or expiry
       retirement. Exercise both frozen programs, all recipient slots, economic
@@ -58,12 +63,12 @@ mutation campaigns. Earlier integration receipts are retained as historical evid
       transaction without replacing original custody, payment, admission or delivery.
       Native cumulative custody, controlled lifecycle boundaries and the richer
       complete Script/domain/actual-host composition pass.
-- [ ] Demonstrate authenticated topic submission returning bound STEAK and
+- [x] Demonstrate authenticated topic submission returning bound STEAK and
       POTATOES with a full verified purchase commitment and separately retained
       admission evidence for every transaction alias. Exercise mined-alias
       selection before issuance and immutable historical entitlement after
       issuance, including native restart and bounded alias custody.
-- [ ] Demonstrate immutable distribution, protected child signing and fixed-child
+- [x] Demonstrate immutable distribution, protected child signing and fixed-child
       remittance, retained remainders and exact final payout with external top-up.
       The reference family is optional; reusable private acquisition ports do
       not assume its revenue model.
@@ -78,7 +83,7 @@ mutation campaigns. Earlier integration receipts are retained as historical evid
 
 ## Package, documentation and final qualification
 
-- [ ] Finish public SDK/host/tooling exports, compiled examples, application and
+- [x] Finish public SDK/host/tooling exports, compiled examples, application and
       operator guides, migration decisions and shutdown/recovery instructions.
 
 Final qualification must verify affected conformance, compatibility,
@@ -108,9 +113,9 @@ custody and recipient-bound LCH decryption, including lost replies and concurren
 buyers. The earlier complete host union passed 878 tests. Those purchase receipts
 predate PR295 and do not qualify its replacement Script, signing, finality or
 alias-recovery contract. The native purchase composition now uses the current
-family, protected fixed-child authority and same-writer alias custody. Its
-complete runtime and final-source qualification must pass before those
-acceptance rows can close.
+family, protected fixed-child authority and same-writer alias custody. Its complete current native reference fixtures and wallet-route demonstrations
+exercise those acceptance rows. The final checkpoint also requires successful
+complete coverage, mutation and published-source gates recorded in the PR evidence.
 
 These integration receipts establish concrete progress. They still require
 complete published-source and final qualification evidence. Native protected
@@ -168,7 +173,8 @@ complete campaign or final PR gate.
   `test/private-purchase-wallet-profile-routes.test.ts` exercises all current routes and
   eight real fixed-child recipients; the alias owner/currentness/coordinator/
   disclosure and buyer-alias suites qualify their independent boundaries.
-  These new fixtures require Linux validation before this acceptance row closes.
+  The current Linux reference fixtures exercise these installed companions;
+  preserve the complete suites and original controls in final qualification.
   The [alias-custody guide](../../docs/guides/private-purchase-alias-custody.md)
   describes the current composition. The retained
   `PrivatePurchaseNative.integration.test.ts` and historical interfaces continue
@@ -187,3 +193,11 @@ qualification. [Compiled package examples](../../docs/guides/compiled-package-ex
 are checked against exact tarballs. Final acceptance also requires all affected
 native/browser/mobile profiles, complete governed mutation qualification and
 terminal successful hosted checks on the final published head.
+
+## Remaining final acceptance gates
+
+- [ ] Pass complete uninstrumented coverage on the final published source, including the original 300-run disclosure and coordinator properties.
+- [ ] Pass the full 151-target/398-row governed mutation campaign and independently reconcile every raw result.
+- [ ] Verify final packed consumers, platforms, conformance, actual CodeQL and zero-new Sonar findings on the same published head.
+
+These gates remain open. Demonstrated reference components do not by themselves complete Checkpoint 2.

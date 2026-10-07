@@ -6497,3 +6497,11 @@ uninstrumented coverage must still pass on the final source before the untrimmed
 151-target/398-row mutation campaign and final checkpoint reconciliation. The
 seven prepared current-document/acceptance updates remain conditional and
 unapplied while the complete baseline is failing.
+
+## October 7: current 4fc diagnostics and the next bounded correction
+
+The current SDK262/8558 and application3 63/930 pass. Application1 disclosure interrupts199/300 and application2 coordinator194/300 at their unchanged150-second limits, with no counterexample. The original wallet BEEF case also fails: its legacy-only HTTP stub misses the current Node Go header endpoint and leaves the fixture dependent on live data. Production endpoints and the original BEEF assertion remain unchanged; the next fixture pins that exact known header and independently checks a wrong root with two fresh requests. Current CodeQL has zero alerts; three new Sonar sorting/regex findings are corrected in the diagnostic scalar validator without suppressions.
+
+The guarded current disclosure CPU sample has zero negative deltas or reordered samples. Its largest JavaScript self costs are JSON object traversal, recursive visitation, duplicate-aware object parsing and closed-object validation. Coordinator and native HTTP CPU samples remain excluded for invalid timestamp ordering. Independently admitted monotonic counters report about21 seconds of inclusive synchronous SQLite/crypto work per property diagnostic; those totals include instrumentation and are not exclusive CPU time. They do not qualify the interrupted properties. The next SDK correction replaces the per-call chunk array/final join with private immutable text accumulation. It preserves every validation and refusal boundary, canonical byte, resource charge, descriptor, symbol, cycle, Unicode and fresh ownership check. Performance improvement still requires ordinary hosted qualification.
+
+Current guides now describe the actually demonstrated Linux native compositions and distinguish them from open final acceptance gates. Historical interfaces and receipts remain explicitly historical. Complete final coverage, packed/platform/conformance/analyzer checks and the full151/398 mutation campaign remain required; Checkpoint2 is incomplete.

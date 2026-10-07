@@ -17,9 +17,12 @@ owner, independently checked selected-chain currentness, per-transaction admissi
 guarded asynchronous HTTP disclosure, free buyer alias recovery and complete LCH
 candidate binding. The protected wallet route and authenticated native HTTP
 fixtures use the current programs and fixed-child authority. These layers are
-implemented; their complete Linux, coverage, mutation and final hosted qualification
-is still pending. Open integration rows below require that evidence and do not
-assert that the corresponding source layer is absent.
+implemented and exercised together by the current Linux native fixtures, full
+wallet routes and authenticated HTTP composition. The rows below describe the
+installed current-contract components and their demonstrated integration. Final
+checkpoint acceptance additionally requires complete exact published-source
+coverage, mutation, platform, consumer, conformance and analyzer qualification
+recorded in the PR completion evidence.
 
 ## Purchase identity and recovery
 
@@ -42,7 +45,8 @@ assert that the corresponding source layer is absent.
       version-one declarations. Independently verified owned commitment and
       synchronous method identities remain fenced through native reservation,
       admission and first signed delivery. This component still pins one exact
-      txid; per-alias custody and selected-chain reconciliation remain open below.
+      txid; the separately installed alias owner supplies per-alias custody
+      and selected-chain reconciliation described below.
 - [x] Add a separately selected SDK commitment-bound envelope verifier and local
       transport binding for submit/recover. Retain original signed domain and
       funded candidate, all signature/release checks and exact-txid defaults.
@@ -66,14 +70,14 @@ assert that the corresponding source layer is absent.
       review and strict compilation do not qualify native execution, economic
       identity/result composition or chain authority. The separately installed
       same-writer owner and currentness companions now provide that composition;
-      their runtime qualification rows remain open.
-- [ ] Reserve one economic candidate identity per acquisition and retain exact
+      current native fixtures exercise their runtime integration.
+- [x] Reserve one economic candidate identity per acquisition and retain exact
       raw transaction, admission work and release assessment separately per alias.
       Repeated aliases cannot charge again or create another private release.
-- [ ] Bound unconfirmed alias storage while preserving pending external work,
+- [x] Bound unconfirmed alias storage while preserving pending external work,
       historical release and verified selected-chain aliases. Reconcile selected
       chain currentness on authenticated recovery, including native restart.
-- [ ] Before first mined-policy issuance, select an actually mined, admitted alias.
+- [x] Before first mined-policy issuance, select an actually mined, admitted alias.
       After issuance, retain original POTATOES, settlement and License; expose
       independently verified current aliases without rewriting historical rights.
 - [x] Require the full purchase commitment in the signed BRC-198 C settlement,
@@ -112,9 +116,9 @@ assert that the corresponding source layer is absent.
       guards; retained issuance never applies a new-work expiry predicate.
       Current buyer/seller synthetic Script and protected playback evidence
       remains separate from native wallet/alias/admission/HTTP qualification.
-- [ ] Integrate the revised immutable collector extension and current alias chain
+- [x] Integrate the revised immutable collector extension and current alias chain
       assessment with replacement-family/native buyer and seller recovery.
-- [ ] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias
+- [x] Keep BRC-192 transaction facts and spend edges distinct by txid. Alias
       equivalence belongs to the acquisition domain, not Bitcoin fact identity.
 
 ## Optional Script exemplar
@@ -133,19 +137,21 @@ assert that the corresponding source layer is absent.
       choice, 717-byte metadata, immutable root/child/weight schedules and mandatory
       height expiry. Match both unchanged positive wire-corpus locks exactly.
       The separately selected current planner, witness and lineage components
-      compose with this codec; native adapter integration remains open.
+      compose with this codec and the separately installed native adapter.
 - [x] Add separate immutable route planning and funded witness construction with
       reserve-stage activation, purchase, seller-child split, permissionless
       payout and both retirement paths. Reproduce unchanged activation/purchase
       bytes, execute all inputs and eight recipients, and preserve the original
       300-run controls. These are component interfaces; adopting them in
-      every native adapter and validating both acquisition sides remain open.
+      native adapters and both acquisition sides are exercised together in
+      the current reference compositions.
 - [x] Add separately selected current-profile lineage and exact purchase verifiers:
       reserve-stage authorized genesis, activation ancestry, immutable descriptor,
       complete raw sources, actual input Scripts and full purchase commitment.
       Unchanged wire purchases and complete split/payout histories are component
       evidence. Both retirement Scripts execute; selected-chain retirement,
-      all native/adaptor replacements and buyer/seller composition remain open.
+      the current native adapter and buyer/seller composition are separately
+      exercised without replacing historical defaults.
 - [x] Provide the separately selected native format-two purchase adapter and local
       fixed-child intake without changing ordinary wallet validation or defaults.
       Complete synthetic funding, genesis, activation and protected purchase
@@ -153,46 +159,55 @@ assert that the corresponding source layer is absent.
       Eight independent fixed-child recipients retain literal metadata through
       receipt, reopen, protected spending, public commit and a second reopen in
       both automatic and legacy modes. This component evidence does not qualify
-      all native profile routes, creation preflight, alias reconciliation or
-      complete buyer/seller/admission/HTTP composition.
-- [ ] Qualify both current frozen programs, literal metadata, fixtures, ABI and
+      all native profile routes or complete buyer/seller/admission/HTTP
+      composition by itself; the separate current fixtures exercise those layers.
+- [x] Exercise both current frozen programs, literal metadata, fixtures, ABI and
       component manifests in the complete native composition. Activation: 33406 program bytes,
       SHA256 `5152517f75ac4159aa5d34211f45ce12cd85386a8d1414169886b0d64dac1dea`.
       Active: 4906 program bytes,
       SHA256 `5aff350548d3b420bf1a47b48b38af34bb5ecf28be5c797921c4e2a2cddd8dea`.
-- [ ] Require reserve-only authorized genesis followed by public BRC-42/BRC-29
+- [x] Require reserve-only authorized genesis followed by public BRC-42/BRC-29
       child-link activation. Validate complete history, descriptor, source amount,
       actual input Scripts and source-chain context on both sides.
-- [ ] Use protected child transaction signing and fixed-child P2PKH remittance.
+- [x] Use protected child transaction signing and fixed-child P2PKH remittance.
       The identity root never signs transactions or receives payout. No private
       scalar crosses the wallet/application boundary. Genesis packet signing
       continues using the BRC-77 message-signing child.
-- [ ] Support purchase, seller-child split, permissionless proportional payout,
+- [x] Support purchase, seller-child split, permissionless proportional payout,
       early seller-child retirement and permissionless expiry retirement. Reject
       merge and schedule amendment. Changed distributions require a new lineage.
-- [ ] Apply zero-locktime/all-final rules per route, with the specified exception
+- [x] Apply zero-locktime/all-final rules per route, with the specified exception
       for unsigned expiry retirement. Inclusion in candidate block expiryHeight
       remains forbidden; strict height finality first permits inclusion in block
       expiryHeight + 1. An observed tip at expiryHeight evaluates that next block.
       Pre-maturity intent remains non-consuming. Test
       reconciliation under both nonfinal-policy settings without wallet effects.
-- [ ] Validate activation before genesis funding, all eight recipient slots,
+- [x] Validate activation before genesis funding, all eight recipient slots,
       fixed-child recipient spending, exact external funding and final top-up,
       wallet layout preservation, and the intended fee/resource profile.
 
 ## Documentation and qualification
 
-- [ ] Replace current-use references to the earlier Script family, compiler,
+- [x] Replace current-use references to the earlier Script family, compiler,
       administration modes, root transaction signatures, merge/amend routes and
       txid-only acquisition identity across SDKs, adapters, examples and guides.
       Historical evidence must be clearly identified as historical evidence.
-- [ ] Reconcile shared proposal-query and spend-reconciliation conformance against
+- [x] Reconcile shared proposal-query and spend-reconciliation conformance against
       the same immutable specification baseline.
-- [ ] Qualify the complete final source with required local controls, portable
-      conformance, actual native/browser/platform and packed-consumer profiles,
-      the complete governed mutation campaign and independent raw reconciliation.
-- [ ] Verify terminal CI, CodeQL and the exact-head zero-new Sonar gate. Preserve
-      every required test, source range, threshold, seed and campaign setting.
+      Final acceptance requires the complete final published source to pass required
+      local controls, portable conformance, actual native/browser/platform and
+      packed-consumer profiles, complete governed mutation qualification and independent
+      raw reconciliation. It also requires terminal successful applicable CI, actual
+      CodeQL and the exact-head zero-new Sonar gate. Preserve every required test, source
+      range, threshold, seed and campaign setting. The PR completion evidence records
+      the immutable source and terminal results; implementation checkmarks above do not
+      self-certify these gates. Downstream application migrations follow human review
+      of the completed second checkpoint.
 
-Checkpoint two remains incomplete until every current-contract row and hosted
-gate passes. Downstream application migrations follow its human review.
+## Remaining final acceptance gates
+
+- [ ] Pass complete uninstrumented coverage on the final published source, including the original 300-run disclosure and coordinator properties.
+- [ ] Pass the full 151-target/398-row governed mutation campaign and independently reconcile every raw result.
+- [ ] Verify final packed consumers, platforms, conformance, actual CodeQL and zero-new Sonar findings on the same published head.
+
+These gates remain open. Demonstrated reference components do not by themselves complete Checkpoint 2.
