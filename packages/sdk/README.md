@@ -325,6 +325,41 @@ than that the script is invalid.
 
 - **Identity**: Comprehensive identity management system supporting identity verification and certificate management.
 
+  `IdentityClient.resolveByAttributes({ attributes: { any: query } }, true)`
+  searches saved contact names and keys with case-insensitive substring matching.
+  Named contact selectors retain exact case-insensitive matching. All supplied
+  selectors must match; empty or malformed selectors never match a contact.
+  Sequential mode retains the contact-hit shortcut; `parallel: true` includes
+  matching contacts alongside fresh public results, with one local override per
+  matching identity key. Contacts are personal assertions, not proof of a
+  third-party certification.
+
+  Contacts are disabled by default. Existing boolean and object callers retain
+  their contact-error behavior. Search UIs can opt into bounded contact recovery:
+
+  ```ts
+  const identities = await client.resolveByAttributes(
+    { attributes: { any: query } },
+    {
+      useContacts: true,
+      contactErrorMode: 'fallback',
+      contactTimeoutMs: 2000,
+      onContactError: () => showContactWarning()
+    }
+  )
+  ```
+
+  Fallback uses a two-second contact deadline unless overridden by an integer
+  from 1 to 60000 milliseconds. It continues public discovery after a contact
+  error or timeout and preserves public-discovery errors and certificate checks.
+  The same options work with `resolveByIdentityKey`. A deadline bounds this
+  call's wait; it cannot cancel a wallet request or dismiss its permission prompt.
+  Render an error separately from a successful empty result, and use the callback
+  for a partial-result warning. Callback exceptions propagate. Omit recovery
+  options to retain strict legacy behavior; omit `useContacts` when contacts are
+  unnecessary. The options require this SDK candidate; upgrading a wallet does
+  not upgrade an application's bundled SDK or its React search component.
+
 - **Key Value Store**: Distributed key-value store for decentralized data storage and retrieval.
 
 Identity publication rejects a certificate unless its certifier signature
