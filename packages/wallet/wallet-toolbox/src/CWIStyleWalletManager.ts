@@ -58,6 +58,8 @@ import {
   LookupResolver,
   LookupAnswer,
   LookupResolution,
+  Beef,
+  Spend,
   Transaction,
   PushDrop,
   LockingScript,
@@ -568,9 +570,9 @@ export interface UMPTokenInteractor {
 
 export interface UMPTokenLookupOptions {
   /**
-   * WAB-administered fallback used only when normal lineage resolution leaves
-   * more than one verified matching token. The outpoint must be one of the
-   * verified lookup candidates or it has no effect.
+   * WAB-administered lineage anchor for competing verified matching tokens.
+   * A proven update that consumes the pin supersedes it. An absent pin has
+   * no effect unless its authenticated same-identity ancestry is available.
    */
   pinnedOutpoint?: OutpointString
 }
@@ -734,16 +736,22 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     // spent by another candidate's transaction history. Only unrelated (forked)
     // tokens remain indeterminate.
     if (matchingTokens.length > 1) {
-      const newest = this.resolveNewestToken(matchingTokens, resolution.answer.outputs)
+      const pinnedLineage = await this.findPinnedLineage(
+        matchingTokens,
+        resolution.answer.outputs,
+        options?.pinnedOutpoint
+      )
+      const newest = this.resolveNewestToken(pinnedLineage ?? matchingTokens, resolution.answer.outputs)
       if (newest != null) {
         this.lookupDone(lookupKind, 'found', diagnostics, startedAt, {
           supersededTokens: matchingTokens.length - 1
         })
         return newest
       }
-      const pinned = options?.pinnedOutpoint
-        ? matchingTokens.find(token => token.currentOutpoint === options.pinnedOutpoint)
-        : undefined
+      const pinned =
+        pinnedLineage == null && options?.pinnedOutpoint
+          ? matchingTokens.find(token => token.currentOutpoint === options.pinnedOutpoint)
+          : undefined
       if (pinned != null) {
         this.lookupDone(lookupKind, 'found', diagnostics, startedAt)
         return pinned
@@ -768,6 +776,172 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const reason = resolution.answer.outputs.length > 0 ? 'token-malformed' : 'lookup-incomplete'
     this.lookupFailed(lookupKind, reason, diagnostics, startedAt)
     throw new UMPTokenLookupError(reason, diagnostics)
+  }
+
+  /** Keep a verified pin and its proven descendants together, excluding unrelated forks. */
+  private async findPinnedLineage(
+    tokens: UMPToken[],
+    outputs: LookupAnswer['outputs'],
+    pinnedOutpoint?: OutpointString
+  ): Promise<UMPToken[] | undefined> {
+    if (pinnedOutpoint == null) return undefined
+    const candidates = new Map(tokens.map(token => [token.currentOutpoint, token]))
+    const pinSource = candidates.has(pinnedOutpoint) ? this.findLookupTransaction(outputs, pinnedOutpoint) : undefined
+    const relationships = await Promise.all(
+      outputs.map(output => this.pinRelationship(output, candidates, pinnedOutpoint, pinSource))
+    )
+    const related = new Set<string>()
+    let anchorSeen = false
+    for (const relationship of relationships) {
+      if (relationship == null) continue
+      anchorSeen = true
+      if (relationship.selected) related.add(relationship.outpoint)
+    }
+    return anchorSeen ? tokens.filter(token => related.has(token.currentOutpoint as string)) : undefined
+  }
+
+  private async pinRelationship(
+    output: LookupAnswer['outputs'][number],
+    candidates: ReadonlyMap<string | undefined, UMPToken>,
+    pin: string,
+    pinSource?: Transaction
+  ): Promise<{ outpoint: string; selected: boolean } | undefined> {
+    try {
+      const tx = this.readTokenHistory(output.beef)
+      const outpoint = `${tx.id('hex')}.${output.outputIndex}`
+      if (!candidates.has(outpoint)) return undefined
+      if (outpoint === pin) return { outpoint, selected: true }
+      const descent = this.descendsFromPin(tx, pin, pinSource)
+      if (descent == null) return undefined
+      return { outpoint, selected: descent === 'verified' && (await this.hasCompleteUpdateEvidence(tx)) }
+    } catch {
+      // A malformed copy cannot establish an anchor or hide a deeper copy.
+      return undefined
+    }
+  }
+
+  /** Preserve unmined funding-ancestry checks without adding a network dependency. */
+  private async hasCompleteUpdateEvidence(tx: Transaction): Promise<boolean> {
+    try {
+      return await tx.verify('scripts only')
+    } catch {
+      // An input reference alone does not establish a usable token update.
+      return false
+    }
+  }
+
+  private descendsFromPin(
+    tx: Transaction,
+    pin: string,
+    pinSource?: Transaction
+  ): 'verified' | 'incomplete' | undefined {
+    const pending = [tx]
+    const visited = new Set<string>()
+    let incomplete = false
+    while (pending.length > 0) {
+      const current = pending.pop() as Transaction
+      const txid = current.id('hex')
+      if (visited.has(txid)) continue
+      visited.add(txid)
+      for (const [inputIndex] of current.inputs.entries()) {
+        const step = this.pinInputDescent(current, inputIndex, pin, pinSource)
+        if (step.descent === 'verified') return step.descent
+        incomplete = incomplete || step.descent === 'incomplete'
+        if (step.predecessor != null) pending.push(step.predecessor)
+      }
+    }
+    return incomplete ? 'incomplete' : undefined
+  }
+
+  private pinInputDescent(
+    tx: Transaction,
+    inputIndex: number,
+    pin: string,
+    pinSource?: Transaction
+  ): { descent?: 'verified' | 'incomplete'; predecessor?: Transaction } {
+    const input = tx.inputs[inputIndex]
+    const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+    const isPin = sourceTxid != null && `${sourceTxid}.${input.sourceOutputIndex}` === pin
+    const source = input.sourceTransaction ?? (isPin ? pinSource : undefined)
+    const refused = { descent: isPin ? ('incomplete' as const) : undefined }
+    if (source == null || !this.isAuthenticatedUMPOutput(source.outputs[input.sourceOutputIndex])) return refused
+    if (!this.verifyUMPSpend(tx, inputIndex, source)) return refused
+    return isPin ? { descent: 'verified' } : { predecessor: source }
+  }
+
+  private isAuthenticatedUMPOutput(output: Transaction['outputs'][number] | undefined): boolean {
+    if (output?.satoshis !== 1) return false
+    try {
+      const { fields } = decodeAuthenticatedUMPFields(output.lockingScript)
+      return (
+        fields.length >= 11 &&
+        fields[6]?.length === 32 &&
+        fields[7]?.length === 32 &&
+        fields.slice(0, 11).every(field => field.length > 0 && field.length <= MAX_STATE_SNAPSHOT_BYTES)
+      )
+    } catch {
+      // A funding input or unauthenticated predecessor is not a UMP anchor.
+      return false
+    }
+  }
+
+  /** Check token-control continuity at every edge, including confirmed transactions. */
+  private verifyUMPSpend(tx: Transaction, inputIndex: number, source: Transaction): boolean {
+    try {
+      const input = tx.inputs[inputIndex]
+      const sourceTxid = source.id('hex')
+      if (input.unlockingScript == null || (input.sourceTXID != null && input.sourceTXID !== sourceTxid)) return false
+      const output = source.outputs[input.sourceOutputIndex]
+      return new Spend({
+        sourceTXID: sourceTxid,
+        sourceOutputIndex: input.sourceOutputIndex,
+        sourceSatoshis: output.satoshis ?? 0,
+        lockingScript: output.lockingScript,
+        transactionVersion: tx.version,
+        otherInputs: tx.inputs.filter((_, index) => index !== inputIndex),
+        unlockingScript: input.unlockingScript,
+        inputSequence: input.sequence ?? 0xffffffff,
+        inputIndex,
+        outputs: tx.outputs,
+        lockTime: tx.lockTime
+      }).validate()
+    } catch {
+      return false
+    }
+  }
+
+  private findLookupTransaction(outputs: LookupAnswer['outputs'], outpoint: string): Transaction | undefined {
+    for (const output of outputs) {
+      try {
+        const tx = this.readTokenHistory(output.beef)
+        if (`${tx.id('hex')}.${output.outputIndex}` === outpoint) return tx
+      } catch {
+        // A malformed copy does not hide another host's usable anchor.
+      }
+    }
+    return undefined
+  }
+
+  /** Link explicit overlay history even when an ancestor already has a Merkle proof. */
+  private readTokenHistory(bytes: number[]): Transaction {
+    const tx = Transaction.fromBEEF(bytes)
+    const beef = Beef.fromBinary(bytes)
+    const pending = [tx]
+    const visited = new Set<string>()
+    while (pending.length > 0) {
+      const current = pending.pop() as Transaction
+      const txid = current.id('hex')
+      if (visited.has(txid)) continue
+      visited.add(txid)
+      for (const input of current.inputs) {
+        const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+        if (input.sourceTransaction == null && sourceTxid != null) {
+          input.sourceTransaction = beef.findAtomicTransaction(sourceTxid)
+        }
+        if (input.sourceTransaction != null) pending.push(input.sourceTransaction)
+      }
+    }
+    return tx
   }
 
   /**
@@ -795,7 +969,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const evidenceByCandidate = new Map<string, { txs: Transaction[]; spent: Set<string> }>()
     for (const output of outputs) {
       try {
-        const tx = Transaction.fromBEEF(output.beef)
+        const tx = this.readTokenHistory(output.beef)
         const outpoint = `${tx.id('hex')}.${output.outputIndex}`
         if (!candidates.has(outpoint)) continue
         const evidence = evidenceByCandidate.get(outpoint) ?? { txs: [], spent: new Set<string>() }

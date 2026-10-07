@@ -2,7 +2,7 @@
   "name": "@bsv/wab-server",
   "author": "BSV Association",
   "private": true,
-  "version": "1.8.8",
+  "version": "1.8.10",
   "overrides": {
     "brace-expansion": "5.0.12",
     "gaxios": "7.3.0",
@@ -16,7 +16,7 @@
   "main": "dist/server.js",
   "scripts": {
     "start": "tsc && node --require ./dist/telemetry.js dist/server.js",
-    "dev": "ts-node-dev --respawn --require ./src/telemetry.ts src/server.ts",
+    "dev": "node dev-watch.mjs --import ./src/telemetry.ts src/server.ts",
     "build": "tsc",
     "lint": "oxlint src --deny-warnings",
     "migrate": "knex --knexfile knexfile.ts migrate:latest",
@@ -24,8 +24,8 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@bsv/sdk": "^2.8.11",
-    "@bsv/wallet-toolbox": "^2.14.4",
+    "@bsv/sdk": "^3.1.0",
+    "@bsv/wallet-toolbox": "^2.14.6",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.222.0",
     "@opentelemetry/auto-instrumentations-node": "^0.80.0",
@@ -61,7 +61,7 @@
     "oxlint": "^1.83.0",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "license": "SEE LICENSE IN LICENSE.txt"

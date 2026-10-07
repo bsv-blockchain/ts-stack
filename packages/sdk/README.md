@@ -325,6 +325,41 @@ than that the script is invalid.
 
 - **Identity**: Comprehensive identity management system supporting identity verification and certificate management.
 
+  `IdentityClient.resolveByAttributes({ attributes: { any: query } }, true)`
+  searches saved contact names and keys with case-insensitive substring matching.
+  Named contact selectors retain exact case-insensitive matching. All supplied
+  selectors must match; empty or malformed selectors never match a contact.
+  Sequential mode retains the contact-hit shortcut; `parallel: true` includes
+  matching contacts alongside fresh public results, with one local override per
+  matching identity key. Contacts are personal assertions, not proof of a
+  third-party certification.
+
+  Contacts are disabled by default. Existing boolean and object callers retain
+  their contact-error behavior. Search UIs can opt into bounded contact recovery:
+
+  ```ts
+  const identities = await client.resolveByAttributes(
+    { attributes: { any: query } },
+    {
+      useContacts: true,
+      contactErrorMode: 'fallback',
+      contactTimeoutMs: 2000,
+      onContactError: () => showContactWarning()
+    }
+  )
+  ```
+
+  Fallback uses a two-second contact deadline unless overridden by an integer
+  from 1 to 60000 milliseconds. It continues public discovery after a contact
+  error or timeout and preserves public-discovery errors and certificate checks.
+  The same options work with `resolveByIdentityKey`. A deadline bounds this
+  call's wait; it cannot cancel a wallet request or dismiss its permission prompt.
+  Render an error separately from a successful empty result, and use the callback
+  for a partial-result warning. Callback exceptions propagate. Omit recovery
+  options to retain strict legacy behavior; omit `useContacts` when contacts are
+  unnecessary. The options require this SDK candidate; upgrading a wallet does
+  not upgrade an application's bundled SDK or its React search component.
+
 - **Key Value Store**: Distributed key-value store for decentralized data storage and retrieval.
 
 Identity publication rejects a certificate unless its certifier signature
@@ -533,3 +568,30 @@ These controls authenticate peers and protect message integrity and freshness;
 they do not encrypt the transport. Applications must use a confidential
 transport such as correctly verified TLS and must separately authorize the
 authenticated identity for every protected operation.
+
+## Locally authorized outputs in completed actions
+
+`completeBoundAction` continues to reject an unrequested output funded by a
+caller-supplied input by default. A caller may install
+`authorizeAdditionalOutputs(result)` to return independently approved outputs,
+each bound to an exact `outputIndex`, `lockingScript`, and `satoshis`. This is a
+local policy decision: do not approve outputs merely because an untrusted wallet
+labels them as change or a fee. Input-value conservation, requested-output
+binding, input signing, and signed-template verification still apply.
+
+For example, a local signer can retain its independently verified storage-policy
+decision in a private `WeakMap` keyed by the exact `createAction` result:
+
+```ts
+await completeBoundAction(wallet, args, {
+  inputSigners,
+  authorizeAdditionalOutputs: result => verifiedLocalOutputs.get(result) ?? []
+})
+```
+
+The new `BOUND_ACTION_OUTPUT_AUTHORIZATION_VERSION` export is `1`. The existing function also exposes `completeBoundAction.outputAuthorizationVersion=1`.
+Consumers supporting older SDK peers should detect that function property before supplying the new
+option; older SDKs retain their existing strict behavior. This additive API is
+included in the SDK 3.1 source candidate. The separate SDK3 identity migration
+still applies; SDK2 applications need an additive backport or a coordinated SDK3
+upgrade. No BRC-100 wire or wallet-data changes are introduced by this option.

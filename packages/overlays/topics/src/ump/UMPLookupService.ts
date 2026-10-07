@@ -116,11 +116,17 @@ export class UMPLookupService implements LookupService {
     // Prefer the most recently indexed candidates so the live lineage tip is
     // not permanently hidden behind the oldest 100 records.
     const docs = await this.records.find(filter).sort({ _id: -1 }).limit(100).toArray()
-    return docs.map(doc => ({ txid: doc.txid, outputIndex: doc.outputIndex }))
+    // Token updates consume and retain their predecessors. Request the full
+    // topical lineage even after confirmation; the Engine owns traversal bounds.
+    return docs.map(doc => ({
+      txid: doc.txid,
+      outputIndex: doc.outputIndex,
+      history: () => Promise.resolve(true)
+    }))
   }
 
   async getDocumentation(): Promise<string> {
-    return 'UMP Lookup Service: find wallet account descriptors by presentation hash, recovery hash, or outpoint.'
+    return 'UMP Lookup Service: find wallet account descriptors by presentation hash, recovery hash, or outpoint, including their retained token-update lineage.'
   }
 
   async getMetaData(): Promise<{

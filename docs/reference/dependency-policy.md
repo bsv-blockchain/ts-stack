@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.2'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+version: '1.3.4'
+last_updated: '2026-10-06'
+last_verified: '2026-10-06'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -107,6 +107,26 @@ and requires the pull request's dependency-evidence section to record release
 notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
 audit and CodeQL results, package and consumer tests, bundle/performance
 impact, and affected public versions.
+
+## Temporary Metro watcher repair
+
+Metro-file-map 0.87.1 consumes only `micromatch.some()`, whose matcher is already
+Picomatch 2.3.2. An exact-version paired source/distribution patch uses the same
+matcher loop directly, declares that exact dependency, and removes only the
+parent-scoped micromatch dependency and unused braces closure. The reviewed
+[braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) lists no
+patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
+has not supplied a published repair. No audit exclusion or threshold change is added.
+
+The mobile platform gate checks all 1,120 results independently reproduced from
+the unmodified published watcher, event/stat/path contracts, and absence of the
+removed dependencies before its existing packed Metro/Hermes compilation,
+source-map and bundle checks. All prior assertions and bounds remain.
+The dated registry owns this 27th selector, its package extension and patch as
+one repair. Remove all three together when a compatible official release removes
+the affected path and the complete compatibility, frozen-graph, audit and platform
+checks pass. This development-tool repair changes no public package API, version
+or production service startup.
 
 ## Supply-chain controls
 
@@ -215,8 +235,9 @@ npm or infrastructure release workflows, the read-only verification workflow:
 - reconciles all public source manifests, recorded published baselines, and npm
   `latest`, explicitly reporting source candidates held by an operator's
   publication decision;
-- installs every published package with lifecycle scripts disabled and runs
-  npm registry signature/provenance verification;
+- installs every exact published package in its own locked consumer context with
+  lifecycle scripts disabled, allowing its declared peers to resolve normally,
+  and runs npm registry signature/provenance verification in every context;
 - pulls every checked-in deployment image by its immutable digest; and
 - verifies generated package, support, conformance, coverage-reporting, and
   version facts.
@@ -245,6 +266,35 @@ other advisory paths were removed at their causes:
 Do not hide a future advisory with a broad override or dismissal. Remove an
 unused dependency, upgrade or replace the owning tool, and verify the frozen
 consumer and development graphs first.
+
+## October 6 advisory repair
+
+The protected UMP release qualification detected newly disclosed critical
+`proxy-addr` and high `source-map-js` advisories before publication. The root
+lock selects the compatible patched releases `proxy-addr` 2.0.8 and
+`source-map-js` 1.2.2; the six affected standalone infrastructure locks select
+`proxy-addr` 2.0.8. Overlay Server already selected that release.
+
+The upstream [proxy-addr advisory](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)
+and [source-map-js advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
+identify those patched versions. Their existing Node engine floors and
+transitive dependency contracts remain compatible. The targeted lock refresh
+uses the existing 24-hour release-age floor, introduces no new dependency
+override or exception, and retains the blocking high-severity audit. Requalify
+the frozen root, documentation and standalone service graphs before release.
+
+The complete standalone audit also found the older Message Box multipart parser
+and legacy UHRP/WAB development watcher paths. Message Box selects the compatible
+`@fastify/busboy` 3.2.2 patch, covering the upstream
+[boundary advisory](https://github.com/advisories/GHSA-xjh9-v7x6-24jw),
+[header advisory](https://github.com/advisories/GHSA-x8mw-p69m-v3mx) and
+[disposition advisory](https://github.com/advisories/GHSA-gxm5-99cw-xjw9).
+UHRP Basic, UHRP Cloud Bucket and WAB replace their legacy Nodemon/ts-node-dev
+watchers with `tsx watch`, retaining source/environment-file watch and telemetry
+preload behavior. Production entry points remain unchanged. Removing that
+unused watcher closure removes the unpatched `braces` advisory rather than
+adding a suppression. The existing full high-severity audit, service suites and
+Node 24 runtime contracts remain required.
 
 ## Update and release flow
 

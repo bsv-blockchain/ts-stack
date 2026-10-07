@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.14.5'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+version: '2.14.6'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -399,3 +399,14 @@ See `packages/wallet/wallet-toolbox-examples/src/p2pkh.ts`, `brc29.ts`, `pushdro
 - [Wallet toolbox examples](./wallet-toolbox-examples.md)
 - [Conformance vectors](../../conformance/vectors.md#wallet-brc-100)
 - [Managed-change liquidity policy](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/docs/managed-change-liquidity.md)
+
+## Faucet output authorization
+
+The source candidate adds exact completed-action binding for independently
+validated local storage fees and change. The SDK capability marker is
+`completeBoundAction.outputAuthorizationVersion=1`; upgrade the wallet and SDK together.
+Existing SDK2 peers retain strict behavior. The separate SDK3 migration still
+applies; SDK2 consumers need an additive backport or that migration. Serialized
+wallet results do not carry local authority. The fee fix does not change signup
+persistence or interrupted-funding reconciliation. See the package README and
+[release and migration ledger](../../reference/package-api-migrations.md).

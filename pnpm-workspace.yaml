@@ -61,9 +61,19 @@ overrides:
   # by GHSA-r5fr-rjxr-66jc (_.template imports key-name code injection). Select
   # the patched release already used elsewhere in the graph; the API is unchanged.
   lodash-es@<4.18.0: 4.18.1
+  # Preserve Metro's existing Picomatch matcher while removing the unused braces closure.
+  'metro-file-map@0.87.1>micromatch': '-'
 strictDepBuilds: true
 trustPolicy: no-downgrade
 # Apply provenance downgrade checks to the recent supply-chain window. Older
 # packages predate consistent registry attestations and otherwise create known
 # false positives (for example chokidar 4.0.3 in pnpm's own documentation).
 trustPolicyIgnoreAfter: 525600
+
+# Temporary exact-version repair; retire patch, extension and removal together.
+packageExtensions:
+  'metro-file-map@0.87.1':
+    dependencies:
+      picomatch: 2.3.2
+patchedDependencies:
+  'metro-file-map@0.87.1': patches/metro-file-map@0.87.1.patch

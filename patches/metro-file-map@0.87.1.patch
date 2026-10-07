@@ -1,0 +1,82 @@
+diff --git a/src/watchers/common.js b/src/watchers/common.js
+--- a/src/watchers/common.js
+@@ -11,7 +11,7 @@
+ exports.includedByGlob = includedByGlob;
+ exports.posixPathMatchesPattern = void 0;
+ exports.typeFromStat = typeFromStat;
+-var _micromatch = _interopRequireDefault(require("micromatch"));
++var _picomatch = _interopRequireDefault(require("picomatch"));
+ var _nodePath = _interopRequireDefault(require("node:path"));
+ function _interopRequireDefault(e) {
+   return e && e.__esModule ? e : { default: e };
+@@ -20,11 +20,21 @@
+ const TOUCH_EVENT = (exports.TOUCH_EVENT = "touch");
+ const RECRAWL_EVENT = (exports.RECRAWL_EVENT = "recrawl");
+ const ALL_EVENT = (exports.ALL_EVENT = "all");
++// Keep Metro's matching semantics using micromatch.some's existing matcher.
++// The unused brace expansion package is excluded from this build-tool closure.
++function matchesAny(relativePath, patterns, options) {
++  for (const pattern of typeof patterns === "string" ? [patterns] : patterns) {
++    if (_picomatch.default(String(pattern), options)(relativePath)) {
++      return true;
++    }
++  }
++  return false;
++}
+ function includedByGlob(type, globs, dot, relativePath) {
+   if (globs.length === 0 || type !== "f") {
+-    return dot || _micromatch.default.some(relativePath, "**/*");
++    return dot || matchesAny(relativePath, "**/*");
+   }
+-  return _micromatch.default.some(relativePath, globs, {
++  return matchesAny(relativePath, globs, {
+     dot,
+   });
+ }
+diff --git a/src/watchers/common.js.flow b/src/watchers/common.js.flow
+--- a/src/watchers/common.js.flow
+@@ -17,8 +17,8 @@
+ import type {ChangeEventMetadata} from '../flow-types';
+ import type {Stats} from 'node:fs';
+ 
+-// $FlowFixMe[untyped-import] - Write libdefs for `micromatch`
+-import micromatch from 'micromatch';
++// $FlowFixMe[untyped-import] - Write libdefs for `picomatch`
++import picomatch from 'picomatch';
+ import path from 'node:path';
+ 
+ /**
+@@ -38,6 +38,21 @@
+   watchmanPath?: string,
+ }>;
+ 
++// Keep Metro's matching semantics using micromatch.some's existing matcher.
++// The unused brace expansion package is excluded from this build-tool closure.
++function matchesAny(
++  relativePath: string,
++  patterns: string | ReadonlyArray<string>,
++  options?: Readonly<{dot?: boolean}>,
++): boolean {
++  for (const pattern of typeof patterns === 'string' ? [patterns] : patterns) {
++    if (picomatch(String(pattern), options)(relativePath)) {
++      return true;
++    }
++  }
++  return false;
++}
++
+ /**
+  * Checks a file relative path against the globs array.
+  */
+@@ -50,9 +65,9 @@
+   // For non-regular files or if there are no glob matchers, just respect the
+   // `dot` option to filter dotfiles if dot === false.
+   if (globs.length === 0 || type !== 'f') {
+-    return dot || micromatch.some(relativePath, '**/*');
++    return dot || matchesAny(relativePath, '**/*');
+   }
+-  return micromatch.some(relativePath, globs, {dot});
++  return matchesAny(relativePath, globs, {dot});
+ }
+ 
+ /**

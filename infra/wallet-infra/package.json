@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wallet-infra",
   "private": true,
-  "version": "2.0.48",
+  "version": "2.0.50",
   "overrides": {
     "gaxios": "7.3.0"
   },
@@ -56,9 +56,9 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
-    "@bsv/payment-express-middleware": "^2.1.8",
-    "@bsv/sdk": "^2.8.11",
-    "@bsv/wallet-toolbox": "^2.14.4",
+    "@bsv/payment-express-middleware": "^2.1.9",
+    "@bsv/sdk": "^3.1.0",
+    "@bsv/wallet-toolbox": "^2.14.6",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.222.0",
     "@opentelemetry/auto-instrumentations-node": "^0.80.0",
