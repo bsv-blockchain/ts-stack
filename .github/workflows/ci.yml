@@ -336,7 +336,7 @@ jobs:
               [{id:"packages-1",shard:1,total:2,application:0},{id:"packages-2",shard:2,total:2,application:0}]
               elif ($other | length) == 1 then [{id:"packages-1",shard:1,total:1,application:0}]
               else [] end) + (if $all | index("@bsv/output-knowledge") then
-              [{id:"application-1",shard:1,total:2,application:1},{id:"application-2",shard:2,total:2,application:2}]
+              [range(1;5) as $shard | {id:("application-" + ($shard | tostring)),shard:$shard,total:4,application:$shard}]
               else [] end))}' <<<"$COVERAGE_OTHER_PACKAGES")
           echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
           BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \

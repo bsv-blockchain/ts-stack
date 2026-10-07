@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.4'
+version: '1.8.5'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -146,11 +146,11 @@ pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
 
-The application output-knowledge coverage suite uses two isolated Jest shards
+The application output-knowledge coverage suite uses four isolated serial Jest shards
 within the existing coverage matrix. Each retains the original complete discovery,
 serial native worker, property cases and per-test deadlines. Its ordinary local
 `test:coverage` command remains a single complete run with the original global
-thresholds. CI requires both shards, then independently discovers the complete
+thresholds. CI requires all four shards, then independently discovers the complete
 suite again and checks a disjoint, exact execution union. Failed, missing, pending,
 todo or skipped tests and mismatched source, run, attempt or configuration fail
 qualification. The aggregate merges the complete Istanbul maps and applies all four

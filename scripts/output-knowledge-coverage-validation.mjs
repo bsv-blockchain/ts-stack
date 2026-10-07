@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url'
 const packageDirectory = fileURLToPath(
   new URL('../packages/application/output-knowledge/', import.meta.url)
 )
-const shardCount = 2
+export const APPLICATION_COVERAGE_SHARDS = 4
+const shardCount = APPLICATION_COVERAGE_SHARDS
 
 // Preserve ECMAScript's UTF-16 code-unit order across runner locales.
 export function compareCoveragePaths(left, right) {
@@ -55,13 +56,18 @@ export function assertCompleteResults(results, selected, directory = packageDire
 }
 
 export function validateShardUnion(shards, identity, expected) {
-  assert.equal(shards.length, shardCount, 'both same-run shards are required')
+  assert.equal(shards.length, shardCount, 'all same-run shards are required')
   const selected = []
   const ids = new Set()
   for (const { manifest, results } of shards) {
     assert.deepEqual(manifest.identity, identity, 'different run, attempt, source or configuration')
     assert.equal(manifest.total, shardCount)
-    assert.ok([1, 2].includes(manifest.shard) && !ids.has(manifest.shard))
+    assert.ok(
+      Number.isSafeInteger(manifest.shard) &&
+        manifest.shard >= 1 &&
+        manifest.shard <= shardCount &&
+        !ids.has(manifest.shard)
+    )
     ids.add(manifest.shard)
     assert.deepEqual(manifest.allTests, expected)
     assertCompleteResults(results, manifest.selectedTests)

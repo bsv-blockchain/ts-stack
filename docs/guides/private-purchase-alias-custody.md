@@ -2,7 +2,7 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.4'
+version: '0.1.5'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -188,6 +188,11 @@ original grant. The report never enters the immutable result payload or signed
 release-evidence digest.
 
 ## Let the buyer assess its own currentness
+
+A free recovery request still authenticates its recipient. A cold authenticated
+transport first exchanges the BRC authentication handshake, then sends exactly one
+recovery request. That handshake is separate from the application request and
+does not authorize a payment, a new wallet action or another private issuance.
 
 `PrivatePurchaseBuyerAliasCurrentness` authenticates the original seller and terms,
 uses the buyer's independently retained full purchase binding, asks the installed

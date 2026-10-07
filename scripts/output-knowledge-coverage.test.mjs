@@ -3,6 +3,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
+  APPLICATION_COVERAGE_SHARDS,
   compareCoveragePaths,
   validateShardUnion
 } from './output-knowledge-coverage-validation.mjs'
@@ -11,7 +12,7 @@ const directory = fileURLToPath(
   new URL('../packages/application/output-knowledge/', import.meta.url)
 )
 const identity = { sha: 'a'.repeat(40), run: '1', attempt: '1', configuration: 'b'.repeat(64) }
-const expected = ['test/a.test.ts', 'test/b.test.ts']
+const expected = ['test/a.test.ts', 'test/b.test.ts', 'test/c.test.ts', 'test/d.test.ts']
 
 test('canonical path ordering retains deterministic code units and the original input array', () => {
   const input = ['é', 'a', '😀', 'A', '_', '-']
@@ -28,7 +29,7 @@ function evidence() {
     manifest: {
       identity: structuredClone(identity),
       shard: index + 1,
-      total: 2,
+      total: APPLICATION_COVERAGE_SHARDS,
       allTests: [...expected],
       selectedTests: [name]
     },
@@ -127,5 +128,15 @@ test('failed, missing, pending, todo and unexecuted assertions cannot qualify', 
     const shards = evidence()
     mutate(shards[1].results)
     assert.throws(() => validateShardUnion(shards, identity, expected))
+  }
+})
+
+test('a missing or relabeled fourth shard cannot qualify a complete campaign', () => {
+  const missing = evidence().slice(0, -1)
+  assert.throws(() => validateShardUnion(missing, identity, expected))
+  for (const id of [0, 5, 1.5, '4', NaN]) {
+    const changed = evidence()
+    changed.at(-1).manifest.shard = id
+    assert.throws(() => validateShardUnion(changed, identity, expected))
   }
 })

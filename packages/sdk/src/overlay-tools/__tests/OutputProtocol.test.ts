@@ -729,4 +729,51 @@ describe('BRC-192 representation boundary', () => {
     ).toBe(false)
     expect(() => outputIdentity('02' + 'ff'.repeat(32))).toThrow()
   })
+
+  it('captures partial limits once and rejects every invalid supplied override', () => {
+    let reads = 0
+    const limits = Object.defineProperty({}, 'bytes', {
+      enumerable: true,
+      get() {
+        reads++
+        return 4
+      }
+    })
+    expect(parseOutputJSON('"é"', limits)).toBe('é')
+    expect(reads).toBe(1)
+    expect(canonicalOutputJSON('é', limits)).toBe('"é"')
+    expect(reads).toBe(2)
+    expect(inspectOutputJSONEncoding('"é"', limits).canonical).toBe(true)
+    expect(reads).toBe(3)
+    for (const invalid of [
+      { bytes: undefined },
+      { depth: null },
+      { bytes: 0 },
+      { bytes: OUTPUT_JSON_LIMITS.bytes + 1 },
+      { arrayElements: 4097 },
+      { mapKeys: 257 },
+      { depth: 33 },
+      { bytes: 4, unexpected: 1 }
+    ])
+      expect(() => parseOutputJSON('"é"', invalid as never)).toThrow(
+        'Invalid output JSON resource limit'
+      )
+  })
+
+  it('keeps the exact object colon byte boundary ahead of value refusal', () => {
+    expect(() => canonicalOutputJSON({ a: undefined }, { bytes: 4 })).toThrow(
+      'Output JSON byte limit'
+    )
+    expect(() => canonicalOutputJSON({ a: undefined }, { bytes: 5 })).toThrow(
+      'Expected a JSON value'
+    )
+    expect(() => canonicalOutputJSON({ é: undefined }, { bytes: 5 })).toThrow(
+      'Output JSON byte limit'
+    )
+    expect(() => canonicalOutputJSON({ é: undefined }, { bytes: 6 })).toThrow(
+      'Expected a JSON value'
+    )
+    expect(canonicalOutputJSON({ a: 0 }, { bytes: 7 })).toBe('{"a":0}')
+    expect(() => canonicalOutputJSON({ a: 0 }, { bytes: 6 })).toThrow('Output JSON byte limit')
+  })
 })

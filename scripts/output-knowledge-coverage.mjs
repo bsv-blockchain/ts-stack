@@ -11,6 +11,7 @@ import reportLibrary from 'istanbul-lib-report'
 import reports from 'istanbul-reports'
 import config from '../packages/application/output-knowledge/jest.coverage.config.js'
 import {
+  APPLICATION_COVERAGE_SHARDS,
   compareCoveragePaths,
   relativeTests,
   assertCompleteResults,
@@ -88,17 +89,24 @@ function jest(arguments_, capture = false) {
 
 function inventory(shard) {
   return relativeTests(
-    jest(['--listTests', '--json', ...(shard ? [`--shard=${shard}/2`] : [])], true)
+    jest(
+      [
+        '--listTests',
+        '--json',
+        ...(shard ? [`--shard=${shard}/${APPLICATION_COVERAGE_SHARDS}`] : [])
+      ],
+      true
+    )
   )
 }
 
 function collect(shard, output) {
-  assert.ok([1, 2].includes(shard))
+  assert.ok(Number.isSafeInteger(shard) && shard >= 1 && shard <= APPLICATION_COVERAGE_SHARDS)
   mkdirSync(output, { recursive: true })
   const manifest = {
     identity: identity(),
     shard,
-    total: 2,
+    total: APPLICATION_COVERAGE_SHARDS,
     allTests: inventory(),
     selectedTests: inventory(shard)
   }
@@ -110,7 +118,7 @@ function collect(shard, output) {
     '--coverageThreshold={}',
     '--coverageReporters=json',
     `--coverageDirectory=${output}`,
-    `--shard=${shard}/2`,
+    `--shard=${shard}/${APPLICATION_COVERAGE_SHARDS}`,
     '--json',
     `--outputFile=${path.join(output, 'results.json')}`
   ])
@@ -119,20 +127,22 @@ function collect(shard, output) {
     manifest.selectedTests
   )
   console.log(
-    `Complete application coverage shard ${shard}/2: ${manifest.selectedTests.length} suites`
+    `Complete application coverage shard ${shard}/${APPLICATION_COVERAGE_SHARDS}: ${manifest.selectedTests.length} suites`
   )
 }
 
 function aggregate(input, output) {
-  const shards = [1, 2].map(shard => {
-    const directory = path.join(input, `shard-${shard}`)
-    const read = file => JSON.parse(readFileSync(path.join(directory, file)))
-    return {
-      manifest: read('manifest.json'),
-      results: read('results.json'),
-      coverage: read('coverage-final.json')
+  const shards = Array.from({ length: APPLICATION_COVERAGE_SHARDS }, (_, index) => index + 1).map(
+    shard => {
+      const directory = path.join(input, `shard-${shard}`)
+      const read = file => JSON.parse(readFileSync(path.join(directory, file)))
+      return {
+        manifest: read('manifest.json'),
+        results: read('results.json'),
+        coverage: read('coverage-final.json')
+      }
     }
-  })
+  )
   const expected = inventory()
   validateShardUnion(shards, identity(), expected)
   const map = mergeCoverage(shards)
@@ -157,7 +167,10 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
       collect(Number(argument), path.resolve(destination))
     else if (command === 'aggregate' && argument && destination)
       aggregate(path.resolve(argument), path.resolve(destination))
-    else throw new Error('Use collect <1|2> <output> or aggregate <input> <output>')
+    else
+      throw new Error(
+        `Use collect <1..${APPLICATION_COVERAGE_SHARDS}> <output> or aggregate <input> <output>`
+      )
   } catch (error) {
     console.error(error)
     process.exitCode = 1

@@ -7,6 +7,7 @@ import test from 'node:test'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import { partitionedMutationTargets } from './mutation-partitions.mjs'
+import { APPLICATION_COVERAGE_SHARDS } from './output-knowledge-coverage-validation.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
@@ -191,9 +192,15 @@ test('application coverage shards retain the complete selection and a required m
     const application = rows.filter(row => row.application !== 0)
     assert.deepEqual(
       application.map(row => row.application),
-      selected.includes('@bsv/output-knowledge') ? [1, 2] : []
+      selected.includes('@bsv/output-knowledge')
+        ? Array.from({ length: APPLICATION_COVERAGE_SHARDS }, (_, index) => index + 1)
+        : []
     )
-    assert.ok(application.every(row => row.total === 2 && row.shard === row.application))
+    assert.ok(
+      application.every(
+        row => row.total === APPLICATION_COVERAGE_SHARDS && row.shard === row.application
+      )
+    )
     const other = selected.filter(name => name !== '@bsv/output-knowledge')
     const packageRows = rows.filter(row => row.application === 0)
     const union = packageRows.flatMap(row =>

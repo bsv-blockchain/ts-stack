@@ -30,19 +30,21 @@ export function isOutputPlainObject(value: object): boolean {
 
 function limitsFor(limits: Partial<OutputJSONLimits>): OutputJSONLimits {
   // The default is already immutable and validated by its fixed declaration.
-  // Custom limits still pass every original resource check below.
+  // Capture and validate every supplied override once; immutable omitted
+  // defaults do not need to be revalidated for every record.
   if (limits === OUTPUT_JSON_LIMITS) return OUTPUT_JSON_LIMITS
-  const result = { ...OUTPUT_JSON_LIMITS, ...limits }
+  const result = { ...limits }
   for (const key of Object.keys(result) as (keyof OutputJSONLimits)[]) {
+    const value = result[key] ?? NaN
     outputAssert(
       Object.hasOwn(OUTPUT_JSON_LIMITS, key) &&
-        Number.isSafeInteger(result[key]) &&
-        result[key] > 0 &&
-        result[key] <= OUTPUT_JSON_LIMITS[key],
+        Number.isSafeInteger(value) &&
+        value > 0 &&
+        value <= OUTPUT_JSON_LIMITS[key],
       'Invalid output JSON resource limit'
     )
   }
-  return result
+  return { ...OUTPUT_JSON_LIMITS, ...result }
 }
 
 function wellFormed(value: string): void {
@@ -60,7 +62,7 @@ export function parseOutputJSON(
   input: Uint8Array | string,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): OutputJSON {
-  const { source, bounds } = outputJSONSource(input, limits)
+  const [source, bounds] = outputJSONSource(input, limits)
   return new OutputJSONParser(source, bounds).parse()
 }
 
@@ -71,11 +73,11 @@ export function inspectOutputJSONEncoding(
   input: Uint8Array | string,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): { value: OutputJSON; canonical: boolean } {
-  const { source, bounds, bytes } = outputJSONSource(input, limits),
+  const [source, bounds, bytes] = outputJSONSource(input, limits),
     // Count the decoded UTF-8 for byte inputs independently of overridable
     // byteLength properties, matching serialization of the parsed value.
     originalBytes = typeof input === 'string' ? bytes : encoder.encode(source).length,
-    encoding = { canonical: true, bytes: originalBytes },
+    encoding = new OutputJSONEncodingInspection(originalBytes),
     value = new OutputJSONParser(source, bounds, encoding).parse()
   // Parse every syntax/Unicode/duplicate/depth/item boundary first, as before.
   outputAssert(
@@ -89,7 +91,7 @@ export function inspectOutputJSONEncoding(
 function outputJSONSource(
   input: Uint8Array | string,
   limits: Partial<OutputJSONLimits>
-): { source: string; bounds: OutputJSONLimits; bytes: number } {
+): [source: string, bounds: OutputJSONLimits, bytes: number] {
   const bounds = limitsFor(limits)
   let source: string, bytes: number
   if (typeof input === 'string') {
@@ -109,7 +111,45 @@ function outputJSONSource(
     }
   }
   outputAssert(source.codePointAt(0) !== 0xfeff, 'JSON BOM is not permitted')
-  return { source, bounds, bytes }
+  return [source, bounds, bytes]
+}
+
+/** Internal optional observer; ordinary parser consumers do not retain the
+ * inspection implementation in their bundles. Each inspection owns its state. */
+interface OutputJSONEncodingObserver {
+  whitespace(): void
+  string(source: string, decoded: string): void
+  value(source: string, value: null | boolean | number): void
+  key(previous: string | undefined, key: string): void
+}
+
+class OutputJSONEncodingInspection implements OutputJSONEncodingObserver {
+  canonical = true
+
+  constructor(public bytes: number) {}
+
+  whitespace(): void {
+    this.canonical = false
+    this.bytes--
+  }
+
+  string(source: string, decoded: string): void {
+    if (!source.includes('\\')) return
+    const canonical = JSON.stringify(decoded)
+    this.canonical &&= canonical === source
+    this.bytes += encoder.encode(canonical).length - encoder.encode(source).length
+  }
+
+  value(source: string, value: null | boolean | number): void {
+    if (typeof value !== 'number') return
+    const canonical = JSON.stringify(value)
+    this.canonical &&= canonical === source
+    this.bytes += canonical.length - source.length
+  }
+
+  key(previous: string | undefined, key: string): void {
+    this.canonical &&= previous === undefined || previous < key
+  }
 }
 
 class OutputJSONParser {
@@ -118,7 +158,7 @@ class OutputJSONParser {
   constructor(
     private readonly source: string,
     private readonly bounds: OutputJSONLimits,
-    private readonly encoding?: { canonical: boolean; bytes: number }
+    private readonly encoding?: OutputJSONEncodingObserver
   ) {}
 
   parse(): OutputJSON {
@@ -131,31 +171,13 @@ class OutputJSONParser {
   private whitespace(): void {
     while (' \r\n\t'.includes(this.source[this.offset] ?? '\0')) {
       this.offset++
-      if (this.encoding) {
-        this.encoding.canonical = false
-        this.encoding.bytes--
-      }
+      this.encoding?.whitespace()
     }
-  }
-
-  private encodedString(source: string, decoded: string, escaped: boolean): void {
-    if (!this.encoding || !escaped) return
-    const canonical = JSON.stringify(decoded)
-    this.encoding.canonical &&= canonical === source
-    this.encoding.bytes += encoder.encode(canonical).length - encoder.encode(source).length
-  }
-
-  private encodedNumber(source: string, value: number): void {
-    if (!this.encoding) return
-    const canonical = JSON.stringify(value)
-    this.encoding.canonical &&= canonical === source
-    this.encoding.bytes += canonical.length - source.length
   }
 
   private string(): string {
     outputAssert(this.source[this.offset] === '"', 'Expected JSON string')
     const start = this.offset++
-    let escaped = false
     // A backslash skips exactly one following UTF-16 code unit.
     // JSON.parse still validates every escape/control;
     // the decoded Unicode check and duplicate-key checks remain independent.
@@ -167,7 +189,6 @@ class OutputJSONParser {
       match = delimiters.exec(this.source)
     ) {
       if (match[0] === '\\') {
-        escaped = true
         delimiters.lastIndex = match.index + 2
         continue
       }
@@ -180,7 +201,7 @@ class OutputJSONParser {
         throw new OutputProtocolError('invalid', 'Malformed JSON string')
       }
       wellFormed(decoded)
-      this.encodedString(encoded, decoded, escaped)
+      this.encoding?.string(encoded, decoded)
       return decoded
     }
     this.offset = this.source.length
@@ -203,10 +224,8 @@ class OutputJSONParser {
       const key = this.string()
       outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
       outputAssert(fields.size < this.bounds.mapKeys, 'JSON map limit', 'limited')
-      if (this.encoding) {
-        this.encoding.canonical &&= previous === undefined || previous < key
-        previous = key
-      }
+      this.encoding?.key(previous, key)
+      previous = key
       this.whitespace()
       outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
       fields.set(key, this.value(depth + 1))
@@ -257,7 +276,7 @@ class OutputJSONParser {
           typeof result !== 'number' || Number.isSafeInteger(result),
           'Protocol numbers must be safe integers'
         )
-        if (typeof result === 'number') this.encodedNumber(token, result)
+        this.encoding?.value(token, result as null | boolean | number)
         return result as null | boolean | number
       }
     }
@@ -282,14 +301,14 @@ export function canonicalOutputJSON(
     outputAssert(bytes <= bounds.bytes, 'Output JSON byte limit', 'limited')
     chunks.push(chunk)
   }
-  function string(text: string): void {
+  function string(text: string, suffix = ''): void {
     outputAssert(text.length <= bounds.bytes, 'Output JSON byte limit', 'limited')
     wellFormed(text)
     // Valid unescaped ASCII has identical JSON and UTF-8 code-unit lengths.
     // Escaped/control/Unicode strings retain native escaping and byte counting.
     if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(text)) {
-      emit('"' + text + '"', true)
-    } else emit(JSON.stringify(text))
+      emit('"' + text + '"' + suffix, true)
+    } else emit(JSON.stringify(text) + suffix)
   }
   function array(node: unknown[], depth: number): void {
     outputAssert(node.length <= bounds.arrayElements, 'JSON array limit', 'limited')
@@ -310,19 +329,16 @@ export function canonicalOutputJSON(
   function object(node: object, depth: number): void {
     outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
     // RFC 8785 orders property names by UTF-16 code units, never locale rules.
-    const keys = Object.getOwnPropertyNames(node).sort((a, b) => {
-      if (a < b) return -1
-      if (a > b) return 1
-      return 0
-    })
+    const keys = Object.getOwnPropertyNames(node).sort()
     outputAssert(keys.length <= bounds.mapKeys, 'JSON map limit', 'limited')
     emit('{', true)
     keys.forEach((key, index) => {
       const descriptor = Object.getOwnPropertyDescriptor(node, key)
       outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
       if (index > 0) emit(',', true)
-      string(key)
-      emit(':', true)
+      // The colon is the next byte before visiting the value. One emission
+      // retains the same byte-limit refusal before any value validation.
+      string(key, ':')
       visit(descriptor.value, depth + 1)
     })
     emit('}', true)

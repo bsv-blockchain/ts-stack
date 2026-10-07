@@ -249,7 +249,10 @@ it('admits a distinct valid raw transaction with the same full purchase commitme
     expect(report.height).toBe('102')
     expect(report.tipHeight).toBe('102')
     expect(() => report.placement.checkCurrent()).not.toThrow()
-    expect(f.requests.slice(requests)).toHaveLength(1)
+    expect(f.requests.slice(requests)).toEqual([
+      '/.well-known/auth',
+      '/api/overlay/v1/purchases/recover'
+    ])
     expect(f.requests.at(-1)).toContain('/recover')
     expect(await owner.state.read()).toEqual(saved)
     expect(historical(await owner.buyer.usableResult())).toBe(historical(delivered))
