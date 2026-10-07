@@ -6279,3 +6279,50 @@ and zero unreviewed hotspots; conformance, code generation and container
 contracts also pass. Its pending/terminal runtime receipts do not qualify this
 correction. Fresh complete source/root/bundle and exact-head hosted qualification
 remain necessary before the full151/398 campaign and Checkpoint2 readiness.
+
+## October 7: private serialization frames and current qualification
+
+Published `02df37c9103815dfb9f5c4e3de14b0bb5d811312` restores complete nested
+canonical ownership and passes all262 SDK suites/8550 tests. Application
+partitions2,3 and4 pass64/986,63/930 and63/968 respectively; current private
+HTTP tests pass53/889, and documentation consumers pass81 examples against24
+exact tarballs. Strict Sonar has zero active issues and unreviewed hotspots.
+Actual CodeQL analyses bind mergea3c7f57f3bb48e8a568dc24f57dda59397b0a318,
+whose tree equals that head, with reviewed-main/head parents, no analysis errors
+and zero open PR-ref alerts. The complete CI run37597237601 remains unsuccessful:
+the original disclosure property interrupts after226/300 under its unchanged
+150-second control, with no reported counterexample. The full151-target,
+398-execution mutation campaign remains unqualified.
+
+Fresh bounded diagnostics preserve source, runtime, selectors, counts, seed,
+case/deadline controls, clear producer/reader guards and drained groups.
+Disclosure and coordinator diagnostics interrupt after198/300 and215/300.
+All four native HTTP diagnostic cases exit0; two negative timing deltas and
+four reordered samples exclude that native function timing from analysis.
+Diagnostics do not replace ordinary functional or campaign qualification.
+Disclosure attributes about38 seconds inclusively to canonical serialization;
+these overlapping samples identify a cost and do not prove an improvement.
+
+The next candidate shares serializer method code using one fresh true-private
+frame per invocation. Chunks, ancestor set, byte count and bounds remain local
+to that frame; no callback receives it. Every existing descriptor, prototype,
+symbol, cycle, Unicode, integer, traversal, depth, map, array and byte check
+retains its original evaluation point. A private assertion shares only frozen
+refusal strings and creates the same error on a fresh failed predicate. Safe
+integers have magnitude below1e21 and no fractional part, so String and native
+JSON encoding produce identical decimal text, including negative zero as0.
+Encoding inspection applies that fact only after the existing parser integer
+check. A private shared walker applies the original array/record traversal and
+null-prototype effects solely to each newly parsed, fully validated canonical
+copy; it returns that same fresh value without retaining call state.
+
+Two appended independent unit cases exercise reentrant descriptor inspection,
+failed-call isolation, literal integer/zero boundaries and competing refusals.
+All141 original property files and the whole original protocol-unit prefix
+remain unchanged. Public SDK entries and schema source/tests are unchanged.
+Source AST comparison independently expands every shared refusal and preserves
+all13 original resource predicates, messages and order, plus the emit, string,
+array and object method bodies after private-state naming. The original browser
+ceilings remain enforced. Complete final-source compilation, root controls,
+untrimmed canonical inventory, exact-head hosted functionality/analyzers and
+the full151/398 campaign are still required before Checkpoint2 readiness.

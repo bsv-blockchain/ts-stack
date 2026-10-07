@@ -445,6 +445,15 @@ wallet-derived locking key, and field signature before reading or spending it.
   enumerable own data fields, including keys that resemble object builtins.
   Parsing and canonical encoding enforce the same explicit byte and structural
   bounds; callers still validate each endpoint's closed schema.
+  Canonical serialization creates a new private frame for each call, sharing
+  method code rather than allocating mutually captured closures. Reentrant
+  descriptor inspection and failed calls cannot reuse another frame's chunks,
+  byte counter, bounds or ancestor set. Resource assertions retain their exact
+  predicates and refusal messages. Validated safe integers use the same decimal
+  text, including conversion of negative zero to zero. Ownership normalizes only
+  each fresh bounded native JSON copy with a private shared walker; it retains
+  no value or result between calls.
+
   String tokens are bounded before decoding. Escaped strings and raw controls
   receive native JSON syntax validation; unescaped strings are copied directly
   after token recognition. Both paths retain Unicode validation, duplicate-key

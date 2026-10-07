@@ -962,3 +962,61 @@ describe('bounded protocol string validation', () => {
       )
   })
 })
+
+describe('fresh canonical serializer state', () => {
+  it('isolates reentrant descriptor inspection and a failed call from the current frame', () => {
+    const visits: string[] = []
+    const value = new Proxy(
+      { z: -0, a: [1, 'é'] },
+      {
+        getOwnPropertyDescriptor(target, key) {
+          visits.push(String(key))
+          expect(canonicalOutputJSON({ ['10']: 10, ['2']: 2 })).toBe('{"10":10,"2":2}')
+          expect(() => canonicalOutputJSON([1, 2], { arrayElements: 1 })).toThrow(
+            'JSON array limit'
+          )
+          return Reflect.getOwnPropertyDescriptor(target, key)
+        }
+      }
+    )
+    const expected = '{"a":[1,"é"],"z":0}'
+    const bytes = Buffer.byteLength(expected, 'utf8')
+    expect(canonicalOutputJSON(value, { bytes })).toBe(expected)
+    expect(visits).toEqual(['a', 'z'])
+    visits.length = 0
+    expect(() => canonicalOutputJSON(value, { bytes: bytes - 1 })).toThrow(
+      expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+    )
+    expect(canonicalOutputJSON(value, { bytes })).toBe(expected)
+    expect(canonicalOutputJSON([true, null, -0])).toBe('[true,null,0]')
+  })
+})
+
+describe('integer canonical text', () => {
+  it('retains independent decimal boundary, zero and refusal literals', () => {
+    const cases: [number, string][] = [
+      [0, '0'],
+      [-0, '0'],
+      [1, '1'],
+      [-1, '-1'],
+      [1000000000000000, '1000000000000000'],
+      [9007199254740991, '9007199254740991'],
+      [-9007199254740991, '-9007199254740991']
+    ]
+    for (const [value, expected] of cases) {
+      expect(canonicalOutputJSON(value)).toBe(expected)
+      expect(inspectOutputJSONEncoding(expected)).toMatchObject({ canonical: true })
+      expect(inspectOutputJSONEncoding(' ' + expected)).toMatchObject({ canonical: false })
+    }
+    for (const value of [NaN, Infinity, -Infinity, 0.5, 9007199254740992, -9007199254740992, 1e21])
+      expect(() => canonicalOutputJSON(value, { bytes: 1 })).toThrow(
+        expect.objectContaining({
+          code: 'invalid',
+          message: 'Protocol numbers must be safe integers'
+        })
+      )
+    for (const value of [null, true, false]) expect(canonicalOutputJSON(value)).toBe(String(value))
+    expect(inspectOutputJSONEncoding('-0')).toMatchObject({ canonical: false })
+    expect(inspectOutputJSONEncoding('1e15')).toMatchObject({ canonical: false })
+  })
+})
