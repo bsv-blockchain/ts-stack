@@ -220,7 +220,8 @@ class OutputJSONParser {
   private object(depth: number): OutputJSONObject {
     this.offset++
     this.whitespace()
-    const fields = new Map<string, OutputJSON>()
+    const fields: OutputJSONObject = Object.create(null) as OutputJSONObject
+    let fieldCount = 0
     let previous: string | undefined
     if (this.source[this.offset] === '}') {
       this.offset++
@@ -228,21 +229,23 @@ class OutputJSONParser {
       for (;;) {
         this.whitespace()
         const key = this.string()
-        outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
-        outputJSONLimit(fields.size < this.bounds.mapKeys, 2)
+        outputAssert(!Object.hasOwn(fields, key), 'Duplicate decoded JSON key')
+        outputJSONLimit(fieldCount < this.bounds.mapKeys, 2)
         this.encoding?.key(previous, key)
         previous = key
         this.whitespace()
         outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-        fields.set(key, this.value(depth + 1))
+        fields[key] = this.value(depth + 1)
+        fieldCount++
         this.whitespace()
         const end = this.source[this.offset++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
-    // One finalization creates own data properties without invoking setters.
-    return Object.setPrototypeOf(Object.fromEntries(fields), null)
+    // The owned null-prototype record has no inherited setters. Duplicate keys
+    // and the field bound are checked before parsing and assigning each value.
+    return fields
   }
 
   private array(depth: number): OutputJSON[] {
@@ -304,7 +307,8 @@ export function canonicalOutputJSON(
  * shared, but no input, representation result or validation verdict is held. */
 class OutputJSONSerializer {
   #text = ''
-  readonly #ancestors = new Set<object>()
+  // Only this invocation's ancestor path; the unchanged depth limit bounds it to 32.
+  readonly #ancestors: object[] = []
   #bytes = 0
 
   readonly #bounds: OutputJSONLimits
@@ -372,22 +376,25 @@ class OutputJSONSerializer {
   }
   #visit(node: unknown, depth: number): void {
     outputJSONLimit(depth <= this.#bounds.depth, 1)
+    // String leaves retain their full fresh encoding checks.
+    if (typeof node === 'string') {
+      this.#string(node)
+      return
+    }
     const number = typeof node === 'number'
     if (node === null || typeof node === 'boolean' || number) {
       outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
       // Safe integers never use exponent notation here; both encoders map -0 to 0.
       this.#emit(String(node), true)
-    } else if (typeof node === 'string') {
-      this.#string(node)
     } else {
       // The preceding scalar branch has already handled null.
       outputAssert(typeof node === 'object', 'Expected a JSON value')
-      outputAssert(!this.#ancestors.has(node), 'Cyclic JSON value')
+      outputAssert(!this.#ancestors.includes(node), 'Cyclic JSON value')
       outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
-      this.#ancestors.add(node)
+      this.#ancestors.push(node)
       if (Array.isArray(node)) this.#array(node, depth)
       else this.#object(node, depth)
-      this.#ancestors.delete(node)
+      this.#ancestors.pop()
     }
   }
 }
