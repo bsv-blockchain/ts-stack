@@ -78,7 +78,11 @@ export function inspectOutputJSONEncoding(
     encoding = { canonical: true, bytes: originalBytes },
     value = new OutputJSONParser(source, bounds, encoding).parse()
   // Parse every syntax/Unicode/duplicate/depth/item boundary first, as before.
-  outputAssert(encoding.bytes <= bounds.bytes, 'Output JSON byte limit', 'limited')
+  outputAssert(
+    originalBytes <= bounds.bytes && encoding.bytes <= bounds.bytes,
+    'Output JSON byte limit',
+    'limited'
+  )
   return { value, canonical: encoding.canonical }
 }
 

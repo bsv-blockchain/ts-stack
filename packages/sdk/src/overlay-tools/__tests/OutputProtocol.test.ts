@@ -205,6 +205,22 @@ describe('BRC-192 representation boundary', () => {
     }
   })
 
+  it('bounds the decoded byte extent independently while retaining ordinary parser behavior and refusal ordering', () => {
+    const encoder = new TextEncoder()
+    const bytes = encoder.encode(' 0 ')
+    Object.defineProperty(bytes, 'byteLength', { value: 1 })
+    expect(parseOutputJSON(bytes, { bytes: 1 })).toBe(0)
+    expect(() => inspectOutputJSONEncoding(bytes, { bytes: 1 })).toThrow(
+      expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+    )
+    expect(inspectOutputJSONEncoding(bytes, { bytes: 3 })).toEqual({ value: 0, canonical: false })
+    const malformed = encoder.encode('[0,?]')
+    Object.defineProperty(malformed, 'byteLength', { value: 1 })
+    expect(() => inspectOutputJSONEncoding(malformed, { bytes: 1 })).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Invalid JSON token' })
+    )
+  })
+
   it('retains owned public arrays and independently hashed bytes for every digest domain', () => {
     const bodies = [
       null,
