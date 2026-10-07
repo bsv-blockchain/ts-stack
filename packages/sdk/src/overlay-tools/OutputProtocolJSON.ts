@@ -167,43 +167,47 @@ class OutputJSONEncodingInspection implements OutputJSONEncodingObserver {
 class OutputJSONParser {
   #offset = 0
 
-  constructor(
-    private readonly text: string,
-    private readonly bounds: OutputJSONLimits,
-    private readonly encoding?: OutputJSONEncodingObserver
-  ) {}
+  readonly #text: string
+  readonly #bounds: OutputJSONLimits
+  readonly #encoding?: OutputJSONEncodingObserver
+
+  constructor(text: string, bounds: OutputJSONLimits, encoding?: OutputJSONEncodingObserver) {
+    this.#text = text
+    this.#bounds = bounds
+    this.#encoding = encoding
+  }
 
   parse(): OutputJSON {
     const value = this.#value(1)
     this.#whitespace()
-    outputAssert(this.#offset === this.text.length, 'Trailing JSON data')
+    outputAssert(this.#offset === this.#text.length, 'Trailing JSON data')
     // Every value is decoded once into this private, bounded data-property graph.
     // Expose it only after complete syntax, duplicate, Unicode and resource checks.
     return value
   }
 
   #whitespace(): void {
-    while (' \r\n\t'.includes(this.text[this.#offset] ?? '\0')) {
+    while (' \r\n\t'.includes(this.#text[this.#offset] ?? '\0')) {
       this.#offset++
-      this.encoding?.whitespace()
+      this.#encoding?.whitespace()
     }
   }
 
   #string(): string {
-    outputAssert(this.text[this.#offset] === '"', 'Expected JSON string')
+    outputAssert(this.#text[this.#offset] === '"', 'Expected JSON string')
     const start = this.#offset++
     // Each quote search advances. Backslash runs preceding candidate quotes
     // cannot overlap, so even malformed tokens require only linear work.
     // Native decoding still validates all escapes and raw controls.
     let end = start
-    while ((end = this.text.indexOf('"', end + 1)) >= 0) {
+    while ((end = this.#text.indexOf('"', end + 1)) >= 0) {
       let backslashStart = end
-      while (backslashStart > start && this.text[backslashStart - 1] === '\\') backslashStart--
+      while (backslashStart > start && this.#text[backslashStart - 1] === '\\') backslashStart--
       if ((end - backslashStart) % 2 === 0) break
     }
-    this.#offset = end < 0 ? this.text.length : end + 1
+    this.#offset = end < 0 ? this.#text.length : end + 1
     outputAssert(end >= 0, 'Unterminated JSON string')
-    const encoded = this.text.slice(start, this.#offset)
+    const encoded = this.#text.slice(start, this.#offset)
     // Fresh text validation already proves unescaped Unicode well-formed;
     // ASCII quote boundaries cannot split a pair. Only decoding escapes can
     // introduce a lone surrogate or change canonical string representation.
@@ -215,61 +219,59 @@ class OutputJSONParser {
       throw new OutputProtocolError('invalid', 'Malformed JSON string')
     }
     wellFormed(decoded)
-    this.encoding?.string(encoded, decoded)
+    this.#encoding?.string(encoded, decoded)
     return decoded
   }
 
   #object(depth: number): OutputJSONObject {
     this.#offset++
     this.#whitespace()
-    const fields: OutputJSONObject = Object.create(null) as OutputJSONObject
-    let count = 0
+    const fields = new Map<string, OutputJSON>()
     let previous: string | undefined
-    if (this.text[this.#offset] === '}') {
+    if (this.#text[this.#offset] === '}') {
       this.#offset++
     } else {
       for (;;) {
         this.#whitespace()
         const key = this.#string()
-        outputAssert(!Object.hasOwn(fields, key), 'Duplicate decoded JSON key')
-        outputJSONLimit(count < this.bounds.mapKeys, 2)
-        this.encoding?.key(previous, key)
+        outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
+        outputJSONLimit(fields.size < this.#bounds.mapKeys, 2)
+        this.#encoding?.key(previous, key)
         previous = key
         this.#whitespace()
-        outputAssert(this.text[this.#offset++] === ':', 'Expected JSON colon')
-        fields[key] = this.#value(depth + 1)
-        count++
+        outputAssert(this.#text[this.#offset++] === ':', 'Expected JSON colon')
+        fields.set(key, this.#value(depth + 1))
         this.#whitespace()
-        const end = this.text[this.#offset++]
+        const end = this.#text[this.#offset++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
-    return fields
+    return ownedOutputJSONRecord(fields)
   }
 
   #array(depth: number): OutputJSON[] {
     this.#offset++
     this.#whitespace()
-    const values: OutputJSON[] = []
-    if (this.text[this.#offset] === ']') {
+    const values = new Map<number, OutputJSON>()
+    if (this.#text[this.#offset] === ']') {
       this.#offset++
-      return values
+      return Array.from(values.values())
     }
     for (;;) {
-      outputJSONLimit(values.length < this.bounds.arrayElements, 3)
-      appendOutputJSONElement(values, this.#value(depth + 1))
+      outputJSONLimit(values.size < this.#bounds.arrayElements, 3)
+      values.set(values.size, this.#value(depth + 1))
       this.#whitespace()
-      const end = this.text[this.#offset++]
-      if (end === ']') return values
+      const end = this.#text[this.#offset++]
+      if (end === ']') return Array.from(values.values())
       outputAssert(end === ',', 'Expected JSON array separator')
     }
   }
 
   #value(depth: number): OutputJSON {
-    outputJSONLimit(depth <= this.bounds.depth, 1)
+    outputJSONLimit(depth <= this.#bounds.depth, 1)
     this.#whitespace()
-    switch (this.text[this.#offset]) {
+    switch (this.#text[this.#offset]) {
       case '"':
         return this.#string()
       case '{':
@@ -277,7 +279,7 @@ class OutputJSONParser {
       case '[':
         return this.#array(depth)
       default: {
-        const rest = this.text.slice(this.#offset)
+        const rest = this.#text.slice(this.#offset)
         const token =
           /^(?:true|false|null)/.exec(rest)?.[0] ??
           /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(rest)?.[0]
@@ -288,7 +290,7 @@ class OutputJSONParser {
           typeof result !== 'number' || Number.isSafeInteger(result),
           'Protocol numbers must be safe integers'
         )
-        this.encoding?.value(token, result as OutputJSONScalar)
+        this.#encoding?.value(token, result as OutputJSONScalar)
         return result as OutputJSONScalar
       }
     }
@@ -368,17 +370,17 @@ function visitOutputJSONArray(
       Object.keys(node).length === node.length,
     'Sparse or decorated JSON array'
   )
-  const owned: OutputJSON[] | undefined = frame.copy ? [] : undefined
+  const owned = frame.copy ? new Map<number, OutputJSON>() : undefined
   emitOutputJSON(frame, '[', true)
   for (let i = 0; i < node.length; i++) {
     if (i > 0) emitOutputJSON(frame, ',', true)
     const descriptor = Object.getOwnPropertyDescriptor(node, i)
     outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
     const child = visitOutputJSON(frame, descriptor.value, depth + 1)
-    if (owned) appendOutputJSONElement(owned, child as OutputJSON)
+    if (owned) owned.set(i, child as OutputJSON)
   }
   emitOutputJSON(frame, ']', true)
-  return owned
+  return owned ? Array.from(owned.values()) : undefined
 }
 
 function visitOutputJSONObject(
@@ -399,9 +401,7 @@ function visitOutputJSONObject(
     }
   }
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
-  const owned: OutputJSONObject | undefined = frame.copy
-    ? (Object.create(null) as OutputJSONObject)
-    : undefined
+  const owned = frame.copy ? new Map<string, OutputJSON>() : undefined
   emitOutputJSON(frame, '{', true)
   let index = 0
   for (const key of keys) {
@@ -412,10 +412,10 @@ function visitOutputJSONObject(
     // retains the same byte-limit refusal before any value validation.
     emitOutputJSONString(frame, key, ':')
     const child = visitOutputJSON(frame, descriptor.value, depth + 1)
-    if (owned) owned[key] = child as OutputJSON
+    if (owned) owned.set(key, child as OutputJSON)
   }
   emitOutputJSON(frame, '}', true)
-  return owned
+  return owned ? ownedOutputJSONRecord(owned) : undefined
 }
 
 function visitOutputJSON(
@@ -447,14 +447,9 @@ function visitOutputJSON(
   }
 }
 
-/** Native-style array data properties bypass inherited numeric setters. */
-function appendOutputJSONElement(values: OutputJSON[], value: OutputJSON): void {
-  Object.defineProperty(values, values.length, {
-    value,
-    enumerable: true,
-    writable: true,
-    configurable: true
-  })
+/** Construct own data properties, then remove the fresh record's prototype. */
+function ownedOutputJSONRecord(fields: Map<string, OutputJSON>): OutputJSONObject {
+  return Object.setPrototypeOf(Object.fromEntries(fields), null) as OutputJSONObject
 }
 
 /**

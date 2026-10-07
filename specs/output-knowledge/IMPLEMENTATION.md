@@ -6741,3 +6741,22 @@ and all151targets/398execution rows retain their complete source and controls.
 Compiler, exact packed budgets, coherent source gates, fresh hosted runtime and
 analyzer evidence and full independent mutation reconciliation remain required.
 This source candidate is not a performance or Checkpoint2 qualification claim.
+
+## October 7: native data construction after keyed staging
+
+Published28aa SDK coverage passes, but actual CodeQL reports three generic
+remote-property-injection findings in private graph construction. The workflow
+result alone is therefore insufficient. No finding is dismissed or suppressed.
+The next candidate stages validated children in fresh Maps, then constructs
+ordinary arrays with Array.from and own-data records with Object.fromEntries,
+removing the latter's fresh prototype before exposure. This preserves all
+special JSON keys, normal data attributes, negative-zero distinctions, complete
+validation and refusal order, without input-selected writes to live objects.
+All parser state uses native private slots on its unexported per-call instance,
+retaining constructor arguments and initialization while allowing private-name
+minification within unchanged artifact ceilings. No parsed value, schema or
+authority verdict is retained between calls. An additional regression checks inherited array setters and special record keys.
+Five compiler contexts and an inverse whole-module AST comparison pass for the
+proposal. Actual packed budgets, coherent source gates and fresh complete hosted
+functional/analyzer and mutation qualification remain required. Checkpoint2 is
+not achieved.

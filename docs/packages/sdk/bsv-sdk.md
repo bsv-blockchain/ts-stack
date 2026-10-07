@@ -47,8 +47,9 @@ input, not later mutations, and supplies no schema or authority decision. Ordina
 `parseOutputJSON` acceptance remains unchanged. Canonical property ordering uses
 an explicit UTF-16 code-unit comparator, independent of locale. Parsed objects are fresh
 null-prototype data records, including special property names. One bounded pass
-decodes values into a private graph with fresh decoded-key membership and
-collection counts, exposing it only after complete validation. Arrays receive
+stages validated children in fresh Maps with decoded-key membership and
+collection counts, constructs native owned containers, and exposes the graph only
+after complete validation. Arrays receive
 ordinary data properties without invoking inherited indexed setters. Strict native string
 parsing and every original duplicate, Unicode and resource check still run. No
 encoding, schema or authorization verdict is retained between calls. An indexed

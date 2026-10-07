@@ -506,3 +506,34 @@ test('duplicate and collection limits keep their refusal order before malformed 
       )
   }
 })
+
+test('native owned containers preserve special data keys and bypass inherited array setters', () => {
+  const previous = Object.getOwnPropertyDescriptor(Array.prototype, '0')
+  const source = '{"__proto__":[{"toString":0}],"constructor":true}'
+  const input = parseOutputJSON(source)
+  let parsed: ReturnType<typeof parseOutputJSON> | undefined
+  let captured: ReturnType<typeof ownOutputJSON> | undefined
+  try {
+    Object.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      set() {
+        throw new Error('Inherited array setter reached')
+      }
+    })
+    parsed = parseOutputJSON(source)
+    captured = ownOutputJSON(input)
+  } finally {
+    if (previous) Object.defineProperty(Array.prototype, '0', previous)
+    else Reflect.deleteProperty(Array.prototype, '0')
+  }
+  expect(captured?.value).toStrictEqual(parsed)
+  for (const value of [parsed, captured?.value]) {
+    owned(value)
+    expect(Object.getOwnPropertyDescriptor(value, '__proto__')).toEqual({
+      value: (value as { __proto__: unknown }).__proto__,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  }
+})
