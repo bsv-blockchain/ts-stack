@@ -6,7 +6,7 @@ import {
 } from './OutputProtocol.js'
 import { outputAssert } from './OutputProtocolError.js'
 
-const publish = s.object(
+const publish = s.fixedObject(
   {
     version: s.literal(1),
     requestId: s.requestId,
@@ -18,8 +18,8 @@ const publish = s.object(
   },
   s.extensions
 )
-const status = s.object({ version: s.literal(1), publicationId: s.hex })
-const result = s.object(
+const status = s.fixedObject({ version: s.literal(1), publicationId: s.hex })
+const result = s.fixedObject(
   {
     version: s.literal(1),
     publicationId: s.hex,

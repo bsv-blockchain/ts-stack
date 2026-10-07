@@ -461,6 +461,15 @@ wallet-derived locking key, and field signature before reading or spending it.
   ordering uses an explicit UTF-16 comparator, including numeric-looking
   and supplementary keys; it never uses locale ordering.
 
+  `createClosedOutputObjectValidator(required, optional)` captures its field
+  names once and validates each supplied object independently. Mutating the
+  original field lists does not change that validator. `closedOutputObject`
+  continues reading mutable field lists afresh on each call. Internal fixed
+  protocol schemas likewise own their field names and callback references;
+  every field callback and complete input check still runs on each call.
+  Mutable user-defined schema behavior is preserved. Only grammar is retained,
+  never values, validation results, authorization or chain-currentness.
+
   String tokens are bounded before decoding. Escaped strings and raw controls
   receive native JSON syntax validation; unescaped strings are copied directly
   after token recognition. Both paths retain Unicode validation, duplicate-key

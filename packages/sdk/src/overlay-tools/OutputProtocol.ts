@@ -186,11 +186,11 @@ export function decodeOutputBytes(
   return decoded
 }
 
-/** Validate one closed object. Call this for each nested protocol object too. */
-export function closedOutputObject(
+function outputObject(
   value: unknown,
   required: readonly string[],
-  optional: readonly string[] = []
+  optional: readonly string[],
+  captured?: ReadonlySet<string>
 ): asserts value is Record<string, unknown> {
   outputAssert(
     value !== null && typeof value === 'object' && !Array.isArray(value),
@@ -198,8 +198,7 @@ export function closedOutputObject(
   )
   outputAssert(isOutputPlainObject(value), 'Expected plain object')
   outputAssert(Object.getOwnPropertySymbols(value).length === 0, 'Unexpected symbol key')
-  // Retain one captured schema snapshot with indexed SameValueZero membership.
-  const allowed = new Set([...required, ...optional])
+  const allowed = captured ?? new Set([...required, ...optional])
   for (const key of required) {
     if (!Object.hasOwn(value, key)) outputAssert(false, `Missing ${key}`)
   }
@@ -211,6 +210,26 @@ export function closedOutputObject(
       'Accessor or hidden protocol field'
     )
   }
+}
+
+/** Validate one closed object. Mutable field lists are read afresh on every call. */
+export function closedOutputObject(
+  value: unknown,
+  required: readonly string[],
+  optional: readonly string[] = []
+): asserts value is Record<string, unknown> {
+  outputObject(value, required, optional)
+}
+
+/** Capture fixed field names, then independently validate each supplied object. */
+export function createClosedOutputObjectValidator(
+  required: readonly string[],
+  optional: readonly string[] = []
+): (value: unknown) => asserts value is Record<string, unknown> {
+  const keys = [...required],
+    allowed = new Set([...keys, ...optional])
+  return (value: unknown): asserts value is Record<string, unknown> =>
+    outputObject(value, keys, keys, allowed)
 }
 
 export function validateOutputExtensions(

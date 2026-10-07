@@ -52,7 +52,7 @@ export class OutputLookupServiceError extends OutputProtocolError {
 }
 
 const maximumRequestBytes = 1048576
-const closedResponse = s.object({ version: s.literal(1), closed: s.literal(true) })
+const closedResponse = s.fixedObject({ version: s.literal(1), closed: s.literal(true) })
 
 /**
  * Bounded BRC-193 HTTP transport for one retained service contract. No discovery,

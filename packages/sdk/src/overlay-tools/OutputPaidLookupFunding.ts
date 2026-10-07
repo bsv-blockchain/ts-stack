@@ -18,7 +18,7 @@ const derivation = (input: unknown): string => {
   )
   return input
 }
-const payment = s.object({
+const payment = s.fixedObject({
   derivationPrefix: derivation,
   derivationSuffix: derivation,
   transaction: s.bytes
@@ -58,7 +58,7 @@ export function inspectOutputPaidLookupFunding(
 ): { operation: OutputWalletFundingOperation; rawTransaction: string } {
   const binding = s.normalized(
     selected,
-    s.object({ chain: parseOutputChain, sellerPaymentKey: outputIdentity })
+    s.fixedObject({ chain: parseOutputChain, sellerPaymentKey: outputIdentity })
   )
   const challenge = parseOutputPaidLookupChallenge(challengeInput)
   const submitted = parseOutputPaidLookupPayment(paymentInput)

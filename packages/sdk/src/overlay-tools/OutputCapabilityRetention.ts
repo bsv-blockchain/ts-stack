@@ -10,7 +10,7 @@ import { outputAssert } from './OutputProtocolError.js'
 const maximumRetainedBytes = 524288
 
 function retainedSchema(allowLocalHTTP = false, supportedExtensions: readonly string[] = []) {
-  return s.object({
+  return s.fixedObject({
     format: s.literal('output-capability-retention/1'),
     manifest: (value: unknown) =>
       parseOutputCapabilities(value, allowLocalHTTP, supportedExtensions),
@@ -19,7 +19,7 @@ function retainedSchema(allowLocalHTTP = false, supportedExtensions: readonly st
     service: s.text,
     profile: s.iri,
     selectedAt: s.u64,
-    freshness: s.object({ maximumAgeSeconds: s.u64, clockSkewSeconds: s.u64 })
+    freshness: s.fixedObject({ maximumAgeSeconds: s.u64, clockSkewSeconds: s.u64 })
   })
 }
 

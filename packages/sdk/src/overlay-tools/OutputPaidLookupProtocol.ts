@@ -17,7 +17,7 @@ const derivation = (input: unknown): string => {
   )
   return input
 }
-const acquire = s.object(
+const acquire = s.fixedObject(
   {
     version: s.literal(1),
     requestId: s.requestId,
@@ -30,7 +30,7 @@ const acquire = s.object(
   },
   s.extensions
 )
-const challenge = s.object({
+const challenge = s.fixedObject({
   version: s.literal(1),
   acquisitionId: s.hex,
   requestDigest: s.hex,
@@ -45,8 +45,8 @@ const challenge = s.object({
   payableUntil: s.u64,
   recoveryUntil: s.u64
 })
-const recover = s.object({ version: s.literal(1), acquisitionId: s.hex })
-const acquired = s.object(
+const recover = s.fixedObject({ version: s.literal(1), acquisitionId: s.hex })
+const acquired = s.fixedObject(
   {
     version: s.literal(1),
     acquisitionId: s.hex,
@@ -66,7 +66,7 @@ const acquired = s.object(
     funding: s.outpoint,
     reason: s.text,
     acceptance: parseOutputReleaseEvidence,
-    result: s.object({ evidence: s.evidence, context: s.bytes, schema: s.text })
+    result: s.fixedObject({ evidence: s.evidence, context: s.bytes, schema: s.text })
   }
 )
 
@@ -115,7 +115,7 @@ export function bindOutputPaidLookupChallenge(
   selected: { seller: string; rulesDigest: string },
   supportedExtensions: readonly string[] = []
 ): OutputPaidLookupChallenge {
-  const expected = s.normalized(selected, s.object({ seller: s.identity, rulesDigest: s.hex }))
+  const expected = s.normalized(selected, s.fixedObject({ seller: s.identity, rulesDigest: s.hex }))
   const request = parseOutputPaidLookupAcquire(originalRequest, supportedExtensions)
   const value = parseOutputPaidLookupChallenge(input)
   const acquisitionId = outputPacketDigest('acquisition', {

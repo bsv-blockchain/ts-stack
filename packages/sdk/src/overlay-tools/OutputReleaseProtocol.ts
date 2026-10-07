@@ -13,7 +13,7 @@ import { toArray, toBase64 } from '../primitives/utils.js'
 export const OUTPUT_PROCESSOR_ATTESTATION_POLICY =
   'https://bsv.brc.dev/overlays/0196#processor-attestation-v1'
 
-const block = s.object({
+const block = s.fixedObject({
   blockHash: s.hex,
   height: s.u64,
   tipHash: s.hex,
@@ -22,12 +22,12 @@ const block = s.object({
   contextId: s.text,
   chainPolicyDigest: s.hex
 })
-const release = s.object(
+const release = s.fixedObject(
   { chain: s.chain, txid: s.hex, policy: parseOutputReleasePolicy, acceptedAt: s.u64 },
   { processorEvidence: s.bytes, blockEvidence: block }
 )
-const processor = s.object({
-  body: s.object({
+const processor = s.fixedObject({
+  body: s.fixedObject({
     version: s.literal(1),
     chain: s.chain,
     txid: s.hex,
@@ -81,7 +81,7 @@ export function bindOutputReleaseEvidence(
 ): OutputReleaseEvidence {
   const binding = s.normalized(
     expected,
-    s.object({
+    s.fixedObject({
       chain: s.chain,
       txid: s.hex,
       policy: parseOutputReleasePolicy

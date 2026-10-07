@@ -1,3 +1,4 @@
+import { closedOutputObject, createClosedOutputObjectValidator } from '../OutputProtocol.js'
 import { runInNewContext } from 'node:vm'
 import { isDeepStrictEqual } from 'node:util'
 import * as s from '../OutputProtocolSchema.js'
@@ -271,4 +272,103 @@ test('accepts foreign-realm plain data while returning local independently owned
   expect(snapshot.value).toEqual({ value: [{ nested: 'foreign' }] })
   owned(snapshot.value)
   expect(snapshot.value).not.toBe(input)
+})
+
+test('fixed object grammar owns callbacks and names while each input is checked afresh', () => {
+  let calls = 0
+  const required: Record<string, s.Schema<unknown>> = {
+    value: value => {
+      calls++
+      return s.text(value)
+    }
+  }
+  const optional: Record<string, s.Schema<unknown>> = { count: s.u32 }
+  const fixed = s.fixedObject(required, optional),
+    dynamic = s.object(required, optional)
+  required.value = s.u32
+  required.extra = s.bool
+  optional.count = s.text
+  optional.note = s.text
+  expect(fixed({ value: 'first', count: 1 })).toEqual({ value: 'first', count: 1 })
+  expect(fixed({ value: 'second' })).toEqual({ value: 'second' })
+  expect(calls).toBe(2)
+  expect(dynamic({ value: 2, extra: true, count: 'three', note: 'four' })).toEqual({
+    value: 2,
+    extra: true,
+    count: 'three',
+    note: 'four'
+  })
+  expect(() => fixed({ value: 'first', extra: true })).toThrow('Unknown extra')
+  expect(() => dynamic({ value: 1 })).toThrow('Missing extra')
+  const first = fixed({ value: 'first' }),
+    second = fixed({ value: 'first' })
+  expect(first).not.toBe(second)
+  expect(Object.getPrototypeOf(first)).toBeNull()
+  expect(() => fixed({ value: 1 })).toThrow('Expected bounded string')
+})
+
+test('fixed object grammar retains fresh missing unknown symbol prototype and descriptor refusal', () => {
+  const fixed = s.fixedObject({ known: s.u32 }, { ['__proto__']: s.text, constructor: s.text })
+  expect(fixed({ known: 1, ['__proto__']: 'data', constructor: 'own' })).toEqual({
+    known: 1,
+    ['__proto__']: 'data',
+    constructor: 'own'
+  })
+  const hidden = Object.defineProperty({ known: 1 }, 'extra', { value: 2 })
+  expect(() => fixed(hidden)).toThrow('Unknown extra')
+  expect(() => fixed(Object.defineProperty({}, 'known', { value: 1 }))).toThrow(
+    'Accessor or hidden protocol field'
+  )
+  let reads = 0
+  const accessor = Object.defineProperty({}, 'known', {
+    enumerable: true,
+    get() {
+      reads++
+      return 1
+    }
+  })
+  expect(() => fixed(accessor)).toThrow('Accessor or hidden protocol field')
+  expect(reads).toBe(0)
+  expect(() => fixed({ other: true })).toThrow('Missing known')
+  expect(() => fixed({ [Symbol('extra')]: 1 })).toThrow('Unexpected symbol key')
+  expect(() => fixed(Object.create({ known: 1 }))).toThrow('Expected plain object')
+  for (const value of [null, [], 1]) expect(() => fixed(value)).toThrow('Expected object')
+})
+
+test('dynamic object snapshots required callbacks before invocation and optional callbacks afterwards', () => {
+  const required: Record<string, s.Schema<unknown>> = {},
+    optional: Record<string, s.Schema<unknown>> = { later: s.text }
+  required.first = value => {
+    required.second = s.u32
+    optional.later = s.u32
+    return s.text(value)
+  }
+  required.second = s.text
+  const dynamic = s.object(required, optional)
+  expect(dynamic({ first: 'one', second: 'two', later: 3 })).toEqual({
+    first: 'one',
+    second: 'two',
+    later: 3
+  })
+  expect(dynamic({ first: 'one', second: 2, later: 3 })).toEqual({
+    first: 'one',
+    second: 2,
+    later: 3
+  })
+})
+
+test('captured closed-object validator owns lists and checks later descriptor changes', () => {
+  const required = ['known'],
+    optional = ['extra']
+  const check: (value: unknown) => asserts value is Record<string, unknown> =
+    createClosedOutputObjectValidator(required, optional)
+  required.push('later')
+  optional.splice(0, 1, 'other')
+  const value = { known: 1, extra: 'allowed' }
+  expect(() => check(value)).not.toThrow()
+  expect(() => closedOutputObject(value, required, optional)).toThrow('Missing later')
+  expect(() => check({ known: 1, other: true })).toThrow('Unknown other')
+  Object.defineProperty(value, 'known', { enumerable: false })
+  expect(() => check(value)).toThrow('Accessor or hidden protocol field')
+  expect(() => check({})).toThrow('Missing known')
 })

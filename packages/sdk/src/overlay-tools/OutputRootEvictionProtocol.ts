@@ -12,22 +12,22 @@ const maximumBytes = 1048576
 const service = s.literal('ls_ship', 'ls_slap')
 const targetIdentity = { service, outpoint: s.outpoint }
 const evidence = s.tagged('kind', {
-  spent: s.object({ kind: s.literal('spent'), txid: s.hex, beef: s.bytes }),
-  'owner-withdrawal': s.object({
+  spent: s.fixedObject({ kind: s.literal('spent'), txid: s.hex, beef: s.bytes }),
+  'owner-withdrawal': s.fixedObject({
     kind: s.literal('owner-withdrawal'),
     advertisement: s.evidence
   }),
-  'operator-policy': s.object({
+  'operator-policy': s.fixedObject({
     kind: s.literal('operator-policy'),
     policy: s.text,
     detailDigest: s.hex
   })
 })
-const target = s.object(
+const target = s.fixedObject(
   { ...targetIdentity, advertisementDigest: s.hex, evidence, advertisement: s.evidence },
   { restores: s.hex }
 )
-const request = s.object({
+const request = s.fixedObject({
   version: s.literal(1),
   requestId: s.requestId,
   requester: s.identity,
@@ -43,16 +43,16 @@ const signature = (input: unknown): string => {
   decodeOutputBytes(input, 174)
   return input as string
 }
-const signedRequest = s.object({ body: request, signature })
-const blocker = s.object({ decisionId: s.hex, policyDigest: s.hex })
-const outcome = s.object(
+const signedRequest = s.fixedObject({ body: request, signature })
+const blocker = s.fixedObject({ decisionId: s.hex, policyDigest: s.hex })
+const outcome = s.fixedObject(
   {
     ...targetIdentity,
     actionStatus: s.literal('pending', 'rejected', 'applied', 'no-op'),
     reasonCode: s.text,
     affectedDecisionIds: s.array(s.hex, 1),
     revision: s.u64,
-    serving: s.object({
+    serving: s.fixedObject({
       state: s.literal('suppressed', 'eligible', 'unresolved'),
       revision: s.u64,
       blockers: s.array(blocker)
@@ -60,7 +60,7 @@ const outcome = s.object(
   },
   { decisionId: s.hex }
 )
-const result = s.object({
+const result = s.fixedObject({
   version: s.literal(1),
   requestDigest: s.hex,
   root: s.identity,
@@ -68,9 +68,13 @@ const result = s.object({
   issuedAt: s.u64,
   outcomes: s.array(outcome, 64, 1)
 })
-const signedResult = s.object({ body: result, signature })
-const status = s.object({ version: s.literal(1), requester: s.identity, requestId: s.requestId })
-const decision = s.object({
+const signedResult = s.fixedObject({ body: result, signature })
+const status = s.fixedObject({
+  version: s.literal(1),
+  requester: s.identity,
+  requestId: s.requestId
+})
+const decision = s.fixedObject({
   root: s.identity,
   requestDigest: s.hex,
   ...targetIdentity,
@@ -140,7 +144,7 @@ export function validateOutputRootEvictionWindow(
   const packet = parseOutputRootEvictionRequest(input)
   const selected = s.normalized(
     clock,
-    s.object({
+    s.fixedObject({
       now: s.u64,
       maximumLifetimeSeconds: s.u64,
       futureClockSeconds: s.u64
@@ -171,7 +175,7 @@ export function verifyOutputRootEvictionRequest(
 ): OutputSignedRootEvictionRequest {
   const expected = s.normalized(
     selected,
-    s.object({ root: s.identity, chain: s.chain, requester: s.identity })
+    s.fixedObject({ root: s.identity, chain: s.chain, requester: s.identity })
   )
   const packet = parseOutputRootEvictionRequest(input)
   outputAssert(
@@ -199,7 +203,7 @@ export function outputRootAdvertisementDigest(input: {
     'root-advertisement',
     s.normalized(
       input,
-      s.object({
+      s.fixedObject({
         ...targetIdentity,
         lockingScript: s.bytes
       }),

@@ -11,15 +11,15 @@ export const OUTPUT_LOOKUP_MAXIMUMS = Object.freeze({
   waitMs: 25000
 })
 
-const limits = s.object({ maxBytes: s.u32, maxObservations: s.u32, waitMs: s.u32 })
+const limits = s.fixedObject({ maxBytes: s.u32, maxObservations: s.u32, waitMs: s.u32 })
 export type OutputLookupLimits = ReturnType<typeof limits>
-const open = s.object(
+const open = s.fixedObject(
   { version: s.literal(1), requestId: s.requestId, service: s.text, query: s.json, limits },
   { requiredRulesDigest: s.hex, ...s.extensions }
 )
-const read = s.object({ version: s.literal(1), session: s.text, cursor: s.text, limits })
-const close = s.object({ version: s.literal(1), session: s.text })
-const batch = s.object(
+const read = s.fixedObject({ version: s.literal(1), session: s.text, cursor: s.text, limits })
+const close = s.fixedObject({ version: s.literal(1), session: s.text })
+const batch = s.fixedObject(
   {
     version: s.literal(1),
     session: s.text,
@@ -42,7 +42,7 @@ export type OutputLookupRead = ReturnType<typeof read>
 export type OutputLookupClose = ReturnType<typeof close>
 export type OutputLookupBatch = ReturnType<typeof batch>
 
-const checkpoint = s.object({
+const checkpoint = s.fixedObject({
   version: s.literal(1),
   session: s.text,
   scope: s.scope,

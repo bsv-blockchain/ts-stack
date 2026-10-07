@@ -12,7 +12,7 @@ export const parseOutputOutpoint = (input: unknown): ReturnType<typeof s.outpoin
 export const parseOutputEvidence = (input: unknown): ReturnType<typeof s.evidence> =>
   s.normalized(input, s.evidence)
 
-const admission = s.object(
+const admission = s.fixedObject(
   { outputsToAdmit: s.array(s.u32), coinsToRetain: s.array(s.u32) },
   { coinsRemoved: s.array(s.u32) }
 )
@@ -34,20 +34,20 @@ export const parseOutputSTEAK = (input: unknown): ReturnType<typeof steak> =>
   s.normalized(input, steak)
 
 const simpleState = (status: 'active' | 'withdrawn' | 'expired') =>
-  s.object({ status: s.literal(status), recordedAt: s.u64 })
+  s.fixedObject({ status: s.literal(status), recordedAt: s.u64 })
 const finalization = { recordedAt: s.u64, operationId: s.requestId, txid: s.hex }
 export const outputProposalStateSchema = s.tagged('status', {
   active: simpleState('active'),
   withdrawn: simpleState('withdrawn'),
   expired: simpleState('expired'),
-  finalizing: s.object({ status: s.literal('finalizing'), ...finalization }),
-  'finalization-failed': s.object({
+  finalizing: s.fixedObject({ status: s.literal('finalizing'), ...finalization }),
+  'finalization-failed': s.fixedObject({
     status: s.literal('finalization-failed'),
     ...finalization,
     reason: s.text,
     globalOutcome: s.literal('unknown')
   }),
-  finalized: s.object({
+  finalized: s.fixedObject({
     status: s.literal('finalized'),
     ...finalization,
     steak,
@@ -56,7 +56,7 @@ export const outputProposalStateSchema = s.tagged('status', {
 })
 export type OutputProposalState = ReturnType<typeof outputProposalStateSchema>
 
-const proposalBody = s.object(
+const proposalBody = s.fixedObject(
   {
     version: s.literal(1),
     service: s.text,
@@ -76,7 +76,7 @@ const proposalBody = s.object(
   { transaction: s.bytes, ...s.extensions }
 )
 
-export const outputProposalSchema = s.object({ body: proposalBody, signature: s.bytes })
+export const outputProposalSchema = s.fixedObject({ body: proposalBody, signature: s.bytes })
 export type OutputSignedProposal = ReturnType<typeof outputProposalSchema>
 export type OutputProposalBody = OutputSignedProposal['body']
 
@@ -122,69 +122,36 @@ export function parseOutputProposal(
 
 const common = { id: s.text, scope: s.scope }
 const channel = { service: s.text, policy: s.policy, channel: s.hex, proposalId: s.hex }
+function observation<T extends string, P>(kind: T, payload: s.Schema<P>) {
+  return s.fixedObject({ ...common, kind: s.literal(kind), payload }, s.extensions)
+}
 export const outputObservationSchema = s.tagged('kind', {
-  output: s.object(
-    {
-      ...common,
-      kind: s.literal('output'),
-      payload: s.object(
-        { evidence: s.evidence },
-        { context: s.object({ schema: s.iri, bytes: s.bytes }) }
-      )
-    },
-    s.extensions
+  output: observation(
+    'output',
+    s.fixedObject(
+      { evidence: s.evidence },
+      { context: s.fixedObject({ schema: s.iri, bytes: s.bytes }) }
+    )
   ),
-  spend: s.object(
-    {
-      ...common,
-      kind: s.literal('spend'),
-      payload: s.object({ previous: s.outpoint, spendingTxid: s.hex, beef: s.bytes })
-    },
-    s.extensions
+  spend: observation(
+    'spend',
+    s.fixedObject({ previous: s.outpoint, spendingTxid: s.hex, beef: s.bytes })
   ),
-  withdraw: s.object(
-    {
-      ...common,
-      kind: s.literal('withdraw'),
-      payload: s.object({ outpoint: s.outpoint, reason: s.text })
-    },
-    s.extensions
+  withdraw: observation('withdraw', s.fixedObject({ outpoint: s.outpoint, reason: s.text })),
+  'assessment-invalidated': observation(
+    'assessment-invalidated',
+    s.fixedObject({ contextId: s.text, reason: s.text })
   ),
-  'assessment-invalidated': s.object(
-    {
-      ...common,
-      kind: s.literal('assessment-invalidated'),
-      payload: s.object({ contextId: s.text, reason: s.text })
-    },
-    s.extensions
+  proposal: observation('proposal', s.fixedObject({ proposal: outputProposalSchema })),
+  'proposal-state': observation(
+    'proposal-state',
+    s.fixedObject({ ...channel, state: outputProposalStateSchema })
   ),
-  proposal: s.object(
-    {
-      ...common,
-      kind: s.literal('proposal'),
-      payload: s.object({ proposal: outputProposalSchema })
-    },
-    s.extensions
-  ),
-  'proposal-state': s.object(
-    {
-      ...common,
-      kind: s.literal('proposal-state'),
-      payload: s.object({ ...channel, state: outputProposalStateSchema })
-    },
-    s.extensions
-  ),
-  'proposal-remove': s.object(
-    {
-      ...common,
-      kind: s.literal('proposal-remove'),
-      payload: s.object({ ...channel, reason: s.text })
-    },
-    s.extensions
-  )
+  'proposal-remove': observation('proposal-remove', s.fixedObject({ ...channel, reason: s.text }))
 })
+
 export type OutputObservation = ReturnType<typeof outputObservationSchema>
-export const outputGroupSchema = s.object({
+export const outputGroupSchema = s.fixedObject({
   id: s.text,
   sequence: s.u64,
   observations: s.array(outputObservationSchema)

@@ -6,7 +6,7 @@ import { outputPacketDigest, outputU64, verifyOutputPacket } from './OutputProto
 import { canonicalOutputJSON } from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'
 
-const prepare = s.object({
+const prepare = s.fixedObject({
   version: s.literal(1),
   requestId: s.requestId,
   topic: s.text,
@@ -16,7 +16,7 @@ const prepare = s.object({
   recipient: s.identity,
   request: s.bytes
 })
-const terms = s.object({
+const terms = s.fixedObject({
   version: s.literal(1),
   acquisitionId: s.hex,
   requestDigest: s.hex,
@@ -27,21 +27,26 @@ const terms = s.object({
   assetId: s.hex,
   termsDigest: s.hex,
   domainProfile: s.iri,
-  domainEvidence: s.object({ schema: s.iri, bytes: s.bytes }),
+  domainEvidence: s.fixedObject({ schema: s.iri, bytes: s.bytes }),
   releasePolicy: parseOutputReleasePolicy,
   purchaseUntil: s.u64,
   recoveryUntil: s.u64
 })
-const signedTerms = s.object({ body: terms, signature: s.bytes })
-const submit = s.object({ version: s.literal(1), acquisitionId: s.hex, txid: s.hex, beef: s.bytes })
-const recover = s.object({ version: s.literal(1), acquisitionId: s.hex })
-const commitmentBinding = s.object({
+const signedTerms = s.fixedObject({ body: terms, signature: s.bytes })
+const submit = s.fixedObject({
+  version: s.literal(1),
+  acquisitionId: s.hex,
+  txid: s.hex,
+  beef: s.bytes
+})
+const recover = s.fixedObject({ version: s.literal(1), acquisitionId: s.hex })
+const commitmentBinding = s.fixedObject({
   profile: s.literal('full-purchase-commitment-v1'),
   domainProfile: s.iri,
   purchaseCommitment: s.hex
 })
-const potatoes = s.object({
-  body: s.object(
+const potatoes = s.fixedObject({
+  body: s.fixedObject(
     {
       version: s.literal(1),
       acquisitionId: s.hex,
@@ -67,46 +72,47 @@ const common = { version: s.literal(1), acquisitionId: s.hex, recoveryUntil: s.u
 const reserved = { ...common, txid: s.hex }
 const candidateIdentity = { purchaseCommitment: s.hex }
 const admitted = { ...reserved, steak: parseOutputSTEAK }
-const decision = s.object({
+const decision = s.fixedObject({
   reason: s.text,
   policy: parseOutputReleasePolicy,
   evidence: s.bytes,
   decidedAt: s.u64,
   globalOutcome: s.literal('unknown')
 })
+type Shape = Record<string, s.Schema<unknown>>
+function purchaseState<
+  T extends string,
+  R extends Shape,
+  E extends Shape = Record<never, never>,
+  O extends Shape = Record<never, never>
+>(status: T, base: R, extra = {} as E, optional?: O) {
+  return s.fixedObject({ ...base, status: s.literal(status), ...extra }, optional)
+}
 const result = s.tagged('status', {
-  prepared: s.object({ ...common, status: s.literal('prepared') }),
-  expired: s.object({ ...common, status: s.literal('expired') }),
-  'admission-pending': s.object(
-    { ...reserved, status: s.literal('admission-pending') },
+  prepared: purchaseState('prepared', common),
+  expired: purchaseState('expired', common),
+  'admission-pending': purchaseState('admission-pending', reserved, {}, candidateIdentity),
+  'admission-rejected': purchaseState(
+    'admission-rejected',
+    reserved,
+    { decision },
     candidateIdentity
   ),
-  'admission-rejected': s.object(
-    {
-      ...reserved,
-      status: s.literal('admission-rejected'),
-      decision
-    },
+  'admitted-delivery-pending': purchaseState(
+    'admitted-delivery-pending',
+    admitted,
+    {},
     candidateIdentity
   ),
-  'admitted-delivery-pending': s.object(
-    {
-      ...admitted,
-      status: s.literal('admitted-delivery-pending')
-    },
-    candidateIdentity
-  ),
-  'delivery-failed': s.object(
-    { ...admitted, status: s.literal('delivery-failed'), decision },
-    candidateIdentity
-  ),
-  delivered: s.object({ ...admitted, status: s.literal('delivered'), potatoes }, candidateIdentity)
+  'delivery-failed': purchaseState('delivery-failed', admitted, { decision }, candidateIdentity),
+  delivered: purchaseState('delivered', admitted, { potatoes }, candidateIdentity)
 })
-const envelope = s.object(
+
+const envelope = s.fixedObject(
   { result },
   {
     releaseEvidence: parseOutputReleaseEvidence,
-    currentAlias: s.object({ txid: s.hex, beef: s.bytes })
+    currentAlias: s.fixedObject({ txid: s.hex, beef: s.bytes })
   }
 )
 

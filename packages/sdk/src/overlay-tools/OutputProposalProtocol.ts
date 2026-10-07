@@ -5,25 +5,25 @@ import {
   validateOutputProposal
 } from './OutputObservation.js'
 
-const put = s.object({ version: s.literal(1), proposal: outputProposalSchema })
-const recorded = s.object({
+const put = s.fixedObject({ version: s.literal(1), proposal: outputProposalSchema })
+const recorded = s.fixedObject({
   version: s.literal(1),
   proposalId: s.hex,
   status: s.literal('recorded'),
   expiresAt: s.u64
 })
-const get = s.object({
+const get = s.fixedObject({
   version: s.literal(1),
   service: s.text,
   policy: s.policy,
   channel: s.hex
 })
-const retrieved = s.object({
+const retrieved = s.fixedObject({
   version: s.literal(1),
   proposal: outputProposalSchema,
   state: outputProposalStateSchema
 })
-const finalize = s.object({
+const finalize = s.fixedObject({
   version: s.literal(1),
   operationId: s.requestId,
   service: s.text,
@@ -31,7 +31,7 @@ const finalize = s.object({
   beef: s.bytes,
   txid: s.hex
 })
-const finalized = s.object({
+const finalized = s.fixedObject({
   version: s.literal(1),
   proposalId: s.hex,
   state: outputProposalStateSchema

@@ -18,13 +18,13 @@ const statuses = Object.freeze({
   unavailable: 503
 } as const)
 
-const detail = s.object(
+const detail = s.fixedObject(
   { kind: s.literal('envelope', 'group', 'permanent-group') },
   { minimumBytes: s.u32, minimumObservations: s.u32 }
 )
-const envelope = s.object({
+const envelope = s.fixedObject({
   version: s.literal(1),
-  error: s.object(
+  error: s.fixedObject(
     {
       code: s.literal(
         'invalid',

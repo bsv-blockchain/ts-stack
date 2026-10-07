@@ -21,23 +21,22 @@ export const OUTPUT_PROFILES = Object.freeze({
 } as const)
 
 const positive: s.Schema<number> = value => {
-  const n = s.u32(value)
-  outputAssert(n > 0, 'Expected positive limit')
-  return n
+  s.u32(value)
+  outputAssert((value as number) > 0, 'Expected positive limit')
+  return value as number
 }
 const positiveU64: s.Schema<string> = value => {
-  const n = s.u64(value)
-  outputAssert(outputU64(n) > 0n, 'Expected positive duration')
-  return n
+  outputAssert(outputU64(value) > 0n, 'Expected positive duration')
+  return value as string
 }
 const release = s.tagged('kind', {
-  'local-admission': s.object({ kind: s.literal('local-admission') }),
-  'processor-accepted': s.object({
+  'local-admission': s.fixedObject({ kind: s.literal('local-admission') }),
+  'processor-accepted': s.fixedObject({
     kind: s.literal('processor-accepted'),
     identity: s.identity,
     policy: s.iri
   }),
-  mined: s.object({ kind: s.literal('mined'), confirmations: positive })
+  mined: s.fixedObject({ kind: s.literal('mined'), confirmations: positive })
 })
 export type OutputReleasePolicy = ReturnType<typeof release>
 
@@ -46,7 +45,7 @@ export function parseOutputReleasePolicy(input: unknown): OutputReleasePolicy {
   return s.normalized(input, release)
 }
 
-const profile = s.object({
+const profile = s.fixedObject({
   id: s.iri,
   authentication: s.literal('none', 'brc103'),
   payment: s.literal('none', 'brc105', 'covenant'),
@@ -54,15 +53,15 @@ const profile = s.object({
   maxResponseBytes: positive,
   parameters: s.jsonMap
 })
-const rules = s.object({ id: s.iri, parameters: s.jsonMap })
-const service = s.object({
+const rules = s.fixedObject({ id: s.iri, parameters: s.jsonMap })
+const service = s.fixedObject({
   name: s.text,
   kind: s.literal('lookup', 'topic', 'coordination'),
   rules,
   rulesDigest: s.hex,
   profiles: s.array(profile, 32, 1)
 })
-const capabilities = s.object(
+const capabilities = s.fixedObject(
   {
     version: s.literal(1),
     identity: s.identity,
@@ -77,7 +76,7 @@ const capabilities = s.object(
   },
   s.extensions
 )
-const signed = s.object({ body: capabilities, signature: s.bytes })
+const signed = s.fixedObject({ body: capabilities, signature: s.bytes })
 export type OutputCapabilities = ReturnType<typeof capabilities>
 export type OutputCapabilityService = ReturnType<typeof service>
 export type OutputCapabilityProfile = ReturnType<typeof profile>
@@ -103,7 +102,7 @@ function validateProfile(p: OutputCapabilityProfile, owner: OutputCapabilityServ
   switch (p.id) {
     case OUTPUT_PROFILES.lookup: {
       outputAssert(owner.kind === 'lookup' && p.payment === 'none', 'Invalid live lookup profile')
-      const parameters = s.object({
+      const parameters = s.fixedObject({
         replaySeconds: positiveU64,
         sessionSeconds: positiveU64,
         maxObservations: positive,
@@ -118,8 +117,12 @@ function validateProfile(p: OutputCapabilityProfile, owner: OutputCapabilityServ
     }
     case OUTPUT_PROFILES.proposal: {
       privateProfile(p, owner, 'topic', 'none')
-      const parameters = s.object({
-        policies: s.array(s.object({ id: s.iri, digest: s.hex, parameters: s.jsonMap }), 32, 1),
+      const parameters = s.fixedObject({
+        policies: s.array(
+          s.fixedObject({ id: s.iri, digest: s.hex, parameters: s.jsonMap }),
+          32,
+          1
+        ),
         maxLifetimeSeconds: positiveU64,
         retentionSeconds: positiveU64
       })(p.parameters)
@@ -131,7 +134,7 @@ function validateProfile(p: OutputCapabilityProfile, owner: OutputCapabilityServ
           'Proposal policy digest mismatch'
         )
         if (policy.id === 'https://bsv.brc.dev/overlays/0194#author-document-v1') {
-          const limits = s.object({ maxTextBytes: positive })(policy.parameters)
+          const limits = s.fixedObject({ maxTextBytes: positive })(policy.parameters)
           outputAssert(limits.maxTextBytes <= 4096, 'Document policy text bound')
         }
       }
@@ -139,15 +142,16 @@ function validateProfile(p: OutputCapabilityProfile, owner: OutputCapabilityServ
     }
     case OUTPUT_PROFILES.publication: {
       privateProfile(p, owner, 'topic', 'none')
-      const parameters = s.object({ maxPrivateBytes: positive, schemas: s.array(s.iri, 32, 1) })(
-        p.parameters
-      )
+      const parameters = s.fixedObject({
+        maxPrivateBytes: positive,
+        schemas: s.array(s.iri, 32, 1)
+      })(p.parameters)
       unique(parameters.schemas)
       break
     }
     case OUTPUT_PROFILES.acquisition: {
       privateProfile(p, owner, 'lookup', 'brc105')
-      const parameters = s.object({ recoverySeconds: positiveU64, acceptancePolicy: release })(
+      const parameters = s.fixedObject({ recoverySeconds: positiveU64, acceptancePolicy: release })(
         p.parameters
       )
       outputAssert(
@@ -158,7 +162,7 @@ function validateProfile(p: OutputCapabilityProfile, owner: OutputCapabilityServ
     }
     case OUTPUT_PROFILES.purchase: {
       privateProfile(p, owner, 'topic', 'covenant')
-      const parameters = s.object({
+      const parameters = s.fixedObject({
         recoverySeconds: positiveU64,
         releasePolicies: s.array(release, 32, 1),
         domainProfiles: s.array(s.iri, 32, 1)
@@ -174,7 +178,7 @@ function validateProfile(p: OutputCapabilityProfile, owner: OutputCapabilityServ
     case OUTPUT_PROFILES.eviction: {
       privateProfile(p, owner, 'coordination', 'none')
       outputAssert(owner.name === 'root-advertisements', 'Invalid root coordination service')
-      s.object({ maxTargets: positive, maxLifetimeSeconds: positiveU64 })(p.parameters)
+      s.fixedObject({ maxTargets: positive, maxLifetimeSeconds: positiveU64 })(p.parameters)
       break
     }
   }

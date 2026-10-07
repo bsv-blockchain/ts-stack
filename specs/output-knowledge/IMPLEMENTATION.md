@@ -6425,3 +6425,20 @@ regressions are retained. This resolves the source causes by returning to the
 prior clean native-data-property construction and explicit sorting, without a
 performance claim, budget change, API change or analyzer suppression. Fresh
 complete qualification remains mandatory.
+
+## October 7: fixed grammar candidate after c5ef qualification
+
+The c5ef SDK262/8554, application1 64/859, application3 63/930,
+application4 63/968, private-overlay53/889 and documentation/legacy-consumer
+lanes pass. Application2 has only the coordinator property interruption at
+222/300 under its unchanged150-second limit. Complete Checkpoint2 qualification
+and the untrimmed151-target398-row mutation campaign remain outstanding.
+
+Fresh source-bound coordinator and disclosure timing samples contain no negative
+or reordered timestamps. They identify repeated closed-object and JSON work;
+the native HTTP timing sample has invalid timestamps and remains excluded.
+The next candidate owns fixed protocol grammar once, retaining all per-value
+checks and the existing mutable-schema API. It introduces no value, schema
+verdict, authentication or currentness cache. Independent cases distinguish
+captured grammar from dynamic callback snapshots and fresh descriptor refusals.
+This candidate requires complete source, budget and hosted qualification.

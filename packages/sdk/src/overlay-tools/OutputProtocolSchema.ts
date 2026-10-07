@@ -3,6 +3,7 @@
 import { outputAssert } from './OutputProtocolError.js'
 import {
   closedOutputObject,
+  createClosedOutputObjectValidator,
   decodeOutputBytes,
   outputHex32,
   outputString,
@@ -20,19 +21,34 @@ export type Schema<T> = (value: unknown) => T
 type Shape = Record<string, Schema<unknown>>
 type Fields<S extends Shape> = { [K in keyof S]: ReturnType<S[K]> }
 
+/** Mutable grammar remains dynamic unless the internal fixed builder opts in. */
 export function object<R extends Shape, O extends Shape = Record<never, never>>(
   required: R,
-  optional = {} as O
+  optional = {} as O,
+  fixed?: boolean
 ): Schema<Fields<R> & Partial<Fields<O>>> {
+  const fields = fixed && Object.entries(required),
+    extras = fixed && Object.entries(optional)
+  const close: (value: unknown) => asserts value is Record<string, unknown> = fixed
+    ? createClosedOutputObjectValidator(Object.keys(required), Object.keys(optional))
+    : value => closedOutputObject(value, Object.keys(required), Object.keys(optional))
   return value => {
-    closedOutputObject(value, Object.keys(required), Object.keys(optional))
+    close(value)
     const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>
-    for (const [key, schema] of Object.entries(required)) result[key] = schema(value[key])
-    for (const [key, schema] of Object.entries(optional)) {
+    for (const [key, schema] of fields || Object.entries(required)) result[key] = schema(value[key])
+    for (const [key, schema] of extras || Object.entries(optional)) {
       if (Object.hasOwn(value, key)) result[key] = schema(value[key])
     }
     return result as Fields<R> & Partial<Fields<O>>
   }
+}
+
+/** Own a fixed grammar; no supplied value or validation result is retained. */
+export function fixedObject<R extends Shape, O extends Shape = Record<never, never>>(
+  required: R,
+  optional?: O
+): Schema<Fields<R> & Partial<Fields<O>>> {
+  return object(required, optional, true)
 }
 
 export function array<T>(element: Schema<T>, maximum = 4096, minimum = 0): Schema<T[]> {
@@ -107,9 +123,9 @@ export const requestId: Schema<string> = value => {
   )
   return value
 }
-export const chain = object({ network: text, genesisHash: hex })
-export const outpoint = object({ chain, txid: hex, outputIndex: u32 })
-export const scope = object({
+export const chain = fixedObject({ network: text, genesisHash: hex })
+export const outpoint = fixedObject({ chain, txid: hex, outputIndex: u32 })
+export const scope = fixedObject({
   chain,
   provider: text,
   service: text,
@@ -118,9 +134,9 @@ export const scope = object({
   access: text,
   epoch: text
 })
-export const evidence = object({ txid: hex, outputIndex: u32, beef: bytes })
+export const evidence = fixedObject({ txid: hex, outputIndex: u32, beef: bytes })
 export const extensions = { extensions: jsonMap, critical: array(iri, 32) }
-export const policy = object({ id: iri, digest: hex })
+export const policy = fixedObject({ id: iri, digest: hex })
 
 export function normalized<T>(input: unknown, schema: Schema<T>, maximumBytes = 4194304): T {
   const value =
