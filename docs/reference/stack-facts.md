@@ -61,7 +61,7 @@ authorized release action.
 | overlays | `@bsv/overlay-discovery-services` | `2.2.7` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-discovery-services](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services) |
 | overlays | `@bsv/overlay-express` | `2.7.4` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-express](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express) |
 | overlays | `@bsv/overlay-topics` | `2.0.1` | node-library | node-esm | node | `>=22` | [packages/overlays/topics](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics) |
-| sdk | `@bsv/sdk` | `3.2.0` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
+| sdk | `@bsv/sdk` | `3.2.1` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
 | sdk | `@bsv/verifast` | `0.3.7` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
 | wallet | `@bsv/btms` | `1.2.4` | node-library | node-cjs, node-esm | node | `>=22` | [packages/wallet/btms](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms) |
 | wallet | `@bsv/btms-permission-module` | `1.2.2` | node-library | node-esm | node | `>=22` | [packages/wallet/btms-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module) |
@@ -106,13 +106,13 @@ recorded container release route; they are not published by the public-package j
 | Metric | Current value |
 | --- | --- |
 | Vector files | 77 |
-| Vectors | 6700 |
-| Structurally passed | 6489 |
+| Vectors | 6706 |
+| Structurally passed | 6495 |
 | Governed skips | 211 |
-| Required parity vectors | 6496 |
+| Required parity vectors | 6502 |
 | Intended parity vectors | 204 |
 | Explicitly skipped vector entries | 7 |
-| Corpus metadata revision | 2026-09-24 |
+| Corpus metadata revision | 2026-10-07 |
 
 Structural runner pass/skip results and parity classifications answer different questions:
 the former is the current runner outcome, while the latter records cross-language

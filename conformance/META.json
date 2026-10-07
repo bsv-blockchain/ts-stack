@@ -73,8 +73,8 @@
   },
   "stats": {
     "total_files": 77,
-    "total_vectors": 6700,
-    "last_updated": "2026-09-24"
+    "total_vectors": 6706,
+    "last_updated": "2026-10-07"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",
