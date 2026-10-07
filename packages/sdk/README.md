@@ -445,6 +445,10 @@ wallet-derived locking key, and field signature before reading or spending it.
   enumerable own data fields, including keys that resemble object builtins.
   Parsing and canonical encoding enforce the same explicit byte and structural
   bounds; callers still validate each endpoint's closed schema.
+  String tokens are bounded before decoding. Escaped strings and raw controls
+  receive native JSON syntax validation; unescaped strings are copied directly
+  after token recognition. Both paths retain Unicode validation, duplicate-key
+  rejection and the same errors, limits and encoding inspection.
 
   `ownOutputJSON(value, limits)` validates a program value and returns its
   bounded canonical `text` and an independent `value` with those same data

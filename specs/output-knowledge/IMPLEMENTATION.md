@@ -6042,3 +6042,28 @@ query/trace/ledger repair still requires hosted qualification; no authority,
 schema, key, plaintext, row or validation verdict is cached. All
 original property/case counts, seeds, replay inputs, deadlines, mutation ranges
 and qualification thresholds remain.
+
+## October 7: current qualification and bounded string decoding
+
+Published `a0d078e662a96a36f30ba84d223c1914dd9c81e8` passes the SDK
+(262 suites/8538 tests), application reconciliation (63/930), all current
+private HTTP tests (53/889), LCH (45/287), proposal conformance and the fourth
+application shard (63/968), packed consumers, browser/mobile profiles, strict
+Sonar with zero new issues or unreviewed hotspots and actual CodeQL with zero
+open PR findings. All fifteen review threads are resolved. The complete CI run
+remains unsuccessful: disclosure stops at168/300 and coordinator at210/300
+under their unchanged150-second property controls, without a counterexample.
+The whole151-target/398-execution mutation campaign has not run on this head.
+
+The next candidate recognizes each bounded JSON string token in one lexer
+operation. Ordinary runs cannot contain a quote or backslash; a backslash
+consumes exactly one following UTF-16 code unit. Escaped and control-bearing
+strings retain native syntax validation. Direct scalar copying applies only
+to unescaped strings without raw controls. Decoded Unicode, duplicate decoded
+keys, cursor progression, malformed versus unterminated errors, resource
+fences and encoding inspection remain independent and unchanged. New literal
+cases cover every raw control, valid and invalid escapes, supplementary Unicode,
+duplicate keys, following tokens, and maximum-size plain, escaped and
+unterminated inputs. All original tests and qualification settings remain.
+This is a measured-bottleneck candidate; its functional and performance
+qualification is pending, and no current authority or validation is cached.

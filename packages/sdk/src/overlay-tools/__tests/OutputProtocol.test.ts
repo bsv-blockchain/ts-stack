@@ -776,4 +776,62 @@ describe('BRC-192 representation boundary', () => {
     expect(canonicalOutputJSON({ a: 0 }, { bytes: 7 })).toBe('{"a":0}')
     expect(() => canonicalOutputJSON({ a: 0 }, { bytes: 6 })).toThrow('Output JSON byte limit')
   })
+
+  it('preserves string decoding and cursor boundaries against independent literals', () => {
+    const cases: [string, string, boolean][] = [
+      ['""', '', true],
+      ['"plain é😀"', 'plain é😀', true],
+      ['"\\\"\\\\\\/\\b\\f\\n\\r\\t"', '"\\/\b\f\n\r\t', false],
+      ['"\\u0061\\u0000\\ud83d\\ude00"', 'a\0😀', false],
+      ['"\\\\u0061"', '\\u0061', true],
+      ['"line\\nend"', 'line\nend', true]
+    ]
+    for (const [text, value, canonical] of cases) {
+      expect(parseOutputJSON(text)).toBe(value)
+      expect(inspectOutputJSONEncoding(text)).toEqual({ value, canonical })
+      expect(parseOutputJSON(`[${text},"next",0]`)).toEqual([value, 'next', 0])
+      const object = parseOutputJSON(`{"key":${text},"next":0}`)
+      expect(object).toEqual({ key: value, next: 0 })
+      expect(Object.getPrototypeOf(object)).toBeNull()
+    }
+    expect(() => parseOutputJSON('"a""b"')).toThrow('Trailing JSON data')
+    expect(() => parseOutputJSON('{"a":0,"\\u0061":1}')).toThrow('Duplicate decoded JSON key')
+  })
+
+  it('retains malformed versus unterminated string refusals for every raw control', () => {
+    for (const control of Array.from({ length: 32 }, (_, code) => String.fromCharCode(code))) {
+      for (const read of [parseOutputJSON, inspectOutputJSONEncoding]) {
+        expect(() => read('"before' + control + 'after"')).toThrow('Malformed JSON string')
+        expect(() => read('"before\\' + control + 'after"')).toThrow('Malformed JSON string')
+        expect(() => read('"before' + control + 'after')).toThrow('Unterminated JSON string')
+      }
+    }
+    for (const read of [parseOutputJSON, inspectOutputJSONEncoding]) {
+      for (const text of ['"\\q"', '"\\u12"', '"\\uZZZZ"'])
+        expect(() => read(text)).toThrow('Malformed JSON string')
+      for (const text of ['"', '"\\', '"\\"', '"\\u12'])
+        expect(() => read(text)).toThrow('Unterminated JSON string')
+      for (const text of ['"\\ud800"', '"\\udfff"', '"\\ud83dX\\ude00"'])
+        expect(() => read(text)).toThrow('Unpaired JSON surrogate')
+    }
+  })
+
+  it('bounds maximum-size ordinary, escaped and unterminated string tokens', () => {
+    const maximum = OUTPUT_JSON_LIMITS.bytes,
+      plain = 'x'.repeat(maximum - 2),
+      plainText = '"' + plain + '"',
+      repetitions = (maximum - 2) / 2,
+      escapedText = '"' + '\\\\'.repeat(repetitions) + '"',
+      escaped = '\\'.repeat(repetitions),
+      unterminated = '"' + '\\\\'.repeat(repetitions) + '\\'
+    expect(parseOutputJSON(plainText)).toBe(plain)
+    expect(inspectOutputJSONEncoding(plainText)).toEqual({ value: plain, canonical: true })
+    expect(parseOutputJSON(escapedText)).toBe(escaped)
+    expect(inspectOutputJSONEncoding(escapedText)).toEqual({ value: escaped, canonical: true })
+    for (const read of [parseOutputJSON, inspectOutputJSONEncoding]) {
+      expect(() => read('"' + 'x'.repeat(maximum - 1) + '"')).toThrow('Output JSON byte limit')
+      expect(() => read(unterminated)).toThrow('Unterminated JSON string')
+      expect(() => read('"' + 'x'.repeat(maximum - 3) + '\n"')).toThrow('Malformed JSON string')
+    }
+  })
 })

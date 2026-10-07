@@ -179,35 +179,29 @@ class OutputJSONParser {
 
   private string(): string {
     outputAssert(this.source[this.offset] === '"', 'Expected JSON string')
-    const start = this.offset++
-    // A backslash skips exactly one following UTF-16 code unit.
-    // JSON.parse still validates every escape/control;
-    // the decoded Unicode check and duplicate-key checks remain independent.
-    const delimiters = /["\\]/g
-    delimiters.lastIndex = this.offset
-    for (
-      let match = delimiters.exec(this.source);
-      match !== null;
-      match = delimiters.exec(this.source)
-    ) {
-      if (match[0] === '\\') {
-        delimiters.lastIndex = match.index + 2
-        continue
-      }
-      this.offset = match.index + 1
-      const encoded = this.source.slice(start, this.offset)
-      let decoded: string
-      try {
-        decoded = JSON.parse(encoded) as string
-      } catch {
-        throw new OutputProtocolError('invalid', 'Malformed JSON string')
-      }
-      wellFormed(decoded)
-      this.encoding?.string(encoded, decoded)
-      return decoded
+    // The mutually exclusive chunks consume an ordinary run or a backslash
+    // plus exactly one UTF-16 code unit, up to the first unescaped quote.
+    // Raw controls deliberately remain tokens: native decoding refuses them.
+    const token = /"[^"\\]*(?:\\[\s\S][^"\\]*)*"/y
+    token.lastIndex = this.offset
+    const match = token.exec(this.source)
+    if (match === null) {
+      this.offset = this.source.length
+      throw new OutputProtocolError('invalid', 'Unterminated JSON string')
     }
-    this.offset = this.source.length
-    throw new OutputProtocolError('invalid', 'Unterminated JSON string')
+    this.offset = token.lastIndex
+    const encoded = match[0]
+    let decoded: string
+    try {
+      decoded = /[^\u0020-\u005B\u005D-\uFFFF]/.test(encoded)
+        ? (JSON.parse(encoded) as string)
+        : encoded.slice(1, -1)
+    } catch {
+      throw new OutputProtocolError('invalid', 'Malformed JSON string')
+    }
+    wellFormed(decoded)
+    this.encoding?.string(encoded, decoded)
+    return decoded
   }
 
   private object(depth: number): OutputJSONObject {
