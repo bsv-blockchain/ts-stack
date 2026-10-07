@@ -372,3 +372,86 @@ test('captured closed-object validator owns lists and checks later descriptor ch
   expect(() => check(value)).toThrow('Accessor or hidden protocol field')
   expect(() => check({})).toThrow('Missing known')
 })
+
+test('owned capture preserves earlier values when later descriptor callbacks mutate caller data', () => {
+  const caller = { z: 1, a: { value: 2 } },
+    order: string[] = []
+  const source = new Proxy(caller, {
+    getOwnPropertyDescriptor(target, key) {
+      order.push(String(key))
+      if (key === 'z') target.a.value = 9
+      return Reflect.getOwnPropertyDescriptor(target, key)
+    }
+  })
+  const result = ownOutputJSON(source)
+  expect(order).toEqual(['a', 'z'])
+  expect(result.text).toBe('{"a":{"value":2},"z":1}')
+  expect(result.value).toStrictEqual(parseOutputJSON(result.text))
+  expect(caller.a.value).toBe(9)
+  owned(result.value)
+})
+
+test('owned arrays create data properties without invoking inherited indexed accessors', () => {
+  const input = Array.from({ length: 4096 }, () => 0),
+    key = '4095'
+  const previous = Object.getOwnPropertyDescriptor(Array.prototype, key)
+  let reads = 0,
+    writes = 0,
+    result: ReturnType<typeof ownOutputJSON> | undefined
+  try {
+    Object.defineProperty(Array.prototype, key, {
+      configurable: true,
+      get() {
+        reads++
+        return 7
+      },
+      set() {
+        writes++
+      }
+    })
+    result = ownOutputJSON(input)
+  } finally {
+    if (previous) Object.defineProperty(Array.prototype, key, previous)
+    else Reflect.deleteProperty(Array.prototype, key)
+  }
+  expect(reads).toBe(0)
+  expect(writes).toBe(0)
+  expect(Array.isArray(result!.value)).toBe(true)
+  expect(Object.getOwnPropertyDescriptor(result!.value, key)).toEqual({
+    value: 0,
+    enumerable: true,
+    writable: true,
+    configurable: true
+  })
+  expect(result!.value).toStrictEqual(parseOutputJSON(result!.text))
+})
+
+test('owned capture refuses framing bounds before visiting later caller fields', () => {
+  let reads = 0
+  const child = Object.defineProperty({}, 'boom', {
+      enumerable: true,
+      get() {
+        reads++
+        throw new Error('Getter must not run')
+      }
+    }),
+    order: string[] = []
+  const source = new Proxy(
+    { z: true, a: child },
+    {
+      getOwnPropertyDescriptor(target, key) {
+        order.push(String(key))
+        return Reflect.getOwnPropertyDescriptor(target, key)
+      }
+    }
+  )
+  expect(() => ownOutputJSON(source, { bytes: 1 })).toThrow(
+    expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' })
+  )
+  expect(order).toEqual(['a'])
+  expect(reads).toBe(0)
+  order.length = 0
+  expect(() => ownOutputJSON(source)).toThrow('JSON accessor or hidden key')
+  expect(order).toEqual(['a'])
+  expect(reads).toBe(0)
+})

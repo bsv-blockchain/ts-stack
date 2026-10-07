@@ -6618,3 +6618,41 @@ required before Checkpoint2 readiness. Original property controls, source ranges
 counts, seeds, deadlines, thresholds, budget ceilings and every original example
 remain unchanged. No local SDK/application/native execution or performance claim
 is introduced by this merge.
+
+## October 7: reconcile hosted qualification and private traversal
+
+Published head216b24aa has terminal CI37673785191. Disclosure221/300 and
+coordinator230/300 interrupt at the unchanged150-second property limit, without
+reported counterexamples; the dependent merge gate fails. All other applicable
+functional, native, platform and packed-consumer lanes pass: SDK262/8582,
+application3 63/930, application4 63/968, wallet3 79/882 including original8_BEEF,
+private-overlay53/889, LCH38/276 and all81 compiled examples. Actual Sonar is clean.
+CodeQL analyses1910901334/1910941338 qualify the complete reviewed-main plus216
+merge tree with zero open PR alerts. All18 review threads are resolved. These
+passing lanes do not qualify the failed full baseline or Checkpoint2.
+
+Exact-head diagnostics admit valid disclosure and four-case native CPU metadata.
+Coordinator timing has negative/reordered deltas and is excluded in full.
+Instrumentation counts175/300 and194/300 remain unqualified measurements. A
+per-call serializer copy-capture proposal was withdrawn after exceeding the
+unchanged LCH browser raw-size limit308000; neither that source nor its claims
+are adopted. Native parsing and independently owned normalization remain.
+
+The current source correction replaces the primitive-name ordering callback with
+an indexed scan. The first inversion triggers the unchanged explicit UTF-16
+comparator. Only private native JSON graphs reach the shared normalization
+walker; dense arrays and records have ordinary own data properties. One own-value
+walk retains null prototypes and all attributes. All other original AST,
+validation predicates, framing, caller callback/refusal order, source limits and
+ownership semantics remain. No input or validation/authorization/currentness
+verdict is cached.
+
+Three additive unit cases retain earlier copied values when later descriptor
+callbacks mutate caller data, avoid invoking inherited indexed array accessors and
+preserve early byte-limit refusal before later caller fields. Original unit,
+property and example bodies and every campaign control remain required. Five
+virtual compiler contexts and source AST checks pass; source preparation is not
+runtime or performance evidence. Coherent source gates, unchanged packed budgets,
+exact-head hosted functionality/analyzers and the complete151targets/398rows
+mutation campaign with independent raw reconciliation remain required for
+Checkpoint2. No runtime improvement is claimed.

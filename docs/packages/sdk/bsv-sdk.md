@@ -50,7 +50,10 @@ null-prototype data records, including special property names. A complete bounde
 before native JSON construction. The newly constructed data graph is normalized to
 null-prototype records with ordinary own data properties. Strict native string
 parsing and every original duplicate, Unicode and resource check still run. No
-encoding, schema or authorization verdict is retained between calls.
+encoding, schema or authorization verdict is retained between calls. An indexed
+scan of fresh primitive names selects the same UTF-16 sort at the first inversion.
+The private native graph is normalized with one own-value traversal for dense
+arrays and records; caller values still receive every original validation check.
 
 `retainOutputCapability` captures a verified selection as bounded local replay
 material to persist atomically with an operation. `restoreOutputCapability`

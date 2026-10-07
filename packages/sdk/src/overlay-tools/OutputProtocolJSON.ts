@@ -361,9 +361,12 @@ class OutputJSONSerializer {
     const keys = Object.getOwnPropertyNames(node)
     // These are fresh primitive names. Already ordered names need no sorting;
     // any inversion still uses the original UTF-16 code-unit comparator.
-    // The first name has no predecessor: comparison with undefined is false.
-    if (keys.some((key, index) => key < keys[index - 1])) {
-      keys.sort((a, b) => +(a > b) - +(a < b))
+    // Begin with the first actual predecessor in this private primitive-name array.
+    for (let index = 1; index < keys.length; index++) {
+      if (keys[index] < keys[index - 1]) {
+        keys.sort((a, b) => +(a > b) - +(a < b))
+        break
+      }
     }
     outputJSONLimit(keys.length <= this.#bounds.mapKeys, 2)
     this.#emit('{', true)
@@ -404,12 +407,10 @@ class OutputJSONSerializer {
 /** Normalize only the fresh, fully validated native JSON copy. No call state is retained. */
 function normalizeOwnedOutputJSON(node: OutputJSON): OutputJSON {
   if (node && typeof node === 'object') {
-    if (Array.isArray(node)) {
-      for (const child of node) normalizeOwnedOutputJSON(child)
-    } else {
-      Object.setPrototypeOf(node, null)
-      for (const key of Object.keys(node)) normalizeOwnedOutputJSON(node[key])
-    }
+    if (!Array.isArray(node)) Object.setPrototypeOf(node, null)
+    // Only private native JSON graphs reach this walker: dense array indices and
+    // record fields are ordinary own data properties. Visit those values once.
+    for (const child of Object.values(node)) normalizeOwnedOutputJSON(child)
   }
   return node
 }
