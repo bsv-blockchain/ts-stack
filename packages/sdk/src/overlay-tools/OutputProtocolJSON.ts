@@ -220,10 +220,7 @@ class OutputJSONParser {
   private object(depth: number): OutputJSONObject {
     this.offset++
     this.whitespace()
-    // This record is private to the parse. A null prototype makes every decoded
-    // key ordinary data, including __proto__, without an intermediate map/copy.
-    const fields = Object.create(null) as OutputJSONObject
-    let keys = 0
+    const fields = new Map<string, OutputJSON>()
     let previous: string | undefined
     if (this.source[this.offset] === '}') {
       this.offset++
@@ -231,21 +228,21 @@ class OutputJSONParser {
       for (;;) {
         this.whitespace()
         const key = this.string()
-        outputAssert(!Object.hasOwn(fields, key), 'Duplicate decoded JSON key')
-        outputJSONLimit(keys < this.bounds.mapKeys, 2)
+        outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
+        outputJSONLimit(fields.size < this.bounds.mapKeys, 2)
         this.encoding?.key(previous, key)
         previous = key
         this.whitespace()
         outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-        fields[key] = this.value(depth + 1)
-        keys++
+        fields.set(key, this.value(depth + 1))
         this.whitespace()
         const end = this.source[this.offset++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
-    return fields
+    // One finalization creates own data properties without invoking setters.
+    return Object.setPrototypeOf(Object.fromEntries(fields), null)
   }
 
   private array(depth: number): OutputJSON[] {
@@ -358,7 +355,7 @@ class OutputJSONSerializer {
   #object(node: object, depth: number): void {
     outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
     // RFC 8785 orders primitive property-name strings by UTF-16 code units.
-    const keys = Object.getOwnPropertyNames(node).sort()
+    const keys = Object.getOwnPropertyNames(node).sort((a, b) => +(a > b) - +(a < b))
     outputJSONLimit(keys.length <= this.#bounds.mapKeys, 2)
     this.#emit('{', true)
     let index = 0

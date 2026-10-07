@@ -6351,7 +6351,7 @@ delta and two reordered samples exclude its timings. All four native HTTP
 diagnostic cases exit0, with the same timing defects excluding their timings.
 These diagnostics supply neither full functional nor campaign qualification.
 
-The parser now constructs one fresh null-prototype data record per object.
+That candidate constructs one fresh null-prototype data record per object.
 Every decoded key is checked for duplication before the map-size bound and
 before its colon/value is consumed, in the original order. A separate local
 count measures successfully inserted unique keys; numeric-looking names retain
@@ -6371,3 +6371,57 @@ duplicates at the map bound, Unicode/size/syntax refusal priority and the full
 Complete fresh source-only checks, exact original browser ceilings, untrimmed
 151-target398-row inventory and hosted qualification are required before
 publication of this candidate or a claim of improvement.
+
+## October 7: native data-property construction and explicit key ordering
+
+Published `a4df0190b1567d542d03551f6e0452d9ebc39ac2` passes all262 SDK
+suites/8554tests, including both new independent literal regressions. Ordinary
+application partitions1and2 interrupt disclosure at164/300 and coordinator
+at249/300 under the unchanged150-second controls; neither reports a
+counterexample. Partition3passes63suites/930tests. Current documentation
+consumers and the other affected-package lanes pass. Partition4was still
+running when this correction began. Checkpoint2 remains open.
+
+The terminal CodeQL workflow succeeds, but its actual JavaScript/TypeScript
+analysis has one open remote-property-injection finding on direct decoded-key
+assignment. Sonar has one active finding on comparator-free sorting. Workflow
+success does not qualify these source findings; neither is suppressed,
+accepted, dismissed or excluded. Current diagnostic metadata preserves source,
+original inputs and clear producer/reader guards. All three function-timing
+sets contain negative or reordered samples and are excluded from analysis.
+Their interrupted properties and successful native cases are diagnostic only.
+
+The first correction candidate streams parsed pairs through native Object.fromEntries data-property
+construction and changes only the complete fresh record's prototype to null.
+A parser-local Set retains decoded names for duplicate detection, with the same
+check before map bounds, colon and value consumption. A name is added only
+following its successful value parse. Native construction creates ordinary
+writable/configurable/enumerable data fields, including builtin-looking names;
+no dynamic assignment or inherited setter is involved. No incomplete result
+escapes. Canonical serialization again supplies an explicit UTF-16 comparator;
+sharing this immutable function retains the original ordering without locale
+comparison or per-object callback allocation. No value, schema or authority
+verdict is cached. All original property bytes, regression literals, resource
+controls and browser ceilings remain required. Source-only checks do not
+establish runtime performance or complete hosted qualification.
+
+That streaming candidate passes all7root controls, five compiler contexts,
+source equivalence and full untrimmed inventory, but its exact-tarball Vite
+acquisition entry is308068bytes against the unchanged308000ceiling. It is
+withdrawn before publication; no budget is raised. The retained correction
+restores native Object.fromEntries construction from the original parser-local
+Map and complete-record null-prototype conversion. Duplicate, bound, colon,
+value and separator checks are byte-for-byte the original Map implementation.
+The explicit shared UTF-16 comparator remains; all regression literals remain.
+No dynamic property assignment, new cache or accepted analyzer debt is added.
+Fresh complete source-only and hosted qualification is still required.
+
+The Map/shared-comparator candidate also passes all7root/source controls but
+its Vite acquisition entry is308008bytes, eight above the same unchanged
+ceiling. It too is withdrawn before publication. The final correction restores
+the entire OutputProtocolJSON.ts implementation byte-for-byte to published75df,
+including its explicit inline UTF-16 comparator. Both independent new parser
+regressions are retained. This resolves the source causes by returning to the
+prior clean native-data-property construction and explicit sorting, without a
+performance claim, budget change, API change or analyzer suppression. Fresh
+complete qualification remains mandatory.
