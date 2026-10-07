@@ -5969,3 +5969,29 @@ replay/failure-interrupt/case deadlines. Registration and source review do not
 constitute execution or mutation qualification. Native effect-owner/core-three,
 coordinator/job recovery, independent chain assessment and buyer/LCH/HTTP
 composition remain unfinished, as does checkpoint two.
+
+### October 7 current shared corpus and native byte qualification
+
+Commit `8bd6d18fdfe597a0a21025b636b01a816defbcae` binds the immutable PR295
+proposal-query and reconciliation corpus. All original 32 traces and transaction
+facts remain unchanged. The sixteen proposal mappings and two expiry-retirement
+additions use actual query, session-guard, Script and SQLite components. Declared
+fixture roots, model heights and host-readable flags remain explicit model
+premises; they do not qualify native provider access, genesis/SPV or HTTP.
+
+Commit `e61fd4d1690acb81ff742659d6d3ded53ae65a6a` avoids a redundant native
+Base64 grammar scan when the required fresh round-trip already matches. The
+malformed syntax, decoded-size and padding-bit refusal order is retained, with
+nineteen additional comparisons against the independent SDK decoder. Original
+property counts, seeds, replays, interruption and case deadlines are unchanged.
+Every read still performs fresh authentication and authorization.
+
+Its source-only pinned-engine inventory has 893 protected-ledger mutation sites,
+including four additional byte-boundary sites. CI run `37570778206` stopped at
+the installed engine's stale 889-site assertion before application qualification.
+The count assertion is reconciled to the complete current inventory. Exact
+canonical-site identity, disjoint partition coverage and every original target,
+runner, source range and qualification setting remain checked. Registration
+retains 151 targets and 398 execution rows; this inventory is not a successful
+mutation campaign. Complete current-source runtime and final qualification
+remain required before Checkpoint 2.
