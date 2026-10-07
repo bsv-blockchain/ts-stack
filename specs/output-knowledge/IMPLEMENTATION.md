@@ -6515,3 +6515,42 @@ The independently admitted current diagnostic retains the original selectors, pr
 The three-line text-accumulation change is insufficient for full coverage. A reviewed fresh batch now constructs parser records directly with a null prototype, eliminating the intermediate Map/final conversion while retaining decoded duplicate-key, map-size and malformed-value refusal order. Serializer scalar dispatch retains every supported and rejected kind and numeric/byte refusal boundary. Its ancestor array holds only the current invocation's path and remains bounded by the unchanged32-level depth limit; cycle versus shared-descendant behavior is retained. The proposed adjacent-key sort optimization is withdrawn after the unchanged LCH browser budget rejects it; the final source retains the original explicit UTF-16 sort. Descriptor access, prototype/symbol checks, Unicode, byte accounting, canonical text, callback order, independent ownership and every unrelated helper remain unchanged. No input, shape, authorization or validation-result cache is introduced.
 
 All five complete virtual type contexts pass before adoption. The installed pinned source-only instrumenter retains151 targets/398 execution rows and all complete disjoint unions. The first proposal genuinely changes the SDK JSON inventory904→909; its smaller final inventory is906 after withdrawing the sort optimization and using compact string-first dispatch. all other inventories, original policy/ranges/settings and all141 original property files,263 original SDK unit bodies and81 compiled example bodies/IDs remain unchanged. No test or native target runs on the Mac. Final actual-source checks, unchanged browser ceilings, full hosted coverage and complete blank-selector mutation/raw reconciliation remain required; no performance, checkpoint-readiness or full runtime qualification is inferred from this source batch.
+
+## October 7: 820 qualification and the retained ordering correction
+
+Published `82007a236499ad32f1d60905d33d82bb103debcd` has terminal CI37654061017.
+SDK262/8558, application3 63/930, application4 63/968, wallet3 79/882,
+private-overlay53/889 including all four native HTTP compositions, LCH38/276,
+packed examples/consumers, browser/mobile, conformance and code generation pass.
+Disclosure174/300 and coordinator198/300 interrupt under their unchanged
+150-second controls, with no reported counterexamples. Actual Sonar is clean;
+actual CodeQL retains one remote-property-injection alert on decoded-key bracket
+assignment. A successful workflow does not qualify an open source alert.
+Checkpoint2 and the complete151-target/398-row mutation campaign remain open.
+
+The new diagnostic retains the original controls and clear producer/reader
+guards. Disclosure CPU timing is valid; coordinator timing contains two negative
+deltas and four reordered samples and is excluded in full. Native HTTP timing
+is valid and all four diagnostic cases exit0. Independently valid synchronous
+SQLite/crypto totals are22.314,21.728and5.399 inclusive seconds; they include
+instrumentation and overlap, so they are not exclusive CPU or wall-time fractions.
+Diagnostics do not qualify the interrupted properties or establish an improvement.
+
+The direct-record, scalar-dispatch and ancestor-array proposal is withdrawn.
+The retained source restores the earlier Map parser, native Object.fromEntries
+own-data construction, complete-record null-prototype conversion, original scalar
+dispatch and fresh Set ancestors. It changes only canonical sorting of a freshly
+captured primitive-name array: an inversion invokes the original explicit UTF-16
+comparator; already ordered names require no sort. The first name has no
+predecessor and cannot establish an inversion. All descriptor inspections still
+occur in canonical order. Every duplicate, resource, syntax, Unicode, ownership,
+cycle, schema and authorization check remains fresh at its original boundary.
+No input, schema, shape, result or authority verdict is cached.
+
+The first loop candidate misses the unchanged LCH raw ceiling by52bytes and is
+withdrawn before publication. The smaller fresh-array predicate passes both SDK
+and LCH exact-tarball browser checks, as well as strict source compilation.
+All original property/unit bodies, example IDs and bodies, source ranges, counts,
+seeds, replay inputs, deadlines, thresholds and package ceilings remain required.
+Complete coherent source controls, actual exact-head hosted qualification and
+full mutation/raw reconciliation are still needed before Checkpoint2 readiness.

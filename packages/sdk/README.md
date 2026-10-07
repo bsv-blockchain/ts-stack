@@ -448,18 +448,20 @@ wallet-derived locking key, and field signature before reading or spending it.
   Canonical serialization creates a new private frame for each call, sharing
   method code rather than allocating mutually captured closures. Reentrant
   descriptor inspection and failed calls cannot reuse another frame's text,
-  byte counter, bounds or depth-bounded ancestor path. Resource assertions retain their exact
+  byte counter, bounds or ancestor set. Resource assertions retain their exact
   predicates and refusal messages. Validated safe integers use the same decimal
   text, including conversion of negative zero to zero. Ownership normalizes only
   each fresh bounded native JSON copy with a private shared walker; it retains
   no value or result between calls.
 
-  Parsing constructs each fresh null-prototype record directly with own data
-  fields. Duplicate decoded keys are rejected before the field-count fence or
-  their value is read; keys such as `__proto__` remain ordinary data. Canonical
-  property ordering uses the original explicit UTF-16 comparator, including
-  numeric-looking and supplementary keys. No input or result is retained
-  between calls.
+  Parsing retains decoded keys in a fresh Map, rejects duplicates before the
+  map-size fence or value parsing, then constructs ordinary own data fields with
+  native `Object.fromEntries` and gives the complete record a null prototype.
+  Keys such as `__proto__` remain ordinary data. Canonical property ordering checks
+  each fresh primitive-name array and uses the original explicit UTF-16 comparator
+  whenever it contains an inversion, including numeric-looking and supplementary
+  keys. Every descriptor is still inspected in canonical order. No input or result
+  is retained between calls.
 
   `createClosedOutputObjectValidator(required, optional)` captures its field
   names once and validates each supplied object independently. Mutating the

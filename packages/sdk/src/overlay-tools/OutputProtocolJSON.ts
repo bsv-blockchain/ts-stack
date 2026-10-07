@@ -220,8 +220,7 @@ class OutputJSONParser {
   private object(depth: number): OutputJSONObject {
     this.offset++
     this.whitespace()
-    const fields: OutputJSONObject = Object.create(null) as OutputJSONObject
-    let fieldCount = 0
+    const fields = new Map<string, OutputJSON>()
     let previous: string | undefined
     if (this.source[this.offset] === '}') {
       this.offset++
@@ -229,23 +228,21 @@ class OutputJSONParser {
       for (;;) {
         this.whitespace()
         const key = this.string()
-        outputAssert(!Object.hasOwn(fields, key), 'Duplicate decoded JSON key')
-        outputJSONLimit(fieldCount < this.bounds.mapKeys, 2)
+        outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
+        outputJSONLimit(fields.size < this.bounds.mapKeys, 2)
         this.encoding?.key(previous, key)
         previous = key
         this.whitespace()
         outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-        fields[key] = this.value(depth + 1)
-        fieldCount++
+        fields.set(key, this.value(depth + 1))
         this.whitespace()
         const end = this.source[this.offset++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
-    // The owned null-prototype record has no inherited setters. Duplicate keys
-    // and the field bound are checked before parsing and assigning each value.
-    return fields
+    // One finalization creates own data properties without invoking setters.
+    return Object.setPrototypeOf(Object.fromEntries(fields), null)
   }
 
   private array(depth: number): OutputJSON[] {
@@ -307,8 +304,7 @@ export function canonicalOutputJSON(
  * shared, but no input, representation result or validation verdict is held. */
 class OutputJSONSerializer {
   #text = ''
-  // Only this invocation's ancestor path; the unchanged depth limit bounds it to 32.
-  readonly #ancestors: object[] = []
+  readonly #ancestors = new Set<object>()
   #bytes = 0
 
   readonly #bounds: OutputJSONLimits
@@ -359,7 +355,13 @@ class OutputJSONSerializer {
   #object(node: object, depth: number): void {
     outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
     // RFC 8785 orders primitive property-name strings by UTF-16 code units.
-    const keys = Object.getOwnPropertyNames(node).sort((a, b) => +(a > b) - +(a < b))
+    const keys = Object.getOwnPropertyNames(node)
+    // These are fresh primitive names. Already ordered names need no sorting;
+    // any inversion still uses the original UTF-16 code-unit comparator.
+    // The first name has no predecessor: comparison with undefined is false.
+    if (keys.some((key, index) => key < keys[index - 1])) {
+      keys.sort((a, b) => +(a > b) - +(a < b))
+    }
     outputJSONLimit(keys.length <= this.#bounds.mapKeys, 2)
     this.#emit('{', true)
     let index = 0
@@ -376,25 +378,22 @@ class OutputJSONSerializer {
   }
   #visit(node: unknown, depth: number): void {
     outputJSONLimit(depth <= this.#bounds.depth, 1)
-    // String leaves retain their full fresh encoding checks.
-    if (typeof node === 'string') {
-      this.#string(node)
-      return
-    }
     const number = typeof node === 'number'
     if (node === null || typeof node === 'boolean' || number) {
       outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
       // Safe integers never use exponent notation here; both encoders map -0 to 0.
       this.#emit(String(node), true)
+    } else if (typeof node === 'string') {
+      this.#string(node)
     } else {
       // The preceding scalar branch has already handled null.
       outputAssert(typeof node === 'object', 'Expected a JSON value')
-      outputAssert(!this.#ancestors.includes(node), 'Cyclic JSON value')
+      outputAssert(!this.#ancestors.has(node), 'Cyclic JSON value')
       outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
-      this.#ancestors.push(node)
+      this.#ancestors.add(node)
       if (Array.isArray(node)) this.#array(node, depth)
       else this.#object(node, depth)
-      this.#ancestors.pop()
+      this.#ancestors.delete(node)
     }
   }
 }
