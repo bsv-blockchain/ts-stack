@@ -108,7 +108,8 @@ recorded in the PR completion evidence.
       verify complete original funded and released subjects and their identical
       full commitment before accepting License/key rights. Retained recovery and
       offline playback never become new preparations. Native action/alias and
-      seller integration remain separate open rows.
+      seller integration are demonstrated separately below; final published-source
+      qualification remains required.
 - [x] Add an explicitly selected current immutable seller over the complete shared
       issuance pipeline. Preserve all original historical interfaces/installation
       IDs and full proof/role/CEK/License checks. New preparation retains/rechecks

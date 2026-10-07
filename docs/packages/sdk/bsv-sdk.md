@@ -46,14 +46,16 @@ Unicode, structural and original/canonical byte bounds. The flag describes that
 input, not later mutations, and supplies no schema or authority decision. Ordinary
 `parseOutputJSON` acceptance remains unchanged. Canonical property ordering uses
 an explicit UTF-16 code-unit comparator, independent of locale. Parsed objects are fresh
-null-prototype data records, including special property names. A complete bounded validation pass uses fresh decoded-key Sets and array counts
-before native JSON construction. The newly constructed data graph is normalized to
-null-prototype records with ordinary own data properties. Strict native string
+null-prototype data records, including special property names. One bounded pass
+decodes values into a private graph with fresh decoded-key membership and
+collection counts, exposing it only after complete validation. Arrays receive
+ordinary data properties without invoking inherited indexed setters. Strict native string
 parsing and every original duplicate, Unicode and resource check still run. No
 encoding, schema or authorization verdict is retained between calls. An indexed
 scan of fresh primitive names selects the same UTF-16 sort at the first inversion.
-The private native graph is normalized by visiting array elements and own
-record keys; caller values still receive every original validation check. Canonical
+Ownership captures each validated child into an independent data graph during
+canonical traversal; generated text needs no second parse or normalization walk.
+Caller values still receive every original validation check. Canonical
 serialization uses closed module functions with a fresh explicit per-call record,
 retaining no state between calls and exposing no frame to caller callbacks.
 

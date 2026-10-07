@@ -6698,3 +6698,46 @@ The original216 normalizer is exact. Complete coherent source, artifact-budget,
 inventory and hosted functional/analyzer qualification are still required. No
 runtime or performance improvement is claimed. The complete151targets/398rows
 mutation campaign remains pending the green final-head baseline.
+
+## October 7: disclosure qualification and single-pass JSON ownership
+
+Published4476 CI37689730442 is terminal FAILED:40jobs pass, the disclosure
+property interrupts at172/300 under its original150-second limit, and the
+dependent merge gate fails. Four jobs skip. The coordinator completes in
+app2 64suites/986tests; SDK262/8585, app3 63/930, app4 63/968, wallet3 79/882
+including original8_BEEF, private-overlay53/889 and LCH38/276 pass. The
+artifact/documentation consumer and all browser/mobile jobs pass. Actual
+Sonar has zero issues and hotspots; CodeQL analyses1911710967/1911761318
+cover the exact complete merge tree with zero open PR-ref alerts. All18
+review threads are resolved. These receipts do not qualify the failed full gate.
+
+The original covered diagnostics interrupt disclosure at228/300 and coordinator
+at250/300; the four native HTTP cases exit0. Only disclosure CPU timing is
+valid. Negative/reordered coordinator and native traces are excluded entirely.
+Instrumentation overhead is included; no comparative speed or causal claim
+is established. No raw counterexample, native-fault or CPU-payload replay is used.
+
+The next source candidate removes redundant whole-graph construction and
+normalization after parsing and value ownership. The parser decodes once into
+private null-prototype records and ordinary arrays; decoded-key membership
+replaces its previous Set without changing duplicate-before-map-limit ordering.
+Collection sizes advance after successful children. Array data properties retain
+their ordinary attributes and bypass inherited indexed setters. Its private
+cursor cannot escape to callers. Only complete successful syntax, Unicode,
+integer, trailing-data and resource validation exposes the owned graph.
+
+Canonical value ownership captures independently owned children during the
+existing descriptor traversal, with fresh invocation state and unchanged public
+signatures, validation predicates, error identities and canonical bytes. Safe
+negative zero becomes zero in owned canonical values; parsing incoming negative
+zero retains its original number. The original indexed UTF-16 scan and explicit
+comparator remain. No input, parsed-record, schema, custody, authority or
+currentness verdict is cached. All cryptographic and protected-store checks remain.
+
+Three additive boundary cases cover native array attributes and negative-zero
+semantics, numeric/supplementary UTF-16 ordering, and duplicate/collection refusal
+precedence before malformed children. Original units,141properties,81examples
+and all151targets/398execution rows retain their complete source and controls.
+Compiler, exact packed budgets, coherent source gates, fresh hosted runtime and
+analyzer evidence and full independent mutation reconciliation remain required.
+This source candidate is not a performance or Checkpoint2 qualification claim.

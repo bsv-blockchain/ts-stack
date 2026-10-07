@@ -451,22 +451,23 @@ wallet-derived locking key, and field signature before reading or spending it.
   descriptor inspection and failed calls cannot reuse another frame's text,
   byte counter, bounds or ancestor set. Resource assertions retain their exact
   predicates and refusal messages. Validated safe integers use the same decimal
-  text, including conversion of negative zero to zero. Ownership normalizes only
-  each fresh bounded native JSON copy with a private shared array/record walker; it retains
-  no value or result between calls.
+  text, including conversion of negative zero to zero. Ownership captures each
+  validated child into a fresh private data graph during the same traversal,
+  without reparsing the generated text or retaining values between calls.
 
-  Parsing first validates the complete immutable source without constructing an
-  intermediate value graph. Each object retains only a fresh Set of decoded keys;
-  duplicates are rejected before the map-size fence or value parsing. Array counts
-  and key Sets advance only after successful values. Native JSON construction runs
-  only after complete syntax, Unicode, integer, resource and trailing-data checks.
-  The new private graph receives null-prototype records before being exposed;
+  Parsing decodes values once into a bounded private graph, exposing it only
+  after complete syntax, Unicode, integer, resource and trailing-data checks.
+  Fresh null-prototype records retain decoded-key membership; duplicates are
+  rejected before the map-size fence or value parsing. Collection sizes advance
+  only after successful values. Arrays receive ordinary writable, configurable,
+  enumerable data properties without invoking inherited indexed setters.
+  The new private graph has null-prototype records before being exposed;
   keys such as `__proto__` remain ordinary writable data. Canonical property ordering checks
   each fresh primitive-name array and uses the original explicit UTF-16 comparator
   whenever an indexed scan finds an inversion, including numeric-looking and
   supplementary keys. The scan allocates no per-object ordering callback. The
-  shared walker visits native array elements directly and record values through
-  their own keys, preserving attributes and null prototypes. Every descriptor is still inspected in canonical order. No input or result
+  same traversal captures independent children, preserving attributes and null
+  prototypes. Every caller descriptor is still inspected in canonical order. No input or result
   is retained between calls.
 
   `createClosedOutputObjectValidator(required, optional)` captures its field

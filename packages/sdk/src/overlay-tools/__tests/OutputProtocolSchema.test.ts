@@ -455,3 +455,54 @@ test('owned capture refuses framing bounds before visiting later caller fields',
   expect(order).toEqual(['a'])
   expect(reads).toBe(0)
 })
+
+test('parsed and captured arrays retain native data-property attributes and separate negative-zero semantics', () => {
+  const source = '{"__proto__":[{"constructor":-0}],"a":true}'
+  const parsed = parseOutputJSON(source) as { __proto__: { constructor: number }[]; a: boolean }
+  owned(parsed)
+  expect(Object.getOwnPropertyDescriptor(parsed.__proto__, '0')).toEqual({
+    value: parsed.__proto__[0],
+    enumerable: true,
+    writable: true,
+    configurable: true
+  })
+  expect(Object.getOwnPropertyDescriptor(parsed.__proto__, 'length')).toEqual({
+    value: 1,
+    enumerable: false,
+    writable: true,
+    configurable: false
+  })
+  expect(Object.is(parsed.__proto__[0].constructor, -0)).toBe(true)
+  const captured = ownOutputJSON(parsed).value as typeof parsed
+  expect(Object.is(captured.__proto__[0].constructor, -0)).toBe(false)
+  captured.__proto__[0].constructor = 2
+  expect(Object.is(parsed.__proto__[0].constructor, -0)).toBe(true)
+})
+test('canonical property names retain UTF-16 order independently of numeric property enumeration', () => {
+  const input = Object.fromEntries([
+    ['\uE000', 1],
+    ['😀', 2],
+    ['2', 3],
+    ['10', 4]
+  ])
+  const text = '{"10":4,"2":3,"😀":2,"\uE000":1}'
+  expect(canonicalOutputJSON(input)).toBe(text)
+  const first = ownOutputJSON(input),
+    second = parseOutputJSON(text)
+  expect(first.text).toBe(text)
+  expect(first.value).toStrictEqual(second)
+  expect(Object.keys(first.value as object)).toEqual(['2', '10', '😀', '\uE000'])
+})
+test('duplicate and collection limits keep their refusal order before malformed children', () => {
+  for (const [text, limits, code, message] of [
+    ['{"a":0,"\\u0061":INVALID}', { mapKeys: 1 }, 'invalid', 'Duplicate decoded JSON key'],
+    ['{"a":0,"b":INVALID}', { mapKeys: 1 }, 'limited', 'JSON map limit'],
+    ['[0,INVALID]', { arrayElements: 1 }, 'limited', 'JSON array limit'],
+    ['{"a":[]}', { depth: 1 }, 'limited', 'JSON depth limit']
+  ] as const) {
+    for (const input of [text, new TextEncoder().encode(text)])
+      expect(() => parseOutputJSON(input, limits)).toThrow(
+        expect.objectContaining({ code, message })
+      )
+  }
+})

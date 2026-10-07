@@ -165,47 +165,46 @@ class OutputJSONEncodingInspection implements OutputJSONEncodingObserver {
 }
 
 class OutputJSONParser {
-  private offset = 0
+  #offset = 0
 
   constructor(
-    private readonly source: string,
+    private readonly text: string,
     private readonly bounds: OutputJSONLimits,
     private readonly encoding?: OutputJSONEncodingObserver
   ) {}
 
   parse(): OutputJSON {
-    this.value(1)
-    this.whitespace()
-    outputAssert(this.offset === this.source.length, 'Trailing JSON data')
-    // The complete immutable source has passed every duplicate, syntax, Unicode,
-    // integer and resource check. Native construction creates only own data
-    // fields; normalize this new private graph before exposing it to the caller.
-    return normalizeOwnedOutputJSON(JSON.parse(this.source) as OutputJSON)
+    const value = this.#value(1)
+    this.#whitespace()
+    outputAssert(this.#offset === this.text.length, 'Trailing JSON data')
+    // Every value is decoded once into this private, bounded data-property graph.
+    // Expose it only after complete syntax, duplicate, Unicode and resource checks.
+    return value
   }
 
-  private whitespace(): void {
-    while (' \r\n\t'.includes(this.source[this.offset] ?? '\0')) {
-      this.offset++
+  #whitespace(): void {
+    while (' \r\n\t'.includes(this.text[this.#offset] ?? '\0')) {
+      this.#offset++
       this.encoding?.whitespace()
     }
   }
 
-  private string(): string {
-    outputAssert(this.source[this.offset] === '"', 'Expected JSON string')
-    const start = this.offset++
+  #string(): string {
+    outputAssert(this.text[this.#offset] === '"', 'Expected JSON string')
+    const start = this.#offset++
     // Each quote search advances. Backslash runs preceding candidate quotes
     // cannot overlap, so even malformed tokens require only linear work.
     // Native decoding still validates all escapes and raw controls.
     let end = start
-    while ((end = this.source.indexOf('"', end + 1)) >= 0) {
+    while ((end = this.text.indexOf('"', end + 1)) >= 0) {
       let backslashStart = end
-      while (backslashStart > start && this.source[backslashStart - 1] === '\\') backslashStart--
+      while (backslashStart > start && this.text[backslashStart - 1] === '\\') backslashStart--
       if ((end - backslashStart) % 2 === 0) break
     }
-    this.offset = end < 0 ? this.source.length : end + 1
+    this.#offset = end < 0 ? this.text.length : end + 1
     outputAssert(end >= 0, 'Unterminated JSON string')
-    const encoded = this.source.slice(start, this.offset)
-    // Fresh source validation already proves unescaped Unicode well-formed;
+    const encoded = this.text.slice(start, this.#offset)
+    // Fresh text validation already proves unescaped Unicode well-formed;
     // ASCII quote boundaries cannot split a pair. Only decoding escapes can
     // introduce a lone surrogate or change canonical string representation.
     if (!/[^\u0020-\u005B\u005D-\uFFFF]/.test(encoded)) return encoded.slice(1, -1)
@@ -220,69 +219,70 @@ class OutputJSONParser {
     return decoded
   }
 
-  private object(depth: number): void {
-    this.offset++
-    this.whitespace()
-    const fields = new Set<string>()
+  #object(depth: number): OutputJSONObject {
+    this.#offset++
+    this.#whitespace()
+    const fields: OutputJSONObject = Object.create(null) as OutputJSONObject
+    let count = 0
     let previous: string | undefined
-    if (this.source[this.offset] === '}') {
-      this.offset++
+    if (this.text[this.#offset] === '}') {
+      this.#offset++
     } else {
       for (;;) {
-        this.whitespace()
-        const key = this.string()
-        outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
-        outputJSONLimit(fields.size < this.bounds.mapKeys, 2)
+        this.#whitespace()
+        const key = this.#string()
+        outputAssert(!Object.hasOwn(fields, key), 'Duplicate decoded JSON key')
+        outputJSONLimit(count < this.bounds.mapKeys, 2)
         this.encoding?.key(previous, key)
         previous = key
-        this.whitespace()
-        outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-        this.value(depth + 1)
-        fields.add(key)
-        this.whitespace()
-        const end = this.source[this.offset++]
+        this.#whitespace()
+        outputAssert(this.text[this.#offset++] === ':', 'Expected JSON colon')
+        fields[key] = this.#value(depth + 1)
+        count++
+        this.#whitespace()
+        const end = this.text[this.#offset++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
+    return fields
   }
 
-  private array(depth: number): void {
-    this.offset++
-    this.whitespace()
-    let count = 0
-    if (this.source[this.offset] === ']') {
-      this.offset++
-      return
+  #array(depth: number): OutputJSON[] {
+    this.#offset++
+    this.#whitespace()
+    const values: OutputJSON[] = []
+    if (this.text[this.#offset] === ']') {
+      this.#offset++
+      return values
     }
     for (;;) {
-      outputJSONLimit(count < this.bounds.arrayElements, 3)
-      this.value(depth + 1)
-      count++
-      this.whitespace()
-      const end = this.source[this.offset++]
-      if (end === ']') return
+      outputJSONLimit(values.length < this.bounds.arrayElements, 3)
+      appendOutputJSONElement(values, this.#value(depth + 1))
+      this.#whitespace()
+      const end = this.text[this.#offset++]
+      if (end === ']') return values
       outputAssert(end === ',', 'Expected JSON array separator')
     }
   }
 
-  private value(depth: number): OutputJSONScalar | string | void {
+  #value(depth: number): OutputJSON {
     outputJSONLimit(depth <= this.bounds.depth, 1)
-    this.whitespace()
-    switch (this.source[this.offset]) {
+    this.#whitespace()
+    switch (this.text[this.#offset]) {
       case '"':
-        return this.string()
+        return this.#string()
       case '{':
-        return this.object(depth)
+        return this.#object(depth)
       case '[':
-        return this.array(depth)
+        return this.#array(depth)
       default: {
-        const rest = this.source.slice(this.offset)
+        const rest = this.text.slice(this.#offset)
         const token =
           /^(?:true|false|null)/.exec(rest)?.[0] ??
           /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(rest)?.[0]
         outputAssert(token !== undefined, 'Invalid JSON token')
-        this.offset += token.length
+        this.#offset += token.length
         const result: unknown = JSON.parse(token)
         outputAssert(
           typeof result !== 'number' || Number.isSafeInteger(result),
@@ -309,13 +309,30 @@ interface OutputJSONFrame {
   text: string
   bytes: number
   readonly bounds: OutputJSONLimits
-  readonly ancestors: Set<object>
+  readonly path: Set<object>
+  readonly copy: boolean
 }
 
-function serializeOutputJSON(value: unknown, bounds: OutputJSONLimits): string {
-  const frame: OutputJSONFrame = { text: '', ancestors: new Set<object>(), bytes: 0, bounds }
-  visitOutputJSON(frame, value, 1)
-  return frame.text
+function serializeOutputJSON(
+  value: unknown,
+  bounds: OutputJSONLimits,
+  capture: true
+): { text: string; value: OutputJSON }
+function serializeOutputJSON(value: unknown, bounds: OutputJSONLimits, capture?: false): string
+function serializeOutputJSON(
+  value: unknown,
+  bounds: OutputJSONLimits,
+  capture = false
+): string | { text: string; value: OutputJSON } {
+  const frame: OutputJSONFrame = {
+    text: '',
+    path: new Set<object>(),
+    bytes: 0,
+    bounds,
+    copy: capture
+  }
+  const owned = visitOutputJSON(frame, value, 1)
+  return capture ? { text: frame.text, value: owned as OutputJSON } : frame.text
 }
 
 function emitOutputJSON(frame: OutputJSONFrame, chunk: string, knownASCII = false): void {
@@ -340,24 +357,35 @@ function emitOutputJSONString(frame: OutputJSONFrame, text: string, suffix = '')
   }
 }
 
-function visitOutputJSONArray(frame: OutputJSONFrame, node: unknown[], depth: number): void {
+function visitOutputJSONArray(
+  frame: OutputJSONFrame,
+  node: unknown[],
+  depth: number
+): OutputJSON[] | undefined {
   outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
   outputAssert(
     Object.getOwnPropertyNames(node).length === node.length + 1 &&
       Object.keys(node).length === node.length,
     'Sparse or decorated JSON array'
   )
+  const owned: OutputJSON[] | undefined = frame.copy ? [] : undefined
   emitOutputJSON(frame, '[', true)
   for (let i = 0; i < node.length; i++) {
     if (i > 0) emitOutputJSON(frame, ',', true)
     const descriptor = Object.getOwnPropertyDescriptor(node, i)
     outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
-    visitOutputJSON(frame, descriptor.value, depth + 1)
+    const child = visitOutputJSON(frame, descriptor.value, depth + 1)
+    if (owned) appendOutputJSONElement(owned, child as OutputJSON)
   }
   emitOutputJSON(frame, ']', true)
+  return owned
 }
 
-function visitOutputJSONObject(frame: OutputJSONFrame, node: object, depth: number): void {
+function visitOutputJSONObject(
+  frame: OutputJSONFrame,
+  node: object,
+  depth: number
+): OutputJSONObject | undefined {
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
@@ -371,6 +399,9 @@ function visitOutputJSONObject(frame: OutputJSONFrame, node: object, depth: numb
     }
   }
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  const owned: OutputJSONObject | undefined = frame.copy
+    ? (Object.create(null) as OutputJSONObject)
+    : undefined
   emitOutputJSON(frame, '{', true)
   let index = 0
   for (const key of keys) {
@@ -380,57 +411,62 @@ function visitOutputJSONObject(frame: OutputJSONFrame, node: object, depth: numb
     // The colon is the next byte before visiting the value. One emission
     // retains the same byte-limit refusal before any value validation.
     emitOutputJSONString(frame, key, ':')
-    visitOutputJSON(frame, descriptor.value, depth + 1)
+    const child = visitOutputJSON(frame, descriptor.value, depth + 1)
+    if (owned) owned[key] = child as OutputJSON
   }
   emitOutputJSON(frame, '}', true)
+  return owned
 }
 
-function visitOutputJSON(frame: OutputJSONFrame, node: unknown, depth: number): void {
+function visitOutputJSON(
+  frame: OutputJSONFrame,
+  node: unknown,
+  depth: number
+): OutputJSON | undefined {
   outputJSONLimit(depth <= frame.bounds.depth, 1)
   const number = typeof node === 'number'
   if (node === null || typeof node === 'boolean' || number) {
     outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
     // Safe integers never use exponent notation here; both encoders map -0 to 0.
     emitOutputJSON(frame, String(node), true)
+    return number && node === 0 ? 0 : (node as OutputJSONScalar)
   } else if (typeof node === 'string') {
     emitOutputJSONString(frame, node)
+    return node
   } else {
     // The preceding scalar branch has already handled null.
     outputAssert(typeof node === 'object', 'Expected a JSON value')
-    outputAssert(!frame.ancestors.has(node), 'Cyclic JSON value')
+    outputAssert(!frame.path.has(node), 'Cyclic JSON value')
     outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
-    frame.ancestors.add(node)
-    if (Array.isArray(node)) visitOutputJSONArray(frame, node, depth)
-    else visitOutputJSONObject(frame, node, depth)
-    frame.ancestors.delete(node)
+    frame.path.add(node)
+    const owned = Array.isArray(node)
+      ? visitOutputJSONArray(frame, node, depth)
+      : visitOutputJSONObject(frame, node, depth)
+    frame.path.delete(node)
+    return owned
   }
 }
 
-/** Normalize only the fresh, fully validated native JSON copy. No call state is retained. */
-function normalizeOwnedOutputJSON(node: OutputJSON): OutputJSON {
-  if (node && typeof node === 'object') {
-    if (Array.isArray(node)) {
-      for (const child of node) normalizeOwnedOutputJSON(child)
-    } else {
-      Object.setPrototypeOf(node, null)
-      for (const key of Object.keys(node)) normalizeOwnedOutputJSON(node[key])
-    }
-  }
-  return node
+/** Native-style array data properties bypass inherited numeric setters. */
+function appendOutputJSONElement(values: OutputJSON[], value: OutputJSON): void {
+  Object.defineProperty(values, values.length, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true
+  })
 }
 
 /**
- * Validate and capture a value as bounded canonical text and an independent
- * data-only copy. This is value ownership, not parsing incoming JSON text.
- * Every representation/resource check runs in canonicalOutputJSON before the
- * native parse. Its generated text has unique keys and valid bounded values;
- * normalize only the resulting owned records to the protocol's null prototype.
+ * Validate and capture bounded canonical text and an independent data-only graph.
+ * Every representation/resource check runs before its privately captured child
+ * is retained. Fresh null-prototype records and ordinary array data properties
+ * preserve ownership without reparsing the generated text or retaining verdicts.
  * Incoming text/bytes still require parseOutputJSON to retain duplicate evidence.
  */
 export function ownOutputJSON(
   input: unknown,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): { text: string; value: OutputJSON } {
-  const text = canonicalOutputJSON(input, limits)
-  return { text, value: normalizeOwnedOutputJSON(JSON.parse(text) as OutputJSON) }
+  return serializeOutputJSON(input, limitsFor(limits), true)
 }
