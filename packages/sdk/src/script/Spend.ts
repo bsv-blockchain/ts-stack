@@ -544,13 +544,24 @@ export default class Spend {
 
   // OP_SUBSTR, OP_LEFT and OP_RIGHT operands go through the node's checked
   // int64 CScriptNum path (bitcoin-sv v1.2.3, int_serialization.h
-  // deserialize<int64_t>): after the era length limit and minimal-encoding
-  // checks, an operand longer than nine bytes or whose sign-magnitude value
-  // lies outside the signed 64-bit range is a script number overflow. The
-  // decoded value is then saturated to int32 like CScriptNum::getint().
+  // deserialize<int64_t>), in the node's order: the era length limit, the
+  // minimal-encoding check, then a length above nine bytes is rejected before
+  // anything is decoded, then a sign-magnitude value outside the signed 64-bit
+  // range is a script number overflow. The decoded value is saturated to int32
+  // like CScriptNum::getint().
   #readSpliceOperand(buf: number[]): number {
-    const value = this.#readScriptNumber(buf).toBigInt()
-    if (buf.length > spliceOperandMaxBytes || value < int64Min || value > int64Max) {
+    const maxSize = this.#scriptNumMaxSize()
+    if (maxSize !== undefined && buf.length > maxSize) {
+      this.#scriptEvaluationError('script number overflow')
+    }
+    if (this.#shouldEnforceMinimalData() && !isMinimallyEncodedHelper(buf)) {
+      this.#scriptEvaluationError('non-minimally encoded script number')
+    }
+    if (buf.length > spliceOperandMaxBytes) {
+      this.#scriptEvaluationError('script number overflow')
+    }
+    const value = BigNumber.fromSm(buf, 'little').toBigInt()
+    if (value < int64Min || value > int64Max) {
       this.#scriptEvaluationError('script number overflow')
     }
     if (value > int32Max) return Number(int32Max)

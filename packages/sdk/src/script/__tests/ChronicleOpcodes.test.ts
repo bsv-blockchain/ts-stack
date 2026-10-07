@@ -791,8 +791,11 @@ describe('Chronicle splice operands — node v1.2.3 checked int64 decoding', () 
   })
 
   describe('OP_SPLIT position bound (interpreter.cpp v1.2.3)', () => {
-    it('rejects a split position above INT32_MAX', () => {
-      // 00 00 00 80 00 = 2^31 = INT32_MAX + 1
+    it('keeps rejecting a position above INT32_MAX on a small element', () => {
+      // 00 00 00 80 00 = 2^31 = INT32_MAX + 1. On a two-byte element the size
+      // check already rejects this, so the test pins the verdict, not the new
+      // guard; the guard itself is only observable on an element larger than
+      // INT32_MAX bytes, which the node exercises with a 2 GiB element.
       expectErrorWithFlags([DATA2, bytes(0, 0, 0, 0x80, 0), OP.OP_SPLIT], /OP_SPLIT/)
     })
 

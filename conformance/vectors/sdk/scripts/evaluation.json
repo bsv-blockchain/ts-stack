@@ -158662,11 +158662,11 @@
       "description": "OP_LEFT with a nine-byte count whose final byte carries magnitude bits (2^64) is a script number overflow",
       "input": {
         "script_sig_hex": "",
-        "script_pubkey_hex": "02000109000000000000000001b4"
+        "script_pubkey_hex": "02000109000000000000000001b40087"
       },
       "expected": {
         "valid": false,
-        "note": "Node v1.2.3 rejects the operand with SCRIPT_ERR_SCRIPTNUM_OVERFLOW; node v1.2.2 read the first eight bytes as 0 and accepted the spend. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+        "note": "Node v1.2.3 rejects the operand with SCRIPT_ERR_SCRIPTNUM_OVERFLOW. Node v1.2.2 read the first eight bytes as count 0, left an empty element, and the trailing OP_0 OP_EQUAL made that spend valid; the vector therefore passes on the old decoder and fails on the new one. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
       },
       "tags": [
         "evaluation",
@@ -158681,11 +158681,11 @@
       "description": "OP_RIGHT with a ten-byte count (2^72) is a script number overflow",
       "input": {
         "script_sig_hex": "",
-        "script_pubkey_hex": "0200010a00000000000000000001b5"
+        "script_pubkey_hex": "0200010a00000000000000000001b50087"
       },
       "expected": {
         "valid": false,
-        "note": "Node v1.2.3 rejects any splice operand longer than nine bytes; node v1.2.2 read the first eight bytes as 0. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+        "note": "Node v1.2.3 rejects any splice operand longer than nine bytes. Node v1.2.2 read the first eight bytes as count 0, left an empty element, and the trailing OP_0 OP_EQUAL made that spend valid. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
       },
       "tags": [
         "evaluation",
@@ -158697,14 +158697,14 @@
     },
     {
       "id": "script-036",
-      "description": "OP_SUBSTR with a nine-byte length whose magnitude exceeds int64 (ff*8 00) is a script number overflow",
+      "description": "OP_SUBSTR with a nine-byte length of 2^64+1 is a script number overflow",
       "input": {
         "script_sig_hex": "",
-        "script_pubkey_hex": "030001020009ffffffffffffffff00b3"
+        "script_pubkey_hex": "030001020009010000000000000001b382775187"
       },
       "expected": {
         "valid": false,
-        "note": "Mirrors opcode_tests.cpp: 9-byte ff ff ff ff ff ff ff ff 00 as OP_SUBSTR length -> SCRIPT_ERR_SCRIPTNUM_OVERFLOW. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+        "note": "Operand 01 00 00 00 00 00 00 00 01: node v1.2.3 rejects it because the ninth byte carries magnitude bits. Node v1.2.2 read the first eight bytes as length 1, extracted one byte, and the trailing OP_SIZE OP_NIP OP_1 OP_EQUAL made that spend valid. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
       },
       "tags": [
         "evaluation",
@@ -158719,11 +158719,11 @@
       "description": "OP_SUBSTR with a nine-byte offset of 2^64 is a script number overflow",
       "input": {
         "script_sig_hex": "",
-        "script_pubkey_hex": "030001020900000000000000000151b3"
+        "script_pubkey_hex": "030001020900000000000000000151b382775187"
       },
       "expected": {
         "valid": false,
-        "note": "Node v1.2.3 decodes the offset through the checked int64 path; node v1.2.2 read offset 0 and accepted the spend. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+        "note": "Node v1.2.3 decodes the offset through the checked int64 path and rejects it. Node v1.2.2 read offset 0, extracted one byte, and the trailing OP_SIZE OP_NIP OP_1 OP_EQUAL made that spend valid. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
       },
       "tags": [
         "evaluation",
@@ -158742,7 +158742,7 @@
       },
       "expected": {
         "valid": false,
-        "note": "int_serialization_tests.cpp: 00*7 80 80 deserializes to INT64_MIN; the count is then negative -> SCRIPT_ERR_INVALID_NUMBER_RANGE. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+        "note": "int_serialization_tests.cpp: 00*7 80 80 deserializes to INT64_MIN and is not an overflow; the count is then negative -> SCRIPT_ERR_INVALID_NUMBER_RANGE. Node v1.2.2 read the first eight bytes as INT64_MIN too, so the verdict is unchanged; this vector pins the boundary, not the behaviour change. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
       },
       "tags": [
         "evaluation",
