@@ -3,8 +3,8 @@ id: architecture-conformance
 title: Conformance Pipeline
 kind: meta
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-10-07'
+last_verified: '2026-10-07'
 review_cadence_days: 30
 status: stable
 tags: ['architecture', 'conformance', 'cross-language']
@@ -58,7 +58,7 @@ shape is:
 
 | Area                          | Size                                                         | Notes                                                                                                                                                                               |
 | ----------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sdk/scripts/evaluation.json` | 5,116 vectors                                                | BRC-14 — Script parsing, encoding, sighash, and full evaluation parity with SV Node + Teranode (normalized hex fixtures)                                                            |
+| `sdk/scripts/evaluation.json` | 5,122 vectors                                                | BRC-14 — Script parsing, encoding, sighash, and full evaluation parity with SV Node + Teranode (normalized hex fixtures)                                                            |
 | `wallet/brc100/`              | Method-level corpus                                          | `WalletInterface` crypto, action, output, certificate, discovery, authentication, chain, and network behavior. Stateful gaps are explicitly governed rather than counted as passes. |
 | `sdk/crypto/`                 | 8 files                                                      | AES-GCM, ECDSA, ECIES, HMAC, SHA-256, RIPEMD-160, Hash160, Signature                                                                                                                |
 | `sdk/keys/`                   | 3 files                                                      | BRC-42 HD derivation, PrivateKey / PublicKey behavior                                                                                                                               |

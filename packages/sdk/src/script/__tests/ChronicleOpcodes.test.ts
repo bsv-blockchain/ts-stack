@@ -608,3 +608,207 @@ describe('Chronicle Opcode Tests (based on bitcoin-sv node v1.2.0 test suite)', 
     })
   })
 })
+
+/**
+ * bitcoin-sv node v1.2.3 fixed-width splice operand decoding.
+ *
+ * Node v1.2.3 (`src/script/int_serialization.h` `deserialize<int64_t>`) rejects
+ * an OP_SUBSTR offset/length or an OP_LEFT/OP_RIGHT count that is longer than
+ * nine bytes or whose value lies outside the signed 64-bit range with
+ * SCRIPT_ERR_SCRIPTNUM_OVERFLOW. Node v1.2.2 read only the first eight bytes
+ * and silently ignored the rest. Vectors below mirror
+ * `src/test/opcode_tests.cpp` and `src/test/int_serialization_tests.cpp` at
+ * https://github.com/bitcoin-sv/bitcoin-sv/tree/v1.2.3.
+ */
+describe('Chronicle splice operands — node v1.2.3 checked int64 decoding', () => {
+  const CHRONICLE_FLAGS = 'UTXO_AFTER_GENESIS,UTXO_AFTER_CHRONICLE'
+  const CHRONICLE_MINIMAL_FLAGS = `${CHRONICLE_FLAGS},MINIMALDATA`
+
+  function spendWithFlags(items: Array<number | number[]>, verifyFlags: string): Spend {
+    return new Spend({
+      sourceTXID: ZERO_TXID,
+      sourceOutputIndex: 0,
+      sourceSatoshis: 1,
+      lockingScript: buildLockingScript(items),
+      transactionVersion: 1,
+      otherInputs: [],
+      outputs: [],
+      inputIndex: 0,
+      unlockingScript: new UnlockingScript([]),
+      inputSequence: 0xffffffff,
+      lockTime: 0,
+      verifyFlags
+    })
+  }
+
+  function expectValidWithFlags(items: Array<number | number[]>, flags = CHRONICLE_FLAGS): void {
+    expect(spendWithFlags(items, flags).validate()).toBe(true)
+  }
+
+  function expectErrorWithFlags(
+    items: Array<number | number[]>,
+    pattern: RegExp,
+    flags = CHRONICLE_FLAGS
+  ): void {
+    expect(() => spendWithFlags(items, flags).validate()).toThrow(pattern)
+  }
+
+  const OVERFLOW = /script number overflow/
+  const RANGE = /must be in range/
+  const NON_MINIMAL = /non-minimally encoded script number/
+
+  const bytes = (...values: number[]): number[] => values
+  /** Nine-byte encoding: eight magnitude bytes followed by a pure sign byte. */
+  const nine = (magnitude: number[], sign: 0x00 | 0x80): number[] => [...magnitude, sign]
+  const ONE_8 = bytes(0x01, 0, 0, 0, 0, 0, 0, 0)
+  const FF_8 = bytes(0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff)
+  const INT64_MIN_MAGNITUDE = bytes(0, 0, 0, 0, 0, 0, 0, 0x80)
+  const TEN_BYTE_ONE = bytes(0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+  const DATA3 = bytes(0, 1, 2)
+  const DATA2 = bytes(0, 1)
+
+  describe('OP_SUBSTR length operand (opcode_tests.cpp)', () => {
+    it('accepts a nine-byte length 1 with a 0x00 sign byte', () => {
+      expectValidWithFlags([DATA3, OP.OP_0, nine(ONE_8, 0x00), OP.OP_SUBSTR, bytes(0), OP.OP_EQUAL])
+    })
+
+    it('rejects a nine-byte length -1 as an out-of-range length, not an overflow', () => {
+      expectErrorWithFlags([DATA3, OP.OP_0, nine(ONE_8, 0x80), OP.OP_SUBSTR], RANGE)
+    })
+
+    it('rejects a nine-byte length whose magnitude exceeds int64 as an overflow', () => {
+      expectErrorWithFlags([DATA3, OP.OP_0, nine(FF_8, 0x00), OP.OP_SUBSTR], OVERFLOW)
+    })
+
+    it('rejects a ten-byte length 1 as an overflow (v1.2.2 read it as 1)', () => {
+      expectErrorWithFlags([DATA3, OP.OP_0, TEN_BYTE_ONE, OP.OP_SUBSTR], OVERFLOW)
+    })
+  })
+
+  describe('OP_SUBSTR offset operand (opcode_tests.cpp)', () => {
+    it('accepts a nine-byte offset 1 with a 0x00 sign byte', () => {
+      expectValidWithFlags([DATA3, nine(ONE_8, 0x00), OP.OP_1, OP.OP_SUBSTR, bytes(1), OP.OP_EQUAL])
+    })
+
+    it('rejects a nine-byte offset -1 as an out-of-range offset', () => {
+      expectErrorWithFlags([DATA3, nine(ONE_8, 0x80), OP.OP_1, OP.OP_SUBSTR], RANGE)
+    })
+
+    it('rejects a nine-byte offset whose magnitude exceeds int64 as an overflow', () => {
+      expectErrorWithFlags([DATA3, nine(FF_8, 0x00), OP.OP_1, OP.OP_SUBSTR], OVERFLOW)
+    })
+
+    it('rejects a ten-byte offset 1 as an overflow (v1.2.2 read it as 1)', () => {
+      expectErrorWithFlags([DATA3, TEN_BYTE_ONE, OP.OP_1, OP.OP_SUBSTR], OVERFLOW)
+    })
+  })
+
+  describe('OP_LEFT count operand (opcode_tests.cpp)', () => {
+    it('accepts a nine-byte count 1 with a 0x00 sign byte', () => {
+      expectValidWithFlags([DATA2, nine(ONE_8, 0x00), OP.OP_LEFT, bytes(0), OP.OP_EQUAL])
+    })
+
+    it('rejects a nine-byte count -1 as an out-of-range count', () => {
+      expectErrorWithFlags([DATA2, nine(ONE_8, 0x80), OP.OP_LEFT], RANGE)
+    })
+
+    it('rejects a nine-byte count whose magnitude exceeds int64 as an overflow', () => {
+      expectErrorWithFlags([DATA2, nine(FF_8, 0x00), OP.OP_LEFT], OVERFLOW)
+    })
+
+    it('rejects a ten-byte count 1 as an overflow (v1.2.2 read it as 1)', () => {
+      expectErrorWithFlags([DATA2, TEN_BYTE_ONE, OP.OP_LEFT], OVERFLOW)
+    })
+  })
+
+  describe('OP_RIGHT count operand (opcode_tests.cpp)', () => {
+    it('accepts a nine-byte count 1 with a 0x00 sign byte', () => {
+      expectValidWithFlags([DATA2, nine(ONE_8, 0x00), OP.OP_RIGHT, bytes(1), OP.OP_EQUAL])
+    })
+
+    it('rejects a nine-byte count -1 as an out-of-range count', () => {
+      expectErrorWithFlags([DATA2, nine(ONE_8, 0x80), OP.OP_RIGHT], RANGE)
+    })
+
+    it('rejects a nine-byte count whose magnitude exceeds int64 as an overflow', () => {
+      expectErrorWithFlags([DATA2, nine(FF_8, 0x00), OP.OP_RIGHT], OVERFLOW)
+    })
+
+    it('rejects a ten-byte count 1 as an overflow (v1.2.2 read it as 1)', () => {
+      expectErrorWithFlags([DATA2, TEN_BYTE_ONE, OP.OP_RIGHT], OVERFLOW)
+    })
+  })
+
+  describe('int64 boundary (int_serialization_tests.cpp)', () => {
+    it('decodes the nine-byte INT64_MIN encoding and rejects it as a negative count', () => {
+      expectErrorWithFlags([DATA2, nine(INT64_MIN_MAGNITUDE, 0x80), OP.OP_LEFT], RANGE)
+    })
+
+    it('rejects the nine-byte +2^63 encoding as an overflow', () => {
+      expectErrorWithFlags([DATA2, nine(INT64_MIN_MAGNITUDE, 0x00), OP.OP_LEFT], OVERFLOW)
+    })
+
+    it('rejects a nine-byte operand whose final byte carries magnitude bits (v1.2.2 read 0)', () => {
+      // 00 00 00 00 00 00 00 00 01 = 2^64; minimally encoded, so this also
+      // reaches the decoder under MINIMALDATA and in the default strict mode.
+      const twoPow64 = bytes(0, 0, 0, 0, 0, 0, 0, 0, 0x01)
+      expectErrorWithFlags([DATA2, twoPow64, OP.OP_LEFT], OVERFLOW)
+      expectErrorWithFlags([DATA2, twoPow64, OP.OP_LEFT], OVERFLOW, CHRONICLE_MINIMAL_FLAGS)
+      expectInvalid([DATA2, twoPow64, OP.OP_LEFT])
+      expectErrorWithFlags([DATA2, twoPow64, OP.OP_RIGHT], OVERFLOW)
+      expectErrorWithFlags([DATA3, OP.OP_0, twoPow64, OP.OP_SUBSTR], OVERFLOW)
+      expectErrorWithFlags([DATA3, twoPow64, OP.OP_1, OP.OP_SUBSTR], OVERFLOW)
+    })
+
+    it('rejects a minimally encoded ten-byte operand as an overflow (v1.2.2 read 0)', () => {
+      const twoPow72 = bytes(0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01)
+      expectErrorWithFlags([DATA2, twoPow72, OP.OP_LEFT], OVERFLOW, CHRONICLE_MINIMAL_FLAGS)
+      expectErrorWithFlags([DATA2, twoPow72, OP.OP_RIGHT], OVERFLOW, CHRONICLE_MINIMAL_FLAGS)
+      expectErrorWithFlags(
+        [DATA3, OP.OP_0, twoPow72, OP.OP_SUBSTR],
+        OVERFLOW,
+        CHRONICLE_MINIMAL_FLAGS
+      )
+    })
+
+    it('still reports a non-minimal nine-byte operand as non-minimal under MINIMALDATA', () => {
+      expectErrorWithFlags(
+        [DATA2, nine(ONE_8, 0x00), OP.OP_LEFT],
+        NON_MINIMAL,
+        CHRONICLE_MINIMAL_FLAGS
+      )
+    })
+
+    it('keeps accepting eight-byte counts and saturating them to int32 for the range check', () => {
+      // 0x7fffffffffffffff fits int64, saturates to INT32_MAX, then fails the size check.
+      const int64Max = bytes(0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f)
+      expectErrorWithFlags([DATA2, int64Max, OP.OP_LEFT], RANGE)
+      expectErrorWithFlags([DATA2, int64Max, OP.OP_RIGHT], RANGE)
+      expectErrorWithFlags([DATA3, int64Max, OP.OP_1, OP.OP_SUBSTR], RANGE)
+      // The eight-byte encoding of 1 is still 1.
+      expectValidWithFlags([DATA2, ONE_8, OP.OP_LEFT, bytes(0), OP.OP_EQUAL])
+    })
+  })
+
+  describe('OP_SPLIT position bound (interpreter.cpp v1.2.3)', () => {
+    it('keeps rejecting a position above INT32_MAX on a small element', () => {
+      // 00 00 00 80 00 = 2^31 = INT32_MAX + 1. On a two-byte element the size
+      // check already rejects this, so the test pins the verdict, not the new
+      // guard; the guard itself is only observable on an element larger than
+      // INT32_MAX bytes, which the node exercises with a 2 GiB element.
+      expectErrorWithFlags([DATA2, bytes(0, 0, 0, 0x80, 0), OP.OP_SPLIT], /OP_SPLIT/)
+    })
+
+    it('accepts a split position equal to the data length', () => {
+      expectValidWithFlags([
+        DATA2,
+        OP.OP_2,
+        OP.OP_SPLIT,
+        OP.OP_0,
+        OP.OP_EQUALVERIFY,
+        DATA2,
+        OP.OP_EQUAL
+      ])
+    })
+  })
+})

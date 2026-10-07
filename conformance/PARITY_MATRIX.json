@@ -1,16 +1,16 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-24",
+  "generated_at": "2026-10-07",
   "source": "ts-stack conformance corpus",
   "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
     "total_files": 77,
-    "total_vectors": 6700,
+    "total_vectors": 6706,
     "fully_required_files": 58,
     "files_with_intended": 17,
     "files_with_mixed_status": 15,
     "vectors_by_status": {
-      "required": 6496,
+      "required": 6502,
       "intended": 204,
       "skipped": 7
     },
@@ -18,7 +18,7 @@
       "fully_supported": 1283,
       "governed_vector_skip": 50,
       "historical_regression": 36,
-      "partial_ts_behavioral_difference": 5116,
+      "partial_ts_behavioral_difference": 5122,
       "intended_parity_work": 24,
       "wallet_stateful_harness_required": 191
     }
@@ -473,10 +473,10 @@
     {
       "path": "sdk/scripts/evaluation.json",
       "id": "sdk.scripts.evaluation",
-      "total_vectors": 5116,
+      "total_vectors": 5122,
       "file_level_parity": "required",
       "effective_status": "mixed",
-      "required_count": 5081,
+      "required_count": 5087,
       "intended_count": 35,
       "skipped_count": 2,
       "reason_category": "partial_ts_behavioral_difference",
