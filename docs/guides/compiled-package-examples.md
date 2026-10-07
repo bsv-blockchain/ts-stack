@@ -2,7 +2,7 @@
 id: compiled-package-examples
 title: 'Compiled Package Boundary Examples'
 kind: guide
-version: '1.1.0'
+version: '1.1.1'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -22,6 +22,25 @@ native TypeScript compiler.
 They validate package names, exports, declarations, module resolution, and
 cross-package type identity. They do not replace behavioral examples, package
 tests, browser/mobile bundles, or live-service integration tests.
+
+## Inspect an incoming canonical encoding
+
+This additive helper checks encoding and bounds during a complete duplicate-aware
+parse. Its owned value still needs endpoint schema and authority validation.
+Ordinary parsing continues accepting valid noncanonical JSON.
+
+```ts compile
+// example-id: sdk-output-json-encoding-inspection
+import { inspectOutputJSONEncoding, parseOutputJSON } from '@bsv/sdk'
+import { inspectOutputJSONEncoding as inspectDeep } from '@bsv/sdk/overlay-tools/OutputProtocolJSON'
+
+const input = new TextEncoder().encode('{"a":1,"b":"é"}')
+const inspected = inspectOutputJSONEncoding(input, { bytes: 1024, mapKeys: 16 })
+if (!inspected.canonical) throw new Error('Canonical encoding required by this record')
+const separatelyOwned = inspectDeep(input)
+const ordinaryValue = parseOutputJSON(' {"b":"é", "a":1} ')
+void [inspected.value, separatelyOwned.value, ordinaryValue]
+```
 
 ## Durable ordinary admission for a proposal service
 

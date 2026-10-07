@@ -63,19 +63,43 @@ async function submitAlias(
   f: Fixture,
   candidate: OutputPurchaseSubmit
 ): Promise<OutputPurchaseEnvelope> {
-  const original = loadOriginal(f)
-  return retryClockConflict(() =>
-    new OutputPurchaseTransport({
+  const original = loadOriginal(f),
+    terms = original.custody.original.terms,
+    domain = f.buyerDomain,
+    signal = new AbortController().signal
+  expect(domain.candidateBinding).toBeDefined()
+  // This companion requires independent full domain verification of both raw
+  // transactions. A seller-reported commitment alone cannot select it.
+  const funded = await domain.candidateBinding!(
+      f.asset.prepare,
+      terms,
+      original.candidate!,
+      signal
+    ),
+    alias = await domain.candidateBinding!(f.asset.prepare, terms, candidate, signal)
+  expect(alias.purchaseCommitment).toBe(funded.purchaseCommitment)
+  return retryClockConflict(async () => {
+    funded.checkCurrent()
+    alias.checkCurrent()
+    const response = await new OutputPurchaseTransport({
       contract: f.retained,
       trust: f.trust,
       request: f.asset.prepare,
       wallet: f.wallet,
       fetch: f.wire,
       operation: 'submit',
-      terms: original.custody.original.terms,
-      candidate
+      terms,
+      candidate,
+      commitmentBinding: {
+        profile: 'full-purchase-commitment-v1',
+        domainProfile: terms.body.domainProfile,
+        purchaseCommitment: funded.purchaseCommitment
+      }
     }).send()
-  )
+    funded.checkCurrent()
+    alias.checkCurrent()
+    return response
+  })
 }
 
 it('composes the current immutable reserve/activation/purchase Script with native funding, actual topical admission, authenticated custody and licensed playback across reopen', async () => {
@@ -152,6 +176,10 @@ it('requires independently checked mined placement and actual admission of an eq
     expect(f.counts.issuance).toBe(1)
     expect(f.native.counts).toEqual(walletCounts)
     await retryClockConflict(() => owner.buyer.recover())
+    // Before its first retained delivery, read-only recovery reconciles the
+    // original finalized wallet once. It never prepares or finalizes again.
+    const deliveredWalletCounts = { ...walletCounts, recover: walletCounts.recover + 1 }
+    expect(f.native.counts).toEqual(deliveredWalletCounts)
     expect(await owner.buyer.validate()).toBe('usable')
     const retained = await owner.buyer.usableResult(),
       saved = await owner.state.read()
@@ -164,7 +192,7 @@ it('requires independently checked mined placement and actual admission of an eq
     expect(historical(await owner.buyer.usableResult())).toBe(historical(retained))
     expect(await f.playback(retained)).toEqual(f.asset.plaintext)
     expect(f.counts.issuance).toBe(1)
-    expect(f.native.counts).toEqual(walletCounts)
+    expect(f.native.counts).toEqual(deliveredWalletCounts)
     await owner.close()
   } finally {
     await f.close()

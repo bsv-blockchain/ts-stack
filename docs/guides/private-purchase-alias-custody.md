@@ -2,7 +2,7 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.3'
+version: '0.1.4'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -206,6 +206,21 @@ a replacement secret/License, changes the persisted control revision nor rewrite
 the historical result. Ordinary `recover` and `usableResult` keep their previous
 behavior. Report absence or selected-view rejection does not erase usable rights.
 Each call owns new bounded work; no positive verdict is cached across calls.
+
+When submitting an equivalent transaction, independently verify both its complete
+domain purchase and the originally funded transaction, require the same full
+commitment, and explicitly supply `commitmentBinding` to `OutputPurchaseTransport`.
+Keep both verification contexts current across the exchange. Omitting that option
+retains the historical exact-transaction contract and correctly refuses a returned
+grant bound to another transaction. The transport companion itself does not prove
+economic equivalence or current placement.
+
+Before the buyer retains its first delivery, ordinary `recover` may read the
+original finalized wallet to reconcile that operation before querying the seller.
+That read neither prepares nor finalizes another action. Once the immutable result
+is retained, historical recovery and current-alias reporting do not need another
+funding-action recovery query. Recipient key access remains a separate requirement
+for licensed playback. The reference composition checks those stages separately.
 
 Server constructors and native owner types are exported from
 `@bsv/output-knowledge/private/node`. The buyer companion and SDK chain adapter

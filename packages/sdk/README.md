@@ -421,6 +421,15 @@ wallet-derived locking key, and field signature before reading or spending it.
   decision nor authorization. Endpoint schemas and current capability checks
   still apply to each operation.
 
+  `inspectOutputJSONEncoding(input, limits)` parses incoming text or UTF-8 bytes
+  with the same duplicate-key, Unicode and structural checks and returns
+  `{ value, canonical }`. It checks the original and canonical byte sizes while
+  parsing, without serializing the parsed value again. The flag describes the
+  original encoding; the independently owned value remains mutable. This is
+  useful when an authenticated record must already have canonical encoding.
+  It supplies no schema, signature, custody or authorization decision, and
+  ordinary `parseOutputJSON` continues accepting noncanonical valid JSON.
+
   `retainOutputCapability(manifest, request)` validates a new selection and returns
   `{ record, selection }` as independent owned copies. Atomically persist `record`
   with the operation before any effect. `restoreOutputCapability(record, trust)`

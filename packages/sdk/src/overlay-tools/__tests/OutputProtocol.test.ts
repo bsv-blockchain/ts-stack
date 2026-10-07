@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm'
 import {
   canonicalOutputJSON,
   parseOutputJSON,
+  inspectOutputJSONEncoding,
   OutputProtocolError,
   outputU64,
   incrementOutputU64,
@@ -39,6 +40,168 @@ describe('BRC-192 representation boundary', () => {
     for (const vector of fixture.vectors) {
       expect(toHex(outputPacketPreimage(vector.domain, fixture.body))).toBe(vector.preimage)
       expect(outputPacketDigest(vector.domain, fixture.body)).toBe(vector.sha256)
+    }
+  })
+
+  it('inspects canonical encoding against independent literals and the existing Python corpus', () => {
+    const cases: [string, string][] = [
+      ['null', 'null'],
+      ['true', 'true'],
+      ['false', 'false'],
+      ['0', '0'],
+      ['-0', '0'],
+      ['1.00', '1'],
+      ['1e9', '1000000000'],
+      ['100e-2', '1'],
+      ['-9007199254740991', '-9007199254740991'],
+      [' [] ', '[]'],
+      ['{}', '{}'],
+      ['[\r\ntrue,\tfalse, null, -0 ]', '[true,false,null,0]'],
+      ['{"b":2,"a":1}', '{"a":1,"b":2}'],
+      ['{"10":1,"2":2}', '{"10":1,"2":2}'],
+      ['{"2":2,"10":1}', '{"10":1,"2":2}'],
+      ['{"a":{"z":0,"b":1}}', '{"a":{"b":1,"z":0}}'],
+      ['{"a":{},"b":[],"c":"é😀"}', '{"a":{},"b":[],"c":"é😀"}'],
+      ['"\\u0061"', '"a"'],
+      ['"\\/"', '"/"'],
+      ['"\\u000a"', '"\\n"'],
+      ['"\\u0000"', '"\\u0000"'],
+      ['"\\u000F"', '"\\u000f"'],
+      ['"\\ud83d\\ude00"', '"😀"'],
+      ['"\\\\"', '"\\\\"'],
+      ['"\\\""', '"\\\""'],
+      ['" space "', '" space "'],
+      [fixture.canonical, fixture.canonical]
+    ]
+    const encoder = new TextEncoder()
+    for (const [source, canonical] of cases) {
+      for (const input of [source, encoder.encode(source)]) {
+        const inspected = inspectOutputJSONEncoding(input)
+        expect(inspected.value).toEqual(JSON.parse(source))
+        expect(inspected.canonical).toBe(source === canonical)
+        expect(canonicalOutputJSON(inspected.value)).toBe(canonical)
+      }
+    }
+    for (let code = 0; code < 128; code++) {
+      for (const text of [
+        String.fromCharCode(code),
+        'prefix' + String.fromCharCode(code) + 'suffix'
+      ]) {
+        const source = JSON.stringify(text)
+        expect(inspectOutputJSONEncoding(source)).toEqual({ value: text, canonical: true })
+      }
+    }
+    for (const text of ['é', '😀', '\u2028', '\u2029', 'é'.repeat(2048)]) {
+      const source = JSON.stringify(text),
+        bytes = encoder.encode(source).length
+      expect(inspectOutputJSONEncoding(source, { bytes })).toEqual({ value: text, canonical: true })
+      expect(() => inspectOutputJSONEncoding(source, { bytes: bytes - 1 })).toThrow('byte limit')
+    }
+  })
+
+  it('retains full parsing before canonical-size refusal and returns independently owned mutable values', () => {
+    expect(inspectOutputJSONEncoding).toHaveLength(1)
+    const encoder = new TextEncoder()
+    for (const source of [
+      '[1e9,"\\u0061"]',
+      ' [1e9,"\\u0061"] ',
+      '[1e15,"\\ud83d\\ude00",1e15,"\\/"]',
+      '{"\\u0061":1e9}',
+      '{ "a" : 1e9, "b" : "\\u000a" }'
+    ]) {
+      const value = JSON.parse(source),
+        canonical = JSON.stringify(value),
+        originalBytes = encoder.encode(source).length,
+        canonicalBytes = encoder.encode(canonical).length,
+        bytes = Math.max(originalBytes, canonicalBytes)
+      for (const input of [source, encoder.encode(source)]) {
+        expect(inspectOutputJSONEncoding(input, { bytes })).toEqual({
+          value,
+          canonical: source === canonical
+        })
+        expect(() => inspectOutputJSONEncoding(input, { bytes: bytes - 1 })).toThrow(
+          'Output JSON byte limit'
+        )
+      }
+    }
+    expect(inspectOutputJSONEncoding('1e9', { bytes: 10 })).toEqual({
+      value: 1000000000,
+      canonical: false
+    })
+    expect(() => inspectOutputJSONEncoding('1e9', { bytes: 9 })).toThrow('Output JSON byte limit')
+    expect(() => inspectOutputJSONEncoding('{"a":1e9,"a":0}', { bytes: 17 })).toThrow(
+      'Duplicate decoded JSON key'
+    )
+    expect(() => inspectOutputJSONEncoding('[1e9,?]', { bytes: 7 })).toThrow('Invalid JSON token')
+    expect(() => inspectOutputJSONEncoding('[[1e9]]', { depth: 2 })).toThrow('JSON depth limit')
+    expect(() => inspectOutputJSONEncoding('[1e9,0]', { arrayElements: 1 })).toThrow(
+      'JSON array limit'
+    )
+    expect(() => inspectOutputJSONEncoding('{"a":1e9,"b":0}', { mapKeys: 1 })).toThrow(
+      'JSON map limit'
+    )
+    const source = '{"__proto__":{"x":[1]},"constructor":2}',
+      first = inspectOutputJSONEncoding(source),
+      second = inspectOutputJSONEncoding(source)
+    const value = first.value as { __proto__: { x: number[] }; extra?: number }
+    expect(Object.getPrototypeOf(value)).toBeNull()
+    expect(Object.getOwnPropertyDescriptor(value, '__proto__')).toEqual({
+      value: { x: [1] },
+      writable: true,
+      enumerable: true,
+      configurable: true
+    })
+    value.__proto__.x[0] = 9
+    value.extra = 3
+    expect(second.value).toEqual(JSON.parse(source))
+    expect(first.canonical).toBe(true)
+    expect(second.canonical).toBe(true)
+  })
+
+  it('preserves the original malformed-input and resource refusal identities during encoding inspection', () => {
+    const cases: [Uint8Array | string, Parameters<typeof parseOutputJSON>[1]][] = [
+      ['', undefined],
+      ['0 trailing', undefined],
+      ['{"a":1,}', undefined],
+      ['[0,]', undefined],
+      ['{"a" 1}', undefined],
+      ['{"a":1 "b":2}', undefined],
+      ['[0 1]', undefined],
+      ['"\\x"', undefined],
+      ['"\\ud800"', undefined],
+      ['"\udfff"', undefined],
+      ['"unfinished', undefined],
+      ['0.5', undefined],
+      ['9007199254740992', undefined],
+      ['{"a":0,"\\u0061":1}', undefined],
+      ['\ufeff{}', undefined],
+      [Uint8Array.of(0xc0, 0xaf), undefined],
+      [Uint8Array.of(0xef, 0xbb, 0xbf, 0x30), undefined],
+      ['"😀"', { bytes: 5 }],
+      ['{}', { bytes: 1 }],
+      ['{}', { bytes: 0 }],
+      ['{}', { depth: 33 }],
+      ['{}', { mapKeys: 257 }],
+      ['{}', { arrayElements: 4097 }]
+    ]
+    function refusal(work: () => unknown): {
+      name: string
+      message: string
+      code: OutputProtocolError['code']
+    } {
+      try {
+        work()
+      } catch (error) {
+        expect(error).toBeInstanceOf(OutputProtocolError)
+        const failure = error as OutputProtocolError
+        return { name: failure.name, message: failure.message, code: failure.code }
+      }
+      throw new Error('Expected independent parser refusal')
+    }
+    for (const [input, limits] of cases) {
+      expect(refusal(() => inspectOutputJSONEncoding(input, limits))).toEqual(
+        refusal(() => parseOutputJSON(input, limits))
+      )
     }
   })
 

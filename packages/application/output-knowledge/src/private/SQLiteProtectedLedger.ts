@@ -5,6 +5,7 @@ import {
   canonicalOutputJSON,
   closedOutputObject,
   incrementOutputU64,
+  inspectOutputJSONEncoding,
   outputAssert,
   outputHex32,
   outputU64,
@@ -181,12 +182,8 @@ export class SQLiteProtectedLedger {
         'Invalid protected ledger UTF-8',
         'unavailable'
       )
-      const value = parseOutputJSON(text, { bytes: maximum })
-      outputAssert(
-        canonicalOutputJSON(value, { bytes: maximum }) === text,
-        'Noncanonical protected ledger record',
-        'unavailable'
-      )
+      const { value, canonical } = inspectOutputJSONEncoding(text, { bytes: maximum })
+      outputAssert(canonical, 'Noncanonical protected ledger record', 'unavailable')
       // Both fields belong to this authenticated call; neither survives in a cache.
       return { value, text }
     } finally {

@@ -24,6 +24,9 @@ beforeAll(() => {
     if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
       return jsonResponse({ status: 'success', value: 950000 })
     }
+    if (url.includes('chaintracks.babbage.systems/findChainTipHashHex')) {
+      return jsonResponse({ status: 'success', value: HEADER_885628.hash })
+    }
     if (url.includes('chaintracks.babbage.systems/findHeaderHexForHeight')) {
       const height = Number(new URL(url).searchParams.get('height'))
       if (height === 885628) {
@@ -115,6 +118,10 @@ describe('verifyBeef tests', () => {
   })
 })
 
-function jsonResponse(body: unknown): any {
-  return { ok: true, status: 200, json: async () => body }
+function jsonResponse(body: unknown): Response {
+  // Exercise the production bounded stream reader, including headers and UTF-8.
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  })
 }

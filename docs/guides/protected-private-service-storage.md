@@ -2,7 +2,7 @@
 id: protected-private-service-storage
 title: 'Protected Private-Service Storage'
 kind: guide
-version: '1.0.4'
+version: '1.0.5'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -76,8 +76,14 @@ No permission, record, custody or currentness result is cached by these
 representation changes.
 
 The ledger uses that serialized path within the original SQL read bound.
-The bounded plaintext parser returns an independent value and its validated canonical
-text for the current call. The ledger reuses those owned results for its shape
+The bounded plaintext parser returns an independent value and checks canonical
+encoding during that same complete parse. It retains duplicate-key, Unicode,
+UTF-16 key ordering, numeric encoding and canonical byte-limit checks without
+rebuilding the serialized value. Malformed input is still rejected before the
+canonical-size check; a valid noncanonical record retains the original
+`unavailable` refusal. This fresh inspection does not cache a record or supply
+a schema or authority decision. The ledger reuses the owned value and original
+validated text for its shape
 and byte-length checks rather than serializing or copying the same plaintext
 again. Every later read authenticates and validates afresh.
 

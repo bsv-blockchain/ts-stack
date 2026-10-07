@@ -60,16 +60,44 @@ export function parseOutputJSON(
   input: Uint8Array | string,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): OutputJSON {
+  const { source, bounds } = outputJSONSource(input, limits)
+  return new OutputJSONParser(source, bounds).parse()
+}
+
+/** Fresh structural encoding inspection, never a schema or authority verdict.
+ * Both original UTF-8 and its canonical encoding must fit the selected limits.
+ * The flag describes this input text, not later mutations of the owned value. */
+export function inspectOutputJSONEncoding(
+  input: Uint8Array | string,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { value: OutputJSON; canonical: boolean } {
+  const { source, bounds, bytes } = outputJSONSource(input, limits),
+    // Count the decoded UTF-8 for byte inputs independently of overridable
+    // byteLength properties, matching serialization of the parsed value.
+    originalBytes = typeof input === 'string' ? bytes : encoder.encode(source).length,
+    encoding = { canonical: true, bytes: originalBytes },
+    value = new OutputJSONParser(source, bounds, encoding).parse()
+  // Parse every syntax/Unicode/duplicate/depth/item boundary first, as before.
+  outputAssert(encoding.bytes <= bounds.bytes, 'Output JSON byte limit', 'limited')
+  return { value, canonical: encoding.canonical }
+}
+
+function outputJSONSource(
+  input: Uint8Array | string,
+  limits: Partial<OutputJSONLimits>
+): { source: string; bounds: OutputJSONLimits; bytes: number } {
   const bounds = limitsFor(limits)
-  let source: string
+  let source: string, bytes: number
   if (typeof input === 'string') {
     outputAssert(input.length <= bounds.bytes, 'Output JSON byte limit', 'limited')
     wellFormed(input)
-    outputAssert(encoder.encode(input).length <= bounds.bytes, 'Output JSON byte limit', 'limited')
+    bytes = encoder.encode(input).length
+    outputAssert(bytes <= bounds.bytes, 'Output JSON byte limit', 'limited')
     source = input
   } else {
     outputAssert(input instanceof Uint8Array, 'Expected UTF-8 bytes')
-    outputAssert(input.byteLength <= bounds.bytes, 'Output JSON byte limit', 'limited')
+    bytes = input.byteLength
+    outputAssert(bytes <= bounds.bytes, 'Output JSON byte limit', 'limited')
     try {
       source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(input)
     } catch {
@@ -77,7 +105,7 @@ export function parseOutputJSON(
     }
   }
   outputAssert(source.codePointAt(0) !== 0xfeff, 'JSON BOM is not permitted')
-  return new OutputJSONParser(source, bounds).parse()
+  return { source, bounds, bytes }
 }
 
 class OutputJSONParser {
@@ -85,7 +113,8 @@ class OutputJSONParser {
 
   constructor(
     private readonly source: string,
-    private readonly bounds: OutputJSONLimits
+    private readonly bounds: OutputJSONLimits,
+    private readonly encoding?: { canonical: boolean; bytes: number }
   ) {}
 
   parse(): OutputJSON {
@@ -96,12 +125,33 @@ class OutputJSONParser {
   }
 
   private whitespace(): void {
-    while (' \r\n\t'.includes(this.source[this.offset] ?? '\0')) this.offset++
+    while (' \r\n\t'.includes(this.source[this.offset] ?? '\0')) {
+      this.offset++
+      if (this.encoding) {
+        this.encoding.canonical = false
+        this.encoding.bytes--
+      }
+    }
+  }
+
+  private encodedString(source: string, decoded: string, escaped: boolean): void {
+    if (!this.encoding || !escaped) return
+    const canonical = JSON.stringify(decoded)
+    this.encoding.canonical &&= canonical === source
+    this.encoding.bytes += encoder.encode(canonical).length - encoder.encode(source).length
+  }
+
+  private encodedNumber(source: string, value: number): void {
+    if (!this.encoding) return
+    const canonical = JSON.stringify(value)
+    this.encoding.canonical &&= canonical === source
+    this.encoding.bytes += canonical.length - source.length
   }
 
   private string(): string {
     outputAssert(this.source[this.offset] === '"', 'Expected JSON string')
     const start = this.offset++
+    let escaped = false
     // A backslash skips exactly one following UTF-16 code unit.
     // JSON.parse still validates every escape/control;
     // the decoded Unicode check and duplicate-key checks remain independent.
@@ -113,17 +163,20 @@ class OutputJSONParser {
       match = delimiters.exec(this.source)
     ) {
       if (match[0] === '\\') {
+        escaped = true
         delimiters.lastIndex = match.index + 2
         continue
       }
       this.offset = match.index + 1
+      const encoded = this.source.slice(start, this.offset)
       let decoded: string
       try {
-        decoded = JSON.parse(this.source.slice(start, this.offset)) as string
+        decoded = JSON.parse(encoded) as string
       } catch {
         throw new OutputProtocolError('invalid', 'Malformed JSON string')
       }
       wellFormed(decoded)
+      this.encodedString(encoded, decoded, escaped)
       return decoded
     }
     this.offset = this.source.length
@@ -134,6 +187,7 @@ class OutputJSONParser {
     this.offset++
     this.whitespace()
     const fields = new Map<string, OutputJSON>()
+    let previous: string | undefined
     // fromEntries creates own data properties without invoking object setters.
     const result = (): OutputJSONObject => Object.setPrototypeOf(Object.fromEntries(fields), null)
     if (this.source[this.offset] === '}') {
@@ -145,6 +199,10 @@ class OutputJSONParser {
       const key = this.string()
       outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
       outputAssert(fields.size < this.bounds.mapKeys, 'JSON map limit', 'limited')
+      if (this.encoding) {
+        this.encoding.canonical &&= previous === undefined || previous < key
+        previous = key
+      }
       this.whitespace()
       outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
       fields.set(key, this.value(depth + 1))
@@ -195,6 +253,7 @@ class OutputJSONParser {
           typeof result !== 'number' || Number.isSafeInteger(result),
           'Protocol numbers must be safe integers'
         )
+        if (typeof result === 'number') this.encodedNumber(token, result)
         return result as null | boolean | number
       }
     }
