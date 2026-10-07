@@ -339,9 +339,70 @@ export function diagnosticMayContinueValidation(phase, property) {
   )
 }
 
+/** Only scalar results from a safe, drained, bounded property measurement.
+ * A passing exit supplies no inferred count or qualification claim. */
+export function summarizePropertyExecution(bytes, measured) {
+  assert.ok(
+    diagnosticMayContinueValidation('profile-summary', measured),
+    'Unsafe property execution metadata'
+  )
+  const flags = triageDiagnostic(bytes, measured.exitCode)
+  assert.ok(
+    !flags.knownNativeFaultMarker && !flags.boundedTriageExceeded && !flags.testCaseTimeoutMarker,
+    'Unsafe property execution metadata'
+  )
+  const matches = bytes
+    .toString('utf8')
+    .matchAll(
+      /^[ \t]*(?:Error: )?Property (interrupted|failed) after (0|[1-9]\d*) tests[ \t]*\r?$/gm
+    )
+  const first = matches.next(),
+    second = matches.next()
+  if (!first.done && second.done && measured.exitCode === 1) {
+    const completedCases = Number(first.value[2])
+    if (Number.isSafeInteger(completedCases) && completedCases <= 300)
+      return {
+        outcome: first.value[1] === 'interrupted' ? 'interrupted' : 'counterexample',
+        completedCases
+      }
+  }
+  return {
+    outcome: measured.exitCode === 0 && first.done ? 'passed' : 'other-failure',
+    completedCases: null
+  }
+}
+
+function readPropertyExecution(file, measured, checkDeadline) {
+  assert.ok(
+    diagnosticMayContinueValidation('profile-summary', measured),
+    'Unsafe property execution metadata'
+  )
+  checkDeadline()
+  const reader = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
+  try {
+    const stat = fs.fstatSync(reader)
+    assert.ok(stat.isFile() && stat.size <= MAX_LOG, 'Unsafe property execution log')
+    const bytes = Buffer.alloc(stat.size + 1)
+    let length = 0
+    while (length < bytes.length) {
+      checkDeadline()
+      const count = fs.readSync(reader, bytes, length, bytes.length - length, null)
+      if (count === 0) break
+      length += count
+    }
+    assert.equal(length, stat.size, 'Property execution log changed during bounded read')
+    return summarizePropertyExecution(bytes.subarray(0, length), measured)
+  } finally {
+    fs.closeSync(reader)
+  }
+}
+
 /** Fixed diagnostic selectors only; neither replaces complete qualification. */
 export function applicationDiagnosticSelection(kind = 'property') {
-  assert.ok(['property', 'native-http'].includes(kind), 'Unknown application diagnostic selector')
+  assert.ok(
+    ['property', 'coordinator-property', 'native-http'].includes(kind),
+    'Unknown application diagnostic selector'
+  )
   if (kind === 'native-http')
     return Object.freeze({
       kind: 'native-http',
@@ -358,16 +419,19 @@ export function applicationDiagnosticSelection(kind = 'property') {
       nativeCases: 4,
       requiresMongo: true
     })
+  const coordinator = kind === 'coordinator-property'
   return Object.freeze({
-    kind: 'property',
+    kind,
     minimumPropertyRuns: 300,
     seed: 3242026,
     interruptAsFailureMilliseconds: 150000,
     packageDirectory: 'packages/application/output-knowledge',
-    selector: 'test/private-purchase-alias-disclosure.property.test.ts',
+    selector: coordinator
+      ? 'test/private-purchase-alias-coordinator.property.test.ts'
+      : 'test/private-purchase-alias-disclosure.property.test.ts',
     phase: 'unchanged-property-with-coverage',
-    profile: 'property.cpuprofile',
-    outputPrefix: 'performance-diagnostic',
+    profile: coordinator ? 'coordinator-property.cpuprofile' : 'property.cpuprofile',
+    outputPrefix: coordinator ? 'performance-diagnostic-coordinator' : 'performance-diagnostic',
     deadlineSeconds: 210,
     testCaseMilliseconds: 180000,
     nativeCases: null,
@@ -425,10 +489,14 @@ function freezeNativeDiagnosticRuntime(root, selection, walk, freeze) {
 
 function selectionFromArguments(args) {
   assert.ok(
-    args.length === 2 || (args.length === 3 && args[2] === '--native-http'),
+    args.length === 2 ||
+      (args.length === 3 && ['--native-http', '--coordinator'].includes(args[2])),
     'Only fixed unchanged diagnostic selectors are permitted'
   )
-  return applicationDiagnosticSelection(args.length === 2 ? 'property' : 'native-http')
+  if (args.length === 2) return applicationDiagnosticSelection()
+  return applicationDiagnosticSelection(
+    args[2] === '--native-http' ? 'native-http' : 'coordinator-property'
+  )
 }
 
 function diagnosticEnvironment(mongoBinary) {
@@ -548,7 +616,12 @@ async function main() {
   fs.mkdirSync(output)
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'output-knowledge-profile-')),
     results = [],
-    report = { phase: 'sqlite-health', refusal: null, timingCollected: false },
+    report = {
+      phase: 'sqlite-health',
+      refusal: null,
+      timingCollected: false,
+      propertyExecution: null
+    },
     env = diagnosticEnvironment(mongoBinary)
   const write = () =>
     fs.writeFileSync(
@@ -620,6 +693,15 @@ async function main() {
     )
     report.phase = 'post-property-source-guard'
     guard()
+    if (!selection.requiresMongo) {
+      report.phase = 'property-execution-metadata'
+      report.propertyExecution = readPropertyExecution(
+        path.join(directory, 'property.log'),
+        measured,
+        checkWindow
+      )
+      guard()
+    }
     report.phase = 'profile-file-bound'
     const parsed = readBoundedProfile(
       path.join(directory, selection.profile),

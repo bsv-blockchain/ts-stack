@@ -329,9 +329,8 @@ export function canonicalOutputJSON(
   }
   function object(node: object, depth: number): void {
     outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
-    // Native default sorting of these primitive strings uses the UTF-16
-    // ordering required by RFC 8785, independent of locale or numeric value.
-    const keys = Object.getOwnPropertyNames(node).sort()
+    // RFC 8785 orders primitive property-name strings by UTF-16 code units.
+    const keys = Object.getOwnPropertyNames(node).sort((a, b) => +(a > b) - +(a < b))
     outputAssert(keys.length <= bounds.mapKeys, 'JSON map limit', 'limited')
     emit('{', true)
     let index = 0

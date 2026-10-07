@@ -500,6 +500,11 @@ jobs:
           OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
         run: node scripts/output-knowledge-performance-diagnostic.mjs --native-http
+      - name: Measure the unchanged application coordinator property on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --coordinator
       - name: Preserve bounded application function timing
         if: always() && ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

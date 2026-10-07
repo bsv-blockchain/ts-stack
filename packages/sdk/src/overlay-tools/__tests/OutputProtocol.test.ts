@@ -864,7 +864,7 @@ describe('fresh representation work preserves literal contracts', () => {
       const inspected = inspectOutputJSONEncoding(source)
       expect(inspected.canonical).toBe(true)
       expect(inspected.value).toEqual(input)
-      expect(Object.getPrototypeOf(inspected.value)).toBe(null)
+      expect(Object.getPrototypeOf(inspected.value)).toBeNull()
     }
     for (const source of ['"😀"', new TextEncoder().encode('"😀"')]) {
       expect(inspectOutputJSONEncoding(source)).toEqual({ value: '😀', canonical: true })

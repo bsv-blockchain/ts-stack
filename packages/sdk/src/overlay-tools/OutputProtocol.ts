@@ -195,16 +195,13 @@ export function closedOutputObject(
   )
   outputAssert(isOutputPlainObject(value), 'Expected plain object')
   outputAssert(Object.getOwnPropertySymbols(value).length === 0, 'Unexpected symbol key')
-  // Capture the same schema-iterator snapshot. Array membership and Set
-  // membership both use SameValueZero. Small lists avoid an extra collection;
-  // larger lists retain indexed membership instead of quadratic validation.
-  const allowed = [...required, ...optional]
-  const indexed = allowed.length > 16 && new Set(allowed)
+  // Retain one captured schema snapshot with indexed SameValueZero membership.
+  const allowed = new Set([...required, ...optional])
   for (const key of required) {
     if (!Object.hasOwn(value, key)) outputAssert(false, `Missing ${key}`)
   }
   for (const key of Object.getOwnPropertyNames(value)) {
-    if (!(indexed ? indexed.has(key) : allowed.includes(key))) outputAssert(false, `Unknown ${key}`)
+    if (!allowed.has(key)) outputAssert(false, `Unknown ${key}`)
     const descriptor = Object.getOwnPropertyDescriptor(value, key)
     outputAssert(
       descriptor?.enumerable && 'value' in descriptor,

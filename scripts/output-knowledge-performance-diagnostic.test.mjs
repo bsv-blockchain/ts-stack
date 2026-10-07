@@ -8,6 +8,7 @@ import {
   diagnosticMayContinueValidation,
   readBoundedProfile,
   summarizeCPUProfile,
+  summarizePropertyExecution,
   triageDiagnostic
 } from './output-knowledge-performance-diagnostic.mjs'
 
@@ -26,6 +27,74 @@ test('diagnostic triage distinguishes ordinary failures, synthetic faults, case 
     true
   )
   assert.equal(triageDiagnostic(Buffer.alloc(16 * 1024 * 1024 + 1), 0).boundedTriageExceeded, true)
+})
+
+const safeMeasurement = {
+  processGroupGone: true,
+  timedOut: false,
+  stopReason: null,
+  signal: null,
+  exitCode: 1,
+  knownNativeFaultMarker: false,
+  boundedTriageExceeded: false,
+  testCaseTimeoutMarker: false
+}
+
+test('property metadata exposes only an exact scalar outcome/count and never infers passing runs', () => {
+  for (const [line, outcome, completedCases] of [
+    ['    Property interrupted after 163 tests\r\n', 'interrupted', 163],
+    ['Error: Property failed after 1 tests\nCounterexample: private data', 'counterexample', 1],
+    ['Property interrupted after 0 tests', 'interrupted', 0]
+  ]) {
+    const report = summarizePropertyExecution(Buffer.from(line), safeMeasurement)
+    assert.deepEqual(report, { outcome, completedCases })
+    assert.equal(JSON.stringify(report).includes('private data'), false)
+  }
+  assert.deepEqual(
+    summarizePropertyExecution(Buffer.from('PASS suite'), { ...safeMeasurement, exitCode: 0 }),
+    { outcome: 'passed', completedCases: null }
+  )
+})
+
+test('ambiguous or noncanonical failure text supplies no property count', () => {
+  for (const text of [
+    'ordinary unrelated failure',
+    'value: Property interrupted after 7 tests',
+    'Property interrupted after 301 tests',
+    'Property interrupted after 01 tests',
+    'Property interrupted after 9007199254740992 tests',
+    'Property interrupted after 10 tests\nProperty failed after 11 tests'
+  ])
+    assert.deepEqual(summarizePropertyExecution(Buffer.from(text), safeMeasurement), {
+      outcome: 'other-failure',
+      completedCases: null
+    })
+})
+
+test('property metadata refuses every unsafe supervisor and independently retriages bounded bytes', () => {
+  for (const change of [
+    { processGroupGone: false },
+    { timedOut: true },
+    { stopReason: 'source-changed' },
+    { signal: 'SIGTERM' },
+    { exitCode: 2 },
+    { knownNativeFaultMarker: true },
+    { boundedTriageExceeded: true },
+    { testCaseTimeoutMarker: true }
+  ])
+    assert.throws(
+      () => summarizePropertyExecution(Buffer.from('PASS'), { ...safeMeasurement, ...change }),
+      /Unsafe property execution metadata/
+    )
+  for (const bytes of [
+    Buffer.from('synthetic SIGSEGV marker'),
+    Buffer.from('Exceeded timeout of 180000 ms'),
+    Buffer.alloc(16 * 1024 * 1024 + 1)
+  ])
+    assert.throws(
+      () => summarizePropertyExecution(bytes, safeMeasurement),
+      /Unsafe property execution metadata/
+    )
 })
 
 const frame = (functionName, url, lineNumber) => ({ functionName, url, lineNumber })
@@ -197,6 +266,28 @@ test('fixed property and native HTTP diagnostics retain their original complete 
     )
 })
 
+test('the additive coordinator diagnostic binds the other original property with identical limits', () => {
+  const disclosure = applicationDiagnosticSelection(),
+    coordinator = applicationDiagnosticSelection('coordinator-property')
+  assert.deepEqual(coordinator, {
+    ...disclosure,
+    kind: 'coordinator-property',
+    selector: 'test/private-purchase-alias-coordinator.property.test.ts',
+    profile: 'coordinator-property.cpuprofile',
+    outputPrefix: 'performance-diagnostic-coordinator'
+  })
+  assert.ok(Object.isFrozen(coordinator))
+  const source = fs.readFileSync(
+    new URL('../' + coordinator.packageDirectory + '/' + coordinator.selector, import.meta.url),
+    'utf8'
+  )
+  assert.match(source, /MIN_PROPERTY_RUNS = 300/)
+  assert.match(source, /seed : 3242026/)
+  assert.match(source, /interruptAfterTimeLimit: 150000/)
+  assert.match(source, /markInterruptAsFailure: true/)
+  assert.match(source, /}, 180000\)/)
+})
+
 test('hosted timing is explicitly opt-in and preserves the ordinary artifact and coverage gates', () => {
   const workflow = fs.readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
   assert.match(workflow, /application-performance-diagnostics:\n(?:.*\n){2}        default: false/)
@@ -207,29 +298,37 @@ test('hosted timing is explicitly opt-in and preserves the ordinary artifact and
   const native = workflow.indexOf(
     '      - name: Measure the unchanged native purchase HTTP composition on hosted Linux'
   )
+  const coordinator = workflow.indexOf(
+    '      - name: Measure the unchanged application coordinator property on hosted Linux'
+  )
   const complete = workflow.indexOf(
     '      - name: Compile documentation examples against exact package tarballs'
   )
   assert.ok(measure > 0 && upload > measure && complete > upload)
   assert.ok(native > measure && native < upload)
+  assert.ok(coordinator > native && coordinator < upload)
   const optional = workflow.slice(measure, complete)
   assert.equal(
     optional.match(
       /github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics/g
     ).length,
-    3
+    4
   )
   assert.equal(
     optional.match(
       /github.event_name == 'pull_request' && contains\(github.event.pull_request.labels.\*.name, 'ci:application-performance-diagnostics'\)/g
     ).length,
-    3
+    4
   )
   assert.match(
     optional,
     /run: node scripts\/output-knowledge-performance-diagnostic\.mjs --native-http/
   )
   assert.match(optional, /MONGOMS_DOWNLOAD_DIR: \$\{\{ runner.temp \}\}\/mongodb-binaries/)
+  assert.match(
+    optional,
+    /run: node scripts\/output-knowledge-performance-diagnostic\.mjs --coordinator/
+  )
   assert.match(optional, /path: \.coverage-output\/performance-diagnostic-\*\//)
   assert.equal(optional.includes('property.cpuprofile'), false)
   assert.ok(workflow.slice(complete).includes('node scripts/output-knowledge-coverage.mjs collect'))

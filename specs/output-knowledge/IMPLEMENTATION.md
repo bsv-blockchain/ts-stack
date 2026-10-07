@@ -6140,3 +6140,46 @@ The earlier compiled purchase example has the same explicit historical label;
 all81 example bodies and identifiers remain unchanged. Fresh compiler, root,
 source-inventory, bundle, hosted functionality and full mutation qualification
 are still required for this candidate before Checkpoint2.
+
+## October 7: explicit ordering and current analyzer follow-up
+
+Published `60035cca9817f0e999d0fcc453c0ea482d6265ff` passes all262 SDK
+suites/8543 tests, including both new literal Unicode/schema regressions. Packed
+consumers pass. Actual CodeQL37585513737 analyzes merge
+4005ce4488c128cb79c70392807f2dba257337c8, with the exact published-head tree
+and reviewed-main/head parents. Both analyses have no error and the PR ref has
+zero open alerts. These receipts apply to that source only. Its disclosure
+property interrupts after163/300 and coordinator after195/300 under the original
+150-second budgets, without a counterexample. These are functional failures;
+complete final qualification remains pending.
+
+Strict Sonar for that exact revision reports two new findings: S2871 requires an
+explicit comparator, and S5906 requests the dedicated null matcher in the new
+literal test. The correction reinstates the explicit UTF-16 comparator already
+covered by the independent canonical corpus, preserving RFC8785 code-unit
+ordering. The literal prototype assertion now uses `toBeNull()` with the same
+expected value. Neither finding is dismissed or suppressed.
+
+Closed schemas retain one captured Set with indexed SameValueZero membership
+for every schema size, simplifying the helper while retaining lazy construction
+of missing/unknown-field messages at their original refusal points. Fresh
+source/ASCII Unicode proofs, escaped-token validation, exact representation,
+byte/structural limits and all authorization/custody checks remain unchanged.
+No stored value, key, schema, authority or validation verdict is newly cached.
+Release notes and the source-generated migration ledger describe this final
+shape; the native-sort and small-schema branches in the preceding source are
+historical implementation evidence. All original property controls and original
+protocol-test bodies are retained. Fresh source, bundle, analyzer, runtime and
+complete151-target/398-execution mutation qualification are still required.
+
+The optional hosted diagnostic now also binds the original coordinator
+property, alongside the existing disclosure and four-case native HTTP
+selectors. All original source bytes, minimum300/seed3242026, replay-free
+configuration, 150-second interruption-as-failure, 180-second property cases,
+210-second property child and 900-second calendar limits remain unchanged.
+The reports add only a fixed scalar outcome and completed-case count from a
+single exact failure summary after safe bounded triage, drainage and fresh
+source guards. Passing exits imply no count; ambiguous summaries imply none.
+No raw logs, counterexample bodies or application values are published.
+Fresh pure-root controls and all source-only checks precede publication;
+fresh hosted diagnosis and complete unchanged qualification are required.

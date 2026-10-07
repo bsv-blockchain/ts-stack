@@ -3,8 +3,8 @@ id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
 version: '1.8.5'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+last_updated: '2026-10-07'
+last_verified: '2026-10-07'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -14,7 +14,7 @@ tags: [reference, ci, performance, github-actions]
 
 The existing `CI` manual dispatch has an optional
 `application-performance-diagnostics` input, disabled by default. It measures the
-unchanged native alias-disclosure property and current private purchase HTTP
+unchanged native alias-disclosure and coordinator properties and current private purchase HTTP
 composition on an isolated hosted Linux runner
 in the existing package-artifact job, before complete artifact verification.
 Its additional work does not consume either ordinary application coverage
@@ -59,8 +59,23 @@ It freezes the additional built Overlay, Overlay Express and LCH inputs and the
 exact cached MongoDB 8.2.6 executable before starting the fixture. Missing or
 ambiguous binaries refuse the measurement; runtime downloads are disabled and
 version checking remains enabled. The complete ordinary suite still qualifies
-the integration. The two fixed selectors have distinct report directories and
-identities; neither accepts arbitrary paths or test-name filters.
+the integration. The three fixed selectors have distinct report directories and
+identities; none accepts arbitrary paths or test-name filters.
+
+The additive `--coordinator` selection binds the original alias-coordinator
+property, with the same minimum300, seed3242026, interruption-as-failure150s,
+case180s, child210s and calendar900s controls as the disclosure diagnostic.
+Both property reports include only a scalar outcome and completed-case count
+when a single exact failure summary supplies it. An ordinary passing exit has
+no inferred count. Ambiguous or unrelated failures supply no count. Extraction
+requires all supervisor guards clear, independently drained execution, fresh
+source guards and a descriptor-bounded log read with independent Boolean
+retriage. Native HTTP reports retain null property execution metadata. No counterexample
+body, application values or raw output is published. Comparing these counts
+with measured duration helps distinguish cost per completed case from a
+different workload; it does not qualify a property or support a speed claim by
+itself. The existing artifact-job timeout and all qualification gates remain
+unchanged.
 
 The uploaded `application-performance-diagnostic-<run>-<attempt>` artifact
 contains checked-out source and PR-head/runtime identity, exit and drain evidence, and bounded self and
