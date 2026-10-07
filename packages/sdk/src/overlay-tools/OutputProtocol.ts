@@ -245,7 +245,7 @@ function validateCriticalExtensions(
   }
 }
 
-export function outputPacketPreimage(domain: OutputDigestDomain, body: unknown): number[] {
+function outputPacketPreimageBytes(domain: OutputDigestDomain, body: unknown): Uint8Array {
   outputAssert(
     (OUTPUT_DIGEST_DOMAINS as readonly string[]).includes(domain),
     'Unregistered output digest domain',
@@ -256,11 +256,16 @@ export function outputPacketPreimage(domain: OutputDigestDomain, body: unknown):
   const preimage = new Uint8Array(prefix.length + payload.length)
   preimage.set(prefix)
   preimage.set(payload, prefix.length)
-  return Array.from(preimage)
+  return preimage
+}
+
+export function outputPacketPreimage(domain: OutputDigestDomain, body: unknown): number[] {
+  return Array.from(outputPacketPreimageBytes(domain, body))
 }
 
 export function outputPacketDigest(domain: OutputDigestDomain, body: unknown): OutputHex32 {
-  return toHex(sha256(outputPacketPreimage(domain, body)))
+  // Hash the freshly validated owned bytes without a number-array round trip.
+  return toHex(sha256(outputPacketPreimageBytes(domain, body)))
 }
 
 /** Signing is an explicit caller action, never a side effect of ingestion. */

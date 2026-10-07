@@ -344,6 +344,10 @@ export function applicationDiagnosticSelection(kind = 'property') {
   assert.ok(['property', 'native-http'].includes(kind), 'Unknown application diagnostic selector')
   if (kind === 'native-http')
     return Object.freeze({
+      kind: 'native-http',
+      minimumPropertyRuns: null,
+      seed: null,
+      interruptAsFailureMilliseconds: null,
       packageDirectory: 'packages/overlays/overlay-express',
       selector: 'src/__tests__/PrivatePurchaseProfileAliasNative.integration.test.ts',
       phase: 'unchanged-native-http-with-coverage',
@@ -355,6 +359,10 @@ export function applicationDiagnosticSelection(kind = 'property') {
       requiresMongo: true
     })
   return Object.freeze({
+    kind: 'property',
+    minimumPropertyRuns: 300,
+    seed: 3242026,
+    interruptAsFailureMilliseconds: 150000,
     packageDirectory: 'packages/application/output-knowledge',
     selector: 'test/private-purchase-alias-disclosure.property.test.ts',
     phase: 'unchanged-property-with-coverage',
@@ -415,6 +423,31 @@ function freezeNativeDiagnosticRuntime(root, selection, walk, freeze) {
   return binary
 }
 
+function selectionFromArguments(args) {
+  assert.ok(
+    args.length === 2 || (args.length === 3 && args[2] === '--native-http'),
+    'Only fixed unchanged diagnostic selectors are permitted'
+  )
+  return applicationDiagnosticSelection(args.length === 2 ? 'property' : 'native-http')
+}
+
+function diagnosticEnvironment(mongoBinary) {
+  const env = {
+    ...process.env,
+    FAST_CHECK_NUM_RUNS: '300',
+    FAST_CHECK_SEED: '3242026',
+    FAST_CHECK_PATH: '',
+    NODE_OPTIONS: ''
+  }
+  if (mongoBinary) {
+    env.MONGOMS_SYSTEM_BINARY = mongoBinary
+    env.MONGOMS_SYSTEM_BINARY_VERSION_CHECK = 'true'
+    env.MONGOMS_RUNTIME_DOWNLOAD = 'false'
+    env.MONGOMS_DOWNLOAD_DIR = path.dirname(mongoBinary)
+  }
+  return env
+}
+
 async function main() {
   assert.equal(process.platform, 'linux', 'Application diagnostics require hosted Linux')
   assert.equal(process.env.GITHUB_ACTIONS, 'true')
@@ -422,12 +455,7 @@ async function main() {
   assert.match(process.env.OUTPUT_KNOWLEDGE_SOURCE_HEAD ?? '', /^[0-9a-f]{40}$/)
   assert.match(process.env.GITHUB_RUN_ID ?? '', /^[1-9]\d*$/)
   assert.match(process.env.GITHUB_RUN_ATTEMPT ?? '', /^[1-9]\d*$/)
-  assert.ok(
-    process.argv.length === 2 || (process.argv.length === 3 && process.argv[2] === '--native-http'),
-    'Only fixed unchanged diagnostic selectors are permitted'
-  )
-  const kind = process.argv.length === 2 ? 'property' : 'native-http',
-    selection = applicationDiagnosticSelection(kind)
+  const selection = selectionFromArguments(process.argv)
   const started = performance.now(),
     until = Date.now() + 900000
   let cancelled = false
@@ -491,13 +519,13 @@ async function main() {
     node: process.version,
     architecture: process.arch,
     selector,
-    diagnosticKind: kind,
+    diagnosticKind: selection.kind,
     calendarUntil: new Date(until).toISOString(),
     calendarSeconds: 900,
     propertySHA256: hash(path.join(cwd, selector)),
-    minimumPropertyRuns: kind === 'property' ? 300 : null,
-    seed: kind === 'property' ? 3242026 : null,
-    interruptAsFailureMilliseconds: kind === 'property' ? 150000 : null,
+    minimumPropertyRuns: selection.minimumPropertyRuns,
+    seed: selection.seed,
+    interruptAsFailureMilliseconds: selection.interruptAsFailureMilliseconds,
     testCaseMilliseconds: selection.testCaseMilliseconds,
     nativeCases: selection.nativeCases,
     mongo: mongoBinary
@@ -521,19 +549,7 @@ async function main() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'output-knowledge-profile-')),
     results = [],
     report = { phase: 'sqlite-health', refusal: null, timingCollected: false },
-    env = {
-      ...process.env,
-      FAST_CHECK_NUM_RUNS: '300',
-      FAST_CHECK_SEED: '3242026',
-      FAST_CHECK_PATH: '',
-      NODE_OPTIONS: ''
-    }
-  if (mongoBinary) {
-    env.MONGOMS_SYSTEM_BINARY = mongoBinary
-    env.MONGOMS_SYSTEM_BINARY_VERSION_CHECK = 'true'
-    env.MONGOMS_RUNTIME_DOWNLOAD = 'false'
-    env.MONGOMS_DOWNLOAD_DIR = path.dirname(mongoBinary)
-  }
+    env = diagnosticEnvironment(mongoBinary)
   const write = () =>
     fs.writeFileSync(
       path.join(output, 'diagnostic.json'),

@@ -1015,7 +1015,8 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest: 'packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts',
       mutate: [
         'src/overlay-tools/OutputProtocolJSON.ts',
-        'src/overlay-tools/OutputProtocolSchema.ts'
+        'src/overlay-tools/OutputProtocolSchema.ts',
+        'src/overlay-tools/OutputProtocol.ts'
       ],
       ...jestTarget('jest.config.js', [
         '<rootDir>/src/overlay-tools/__tests/OutputProtocol.test.ts',

@@ -1,7 +1,6 @@
 import {
   canonicalOutputJSON,
   closedOutputObject,
-  decodeOutputBytes,
   outputAssert,
   outputHex32,
   outputIdentity,
@@ -16,6 +15,7 @@ import {
   PrivateAcquisitionPayloads,
   parsePrivateAcquisitionPayload
 } from './PrivateAcquisitionPayloads.js'
+import { nativeOutputBytes } from './NativeOutputBytes.js'
 import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
 import type { ProtectedLedgerGuard, ProtectedLedgerView } from './ProtectedLedgerCodec.js'
 import type { PrivatePurchaseCandidateProfile } from './PrivatePurchaseProgress.js'
@@ -91,7 +91,7 @@ export class PrivatePurchaseAccess {
         )
         const custody = parseOutputJSON(
           Uint8Array.from(
-            decodeOutputBytes(
+            nativeOutputBytes(
               this.payloads.read(
                 descriptor,
                 this.payloads.addresses(descriptor).map(item => view.get(item))

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
@@ -38,6 +39,54 @@ describe('BRC-192 representation boundary', () => {
     for (const vector of fixture.vectors) {
       expect(toHex(outputPacketPreimage(vector.domain, fixture.body))).toBe(vector.preimage)
       expect(outputPacketDigest(vector.domain, fixture.body)).toBe(vector.sha256)
+    }
+  })
+
+  it('retains owned public arrays and independently hashed bytes for every digest domain', () => {
+    const bodies = [
+      null,
+      { content: 'é😀\0\n', array: [false, 0, null], z: 'last', a: 'first' },
+      { content: 'A'.repeat(65536) }
+    ]
+    for (const body of bodies) {
+      const canonical = canonicalOutputJSON(body)
+      for (const domain of OUTPUT_DIGEST_DOMAINS) {
+        const bytes = new TextEncoder().encode(`BRC-OUTPUT/1/${domain}\0${canonical}`),
+          digest = createHash('sha256').update(bytes).digest('hex'),
+          first = outputPacketPreimage(domain, body),
+          second = outputPacketPreimage(domain, body)
+        expect(Array.isArray(first)).toBe(true)
+        expect(first).toEqual(Array.from(bytes))
+        expect(second).toEqual(first)
+        expect(second).not.toBe(first)
+        first[0] ^= 255
+        expect(second).toEqual(Array.from(bytes))
+        expect(outputPacketDigest(domain, body)).toBe(digest)
+      }
+    }
+  })
+
+  it('preserves domain-first validation and canonical body failures for both digest paths', () => {
+    let reads = 0
+    const accessor = Object.defineProperty({}, 'body', {
+      enumerable: true,
+      get() {
+        reads++
+        return 'not read'
+      }
+    })
+    for (const operation of [outputPacketPreimage, outputPacketDigest]) {
+      expect(() => operation('unregistered' as OutputDigestDomain, accessor)).toThrow(
+        expect.objectContaining({
+          code: 'unsupported',
+          message: 'Unregistered output digest domain'
+        })
+      )
+      expect(reads).toBe(0)
+      expect(() => operation('purchase-request', accessor)).toThrow(OutputProtocolError)
+      expect(reads).toBe(0)
+      for (const invalid of [undefined, Number.NaN, Number.POSITIVE_INFINITY, BigInt(1)])
+        expect(() => operation('purchase-request', invalid)).toThrow(OutputProtocolError)
     }
   })
 

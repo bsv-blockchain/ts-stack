@@ -2,7 +2,7 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.1'
+version: '0.1.2'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -102,6 +102,14 @@ head; it must not apply the old snapshot fence to its own successful write.
 An unrelated head change before the writer still refuses the transition, including
 a change during private-result signing. Failure and mined-alias promotion use the
 same separation between pre-effect snapshot checks and fresh readback.
+
+Time may advance between authenticated reads without changing the retained head
+or records. First result completion therefore retains revision fences and derives
+the delivery progress at the actual `commitPrepared` observation. That writer
+checks current authority and placement before and after derivation, validates the
+original signed envelope and commits its protected result with the historical
+alias in one transaction. A changed head, row or authority still refuses the
+effect; a clock increment alone is not an unrelated state change.
 
 The domain's issuance operation is pure and idempotent over retained material.
 Ordinary issuance, signing or transport errors leave an admitted obligation

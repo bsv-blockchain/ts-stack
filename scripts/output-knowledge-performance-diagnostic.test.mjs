@@ -160,6 +160,14 @@ test('nonfinite and before-start cumulative timestamps remain invalid, including
 test('fixed property and native HTTP diagnostics retain their original complete selectors and case controls', () => {
   const property = applicationDiagnosticSelection(),
     native = applicationDiagnosticSelection('native-http')
+  assert.equal(property.kind, 'property')
+  assert.equal(property.minimumPropertyRuns, 300)
+  assert.equal(property.seed, 3242026)
+  assert.equal(property.interruptAsFailureMilliseconds, 150000)
+  assert.equal(native.kind, 'native-http')
+  assert.equal(native.minimumPropertyRuns, null)
+  assert.equal(native.seed, null)
+  assert.equal(native.interruptAsFailureMilliseconds, null)
   assert.equal(property.selector, 'test/private-purchase-alias-disclosure.property.test.ts')
   assert.equal(property.packageDirectory, 'packages/application/output-knowledge')
   assert.equal(property.profile, 'property.cpuprofile')

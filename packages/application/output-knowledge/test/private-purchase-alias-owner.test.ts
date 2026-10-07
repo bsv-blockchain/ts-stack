@@ -141,6 +141,93 @@ it('preserves the first complete result across reopen and later selected aliases
   ).toThrow('authority changed')
 })
 
+it('completes under advancing clocks and derives delivery time from the actual atomic writer', () => {
+  const f = purchaseAliasOwnerFixture()
+  f.prepare()
+  const candidate = f.f.variant(44)
+  f.retain(candidate)
+  f.admitted(candidate)
+  const admitted = f.load(),
+    envelope = f.envelope(admitted),
+    original = SQLiteProtectedLedger.prototype.commitPrepared
+  let now = 100n,
+    committedAt: string | undefined
+  const clock = () => (now++).toString()
+  const commit = jest
+    .spyOn(SQLiteProtectedLedger.prototype, 'commitPrepared')
+    .mockImplementation(function (
+      this: SQLiteProtectedLedger,
+      revision,
+      prepare,
+      observedClock,
+      guard,
+      options
+    ) {
+      return original.call(
+        this,
+        revision,
+        view => {
+          const changes = prepare(view)
+          committedAt = view.observedAt
+          return changes
+        },
+        observedClock,
+        guard,
+        options
+      )
+    })
+  const complete = f.store.complete(admitted, envelope, undefined, clock, f.f.guard)
+  expect(commit).toHaveBeenCalledTimes(1)
+  expect(now).toBeGreaterThan(102n)
+  expect(complete.progress.status).toBe('delivered')
+  expect(complete.progress.updatedAt).toBe(committedAt)
+  expect(BigInt(complete.observedAt)).toBeGreaterThan(BigInt(committedAt!))
+  expect(complete.aliases.state.historical?.txid).toBe(candidate.txid)
+  let disclosed: unknown
+  f.store.disclose(complete, f.base.buyer, clock, f.f.guard, value => {
+    disclosed = value
+  })
+  expect(canonicalOutputJSON(disclosed)).toBe(canonicalOutputJSON(envelope))
+})
+
+it('refuses changed authority at the final advancing-clock writer without retaining alias or secret', () => {
+  const f = purchaseAliasOwnerFixture()
+  f.prepare()
+  const candidate = f.f.variant(45)
+  f.retain(candidate)
+  f.admitted(candidate)
+  const admitted = f.load(),
+    envelope = f.envelope(admitted),
+    original = SQLiteProtectedLedger.prototype.commitPrepared
+  let now = 100n,
+    atWriter = false
+  const clock = () => (now++).toString()
+  jest.spyOn(SQLiteProtectedLedger.prototype, 'commitPrepared').mockImplementation(function (
+    this: SQLiteProtectedLedger,
+    revision,
+    prepare,
+    observedClock,
+    guard,
+    options
+  ) {
+    atWriter = true
+    return original.call(this, revision, prepare, observedClock, guard, options)
+  })
+  expect(() =>
+    f.store.complete(admitted, envelope, undefined, clock, () => {
+      f.f.guard()
+      if (atWriter) throw new Error('Authority revoked at native writer')
+    })
+  ).toThrow('Authority revoked at native writer')
+  const after = f.load()
+  expect(atWriter).toBe(true)
+  expect(after.revision).toBe(admitted.revision)
+  expect(BigInt(after.observedAt)).toBeGreaterThan(100n)
+  expect(after.progress.status).toBe('admitted-delivery-pending')
+  expect(after.state.result.digest).toBeNull()
+  expect(after.aliases.state.historical).toBeNull()
+})
+
 it('rolls back earlier alias writes when the final core row conflicts inside the actual writer', () => {
   const original = SQLiteProtectedLedger.prototype.commitPrepared
   let refuseFinalRow = false

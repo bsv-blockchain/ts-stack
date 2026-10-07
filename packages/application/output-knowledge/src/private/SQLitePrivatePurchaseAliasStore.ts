@@ -752,8 +752,8 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     this.domain.ledger.read([this.address(id)], clock, view => {
       this.authorize(guard, view)
       outputAssert(
-        view.revision === actual.revision && view.observedAt === actual.observedAt,
-        'Alias result preparation observation changed',
+        view.revision === actual.revision,
+        'Alias result preparation revision changed',
         'context-changed'
       )
       const sealed = this.payloads.seal(
@@ -781,11 +781,11 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
       ]
     })
     outputAssert(resultChanges, 'Alias result completion reservation is unavailable', 'unavailable')
-    const sameObservation: ProtectedLedgerGuard = view => {
+    const sameRevision: ProtectedLedgerGuard = view => {
       this.authorize(guard, view)
       outputAssert(
-        view.observedAt === actual.observedAt,
-        'Alias result clock changed before commit',
+        view.revision === actual.revision,
+        'Alias result revision changed before commit',
         'context-changed'
       )
     }
@@ -795,15 +795,55 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
       placement,
       resultChanges,
       clock,
-      sameObservation
+      sameRevision
     )
     outputAssert(
       release.status === 'ready',
       'Alias historical result cannot be committed',
       'unavailable'
     )
-    release.retain(clock, sameObservation)
+    const prepared = release.prepare(sameRevision)
+    this.domain.ledger.commitPrepared(
+      prepared.revision,
+      view => this.resultAtObservation(actual, envelope, prepared.changes(view), view),
+      clock,
+      prepared.checkCurrent,
+      { maximumBatchBytes: this.limits.maximumBatchBytes }
+    )
     return this.require(id, actual.state.recipient, clock, guard)
+  }
+  private resultAtObservation(
+    actual: PrivatePurchaseAliasedLoaded,
+    envelope: OutputPurchaseEnvelope,
+    changes: readonly ProtectedLedgerChange[],
+    view: ProtectedLedgerView
+  ): readonly ProtectedLedgerChange[] {
+    // Clock advancement is not a head conflict. Derive the durable terminal
+    // observation inside the same authenticated writer as alias/result custody.
+    const progress = advancePrivatePurchaseProgress(
+      actual.progress,
+      actual.custody.original,
+      { type: 'delivered', envelope },
+      view.observedAt,
+      PROFILE
+    )
+    const address = this.address(actual.progress.acquisitionId)
+    let results = 0
+    const updated = changes.map(change => {
+      if (change.kind !== address.kind || change.key !== address.key) return change
+      results++
+      outputAssert(
+        change.expectedRevision === actual.row.revision,
+        'Alias result record changed before commit',
+        'conflict'
+      )
+      return {
+        ...change,
+        value: protectedValue({ ...change.value, progress }, this.limits.maximumStateBytes).value
+      }
+    })
+    outputAssert(results === 1, 'Alias result must have one atomic owner write', 'unavailable')
+    return updated
   }
   /** Only the installed domain coordinator may declare an irrecoverable local
    * failure. Transient issuance errors leave admitted-delivery-pending untouched.
