@@ -238,10 +238,11 @@ and clean-consumer tests remain the executable type authority.
 ${summaryRows}
 
 \`none\` means the source manifest matches the recorded npm baseline. Any other
-value is an unpublished candidate. \`initial\` with a null published baseline
-identifies a new package with no recorded published baseline; it does not invent an npm
-version or waive publication checks. Publication, tags, releases, registry
-reconciliation, and infrastructure dependency synchronization remain separate,
+value records source ahead of that baseline; it does not establish the current
+registry state. \`initial\` with a null published baseline identifies a new
+package with no recorded published baseline; it does not invent an npm version or
+waive publication checks. Publication, tags, releases, registry reconciliation,
+and infrastructure dependency synchronization remain separate,
 explicitly authorized operations.
 
 ## Package entry points
