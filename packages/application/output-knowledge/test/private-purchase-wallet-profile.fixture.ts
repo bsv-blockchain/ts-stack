@@ -561,7 +561,9 @@ export async function nativeProfilePurchaseWalletFixture(
      * never be used by a production signer. No second wallet action is made. */
     async alternativeCandidate(candidate: OutputPurchaseSubmit): Promise<OutputPurchaseSubmit> {
       const original = Beef.fromBinaryStrict(Utils.toArray(candidate.beef, 'base64')),
-        originalTx = original.findTransactionForSigning(candidate.txid)!,
+        // Signing attachment supplies only immediate parents; verification requires
+        // the complete original proof tree before cloning its raw transaction.
+        originalTx = original.findAtomicTransaction(candidate.txid)!,
         changed = Transaction.fromHex(originalTx.toHex()),
         publicKey = new KeyDeriver(
           new PrivateKey(application?.buyerKeyCode ?? 44)

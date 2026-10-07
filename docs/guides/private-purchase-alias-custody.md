@@ -2,7 +2,7 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.2'
+version: '0.1.3'
 last_updated: '2026-10-06'
 last_verified: '2026-10-06'
 review_cadence_days: 30
@@ -257,6 +257,11 @@ that first private grant remains historical after a later fork.
 
 The alternative transaction changes only an unrelated disclosed funding signature;
 it does not prepare another wallet action or modify the listing-input preimage.
+It first links the complete original BEEF proof tree, then preserves those exact
+source transactions when cloning raw bytes. Signing-only attachment provides
+immediate parents and is insufficient for recursive Script/SPV verification.
+The cloned alternative still executes every input against the independently
+selected tracker before it can be submitted.
 The signature's fixed nonce is a public test-key fixture and must never be used
 with production keys. The proof fixture checks Script/SPV against a small synthetic
 proof-of-work ancestry with an explicit Merkle commitment. It does not establish

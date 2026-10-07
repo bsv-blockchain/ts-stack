@@ -142,14 +142,7 @@ it('preserves the first complete result across reopen and later selected aliases
 })
 
 it('completes under advancing clocks and derives delivery time from the actual atomic writer', () => {
-  const f = purchaseAliasOwnerFixture()
-  f.prepare()
-  const candidate = f.f.variant(44)
-  f.retain(candidate)
-  f.admitted(candidate)
-  const admitted = f.load(),
-    envelope = f.envelope(admitted),
-    original = SQLiteProtectedLedger.prototype.commitPrepared
+  const original = SQLiteProtectedLedger.prototype.commitPrepared
   let now = 100n,
     committedAt: string | undefined
   const clock = () => (now++).toString()
@@ -176,6 +169,15 @@ it('completes under advancing clocks and derives delivery time from the actual a
         options
       )
     })
+  const f = purchaseAliasOwnerFixture()
+  f.prepare()
+  const candidate = f.f.variant(44)
+  f.retain(candidate)
+  f.admitted(candidate)
+  const admitted = f.load(),
+    envelope = f.envelope(admitted)
+  commit.mockClear()
+  committedAt = undefined
   const complete = f.store.complete(admitted, envelope, undefined, clock, f.f.guard)
   expect(commit).toHaveBeenCalledTimes(1)
   expect(now).toBeGreaterThan(102n)
@@ -191,16 +193,10 @@ it('completes under advancing clocks and derives delivery time from the actual a
 })
 
 it('refuses changed authority at the final advancing-clock writer without retaining alias or secret', () => {
-  const f = purchaseAliasOwnerFixture()
-  f.prepare()
-  const candidate = f.f.variant(45)
-  f.retain(candidate)
-  f.admitted(candidate)
-  const admitted = f.load(),
-    envelope = f.envelope(admitted),
-    original = SQLiteProtectedLedger.prototype.commitPrepared
+  const original = SQLiteProtectedLedger.prototype.commitPrepared
   let now = 100n,
-    atWriter = false
+    atWriter = false,
+    observeWriter = false
   const clock = () => (now++).toString()
   jest.spyOn(SQLiteProtectedLedger.prototype, 'commitPrepared').mockImplementation(function (
     this: SQLiteProtectedLedger,
@@ -210,9 +206,17 @@ it('refuses changed authority at the final advancing-clock writer without retain
     guard,
     options
   ) {
-    atWriter = true
+    if (observeWriter) atWriter = true
     return original.call(this, revision, prepare, observedClock, guard, options)
   })
+  const f = purchaseAliasOwnerFixture()
+  f.prepare()
+  const candidate = f.f.variant(45)
+  f.retain(candidate)
+  f.admitted(candidate)
+  const admitted = f.load(),
+    envelope = f.envelope(admitted)
+  observeWriter = true
   expect(() =>
     f.store.complete(admitted, envelope, undefined, clock, () => {
       f.f.guard()
