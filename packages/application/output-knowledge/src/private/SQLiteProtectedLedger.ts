@@ -1,5 +1,5 @@
 import { closeSync, openSync } from 'node:fs'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import {
   ownOutputJSON,
   canonicalOutputJSON,
@@ -72,6 +72,7 @@ export class SQLiteProtectedLedger {
   private readonly domain: SQLiteTransactionDomain
   private readonly configuration: ProtectedLedgerConfiguration
   private readonly configurationDigest: string
+  private readonly recordQuery: StatementSync
 
   private constructor(
     path: string,
@@ -102,6 +103,12 @@ export class SQLiteProtectedLedger {
         'PRAGMA busy_timeout=1000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;'
       )
       if (create) this.initialize()
+      // Retain only a compiled fixed SQL statement. Each get still selects the
+      // current native row inside its transaction and authenticates it afresh.
+      // No plaintext, key, header, authorization or row verdict is retained.
+      this.recordQuery = this.database.prepare(
+        `SELECT ${HEADER_COLUMNS},CASE WHEN length(CAST(envelope AS BLOB))<=? THEN envelope END AS envelope FROM protected_records WHERE kind=? AND key=?`
+      )
       this.domain.transaction(
         () => {
           const head = this.head()
@@ -289,11 +296,11 @@ export class SQLiteProtectedLedger {
   }
   private record(address: ProtectedLedgerAddress): ProtectedLedgerRecord | undefined {
     this.domain.reading()
-    const row = this.database
-      .prepare(
-        `SELECT ${HEADER_COLUMNS},CASE WHEN length(CAST(envelope AS BLOB))<=? THEN envelope END AS envelope FROM protected_records WHERE kind=? AND key=?`
-      )
-      .get(this.envelopeBound(this.configuration.maximumRecordBytes), address.kind, address.key)
+    const row = this.recordQuery.get(
+      this.envelopeBound(this.configuration.maximumRecordBytes),
+      address.kind,
+      address.key
+    )
     if (!row) return undefined
     const header = protectedHeader(row, this.configuration.maximumRecordBytes)
     outputAssert(

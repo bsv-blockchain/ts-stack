@@ -35,7 +35,7 @@ function limitsFor(limits: Partial<OutputJSONLimits>): OutputJSONLimits {
   if (limits === OUTPUT_JSON_LIMITS) return OUTPUT_JSON_LIMITS
   const result = { ...limits }
   for (const key of Object.keys(result) as (keyof OutputJSONLimits)[]) {
-    const value = result[key] ?? NaN
+    const value = result[key] ?? 0
     outputAssert(
       Object.hasOwn(OUTPUT_JSON_LIMITS, key) &&
         Number.isSafeInteger(value) &&
@@ -116,10 +116,12 @@ function outputJSONSource(
 
 /** Internal optional observer; ordinary parser consumers do not retain the
  * inspection implementation in their bundles. Each inspection owns its state. */
+type OutputJSONScalar = null | boolean | number
+
 interface OutputJSONEncodingObserver {
   whitespace(): void
   string(source: string, decoded: string): void
-  value(source: string, value: null | boolean | number): void
+  value(source: string, value: OutputJSONScalar): void
   key(previous: string | undefined, key: string): void
 }
 
@@ -140,7 +142,7 @@ class OutputJSONEncodingInspection implements OutputJSONEncodingObserver {
     this.bytes += encoder.encode(canonical).length - encoder.encode(source).length
   }
 
-  value(source: string, value: null | boolean | number): void {
+  value(source: string, value: OutputJSONScalar): void {
     if (typeof value !== 'number') return
     const canonical = JSON.stringify(value)
     this.canonical &&= canonical === source
@@ -211,27 +213,29 @@ class OutputJSONParser {
   private object(depth: number): OutputJSONObject {
     this.offset++
     this.whitespace()
-    const fields = new Map<string, OutputJSON>()
-    let previous: string | undefined
-    // fromEntries creates own data properties without invoking object setters.
-    const result = (): OutputJSONObject => Object.setPrototypeOf(Object.fromEntries(fields), null)
+    // This fresh null-prototype record has no setters, including __proto__.
+    // Own data assignment retains decoded duplicate evidence without a second
+    // Map-to-object allocation at the end of every parsed record.
+    const result: OutputJSONObject = Object.create(null)
+    let count = 0,
+      previous: string | undefined
     if (this.source[this.offset] === '}') {
       this.offset++
-      return result()
+      return result
     }
     for (;;) {
       this.whitespace()
       const key = this.string()
-      outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
-      outputAssert(fields.size < this.bounds.mapKeys, 'JSON map limit', 'limited')
+      outputAssert(!Object.hasOwn(result, key), 'Duplicate decoded JSON key')
+      outputAssert(count++ < this.bounds.mapKeys, 'JSON map limit', 'limited')
       this.encoding?.key(previous, key)
       previous = key
       this.whitespace()
       outputAssert(this.source[this.offset++] === ':', 'Expected JSON colon')
-      fields.set(key, this.value(depth + 1))
+      result[key] = this.value(depth + 1)
       this.whitespace()
       const end = this.source[this.offset++]
-      if (end === '}') return result()
+      if (end === '}') return result
       outputAssert(end === ',', 'Expected JSON object separator')
     }
   }
@@ -276,8 +280,8 @@ class OutputJSONParser {
           typeof result !== 'number' || Number.isSafeInteger(result),
           'Protocol numbers must be safe integers'
         )
-        this.encoding?.value(token, result as null | boolean | number)
-        return result as null | boolean | number
+        this.encoding?.value(token, result as OutputJSONScalar)
+        return result as OutputJSONScalar
       }
     }
   }
@@ -329,24 +333,25 @@ export function canonicalOutputJSON(
   function object(node: object, depth: number): void {
     outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
     // RFC 8785 orders property names by UTF-16 code units, never locale rules.
-    const keys = Object.getOwnPropertyNames(node).sort()
+    const keys = Object.getOwnPropertyNames(node).sort((a, b) => +(a > b) - +(a < b))
     outputAssert(keys.length <= bounds.mapKeys, 'JSON map limit', 'limited')
     emit('{', true)
-    keys.forEach((key, index) => {
+    let index = 0
+    for (const key of keys) {
       const descriptor = Object.getOwnPropertyDescriptor(node, key)
       outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
-      if (index > 0) emit(',', true)
+      if (index++ > 0) emit(',', true)
       // The colon is the next byte before visiting the value. One emission
       // retains the same byte-limit refusal before any value validation.
       string(key, ':')
       visit(descriptor.value, depth + 1)
-    })
+    }
     emit('}', true)
   }
   function visit(node: unknown, depth: number): void {
     outputAssert(depth <= bounds.depth, 'JSON depth limit', 'limited')
     if (node === null || typeof node === 'boolean') {
-      emit(JSON.stringify(node), true)
+      emit(String(node), true)
     } else if (typeof node === 'number') {
       outputAssert(Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
       emit(JSON.stringify(node), true)

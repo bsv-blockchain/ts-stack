@@ -40,6 +40,16 @@ constraints, including predecessor shape and selected critical extensions. Signa
 installed-policy, current authorization and evidence verification remain required
 before any storage, admission or application effect.
 
+`inspectOutputJSONEncoding(input, limits)` returns a freshly parsed, independently
+owned value and whether the incoming encoding is canonical. It retains duplicate,
+Unicode, structural and original/canonical byte bounds. The flag describes that
+input, not later mutations, and supplies no schema or authority decision. Ordinary
+`parseOutputJSON` acceptance remains unchanged. Canonical property ordering uses
+an explicit UTF-16 code-unit comparator, independent of locale. Parsed objects are fresh
+null-prototype data records, including special property names. Strict native string
+parsing and every original duplicate, Unicode and resource check still run. No
+encoding, schema or authorization verdict is retained between calls.
+
 `retainOutputCapability` captures a verified selection as bounded local replay
 material to persist atomically with an operation. `restoreOutputCapability`
 revalidates that signed manifest at its original selection time and requires the

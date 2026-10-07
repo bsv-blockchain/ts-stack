@@ -2168,13 +2168,13 @@ export const logger = (message: string, ...optionalParams: any[]): void => {
  * @param {Object} testValues - An object containing key-value pairs to update.
  */
 export const updateTable = async <Id, Value extends object>(
-  updateFunction: (id: Id, values: Partial<Value>) => Promise<unknown>,
+  updateFunction: (id: Id, values: Record<string, unknown>) => Promise<unknown>,
   id: Id,
   testValues: Partial<Value>
 ) => {
   for (const [key, value] of Object.entries(testValues)) {
     logger('id=', id, '[key]=', [key], 'value=', value)
-    await updateFunction(id, { [key]: value } as Partial<Value>)
+    await updateFunction(id, { [key]: value })
   }
 }
 
