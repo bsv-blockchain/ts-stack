@@ -432,6 +432,24 @@
       "created": "2026-10-02",
       "reviewBy": "2026-11-01",
       "removeWhen": "Remove the patch, exact-version package extension and scoped removal together after an official compatible Metro/file-map release removes the affected dependency path; require the complete watcher oracle, fresh unexcluded audit, frozen graph and packed Metro/Hermes platform checks before retirement."
+    },
+    {
+      "id": "handlebars-4-7-10-security-release-age",
+      "category": "security",
+      "target": "pnpm minimumReleaseAgeExclude for exactly handlebars@4.7.10",
+      "owner": "ts-stack-maintainers",
+      "reason": "GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f newly identify critical vulnerabilities through handlebars4.7.9 in the conformance ts-jest tooling. Version4.7.10 is the upstream patched release and is admitted immediately under the security response policy before the ordinary seven-day release delay. Only this exact version is excepted; audit, provenance, lifecycle-script controls, original dependency ranges and every qualification gate remain required. No security finding is dismissed or accepted.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-8r5x-fm3f-whwj",
+        "https://github.com/advisories/GHSA-p8wg-vrv2-v86f",
+        "https://github.com/handlebars-lang/handlebars.js/releases/tag/v4.7.10",
+        ".github/SECURITY.md",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml"
+      ],
+      "created": "2026-10-08",
+      "reviewBy": "2026-10-13",
+      "removeWhen": "Remove the exact-version age exclusion and this exception once handlebars4.7.10 has satisfied the ordinary seven-day release-age policy; retain the patched lock selection and all qualification gates."
     }
   ]
 }

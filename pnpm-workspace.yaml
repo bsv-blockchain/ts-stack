@@ -28,6 +28,9 @@ autoInstallPeers: false
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - '@bsv/*'
+  # Urgent security patch; exact-version age exception, not an audit waiver.
+  # Removal date and advisories are recorded in the exception registry.
+  - 'handlebars@4.7.10'
 
 # Jest 30's current coverage/reporting graph still constrains minimatch to
 # brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest
