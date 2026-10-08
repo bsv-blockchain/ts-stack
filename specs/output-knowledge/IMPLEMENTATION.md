@@ -7617,3 +7617,29 @@ prove runtime improvement. Fresh full local controls, pinned151/398 inventories,
 exact-head hosted qualification and full raw mutation reconciliation remain
 required. The budget proposal remains unapproved and unapplied; checkpoint two
 is incomplete, with no publication, deployment, funding, broadcast or merge.
+
+## October 8: preserve the complete final Base64 canonical check
+
+Static review of published6acec1c found that JavaScript's end anchor may match
+before a final line terminator. The decoder removes that trailing whitespace;
+the original full round-trip check then rejects the differing representation
+after decoded bounds. A padding-only tail check can omit that refusal for an
+unpadded tail. The corrected candidate checks final alphabet membership on every
+call, along with the exact unused-bit mask. Empty bytes remain valid. Syntax,
+encoded bounds, decoding, decoded bounds and the final canonical refusal retain
+their original order and error identities. No prior result is reused.
+
+One additional ordinary SDK regression covers LF, CR, Unicode line/paragraph
+separators and CRLF, compares the independent encoder's canonical representation,
+checks decoded-limit precedence and retries empty, padded and complete-quartet
+inputs after each rejection. Existing test bodies and all property, example,
+engine/golden, selector, replay, resource and browser limits remain unchanged.
+All five compiler contexts pass, all234 public declarations remain byte-identical,
+and complete fresh SDK/LCH Vite/esbuild graphs pass unchanged raw/gzip/Brotli
+limits; candidate LCH Vite raw size is307977 under308000. These static checks do
+not execute SDK/application code or establish runtime performance. Published6ace
+analyzers have zero checked Sonar findings, zero unreviewed hotspots and zero open
+PR-ref CodeQL alerts; they do not qualify the corrected candidate. Exact-source
+hosted qualification and the full151-target/398-row mutation reconciliation remain
+required. Checkpoint two remains incomplete. The budget proposal is still
+unapproved and unapplied.

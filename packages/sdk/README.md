@@ -514,7 +514,10 @@ wallet-derived locking key, and field signature before reading or spending it.
   allocation bound and decoded-byte limit. After those checks it validates the
   final sextet's unused bits directly: four zero bits with two padding characters,
   two with one. Decoded bytes and refusal order are unchanged; this avoids a
-  complete re-encoding solely to verify padding. No byte value or verdict is cached.
+  complete re-encoding solely to verify padding. A final alphabet check also
+  rejects line terminators at that same stage, preserving the original round-trip
+  refusal after decoded bounds. Empty bytes remain valid. No byte value or verdict
+  is cached.
 
   Purchase and release parsers retain fresh complete normalization at both
   public and nested packet boundaries. Nested ownership also preserves canonical

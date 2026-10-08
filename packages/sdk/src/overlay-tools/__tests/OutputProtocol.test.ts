@@ -1164,4 +1164,19 @@ describe('fresh private JSON graph traversal', () => {
       expect(() => decodeOutputBytes(text)).toThrow('Noncanonical base64')
     }
   })
+
+  it('retains final line-terminator refusal after decoded bounds and accepts fresh valid retries', () => {
+    for (const terminator of ['\n', '\r', '\u2028', '\u2029', '\r\n']) {
+      const stem = terminator.length === 2 ? 'AA' : 'AAA'
+      const text = stem + terminator
+      const decoded = Array.from(Buffer.from(text, 'base64'))
+      expect(toBase64(decoded)).not.toBe(text)
+      expect(() => decodeOutputBytes(text)).toThrow('Nonzero base64 padding bits')
+      expect(() => decodeOutputBytes(text, decoded.length - 1)).toThrow('Decoded byte limit')
+      expect(decodeOutputBytes('')).toEqual([])
+      expect(decodeOutputBytes('AA==')).toEqual([0])
+      expect(decodeOutputBytes('AAA=')).toEqual([0, 0])
+      expect(decodeOutputBytes('AAAA')).toEqual([0, 0, 0])
+    }
+  })
 })
