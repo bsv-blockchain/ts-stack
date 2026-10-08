@@ -1432,3 +1432,10 @@ This changes no public interface, wire or persisted schema, financial effect,
 clock requirement or disclosure rule. No caller migration is required. Semantic
 mutation execution boundaries follow complete methods and retain the entire
 canonical source and test selection.
+
+Fixed protected-envelope and alias-record field definitions are privately captured once
+through the SDK closed-object companion. Every supplied object still receives fresh
+prototype, symbol, required-field, allowed-field and data-descriptor checks. Complete
+value normalization, encrypted custody, revision, clock, authorization and selected-chain
+validation remain independent and current on every operation. No incoming value or
+validation result is retained by these definitions.

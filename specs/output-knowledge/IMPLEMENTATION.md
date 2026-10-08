@@ -6791,3 +6791,30 @@ limits, disguised byte views and lone-surrogate refusal. All original properties
 units, examples and full151target/398row controls remain. Complete coherent
 source/artifact checks and fresh hosted functional/analyzer/mutation qualification
 remain required; Checkpoint2 is not achieved.
+
+### October 8: privately captured literal field definitions
+
+Published0e9018d passes SDK262suites/8590tests, the native wallet79/882
+including original8_BEEF, and app3's complete63suites/930tests. Actual Sonar
+qualityOK/issues0/hotspots0 and actual CodeQL zero open PR-ref alerts are
+verified against its complete analyzed head tree. Its disclosure property
+interrupts176/300 and coordinator259/300 under unchanged150-second limits,
+with no nonempty counterexample. Remaining hosted jobs and the full151/398
+mutation campaign are not yet qualified; Checkpoint2 remains incomplete.
+
+Source inspection identifies seventeen literal-only object checks in the protected
+payload codec, alias store, alias record journal, selection projection and access
+fence. Sixteen private definitions now use the existing SDK closed-object factory.
+Only immutable field-name allocation moves to module initialization; every incoming
+value still undergoes complete fresh prototype, symbol, required/allowed-field and
+data-descriptor validation, with identical field order. Scalar, normalization,
+cryptographic, revision, clock, custody and authority bodies are untouched.
+The public mutable grammar API remains unchanged. No value, verdict or
+currentness cache is introduced.
+
+Before adoption, reversing only the private field-definition capture reproduces
+the entire original AST of each of the five modules. Five full affected compiler
+contexts pass without executing a target. The coherent adopted tree, original
+test/policy preservation, complete source inventory, package budgets and fresh
+exact published-head hosted qualification are still required. No comparative
+speed or causal performance conclusion is established.

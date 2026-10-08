@@ -1,6 +1,6 @@
 import {
   canonicalOutputJSON,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
   outputU64,
@@ -15,6 +15,10 @@ import {
 } from './PrivatePurchaseProgress.js'
 import type { PrivatePurchaseAliasSnapshot } from './SQLitePrivatePurchaseAliases.js'
 import type { ProtectedLedgerView } from './ProtectedLedgerCodec.js'
+
+// Capture only fixed field definitions; validate every supplied value afresh.
+const assertSelectionFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['format', 'firstReservedAt', 'selectedAt', 'progress'])
 
 /** Explicit new native-owner metadata. Existing progress/state schemas and
  * exact-txid owners are unchanged. This projection is not a domain, admission,
@@ -36,7 +40,7 @@ export function parsePrivatePurchaseAliasSelection(
   original: PrivatePurchaseOriginal
 ): PrivatePurchaseAliasSelection {
   const value = ownOutputJSON(input, { bytes: 524288 + 8192 }).value
-  closedOutputObject(value, ['format', 'firstReservedAt', 'selectedAt', 'progress'])
+  assertSelectionFields(value)
   outputAssert(
     value.format === 'private-purchase-alias-selection/1',
     'Unsupported alias selection custody',

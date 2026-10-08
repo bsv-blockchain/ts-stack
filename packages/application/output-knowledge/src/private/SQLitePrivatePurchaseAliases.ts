@@ -3,7 +3,7 @@ import {
   Beef,
   Utils,
   canonicalOutputJSON,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   decodeOutputBytes,
   outputAssert,
   outputHex32,
@@ -45,6 +45,31 @@ import {
   type ProtectedLedgerRecord,
   type ProtectedLedgerView
 } from './ProtectedLedgerCodec.js'
+
+// Capture only fixed field definitions; validate every supplied value afresh.
+const assertAliasLimitFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator([
+    'maximumCandidateBytes',
+    'maximumUnconfirmed',
+    'maximumPending',
+    'maximumWrites',
+    'maximumBatchBytes'
+  ])
+const assertMetadataFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['format', 'binding', 'state'])
+const assertChunkFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['format', 'binding', 'role', 'index', 'data'])
+const assertHeaderFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator([
+    'format',
+    'binding',
+    'role',
+    'admission',
+    'bytes',
+    'digest',
+    'outcome',
+    'completedAt'
+  ])
 
 const FORMAT = 'private-purchase-alias-slots/1',
   CHUNK = 786432,
@@ -133,13 +158,7 @@ export class SQLitePrivatePurchaseAliases {
     limits: PrivatePurchaseAliasLimits
   ) {
     const value = ownOutputJSON(limits, { bytes: 4096 }).value
-    closedOutputObject(value, [
-      'maximumCandidateBytes',
-      'maximumUnconfirmed',
-      'maximumPending',
-      'maximumWrites',
-      'maximumBatchBytes'
-    ])
+    assertAliasLimitFields(value)
     this.limits = Object.freeze({
       maximumCandidateBytes: protectedInteger(value.maximumCandidateBytes, 4194304),
       maximumUnconfirmed: protectedInteger(value.maximumUnconfirmed, 4),
@@ -446,7 +465,7 @@ export class SQLitePrivatePurchaseAliases {
     let expectedBinding: string | undefined
     const matchesBinding = (value: unknown): boolean =>
       canonicalOutputJSON(value) === (expectedBinding ??= canonicalOutputJSON(binding))
-    closedOutputObject(body, ['format', 'binding', 'state'])
+    assertMetadataFields(body)
     outputAssert(
       body.format === FORMAT && matchesBinding(body.binding),
       'Alias original binding changed',
@@ -478,7 +497,7 @@ export class SQLitePrivatePurchaseAliases {
       for (let index = 0; index < this.chunks; index++) {
         const chunkRow = records[offset + index + 1],
           frame = chunkRow.value
-        closedOutputObject(frame, ['format', 'binding', 'role', 'index', 'data'])
+        assertChunkFields(frame)
         outputAssert(
           frame.format === FORMAT &&
             frame.role === role &&
@@ -511,16 +530,7 @@ export class SQLitePrivatePurchaseAliases {
         entry = this.entry(state, role),
         row = records[offset],
         header = row.value
-      closedOutputObject(header, [
-        'format',
-        'binding',
-        'role',
-        'admission',
-        'bytes',
-        'digest',
-        'outcome',
-        'completedAt'
-      ])
+      assertHeaderFields(header)
       outputAssert(
         header.format === FORMAT &&
           header.role === role &&

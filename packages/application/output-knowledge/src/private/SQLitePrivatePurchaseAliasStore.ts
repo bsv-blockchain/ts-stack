@@ -5,7 +5,7 @@ import {
   Utils,
   parseOutputPurchaseSubmit,
   type OutputPurchaseSubmit,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   decodeOutputBytes,
   outputAssert,
   outputHex32,
@@ -63,6 +63,54 @@ import type {
   PrivatePurchaseAliasedState
 } from './PrivatePurchaseAliasOwnerPorts.js'
 
+// Capture only fixed field definitions; validate every supplied value afresh.
+const assertStoreLimitFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator([
+    'maximumStateBytes',
+    'maximumOriginalBytes',
+    'maximumCandidateBytes',
+    'maximumResultBytes',
+    'maximumOutcomeBytes',
+    'maximumBatchBytes'
+  ])
+const assertValidationPolicyFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['id', 'digest'])
+const assertCustodyFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator([
+    'format',
+    'original',
+    'validationPolicy',
+    'schema',
+    'maximumSecretBytes',
+    'material'
+  ])
+const assertLoadedStateFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator([
+    'format',
+    'clockProfile',
+    'candidateProfile',
+    'recipient',
+    'firstReservedAt',
+    'selectedTxid',
+    'progress',
+    'original',
+    'result'
+  ])
+const assertTerminalFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['format', 'candidate', 'candidateDigest', 'envelope'])
+const assertMetadataFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['format', 'binding', 'state'])
+const assertBindingFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator([
+    'owner',
+    'acquisitionId',
+    'requestDigest',
+    'recipient',
+    'originalDigest'
+  ])
+const assertFailureFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['reason', 'evidence'])
+
 const PROFILE = 'full-purchase-commitment-v1' as const
 
 /** Explicit new owner; historical formats cannot be opened or migrated here.
@@ -85,14 +133,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     maximumSelections: number
   ) {
     const value = ownOutputJSON(limits, { bytes: 4096 }).value
-    closedOutputObject(value, [
-      'maximumStateBytes',
-      'maximumOriginalBytes',
-      'maximumCandidateBytes',
-      'maximumResultBytes',
-      'maximumOutcomeBytes',
-      'maximumBatchBytes'
-    ])
+    assertStoreLimitFields(value)
     this.limits = {
       maximumStateBytes: protectedInteger(value.maximumStateBytes, 1048576),
       maximumOriginalBytes: protectedInteger(value.maximumOriginalBytes, 4194304),
@@ -111,7 +152,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
       'Invalid alias selection capacity'
     )
     this.updates = maximumSelections + 1
-    closedOutputObject(policy, ['id', 'digest'])
+    assertValidationPolicyFields(policy)
     this.policy = { id: outputString(policy.id), digest: outputHex32(policy.digest) }
     this.payloads = new PrivateAcquisitionPayloads(domain.identity)
     aliases.installedOn(domain, contracts)
@@ -201,15 +242,8 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     return inspected.canonical ? this.custodyValue(inspected.value) : this.custody(inspected.value)
   }
   private custodyValue(value: unknown): PrivatePurchaseCustody {
-    closedOutputObject(value, [
-      'format',
-      'original',
-      'validationPolicy',
-      'schema',
-      'maximumSecretBytes',
-      'material'
-    ])
-    closedOutputObject(value.validationPolicy, ['id', 'digest'])
+    assertCustodyFields(value)
+    assertValidationPolicyFields(value.validationPolicy)
     outputAssert(
       value.format === 'private-purchase-custody/1' &&
         value.validationPolicy.id === this.policy.id &&
@@ -278,17 +312,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     guard: ProtectedLedgerGuard
   ): PrivatePurchaseAliasedLoaded | undefined {
     const value = row.value
-    closedOutputObject(value, [
-      'format',
-      'clockProfile',
-      'candidateProfile',
-      'recipient',
-      'firstReservedAt',
-      'selectedTxid',
-      'progress',
-      'original',
-      'result'
-    ])
+    assertLoadedStateFields(value)
     outputAssert(
       value.format === 'private-purchase-state/3' &&
         value.clockProfile === 'native-observation-v1' &&
@@ -372,7 +396,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
         ),
         { bytes: this.limits.maximumResultBytes }
       ).value
-      closedOutputObject(terminal, ['format', 'candidate', 'candidateDigest', 'envelope'])
+      assertTerminalFields(terminal)
       candidate = parseOutputPurchaseSubmit(terminal.candidate)
       outputAssert(
         terminal.format === 'private-purchase-failure-custody/1' &&
@@ -598,14 +622,8 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
       )
       outputAssert(metadata.length <= 1, 'Alias planner has ambiguous metadata')
       if (metadata.length === 1) {
-        closedOutputObject(metadata[0].value, ['format', 'binding', 'state'])
-        closedOutputObject(metadata[0].value.binding, [
-          'owner',
-          'acquisitionId',
-          'requestDigest',
-          'recipient',
-          'originalDigest'
-        ])
+        assertMetadataFields(metadata[0].value)
+        assertBindingFields(metadata[0].value.binding)
         outputAssert(
           metadata[0].value.binding.owner === this.aliases.id &&
             metadata[0].value.binding.acquisitionId === id &&
@@ -868,7 +886,7 @@ export class SQLitePrivatePurchaseAliasStore implements PrivatePurchaseAliasOwne
     guard: ProtectedLedgerGuard
   ): PrivatePurchaseAliasedLoaded {
     const decision = ownOutputJSON(input, { bytes: this.limits.maximumOutcomeBytes }).value
-    closedOutputObject(decision, ['reason', 'evidence'])
+    assertFailureFields(decision)
     const reason = outputString(decision.reason)
     outputAssert(typeof decision.evidence === 'string', 'Failure evidence must be bytes')
     nativeOutputBytes(decision.evidence, this.limits.maximumOutcomeBytes)

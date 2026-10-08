@@ -8,13 +8,17 @@ import {
 } from 'node:crypto'
 import {
   canonicalOutputJSON,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   outputString,
   parseOutputJSON,
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'
 import { nativeOutputBytes } from './NativeOutputBytes.js'
+
+// Capture only fixed field definitions; validate every supplied value afresh.
+const assertPayloadEnvelopeFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
 
 /** Local custody port. IDs must be public labels; key material never enters a persisted envelope. */
 export interface ProtectedPayloadCustody {
@@ -212,7 +216,7 @@ function parseEnvelope(input: unknown, maximum: number): ProtectedPayloadEnvelop
 }
 
 function envelopeFields(value: unknown): ProtectedPayloadEnvelope {
-  closedOutputObject(value, ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'])
+  assertPayloadEnvelopeFields(value)
   if (value.format !== FORMAT)
     throw new OutputProtocolError('unsupported', 'Unsupported protected payload format')
   return {

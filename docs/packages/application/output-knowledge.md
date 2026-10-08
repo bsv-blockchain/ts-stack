@@ -325,3 +325,10 @@ changes and unrelated channel writes do not rebind those records. Missing and
 unauthorized gets use the same not-found result. The companion performs no
 admission, wallet action or network I/O; the authenticated HTTP adapter must also
 bind signed headers, enforce physical work limits and handle cancellation.
+
+Fixed protected-envelope and alias-record field definitions are privately captured once
+through the SDK closed-object companion. Every supplied object still receives fresh
+prototype, symbol, required-field, allowed-field and data-descriptor checks. Complete
+value normalization, encrypted custody, revision, clock, authorization and selected-chain
+validation remain independent and current on every operation. No incoming value or
+validation result is retained by these definitions.

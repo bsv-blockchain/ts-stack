@@ -1,6 +1,6 @@
 import {
   canonicalOutputJSON,
-  closedOutputObject,
+  createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
   outputIdentity,
@@ -19,6 +19,19 @@ import { nativeOutputBytes } from './NativeOutputBytes.js'
 import type { PrivateServiceDomain } from './PrivateServiceDomain.js'
 import type { ProtectedLedgerGuard, ProtectedLedgerView } from './ProtectedLedgerCodec.js'
 import type { PrivatePurchaseCandidateProfile } from './PrivatePurchaseProgress.js'
+
+// Capture only fixed field definitions; validate every supplied value afresh.
+const assertCustodyFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator([
+    'format',
+    'original',
+    'validationPolicy',
+    'schema',
+    'maximumSecretBytes',
+    'material'
+  ])
+const assertOriginalFields: ReturnType<typeof createClosedOutputObjectValidator> =
+  createClosedOutputObjectValidator(['format', 'request', 'terms', 'capability', 'createdAt'])
 
 /** Current permission shares native purchase custody. Match recipient ownership
  * before reading original chunks; a lookup catalogue is not recovery authority.
@@ -101,21 +114,8 @@ export class PrivatePurchaseAccess {
           ),
           { bytes: descriptor.maximumBytes }
         )
-        closedOutputObject(custody, [
-          'format',
-          'original',
-          'validationPolicy',
-          'schema',
-          'maximumSecretBytes',
-          'material'
-        ])
-        closedOutputObject(custody.original, [
-          'format',
-          'request',
-          'terms',
-          'capability',
-          'createdAt'
-        ])
+        assertCustodyFields(custody)
+        assertOriginalFields(custody.original)
         request = parseOutputPurchasePrepare(custody.original.request)
         outputAssert(
           outputPacketDigest('purchase-request', request) === descriptor.requestDigest,
