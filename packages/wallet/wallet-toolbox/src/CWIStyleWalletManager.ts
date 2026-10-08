@@ -97,6 +97,20 @@ export const PBKDF2_MAX_ITERATIONS = 10_000_000
 export const MAX_STATE_SNAPSHOT_BYTES = 16 * 1024 * 1024
 export const MAX_PENDING_REGISTRATION_TOKEN_BYTES = 64 * 1024
 
+function readSerializedOutpoint(reader: Reader, allowUnpublished: boolean): string {
+  const outpointLen = reader.readVarIntNumStrict(false)
+  const currentOutpoint = toUTF8(reader.read(outpointLen))
+  if (
+    (currentOutpoint.length === 0 && !allowUnpublished) ||
+    currentOutpoint.length > 128 ||
+    (currentOutpoint.length > 0 && !/^[^\s.:]+[.:]\d+$/.test(currentOutpoint)) ||
+    (allowUnpublished && !reader.eof())
+  ) {
+    throw new Error('Serialized UMP token contains an invalid outpoint.')
+  }
+  return currentOutpoint
+}
+
 function isPositiveIntegerInRange(value: unknown, maximum: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= maximum
 }
@@ -1896,15 +1910,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     let rootPrimaryKey: number[]
     if (this.pendingRegistrationToken != null) {
       newToken = this.pendingRegistrationToken
-      try {
-        const passwordKey = await derivePasswordKey(newToken, toArray(password, 'utf8'))
-        rootPrimaryKey = new SymmetricKey(this.XOR(this.presentationKey, passwordKey)).decrypt(
-          newToken.passwordPresentationPrimary
-        ) as number[]
-        if (rootPrimaryKey.length !== 32) throw new Error('Invalid root key length.')
-      } catch {
-        throw new Error('Pending registration token could not be unlocked with this password.')
-      }
+      rootPrimaryKey = await this.unlockPendingRegistrationToken(newToken, this.presentationKey, password)
     } else {
       const generated = await this.buildPendingRegistrationToken(password, this.presentationKey)
       newToken = generated.token
@@ -1948,6 +1954,23 @@ export class CWIStyleWalletManager implements WalletInterface {
     )
     this.pendingRegistrationToken = undefined
     this.authenticated = true
+  }
+
+  private async unlockPendingRegistrationToken(
+    token: UMPToken,
+    presentationKey: number[],
+    password: string
+  ): Promise<number[]> {
+    try {
+      const passwordKey = await derivePasswordKey(token, toArray(password, 'utf8'))
+      const rootPrimaryKey = new SymmetricKey(this.XOR(presentationKey, passwordKey)).decrypt(
+        token.passwordPresentationPrimary
+      ) as number[]
+      if (rootPrimaryKey.length !== 32) throw new Error('Invalid root key length.')
+      return rootPrimaryKey
+    } catch {
+      throw new Error('Pending registration token could not be unlocked with this password.')
+    }
   }
 
   private async buildPendingRegistrationToken(
@@ -2810,7 +2833,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     // Write outpoint string
-    const outpointBytes = token.currentOutpoint == null ? [] : toArray(token.currentOutpoint, 'utf8')
+    const outpointBytes = toArray(token.currentOutpoint ?? '', 'utf8')
     writer.writeVarIntNum(outpointBytes.length)
     writer.write(outpointBytes)
 
@@ -2886,17 +2909,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     // Read outpoint string
-    const outpointLen = reader.readVarIntNumStrict(false)
-    const outpointBytes = reader.read(outpointLen)
-    const currentOutpoint = toUTF8(outpointBytes)
-    if (
-      (currentOutpoint.length === 0 && !allowUnpublished) ||
-      currentOutpoint.length > 128 ||
-      (currentOutpoint.length > 0 && !/^[^\s.:]+[.:]\d+$/.test(currentOutpoint)) ||
-      (allowUnpublished && !reader.eof())
-    ) {
-      throw new Error('Serialized UMP token contains an invalid outpoint.')
-    }
+    const currentOutpoint = readSerializedOutpoint(reader, allowUnpublished)
 
     const token: UMPToken = {
       passwordSalt,
@@ -2927,11 +2940,11 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param rootPrimaryKey      The user's root primary key (32 bytes).
    * @param ephemeralRootPrivilegedKey Optional root privileged key (e.g., during recovery flows).
    */
-  private async setupRoot(
+  private setupRoot(
     rootKey: number[],
     ephemeralRootPrivilegedKey?: number[],
     authenticated = true
-  ): Promise<void> {
+  ): void {
     if (this.currentUMPToken == null) {
       throw new Error('A UMP token must exist before setting up root infrastructure!')
     }
