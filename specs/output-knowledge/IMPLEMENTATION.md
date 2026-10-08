@@ -7618,28 +7618,33 @@ exact-head hosted qualification and full raw mutation reconciliation remain
 required. The budget proposal remains unapproved and unapplied; checkpoint two
 is incomplete, with no publication, deployment, funding, broadcast or merge.
 
-## October 8: preserve the complete final Base64 canonical check
+## October 8: withdrawn anchor hypothesis and corrected syntax regression
 
-Static review of published6acec1c found that JavaScript's end anchor may match
-before a final line terminator. The decoder removes that trailing whitespace;
-the original full round-trip check then rejects the differing representation
-after decoded bounds. A padding-only tail check can omit that refusal for an
-unpadded tail. The corrected candidate checks final alphabet membership on every
-call, along with the exact unused-bit mask. Empty bytes remain valid. Syntax,
-encoded bounds, decoding, decoded bounds and the final canonical refusal retain
-their original order and error identities. No prior result is reused.
+The earlier25d9e9f change was based on an incorrect static hypothesis about
+JavaScript's dollar anchor. [ECMAScript CompileAssertion](https://tc39.es/ecma262/multipage/text-processing.html#sec-compileassertion) permits the anchor before
+a line terminator only with multiline mode. The existing Base64 expression has
+no multiline flag: LF, CR, Unicode line/paragraph separators and CRLF already
+fail the original syntax check after encoded bounds, before decoding. The claim
+that6acec1c accepted these inputs is withdrawn. The25d9 test's padding-error
+expectation was also wrong; compiler and bundle controls never qualified that
+runtime assertion. No SDK/application code was executed locally to infer it.
 
-One additional ordinary SDK regression covers LF, CR, Unicode line/paragraph
-separators and CRLF, compares the independent encoder's canonical representation,
-checks decoded-limit precedence and retries empty, padded and complete-quartet
-inputs after each rejection. Existing test bodies and all property, example,
-engine/golden, selector, replay, resource and browser limits remain unchanged.
-All five compiler contexts pass, all234 public declarations remain byte-identical,
-and complete fresh SDK/LCH Vite/esbuild graphs pass unchanged raw/gzip/Brotli
-limits; candidate LCH Vite raw size is307977 under308000. These static checks do
-not execute SDK/application code or establish runtime performance. Published6ace
-analyzers have zero checked Sonar findings, zero unreviewed hotspots and zero open
-PR-ref CodeQL alerts; they do not qualify the corrected candidate. Exact-source
-hosted qualification and the full151-target/398-row mutation reconciliation remain
-required. Checkpoint two remains incomplete. The budget proposal is still
-unapproved and unapplied.
+The current correction restores the6ace padding-only routine and documents its
+nonmultiline syntax. The added ordinary regression now asserts syntax rejection,
+encoded-limit precedence and fresh empty/padded/complete-quartet retries. Every
+original6ace SDK test body, all141 properties,81 examples/IDs, engine tests/all20
+goldens, selectors, seed/replay, resource budgets and browser ceilings remain.
+Public declarations are byte-identical across all234 files; five compiler
+contexts and complete fresh SDK/LCH Vite/esbuild graphs pass static controls.
+Runtime qualification remains a separate required gate.
+
+Published6ace has a disclosure interruption at248/300 under unchanged150seconds,
+with no reported nonempty counterexample and860 other tests passing; coordinator
+shard2 passes. Its CI was subsequently cancelled during remaining lanes by the
+next source update, so it is incomplete. Actual6ace Sonar0allcheckedclassifications,
+0unreviewedhotspots, CodeQL0openPRrefalerts and23resolved reviews remain historical.
+Earlier46ec CPU traces remain wholly excluded from timings and counts because of
+negative/reordered samples. Corrected exact-source hosted qualification, remaining
+performance diagnosis and full151-target/398-row raw mutation reconciliation are
+still required. Checkpoint two is incomplete; the budget proposal is unapproved
+and unapplied. No publication, deployment, funding, broadcast or merge occurred.

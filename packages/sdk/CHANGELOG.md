@@ -214,9 +214,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-- Preserve canonical Base64 rejection of trailing line terminators after decoded
-  size checks. The fresh tail check retains original refusal ordering and empty,
-  padded and complete-quartet inputs without full result re-encoding.
+- Retain the original Base64 padding-only tail check. A syntax regression covers
+  trailing line terminators, encoded-bound precedence and valid retries. The
+  nonmultiline syntax expression already rejects those terminators before decoding.
 
 - Construct program-value ownership with native JSON parsing only after complete bounded canonical validation and byte emission. A bounded private traversal selects null prototypes only on fresh, unexposed records; incoming text retains duplicate-aware parsing. Special keys, own data attributes, independent ownership, UTF-16 order and all refusal boundaries remain unchanged.
 

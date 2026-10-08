@@ -185,18 +185,17 @@ export function decodeOutputBytes(
   )
   const decoded: number[] = toArray(value, 'base64')
   outputAssert(decoded.length <= maximumBytes, 'Decoded byte limit', 'limited')
-  // Keep the final canonical check after syntax, decoding and decoded bounds.
-  // The syntax regex can end before a final line terminator; reject that here
-  // to preserve the original round-trip refusal and its ordering. Empty is valid.
-  // Padded tails have four or two unused bits; complete quartets have none.
-  const pads = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
-  const sextet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
-    value[value.length - pads - 1] ?? ''
-  )
-  outputAssert(
-    sextet >= 0 && (sextet & ((1 << (pads * 2)) - 1)) === 0,
-    'Nonzero base64 padding bits'
-  )
+  // The syntax regex has no multiline flag: line terminators fail syntax.
+  // Syntax and decoded length are checked before this exact padding-bit rule.
+  // A canonical final sextet has four zero bits with two pads, two with one.
+  // This is fresh representation validation, without a second full encoding.
+  if (value.endsWith('=')) {
+    const pads = value.endsWith('==') ? 2 : 1
+    const sextet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
+      value[value.length - pads - 1]
+    )
+    outputAssert((sextet & (pads === 2 ? 15 : 3)) === 0, 'Nonzero base64 padding bits')
+  }
   return decoded
 }
 
