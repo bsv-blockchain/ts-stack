@@ -621,6 +621,76 @@ describe('HTTPWalletJSON – api() error responses', () => {
     )
   })
 
+  it.each([
+    ['conflict evidence on a successful result', { status: 'success' }, 'competingTxs'],
+    ['non-array competitors', { competingTxs: 'invalid' }, 'competingTxs'],
+    [
+      'too many competitors',
+      { competingTxs: Array.from({ length: 1001 }, () => MINIMAL_TXID) },
+      'competingTxs'
+    ],
+    ['non-string competitor', { competingTxs: [42] }, 'competingTxs[0]'],
+    ['malformed competitor', { competingTxs: ['not-a-txid'] }, 'competingTxs[0]'],
+    ['self competitor', { competingTxs: [VALID_TXID] }, 'competingTxs'],
+    [
+      'duplicate competitors',
+      { competingTxs: [MINIMAL_TXID, MINIMAL_TXID.toUpperCase()] },
+      'competingTxs'
+    ],
+    ['proof without competitor IDs', { competingTxs: [] }, 'competingBeef'],
+    ['invalid proof byte', { competingBeef: [-1] }, 'competingBeef'],
+    ['missing competitor transaction', { competingTxs: ['cd'.repeat(32)] }, 'competingBeef']
+  ])('rejects a constructed review containing %s', async (_name, changes, field) => {
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          txid: VALID_TXID,
+          sendWithResults: [],
+          reviewActionResults: [
+            {
+              txid: VALID_TXID,
+              status: 'doubleSpend',
+              competingTxs: [MINIMAL_TXID],
+              competingBeef: VALID_BEEF,
+              ...changes
+            }
+          ]
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    const error = await client.createAction({ description: 'hello world' }).catch(error => error)
+    expect(error).not.toBeInstanceOf(WERR_REVIEW_ACTIONS)
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toContain(`reviewActionResults[0].${field}`)
+  })
+
+  it('preserves constructed review compatibility without pre-construction input binding', async () => {
+    const review = {
+      txid: VALID_TXID,
+      status: 'doubleSpend',
+      competingTxs: [MINIMAL_TXID],
+      competingBeef: VALID_BEEF
+    }
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          txid: VALID_TXID,
+          sendWithResults: [],
+          reviewActionResults: [review]
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    const error = await client.createAction({ description: 'hello world' }).catch(error => error)
+    expect(error).toBeInstanceOf(WERR_REVIEW_ACTIONS)
+    expect(error.reviewActionResults).toEqual([review])
+  })
+
   it('bounds review-action collections before iterating their entries', async () => {
     const errorBody = {
       isError: true,
