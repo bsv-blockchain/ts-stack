@@ -183,12 +183,12 @@ class OutputJSONParser {
 
   parse(): OutputJSON {
     const frame = this.#frame
-    const value = this.#value(1)
+    this.#value(1)
     this.#whitespace()
     outputAssert(frame.o === frame.t.length, 'Trailing JSON data')
-    // Every value is decoded once into this private, bounded data-property graph.
-    // Expose it only after complete syntax, duplicate, Unicode and resource checks.
-    return value
+    // Duplicate decoded names and every syntax/resource boundary are checked
+    // before native construction of an independent, data-only graph.
+    return ownValidatedOutputJSON(frame.t)
   }
 
   #whitespace(): void {
@@ -230,12 +230,11 @@ class OutputJSONParser {
     return decoded
   }
 
-  #object(depth: number): OutputJSONObject {
+  #object(depth: number): void {
     const frame = this.#frame
     frame.o++
     this.#whitespace()
-    const fields: OutputJSONObject = Object.create(null) as OutputJSONObject
-    let size = 0
+    const keys = new Set<string>()
     let previous: string | undefined
     if (frame.t[frame.o] === '}') {
       frame.o++
@@ -243,55 +242,50 @@ class OutputJSONParser {
       for (;;) {
         this.#whitespace()
         const key = this.#string()
-        outputAssert(!Object.hasOwn(fields, key), 'Duplicate decoded JSON key')
-        outputJSONLimit(size < frame.b.mapKeys, 2)
+        outputAssert(!keys.has(key), 'Duplicate decoded JSON key')
+        outputJSONLimit(keys.size < frame.b.mapKeys, 2)
         frame.e?.key(previous, key)
         previous = key
         this.#whitespace()
         outputAssert(frame.t[frame.o++] === ':', 'Expected JSON colon')
-        // Define own data explicitly; no decoded key can select an inherited setter.
-        Object.defineProperty(fields, key, {
-          value: this.#value(depth + 1),
-          enumerable: true,
-          writable: true,
-          configurable: true
-        })
-        size++
+        this.#value(depth + 1)
+        keys.add(key)
         this.#whitespace()
         const end = frame.t[frame.o++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
-    return fields
   }
 
-  #array(depth: number): OutputJSON[] {
+  #array(depth: number): void {
     const frame = this.#frame
     frame.o++
     this.#whitespace()
-    const values = new Map<number, OutputJSON>()
+    let size = 0
     if (frame.t[frame.o] === ']') {
       frame.o++
-      return Array.from(values.values())
+      return
     }
     for (;;) {
-      outputJSONLimit(values.size < frame.b.arrayElements, 3)
-      values.set(values.size, this.#value(depth + 1))
+      outputJSONLimit(size < frame.b.arrayElements, 3)
+      this.#value(depth + 1)
+      size++
       this.#whitespace()
       const end = frame.t[frame.o++]
-      if (end === ']') return Array.from(values.values())
+      if (end === ']') return
       outputAssert(end === ',', 'Expected JSON array separator')
     }
   }
 
-  #value(depth: number): OutputJSON {
+  #value(depth: number): void {
     const frame = this.#frame
     outputJSONLimit(depth <= frame.b.depth, 1)
     this.#whitespace()
     switch (frame.t[frame.o]) {
       case '"':
-        return this.#string()
+        this.#string()
+        return
       case '{':
         return this.#object(depth)
       case '[':
@@ -309,7 +303,7 @@ class OutputJSONParser {
           'Protocol numbers must be safe integers'
         )
         frame.e?.value(token, result as OutputJSONScalar)
-        return result as OutputJSONScalar
+        return
       }
     }
   }
@@ -439,7 +433,8 @@ function ownOutputJSONRecordPrototypes(value: OutputJSON): OutputJSON {
 
 /** Construct an independent graph only from text just fully validated here.
  * Native parsing creates ordinary own data, including builtin-looking names.
- * Caller objects and incoming text never pass through this construction path.
+ * Incoming text reaches this path only after complete lexical validation,
+ * including duplicate decoded names. Caller objects are serialized first.
  */
 function ownValidatedOutputJSON(text: string): OutputJSON {
   return ownOutputJSONRecordPrototypes(JSON.parse(text) as OutputJSON)

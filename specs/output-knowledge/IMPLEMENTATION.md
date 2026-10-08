@@ -7333,3 +7333,41 @@ The encrypted associated-data binding retains its original general canonical
 validator and all cryptographic/custody checks. Original properties, SDK units,
 compiled example bodies, source ranges and campaign controls remain unchanged.
 Full local controls and exact published-source qualification remain required.
+
+### October 8: lexical validation before native JSON construction
+
+Published `0bd4ea3d` passes SDK 8591 tests and wallet shard three's 882 tests,
+including the original BEEF regression. Its actual Sonar analysis reports zero
+findings and zero unreviewed hotspots. Complete qualification still fails: the
+original disclosure and coordinator properties stop at 164/300 and 251/300
+under the unchanged 150-second limit, without a nonempty counterexample. Actual
+CodeQL reports alert331 at the explicit decoded-key property construction.
+No full mutation campaign was dispatched, and Checkpoint2 remains open.
+
+Both current property CPU traces pass whole-trace timing admission. Their
+largest self-time contributors include incoming object construction and generic
+canonical validation. The complete native HTTP CPU trace is excluded for
+negative/reordered samples; none of its CPU timing or sample aggregates are
+used. Independent function counters and native monotonic observations remain
+separate evidence. Instrumented property results do not qualify the original
+uninstrumented 300-case controls or establish a performance improvement.
+
+The next parser candidate separates complete lexical validation from native
+data-only graph construction. Fresh decoded-key Sets retain duplicate refusal
+before map limits and child parsing. Arrays retain independent successful-value
+counts and their original item-limit order. Every original syntax, Unicode,
+safe-integer, depth, collection, byte and trailing-data check completes before
+native JSON parsing creates the independent graph. The existing bounded private
+traversal selects null prototypes only on newly parsed records. Builtin-looking
+keys remain ordinary writable, configurable, enumerable own data; inherited
+setters are never selected. Canonical inspection retains its byte fence and flag,
+and the complete serializer and program-value ownership paths remain unchanged.
+No input, shape, schema, normalization, currentness or authorization verdict is
+cached, and no analyzer suppression or classification is introduced.
+
+All original SDK test bodies, property profiles, compiled examples, source
+ranges, thresholds, browser/package ceilings and the full 151-target/398-row
+campaign remain required. The five complete compiler contexts accept the
+unadopted parser proposal. Full local controls, native/browser/mobile consumers,
+actual analyzers and complete published-source qualification remain necessary;
+this source correction does not announce performance or checkpoint readiness.
