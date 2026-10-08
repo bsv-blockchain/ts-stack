@@ -192,3 +192,37 @@ it('preserves subclass and instance object-reader dispatch with one capture befo
     prototypeReader.mockRestore()
   }
 })
+
+it('checks every fresh owned string field and exact six-field membership before payload decoding', () => {
+  const codec = make(),
+    envelope = codec.seal(binding, Uint8Array.of(3, 9))
+  const fields = ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag'] as const
+  for (const field of fields) {
+    const missing: Record<string, unknown> = { ...envelope }
+    delete missing[field]
+    const renamed = { ...missing, unknown: envelope[field] }
+    for (const value of [
+      missing,
+      renamed,
+      ...[null, false, 1, [], {}].map(value => ({ ...envelope, [field]: value }))
+    ]) {
+      const source = JSON.stringify(value)
+      expect(failure(() => codec.openSerialized(binding, source, bound))).toEqual(
+        failure(() => codec.open(binding, parseOutputJSON(source, { bytes: bound })))
+      )
+    }
+  }
+  const source = JSON.stringify(envelope)
+  expect(codec.openSerialized(binding, source, bound)).toEqual(Uint8Array.of(3, 9))
+  expect(
+    failure(() => codec.openSerialized(binding, JSON.stringify({ ...envelope, tag: false }), bound))
+  ).toEqual(
+    failure(() =>
+      codec.open(
+        binding,
+        parseOutputJSON(JSON.stringify({ ...envelope, tag: false }), { bytes: bound })
+      )
+    )
+  )
+  expect(codec.openSerialized(binding, source, bound)).toEqual(Uint8Array.of(3, 9))
+})

@@ -7494,3 +7494,46 @@ Complete fresh published-head functional, analyzer, packed/native and full151/39
 mutation qualification remain required. The separately reviewed budget proposal is
 still unapproved and unapplied. Checkpoint two remains incomplete. No local SDK or
 native execution, publication, deployment, funding, broadcast or merge occurs.
+
+## October 8: fixed canonical comparator and split private traversal
+
+Published `a369f2af` has terminal CI failure with38successful jobs, two original
+property shard failures, three Sonar findings and the dependent merge-gate failure.
+Disclosure stops at234/300 and coordinator at210/300 under their unchanged
+150-second interruption bound. No nonempty counterexample is reported. SDK8593,
+all applicable wallet/native lanes and81 documentation examples using24 exact
+package tarballs pass. These partial results do not qualify checkpoint two.
+
+The actual analyzed head has three open Sonar findings: missing sort comparison,
+private traversal complexity and an indexed loop. The correction restores the
+original captured locale-independent UTF-16 comparator. Direct dense-array
+iteration and a separate private null-prototype record traversal avoid intermediate
+values arrays while keeping the walk readable. Only freshly constructed,
+completely validated, unexposed graphs enter it. Caller prototypes, descriptors,
+symbols, cycles, Unicode, integers, limits, field order, data attributes and refusal
+identities remain unchanged. All existing tests are retained unchanged.
+
+All three hosted a369 CPU traces fail whole-trace sample-order admission and are
+excluded in full from timing and count aggregates. Independently recorded original
+Jest entries, monotonic native per-method inclusive timings and ordinary wall time
+remain separate diagnostic evidence, not a speedup or complete qualification.
+Instrumented disclosure completes174cases in168.013seconds and coordinator205cases
+in167.368seconds; instrumented native HTTP passes in263.079seconds. The repeated
+byte/framing/ledger calls motivate source investigation but their counts do not
+establish a timing bottleneck. Nested native timings are not added together.
+
+Fresh exact-published-head functional, analyzer, packed/native and151/398 mutation
+qualification remain required. No property case, replay, seed, individual time
+bound, selector, threshold, worker setting or bundle ceiling changes. The separate
+mutation-budget proposal remains unapproved and unapplied. Checkpoint two remains
+incomplete; no input, normalization, key, authority or currentness verdict is cached.
+
+The same correction checks the six fixed serialized private-envelope string fields
+directly on every fresh owned graph, in their original order. Exact field count
+and complete parsing precede those reads. Missing, renamed or non-string fields
+retain the original malformed-input canonicalization and refusal path. One
+appended ordinary regression compares all six fields against the historical
+object reader and verifies a subsequent fresh valid read. Custody lookup, key
+derivation, GCM authentication, reader override capture and all capacities remain
+unchanged. This removes local field-list/callback allocation without caching any
+input, plaintext, key or authority verdict; hosted performance is still unproved.

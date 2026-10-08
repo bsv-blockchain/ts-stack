@@ -467,14 +467,14 @@ wallet-derived locking key, and field signature before reading or spending it.
   only after successful children. Every syntax, Unicode, safe-integer, resource
   and trailing-data check completes before native JSON parsing constructs the
   independently owned graph. A bounded private traversal selects null prototypes
-  only on those newly created records. Dense arrays use indexed traversal;
+  only on those newly created records. Dense arrays use direct iteration;
   records receive null prototypes before their own fields are traversed. This
   avoids intermediate values arrays without touching caller objects or inherited
   fields. Keys such as `__proto__` remain ordinary
   writable, configurable, enumerable own data; inherited setters are not called.
   Caller objects never enter that traversal. The encoding inspector retains its
   independent canonical-byte check and flag. Canonical property ordering sorts
-  each fresh primitive-name array with native UTF-16 string ordering,
+  each fresh primitive-name array with one captured UTF-16 comparator,
   including numeric-looking and supplementary keys. The bounded serializer
   checks every caller descriptor in canonical order before ownership construction.
   No input, shape, schema or validation result is retained between calls.
@@ -493,8 +493,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   For program values, the schema layer constructs the same fresh data-only graph
   after every canonical byte fence, then discards the temporary generated text.
   Full-text ownership and canonical serialization retain their original outputs.
-  Sorting fresh primitive names uses the same fixed string comparison as
-  the previous comparator, including numeric-looking and supplementary keys
+  Sorting fresh primitive names uses the fixed locale-independent UTF-16
+  comparator, including numeric-looking and supplementary keys
   ([ECMAScript CompareArrayElements](https://tc39.es/ecma262/multipage/indexed-collections.html#sec-comparearrayelements)).
 
   String tokens are bounded before decoding. Escaped strings and raw controls

@@ -317,6 +317,9 @@ export function canonicalOutputJSON(
   return serializeOutputJSON(value, limitsFor(limits))
 }
 
+/** Fixed UTF-16 comparison of primitive names, independent of locale. */
+const compareOutputJSONKeys = (a: string, b: string): number => +(a > b) - +(a < b)
+
 /** Each invocation owns its complete mutable framing state. Shared functions
  * never expose this private frame or retain an input or validation verdict. */
 interface OutputJSONFrame {
@@ -375,8 +378,8 @@ function visitOutputJSONObject(frame: OutputJSONFrame, node: object, depth: numb
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
-  // Native ordering of fresh primitive strings is the same UTF-16 order.
-  keys.sort()
+  // The fresh primitive names use one fixed locale-independent comparator.
+  keys.sort(compareOutputJSONKeys)
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
   emitOutputJSON(frame, '{', true)
   let index = 0
@@ -415,26 +418,30 @@ function visitOutputJSON(frame: OutputJSONFrame, node: unknown, depth: number): 
 
 /** Select null prototypes only on this invocation's newly parsed data graph.
  * Complete lexical/serializer checks precede native construction. Its unexposed
- * arrays are dense and records contain only own data. Indexed arrays and newly
+ * arrays are dense and records contain only own data. Direct arrays and newly
  * null-prototype records exclude inherited values without a values-array copy.
  * No caller object, input verdict or private record is retained here.
  */
 function ownOutputJSONRecordPrototypes(value: OutputJSON): OutputJSON {
   if (value !== null && typeof value === 'object') {
     if (Array.isArray(value)) {
-      for (let index = 0; index < value.length; index++) {
-        const child = value[index]
+      for (const child of value) {
         if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
       }
     } else {
       Object.setPrototypeOf(value, null)
-      for (const key in value) {
-        const child = value[key]
-        if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
-      }
+      ownOutputJSONRecordFields(value)
     }
   }
   return value
+}
+
+/** Only freshly constructed records whose prototype is already null enter here. */
+function ownOutputJSONRecordFields(value: OutputJSONObject): void {
+  for (const key in value) {
+    const child = value[key]
+    if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
+  }
 }
 
 /** Construct an independent graph only from text just fully validated here.
