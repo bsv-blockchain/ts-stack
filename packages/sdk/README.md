@@ -463,10 +463,10 @@ wallet-derived locking key, and field signature before reading or spending it.
   only after successful values. Native container construction gives arrays ordinary writable, configurable,
   enumerable data properties without invoking inherited indexed setters.
   The new private graph has null-prototype records before being exposed;
-  keys such as `__proto__` remain ordinary writable data. Canonical property ordering checks
-  each fresh primitive-name array and uses native UTF-16 string ordering
-  whenever an indexed scan finds an inversion, including numeric-looking and
-  supplementary keys. Neither the scan nor its native fallback allocates a per-object ordering callback. The
+  keys such as `__proto__` remain ordinary writable data. Canonical property ordering sorts
+  each fresh primitive-name array with the original UTF-16 comparator captured
+  once, including numeric-looking and supplementary keys. It allocates no
+  per-object ordering callback. The
   same traversal captures independent children, preserving attributes and null
   prototypes. Every caller descriptor is still inspected in canonical order. No input or result
   is retained between calls.
@@ -485,7 +485,7 @@ wallet-derived locking key, and field signature before reading or spending it.
   For program values, the schema layer captures the same fresh data-only graph
   and checks every canonical byte fence without retaining text it would discard.
   Full-text ownership and canonical serialization retain their original outputs.
-  Native sorting of fresh primitive names has the same string comparison as
+  Sorting fresh primitive names uses the same fixed string comparison as
   the previous comparator, including numeric-looking and supplementary keys
   ([ECMAScript CompareArrayElements](https://tc39.es/ecma262/multipage/indexed-collections.html#sec-comparearrayelements)).
 

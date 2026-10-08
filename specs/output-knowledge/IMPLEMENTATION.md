@@ -6866,3 +6866,22 @@ Unicode. All original tests, properties, examples and151/398 controls remain.
 The coherent source and exact future published commit still require complete
 functional, analyzer and mutation qualification. No comparative speed or causal
 performance result is claimed; Checkpoint2 remains incomplete.
+
+### October 8: fixed comparator and direct canonical-name sorting
+
+Published871604b5 passes non-coverage reference tests, including the original
+Mongo admission suites, after the fixed8.2.6 binary preflight. Its actual Sonar
+analysis reports one open typescript:S2871 finding on the argument-free sort;
+that analysis and the existing failed gate do not qualify the source.
+
+The next source uses the original primitive-string UTF-16 comparator captured
+once at module scope and directly sorts each fresh name array. It omits the
+separate inversion scan. The fixed comparator gives the same canonical order
+for all primitive names, independently of locale; localeCompare would change
+the protocol and is not used. Every descriptor, symbol, prototype, cycle,
+Unicode, integer, ownership and resource predicate retains its order. Public
+encodings, errors, schemas and mutable-definition behavior remain unchanged.
+Source preservation, compiler contexts, exact unchanged artifact budgets and
+the complete151/398 inventory must pass before publication. Fresh hosted
+functional/analyzer/mutation qualification is still required; no comparative
+speed claim is made and Checkpoint2 remains incomplete.

@@ -317,6 +317,9 @@ export function canonicalOutputJSON(
 
 /** Each invocation owns its complete mutable framing state. Shared functions
  * never expose this private frame or retain an input or validation verdict. */
+/** Fixed UTF-16 comparison of primitive names, independent of locale. */
+const compareOutputJSONKeys = (a: string, b: string): number => +(a > b) - +(a < b)
+
 interface OutputJSONFrame {
   text: string
   bytes: number
@@ -401,15 +404,8 @@ function visitOutputJSONObject(
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
-  // These are fresh primitive names. Already ordered names need no sorting;
-  // any inversion still uses the same native UTF-16 string ordering.
-  // Begin with the first actual predecessor in this private primitive-name array.
-  for (let index = 1; index < keys.length; index++) {
-    if (keys[index] < keys[index - 1]) {
-      keys.sort()
-      break
-    }
-  }
+  // The fresh primitive names use one fixed locale-independent comparator.
+  keys.sort(compareOutputJSONKeys)
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
   const owned = frame.capture ? new Map<string, OutputJSON>() : undefined
   emitOutputJSON(frame, '{', true)
