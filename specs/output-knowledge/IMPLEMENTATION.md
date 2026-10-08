@@ -7442,3 +7442,55 @@ compiler and preservation results precede coherent root checks and publication.
 Fresh complete hosted functional, analyzer, packed/native and mutation evidence
 remains required; this candidate does not announce a performance improvement or
 checkpoint readiness.
+
+## October 8: private validated graph traversal and duplicate-summary reporting
+
+Published `391eebc6` passes all applicable functional lanes except the original
+bounded disclosure/coordinator properties. Attempt one stops at209/300 coordinator
+cases; a failed-jobs-only repeat passes all986 coordinator tests but aggregate
+coverage correctly refuses mixed-attempt identities. A complete unchanged third
+attempt is terminal39success/3failure/4skip: disclosure and coordinator stop at
+172/300 and202/300 cases under the unchanged150-second interruption bound. The
+reported failures contain no nonempty counterexample. These remain qualification
+failures, and no further unchanged rerun establishes readiness.
+
+All three391e CPU traces pass complete sample-order and schema admission; earlier
+invalid traces remain wholly excluded. The instrumented property/coordinator
+failures remain unclassified because their raw measurement logs were not uploaded.
+The valid disclosure trace identifies serializer and private owned-record traversal
+cost. It motivates the following small implementation changes, not a speed claim.
+
+Fresh primitive property-name arrays use native UTF-16 string ordering. Names are
+already primitive strings, so canonical order remains identical for numeric-looking,
+BMP and supplementary names. The serializer still checks every caller prototype,
+symbol, cycle, descriptor, Unicode value, integer and resource boundary in original
+order. Its fresh private framing state and refusal identities remain unchanged.
+
+Only after complete lexical or canonical validation and native JSON construction,
+a private traversal selects null prototypes on newly created unexposed records.
+Dense arrays use indexed traversal; records receive null prototypes before their
+own data fields are traversed. This avoids intermediate values arrays and their
+iterators. Caller objects never enter this traversal. Special keys, ordinary own
+field attributes, independent graphs, reentrant isolation and all original checks
+remain. No input, shape, schema, normalization, secret or authority verdict is cached.
+
+Two appended ordinary SDK regressions cover inherited enumerable accessors, nested
+builtin-looking names, array/record attributes and independence, numeric and
+supplementary UTF-16 ordering, fresh descendant mutation and accessor refusal.
+Original SDK/property/example bodies and all selectors, thresholds, seeds, replays,
+individual case bounds and bundle ceilings remain unchanged. The scratch candidate
+passes five strict compiler contexts and234 byte-identical public declarations.
+Static SDK and LCH Vite/esbuild graphs fit all original budgets; these source graphs
+are preliminary evidence, not packed/runtime qualification or a measured speedup.
+
+The root diagnostic parser now recognizes one fixed failure summary or an identical
+pair, matching Jest's duplicate summary. Conflicting outcomes/counts, excess reports,
+noncanonical or out-of-range counts and successful exits remain unclassified.
+Original Boolean native/output/case guards remain unchanged; reports contain only
+fixed outcome and bounded case count, never raw counterexamples. Two appended pure
+control tests preserve every original test and exercise these reporting boundaries.
+
+Complete fresh published-head functional, analyzer, packed/native and full151/398
+mutation qualification remain required. The separately reviewed budget proposal is
+still unapproved and unapplied. Checkpoint two remains incomplete. No local SDK or
+native execution, publication, deployment, funding, broadcast or merge occurs.

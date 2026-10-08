@@ -1070,3 +1070,73 @@ describe('decoded object ownership and key ordering', () => {
     expect(() => parseOutputJSON('{"a" 0}')).toThrow('Expected JSON colon')
   })
 })
+
+describe('fresh private JSON graph traversal', () => {
+  it('owns nested records without traversing inherited array or record values', () => {
+    const marker = '__outputProtocolInheritedTraversal__'
+    const originals = [Array.prototype, Object.prototype].map(prototype =>
+      Object.getOwnPropertyDescriptor(prototype, marker)
+    )
+    let parsed: ReturnType<typeof parseOutputJSON> = null
+    let inspected: ReturnType<typeof parseOutputJSON> = null
+    try {
+      for (const prototype of [Array.prototype, Object.prototype]) {
+        Object.defineProperty(prototype, marker, {
+          configurable: true,
+          enumerable: true,
+          get() {
+            throw new Error('Inherited traversal must not run')
+          }
+        })
+      }
+      const source =
+        '{"children":[{"__proto__":{"x":1}},{"constructor":{"x":2}}],"record":{"prototype":{"x":3}}}'
+      parsed = parseOutputJSON(source)
+      inspected = inspectOutputJSONEncoding(source).value
+    } finally {
+      for (const [index, prototype] of [Array.prototype, Object.prototype].entries()) {
+        const descriptor = originals[index]
+        if (descriptor) Object.defineProperty(prototype, marker, descriptor)
+        else Reflect.deleteProperty(prototype, marker)
+      }
+    }
+    for (const value of [parsed, inspected]) {
+      const owned = value as {
+        children: Array<Record<string, unknown>>
+        record: Record<string, unknown>
+      }
+      expect(Object.getPrototypeOf(owned)).toBeNull()
+      expect(Object.getPrototypeOf(owned.children)).toBe(Array.prototype)
+      for (const child of owned.children) expect(Object.getPrototypeOf(child)).toBeNull()
+      expect(Object.getPrototypeOf(owned.children[0]!.__proto__)).toBeNull()
+      expect(Object.getPrototypeOf(owned.children[1]!.constructor)).toBeNull()
+      expect(Object.getPrototypeOf(owned.record)).toBeNull()
+      expect(Object.getPrototypeOf(owned.record.prototype)).toBeNull()
+      expect(Object.hasOwn(owned.children, marker)).toBe(false)
+      expect(Object.getOwnPropertyDescriptor(owned.children, '0')).toMatchObject({
+        writable: true,
+        configurable: true,
+        enumerable: true
+      })
+    }
+    expect(parsed).not.toBe(inspected)
+  })
+
+  it('rechecks changed descendants and fresh UTF-16 key order on repeated serialization', () => {
+    const value = parseOutputJSON('{"":0,"😀":1,"2":2,"10":10,"a":{"x":3}}') as {
+      a: Record<string, unknown>
+      [key: string]: unknown
+    }
+    expect(canonicalOutputJSON(value)).toBe('{"10":10,"2":2,"a":{"x":3},"😀":1,"\ue000":0}')
+    value.a.x = 4
+    expect(canonicalOutputJSON(value)).toBe('{"10":10,"2":2,"a":{"x":4},"😀":1,"\ue000":0}')
+    Object.defineProperty(value.a, 'x', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error('Accessor must not be invoked')
+      }
+    })
+    expect(() => canonicalOutputJSON(value)).toThrow('JSON accessor or hidden key')
+  })
+})

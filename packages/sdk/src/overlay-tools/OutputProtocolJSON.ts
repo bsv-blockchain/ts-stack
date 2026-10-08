@@ -319,9 +319,6 @@ export function canonicalOutputJSON(
 
 /** Each invocation owns its complete mutable framing state. Shared functions
  * never expose this private frame or retain an input or validation verdict. */
-/** Fixed UTF-16 comparison of primitive names, independent of locale. */
-const compareOutputJSONKeys = (a: string, b: string): number => +(a > b) - +(a < b)
-
 interface OutputJSONFrame {
   text: string
   bytes: number
@@ -378,8 +375,8 @@ function visitOutputJSONObject(frame: OutputJSONFrame, node: object, depth: numb
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
-  // The fresh primitive names use one fixed locale-independent comparator.
-  keys.sort(compareOutputJSONKeys)
+  // Native ordering of fresh primitive strings is the same UTF-16 order.
+  keys.sort()
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
   emitOutputJSON(frame, '{', true)
   let index = 0
@@ -417,15 +414,24 @@ function visitOutputJSON(frame: OutputJSONFrame, node: unknown, depth: number): 
 }
 
 /** Select null prototypes only on this invocation's newly parsed data graph.
- * The complete serializer already bounded depth and every value. Native values
- * enumeration creates own array data without invoking inherited setters. No
- * caller object, input verdict or private record is retained by this traversal.
+ * Complete lexical/serializer checks precede native construction. Its unexposed
+ * arrays are dense and records contain only own data. Indexed arrays and newly
+ * null-prototype records exclude inherited values without a values-array copy.
+ * No caller object, input verdict or private record is retained here.
  */
 function ownOutputJSONRecordPrototypes(value: OutputJSON): OutputJSON {
   if (value !== null && typeof value === 'object') {
-    if (!Array.isArray(value)) Object.setPrototypeOf(value, null)
-    for (const child of Object.values(value)) {
-      if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index++) {
+        const child = value[index]
+        if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
+      }
+    } else {
+      Object.setPrototypeOf(value, null)
+      for (const key in value) {
+        const child = value[key]
+        if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
+      }
     }
   }
   return value

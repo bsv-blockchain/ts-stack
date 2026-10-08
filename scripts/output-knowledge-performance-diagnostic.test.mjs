@@ -577,3 +577,47 @@ test('profile reads use the opened descriptor and refuse oversized or changed fi
     fs.rmSync(directory, { recursive: true, force: true })
   }
 })
+
+test('identical duplicate property summaries retain only their fixed scalar outcome', () => {
+  for (const [text, outcome, completedCases] of [
+    [
+      'Property interrupted after 209 tests\nError: Property interrupted after 209 tests',
+      'interrupted',
+      209
+    ],
+    [
+      'Property failed after 1 tests\nCounterexample: private data\n    Property failed after 1 tests',
+      'counterexample',
+      1
+    ],
+    [
+      'Property interrupted after 300 tests\nProperty interrupted after 300 tests',
+      'interrupted',
+      300
+    ]
+  ]) {
+    const report = summarizePropertyExecution(Buffer.from(text), safeMeasurement)
+    assert.deepEqual(report, { outcome, completedCases })
+    assert.equal(JSON.stringify(report).includes('private data'), false)
+  }
+})
+
+test('duplicate property summaries refuse mismatched counts, outcomes, excess reports and successful exits', () => {
+  for (const text of [
+    'Property interrupted after 10 tests\nProperty interrupted after 11 tests',
+    'Property interrupted after 10 tests\nProperty failed after 10 tests',
+    'Property failed after 1 tests\nProperty failed after 1 tests\nProperty failed after 1 tests',
+    'Property interrupted after 301 tests\nProperty interrupted after 301 tests'
+  ])
+    assert.deepEqual(summarizePropertyExecution(Buffer.from(text), safeMeasurement), {
+      outcome: 'other-failure',
+      completedCases: null
+    })
+  assert.deepEqual(
+    summarizePropertyExecution(
+      Buffer.from('Property interrupted after 10 tests\nProperty interrupted after 10 tests'),
+      { ...safeMeasurement, exitCode: 0 }
+    ),
+    { outcome: 'other-failure', completedCases: null }
+  )
+})

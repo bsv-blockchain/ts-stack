@@ -511,8 +511,17 @@ export function summarizePropertyExecution(bytes, measured) {
       /^[ \t]*(?:Error: )?Property (interrupted|failed) after (0|[1-9]\d*) tests[ \t]*\r?$/gm
     )
   const first = matches.next(),
-    second = matches.next()
-  if (!first.done && second.done && measured.exitCode === 1) {
+    second = matches.next(),
+    third = matches.next()
+  // Jest may repeat the same fixed failure summary. Only one report or an
+  // identical pair is unambiguous; additional or conflicting reports refuse.
+  const unambiguous =
+    second.done ||
+    (third.done &&
+      !first.done &&
+      first.value[1] === second.value[1] &&
+      first.value[2] === second.value[2])
+  if (!first.done && unambiguous && measured.exitCode === 1) {
     const completedCases = Number(first.value[2])
     if (Number.isSafeInteger(completedCases) && completedCases <= 300)
       return {

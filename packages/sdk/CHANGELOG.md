@@ -218,8 +218,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.3 source candidate)
 
+- Traverse freshly parsed, completely validated private JSON graphs with dense array indices and null-prototype own record fields, avoiding intermediate values-array copies. Caller graphs, validation order, data attributes, independence, wire bytes and every limit remain unchanged. No input or verdict is cached.
 - Lexically validate incoming JSON with fresh decoded-key Sets and successful-value counts before native data-only graph construction. Preserve every syntax, Unicode, integer, duplicate-key, resource and trailing-data refusal, null-prototype records, own data attributes and independent ownership. No input or verdict is cached.
-- Sort fresh canonical JSON names with the original locale-independent UTF-16 comparator captured once. Schema normalization still counts every canonical byte and creates an independent owned graph then discards its generated text; public serialization, all refusal boundaries and limits remain unchanged.
+- Sort fresh primitive canonical JSON names with native locale-independent UTF-16 string ordering. Schema normalization still counts every canonical byte and creates an independent owned graph then discards its generated text; public serialization, all refusal boundaries and limits remain unchanged.
 - Add `inspectOutputJSONEncoding` for fresh duplicate-aware, bounded parsing with a canonical-input flag and an independently owned value. The flag is not a schema, signature or authorization verdict. Ordinary parsing, canonical UTF-16 key order, literal/number encodings, limits and refusal order are preserved; optional inspection code stays separate from ordinary parser bundles.
 - Preserve own decoded-key duplicate detection and ordinary data-property construction for fresh null-prototype parsed records; traverse canonical fields in order without per-field callbacks. Preserve special property names, all bounds, exact encodings and refusal order.
 

@@ -467,12 +467,15 @@ wallet-derived locking key, and field signature before reading or spending it.
   only after successful children. Every syntax, Unicode, safe-integer, resource
   and trailing-data check completes before native JSON parsing constructs the
   independently owned graph. A bounded private traversal selects null prototypes
-  only on those newly created records. Keys such as `__proto__` remain ordinary
+  only on those newly created records. Dense arrays use indexed traversal;
+  records receive null prototypes before their own fields are traversed. This
+  avoids intermediate values arrays without touching caller objects or inherited
+  fields. Keys such as `__proto__` remain ordinary
   writable, configurable, enumerable own data; inherited setters are not called.
   Caller objects never enter that traversal. The encoding inspector retains its
   independent canonical-byte check and flag. Canonical property ordering sorts
-  each fresh primitive-name array with the original UTF-16 comparator captured
-  once, including numeric-looking and supplementary keys. The bounded serializer
+  each fresh primitive-name array with native UTF-16 string ordering,
+  including numeric-looking and supplementary keys. The bounded serializer
   checks every caller descriptor in canonical order before ownership construction.
   No input, shape, schema or validation result is retained between calls.
 
