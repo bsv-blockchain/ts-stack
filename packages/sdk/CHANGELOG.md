@@ -214,6 +214,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Construct canonical owned objects directly as fresh null-prototype records after each complete child validation. This removes generator entry tuples and the final copy while retaining special keys, own data attributes, independent ownership, original UTF-16 ordering and every refusal boundary.
+
 - Yield freshly validated serialization array children directly to native own-data array construction. Text-only traversal completes every original check and emission without yielding; ordinary array attributes, inherited-setter isolation, negative-zero behavior and all refusal boundaries are retained.
 
 ### Added (3.3 source candidate)

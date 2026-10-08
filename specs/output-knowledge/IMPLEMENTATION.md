@@ -7064,3 +7064,63 @@ application implementation, original properties, conformance, selectors,
 resources, seeds, counts, replay settings, thresholds and mutation governance
 are unchanged. Complete local root/source-preservation checks and fresh exact-head
 hosted functional and actual analyzer qualification remain required.
+
+## October 8: current diagnostic analyzer follow-up
+
+The published e0d70d1 source retains all original implementation and qualification
+controls. Its actual CodeQL action and JavaScript/TypeScript analyses match the
+head tree and both merge parents, with zero open PR-ref alerts. All21 review
+threads remain resolved. Current coverage and hosted diagnostics are still running;
+no final functional or mutation qualification is claimed.
+
+Actual Sonar identifies five new tooling findings: optional chaining, two sort
+comparators, sort-expression placement and main complexity16 against15. A
+synchronous counter-extraction helper now retains the original phase, source,
+calendar, safe-measurement and refusal behavior. Explicit lexical comparators
+check matching function-ID inventories; original numeric IDs still determine
+final ties. The fresh private rows are sorted before constructing the report.
+SDK/application/test bytes and all original controls are unchanged. Pure and
+original-coverage regression, source-preservation and complete root checks remain
+required for this local follow-up; fresh actual analyzer qualification remains
+mandatory before review.
+
+## October 8: admitted object-ownership cost and direct private construction
+
+Published e0d70d1 CI37726718056 retains the original qualification controls.
+The full disclosure shard interrupts at165/300 and the coordinator shard at
+228/300; neither reports a nonempty counterexample. Application shard3 passes
+63suites/930tests, SDK passes262suites/8591tests and wallet shard3 passes
+79suites/882tests including8_BEEF. Actual CodeQL analyses match the published
+tree with zero open PR-ref alerts; all21 review threads are resolved. Five new
+Sonar findings in the diagnostic driver are fixed in this local batch, pending
+exact-published-source analyzer qualification. None is suppressed or accepted.
+
+The isolated hosted diagnostic preserves the original properties, seed3242026,
+minimum300, interrupt150s, case180s, source/calendar/output bounds and complete
+process drainage. Original Jest/Istanbul counters are admitted for both
+properties. The disclosure CPU trace has zero negative deltas and zero reordered
+samples; its166.595-second sampled duration includes profiling overhead.
+Object traversal has17.381seconds self time and owned-record construction
+9.106seconds self time. Their inclusive times overlap and must not be summed.
+Native SQL/crypto monotonic totals are21.314seconds inclusive, also overlapping.
+The coordinator and native HTTP CPU traces contain negative/reordered samples
+and are wholly excluded, including their sample counts and timing aggregates.
+Their separately admitted original function counters and native monotonic
+measurements remain independent evidence. These diagnostics do not qualify
+full functional coverage, performance improvement, mutations or Checkpoint2.
+
+The compatible correction constructs captured serialization objects directly
+as private null-prototype records, assigning each checked child only after
+its original recursive validation and byte emission. This removes generator
+entry tuples, Object.fromEntries and the final spread copy from serialization
+object ownership. Null-prototype assignment creates enumerable, writable and
+configurable own data, including **proto**, constructor and numeric names,
+without inherited setters. Every original prototype/symbol/descriptor, Unicode,
+integer, cycle, depth, item and byte check retains its order. Text-only mode
+constructs no graph. Array traversal, duplicate-aware parsing, UTF-16 key
+comparison, public exports, defaults and resource budgets remain unchanged.
+No shape, input, secret, authorization or validation-result cache is introduced.
+The existing SDK3.3 minor source candidate and migration requirement of none
+remain appropriate. Source preservation, compiler contexts, browser budgets,
+packed artifacts and root gates precede publication; runtime and full151-target,
+398-row mutation qualification remain required on the final published head.

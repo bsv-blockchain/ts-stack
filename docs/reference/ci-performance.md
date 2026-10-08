@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.8'
+version: '1.8.9'
 last_updated: '2026-10-08'
 last_verified: '2026-10-08'
 review_cadence_days: 30
@@ -135,8 +135,10 @@ with the temporary directory and never uploaded. If a project does not write a
 JSON coverage report, its function-counter extraction records a fixed refusal.
 
 Counter refusal does not block independent native monotonic or CPU extraction
-from an otherwise safe, fully drained measurement. All source, calendar and
-Boolean admission guards remain mandatory between independent extractions.
+from an otherwise safe, fully drained measurement. A separate synchronous counter-extraction helper retains all original source,
+calendar and Boolean admission guards between independent extractions. Function
+ID inventories use explicit lexical comparators and numeric ID validation; the
+final frequency ordering is performed before constructing the returned report.
 These counters may be admitted when an entire CPU trace is excluded for negative
 or reordered timestamps. They show execution frequency within the measured
 workload, not completed operations, exclusive timings or performance qualification.

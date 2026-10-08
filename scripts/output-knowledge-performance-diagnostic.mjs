@@ -422,9 +422,13 @@ export function summarizeFunctionEntries(coverage, root, checkDeadline) {
     checkDeadline()
     const source = sources.get(file)
     if (!source) continue
-    assert.ok(data && data.path === file && data.fnMap && data.f, 'function-count-shape')
-    const ids = Object.keys(data.fnMap).sort()
-    assert.deepEqual(Object.keys(data.f).sort(), ids, 'function-count-identity')
+    assert.ok(data?.path === file && data.fnMap && data.f, 'function-count-shape')
+    const ids = Object.keys(data.fnMap).toSorted((left, right) => left.localeCompare(right))
+    assert.deepEqual(
+      Object.keys(data.f).toSorted((left, right) => left.localeCompare(right)),
+      ids,
+      'function-count-identity'
+    )
     assert.ok(rows.length + ids.length <= MAX_COUNT_ROWS, 'function-count-row-bound')
     for (const id of ids) {
       assert.match(id, /^(?:0|[1-9]\d{0,5})$/, 'function-count-identity')
@@ -433,6 +437,12 @@ export function summarizeFunctionEntries(coverage, root, checkDeadline) {
   }
   assert.ok(rows.length > 0, 'function-count-empty')
   checkDeadline()
+  rows.sort(
+    (left, right) =>
+      right.entries - left.entries ||
+      left.source.localeCompare(right.source) ||
+      left.functionId - right.functionId
+  )
   return {
     coverageFiles: 1,
     countSemantics: 'original-jest-istanbul-function-entries',
@@ -441,12 +451,7 @@ export function summarizeFunctionEntries(coverage, root, checkDeadline) {
     timingCollected: false,
     fullFunctionalQualified: false,
     fullCampaignQualified: false,
-    rows: rows.sort(
-      (left, right) =>
-        right.entries - left.entries ||
-        left.source.localeCompare(right.source) ||
-        left.functionId - right.functionId
-    )
+    rows
   }
 }
 
@@ -678,6 +683,34 @@ function collectPropertyExecution(selection, directory, measured, report, guard,
   guard()
 }
 
+function collectEntrySummary({
+  directory,
+  root,
+  identity,
+  output,
+  report,
+  measured,
+  guard,
+  checkWindow
+}) {
+  report.phase = 'function-count-file-bound'
+  try {
+    const functionEntries = readFunctionEntries(path.join(directory, 'coverage'), root, checkWindow)
+    report.phase = 'function-count-summary'
+    guard()
+    fs.writeFileSync(
+      path.join(output, 'function-entries.json'),
+      JSON.stringify({ identity, ...functionEntries }, null, 2)
+    )
+    report.functionEntriesCollected = true
+  } catch (error) {
+    assert.ok(diagnosticMayContinueValidation(report.phase, measured))
+    checkWindow()
+    guard()
+    report.functionEntryRefusal = functionEntryRefusal(error)
+  }
+}
+
 async function main() {
   assert.equal(process.platform, 'linux', 'Application diagnostics require hosted Linux')
   assert.equal(process.env.GITHUB_ACTIONS, 'true')
@@ -862,26 +895,7 @@ async function main() {
     report.phase = 'post-property-source-guard'
     guard()
     collectPropertyExecution(selection, directory, measured, report, guard, checkWindow)
-    report.phase = 'function-count-file-bound'
-    try {
-      const functionEntries = readFunctionEntries(
-        path.join(directory, 'coverage'),
-        root,
-        checkWindow
-      )
-      report.phase = 'function-count-summary'
-      guard()
-      fs.writeFileSync(
-        path.join(output, 'function-entries.json'),
-        JSON.stringify({ identity, ...functionEntries }, null, 2)
-      )
-      report.functionEntriesCollected = true
-    } catch (error) {
-      assert.ok(diagnosticMayContinueValidation(report.phase, measured))
-      checkWindow()
-      guard()
-      report.functionEntryRefusal = functionEntryRefusal(error)
-    }
+    collectEntrySummary({ directory, root, identity, output, report, measured, guard, checkWindow })
     report.phase = 'monotonic-file-bound'
     const monotonic = readBoundedProfile(
       path.join(directory, 'monotonic-timing.json'),

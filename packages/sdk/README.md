@@ -451,10 +451,13 @@ wallet-derived locking key, and field signature before reading or spending it.
   descriptor inspection and failed calls cannot reuse another frame's text,
   byte counter, bounds or ancestor set. Resource assertions retain their exact
   predicates and refusal messages. Validated safe integers use the same decimal
-  text, including conversion of negative zero to zero. Ownership yields each freshly validated child to native own-data construction
-  during the same traversal. It retains no intermediate value Map, reparses no
-  generated text and retains no values between calls. Text-only traversal exhausts
-  the same checks without yielding children or constructing a graph.
+  text, including conversion of negative zero to zero. Object ownership places each
+  freshly validated child directly in a private null-prototype record. Array
+  ownership yields checked children to native own-data construction. Neither
+  retains an intermediate value Map or reparses generated text; object ownership
+  also avoids entry tuples and a final record copy. Text-only traversal performs
+  the same checks without constructing a graph. No input or verdict is retained
+  between calls.
 
   Parsing decodes values once into a bounded private graph, exposing it only
   after complete syntax, Unicode, integer, resource and trailing-data checks.

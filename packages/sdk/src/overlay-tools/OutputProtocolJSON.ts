@@ -411,24 +411,14 @@ function visitOutputJSONObject(
   node: object,
   depth: number
 ): OutputJSONObject | undefined {
-  const entries = outputJSONObjectEntries(frame, node, depth)
-  if (frame.capture) return ownedOutputJSONRecord(entries)
-  // Text-only traversal never yields. One advance runs every check and emission.
-  entries.next()
-  return undefined
-}
-
-function* outputJSONObjectEntries(
-  frame: OutputJSONFrame,
-  node: object,
-  depth: number
-): Generator<readonly [string, OutputJSON], void> {
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
   // The fresh primitive names use one fixed locale-independent comparator.
   keys.sort(compareOutputJSONKeys)
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  // Private null-prototype construction cannot invoke an inherited setter.
+  const owned = frame.capture ? ({ __proto__: null } as OutputJSONObject) : undefined
   emitOutputJSON(frame, '{', true)
   let index = 0
   for (const key of keys) {
@@ -439,9 +429,10 @@ function* outputJSONObjectEntries(
     // retains the same byte-limit refusal before any value validation.
     emitOutputJSONString(frame, key, ':')
     const child = visitOutputJSON(frame, descriptor.value, depth + 1)
-    if (frame.capture) yield [key, child as OutputJSON]
+    if (owned) owned[key] = child as OutputJSON
   }
   emitOutputJSON(frame, '}', true)
+  return owned
 }
 
 function visitOutputJSON(
