@@ -31,6 +31,8 @@ publisher disclosure and bounded restart recovery. Its
 publication from the separately composed paid lookup and purchase/POTATOES owners.
 The package version does not indicate a published or production-qualified release.
 Private ledger, alias and purchase codecs capture their fixed field names once.
+The native protected-payload envelope also reuses a frozen six-name field list;
+its required-field loop still inspects all six fresh owned values on every open.
 Every input still receives complete ownership, prototype, symbol, descriptor,
 required/unknown-field and scalar checks. Encrypted records, revision, clock,
 authority and custody checks remain fresh; no record, secret or validation verdict

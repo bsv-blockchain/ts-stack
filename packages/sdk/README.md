@@ -503,12 +503,18 @@ wallet-derived locking key, and field signature before reading or spending it.
   rejection and the same errors, limits and encoding inspection.
 
   `outputString` retains its nonempty primitive, 1,024-code-unit and 1,024-byte
-  UTF-8 limits. It checks Unicode directly with the same fresh validator used by
-  JSON framing, preserving the original refusal order. A bounded scalar cannot
-  reach the serializer's structural or 4 MiB limits. Complete packets still
-  receive every recursive representation and schema check; no string or
-  validation result is cached. ASCII strings use their exact code-unit byte count
-  after fresh Unicode validation; non-ASCII strings retain native UTF-8 encoding.
+  UTF-8 limits. Fresh ASCII evidence establishes well-formed Unicode and one
+  UTF-8 byte per code unit within the original primitive bound. Non-ASCII strings
+  retain the same fresh surrogate refusal before native UTF-8 encoding and the
+  byte check. A bounded scalar cannot reach the serializer's structural or 4 MiB
+  limits. Complete packets still receive every recursive representation and
+  schema check; no string or validation result is cached.
+
+  Byte inputs reuse only a lazy, private UTF-8 decoder with fixed fatal and
+  ignore-BOM options. Each complete, non-streaming decode resets decoder state,
+  including after malformed UTF-8 ([Encoding Standard](https://encoding.spec.whatwg.org/#dom-textdecoder-decode)).
+  Lexical, duplicate-key, Unicode and resource checks still inspect every input;
+  results remain independently owned. The parser still rejects a decoded BOM.
 
   `decodeOutputBytes` retains canonical alphabet and padding syntax, the encoded
   allocation bound and decoded-byte limit. After those checks it validates the

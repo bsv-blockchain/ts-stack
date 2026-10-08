@@ -134,14 +134,13 @@ export function outputString(value: unknown): string {
     typeof value === 'string' && value.length > 0 && value.length <= 1024,
     'Expected bounded string'
   )
-  // A bounded primitive has no structural limits to check, and even escaping
-  // all 1024 code units fits 6146 JSON bytes, below the unchanged 4 MiB limit.
-  // Retain the exact fresh Unicode refusal before checking decoded UTF-8 size.
-  assertOutputJSONUnicode(value)
-  outputAssert(
-    (/[\u0080-\uFFFF]/.test(value) ? utf8.encode(value).length : value.length) <= 1024,
-    'String exceeds 1024 UTF-8 bytes'
-  )
+  // Fresh ASCII evidence proves well-formed Unicode and one byte per code
+  // unit, already within the original primitive bound. Non-ASCII retains
+  // surrogate refusal before the exact decoded UTF-8 byte check.
+  if (/[\u0080-\uFFFF]/.test(value)) {
+    assertOutputJSONUnicode(value)
+    outputAssert(utf8.encode(value).length <= 1024, 'String exceeds 1024 UTF-8 bytes')
+  }
   return value
 }
 

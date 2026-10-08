@@ -214,6 +214,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Reuse a lazy, private non-streaming UTF-8 decoder with fixed options; freshly
+  check every input and preserve malformed UTF-8, BOM, duplicate-key and Unicode
+  refusals across retries. Bounded ASCII strings establish Unicode validity and
+  exact byte length directly; non-ASCII strings retain surrogate-before-size
+  refusal order. No input or verdict is cached and no consumer migration is needed.
+
 - Retain the original Base64 padding-only tail check. A syntax regression covers
   trailing line terminators, encoded-bound precedence and valid retries. The
   nonmultiline syntax expression already rejects those terminators before decoding.

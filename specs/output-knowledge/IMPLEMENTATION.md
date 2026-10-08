@@ -7648,3 +7648,65 @@ negative/reordered samples. Corrected exact-source hosted qualification, remaini
 performance diagnosis and full151-target/398-row raw mutation reconciliation are
 still required. Checkpoint two is incomplete; the budget proposal is unapproved
 and unapplied. No publication, deployment, funding, broadcast or merge occurred.
+
+## October 8: fixed codec configuration and fresh ASCII evidence
+
+Exact published834b3eaa qualification completes40 successful CI jobs, two failed
+jobs and four scope skips. The alias-coordinator property interrupts at234/300
+under the unchanged150-second limit with no reported nonempty counterexample;
+986 other tests in that shard pass. The other failure is the derived merge gate.
+The SDK passes8595 tests across262 suites, including the corrected Base64 syntax
+regression. All other CI lanes pass. Actual exact-source Sonar analysis reports
+qualityOK, zero findings in every checked classification and zero unreviewed
+hotspots; actual CodeQL analyses report zero open PR-ref alerts. All23 review
+threads are resolved. These results do not qualify the failed property or the
+remaining full mutation campaign.
+
+The exact-run diagnostic archive is independently admitted. All three CPU traces
+contain invalid/reordered timing data and are wholly excluded from both counts
+and timings. Separate original-Jest entries and native monotonic/wall evidence
+remain valid: the coordinator diagnostic enters the protected-envelope six-field
+callback2,338,716 times and opens389,786 protected payloads. Inclusive native
+measurements are not self time and cannot be summed into a speedup claim. The
+coordinator and disclosure diagnostic properties interrupt; the four native HTTP
+cases pass. This identifies repeated work for investigation, not a correctness
+qualification or a measured benefit from the following source changes.
+
+The SDK now lazily reuses a private decoder configured for fatal UTF-8 and
+ignore-BOM handling. Complete calls omit streaming: the
+[Encoding Standard](https://encoding.spec.whatwg.org/#dom-textdecoder-decode)
+resets decoder state before the next complete call, including after failure.
+Every input still receives all fresh syntax, duplicate-key, Unicode, decoded-BOM,
+resource and ownership checks. An appended regression repeatedly interleaves
+malformed UTF-8, BOM, lone-surrogate and duplicate-key refusals with fresh valid
+ASCII and Unicode inputs. For bounded output strings, fresh ASCII evidence
+establishes well-formed Unicode and one byte per code unit within the existing
+primitive limit. Non-ASCII strings keep the exact surrogate-before-byte-limit
+order. No input, shape, secret, authority or validation verdict is cached.
+
+The native protected-payload codec reuses a frozen six-name field list. Its
+required-field loop still checks all six fresh owned string values, with the
+original exact-field count and ordering. Schema, revision, clock, authentication,
+decryption and custody checks remain fresh. The protected-ledger golden remains 994. No public declaration, wire encoding, persisted schema, error identity,
+installation choice or consumer migration changes.
+
+Before adoption, five strict compiler contexts pass, all234 public declaration
+files are byte-exact, and all eight complete SDK/LCH Vite/esbuild static graphs
+pass their unchanged raw, gzip and Brotli ceilings. The LCH Vite candidate is
+307977 raw bytes under308000. Full source-only pinned inventories retain151
+targets and398 execution rows, all original partition unions/settings, and62292
+mutants. These checks execute no SDK/application/native target locally. The
+first proposal's regex hoists were withdrawn after its LCH graph exceeded the
+unchanged ceiling; that failure is preserved rather than reclassified.
+
+Current main f77d672263a2d5218c787fe64c085a75aa08af78 contributes only four
+BotBoard enrollment-policy files, incorporated while preserving branch history.
+Independent peers' wallet parser/source changes are not adopted. All original
+SDK unit bodies,141 property files,81 example bodies/IDs, partition-engine tests,
+both overlay configurations and all20 goldens remain. Seeds, replay, case and
+initial budgets, workers, isolation, thresholds and bundle ceilings are unchanged.
+Coherent root controls and fresh exact published-source hosted qualification are
+still required, followed by the full151/398 raw mutation reconciliation. The
+budget proposal remains unanswered and unapplied. Checkpoint two is incomplete;
+no runtime improvement, package publication, deployment, funding, broadcast or upstream merge is
+claimed.

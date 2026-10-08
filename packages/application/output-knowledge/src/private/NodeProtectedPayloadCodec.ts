@@ -35,6 +35,16 @@ export interface ProtectedPayloadEnvelope {
   tag: string
 }
 
+// Fixed field names only; every open checks each fresh owned value.
+const payloadEnvelopeFields = Object.freeze([
+  'format',
+  'keyId',
+  'salt',
+  'nonce',
+  'ciphertext',
+  'tag'
+])
+
 const FORMAT = 'output-protected-payload/1'
 const MAXIMUM_PLAINTEXT_BYTES = 2 * 1024 * 1024
 const MAXIMUM_CONTEXT_BYTES = 64 * 1024
@@ -124,7 +134,7 @@ export class NodeProtectedPayloadCodec {
     const reader = this.open
     const owned = parseOutputJSON(input, { bytes: maximumEnvelopeBytes })
     if (reader !== defaultObjectReader) return Reflect.apply(reader, this, [binding, owned])
-    const fields = ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag']
+    const fields = payloadEnvelopeFields
     const stringsOnly =
       owned !== null &&
       typeof owned === 'object' &&

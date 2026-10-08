@@ -1178,4 +1178,27 @@ describe('fresh private JSON graph traversal', () => {
       expect(decodeOutputBytes('AAAA')).toEqual([0, 0, 0])
     }
   })
+
+  it('keeps independent UTF-8 messages and grammar checks fresh after malformed inputs', () => {
+    const encoded = new TextEncoder().encode('{"a":"é😀","b":[0,true]}')
+    for (let round = 0; round < 8; round++) {
+      for (const malformed of [Uint8Array.of(0xc0, 0xaf), Uint8Array.of(0xe2, 0x82)]) {
+        expect(() => parseOutputJSON(malformed)).toThrow('Malformed UTF-8')
+        expect(() => inspectOutputJSONEncoding(malformed)).toThrow('Malformed UTF-8')
+        expect(parseOutputJSON(encoded)).toEqual({ a: 'é😀', b: [0, true] })
+        expect(inspectOutputJSONEncoding(encoded).canonical).toBe(true)
+      }
+      expect(() => parseOutputJSON(Uint8Array.of(0xef, 0xbb, 0xbf, 0x30))).toThrow(
+        'JSON BOM is not permitted'
+      )
+      expect(parseOutputJSON(Uint8Array.of(0x30))).toBe(0)
+      expect(() => canonicalOutputJSON('\ud800')).toThrow('Unpaired JSON surrogate')
+      expect(canonicalOutputJSON('plain "quoted" \\ é😀')).toBe(
+        JSON.stringify('plain "quoted" \\ é😀')
+      )
+      expect(canonicalOutputJSON('plain ASCII')).toBe('"plain ASCII"')
+      expect(() => parseOutputJSON('{"a":0,"\\u0061":1}')).toThrow('Duplicate decoded JSON key')
+      expect(parseOutputJSON('{"a":1}')).toEqual({ a: 1 })
+    }
+  })
 })

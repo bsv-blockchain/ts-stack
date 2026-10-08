@@ -21,6 +21,9 @@ export const OUTPUT_JSON_LIMITS: Readonly<OutputJSONLimits> = Object.freeze({
 })
 
 const encoder = new TextEncoder()
+// Fixed decoding options only. Non-streaming calls reset the decoder state
+// for every complete input, including after malformed UTF-8.
+let utf8Decoder: TextDecoder | undefined
 
 const resourceMessages = Object.freeze([
   'Output JSON byte limit',
@@ -120,7 +123,9 @@ function outputJSONSource(
     bytes = input.byteLength
     outputJSONLimit(bytes <= bounds.bytes)
     try {
-      source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(input)
+      source = (utf8Decoder ??= new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })).decode(
+        input
+      )
     } catch {
       throw new OutputProtocolError('invalid', 'Malformed UTF-8')
     }
