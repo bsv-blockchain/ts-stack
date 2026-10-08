@@ -123,16 +123,123 @@ function requireErrorSatoshis(value: unknown, name: string): number {
   return value as number
 }
 
+function requireReviewTxid(
+  value: unknown,
+  index: number,
+  preConstruction: boolean,
+  allowed: Set<string>,
+  reviewed: Set<string>
+): string {
+  if (!preConstruction && (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value))) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
+  }
+  const txid = (value as string).toLowerCase()
+  if (reviewed.has(txid) || (!preConstruction && !allowed.has(txid))) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
+  }
+  reviewed.add(txid)
+  return txid
+}
+
+function validateReviewStatus(
+  result: Record<string, unknown>,
+  index: number,
+  preConstruction: boolean
+): void {
+  const statuses = new Set(['success', 'doubleSpend', 'serviceError', 'invalidTx'])
+  if (
+    !statuses.has(result.status as string) ||
+    (preConstruction && result.status !== 'doubleSpend')
+  ) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].status`)
+  }
+  if (
+    result.status !== 'doubleSpend' &&
+    (result.competingTxs !== undefined || result.competingBeef !== undefined)
+  ) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
+  }
+}
+
+function normalizeCompetingTxids(
+  value: unknown,
+  reviewedTxid: string,
+  index: number
+): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > MAXIMUM_SEND_WITH_TRANSACTIONS) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
+  }
+  const unique = new Set<string>()
+  const txids: string[] = []
+  for (const [competingIndex, competing] of value.entries()) {
+    if (typeof competing !== 'string' || !/^[0-9a-fA-F]{64}$/.test(competing)) {
+      throw new Error(
+        `Invalid wallet error reviewActionResults[${index}].competingTxs[${competingIndex}]`
+      )
+    }
+    const normalized = competing.toLowerCase()
+    if (normalized === reviewedTxid || unique.has(normalized)) {
+      throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
+    }
+    unique.add(normalized)
+    txids.push(normalized)
+  }
+  return txids
+}
+
+function validateCompetingTransactions(
+  parsed: Beef,
+  txids: string[],
+  requestedInputs?: Set<string>
+): void {
+  for (const txid of txids) {
+    const competing = parsed.findTxid(txid)
+    if (competing == null) throw new Error('Missing competing transaction')
+    if (requestedInputs === undefined) continue
+    // No attempted TXID exists yet. Bind each full competing transaction to an
+    // explicit input of the original request instead.
+    const tx = competing.tx
+    if (tx == null || tx.id('hex') !== txid) throw new Error('Invalid competing transaction')
+    const spendsRequestedInput = tx.inputs.some(input => {
+      const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+      return requestedInputs.has(`${source?.toLowerCase()}.${input.sourceOutputIndex}`)
+    })
+    if (!spendsRequestedInput) throw new Error('Unrelated competing transaction')
+  }
+}
+
+function validateReviewBeef(
+  value: unknown,
+  competingTxs: string[] | undefined,
+  index: number,
+  requestedInputs?: Set<string>
+): void {
+  const invalid = `Invalid wallet error reviewActionResults[${index}].competingBeef`
+  if (value === undefined) {
+    if (requestedInputs !== undefined) throw new Error(invalid)
+    return
+  }
+  if (competingTxs == null || competingTxs.length === 0) throw new Error(invalid)
+  const bytes = normalizeBRC100ByteArray(value)
+  if (bytes == null || (requestedInputs !== undefined && bytes.length > 32 * 1024 * 1024)) {
+    throw new Error(invalid)
+  }
+  try {
+    validateCompetingTransactions(Beef.fromBinaryStrict(bytes), competingTxs, requestedInputs)
+  } catch {
+    throw new Error(invalid)
+  }
+}
+
 function validateReviewActionResults(
   value: unknown,
   allowedTxids: Set<string>,
   preConstructionInputs?: Set<string>
 ): void {
-  if (!Array.isArray(value)) throw new Error('Invalid wallet error reviewActionResults')
-  if (value.length > MAXIMUM_SEND_WITH_TRANSACTIONS + 1) {
+  if (!Array.isArray(value) || value.length > MAXIMUM_SEND_WITH_TRANSACTIONS + 1) {
     throw new Error('Invalid wallet error reviewActionResults')
   }
-  const statuses = new Set(['success', 'doubleSpend', 'serviceError', 'invalidTx'])
   const reviewedTxids = new Set<string>()
   for (const [index, item] of value.entries()) {
     if (item == null || typeof item !== 'object' || Array.isArray(item)) {
@@ -140,91 +247,15 @@ function validateReviewActionResults(
     }
     const result = item as Record<string, unknown>
     const preConstruction = preConstructionInputs !== undefined && result.txid === ''
-    if (
-      !preConstruction &&
-      (typeof result.txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(result.txid))
-    ) {
-      throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
-    }
-    const reviewedTxid = (result.txid as string).toLowerCase()
-    if (reviewedTxids.has(reviewedTxid) || (!preConstruction && !allowedTxids.has(reviewedTxid))) {
-      throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
-    }
-    reviewedTxids.add(reviewedTxid)
-    if (
-      !statuses.has(result.status as string) ||
-      (preConstruction && result.status !== 'doubleSpend')
-    ) {
-      throw new Error(`Invalid wallet error reviewActionResults[${index}].status`)
-    }
-    if (
-      result.status !== 'doubleSpend' &&
-      (result.competingTxs !== undefined || result.competingBeef !== undefined)
-    ) {
-      throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
-    }
-    let competingTxs: string[] | undefined
-    if (result.competingTxs !== undefined) {
-      if (
-        !Array.isArray(result.competingTxs) ||
-        result.competingTxs.length > MAXIMUM_SEND_WITH_TRANSACTIONS
-      ) {
-        throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
-      }
-      competingTxs = []
-      const unique = new Set<string>()
-      for (const [competingIndex, competing] of result.competingTxs.entries()) {
-        if (typeof competing !== 'string' || !/^[0-9a-fA-F]{64}$/.test(competing)) {
-          throw new Error(
-            `Invalid wallet error reviewActionResults[${index}].competingTxs[${competingIndex}]`
-          )
-        }
-        const normalized = competing.toLowerCase()
-        if (normalized === reviewedTxid || unique.has(normalized)) {
-          throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
-        }
-        unique.add(normalized)
-        competingTxs.push(normalized)
-      }
-    }
-    if (preConstruction && result.competingBeef === undefined) {
-      throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
-    }
-    if (result.competingBeef !== undefined) {
-      if (competingTxs == null || competingTxs.length === 0) {
-        throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
-      }
-      const competingBeef = normalizeBRC100ByteArray(result.competingBeef)
-      if (competingBeef == null || (preConstruction && competingBeef.length > 32 * 1024 * 1024)) {
-        throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
-      }
-      try {
-        const parsed = Beef.fromBinaryStrict(competingBeef)
-        for (const competingTxid of competingTxs) {
-          const competing = parsed.findTxid(competingTxid)
-          if (competing == null) throw new Error()
-          if (preConstruction) {
-            // A pre-construction failure has no attempted TXID. Bind each full
-            // competing transaction to an explicit input of this request instead.
-            const tx = competing.tx
-            if (
-              tx == null ||
-              tx.id('hex') !== competingTxid ||
-              !tx.inputs.some(input => {
-                const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-                return (
-                  source !== undefined &&
-                  preConstructionInputs!.has(`${source.toLowerCase()}.${input.sourceOutputIndex}`)
-                )
-              })
-            )
-              throw new Error()
-          }
-        }
-      } catch {
-        throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
-      }
-    }
+    const txid = requireReviewTxid(result.txid, index, preConstruction, allowedTxids, reviewedTxids)
+    validateReviewStatus(result, index, preConstruction)
+    const competingTxs = normalizeCompetingTxids(result.competingTxs, txid, index)
+    validateReviewBeef(
+      result.competingBeef,
+      competingTxs,
+      index,
+      preConstruction ? preConstructionInputs : undefined
+    )
   }
 }
 
