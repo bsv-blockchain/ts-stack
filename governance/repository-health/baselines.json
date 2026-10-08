@@ -14,11 +14,11 @@
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
   },
   "conformance": {
-    "passed": 6489,
+    "passed": 6495,
     "skipped": 211,
-    "total": 6700,
+    "total": 6706,
     "vectorFiles": 77,
-    "run": "Local: pnpm --filter @bsv/conformance-runner-ts test (2026-09-24); 6489 vector cases plus 2 metadata/wire tests, 211 unchanged governed skips; adds required empty historical BRC100 display metadata interoperability vector"
+    "run": "Local: pnpm --filter @bsv/conformance-runner-ts test (2026-10-07); 6495 vector cases plus 2 metadata/wire tests, 211 unchanged governed skips; adds six required SV Node v1.2.3 checked int64 splice-operand script evaluation vectors"
   },
   "testExceptions": {
     "explicitSkipDeclarations": 60,
@@ -321,7 +321,7 @@
     "@bsv/overlay-discovery-services": "2.2.7",
     "@bsv/overlay-express": "2.7.4",
     "@bsv/overlay-topics": "2.0.1",
-    "@bsv/sdk": "3.2.0",
+    "@bsv/sdk": "3.2.1",
     "@bsv/verifast": "0.3.7",
     "@bsv/btms": "1.2.4",
     "@bsv/btms-permission-module": "1.2.2",

@@ -6,8 +6,10 @@ import Transaction from '../../transaction/Transaction'
 import TransactionSignature from '../../primitives/TransactionSignature'
 import Script from '../Script'
 
-// Minimal synthetic transactions for node v1.2.2 conformance. These assert
-// node v1.2.2 block/relay verdicts, not error-message wording.
+// Minimal synthetic transactions for node conformance. These assert node
+// block/relay verdicts, not error-message wording. Verdicts follow node
+// v1.2.2 except where a later node release changed consensus behaviour; each
+// such vector names the release that fixed its verdict.
 const vectors = [
   {
     name: '1: crypto-00012',
@@ -155,13 +157,17 @@ const vectors = [
     valid: true
   },
   {
+    // OP_SUBSTR with the nine-byte offset 04 00 00 00 00 00 00 00 80. Node
+    // v1.2.2 read only the first eight bytes (offset 4) and accepted the spend;
+    // node v1.2.3 decodes the full sign-magnitude operand as -4 and rejects it
+    // with SCRIPT_ERR_INVALID_NUMBER_RANGE.
     name: '11: gen-00795',
     classNumber: 11,
     lockHex: '10000102030405060708090a0b0c0d0e0f0904000000000000008054b3040405060787',
     coinHeight: 943816,
     txHex:
       '0200000001bd713e289714213b3d76b5168a550fe3bc8bee30363eb9a72795e051c88686500000000000ffffffff010100000000000000015100000000',
-    valid: true
+    valid: false
   },
   {
     name: '12: gen-00835',
