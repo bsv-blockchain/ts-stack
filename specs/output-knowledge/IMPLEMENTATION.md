@@ -7847,3 +7847,38 @@ The scoped initial-suite/job-budget proposal is still unapproved and unapplied.
 No Mac SDK/application/native/property/mutation target was executed. New exact-head
 hosted qualification and the complete independently reconciled runtime mutation
 campaign remain required before Checkpoint 2 can be approved.
+
+## October 8: fresh general JSON string-record path
+
+A general SDK parser path now proves each flat unescaped string record before
+native construction. Fresh source checks enforce Unicode, byte size and BOM
+refusal; fixed syntax excludes raw controls, escapes and incomplete framing.
+An invocation-local matcher and key Set check decoded-name uniqueness, map size
+and depth. Other shapes and refused records retain the original parser and
+error order. Native construction then creates a new data-only graph with null
+record prototypes. Closed endpoint schemas, scalar framing, cryptographic
+bindings, custody, authentication and currentness remain separate fresh checks.
+The private codec and its original mutation-ledger assertion are unchanged.
+
+Four appended SDK regressions cover independent ownership and builtin-looking
+keys, duplicate/resource/malformed refusals after valid parses, escaped/Unicode/
+nested alternatives and unchanged encoding inspection, and fresh limit getters
+with large delimiter-bearing values. Every original test byte is retained.
+Strict source-only compilation passes in all five selected package contexts;
+public declarations are byte-identical. A static compiled operations-entry screen
+retains its unchanged browser budgets: Vite 62,509 raw / 18,591 gzip / 16,023
+brotli bytes; esbuild 69,430 / 23,219 / 20,208. This screen evaluates no target
+and does not replace packed browser/mobile or runtime qualification.
+
+Pinned source-only instrumentation retains every original SDK JSON site: 952
+original sites become 996 with 44 additive sites. The protected ledger remains
+994; all 151 targets, 398 rows, source ranges, thresholds, original property and
+example bodies, seeds, replay policy and individual deadlines remain unchanged.
+No Mac SDK/application/native/property/mutation target was executed. No speedup
+is claimed before unchanged hosted properties complete. The published preceding
+head's two property shards stop at 206 and 247 of their required 300 cases; its
+consumer/native diagnostics, SDK coverage, browser/mobile checks, actual Sonar
+and CodeQL analyses pass, with zero checked findings and unresolved review threads.
+Complete qualification on the new published source and the full independently
+reconciled mutation campaign remain required. The scoped campaign-budget proposal
+remains unapproved and unapplied. Checkpoint 2 remains open.

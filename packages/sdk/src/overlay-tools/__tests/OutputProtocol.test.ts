@@ -1202,3 +1202,96 @@ describe('fresh private JSON graph traversal', () => {
     }
   })
 })
+
+describe('fresh flat string-record parsing', () => {
+  it('retains independent null-prototype records, ordinary own fields and built-in-looking names', () => {
+    const text =
+      '{"__proto__":"ordinary","constructor":"data","":"empty","0":"numeric","b":"[,]:{} / + = . -"}'
+    const first = parseOutputJSON(text),
+      second = parseOutputJSON(new TextEncoder().encode(text))
+    expect(first).toEqual(JSON.parse(text))
+    expect(second).toEqual(first)
+    expect(second).not.toBe(first)
+    expect(Object.getPrototypeOf(first)).toBeNull()
+    expect(Object.getPrototypeOf(second)).toBeNull()
+    expect(Object.getOwnPropertyDescriptor(first, '__proto__')).toEqual({
+      value: 'ordinary',
+      writable: true,
+      enumerable: true,
+      configurable: true
+    })
+    Object.defineProperty(first, 'b', {
+      get() {
+        throw new Error('Old result must never be consulted')
+      }
+    })
+    expect(parseOutputJSON(text)).toEqual(JSON.parse(text))
+  })
+
+  it('keeps original duplicate, depth, map, byte and malformed-input refusals before and after successful records', () => {
+    const valid = '{"a":"one","b":"two"}'
+    for (const input of [valid, new TextEncoder().encode(valid)]) {
+      expect(parseOutputJSON(input, { mapKeys: 2, depth: 2, bytes: valid.length })).toEqual({
+        a: 'one',
+        b: 'two'
+      })
+      expect(() => parseOutputJSON(input, { mapKeys: 1 })).toThrow('JSON map limit')
+      expect(() => parseOutputJSON(input, { depth: 1 })).toThrow('JSON depth limit')
+      expect(() => parseOutputJSON(input, { bytes: valid.length - 1 })).toThrow(
+        'Output JSON byte limit'
+      )
+    }
+    expect(Object.getPrototypeOf(parseOutputJSON('{}', { depth: 1 }))).toBeNull()
+    for (const text of [
+      '{"a":"one","a":"two"}',
+      '{"a":"one","\\u0061":"two"}',
+      '{"a":"one"}x',
+      '{"a":"line\nfeed"}',
+      '{"a":"unterminated}',
+      '{"a" "one"}'
+    ]) {
+      expect(() => parseOutputJSON(text)).toThrow(OutputProtocolError)
+      expect(parseOutputJSON(valid)).toEqual({ a: 'one', b: 'two' })
+    }
+    expect(() => parseOutputJSON('{"a":"one","a":"two"}', { depth: 1 })).toThrow('JSON depth limit')
+  })
+
+  it('retains escaped and Unicode strings, whitespace, nested values and canonical inspection', () => {
+    for (const text of [
+      ' {"a":"one"}\n',
+      '{"a":"\\u0061"}',
+      '{"a":"é😀"}',
+      '{"a":"\\\"key\\\":\\\"value\\\""}',
+      '{"a":{"b":"nested"}}',
+      '{"a":["one","two"]}',
+      '{"a":true}',
+      '{"a":null}',
+      '{"a":2}'
+    ]) {
+      const value = parseOutputJSON(text)
+      expect(value).toEqual(JSON.parse(text))
+      expect(Object.getPrototypeOf(value)).toBeNull()
+      expect(inspectOutputJSONEncoding(text).value).toEqual(value)
+    }
+    const text = '{"z":"last","a":"first"}'
+    expect(inspectOutputJSONEncoding(text).canonical).toBe(false)
+    expect(inspectOutputJSONEncoding('{"a":"first","z":"last"}').canonical).toBe(true)
+  })
+
+  it('captures supplied resource-limit getters once and retains large delimiter-bearing strings', () => {
+    let reads = 0
+    const text = JSON.stringify({ a: '[,]:{} / + = . -'.repeat(4096) })
+    expect(
+      parseOutputJSON(text, {
+        get mapKeys() {
+          reads++
+          return 1
+        }
+      })
+    ).toEqual(JSON.parse(text))
+    expect(reads).toBe(1)
+    expect(() => parseOutputJSON(text, { bytes: text.length - 1 })).toThrow(
+      'Output JSON byte limit'
+    )
+  })
+})

@@ -85,6 +85,8 @@ export function parseOutputJSON(
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): OutputJSON {
   const [source, bounds] = outputJSONSource(input, limits)
+  const flat = ownFlatOutputJSONStringRecord(source, bounds)
+  if (flat !== undefined) return flat
   return new OutputJSONParser(source, bounds).parse()
 }
 
@@ -478,4 +480,35 @@ export function ownOutputJSONValue(
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): OutputJSON {
   return ownValidatedOutputJSON(serializeOutputJSON(input, limitsFor(limits)))
+}
+
+// Fixed syntax grammar only. Every invocation rechecks its own bounded text.
+// Source validation already proves Unicode; syntax excludes controls, quotes and escapes.
+const flatOutputJSONStringRecord =
+  /^\{(?:"[^"\\]*":"[^"\\]*"(?:,"[^"\\]*":"[^"\\]*")*)?\}(?![\s\S])/
+
+/** A complete fresh lexical proof for one flat string record. All other shapes,
+ * escaped text and refusals retain the original parser/error order.
+ * Decoded names equal these fresh unescaped names. Check them before native
+ * construction; no supplied value, shape, ownership or verdict is retained.
+ */
+function ownFlatOutputJSONStringRecord(
+  source: string,
+  bounds: OutputJSONLimits
+): OutputJSONObject | undefined {
+  if (/[^\u0020-\uFFFF]/.test(source) || !flatOutputJSONStringRecord.test(source)) return undefined
+  const names = new Set<string>(),
+    fields = /(?:^\{|,)"([^"]*)":"/g
+  let match: RegExpExecArray | null
+  // Full syntax above proves this token pattern sees only actual key boundaries;
+  // value strings contain no quotes or escapes. The matcher is local and fresh.
+  while ((match = fields.exec(source)) !== null) {
+    const name = match[1]
+    if (names.has(name) || names.size >= bounds.mapKeys) return undefined
+    names.add(name)
+  }
+  if (names.size !== 0 && bounds.depth < 2) return undefined
+  // Source byte/Unicode/BOM limits have already passed. Root depth is one;
+  // nonempty string fields have depth two, and there are no arrays or children.
+  return ownValidatedOutputJSON(source) as OutputJSONObject
 }
