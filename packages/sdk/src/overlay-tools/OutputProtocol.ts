@@ -138,7 +138,10 @@ export function outputString(value: unknown): string {
   // all 1024 code units fits 6146 JSON bytes, below the unchanged 4 MiB limit.
   // Retain the exact fresh Unicode refusal before checking decoded UTF-8 size.
   assertOutputJSONUnicode(value)
-  outputAssert(utf8.encode(value).length <= 1024, 'String exceeds 1024 UTF-8 bytes')
+  outputAssert(
+    (/[\u0080-\uFFFF]/.test(value) ? utf8.encode(value).length : value.length) <= 1024,
+    'String exceeds 1024 UTF-8 bytes'
+  )
   return value
 }
 
@@ -182,7 +185,16 @@ export function decodeOutputBytes(
   )
   const decoded: number[] = toArray(value, 'base64')
   outputAssert(decoded.length <= maximumBytes, 'Decoded byte limit', 'limited')
-  outputAssert(toBase64(decoded) === value, 'Nonzero base64 padding bits')
+  // Syntax and decoded length are checked before this exact padding-bit rule.
+  // A canonical final sextet has four zero bits with two pads, two with one.
+  // This is fresh representation validation, without a second full encoding.
+  if (value.endsWith('=')) {
+    const pads = value.endsWith('==') ? 2 : 1
+    const sextet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
+      value[value.length - pads - 1]
+    )
+    outputAssert((sextet & (pads === 2 ? 15 : 3)) === 0, 'Nonzero base64 padding bits')
+  }
   return decoded
 }
 

@@ -7571,3 +7571,49 @@ seed3242026, empty replay,150-second interruption and180-second individual limit
 workers, isolation,151targets/398rows, thresholds and bundle ceilings remain.
 The pending mutation-budget proposal remains unapproved and unapplied. Checkpoint
 two is incomplete, with no publication, deployment, funding, broadcast or merge.
+
+## October 8: fresh representation checks without full re-encoding
+
+Published46ec2eb has terminal CI39success/3failure/4scope-skips. Disclosure
+and coordinator properties reach182/300 and205/300 respectively before their
+unchanged150-second interruption, with no reported counterexample. Their other
+860 and986 tests pass; application shards3/4 pass936/968 tests. SDK8593 tests,
+all applicable wallet, native, browser/mobile, conformance, codegen and container
+lanes pass. All81 documentation examples compile against24 exact package
+tarballs. Actual Sonar has zero findings in every checked classification and zero
+unreviewed hotspots. Both actual CodeQL analyses match the exact merge parents
+and source tree, with zero open PR-ref alerts; all23 paginated review threads are
+resolved. These passing lanes do not qualify the failed full baseline.
+
+The same-head hosted diagnostic properties interrupt at195/221 cases. Native
+HTTP completes successfully. All three CPU traces contain negative or reordered
+samples and are excluded in full from both timing and count conclusions. Their
+separate original-Jest function entries, guarded wall measurements and monotonic
+native call measurements are independently admitted. Counts demonstrate repeated
+representation work; they do not establish CPU cost or a speedup.
+
+The next source candidate retains the existing Base64 syntax, encoded allocation
+bound, decoder and decoded-byte limit. It replaces full result re-encoding with
+an exact fresh final-sextet padding-bit check, after the same decoded limit.
+Canonical Base64 requires four zero unused bits with two pads, two with one;
+unpadded complete quartets have no unused bits. Strings retain their primitive,
+code-unit and Unicode checks before exact UTF-8 bounds. ASCII uses its exact
+one-byte-per-code-unit length; other strings keep native UTF-8 encoding. No
+input, normalization, shape, secret, authorization or currentness verdict is
+cached. Every prior public interface, wire/storage encoding, refusal and bound
+remains unchanged.
+
+One appended ordinary SDK regression compares every final alphabet sextet for
+both padding lengths against the independent existing encoder, checks byte
+boundaries across multiple lengths, and retains syntax/limit/padding refusal
+order. All original SDK test bodies,141 properties,81 example bodies/IDs,
+engine tests/goldens, selectors, seed, replay, per-case and initial budgets,
+workers, isolation, thresholds and browser ceilings remain. Before adoption,
+five compiler contexts pass, all234 SDK declarations are byte-identical, and
+complete freshly emitted SDK/LCH Vite/esbuild graphs pass every static budget.
+LCH Vite candidate raw bytes are307974 under the unchanged308000 ceiling.
+These controls do not execute SDK or application code on the Mac and do not
+prove runtime improvement. Fresh full local controls, pinned151/398 inventories,
+exact-head hosted qualification and full raw mutation reconciliation remain
+required. The budget proposal remains unapproved and unapplied; checkpoint two
+is incomplete, with no publication, deployment, funding, broadcast or merge.

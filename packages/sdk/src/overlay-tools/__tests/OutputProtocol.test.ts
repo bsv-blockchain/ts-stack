@@ -1139,4 +1139,29 @@ describe('fresh private JSON graph traversal', () => {
     })
     expect(() => canonicalOutputJSON(value)).toThrow('JSON accessor or hidden key')
   })
+
+  it('checks every Base64 tail sextet against the independent existing codec and retains refusal order', () => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    for (const stem of ['AA', '////AA', 'aGVsbG8gAA']) {
+      for (const character of alphabet) {
+        for (const padding of ['=', '==']) {
+          const text = (padding === '==' ? stem.slice(0, -1) : stem) + character + padding
+          const decoded = Array.from(Buffer.from(text, 'base64'))
+          if (toBase64(decoded) === text) expect(decodeOutputBytes(text)).toEqual(decoded)
+          else expect(() => decodeOutputBytes(text)).toThrow('Nonzero base64 padding bits')
+          expect(() => decodeOutputBytes(text, decoded.length - 1)).toThrow('Decoded byte limit')
+        }
+      }
+    }
+    for (const length of [0, 1, 2, 3, 16, 63, 64, 65, 1024, 4096]) {
+      const bytes = Array.from({ length }, (_, index) => (index * 73 + 29) % 256)
+      const text = toBase64(bytes)
+      expect(decodeOutputBytes(text, length)).toEqual(bytes)
+      if (length > 0)
+        expect(() => decodeOutputBytes(text, length - 1)).toThrow('Decoded byte limit')
+    }
+    for (const text of ['A===', '====', ' AA=', 'AA-=', 'AA_=']) {
+      expect(() => decodeOutputBytes(text)).toThrow('Noncanonical base64')
+    }
+  })
 })

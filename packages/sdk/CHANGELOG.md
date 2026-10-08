@@ -218,6 +218,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.3 source candidate)
 
+- Preserve canonical Base64 syntax, decoded bytes, allocation bounds and refusal order while checking final unused sextet bits directly after the decoded-byte limit. Preserve fresh Unicode validation and exact 1,024-byte bounds while avoiding native UTF-8 array allocation for ASCII strings. No input or validation result is cached; no consumer migration is required.
 - Traverse freshly parsed, completely validated private JSON graphs with direct dense array iteration and null-prototype own record fields, avoiding intermediate values-array copies. Caller graphs, validation order, data attributes, independence, wire bytes and every limit remain unchanged. No input or verdict is cached.
 - Lexically validate incoming JSON with fresh decoded-key Sets and successful-value counts before native data-only graph construction. Preserve every syntax, Unicode, integer, duplicate-key, resource and trailing-data refusal, null-prototype records, own data attributes and independent ownership. No input or verdict is cached.
 - Sort fresh primitive canonical JSON names with one captured locale-independent UTF-16 comparator. Schema normalization still counts every canonical byte and creates an independent owned graph then discards its generated text; public serialization, all refusal boundaries and limits remain unchanged.

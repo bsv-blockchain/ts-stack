@@ -507,7 +507,14 @@ wallet-derived locking key, and field signature before reading or spending it.
   JSON framing, preserving the original refusal order. A bounded scalar cannot
   reach the serializer's structural or 4 MiB limits. Complete packets still
   receive every recursive representation and schema check; no string or
-  validation result is cached.
+  validation result is cached. ASCII strings use their exact code-unit byte count
+  after fresh Unicode validation; non-ASCII strings retain native UTF-8 encoding.
+
+  `decodeOutputBytes` retains canonical alphabet and padding syntax, the encoded
+  allocation bound and decoded-byte limit. After those checks it validates the
+  final sextet's unused bits directly: four zero bits with two padding characters,
+  two with one. Decoded bytes and refusal order are unchanged; this avoids a
+  complete re-encoding solely to verify padding. No byte value or verdict is cached.
 
   Purchase and release parsers retain fresh complete normalization at both
   public and nested packet boundaries. Nested ownership also preserves canonical
