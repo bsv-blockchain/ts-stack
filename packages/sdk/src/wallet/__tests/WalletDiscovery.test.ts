@@ -65,12 +65,15 @@ describe('WalletDiscovery', () => {
     expect(seen[0].info.uuid).toMatch(/^[0-9a-f]{32}$/)
   })
 
-  it('lists an unannounced window.CWI, named from its version', async () => {
-    ;(window as any).CWI = wallet('yours-wallet-5.0.2')
+  it('lists an unannounced window.CWI without calling it', async () => {
+    const cwi = wallet('yours-wallet-5.0.2')
+    const getVersion = jest.spyOn(cwi, 'getVersion')
+    ;(window as any).CWI = cwi
     const list = await discoverWallets(noLocal)
+    expect(getVersion).not.toHaveBeenCalled()
     expect(list).toHaveLength(1)
     expect(list[0]).toMatchObject({
-      name: 'Yours Wallet',
+      name: 'Browser wallet',
       rdns: 'legacy.window-cwi',
       source: 'window.CWI'
     })

@@ -203,15 +203,11 @@ export async function discoverWallets(
 
   const cwi = (window as unknown as { CWI?: WalletInterface }).CWI
   if (cwi != null && !list.some(w => w.wallet === cwi)) {
-    let name = 'Browser wallet'
-    try {
-      name = walletNameFromVersion((await withTimeout(cwi.getVersion({}), timeoutMs)).version, name)
-    } catch {
-      // Locked or slow: keep the generic name.
-    }
+    // Not called here: some wallets prompt the user on any call from a new site, and discovery
+    // must never prompt. Apps can name it from getVersion() after the user picks it.
     list.push({
       rdns: 'legacy.window-cwi',
-      name,
+      name: 'Browser wallet',
       icon: null,
       kind: 'extension',
       wallet: cwi,
