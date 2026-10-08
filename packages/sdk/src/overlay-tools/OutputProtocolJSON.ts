@@ -423,7 +423,8 @@ function visitOutputJSON(frame: OutputJSONFrame, node: unknown, depth: number): 
 /** Select null prototypes only on this invocation's newly parsed data graph.
  * Complete lexical/serializer checks precede native construction. Its unexposed
  * arrays are dense and records contain only own data. Direct arrays and newly
- * null-prototype records exclude inherited values without a values-array copy.
+ * null-prototype records exclude inherited values. Native own-record enumeration
+ * stays inside this unexposed, completely validated graph.
  * No caller object, input verdict or private record is retained here.
  */
 function ownOutputJSONRecordPrototypes(value: OutputJSON): OutputJSON {
@@ -440,10 +441,10 @@ function ownOutputJSONRecordPrototypes(value: OutputJSON): OutputJSON {
   return value
 }
 
-/** Only freshly constructed records whose prototype is already null enter here. */
+/** Only freshly constructed records whose prototype is already null enter here.
+ * Native enumeration reads ordinary own data from this private bounded graph. */
 function ownOutputJSONRecordFields(value: OutputJSONObject): void {
-  for (const key in value) {
-    const child = value[key]
+  for (const child of Object.values(value)) {
     if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
   }
 }

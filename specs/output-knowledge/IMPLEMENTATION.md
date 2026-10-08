@@ -7747,3 +7747,57 @@ controls, complete source inventories, fresh exact published-source hosted gates
 and all151-target/398-row raw mutation reconciliation remain required. The
 budget proposal is unanswered and unapplied. No package publication, deployment,
 funding, broadcast or upstream merge is performed. Checkpoint2 remains incomplete.
+
+
+## October 8: native own-record enumeration within the private graph
+
+Published `f8d195c3355df7956e83a1f6e930559b13b4c5b8` completes CI with
+40 successful jobs, two failures and four expected scope skips. The SDK passes
+8,596 tests in 262 suites. The disclosure shard passes all 861 tests, including
+its unchanged 300-case property. The coordinator shard passes 986 tests and fails
+one property after an interruption at 223 of 300 cases under its original
+150-second bound; the derived merge gate also fails. The terminal logs are
+independently source-bound and admitted before scalar extraction. Actual Sonar
+reports zero findings in every checked classification and zero unreviewed
+hotspots; actual CodeQL verifies both language categories, the exact merge
+parents/tree and zero open PR-ref alerts. All 23 review threads are resolved.
+Those analyzer results do not qualify a subsequent source change.
+
+The current diagnostic archive is digest-verified and independently admitted.
+All three CPU traces contain negative or reordered samples and are wholly
+excluded from CPU counts and timings. Separate original-Jest function entries,
+native monotonic measurements and terminal wall times remain separate evidence;
+inclusive method times are not summed. Diagnostics do not replace the original
+uninstrumented properties or establish a speedup.
+
+The broad ownership-construction proposals remain unadopted because they exceeded
+the existing browser byte ceiling. The narrower direct parser proposal also
+remains unadopted: although its compiler/declaration/browser controls pass, it
+restores a dynamic decoded-key write pattern previously reported by CodeQL.
+The complete lexical checks and native JSON construction path remain unchanged.
+
+The next narrow source correction restores native own-value enumeration only
+for freshly constructed private records whose prototype is already null. This
+retains the last fully passing baseline's record-enumeration behavior while
+keeping direct dense-array traversal. Native enumeration reads ordinary own data
+and creates its private values array without selecting inherited setters. All
+representation, descriptor, Unicode, duplicate-key, integer, canonical ordering,
+byte, item, depth, schema, revision, custody and authorization checks remain
+fresh. No caller object, secret, shape or validation verdict is cached or reused.
+
+Before adoption, five strict compiler contexts pass, all 234 public declaration
+files are byte-exact, and all eight complete SDK/LCH Vite/esbuild static graphs
+pass their unchanged raw, gzip and Brotli ceilings. LCH Vite is 307,964 raw bytes
+under 308,000. These source-only checks do not execute SDK/application/native
+code locally and do not establish a runtime improvement. All original SDK
+units, property/example bodies, selectors, source ranges, engine tests, both
+overlay configurations and all 20 goldens remain unchanged. The protected-ledger
+golden remains 994. Seed/replay, minimum 300 cases, 150/180-second property limits,
+workers, isolation, thresholds and bundle ceilings remain unchanged.
+
+Coherent root controls, full pinned 151-target/398-row source inventories and
+fresh exact published-source hosted qualification are required before checkpoint
+acceptance. The campaign budget proposal remains unanswered and unapplied; no
+complete current-head runtime mutation campaign is claimed. Checkpoint two is
+incomplete. No package publication, deployment, funding, broadcast or upstream
+merge is performed.
