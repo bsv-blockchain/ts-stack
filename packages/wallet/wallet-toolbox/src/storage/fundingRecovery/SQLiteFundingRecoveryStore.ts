@@ -38,7 +38,7 @@ interface Row {
 export class SQLiteFundingRecoveryStore {
   private constructor(readonly storage: StorageKnex, readonly chain: OutputChain) {}
 
-  static async install(storage: StorageKnex, chainInput: OutputChain, limits = defaults): Promise<SQLiteFundingRecoveryStore> {
+  static async install(storage: StorageKnex, chainInput: OutputChain, limits: Readonly<{ records: number; bytes: number }> = defaults): Promise<SQLiteFundingRecoveryStore> {
     limits = { records: limits.records, bytes: limits.bytes }
     const chain = Object.freeze(parseOutputChain(chainInput))
     requireFunding(storage.getSettings().dbtype === 'SQLite' && chain.network === storage.getSettings().chain, 'Funding recovery requires matching local SQLite storage')

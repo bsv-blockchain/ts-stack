@@ -7371,3 +7371,37 @@ campaign remain required. The five complete compiler contexts accept the
 unadopted parser proposal. Full local controls, native/browser/mobile consumers,
 actual analyzers and complete published-source qualification remain necessary;
 this source correction does not announce performance or checkpoint readiness.
+
+## October 8: funding capacity declarations and retained ownership regressions
+
+Published `7ef1cbb3` qualifies the complete functional baseline: all applicable
+CI/platform/native/consumer/conformance checks, actual zero-new analyzers and
+resolved reviews. Its full 151-target/398-row mutation campaign remains failed
+and incomplete. Independently admitted terminal logs identify complete initial
+suite timeouts, while three targets passed their initial tests but reached their
+whole-job deadlines. Successful funding-store evidence covers all 424 mutants
+at 92.45%; it does not qualify the incomplete campaign. Proposed deadline changes
+await explicit maintainer approval and have not been applied.
+
+A separate compiler review found that the local funding store's installation
+parameter inferred its default record count as the literal 4,096. The explicit
+readonly numeric capacity shape now matches the already supported smaller
+runtime limits. Removing this parameter annotation restores the complete
+original implementation byte for byte; defaults, validation, storage formats and
+all executable statements are unchanged.
+
+Two appended ordinary regressions exercise retained valid-JSON binary/oversized
+records and all native managed-ownership fields before receipt issuance. They
+check rejection, transaction rollback, retained uncertainty and successful
+recovery of the original operation. Removing only their added text restores the
+entire original test file. Every original property, test body, example, selector,
+source range, threshold and resource setting remains intact. The two new tests
+and their complete imported closure strictly compile in a virtual source-only
+context. The original suite's deliberately invalid `accepted: false` callback
+remains an intentional negative vector; it is not a newly introduced declaration
+error or a waived runtime assertion.
+
+This correction requires fresh published-source functional and full mutation
+qualification. Neither the earlier green baseline nor the virtual compiler
+result completes checkpoint two. No local SDK/native test execution, package
+publication, deployment, funding, broadcast or merge is performed.

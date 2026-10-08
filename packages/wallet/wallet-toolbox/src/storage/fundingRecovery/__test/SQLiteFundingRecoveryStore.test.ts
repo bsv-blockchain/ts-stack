@@ -170,4 +170,46 @@ describe('bounded atomic funding journal', () => {
       await expect(store.getInternalization(context.userId, context.identityKey, input.id)).rejects.toThrow('Corrupt funding recovery receipt')
     }
   })
+
+  test('rejects non-text and oversized retained records even when their JSON values otherwise match', async () => {
+    const fixture = fundingFixture(context), input = fixture.operation()
+    jest.spyOn(context.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
+    const store = await SQLiteFundingRecoveryStore.install(context.activeStorage, fixture.chain)
+    await new RecoverableFundingController(context.wallet, store).internalizeOnce(input)
+    const db = context.activeStorage.knex, saved = await db(records).where({ id: input.id }).first()
+    const accepted = await store.getInternalization(context.userId, context.identityKey, input.id)
+    expect(accepted.state).toBe('accepted')
+    for (const change of [
+      { operation: Buffer.from(saved.operation) },
+      { operation: saved.operation + ' '.repeat(100000) },
+      { receipt: Buffer.from(saved.receipt) },
+      { receipt: saved.receipt + ' '.repeat(4096) }
+    ]) {
+      await db(records).where({ id: input.id }).update({ ...saved, ...change })
+      await expect(store.getInternalization(context.userId, context.identityKey, input.id)).rejects.toThrow('Corrupt or inaccessible funding recovery record')
+      await db(records).where({ id: input.id }).update(saved)
+      expect(await store.getInternalization(context.userId, context.identityKey, input.id)).toEqual(accepted)
+    }
+  })
+
+  test('does not issue a retained receipt when native ownership metadata cannot support managed spending', async () => {
+    const fixture = fundingFixture(context), input = fixture.operation()
+    jest.spyOn(context.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
+    const store = await SQLiteFundingRecoveryStore.install(context.activeStorage, fixture.chain)
+    await new RecoverableFundingController(context.wallet, store).internalizeOnce(input)
+    const db = context.activeStorage.knex
+    await db(records).where({ id: input.id }).update({ receipt: null })
+    const hook = await store.retain(context.userId, context.identityKey, input)
+    const output = (await context.activeStorage.findOutputs({ partial: { txid: input.funding.txid, vout: input.funding.outputIndex } }))[0]
+    for (const change of [{ type: 'custom' }, { change: false }, { providedBy: 'you' as const }, { purpose: 'payment' }]) {
+      await expect(hook.commit(async trx => {
+        await context.activeStorage.updateOutput(output.outputId, change, trx)
+        return { accepted: true, isMerge: true, txid: input.funding.txid, satoshis: 0 }
+      })).rejects.toThrow('ownership does not match retained intent')
+      expect((await context.activeStorage.findOutputs({ partial: { outputId: output.outputId } }))[0]).toEqual(output)
+      expect(await store.getInternalization(context.userId, context.identityKey, input.id)).toEqual({ state: 'unknown' })
+    }
+    await hook.commit(async () => ({ accepted: true, isMerge: true, txid: input.funding.txid, satoshis: 0 }))
+    expect(await store.getInternalization(context.userId, context.identityKey, input.id)).toMatchObject({ state: 'accepted', funding: input.funding })
+  })
 })

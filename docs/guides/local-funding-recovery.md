@@ -3,8 +3,8 @@ id: local-funding-recovery
 title: 'Crediting a Payment Exactly Once in a Local Wallet'
 kind: guide
 version: '1.0.0'
-last_updated: '2026-09-30'
-last_verified: '2026-09-30'
+last_updated: '2026-10-08'
+last_verified: '2026-10-08'
 review_cadence_days: 30
 status: experimental
 tags: [wallet, utxo, recovery, sqlite, private-overlay]
@@ -131,6 +131,11 @@ therefore the default byte limit admits at most 655 operations. Smaller explicit
 limits are supported and sealed. Capacity exhaustion fails before any wallet
 effect. Rejected and pending claims continue occupying their reservations and
 funding fences. This version has no implicit expiry or garbage collection.
+The optional capacity argument accepts numeric `records` and `bytes` values;
+the declaration does not restrict `records` to the default literal 4,096.
+For example, a dedicated one-operation journal can install with
+`SQLiteFundingRecoveryStore.install(activeStorage, chain, { records: 1, bytes: 102400 })`.
+Both values still pass the same integer and maximum-capacity checks at runtime.
 Installation copies its capacity values and chain before yielding to the database;
 later changes to the caller's configuration object cannot change the installed
 contract.
@@ -154,6 +159,10 @@ The tests cover retained-intent failure, exact output ownership, distinct output
 in one transaction, alternate proof encodings, immutable capacities, corrupted
 records, lost replies and five actual process-termination boundaries. Generated
 properties exercise operation binding, funding uniqueness and receipt replay.
+The rejection regressions also assert that valid JSON stored as a binary value
+or oversized text cannot become a receipt, and that changed native ownership
+metadata rolls back without completing the retained operation. Restoring the
+original record or managed ownership permits the original operation to recover.
 Their synthetic inclusion fixtures run real transaction verification against an
 explicit local tracker; they are not real-chain funding or a network-acceptance
 demonstration.

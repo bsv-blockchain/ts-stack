@@ -11,6 +11,9 @@ attention to changes that materially alter behavior or extend functionality.
 - Add local BRC-29 funding recovery with unique outpoint ownership, atomic wallet
   credit, deferred monitor work and retained receipts. Deep imports require
   explicit installation; ordinary calls, root exports and BRC-100 RPCs are unchanged.
+- Type explicit funding-recovery capacity values as numbers, matching the existing
+  configurable limits. Add retained-record representation and native ownership
+  rejection regressions; runtime validation, defaults and journal formats remain unchanged.
 - Preserve whole wallet databases and keys for these auxiliary journals. Legacy
   entity backup/sync, browser/mobile wrappers, IndexedDB and remote providers do
   not transport or implement them. Reconcile pending operations before rollback.
