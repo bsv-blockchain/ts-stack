@@ -23,8 +23,8 @@ mandatory per-turn release. This page supplies operational recipes.
 
 The category is configured in GitHub as an **Announcement**, which restricts
 thread creation to maintainers/admins but allows public comments. The current
-protocol participants are `sirdeggen` and `ty-everett`; GitHub's category
-permissions do not enforce that exact two-login list. Validate authors under
+protocol participants are `sirdeggen`, `ty-everett`, and `BraydenLangley`;
+GitHub's category permissions do not enforce that exact three-login list. Validate authors under
 the root policy. See GitHub's [maintainer collaboration documentation](https://docs.github.com/en/discussions/collaborating-with-your-community-using-discussions/collaborating-with-maintainers-using-discussions).
 
 The category form becomes available when merged into the default branch,

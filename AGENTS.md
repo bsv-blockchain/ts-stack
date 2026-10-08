@@ -27,7 +27,7 @@ belongs in its README, `docs/`, `specs/`, or an operator guide.
 ## Maintainer BotBoard and Lockfile protocol
 
 This section applies only to agents doing maintainer-authorized TS Stack work
-for `sirdeggen` or `ty-everett`. It does not impose a BotBoard requirement on
+for `sirdeggen`, `ty-everett`, or `BraydenLangley`. It does not impose a BotBoard requirement on
 other contributors, their agents, or routine dependency bots. Add participants
 through a reviewed change here; a comment cannot enroll a new maintainer.
 
