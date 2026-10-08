@@ -234,7 +234,8 @@ class OutputJSONParser {
     const frame = this.#frame
     frame.o++
     this.#whitespace()
-    const fields = new Map<string, OutputJSON>()
+    const fields: OutputJSONObject = Object.create(null) as OutputJSONObject
+    let size = 0
     let previous: string | undefined
     if (frame.t[frame.o] === '}') {
       frame.o++
@@ -242,20 +243,21 @@ class OutputJSONParser {
       for (;;) {
         this.#whitespace()
         const key = this.#string()
-        outputAssert(!fields.has(key), 'Duplicate decoded JSON key')
-        outputJSONLimit(fields.size < frame.b.mapKeys, 2)
+        outputAssert(!Object.hasOwn(fields, key), 'Duplicate decoded JSON key')
+        outputJSONLimit(size < frame.b.mapKeys, 2)
         frame.e?.key(previous, key)
         previous = key
         this.#whitespace()
         outputAssert(frame.t[frame.o++] === ':', 'Expected JSON colon')
-        fields.set(key, this.#value(depth + 1))
+        fields[key] = this.#value(depth + 1)
+        size++
         this.#whitespace()
         const end = frame.t[frame.o++]
         if (end === '}') break
         outputAssert(end === ',', 'Expected JSON object separator')
       }
     }
-    return ownedOutputJSONRecord(fields)
+    return fields
   }
 
   #array(depth: number): OutputJSON[] {
@@ -414,25 +416,27 @@ function visitOutputJSON(frame: OutputJSONFrame, node: unknown, depth: number): 
   }
 }
 
-/** Construct checked entries once as own data on a fresh null-prototype record. */
-function ownedOutputJSONRecord(fields: Iterable<readonly [string, OutputJSON]>): OutputJSONObject {
-  // fromEntries defines own data, including names such as __proto__.
-  // Set the prototype only on this fresh, unexposed record; no second copy.
-  return Object.setPrototypeOf(Object.fromEntries(fields), null) as OutputJSONObject
+/** Select null prototypes only on this invocation's newly parsed data graph.
+ * The complete serializer already bounded depth and every value. Native values
+ * enumeration creates own array data without invoking inherited setters. No
+ * caller object, input verdict or private record is retained by this traversal.
+ */
+function ownOutputJSONRecordPrototypes(value: OutputJSON): OutputJSON {
+  if (value !== null && typeof value === 'object') {
+    if (!Array.isArray(value)) Object.setPrototypeOf(value, null)
+    for (const child of Object.values(value)) {
+      if (child !== null && typeof child === 'object') ownOutputJSONRecordPrototypes(child)
+    }
+  }
+  return value
 }
 
 /** Construct an independent graph only from text just fully validated here.
- * Native parsing defines ordinary own data fields, including __proto__. The
- * private reviver selects null prototypes only on fresh, unexposed records.
+ * Native parsing creates ordinary own data, including builtin-looking names.
  * Caller objects and incoming text never pass through this construction path.
  */
 function ownValidatedOutputJSON(text: string): OutputJSON {
-  return JSON.parse(text, (_key: string, value: unknown) => {
-    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      return Object.setPrototypeOf(value, null)
-    }
-    return value
-  }) as OutputJSON
+  return ownOutputJSONRecordPrototypes(JSON.parse(text) as OutputJSON)
 }
 
 /**

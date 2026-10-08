@@ -7264,3 +7264,33 @@ It neither asserts evergreen pending status nor self-certifies acceptance.
 Complete source/root/engine checks precede publication; fresh complete hosted
 functional, platform, consumer, analyzer and runtime mutation qualification
 remain mandatory.
+
+## Current 27f8012 qualification and private record construction
+
+The published 27f8012 source fixes the two genuine native-header mutation-count
+goldens without changing any other original assertion. CI37741594497 passes
+build/policy, SDK, wallet, browser/mobile, conformance, container, codegen and
+packed/documentation consumers. Actual Sonar and CodeQL analyses have zero new
+findings, and all21 review conversations are resolved. Complete qualification
+remains open: disclosure and coordinator properties interrupt at156/300 and
+235/300 under the original150-second limit, with no nonempty counterexamples.
+All original controls remain required; full runtime mutations are not launched.
+
+The independently admitted current diagnostic has one valid disclosure CPU
+trace. The complete coordinator and native CPU traces are excluded for negative
+or reordered samples; none of their timing/sample aggregates are used. The
+valid disclosure trace identifies repeated canonical validation and graph
+construction as material work. Its instrumented timings do not qualify the
+original uninstrumented properties or establish a speedup. Independent function
+entry counters and native monotonic observations remain separate evidence.
+
+The next bounded source correction constructs each incoming object directly
+as a fresh null-prototype record. Own decoded-key membership retains duplicate
+refusal before the independent item-count fence and before child parsing. Arrays
+retain their existing private Map staging/native own-data construction. Program
+values still complete every original canonical check and byte emission before
+private native parsing. A bounded traversal selects null prototypes on those
+newly parsed records; it never sees caller objects, caches validation, or invokes
+inherited indexed setters. All existing ownership, special-key, refusal-order,
+Unicode and resource regressions remain unchanged. No current-source performance,
+full runtime mutation or checkpoint acceptance is claimed by this source change.

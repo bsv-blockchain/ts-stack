@@ -214,14 +214,14 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-- Construct program-value ownership with native JSON parsing only after complete bounded canonical validation and byte emission. A private reviver selects null prototypes only on fresh, unexposed records; incoming text retains duplicate-aware parsing. Special keys, own data attributes, independent ownership, UTF-16 order and all refusal boundaries remain unchanged.
+- Construct program-value ownership with native JSON parsing only after complete bounded canonical validation and byte emission. A bounded private traversal selects null prototypes only on fresh, unexposed records; incoming text retains duplicate-aware parsing. Special keys, own data attributes, independent ownership, UTF-16 order and all refusal boundaries remain unchanged.
 
 ### Added (3.3 source candidate)
 
-- Construct incoming parsed records from the same validated Map staging and duplicate evidence with native own data fields, selecting the null prototype before exposure. All key, attribute, ownership, validation and refusal behavior remains unchanged.
+- Construct incoming parsed records directly as fresh private null-prototype data, retaining own decoded-key membership and an independent item count before value parsing. All key, attribute, ownership, validation and refusal behavior remains unchanged.
 - Sort fresh canonical JSON names with the original locale-independent UTF-16 comparator captured once. Schema normalization still counts every canonical byte and creates an independent owned graph then discards its generated text; public serialization, all refusal boundaries and limits remain unchanged.
 - Add `inspectOutputJSONEncoding` for fresh duplicate-aware, bounded parsing with a canonical-input flag and an independently owned value. The flag is not a schema, signature or authorization verdict. Ordinary parsing, canonical UTF-16 key order, literal/number encodings, limits and refusal order are preserved; optional inspection code stays separate from ordinary parser bundles.
-- Preserve Map-based duplicate detection and own-data-property construction for fresh null-prototype parsed records; traverse canonical fields in order without per-field callbacks. Preserve special property names, all bounds, exact encodings and refusal order.
+- Preserve own decoded-key duplicate detection and ordinary data-property construction for fresh null-prototype parsed records; traverse canonical fields in order without per-field callbacks. Preserve special property names, all bounds, exact encodings and refusal order.
 
 - Add the portable `RevenueListingProfile` two-stage literal codec, immutable public-child schedule and exact 717-byte metadata with required height expiry. Both locks match unchanged PR295 positive wire vectors. Recognition does not establish activation, lineage or transaction validity; the separate `RevenueListingProfilePlan` and `RevenueListingProfileSpend` entries add immutable route planning, owned complete funding layouts, full 114/15-value public witnesses, protected seller-child requests and full purchase commitments. Tests execute complete positive routes and all eight recipients. The separately installed native reference composition exercises these codecs with protected child authority, wallet funding, lineage and alias recovery; complete exact-source qualification remains required.
 

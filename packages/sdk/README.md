@@ -453,23 +453,24 @@ wallet-derived locking key, and field signature before reading or spending it.
   predicates and refusal messages. Validated safe integers use the same decimal
   text, including conversion of negative zero to zero. Program-value ownership
   completes this bounded canonical traversal before constructing a fresh graph
-  from its generated text with native JSON parsing. A private internal reviver
+  from its generated text with native JSON parsing. A bounded private traversal
   selects null prototypes only on freshly created, unexposed records. Native
   parsing defines ordinary own data fields, including `__proto__`, without
-  invoking inherited setters. Caller objects never enter that reviver. Text-only
+  invoking inherited setters. Caller objects never enter that traversal. Text-only
   serialization performs the same checks without constructing a graph. No input
   or verdict is retained between calls.
 
   Parsing decodes values once into a bounded private graph, exposing it only
   after complete syntax, Unicode, integer, resource and trailing-data checks.
-  Fresh parser Maps stage validated children and decoded-key membership before native
-  record and array construction; duplicates are
+  Fresh null-prototype records retain validated children and own decoded-key
+  membership directly. Arrays retain private Map staging and native own-data
+  construction; duplicate object keys are
   rejected before the map-size fence or value parsing. Collection sizes advance
   only after successful values. Native container construction gives arrays ordinary writable, configurable,
   enumerable data properties without invoking inherited indexed setters.
-  Record construction defines each checked entry as own data once, then selects
-  the null prototype on that fresh, unexposed record. The prototype operation
-  never receives a caller object. Keys such as `__proto__` remain ordinary writable,
+  Incoming records begin with a null prototype, and each checked entry is
+  assigned as ordinary own data once. The private native ownership traversal
+  changes prototypes only on its newly parsed records, never on caller objects. Keys such as `__proto__` remain ordinary writable,
   configurable, enumerable data; inherited setters are not called. Canonical property ordering sorts
   each fresh primitive-name array with the original UTF-16 comparator captured
   once, including numeric-looking and supplementary keys. It allocates no
