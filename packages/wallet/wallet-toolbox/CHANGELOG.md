@@ -4,6 +4,15 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.7 (unpublished candidate)
+
+- Preserve bounded pre-construction double-spend reviews from remote storage.
+  An empty attempted TXID is accepted only with one doubleSpend result, empty
+  send results, absent constructed-action fields and nonempty competing evidence.
+  Consumers must validate the evidence and synchronize the winning transaction
+  before rebuilding a save. The existing JSON transport carries this evidence;
+  binary wire framing is unchanged. No database or call migration is required.
+
 ## wallet-toolbox 2.14.6
 
 - UMP support pins anchor verified update lineage. Password and token updates

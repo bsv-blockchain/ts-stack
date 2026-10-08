@@ -38,6 +38,9 @@ const mockWalletStorage = {
   })
 }
 
+const sparseProof: number[] = []
+sparseProof.length = 1
+
 describe('WalletError tests', () => {
   jest.setTimeout(99999999)
 
@@ -116,6 +119,66 @@ describe('WalletError tests', () => {
         sendWithResults: []
       })
     ).toThrow('Invalid remote wallet error reviewActionResults')
+  })
+
+  test('preserves a pre-construction double-spend review without inventing a transaction ID', () => {
+    const result = {
+      txid: '',
+      status: 'doubleSpend' as const,
+      competingTxs: ['ab'.repeat(32)],
+      competingBeef: [0, 1, 2]
+    }
+    const error = new WERR_REVIEW_ACTIONS([result], [])
+    const restored = WalletErrorFromJson(JSON.parse(WalletError.unknownToJson(error))) as WERR_REVIEW_ACTIONS
+    expect(restored).toBeInstanceOf(WERR_REVIEW_ACTIONS)
+    expect(restored.reviewActionResults).toEqual([result])
+    expect(restored.sendWithResults).toEqual([])
+    expect(restored.txid).toBeUndefined()
+    expect(restored.tx).toBeUndefined()
+    result.competingBeef[0] = 255
+    expect(restored.reviewActionResults[0].competingBeef).toEqual([0, 1, 2])
+  })
+
+  test.each([
+    { status: 'success' },
+    { status: 'serviceError' },
+    { status: 'invalidTx' },
+    { competingTxs: [] },
+    { competingTxs: undefined },
+    { competingTxs: ['short'] },
+    { competingTxs: ['ab'.repeat(32), 'AB'.repeat(32)] },
+    { competingBeef: [] },
+    { competingBeef: undefined },
+    { competingBeef: [256] },
+    { competingBeef: sparseProof }
+  ])('rejects an incomplete pre-construction review %#', change => {
+    expect(() =>
+      WalletErrorFromJson({
+        name: 'WERR_REVIEW_ACTIONS',
+        reviewActionResults: [
+          { txid: '', status: 'doubleSpend', competingTxs: ['ab'.repeat(32)], competingBeef: [0, 1, 2], ...change }
+        ],
+        sendWithResults: []
+      })
+    ).toThrow(WERR_INTERNAL)
+  })
+
+  test.each([
+    { txid: 'ab'.repeat(32) },
+    { tx: [1] },
+    { noSendChange: [] },
+    { sendWithResults: [{ txid: 'ab'.repeat(32), status: 'failed' }] }
+  ])('rejects constructed-action fields in a pre-construction review %#', change => {
+    expect(() =>
+      WalletErrorFromJson({
+        name: 'WERR_REVIEW_ACTIONS',
+        reviewActionResults: [
+          { txid: '', status: 'doubleSpend', competingTxs: ['ab'.repeat(32)], competingBeef: [0, 1, 2] }
+        ],
+        sendWithResults: [],
+        ...change
+      })
+    ).toThrow(WERR_INTERNAL)
   })
 
   test('action batch lifecycle state survives JSON transport', () => {
