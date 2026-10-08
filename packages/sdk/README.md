@@ -451,13 +451,13 @@ wallet-derived locking key, and field signature before reading or spending it.
   descriptor inspection and failed calls cannot reuse another frame's text,
   byte counter, bounds or ancestor set. Resource assertions retain their exact
   predicates and refusal messages. Validated safe integers use the same decimal
-  text, including conversion of negative zero to zero. Object ownership places each
-  freshly validated child directly in a private null-prototype record. Array
-  ownership yields checked children to native own-data construction. Neither
-  retains an intermediate value Map or reparses generated text; object ownership
-  also avoids entry tuples and a final record copy. Text-only traversal performs
-  the same checks without constructing a graph. No input or verdict is retained
-  between calls.
+  text, including conversion of negative zero to zero. Object and array ownership
+  yield freshly checked children to native own-data construction. Neither retains
+  an intermediate value Map or reparses generated text. Each object is constructed
+  once with `Object.fromEntries`, then its prototype is set to `null` before the
+  private record is exposed; there is no dynamic property assignment or second
+  spread copy. Text-only traversal performs the same checks without constructing
+  a graph. No input or verdict is retained between calls.
 
   Parsing decodes values once into a bounded private graph, exposing it only
   after complete syntax, Unicode, integer, resource and trailing-data checks.
@@ -466,9 +466,10 @@ wallet-derived locking key, and field signature before reading or spending it.
   rejected before the map-size fence or value parsing. Collection sizes advance
   only after successful values. Native container construction gives arrays ordinary writable, configurable,
   enumerable data properties without invoking inherited indexed setters.
-  The new private graph creates each null-prototype record directly and copies
-  checked own data with standard object spread, without changing a record prototype;
-  keys such as `__proto__` remain ordinary writable data. Canonical property ordering sorts
+  Record construction defines each checked entry as own data once, then selects
+  the null prototype on that fresh, unexposed record. The prototype operation
+  never receives a caller object. Keys such as `__proto__` remain ordinary writable,
+  configurable, enumerable data; inherited setters are not called. Canonical property ordering sorts
   each fresh primitive-name array with the original UTF-16 comparator captured
   once, including numeric-looking and supplementary keys. It allocates no
   per-object ordering callback. The

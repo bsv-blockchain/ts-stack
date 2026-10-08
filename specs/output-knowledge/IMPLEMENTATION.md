@@ -7124,3 +7124,41 @@ The existing SDK3.3 minor source candidate and migration requirement of none
 remain appropriate. Source preservation, compiler contexts, browser budgets,
 packed artifacts and root gates precede publication; runtime and full151-target,
 398-row mutation qualification remain required on the final published head.
+
+## October 8: single private record construction and current qualification blockers
+
+Published 4824749 retains BRC PR295 at1b9a75e4 and all original qualification
+controls. SDK262suites/8591tests, wallet shard3 79suites/882tests including8_BEEF,
+browser/mobile profiles, conformance, codegen, container contracts and
+artifact/documentation consumers pass. Disclosure interrupts at178/300 and
+coordinator at246/300 under the original150-second fence. Actual Sonar has zero
+new findings and unreviewed hotspots; all21 review threads are resolved. Actual
+CodeQL has one open remote-property-injection finding on the new dynamic owned
+record assignment. Successful workflow completion does not qualify that finding.
+No full runtime mutation campaign or Checkpoint2 completion is claimed.
+
+The exact diagnostic producer completed successfully. Both property CPU traces
+have zero negative deltas and zero reordered samples. Disclosure object traversal
+has17.425seconds self time and record construction6.494seconds; coordinator has
+18.138seconds and5.877seconds respectively. Inclusive times overlap and are not
+summed. Original Jest/Istanbul counters and native monotonic measurements are
+admitted separately. The native HTTP CPU trace is wholly excluded for negative
+and reordered samples; none of its CPU samples or aggregates is used. Diagnostic
+executions include overhead and do not qualify performance or functional tests.
+
+The earlier direct-assignment construction above is superseded by one native
+own-data construction. Both incoming parsed records and captured serialization
+records use Object.fromEntries for their already checked entries, then select a
+null prototype on that fresh, unexposed ordinary record. This removes the
+second spread copy and dynamic property assignment. No caller object has its
+prototype changed. Special names, including `__proto__`, retain enumerable,
+writable and configurable own data properties; inherited setters are not called.
+Serialization retains its checked-child generator, while duplicate-aware
+parsing retains its Map and all original syntax, order and resource checks.
+Text-only traversal creates no graph. Every original descriptor, symbol,
+prototype, Unicode, integer, cycle, depth, item and byte refusal remains.
+There is no input, secret, authority or validation-result cache. SDK3.3 remains
+an unpublished minor candidate with no migration. Source preservation,
+compiler/root/browser/packed checks precede publication; fresh actual analyzer
+and full functional qualification, followed by all151 targets/398 execution rows,
+remain necessary on the final published source.

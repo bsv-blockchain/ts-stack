@@ -214,14 +214,14 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-- Construct canonical owned objects directly as fresh null-prototype records after each complete child validation. This removes generator entry tuples and the final copy while retaining special keys, own data attributes, independent ownership, original UTF-16 ordering and every refusal boundary.
+- Construct checked JSON records once with native own-data creation, selecting the null prototype before exposure. This removes the temporary-record spread copy and dynamic property assignment while retaining special keys, own data attributes, independent ownership, original UTF-16 ordering and every refusal boundary.
 
 - Yield freshly validated serialization array children directly to native own-data array construction. Text-only traversal completes every original check and emission without yielding; ordinary array attributes, inherited-setter isolation, negative-zero behavior and all refusal boundaries are retained.
 
 ### Added (3.3 source candidate)
 
 - Yield each freshly validated serialization child directly to native own-data record construction, without retaining an intermediate value Map. Text-only traversal performs every original check and byte emission without yielding children; the duplicate-aware parser retains its fresh Maps and all boundaries remain unchanged.
-- Construct each privately owned JSON record with a null prototype from creation, using standard own-data copying after the same validated Map staging. All key, attribute, ownership, validation and refusal behavior remains unchanged.
+- Construct each privately owned JSON record once, then set its prototype to null before exposure. Incoming-text parsing retains the same validated Map staging and duplicate evidence. All key, attribute, ownership, validation and refusal behavior remains unchanged.
 - Sort fresh canonical JSON names with the original locale-independent UTF-16 comparator captured once. Schema normalization still counts every canonical byte and creates an independent owned graph while omitting discarded text; public serialization, all refusal boundaries and limits remain unchanged.
 - Add `inspectOutputJSONEncoding` for fresh duplicate-aware, bounded parsing with a canonical-input flag and an independently owned value. The flag is not a schema, signature or authorization verdict. Ordinary parsing, canonical UTF-16 key order, literal/number encodings, limits and refusal order are preserved; optional inspection code stays separate from ordinary parser bundles.
 - Preserve Map-based duplicate detection and own-data-property construction for fresh null-prototype parsed records; traverse canonical fields in order without per-field callbacks. Preserve special property names, all bounds, exact encodings and refusal order.
