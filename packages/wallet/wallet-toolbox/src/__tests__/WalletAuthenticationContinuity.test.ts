@@ -1,5 +1,6 @@
 import { CachedKeyDeriver, LockingScript, PrivateKey, RPuzzle, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
 import { WABAccountContinuityError, WalletAuthenticationManager } from '../WalletAuthenticationManager'
+import { CWIStyleWalletManager } from '../CWIStyleWalletManager'
 import { _tu } from '../../test/utils/TestUtilsWalletStorage'
 import { ScriptTemplateBRC29 } from '../utility/ScriptTemplateBRC29'
 
@@ -37,6 +38,22 @@ function subject() {
 }
 
 describe('WAB authentication continuity', () => {
+  it('refuses to re-fund a resumed registration when its original token checkpoint is missing', async () => {
+    const { manager, wabClient } = subject()
+    await manager.startAuth({ phoneNumber: '+12065550100' })
+    wabClient.completeAuthMethod.mockResolvedValueOnce({
+      success: true,
+      presentationKey: existingKey,
+      accountStatus: 'existing-user',
+      registrationStatus: 'pending'
+    })
+    await manager.completeAuth({ otp: '123456' })
+
+    const basePassword = jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValueOnce()
+    await expect(manager.providePassword('password')).rejects.toThrow(/checkpoint/i)
+    expect(basePassword).not.toHaveBeenCalled()
+  })
+
   it('surfaces a WAB faucet failure message before attempting wallet funding', async () => {
     const wabClient = {
       requestFaucet: jest.fn(async () => ({ success: false, message: 'faucet unavailable' }))

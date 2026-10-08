@@ -212,6 +212,8 @@ export interface WalletAuthenticationManagerOptions {
   telemetry?: TelemetryConfig
   /** Maximum lifetime of a temporary WAB presentation key. Defaults to 10 minutes. */
   authSessionTtlMs?: number
+  /** Durable store for the unpublished encrypted UMP token, before faucet redemption. */
+  pendingRegistrationTokenSaver?: (token: number[]) => Promise<void>
 }
 
 export class WABAccountContinuityError extends Error {
@@ -266,6 +268,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
   private authSession?: WABAuthSession
   private phoneChangeSession?: WABPhoneChangeSession
   private pendingRegistrationPresentationKey?: string
+  private pendingWABRegistrationResumed = false
   private readonly authSessionTtlMs: number
 
   constructor(
@@ -481,7 +484,8 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       },
       stateSnapshot,
       undefined,
-      options.telemetry
+      options.telemetry,
+      options.pendingRegistrationTokenSaver
     )
 
     this.wabClient = wabClient
@@ -514,6 +518,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     if (this.authenticated) throw new Error('User is already authenticated')
     this.cancelAuth()
     this.pendingRegistrationPresentationKey = undefined
+    this.pendingWABRegistrationResumed = false
 
     const presentationKey = this.generateTemporaryPresentationKey()
     const correlationId = this.telemetry.enabled === true ? this.telemetry.createCorrelationId() : undefined
@@ -625,7 +630,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     }
 
     this.assertAccountContinuity(wabAccountStatus, registrationStatus, session)
-    await this.reconcilePendingRegistration(result, registrationStatus)
+    await this.reconcilePendingRegistration(result, registrationStatus, wabAccountStatus)
     const continuity = this.describeContinuity(wabAccountStatus, registrationStatus)
     this.telemetry.capture({
       name: `${AUTH_EVENT}completed`,
@@ -652,6 +657,9 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
    */
   public override async providePassword(password: string): Promise<void> {
     const shouldFinalize = this.pendingRegistrationPresentationKey != null && this.authenticationFlow === NEW_USER
+    if (shouldFinalize && this.pendingWABRegistrationResumed && !this.hasPendingRegistrationToken()) {
+      throw new WABAccountContinuityError('Cannot safely resume registration without its original token checkpoint.')
+    }
     await super.providePassword(password)
     if (shouldFinalize) await this.finalizePendingRegistration()
   }
@@ -692,10 +700,12 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
 
   private async reconcilePendingRegistration(
     result: CompleteAuthResponse,
-    registrationStatus: 'pending' | 'active'
+    registrationStatus: 'pending' | 'active',
+    wabAccountStatus: 'new-user' | 'existing-user'
   ): Promise<void> {
     if (registrationStatus !== PENDING_REGISTRATION) return
     this.pendingRegistrationPresentationKey = result.presentationKey
+    this.pendingWABRegistrationResumed = wabAccountStatus === EXISTING_USER && this.authenticationFlow === NEW_USER
     if (this.authenticationFlow === EXISTING_USER) await this.finalizePendingRegistration()
   }
 
@@ -870,6 +880,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     this.cancelAuth()
     this.cancelPhoneNumberChange()
     this.pendingRegistrationPresentationKey = undefined
+    this.pendingWABRegistrationResumed = false
     super.destroy()
   }
 

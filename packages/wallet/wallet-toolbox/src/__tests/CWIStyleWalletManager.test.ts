@@ -204,6 +204,160 @@ describe('CWIStyleWalletManager Tests', () => {
   // ----------------------------------------------------------------------------------------
 
   describe('New user flow: presentation + password', () => {
+    test('restores the same root after a restart between faucet broadcast and UMP publication', async () => {
+      const events: string[] = []
+      let savedToken: number[] | undefined
+      const savePendingToken = jest.fn(async (token: number[]) => {
+        events.push('checkpoint')
+        savedToken = [...token]
+      })
+      const firstBuilder = jest.fn(async (_root: number[]) => mockUnderlyingWallet)
+      const firstFunder = jest.fn(async () => {
+        events.push('funding')
+        throw new Error('broadcast response lost')
+      })
+      const first = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        firstBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        firstFunder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        savePendingToken
+      )
+
+      await first.providePresentationKey(presentationKey)
+      await expect(first.providePassword('test-password')).rejects.toThrow('broadcast response lost')
+      expect(events).toEqual(['checkpoint', 'funding'])
+      expect(first.authenticated).toBe(false)
+      expect(() => first.saveSnapshot()).toThrow('UMP token cannot be saved without a current outpoint')
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const secondBuilder = jest.fn(async (_root: number[]) => mockUnderlyingWallet)
+      const secondFunder = jest.fn(async () => {
+        events.push('funding after restart')
+      })
+      const second = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        secondBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        secondFunder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        savePendingToken
+      )
+      second.loadPendingRegistrationToken(savedToken)
+      await second.providePresentationKey(presentationKey)
+      await second.providePassword('test-password')
+
+      expect(second.authenticated).toBe(true)
+      expect(secondFunder).toHaveBeenCalledTimes(1)
+      expect(secondBuilder.mock.calls[0][0]).toEqual(firstBuilder.mock.calls[0][0])
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
+    })
+
+    test('never invokes the funder when the pending token cannot be persisted', async () => {
+      const funder = jest.fn(async () => {})
+      const managerWithFailedStore = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        funder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async () => {
+          throw new Error('checkpoint write failed')
+        }
+      )
+
+      await managerWithFailedStore.providePresentationKey(presentationKey)
+      await expect(managerWithFailedStore.providePassword('test-password')).rejects.toThrow('checkpoint write failed')
+      expect(funder).not.toHaveBeenCalled()
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(managerWithFailedStore.authenticated).toBe(false)
+    })
+
+    test('rejects damaged checkpoints and wrong factors before retrying funding', async () => {
+      let savedToken: number[] | undefined
+      const first = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        async () => {
+          throw new Error('broadcast response lost')
+        },
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async token => {
+          savedToken = [...token]
+        }
+      )
+      await first.providePresentationKey(presentationKey)
+      await expect(first.providePassword('test-password')).rejects.toThrow('broadcast response lost')
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const funder = jest.fn(async () => {})
+      const restarted = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        funder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS }
+      )
+      expect(() => restarted.loadPendingRegistrationToken([...savedToken, 0])).toThrow('invalid')
+      restarted.loadPendingRegistrationToken(savedToken)
+      const otherPresentationKey = presentationKey.map(byte => byte ^ 0xff)
+      await expect(restarted.providePresentationKey(otherPresentationKey)).rejects.toThrow('another presentation key')
+      const otherPublishedToken = await createMockUMPToken()
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as jest.Mock).mockResolvedValueOnce({
+        ...otherPublishedToken,
+        presentationHash: Hash.sha256(otherPresentationKey)
+      })
+      await restarted.providePresentationKey(otherPresentationKey)
+      expect(restarted.authenticationFlow).toBe('existing-user')
+      expect(restarted.hasPendingRegistrationToken()).toBe(true)
+      await restarted.providePresentationKey(presentationKey)
+      await expect(restarted.providePassword('wrong-password')).rejects.toThrow('could not be unlocked')
+      expect(funder).not.toHaveBeenCalled()
+      expect(restarted.authenticated).toBe(false)
+    })
+
+    test('retries an interrupted funding attempt with the original wallet root', async () => {
+      let attempts = 0
+      const funder = jest.fn(async () => {
+        attempts += 1
+        if (attempts === 1) throw new Error('broadcast succeeded but its response was lost')
+      })
+      ;(manager as any).newWalletFunder = funder
+
+      await manager.providePresentationKey(presentationKey)
+      await expect(manager.providePassword('test-password')).rejects.toThrow('response was lost')
+      expect(manager.authenticated).toBe(false)
+
+      await manager.providePassword('test-password')
+      expect(manager.authenticated).toBe(true)
+      expect(funder).toHaveBeenCalledTimes(2)
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(mockWalletBuilder).toHaveBeenCalledTimes(2)
+      expect(mockWalletBuilder.mock.calls[1][0]).toEqual(mockWalletBuilder.mock.calls[0][0])
+    })
+
     test('Successfully creates a new token and calls buildAndSend', async () => {
       // New wallet funder is a mock function
       const newWalletFunder = jest.fn(() => {})
