@@ -7034,3 +7034,33 @@ No SDK implementation, application test, seed, case count, selector, resource
 budget or qualification ceiling changes in this diagnostic step. Entry counts
 can identify repeated paths for source review but do not establish exclusive
 CPU cost, a performance improvement, completed operations or checkpoint readiness.
+
+## October 8: original coverage counters and independent diagnostic admission
+
+Published af1506 passes the SDK's 262 suites/8591 tests, native wallet shard
+three's79 suites/882 tests and the other completed consumer lanes. The disclosure
+property interrupts after188 of300 cases and coordination after192 of300 at the
+original150-second limit, without a nonempty counterexample. These are incomplete
+functional qualification, not a waived success. Actual Sonar reports four new
+diagnostic-tool findings; the original complete mutation campaign remains unlaunched.
+
+All three added V8-counter reports refuse extraction at their file bound and
+supply no admitted counters, timings or sample counts. The diagnostic now uses
+the existing Jest/Istanbul function counters, avoiding extra V8 coverage
+instrumentation. Fixed owned modules, original function counters and original declaration
+starts are checked within the original metadata bounds. Admitted hosted
+coverage has null source-mapped body and declaration end columns; all declaration
+starts are present. The collector retains only checked original declaration
+starts, source/function identities and counters, without filling end columns or
+claiming source ranges. Source maps, source
+contents and values never enter the uploaded summary. A missing JSON report
+records a fixed refusal; independent native monotonic and CPU extraction can
+continue only with all original source, process, calendar and Boolean guards.
+Whole negative or reordered CPU traces remain excluded in full. Neither counts
+nor a diagnostic exit qualifies the original tests or checkpoint.
+
+This step changes diagnostic tooling and its synthetic tests only. SDK and
+application implementation, original properties, conformance, selectors,
+resources, seeds, counts, replay settings, thresholds and mutation governance
+are unchanged. Complete local root/source-preservation checks and fresh exact-head
+hosted functional and actual analyzer qualification remain required.

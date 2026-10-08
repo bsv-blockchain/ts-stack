@@ -6,6 +6,7 @@ import path from 'node:path'
 import {
   applicationDiagnosticSelection,
   diagnosticMayContinueValidation,
+  functionEntryRefusal,
   readBoundedProfile,
   readFunctionEntries,
   summarizeFunctionEntries,
@@ -16,36 +17,65 @@ import {
 
 const countRoot = '/synthetic-repository'
 const countSource = `${countRoot}/packages/sdk/src/overlay-tools/OutputProtocolJSON.ts`
-const countFixture = (count = 3) => ({
-  result: [
-    {
-      url: countSource,
-      functions: [
-        {
-          functionName: 'visitOutputJSON',
-          isBlockCoverage: true,
-          ranges: [
-            { startOffset: 10, endOffset: 100, count },
-            { startOffset: 20, endOffset: 30, count: 99 }
-          ]
-        }
-      ]
+const countFixture = (entries = 3) => ({
+  [countSource]: {
+    path: countSource,
+    fnMap: {
+      0: {
+        name: 'visitOutputJSON',
+        decl: { start: { line: 1, column: 10 }, end: { line: 5, column: 4 } },
+        loc: { start: { line: 1, column: 10 }, end: { line: 5, column: 4 } }
+      },
+      1: {
+        name: '(anonymous_1)',
+        decl: { start: { line: 6, column: 0 }, end: { line: 6, column: 10 } },
+        loc: { start: { line: 6, column: 0 }, end: { line: 6, column: 10 } }
+      }
     },
-    { url: 'file:///unowned/private-value.js', functions: [] }
-  ],
-  'source-map-cache': { private: { sourcesContent: ['PRIVATE-SOURCE-PAYLOAD'] } }
+    f: { 0: entries, 1: 0 },
+    b: { 0: [99, 99] },
+    inputSourceMap: { sourcesContent: ['PRIVATE-SOURCE-PAYLOAD'] }
+  },
+  '/unowned/private-value.js': { private: 'PRIVATE' }
 })
 
-test('independent entry counts sum only outer ranges in fixed modules without source payloads', () => {
-  const report = summarizeFunctionEntries([countFixture(3), countFixture(5)], countRoot, () => {})
-  assert.equal(report.coverageFiles, 2)
+test('entry refusal classification reveals fixed reasons without exception payloads', () => {
+  assert.equal(
+    functionEntryRefusal(new Error('function-count-shape\nPRIVATE')),
+    'function-count-shape'
+  )
+  assert.equal(
+    functionEntryRefusal(Object.assign(new Error('PRIVATE'), { code: 'ENOENT' })),
+    'function-count-absent'
+  )
+  assert.equal(
+    functionEntryRefusal(Object.assign(new Error('PRIVATE'), { code: 'ELOOP' })),
+    'function-count-file-access'
+  )
+  assert.equal(functionEntryRefusal(new Error('PRIVATE')), 'unclassified-refusal')
+  assert.equal(functionEntryRefusal(null), 'unclassified-refusal')
+})
+
+test('entry counts preserve original Jest counters and positions without source payloads', () => {
+  const report = summarizeFunctionEntries(countFixture(5), countRoot, () => {})
+  assert.equal(report.coverageFiles, 1)
+  assert.equal(report.countSemantics, 'original-jest-istanbul-function-entries')
+  assert.equal(report.sourcePositions, true)
+  assert.equal(report.positionSemantics, 'original-function-declaration-start')
   assert.deepEqual(report.rows, [
     {
       source: 'packages/sdk/src/overlay-tools/OutputProtocolJSON.ts',
+      functionId: 0,
       functionName: 'visitOutputJSON',
-      startOffset: 10,
-      endOffset: 100,
-      entries: 8
+      declaration: { line: 1, column: 10 },
+      entries: 5
+    },
+    {
+      source: 'packages/sdk/src/overlay-tools/OutputProtocolJSON.ts',
+      functionId: 1,
+      functionName: '(anonymous_1)',
+      declaration: { line: 6, column: 0 },
+      entries: 0
     }
   ])
   assert.equal(report.timingCollected, false)
@@ -55,68 +85,78 @@ test('independent entry counts sum only outer ranges in fixed modules without so
   assert.equal(JSON.stringify(report).includes('unowned'), false)
 })
 
-test('entry metadata refuses malformed identities, ranges, overflow and deadlines', () => {
+test('source-map body gaps do not invent declaration positions or function entries', () => {
+  const fixture = countFixture(7)
+  fixture[countSource].fnMap[0].loc.end.column = null
+  fixture[countSource].fnMap[0].decl.end.column = null
+  const report = summarizeFunctionEntries(fixture, countRoot, () => {})
+  assert.equal(report.rows[0].entries, 7)
+  assert.deepEqual(report.rows[0].declaration, fixture[countSource].fnMap[0].decl.start)
+  assert.equal(Object.hasOwn(report.rows[0], 'end'), false)
+})
+
+test('entry metadata refuses malformed identities, positions, counts and deadlines', () => {
   for (const alter of [
-    fn => {
-      fn.functionName = 'private\nvalue'
+    data => {
+      data.fnMap[0].name = 'private\nvalue'
     },
-    fn => {
-      fn.isBlockCoverage = 'true'
+    data => {
+      data.f[0] = -1
     },
-    fn => {
-      fn.ranges = []
+    data => {
+      data.f[0] = Number.MAX_SAFE_INTEGER
     },
-    fn => {
-      fn.ranges[0].count = -1
+    data => {
+      data.fnMap[0].decl.start.line = 0
     },
-    fn => {
-      fn.ranges[0].count = Number.MAX_SAFE_INTEGER
+    data => {
+      data.fnMap[0].decl.start.column = null
     },
-    fn => {
-      fn.ranges[0].startOffset = 100
+    data => {
+      data.fnMap[0].decl.start.column = -1
     },
-    fn => {
-      fn.ranges[1].endOffset = 101
+    data => {
+      data.path = '/unowned/private-value.js'
+    },
+    data => {
+      delete data.f[0]
+    },
+    data => {
+      data.f[2] = 0
+    },
+    data => {
+      data.fnMap['01'] = data.fnMap[0]
+      data.f['01'] = 1
     }
   ]) {
     const fixture = countFixture()
-    alter(fixture.result[0].functions[0])
-    assert.throws(() => summarizeFunctionEntries([fixture], countRoot, () => {}))
+    alter(fixture[countSource])
+    assert.throws(() => summarizeFunctionEntries(fixture, countRoot, () => {}))
   }
-  assert.throws(() => summarizeFunctionEntries([], countRoot, () => {}))
-  assert.throws(() => summarizeFunctionEntries(Array(17).fill(countFixture()), countRoot, () => {}))
-  assert.throws(() =>
-    summarizeFunctionEntries(
-      [countFixture(600000000), countFixture(600000000)],
-      countRoot,
-      () => {}
-    )
-  )
-  assert.throws(() => summarizeFunctionEntries([{ result: [] }], countRoot, () => {}))
+  for (const invalid of [null, [], {}, { '/unowned/value.js': {} }])
+    assert.throws(() => summarizeFunctionEntries(invalid, countRoot, () => {}))
   assert.throws(
     () =>
-      summarizeFunctionEntries([countFixture()], countRoot, () => {
+      summarizeFunctionEntries(countFixture(), countRoot, () => {
         throw new Error('deadline')
       }),
     /deadline/
   )
 })
 
-test('entry-file collection rejects symlinks, unexpected names and oversized aggregates', () => {
+test('existing coverage collection rejects absent reports, symlinks and oversized bytes', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'synthetic-function-entries-'))
-  const file = path.join(directory, 'coverage-123-456-0.json')
+  const file = path.join(directory, 'coverage-final.json'),
+    other = path.join(directory, 'other.json')
   try {
     fs.writeFileSync(file, JSON.stringify(countFixture()))
     assert.equal(readFunctionEntries(directory, countRoot, () => {}).rows[0].entries, 3)
-    fs.renameSync(file, path.join(directory, 'unexpected.json'))
-    assert.throws(
-      () => readFunctionEntries(directory, countRoot, () => {}),
-      /function-count-file-name/
-    )
-    fs.renameSync(path.join(directory, 'unexpected.json'), file)
-    fs.symlinkSync(file, path.join(directory, 'coverage-123-789-0.json'))
+    fs.renameSync(file, other)
     assert.throws(() => readFunctionEntries(directory, countRoot, () => {}))
-    fs.unlinkSync(path.join(directory, 'coverage-123-789-0.json'))
+    fs.symlinkSync(other, file)
+    assert.throws(() => readFunctionEntries(directory, countRoot, () => {}))
+    fs.unlinkSync(file)
+    fs.renameSync(other, file)
     fs.truncateSync(file, 64 * 1024 * 1024 + 1)
     assert.throws(
       () => readFunctionEntries(directory, countRoot, () => {}),

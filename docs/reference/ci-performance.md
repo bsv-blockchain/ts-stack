@@ -2,7 +2,7 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.7'
+version: '1.8.8'
 last_updated: '2026-10-08'
 last_verified: '2026-10-08'
 review_cadence_days: 30
@@ -117,26 +117,33 @@ are usable. The preload is diagnostic only; complete ordinary uninstrumented
 coverage and mutation qualification remain mandatory with their unchanged tests,
 counts, seeds, replay settings, deadlines and thresholds.
 
-The same unchanged diagnostic child also writes independent V8 coverage through
-[Node's NODE_V8_COVERAGE mechanism](https://nodejs.org/api/cli.html#node_v8_coveragedir).
-Only a safe, fully drained measurement with fresh source guards permits reading
-its owned directory. At most sixteen files share the original aggregate64MiB
-metadata bound. The uploaded function-entries.json retains only fixed SDK JSON
-and schema modules and eight fixed private ledger, codec, coordinator and
-disclosure modules. It combines outer function-range entry counts by source,
-name and transformed offsets across emitted snapshots and isolates. Nested block
-counts are not added to function entries. Rows, ranges, names, offsets and counts
-are bounded and checked; an empty or invalid report supplies no counts. Raw
+The unchanged diagnostic child already generates Jest/Istanbul coverage. After a
+safe, fully drained measurement and fresh source guards, the driver reads only
+its existing `coverage/coverage-final.json` within the original 64 MiB bound.
+It disables inherited extra V8 coverage instrumentation. The uploaded
+`function-entries.json` retains only fixed SDK JSON/schema and eight fixed
+private ledger, codec, coordinator and disclosure modules that appear in the
+original Jest coverage inventory. External modules that Jest does not instrument
+supply no counters. Each row retains the original function counter, numeric
+function ID, bounded name and checked original declaration starts; branch counters are never
+added to function entries. Source-map gaps in body or declaration end columns supply no invented
+positions or ranges: only declaration starts are retained and checked directly
+from the original report.
+Invalid or empty reports supply no counts. Raw
 coverage, source maps, source content, arguments and application values are deleted
-with the temporary directory and never uploaded.
+with the temporary directory and never uploaded. If a project does not write a
+JSON coverage report, its function-counter extraction records a fixed refusal.
 
-These counts are independent of CPU samples and may be admitted when a whole CPU
-trace is excluded for negative or reordered timestamps. They are execution
-frequency observations, not completed-operation counts, exclusive timings or a
-performance qualification. Coverage instrumentation has overhead and can affect
-optimization; no comparative runtime claim follows from these measurements.
-Original tests, counts, seeds, replay settings, child/case/calendar deadlines,
-resource limits and complete ordinary qualification remain unchanged.
+Counter refusal does not block independent native monotonic or CPU extraction
+from an otherwise safe, fully drained measurement. All source, calendar and
+Boolean admission guards remain mandatory between independent extractions.
+These counters may be admitted when an entire CPU trace is excluded for negative
+or reordered timestamps. They show execution frequency within the measured
+workload, not completed operations, exclusive timings or performance qualification.
+The original coverage instrumentation and diagnostic profiling have overhead;
+no comparative runtime claim follows from these measurements. Original tests,
+counts, seeds, replay settings, child/case/calendar deadlines, resource limits
+and complete ordinary qualification remain unchanged.
 
 The weekly `CI performance trend` workflow classifies successful pull-request
 CI runs as full-scope (at least 50 executed, non-skipped jobs) or targeted,

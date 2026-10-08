@@ -10,7 +10,6 @@ import { validateMonotonicTiming } from './output-knowledge-monotonic-timing.mjs
 const MAX_LOG = 16 * 1024 * 1024
 const MAX_PROFILE = 64 * 1024 * 1024
 const CPU_SAMPLING_INTERVAL_MICROSECONDS = 10000
-const MAX_COUNT_FILES = 16
 const MAX_COUNT_ROWS = 8192
 const markers = [
   'Segmentation fault',
@@ -378,120 +377,115 @@ function functionCountSources(root) {
   return sources
 }
 
-/** Independent V8 function-range entry counts, never CPU samples or timings.
- * Only fixed repository modules and bounded scalar identities enter the result.
- * Counts combine emitted coverage snapshots/isolates, not completed operations. */
-export function summarizeFunctionEntries(coverages, root, checkDeadline) {
+function countPosition(position) {
   assert.ok(
-    Array.isArray(coverages) && coverages.length > 0 && coverages.length <= MAX_COUNT_FILES,
-    'function-count-file-bound'
+    position &&
+      Number.isSafeInteger(position.line) &&
+      position.line >= 1 &&
+      position.line <= 1000000 &&
+      Number.isSafeInteger(position.column) &&
+      position.column >= 0 &&
+      position.column <= MAX_PROFILE,
+    'function-count-position'
+  )
+  return { line: position.line, column: position.column }
+}
+
+function collectFunctionEntry(fn, entries, source, id, checkDeadline) {
+  checkDeadline()
+  assert.ok(
+    fn &&
+      typeof fn.name === 'string' &&
+      fn.name.length <= 128 &&
+      /^(?:(?:get|set) )?[#A-Za-z_$][A-Za-z0-9_$#]*$|^\(anonymous_\d+\)$/.test(fn.name) &&
+      Number.isSafeInteger(entries) &&
+      entries >= 0 &&
+      entries <= 1000000000,
+    'function-count-shape'
+  )
+  const declaration = countPosition(fn.decl?.start)
+  return { source, functionId: Number(id), functionName: fn.name, declaration, entries }
+}
+
+/** Original Jest/Istanbul function counters, never CPU samples or timings.
+ * Only fixed repository modules and bounded scalar identities enter the result. */
+export function summarizeFunctionEntries(coverage, root, checkDeadline) {
+  assert.ok(
+    coverage && typeof coverage === 'object' && !Array.isArray(coverage),
+    'function-count-shape'
   )
   const sources = functionCountSources(root),
-    rows = new Map()
-  let scripts = 0,
-    functions = 0,
-    ranges = 0
-  for (const coverage of coverages) {
+    rows = [],
+    files = Object.entries(coverage)
+  assert.ok(files.length > 0 && files.length <= 16384, 'function-count-file-bound')
+  for (const [file, data] of files) {
     checkDeadline()
-    assert.ok(Array.isArray(coverage.result), 'function-count-shape')
-    for (const script of coverage.result) {
-      checkDeadline()
-      assert.ok(++scripts <= 16384, 'function-count-script-bound')
-      assert.ok(
-        typeof script.url === 'string' && Array.isArray(script.functions),
-        'function-count-shape'
-      )
-      functions += script.functions.length
-      assert.ok(functions <= 200000, 'function-count-function-bound')
-      const source = sources.get(script.url)
-      if (!source) continue
-      for (const fn of script.functions) {
-        checkDeadline()
-        assert.ok(
-          typeof fn.functionName === 'string' &&
-            fn.functionName.length <= 128 &&
-            /^(?:(?:get|set) )?[#A-Za-z_$][A-Za-z0-9_$#]*$|^$/.test(fn.functionName) &&
-            typeof fn.isBlockCoverage === 'boolean' &&
-            Array.isArray(fn.ranges) &&
-            fn.ranges.length > 0,
-          'function-count-shape'
-        )
-        ranges += fn.ranges.length
-        assert.ok(ranges <= 1000000, 'function-count-range-bound')
-        const outer = fn.ranges[0]
-        for (const range of fn.ranges) {
-          checkDeadline()
-          assert.ok(
-            Number.isSafeInteger(range.startOffset) &&
-              Number.isSafeInteger(range.endOffset) &&
-              range.startOffset >= 0 &&
-              range.startOffset < range.endOffset &&
-              range.endOffset <= MAX_PROFILE &&
-              range.startOffset >= outer.startOffset &&
-              range.endOffset <= outer.endOffset &&
-              Number.isSafeInteger(range.count) &&
-              range.count >= 0 &&
-              range.count <= 1000000000,
-            'function-count-range'
-          )
-        }
-        const key = JSON.stringify([source, fn.functionName, outer.startOffset, outer.endOffset]),
-          existing = rows.get(key)
-        if (existing) {
-          existing.entries += outer.count
-          assert.ok(existing.entries <= 1000000000, 'function-count-total-bound')
-        } else {
-          assert.ok(rows.size < MAX_COUNT_ROWS, 'function-count-row-bound')
-          rows.set(key, {
-            source,
-            functionName: fn.functionName,
-            startOffset: outer.startOffset,
-            endOffset: outer.endOffset,
-            entries: outer.count
-          })
-        }
-      }
+    const source = sources.get(file)
+    if (!source) continue
+    assert.ok(data && data.path === file && data.fnMap && data.f, 'function-count-shape')
+    const ids = Object.keys(data.fnMap).sort()
+    assert.deepEqual(Object.keys(data.f).sort(), ids, 'function-count-identity')
+    assert.ok(rows.length + ids.length <= MAX_COUNT_ROWS, 'function-count-row-bound')
+    for (const id of ids) {
+      assert.match(id, /^(?:0|[1-9]\d{0,5})$/, 'function-count-identity')
+      rows.push(collectFunctionEntry(data.fnMap[id], data.f[id], source, id, checkDeadline))
     }
   }
-  assert.ok(rows.size > 0, 'function-count-empty')
+  assert.ok(rows.length > 0, 'function-count-empty')
   checkDeadline()
   return {
-    coverageFiles: coverages.length,
-    countSemantics: 'outer-function-range-entries-across-emitted-snapshots-and-isolates',
-    transformedOffsets: true,
+    coverageFiles: 1,
+    countSemantics: 'original-jest-istanbul-function-entries',
+    sourcePositions: true,
+    positionSemantics: 'original-function-declaration-start',
     timingCollected: false,
     fullFunctionalQualified: false,
     fullCampaignQualified: false,
-    rows: [...rows.values()].sort(
+    rows: rows.sort(
       (left, right) =>
         right.entries - left.entries ||
         left.source.localeCompare(right.source) ||
-        left.startOffset - right.startOffset ||
-        left.functionName.localeCompare(right.functionName)
+        left.functionId - right.functionId
     )
   }
 }
 
-/** Read only an owned, drained directory, with an aggregate 64 MiB bound.
+/** Read the existing owned Jest JSON report within the original 64 MiB bound.
  * Raw coverage, including source maps, is never returned or uploaded. */
 export function readFunctionEntries(directory, root, checkDeadline) {
   checkDeadline()
   const stat = fs.lstatSync(directory)
   assert.ok(stat.isDirectory() && !stat.isSymbolicLink(), 'function-count-directory')
-  const files = fs.readdirSync(directory)
-  assert.ok(files.length > 0 && files.length <= MAX_COUNT_FILES, 'function-count-file-bound')
-  let bytes = 0
-  const coverages = []
-  for (const name of files.sort()) {
-    checkDeadline()
-    assert.match(name, /^coverage-[0-9]+-[0-9]+-[0-9]+\.json$/, 'function-count-file-name')
-    const file = path.join(directory, name),
-      metadata = {}
-    coverages.push(readBoundedProfile(file, MAX_PROFILE - bytes, metadata, checkDeadline))
-    bytes += metadata.profileBytes
-    assert.ok(Number.isSafeInteger(bytes) && bytes <= MAX_PROFILE, 'function-count-file-bound')
+  const coverage = readBoundedProfile(
+    path.join(directory, 'coverage-final.json'),
+    MAX_PROFILE,
+    {},
+    checkDeadline
+  )
+  return summarizeFunctionEntries(coverage, root, checkDeadline)
+}
+
+/** Fixed refusal labels only; never expose exception payloads or source maps. */
+export function functionEntryRefusal(error) {
+  const reasons = new Set([
+    'function-count-file-bound',
+    'function-count-shape',
+    'function-count-position',
+    'function-count-identity',
+    'function-count-row-bound',
+    'function-count-empty',
+    'function-count-directory',
+    'profile-file-kind',
+    'Profile exceeds bounded metadata budget',
+    'Profile changed during bounded read'
+  ])
+  if (error instanceof Error) {
+    const reason = error.message.split('\n', 1)[0]
+    if (reasons.has(reason)) return reason
   }
-  return summarizeFunctionEntries(coverages, root, checkDeadline)
+  if (error?.code === 'ENOENT') return 'function-count-absent'
+  if (['ELOOP', 'EISDIR', 'EACCES'].includes(error?.code)) return 'function-count-file-access'
+  return 'unclassified-refusal'
 }
 
 /** Only scalar results from a safe, drained, bounded property measurement.
@@ -654,7 +648,7 @@ function selectionFromArguments(args) {
   )
 }
 
-function diagnosticEnvironment(mongoBinary, monotonicFile, countDirectory) {
+function diagnosticEnvironment(mongoBinary, monotonicFile) {
   const env = {
     ...process.env,
     FAST_CHECK_NUM_RUNS: '300',
@@ -662,7 +656,7 @@ function diagnosticEnvironment(mongoBinary, monotonicFile, countDirectory) {
     FAST_CHECK_PATH: '',
     NODE_OPTIONS: '',
     OUTPUT_KNOWLEDGE_MONOTONIC_FILE: monotonicFile,
-    NODE_V8_COVERAGE: countDirectory ?? ''
+    NODE_V8_COVERAGE: ''
   }
   if (mongoBinary) {
     env.MONGOMS_SYSTEM_BINARY = mongoBinary
@@ -771,7 +765,7 @@ async function main() {
       .update(JSON.stringify([...frozen]))
       .digest('hex'),
     profilingOverheadIncluded: true,
-    functionEntryCoverageOverheadIncluded: true,
+    functionEntryCoverage: 'original-jest-istanbul',
     samplingIntervalMicroseconds: CPU_SAMPLING_INTERVAL_MICROSECONDS,
     fullFunctionalQualified: false,
     fullCampaignQualified: false
@@ -791,6 +785,7 @@ async function main() {
       timingCollected: false,
       monotonicCollected: false,
       functionEntriesCollected: false,
+      functionEntryRefusal: null,
       propertyExecution: null
     },
     env = diagnosticEnvironment(mongoBinary, path.join(directory, 'monotonic-timing.json'))
@@ -855,11 +850,7 @@ async function main() {
       cwd,
       path.join(directory, 'property.log'),
       selection.deadlineSeconds,
-      diagnosticEnvironment(
-        mongoBinary,
-        path.join(directory, 'monotonic-timing.json'),
-        path.join(directory, 'function-counts')
-      ),
+      diagnosticEnvironment(mongoBinary, path.join(directory, 'monotonic-timing.json')),
       aborted
     )
     results.push({ phase: selection.phase, ...measured })
@@ -872,18 +863,25 @@ async function main() {
     guard()
     collectPropertyExecution(selection, directory, measured, report, guard, checkWindow)
     report.phase = 'function-count-file-bound'
-    const functionEntries = readFunctionEntries(
-      path.join(directory, 'function-counts'),
-      root,
-      checkWindow
-    )
-    report.phase = 'function-count-summary'
-    guard()
-    fs.writeFileSync(
-      path.join(output, 'function-entries.json'),
-      JSON.stringify({ identity, ...functionEntries }, null, 2)
-    )
-    report.functionEntriesCollected = true
+    try {
+      const functionEntries = readFunctionEntries(
+        path.join(directory, 'coverage'),
+        root,
+        checkWindow
+      )
+      report.phase = 'function-count-summary'
+      guard()
+      fs.writeFileSync(
+        path.join(output, 'function-entries.json'),
+        JSON.stringify({ identity, ...functionEntries }, null, 2)
+      )
+      report.functionEntriesCollected = true
+    } catch (error) {
+      assert.ok(diagnosticMayContinueValidation(report.phase, measured))
+      checkWindow()
+      guard()
+      report.functionEntryRefusal = functionEntryRefusal(error)
+    }
     report.phase = 'monotonic-file-bound'
     const monotonic = readBoundedProfile(
       path.join(directory, 'monotonic-timing.json'),
