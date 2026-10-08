@@ -1,3 +1,4 @@
+import { ownOutputJSON } from '@bsv/sdk'
 import { expect, it } from '@jest/globals'
 import {
   protectedAddress,
@@ -361,4 +362,62 @@ it('native inventory retains canonical framing for live kind extensions', () => 
   } finally {
     kinds.splice(0, kinds.length, ...original)
   }
+})
+
+it('owns ordinary readonly address data and retains accessor, hidden and decorated refusals', () => {
+  for (const prototype of [null, Object.prototype]) {
+    const input = Object.create(prototype) as Record<string, unknown>
+    Object.defineProperties(input, {
+      kind: { value: 'publication', enumerable: true },
+      key: { value: '11'.repeat(32), enumerable: true }
+    })
+    const owned = protectedAddress(input)
+    expect(owned).toEqual({ kind: 'publication', key: '11'.repeat(32) })
+    owned.key = '22'.repeat(32)
+    expect(input.key).toBe('11'.repeat(32))
+  }
+  let calls = 0
+  const getter = Object.defineProperty({ key: '11'.repeat(32) }, 'kind', {
+    enumerable: true,
+    get() {
+      calls++
+      return 'publication'
+    }
+  })
+  expect(() => protectedAddress(getter)).toThrow(expect.objectContaining({ code: 'invalid' }))
+  expect(calls).toBe(0)
+  const hidden = Object.defineProperty({ key: '11'.repeat(32) }, 'kind', { value: 'publication' })
+  expect(() => protectedAddress(hidden)).toThrow(expect.objectContaining({ code: 'invalid' }))
+  const symbol = { kind: 'publication', key: '11'.repeat(32), [Symbol('extra')]: true }
+  expect(() => protectedAddress(symbol)).toThrow(expect.objectContaining({ code: 'invalid' }))
+  expect(() =>
+    protectedAddress({ kind: 'publication', key: '11'.repeat(32), extra: 'x'.repeat(1024) })
+  ).toThrow(expect.objectContaining({ code: 'limited' }))
+})
+
+it('preserves the original descriptor observation sequence for proxy addresses', () => {
+  const calls: string[] = []
+  const input = new Proxy(
+    { kind: 'publication', key: '11'.repeat(32) },
+    {
+      getPrototypeOf(target) {
+        calls.push('prototype')
+        return Reflect.getPrototypeOf(target)
+      },
+      ownKeys(target) {
+        calls.push('names')
+        return Reflect.ownKeys(target)
+      },
+      getOwnPropertyDescriptor(target, key) {
+        calls.push('descriptor:' + String(key))
+        return Reflect.getOwnPropertyDescriptor(target, key)
+      }
+    }
+  )
+  const expected = ownOutputJSON(input, { bytes: 1024 }).value
+  const observed = [...calls]
+  calls.length = 0
+  expect(protectedAddress(input)).toEqual(expected)
+  expect(calls).toEqual(observed)
+  expect(observed.length).toBeGreaterThan(0)
 })

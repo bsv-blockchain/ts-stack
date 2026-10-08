@@ -1341,6 +1341,13 @@ POTATOES delivery. See the [storage and custody guide](../../../docs/guides/prot
 for limits, process-loss behavior and the required recovery boundary. Existing
 public entry points and wire formats are unchanged.
 
+Every ledger address is freshly validated. Ordinary exact two-field data records
+with bounded ASCII kind and key values use direct descriptor inspection and a
+new scalar result; live kind membership is checked on every call. Proxies retain
+the original observation sequence, and accessors, extra/hidden/symbol fields,
+other prototypes and other representations retain the general JSON validator.
+No input, shape, authorization, ciphertext or validation verdict is cached.
+
 ## Paid acquisition foundation
 
 The internal acquisition helpers preserve original quote/capability context,

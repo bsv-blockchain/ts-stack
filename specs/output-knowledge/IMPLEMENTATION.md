@@ -7294,3 +7294,42 @@ newly parsed records; it never sees caller objects, caches validation, or invoke
 inherited indexed setters. All existing ownership, special-key, refusal-order,
 Unicode and resource regressions remain unchanged. No current-source performance,
 full runtime mutation or checkpoint acceptance is claimed by this source change.
+
+### October 8: explicit parser data properties and fresh bounded ledger addresses
+
+Published8a92 passes SDK8591 tests, wallet shard3's882 tests including8_BEEF,
+actual zero-new Sonar, conformance, codegen, containers, platform/browser checks,
+packed documentation consumers and the completed native coverage lanes. Its
+original disclosure and coordinator properties interrupt at252/300 and197/300
+under unchanged150-second limits, with no nonempty counterexample. Actual
+CodeQL reports one dynamic-property-write finding at the incoming JSON parser.
+Checkpoint2 remains incomplete and no full mutation campaign was dispatched.
+
+All three current CPU traces are excluded entirely because they contain negative
+or reordered samples. Independent source-bound function counters remain usable:
+the disclosure measurement calls protectedAddress634257 times and the coordinator
+measurement600466 times. These counts describe repeated work, not a speedup or
+functional qualification. Current instrumentation completes173 and187 property
+cases respectively and the four native HTTP cases; it does not replace the
+complete uninstrumented coverage requirements.
+
+The parser now explicitly defines writable, configurable, enumerable own data
+properties on its private null-prototype record. Duplicate membership, item
+limits, successful-value counts, complete syntax and resource checks, and all
+other parser and serializer logic remain unchanged. Every decoded key remains
+accepted as ordinary own data. No analyzer suppression or classification is used.
+
+The ledger address codec freshly inspects only non-proxy ordinary exact two-field
+data records containing bounded ASCII kind and hexadecimal key scalars. This
+shape provably satisfies the original depth, item, Unicode and1024-byte fences;
+current kind membership and key validation still precede a new scalar result.
+Proxies retain the original descriptor observation sequence. All other shapes,
+accessors, hidden/symbol/extra fields, prototypes and representations retain the
+original general JSON validator, error identities and ordering. No input, shape,
+membership, schema, authorization or normalization verdict is cached. Additional
+regressions exercise ordinary readonly data, independent ownership, accessors,
+hidden and symbol fields, oversized decoration and exact proxy observation order.
+The encrypted associated-data binding retains its original general canonical
+validator and all cryptographic/custody checks. Original properties, SDK units,
+compiled example bodies, source ranges and campaign controls remain unchanged.
+Full local controls and exact published-source qualification remain required.

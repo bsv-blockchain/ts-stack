@@ -8,6 +8,7 @@ import {
   type OutputJSONObject
 } from '@bsv/sdk'
 import { createHash } from 'node:crypto'
+import { isProxy } from 'node:util/types'
 
 type ClosedFields = (value: unknown) => asserts value is Record<string, unknown>
 // Only fixed field names are retained. Ownership, descriptors and values are
@@ -112,6 +113,37 @@ export function protectedInteger(value: unknown, maximum: number): number {
   return value
 }
 export function protectedAddress(value: unknown): ProtectedLedgerAddress {
+  // Only inspect ordinary objects here: proxies retain the original descriptor
+  // read sequence in the general validator. Fresh exact two-field data records
+  // with these ASCII scalars have depth2, two names and fewer than128 bytes.
+  // No caller value, shape or membership verdict is retained between calls.
+  if (value !== null && typeof value === 'object' && !isProxy(value) && !Array.isArray(value)) {
+    const prototype: unknown = Object.getPrototypeOf(value)
+    if (
+      (prototype === null || prototype === Object.prototype) &&
+      Object.getOwnPropertySymbols(value).length === 0 &&
+      Object.getOwnPropertyNames(value).length === 2
+    ) {
+      const key = Object.getOwnPropertyDescriptor(value, 'key')
+      const kind = Object.getOwnPropertyDescriptor(value, 'kind')
+      if (
+        key?.enumerable &&
+        'value' in key &&
+        kind?.enumerable &&
+        'value' in kind &&
+        typeof key.value === 'string' &&
+        /^[0-9a-f]{64}$/.test(key.value) &&
+        typeof kind.value === 'string' &&
+        /^[a-z-]{1,13}$/.test(kind.value)
+      ) {
+        outputAssert(
+          protectedLedgerKinds.includes(kind.value as ProtectedLedgerKind),
+          'Invalid protected ledger record kind'
+        )
+        return { kind: kind.value as ProtectedLedgerKind, key: outputHex32(key.value) }
+      }
+    }
+  }
   const input = ownOutputJSON(value, { bytes: 1024 }).value
   addressFields(input)
   outputAssert(

@@ -469,7 +469,7 @@ wallet-derived locking key, and field signature before reading or spending it.
   only after successful values. Native container construction gives arrays ordinary writable, configurable,
   enumerable data properties without invoking inherited indexed setters.
   Incoming records begin with a null prototype, and each checked entry is
-  assigned as ordinary own data once. The private native ownership traversal
+  defined explicitly as an ordinary writable, configurable, enumerable own data property once. The private native ownership traversal
   changes prototypes only on its newly parsed records, never on caller objects. Keys such as `__proto__` remain ordinary writable,
   configurable, enumerable data; inherited setters are not called. Canonical property ordering sorts
   each fresh primitive-name array with the original UTF-16 comparator captured

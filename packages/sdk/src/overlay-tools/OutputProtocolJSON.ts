@@ -249,7 +249,13 @@ class OutputJSONParser {
         previous = key
         this.#whitespace()
         outputAssert(frame.t[frame.o++] === ':', 'Expected JSON colon')
-        fields[key] = this.#value(depth + 1)
+        // Define own data explicitly; no decoded key can select an inherited setter.
+        Object.defineProperty(fields, key, {
+          value: this.#value(depth + 1),
+          enumerable: true,
+          writable: true,
+          configurable: true
+        })
         size++
         this.#whitespace()
         const end = frame.t[frame.o++]
