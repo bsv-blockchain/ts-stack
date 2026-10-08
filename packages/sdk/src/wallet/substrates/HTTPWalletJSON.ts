@@ -200,7 +200,7 @@ function validateCompetingTransactions(
     // No attempted TXID exists yet. Bind each full competing transaction to an
     // explicit input of the original request instead.
     const tx = competing.tx
-    if (tx == null || tx.id('hex') !== txid) throw new Error('Invalid competing transaction')
+    if (tx?.id('hex') !== txid) throw new Error('Invalid competing transaction')
     const spendsRequestedInput = tx.inputs.some(input => {
       const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
       return requestedInputs.has(`${source?.toLowerCase()}.${input.sourceOutputIndex}`)
