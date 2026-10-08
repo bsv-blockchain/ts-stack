@@ -13,7 +13,7 @@ separate deep imports. Action recovery retains one fixed-layout, two-phase
 `noSend` allocation, prepared transaction and final signed bytes. Funding recovery
 binds one BRC-29 payment to its acquisition and atomically retains wallet ownership,
 monitor work and a durable receipt. Ordinary BRC-100 calls and defaults are unchanged.
-The new funding capability requires SDK 3.0.0; legacy root and existing deep
+The new funding capability requires SDK 3.3.0; legacy root and existing deep
 consumers retain the declared older SDK peer compatibility.
 
 Install the auxiliary schemas explicitly in the active local wallet database.

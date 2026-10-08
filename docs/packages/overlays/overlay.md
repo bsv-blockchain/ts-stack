@@ -22,8 +22,7 @@ before adopting it.
 > Core library defining the Overlay Services Engine for UTXO-based systems on BSV.
 
 The optional `@bsv/overlay/proposal-admission` entry supplies
-`OverlayProposalAdmission` for a durably reserved proposal service. With SDK 3.0
-or newer and explicit retained-history storage, it recovers the original ordinary
+`OverlayProposalAdmission` for a durably reserved proposal service. With the SDK 3.3.0 candidate or a compatible later 3.x release and explicit retained-history storage, it recovers the original ordinary
 topic receipt, projects only that topic's STEAK and preserves uncertainty after
 duplicate or failed submissions. It bounds physical concurrency and result
 capacity before new admission. Existing root imports and older SDK consumers

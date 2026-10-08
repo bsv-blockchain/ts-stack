@@ -68,7 +68,7 @@ process.once('SIGINT', () => void server.close())
 
 The optional `@bsv/overlay-express/root-eviction-response` entry connects
 authenticated response queueing to a durable root-advertisement journal.
-`guardRootAdvertisementResponse` requires middleware 2.3.0, SDK 3.0.0, a revision
+`guardRootAdvertisementResponse` requires middleware 2.3.0, SDK 3.3.0, a revision
 captured before hydration, every disclosed target and current synchronous data/control
 access checks. It resets a stale response in full and separately fences the signed
 replacement. It does not mount routes or automatically guard existing serving
@@ -95,7 +95,7 @@ provider database ownership with the application.
 
 The [durable lookup guide](../../guides/durable-live-lookup.md) explains the provider,
 SQLite recovery, current authorization and mounting rules. The feature requires
-SDK 3.0.0; legacy root imports and finite routes remain available without enabling
+SDK 3.3.0; legacy root imports and finite routes remain available without enabling
 it. The candidate is not a package publication or a claim of complete application
 qualification.
 
@@ -290,7 +290,7 @@ monitor.start()
 `configureProposals` before `start` or the separate
 `@bsv/overlay-express/proposals` router composes the durable proposal service,
 service-owned disclosure validator and shared journal/native-enqueue gate.
-This entry requires SDK 3.0 and auth middleware 2.3; legacy root peer floors and
+This entry requires SDK 3.3.0 and auth middleware 2.3; legacy root peer floors and
 routes remain unchanged. A current channel read differs from recovery of a
 retained publication ACK. Both require current authorization and original
 contract bounds after response signing. One sanitized replacement error may be

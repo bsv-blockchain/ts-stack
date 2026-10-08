@@ -175,7 +175,7 @@ by itself implement a BRC-194 service or durable negative admission decisions.
 
 `@bsv/overlay/proposal-admission` exports `OverlayProposalAdmission`, an optional
 Node adapter for `ProposalServiceAdmission` from `@bsv/output-knowledge/proposals`.
-This entry requires SDK 3.0 or newer. The existing root entry, SDK peer floor,
+This entry requires the SDK 3.3.0 candidate or a compatible later 3.x release. The existing root entry, SDK peer floor,
 ordinary submit signature and storage defaults are unchanged.
 
 Construct the bridge with an actual `Engine`, retained-history storage, the

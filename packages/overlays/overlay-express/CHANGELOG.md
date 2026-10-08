@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file. The format 
   and mount private routes before generic parsers and payload logging. Existing
   finite routes and default startup behavior remain unchanged.
 - Preserve legacy ESM/CJS root loading and strict consumer declarations with SDK
-  2.8.9 by loading the optional adapter lazily. The new feature requires SDK 3.0.0.
+  2.8.9 by loading the optional adapter lazily. The new feature requires SDK 3.3.0.
 - Document SQLite provider composition, explicit recovery, retention and ownership;
   include packed public-interface examples and actual authenticated HTTP tests.
 

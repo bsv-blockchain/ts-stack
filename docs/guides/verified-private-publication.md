@@ -150,7 +150,7 @@ reconciliation components. The separate
 `@bsv/overlay-express/private-publication` entry exports
 `createPrivatePublicationRouter` and its structural service/disclosure options.
 Both are opt-in. Existing package roots, finite lookup routes and ordinary
-submission behavior remain unchanged. This composition requires the SDK 3.0
+submission behavior remain unchanged. This composition requires the SDK 3.3.0
 candidate and authentication middleware 2.3; it adds no SDK requirement to
 ordinary legacy Overlay Express imports.
 

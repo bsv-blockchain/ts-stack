@@ -144,8 +144,11 @@ export class NodeProtectedPayloadCodec {
     // Six owned string fields have canonical JSON no larger than their bounded
     // serialized input. Preserve the original canonicalization/error order for
     // every malformed shape or nonstring field rather than broadening that path.
+    // The parser constructs this private graph with ordinary own data fields.
+    // Exact membership above is fresh; scalar and cryptographic checks remain
+    // fresh below. No caller object or retained validation result enters here.
     const envelope = stringsOnly
-      ? envelopeFields(owned)
+      ? envelopeScalarFields(owned)
       : parseEnvelope(owned, this.maximumPlaintextBytes)
     return this.decrypt(binding, envelope)
   }
@@ -222,11 +225,13 @@ function parseEnvelope(input: unknown, maximum: number): ProtectedPayloadEnvelop
   const value: unknown = JSON.parse(
     canonicalOutputJSON(input, { bytes: Math.ceil(maximum / 3) * 4 + 1024 })
   )
-  return envelopeFields(value)
+  assertPayloadEnvelopeFields(value)
+  return envelopeScalarFields(value)
 }
 
-function envelopeFields(value: unknown): ProtectedPayloadEnvelope {
-  assertPayloadEnvelopeFields(value)
+// Only a freshly closed object or the privately parsed exact six-string shape
+// enters here. Every field is read and checked anew; this helper owns no cache.
+function envelopeScalarFields(value: Record<string, unknown>): ProtectedPayloadEnvelope {
   if (value.format !== FORMAT)
     throw new OutputProtocolError('unsupported', 'Unsupported protected payload format')
   return {

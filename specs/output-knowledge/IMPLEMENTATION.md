@@ -7748,7 +7748,6 @@ and all151-target/398-row raw mutation reconciliation remain required. The
 budget proposal is unanswered and unapplied. No package publication, deployment,
 funding, broadcast or upstream merge is performed. Checkpoint2 remains incomplete.
 
-
 ## October 8: native own-record enumeration within the private graph
 
 Published `f8d195c3355df7956e83a1f6e930559b13b4c5b8` completes CI with
@@ -7801,3 +7800,50 @@ acceptance. The campaign budget proposal remains unanswered and unapplied; no
 complete current-head runtime mutation campaign is claimed. Checkpoint two is
 incomplete. No package publication, deployment, funding, broadcast or upstream
 merge is performed.
+
+## October 8: correct optional SDK floor and fresh envelope validation
+
+Published `ad1e7644c1e425107c6307ae63c4b0effae0db50` completed its ordinary
+qualification with 39 successful jobs, four governed skips and two application
+property failures plus the dependent merge gate. All 8,596 SDK tests passed.
+The disclosure property stopped at 183 cases and the coordinator property at
+202, before their unchanged 300-case minimum and 150-second interruption bound.
+Both exact terminal logs passed bounded acquisition, Boolean fault/timeout/output
+guards and independent source/process admission before scalar extraction. The
+actual current Sonar issue and unreviewed-hotspot counts are zero, current CodeQL
+has zero open PR-ref alerts, and all 23 review threads are resolved. This is a
+failed baseline, not a complete checkpoint or evidence of a measured speedup.
+
+The initial output-knowledge package now requires SDK `^3.3.0`: its imported
+output-protocol APIs are introduced by that candidate and are absent from SDK
+3.0–3.2. Owned optional LCH/Overlay guides and overview pages, API notes, changelog and
+release migration entries now state that requirement. Existing LCH and Overlay Express
+root peer ranges, legacy lazy loading and historical SDK3.0 DID/certificate
+statements are preserved. The migration ledger is regenerated from its actual
+source-owned model. The two wallet recovery guide version-text corrections are coordinated under
+[ACK65](https://github.com/bsv-blockchain/ts-stack/discussions/880#discussioncomment-18822322);
+no held wallet source is adopted. The same narrow correction in the wallet README,
+overview and existing recovery-adoption migration sentence is separately agreed
+under author-verified ACK67; every other wallet field and historical SDK3.1 statement
+is preserved.
+
+The private Node protected-payload serialized path now uses its freshly parsed
+six-string shape directly for scalar framing validation. Complete bounded JSON
+lexical validation and native construction already establish this private graph's
+ownership and ordinary data fields; fresh exact membership checks still inspect
+all six fields. The generic object path retains its full closed-object assertion,
+and malformed shapes retain the original canonicalization and error order.
+Custom reader capture/dispatch, all scalar checks, byte limits, binding checks,
+per-call custody resolution, decryption/authentication and zeroization remain
+unchanged. No supplied object, normalization, record, secret or validation verdict
+is cached. One appended regression compares string-only framing impostors with
+the generic path and requires refusal before custody; every original test byte
+is retained. Source-only strict compilation passed in all five complete selected
+package contexts, and all 229 output-knowledge public declaration files are byte
+identical. These are compilation/compatibility controls, not runtime qualification.
+
+The unchanged full mutation scope remains 151 targets and 398 execution rows.
+The scoped initial-suite/job-budget proposal is still unapproved and unapplied.
+No Mac SDK/application/native/property/mutation target was executed. New exact-head
+hosted qualification and the complete independently reconciled runtime mutation
+campaign remain required before Checkpoint 2 can be approved.

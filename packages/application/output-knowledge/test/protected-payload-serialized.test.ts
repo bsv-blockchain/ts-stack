@@ -226,3 +226,29 @@ it('checks every fresh owned string field and exact six-field membership before 
   )
   expect(codec.openSerialized(binding, source, bound)).toEqual(Uint8Array.of(3, 9))
 })
+
+it('refuses string-only framing impostors before consulting custody', () => {
+  const resolve = jest.fn(() => key)
+  const codec = new NodeProtectedPayloadCodec({ resolve }, 'key-a', 128)
+  const envelope = codec.seal(binding, Uint8Array.of(5))
+  const { tag, ...withoutTag } = envelope
+  const impostors = [
+    { ...envelope, format: 'future' },
+    { ...envelope, keyId: 'bad label' },
+    { ...envelope, extra: 'string' },
+    ...['__proto__', 'constructor', 'toString'].map(name =>
+      Object.fromEntries([...Object.entries(withoutTag), [name, tag]])
+    )
+  ]
+  for (const value of impostors) {
+    const source = JSON.stringify(value)
+    resolve.mockClear()
+    expect(failure(() => codec.openSerialized(binding, source, bound))).toEqual(
+      failure(() => codec.open(binding, parseOutputJSON(source, { bytes: bound })))
+    )
+    expect(resolve).not.toHaveBeenCalled()
+  }
+  resolve.mockClear()
+  expect(codec.openSerialized(binding, JSON.stringify(envelope), bound)).toEqual(Uint8Array.of(5))
+  expect(resolve).toHaveBeenCalledTimes(1)
+})

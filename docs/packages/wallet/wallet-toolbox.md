@@ -26,7 +26,7 @@ The 2.15.0 source candidate adds separate deep-import SQLite action and funding
 recovery controllers. They retain exact noSend preparation/signing state or
 atomically reconcile BRC-29 wallet ownership with a durable receipt. Ordinary
 BRC-100 APIs and SDK peer compatibility remain unchanged; the optional funding
-capability requires SDK 3.0.0 and explicit same-wallet schema installation.
+capability requires SDK 3.3.0 and explicit same-wallet schema installation.
 
 Read [local action recovery](../../guides/local-action-recovery.md) and
 [local funding recovery](../../guides/local-funding-recovery.md) before adopting

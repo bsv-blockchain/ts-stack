@@ -204,7 +204,7 @@ changes, and existing serialization remains available.
 
 See the [provider guide](../../../docs/guides/durable-live-lookup.md) for creation,
 restart, projection, disclosure guards, HTTP mounting and retention. The optional
-Overlay Express adapter requires SDK 3.0.0 and a signed matching capability. This
+Overlay Express adapter requires SDK 3.3.0 and a signed matching capability. This
 increment does not complete topic admission, payment, private acquisition or the
 full BRC-192–199 reference application.
 
@@ -304,8 +304,9 @@ underlying verifier.
 
 ## Getting started
 
-This package is an unpublished implementation candidate. From this TS Stack
-workspace, run `pnpm --filter @bsv/sdk build:ts`, then
+This package is an unpublished implementation candidate requiring the coordinated
+SDK 3.3.0 candidate or a compatible later 3.x release. SDK 3.0–3.2 do not contain
+the output-protocol APIs imported by this package. From this TS Stack workspace, run `pnpm --filter @bsv/sdk build:ts`, then
 `pnpm --filter @bsv/output-knowledge build`. Workspace consumers declare
 `@bsv/output-knowledge` with `workspace:^`; external installation waits for the
 separately authorized package publication. The composition example below uses

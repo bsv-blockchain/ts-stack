@@ -33,7 +33,7 @@ default. It never mounts automatically or installs a payment handler. See the
 
 The unpublished 2.8.0 candidate also provides the optional
 `@bsv/overlay-express/root-eviction-response` companion. With middleware 2.3.0,
-SDK 3.0.0 and a shared root journal, `guardRootAdvertisementResponse` checks current
+SDK 3.3.0 and a shared root journal, `guardRootAdvertisementResponse` checks current
 access and every disclosed advertisement after signing and queues the native HTTP
 response under the journal's gate. Stale responses are replaced in full by a
 separately authorized signed reset. Capture the revision before hydration and
@@ -483,7 +483,7 @@ Thank you for being a part of the BSV Blockchain Overlay Express Project. Let's 
 
 Call `configureOutputLookup` before `start`, or import `createOutputLookupRouter`
 from `@bsv/overlay-express/output-lookup` for standalone Express composition. The
-new adapter requires SDK 3.0.0, a durable provider companion, a signed matching
+new adapter requires SDK 3.3.0, a durable provider companion, a signed matching
 capability manifest, current authorization and explicit browser origins. The
 legacy root loads this adapter only when enabled. Existing finite lookup routes
 and default startup remain unchanged.
@@ -500,7 +500,7 @@ complete BRC-192–199 integration remains under qualification.
 `configureProposals` before `start` or the separate
 `@bsv/overlay-express/proposals` router composes the durable proposal service,
 service-owned disclosure validator and shared journal/native-enqueue gate.
-This entry requires SDK 3.0 and auth middleware 2.3; legacy root peer floors and
+This entry requires SDK 3.3.0 and auth middleware 2.3; legacy root peer floors and
 routes remain unchanged. A current channel read differs from recovery of a
 retained publication ACK. Both require current authorization and original
 contract bounds after response signing. One sanitized replacement error may be

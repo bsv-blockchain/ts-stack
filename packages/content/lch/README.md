@@ -236,7 +236,7 @@ and does not add a new online requirement to already verified offline playback.
 
 The separate `@bsv/lch/overlay-acquisition` entry implements the BRC-198 wire
 representations for paid-lookup and listing-covenant acquisition. It requires
-the coordinated SDK3 output-protocol and revenue-listing companions. Ordinary
+the coordinated SDK 3.3.0 output-protocol and revenue-listing companions. Ordinary
 imports and `CORE_CAPABILITIES` retain their BRC-170 behavior and SDK2 support.
 
 `decodeLCHOverlayBinding` checks the exact seller key, chain, canonical HTTPS

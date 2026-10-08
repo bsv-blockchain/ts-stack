@@ -15,7 +15,7 @@ tags: [overlay, custody, recovery, wallet]
 The optional `@bsv/overlay/private-publication-admission` entry supplies
 `OverlayPrivatePublicationAdmission` for the ordinary-admission part of a BRC-195
 private publication. It uses the existing Engine's `offChainValues` argument and
-retained admission history. SDK 3.0 or newer is required for this entry. Existing
+retained admission history. SDK 3.3.0 or newer is required for this entry. Existing
 submission signatures, public receipts and root exports retain their behavior.
 
 This adapter is one part of the publication service. Its result does not establish

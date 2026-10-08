@@ -222,7 +222,7 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^3.0.0"
+    "@bsv/sdk": "^3.3.0"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

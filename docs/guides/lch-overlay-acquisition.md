@@ -18,7 +18,7 @@ ordinary licensed content. Its wire codecs cover paid lookup and covenant
 context. Its concrete buyer domains implement fixed-render,
 whole-Asset, authorized collector acquisition through paid lookup and covenant
 purchase. The covenant domain has a separate `@bsv/lch/overlay-covenant` entry. It is a
-minor API addition requiring the coordinated SDK3 output/revenue companions;
+minor API addition requiring the coordinated SDK 3.3.0 output/revenue companions;
 ordinary imports, SDK2 peers and `CORE_CAPABILITIES` stay unchanged. The current
 covenant buyer, seller, alias and authenticated native HTTP composition is
 implemented and exercised by current Linux reference compositions. The concrete
