@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.8.6'
-last_updated: '2026-10-07'
-last_verified: '2026-10-07'
+version: '1.8.7'
+last_updated: '2026-10-08'
+last_verified: '2026-10-08'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -116,6 +116,27 @@ remain excluded from performance conclusions, even when bounded scalar counters
 are usable. The preload is diagnostic only; complete ordinary uninstrumented
 coverage and mutation qualification remain mandatory with their unchanged tests,
 counts, seeds, replay settings, deadlines and thresholds.
+
+The same unchanged diagnostic child also writes independent V8 coverage through
+[Node's NODE_V8_COVERAGE mechanism](https://nodejs.org/api/cli.html#node_v8_coveragedir).
+Only a safe, fully drained measurement with fresh source guards permits reading
+its owned directory. At most sixteen files share the original aggregate64MiB
+metadata bound. The uploaded function-entries.json retains only fixed SDK JSON
+and schema modules and eight fixed private ledger, codec, coordinator and
+disclosure modules. It combines outer function-range entry counts by source,
+name and transformed offsets across emitted snapshots and isolates. Nested block
+counts are not added to function entries. Rows, ranges, names, offsets and counts
+are bounded and checked; an empty or invalid report supplies no counts. Raw
+coverage, source maps, source content, arguments and application values are deleted
+with the temporary directory and never uploaded.
+
+These counts are independent of CPU samples and may be admitted when a whole CPU
+trace is excluded for negative or reordered timestamps. They are execution
+frequency observations, not completed-operation counts, exclusive timings or a
+performance qualification. Coverage instrumentation has overhead and can affect
+optimization; no comparative runtime claim follows from these measurements.
+Original tests, counts, seeds, replay settings, child/case/calendar deadlines,
+resource limits and complete ordinary qualification remain unchanged.
 
 The weekly `CI performance trend` workflow classifies successful pull-request
 CI runs as full-scope (at least 50 executed, non-skipped jobs) or targeted,

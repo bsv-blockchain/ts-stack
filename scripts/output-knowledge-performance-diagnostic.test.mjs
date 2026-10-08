@@ -7,10 +7,125 @@ import {
   applicationDiagnosticSelection,
   diagnosticMayContinueValidation,
   readBoundedProfile,
+  readFunctionEntries,
+  summarizeFunctionEntries,
   summarizeCPUProfile,
   summarizePropertyExecution,
   triageDiagnostic
 } from './output-knowledge-performance-diagnostic.mjs'
+
+const countRoot = '/synthetic-repository'
+const countSource = `${countRoot}/packages/sdk/src/overlay-tools/OutputProtocolJSON.ts`
+const countFixture = (count = 3) => ({
+  result: [
+    {
+      url: countSource,
+      functions: [
+        {
+          functionName: 'visitOutputJSON',
+          isBlockCoverage: true,
+          ranges: [
+            { startOffset: 10, endOffset: 100, count },
+            { startOffset: 20, endOffset: 30, count: 99 }
+          ]
+        }
+      ]
+    },
+    { url: 'file:///unowned/private-value.js', functions: [] }
+  ],
+  'source-map-cache': { private: { sourcesContent: ['PRIVATE-SOURCE-PAYLOAD'] } }
+})
+
+test('independent entry counts sum only outer ranges in fixed modules without source payloads', () => {
+  const report = summarizeFunctionEntries([countFixture(3), countFixture(5)], countRoot, () => {})
+  assert.equal(report.coverageFiles, 2)
+  assert.deepEqual(report.rows, [
+    {
+      source: 'packages/sdk/src/overlay-tools/OutputProtocolJSON.ts',
+      functionName: 'visitOutputJSON',
+      startOffset: 10,
+      endOffset: 100,
+      entries: 8
+    }
+  ])
+  assert.equal(report.timingCollected, false)
+  assert.equal(report.fullFunctionalQualified, false)
+  assert.equal(report.fullCampaignQualified, false)
+  assert.equal(JSON.stringify(report).includes('PRIVATE'), false)
+  assert.equal(JSON.stringify(report).includes('unowned'), false)
+})
+
+test('entry metadata refuses malformed identities, ranges, overflow and deadlines', () => {
+  for (const alter of [
+    fn => {
+      fn.functionName = 'private\nvalue'
+    },
+    fn => {
+      fn.isBlockCoverage = 'true'
+    },
+    fn => {
+      fn.ranges = []
+    },
+    fn => {
+      fn.ranges[0].count = -1
+    },
+    fn => {
+      fn.ranges[0].count = Number.MAX_SAFE_INTEGER
+    },
+    fn => {
+      fn.ranges[0].startOffset = 100
+    },
+    fn => {
+      fn.ranges[1].endOffset = 101
+    }
+  ]) {
+    const fixture = countFixture()
+    alter(fixture.result[0].functions[0])
+    assert.throws(() => summarizeFunctionEntries([fixture], countRoot, () => {}))
+  }
+  assert.throws(() => summarizeFunctionEntries([], countRoot, () => {}))
+  assert.throws(() => summarizeFunctionEntries(Array(17).fill(countFixture()), countRoot, () => {}))
+  assert.throws(() =>
+    summarizeFunctionEntries(
+      [countFixture(600000000), countFixture(600000000)],
+      countRoot,
+      () => {}
+    )
+  )
+  assert.throws(() => summarizeFunctionEntries([{ result: [] }], countRoot, () => {}))
+  assert.throws(
+    () =>
+      summarizeFunctionEntries([countFixture()], countRoot, () => {
+        throw new Error('deadline')
+      }),
+    /deadline/
+  )
+})
+
+test('entry-file collection rejects symlinks, unexpected names and oversized aggregates', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'synthetic-function-entries-'))
+  const file = path.join(directory, 'coverage-123-456-0.json')
+  try {
+    fs.writeFileSync(file, JSON.stringify(countFixture()))
+    assert.equal(readFunctionEntries(directory, countRoot, () => {}).rows[0].entries, 3)
+    fs.renameSync(file, path.join(directory, 'unexpected.json'))
+    assert.throws(
+      () => readFunctionEntries(directory, countRoot, () => {}),
+      /function-count-file-name/
+    )
+    fs.renameSync(path.join(directory, 'unexpected.json'), file)
+    fs.symlinkSync(file, path.join(directory, 'coverage-123-789-0.json'))
+    assert.throws(() => readFunctionEntries(directory, countRoot, () => {}))
+    fs.unlinkSync(path.join(directory, 'coverage-123-789-0.json'))
+    fs.truncateSync(file, 64 * 1024 * 1024 + 1)
+    assert.throws(
+      () => readFunctionEntries(directory, countRoot, () => {}),
+      /bounded metadata budget/
+    )
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
+})
 
 test('diagnostic triage distinguishes ordinary failures, synthetic faults, case bounds and oversized output', () => {
   const ordinary = triageDiagnostic(Buffer.from('Property interrupted after 116 tests'), 1)
@@ -41,7 +156,12 @@ const safeMeasurement = {
 }
 
 test('monotonic timing refusals retain every original supervisor admission guard', () => {
-  for (const phase of ['monotonic-file-bound', 'monotonic-summary']) {
+  for (const phase of [
+    'monotonic-file-bound',
+    'monotonic-summary',
+    'function-count-file-bound',
+    'function-count-summary'
+  ]) {
     assert.equal(diagnosticMayContinueValidation(phase, safeMeasurement), true)
     for (const change of [
       { processGroupGone: false },

@@ -7009,3 +7009,28 @@ predict this candidate's runtime. Complete compiler, preservation, root and
 unchanged packed-consumer checks must pass before publication. Only fresh hosted
 functional and analyzer qualification and the complete 151/398 mutation campaign
 can complete checkpoint two.
+
+## October 8: independent bounded function-entry diagnosis
+
+Published b350 retains all original controls. Its coordinator property is
+interrupted after192 of300 required cases at150seconds, with other985 tests
+passing and no nonempty counterexample. Disclosure, application shard three,
+SDK, native wallet shard three and artifact/documentation consumers pass their
+ordinary suites. Actual Sonar and both CodeQL analyses have zero new findings;
+all21 review threads are resolved. The functional baseline is still incomplete,
+so the full151-target/398-execution mutation campaign remains unlaunched.
+
+All three current diagnostic CPU traces have negative or reordered samples and
+are excluded in full. They supply neither timings nor sample counts for
+diagnosis. The existing Linux-only diagnostic gains independent bounded V8
+function-range entry counts for fixed JSON/schema and protected-ledger modules,
+retaining its original source, process, calendar and Boolean admission guards.
+Only scalar source identities, names, offsets and numeric entries are uploaded;
+raw coverage and source maps are deleted. Pure synthetic fixtures check refusal,
+ownership, bounds, outer-range counting and payload exclusion without importing
+or executing SDK or application targets locally.
+
+No SDK implementation, application test, seed, case count, selector, resource
+budget or qualification ceiling changes in this diagnostic step. Entry counts
+can identify repeated paths for source review but do not establish exclusive
+CPU cost, a performance improvement, completed operations or checkpoint readiness.

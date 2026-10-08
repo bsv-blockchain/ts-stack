@@ -10,6 +10,8 @@ import { validateMonotonicTiming } from './output-knowledge-monotonic-timing.mjs
 const MAX_LOG = 16 * 1024 * 1024
 const MAX_PROFILE = 64 * 1024 * 1024
 const CPU_SAMPLING_INTERVAL_MICROSECONDS = 10000
+const MAX_COUNT_FILES = 16
+const MAX_COUNT_ROWS = 8192
 const markers = [
   'Segmentation fault',
   'Bus error',
@@ -331,7 +333,9 @@ export function diagnosticMayContinueValidation(phase, property) {
     'profile-json',
     'profile-summary',
     'monotonic-file-bound',
-    'monotonic-summary'
+    'monotonic-summary',
+    'function-count-file-bound',
+    'function-count-summary'
   ])
   return (
     timingOnly.has(phase) &&
@@ -344,6 +348,150 @@ export function diagnosticMayContinueValidation(phase, property) {
     property.boundedTriageExceeded === false &&
     property.testCaseTimeoutMarker === false
   )
+}
+
+function functionCountSources(root) {
+  const sources = new Map()
+  const add = relative => {
+    const absolute = path.join(root, relative)
+    sources.set(absolute, relative)
+    sources.set(pathToFileURL(absolute).href, relative)
+  }
+  for (const name of ['OutputProtocolJSON', 'OutputProtocolSchema']) {
+    add(`packages/sdk/src/overlay-tools/${name}.ts`)
+    for (const format of ['esm', 'cjs'])
+      add(`packages/sdk/dist/${format}/src/overlay-tools/${name}.js`)
+  }
+  for (const name of [
+    'ProtectedLedgerCodec',
+    'SQLiteProtectedLedger',
+    'NodeProtectedPayloadCodec',
+    'SQLitePrivatePurchaseStore',
+    'SQLitePrivatePurchaseAliases',
+    'SQLitePrivatePurchaseAliasStore',
+    'PrivatePurchaseAliasCoordinator',
+    'PrivatePurchaseAliasDisclosure'
+  ]) {
+    add(`packages/application/output-knowledge/src/private/${name}.ts`)
+    add(`packages/application/output-knowledge/dist/private/${name}.js`)
+  }
+  return sources
+}
+
+/** Independent V8 function-range entry counts, never CPU samples or timings.
+ * Only fixed repository modules and bounded scalar identities enter the result.
+ * Counts combine emitted coverage snapshots/isolates, not completed operations. */
+export function summarizeFunctionEntries(coverages, root, checkDeadline) {
+  assert.ok(
+    Array.isArray(coverages) && coverages.length > 0 && coverages.length <= MAX_COUNT_FILES,
+    'function-count-file-bound'
+  )
+  const sources = functionCountSources(root),
+    rows = new Map()
+  let scripts = 0,
+    functions = 0,
+    ranges = 0
+  for (const coverage of coverages) {
+    checkDeadline()
+    assert.ok(Array.isArray(coverage.result), 'function-count-shape')
+    for (const script of coverage.result) {
+      checkDeadline()
+      assert.ok(++scripts <= 16384, 'function-count-script-bound')
+      assert.ok(
+        typeof script.url === 'string' && Array.isArray(script.functions),
+        'function-count-shape'
+      )
+      functions += script.functions.length
+      assert.ok(functions <= 200000, 'function-count-function-bound')
+      const source = sources.get(script.url)
+      if (!source) continue
+      for (const fn of script.functions) {
+        checkDeadline()
+        assert.ok(
+          typeof fn.functionName === 'string' &&
+            fn.functionName.length <= 128 &&
+            /^(?:(?:get|set) )?[#A-Za-z_$][A-Za-z0-9_$#]*$|^$/.test(fn.functionName) &&
+            typeof fn.isBlockCoverage === 'boolean' &&
+            Array.isArray(fn.ranges) &&
+            fn.ranges.length > 0,
+          'function-count-shape'
+        )
+        ranges += fn.ranges.length
+        assert.ok(ranges <= 1000000, 'function-count-range-bound')
+        const outer = fn.ranges[0]
+        for (const range of fn.ranges) {
+          checkDeadline()
+          assert.ok(
+            Number.isSafeInteger(range.startOffset) &&
+              Number.isSafeInteger(range.endOffset) &&
+              range.startOffset >= 0 &&
+              range.startOffset < range.endOffset &&
+              range.endOffset <= MAX_PROFILE &&
+              range.startOffset >= outer.startOffset &&
+              range.endOffset <= outer.endOffset &&
+              Number.isSafeInteger(range.count) &&
+              range.count >= 0 &&
+              range.count <= 1000000000,
+            'function-count-range'
+          )
+        }
+        const key = JSON.stringify([source, fn.functionName, outer.startOffset, outer.endOffset]),
+          existing = rows.get(key)
+        if (existing) {
+          existing.entries += outer.count
+          assert.ok(existing.entries <= 1000000000, 'function-count-total-bound')
+        } else {
+          assert.ok(rows.size < MAX_COUNT_ROWS, 'function-count-row-bound')
+          rows.set(key, {
+            source,
+            functionName: fn.functionName,
+            startOffset: outer.startOffset,
+            endOffset: outer.endOffset,
+            entries: outer.count
+          })
+        }
+      }
+    }
+  }
+  assert.ok(rows.size > 0, 'function-count-empty')
+  checkDeadline()
+  return {
+    coverageFiles: coverages.length,
+    countSemantics: 'outer-function-range-entries-across-emitted-snapshots-and-isolates',
+    transformedOffsets: true,
+    timingCollected: false,
+    fullFunctionalQualified: false,
+    fullCampaignQualified: false,
+    rows: [...rows.values()].sort(
+      (left, right) =>
+        right.entries - left.entries ||
+        left.source.localeCompare(right.source) ||
+        left.startOffset - right.startOffset ||
+        left.functionName.localeCompare(right.functionName)
+    )
+  }
+}
+
+/** Read only an owned, drained directory, with an aggregate 64 MiB bound.
+ * Raw coverage, including source maps, is never returned or uploaded. */
+export function readFunctionEntries(directory, root, checkDeadline) {
+  checkDeadline()
+  const stat = fs.lstatSync(directory)
+  assert.ok(stat.isDirectory() && !stat.isSymbolicLink(), 'function-count-directory')
+  const files = fs.readdirSync(directory)
+  assert.ok(files.length > 0 && files.length <= MAX_COUNT_FILES, 'function-count-file-bound')
+  let bytes = 0
+  const coverages = []
+  for (const name of files.sort()) {
+    checkDeadline()
+    assert.match(name, /^coverage-[0-9]+-[0-9]+-[0-9]+\.json$/, 'function-count-file-name')
+    const file = path.join(directory, name),
+      metadata = {}
+    coverages.push(readBoundedProfile(file, MAX_PROFILE - bytes, metadata, checkDeadline))
+    bytes += metadata.profileBytes
+    assert.ok(Number.isSafeInteger(bytes) && bytes <= MAX_PROFILE, 'function-count-file-bound')
+  }
+  return summarizeFunctionEntries(coverages, root, checkDeadline)
 }
 
 /** Only scalar results from a safe, drained, bounded property measurement.
@@ -506,14 +654,15 @@ function selectionFromArguments(args) {
   )
 }
 
-function diagnosticEnvironment(mongoBinary, monotonicFile) {
+function diagnosticEnvironment(mongoBinary, monotonicFile, countDirectory) {
   const env = {
     ...process.env,
     FAST_CHECK_NUM_RUNS: '300',
     FAST_CHECK_SEED: '3242026',
     FAST_CHECK_PATH: '',
     NODE_OPTIONS: '',
-    OUTPUT_KNOWLEDGE_MONOTONIC_FILE: monotonicFile
+    OUTPUT_KNOWLEDGE_MONOTONIC_FILE: monotonicFile,
+    NODE_V8_COVERAGE: countDirectory ?? ''
   }
   if (mongoBinary) {
     env.MONGOMS_SYSTEM_BINARY = mongoBinary
@@ -622,6 +771,7 @@ async function main() {
       .update(JSON.stringify([...frozen]))
       .digest('hex'),
     profilingOverheadIncluded: true,
+    functionEntryCoverageOverheadIncluded: true,
     samplingIntervalMicroseconds: CPU_SAMPLING_INTERVAL_MICROSECONDS,
     fullFunctionalQualified: false,
     fullCampaignQualified: false
@@ -640,6 +790,7 @@ async function main() {
       refusal: null,
       timingCollected: false,
       monotonicCollected: false,
+      functionEntriesCollected: false,
       propertyExecution: null
     },
     env = diagnosticEnvironment(mongoBinary, path.join(directory, 'monotonic-timing.json'))
@@ -704,7 +855,11 @@ async function main() {
       cwd,
       path.join(directory, 'property.log'),
       selection.deadlineSeconds,
-      env,
+      diagnosticEnvironment(
+        mongoBinary,
+        path.join(directory, 'monotonic-timing.json'),
+        path.join(directory, 'function-counts')
+      ),
       aborted
     )
     results.push({ phase: selection.phase, ...measured })
@@ -716,6 +871,19 @@ async function main() {
     report.phase = 'post-property-source-guard'
     guard()
     collectPropertyExecution(selection, directory, measured, report, guard, checkWindow)
+    report.phase = 'function-count-file-bound'
+    const functionEntries = readFunctionEntries(
+      path.join(directory, 'function-counts'),
+      root,
+      checkWindow
+    )
+    report.phase = 'function-count-summary'
+    guard()
+    fs.writeFileSync(
+      path.join(output, 'function-entries.json'),
+      JSON.stringify({ identity, ...functionEntries }, null, 2)
+    )
+    report.functionEntriesCollected = true
     report.phase = 'monotonic-file-bound'
     const monotonic = readBoundedProfile(
       path.join(directory, 'monotonic-timing.json'),
