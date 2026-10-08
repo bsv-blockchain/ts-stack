@@ -286,8 +286,8 @@ the full covenant reference flow.
 ## Concrete covenant buyer and settlement
 
 This section targets [BRC PR295](https://github.com/bsv-blockchain/BRCs/pull/295)
-at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Current acceptance and open
-integration work are recorded in [specification alignment](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
+at `1b9a75e497b5856675af1ce01fd86843c37d07f9`. Implemented current composition and remaining
+qualification are recorded in [specification alignment](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
 
 `validateLCHOverlayCovenantProfileTerms` authenticates the reusable standing Offer
 and each buyer's individual Request against the current immutable descriptor and

@@ -175,11 +175,80 @@ export function protectedHeader(
     sealedDigest: outputHex32(input.sealedDigest)
   }
 }
+type ProtectedInventory = Pick<
+  ProtectedLedgerHead,
+  'inventory' | 'records' | 'reservedBytes' | 'reservedUpdates'
+>
+
 export function protectedInventory(
   headers: ProtectedLedgerHeader[],
   maximumRecords: number,
   maximumReservedBytes: number
-): Pick<ProtectedLedgerHead, 'inventory' | 'records' | 'reservedBytes' | 'reservedUpdates'> {
+): ProtectedInventory {
+  return collectProtectedInventory(
+    headers,
+    maximumRecords,
+    maximumReservedBytes,
+    canonicalOutputJSON
+  )
+}
+
+/** Internal native-row companion. Every row is freshly validated before the
+ * original aggregate checks. Headers remain private until the hash completes;
+ * the dedicated encoder receives only this invocation's fresh scalar records.
+ * The general inventory interface retains full caller-object JSON validation.
+ */
+export function protectedNativeInventory(
+  rows: Record<string, unknown>[],
+  maximumRecordBytes: number,
+  maximumRecords: number,
+  maximumReservedBytes: number
+): { headers: ProtectedLedgerHeader[]; actual: ProtectedInventory } {
+  const headers = rows.map(row => protectedHeader(row, maximumRecordBytes))
+  const actual = collectProtectedInventory(
+    headers,
+    maximumRecords,
+    maximumReservedBytes,
+    encodeNativeProtectedHeader
+  )
+  return { headers, actual }
+}
+
+/** Exact JCS for seven freshly validated ASCII/numeric header scalars. Fixed
+ * names are in UTF-16 order; safe integers have decimal encodings and revisions
+ * are bounded u64 decimal strings. No field needs escaping. This fixed shape
+ * has depth2, seven names and fewer than512 bytes, within original JSON fences.
+ * This function is private and never accepts a caller-owned header.
+ */
+function encodeNativeProtectedHeader(header: ProtectedLedgerHeader): string {
+  if (typeof header.kind !== 'string' || !/^[a-z-]{1,13}$/.test(header.kind)) {
+    return canonicalOutputJSON(header)
+  }
+  return (
+    '{"bytes":' +
+    header.bytes +
+    ',"key":"' +
+    header.key +
+    '","kind":"' +
+    header.kind +
+    '","reservedBytes":' +
+    header.reservedBytes +
+    ',"reservedUpdates":' +
+    header.reservedUpdates +
+    ',"revision":"' +
+    header.revision +
+    '","sealedDigest":"' +
+    header.sealedDigest +
+    '"}'
+  )
+}
+
+function collectProtectedInventory(
+  headers: ProtectedLedgerHeader[],
+  maximumRecords: number,
+  maximumReservedBytes: number,
+  encode: (header: ProtectedLedgerHeader) => string
+): ProtectedInventory {
   outputAssert(
     headers.length <= maximumRecords,
     'Protected ledger record capacity exceeded',
@@ -196,7 +265,7 @@ export function protectedInventory(
     )
     reservedBytes += header.reservedBytes
     reservedUpdates += header.reservedUpdates
-    hash.update(canonicalOutputJSON(header) + '\n')
+    hash.update(encode(header) + '\n')
   }
   outputAssert(
     reservedBytes <= maximumReservedBytes,

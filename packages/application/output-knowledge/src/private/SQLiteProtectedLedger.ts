@@ -22,6 +22,7 @@ import {
   protectedHeader,
   protectedInteger,
   protectedInventory,
+  protectedNativeInventory,
   protectedUpdates,
   protectedRevisionCapacity,
   type ProtectedLedgerAddress,
@@ -290,20 +291,28 @@ export class SQLiteProtectedLedger {
       keyId: envelope.keyId
     }
   }
-  private headers(): ProtectedLedgerHeader[] {
+  private headerRows(): Record<string, unknown>[] {
     this.domain.reading()
     return this.database
       .prepare(`SELECT ${HEADER_COLUMNS} FROM protected_records ORDER BY kind,key LIMIT ?`)
       .all(this.configuration.maximumRecords + 1)
-      .map(row => protectedHeader(row, this.configuration.maximumRecordBytes))
   }
-  private inventory(head: ProtectedLedgerHead): void {
-    const headers = this.headers()
-    const actual = protectedInventory(
-      headers,
+  private headers(): ProtectedLedgerHeader[] {
+    return this.headerRows().map(row => protectedHeader(row, this.configuration.maximumRecordBytes))
+  }
+  private inventoryData(): {
+    headers: ProtectedLedgerHeader[]
+    actual: Pick<ProtectedLedgerHead, 'inventory' | 'records' | 'reservedBytes' | 'reservedUpdates'>
+  } {
+    return protectedNativeInventory(
+      this.headerRows(),
+      this.configuration.maximumRecordBytes,
       this.configuration.maximumRecords,
       this.configuration.maximumReservedBytes
     )
+  }
+  private inventory(head: ProtectedLedgerHead): void {
+    const { headers, actual } = this.inventoryData()
     outputAssert(
       actual.inventory === head.inventory &&
         actual.records === head.records &&
@@ -682,15 +691,7 @@ export class SQLiteProtectedLedger {
           envelope
         )
     }
-    Object.assign(
-      head,
-      protectedInventory(
-        this.headers(),
-        this.configuration.maximumRecords,
-        this.configuration.maximumReservedBytes
-      ),
-      { revision }
-    )
+    Object.assign(head, this.inventoryData().actual, { revision })
     protectedRevisionCapacity(revision, head.reservedUpdates)
     return revision
   }

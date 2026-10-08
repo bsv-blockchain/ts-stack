@@ -330,12 +330,15 @@ retains original CEKs privately, independently reconciles original native credit
 and issues the exact signed settlement and recipient-bound License. The real
 authenticated native buyer/seller recovery test loses the paid reply, reopens
 buyer custody and plays actual encrypted content after expiry/catalogue withdrawal
-with one payment and one credit. Covenant purchase and the complete operator
-workbench demonstrations remain checkpoint-two work. Ordinary BRC-170 imports and `CORE_CAPABILITIES`
-do not advertise these optional profiles.
+with one payment and one credit. The separate current native covenant reference composition installs the two-stage listing family, protected child
+authority, native wallet, per-alias admission, selected-chain currentness and LCH
+recovery/playback. Their integration selectors and final qualification gates are
+listed in the [checkpoint inventory](../../../specs/output-knowledge/CHECKPOINT2.md).
+Ordinary BRC-170 imports and `CORE_CAPABILITIES` do not advertise these optional
+profiles.
 
-`validateLCHOverlayCovenantTerms` authenticates the optional standing-Offer
-collector profile before wallet construction. It requires the exact topic
+The historical `validateLCHOverlayCovenantTerms` interface retains its original
+standing-Offer collector checks before wallet construction. It requires the exact topic
 capability, installed E/C/S/family mechanisms, one buyer-free standing
 requirement, an open Offer policy assignee, and the complete initial revenue
 schedule. The individual signed License Request supplies the buyer; the
@@ -345,8 +348,10 @@ checks new work; `validateLCHOverlayCovenantPromise` checks frozen original
 seller-signed purchase terms during recovery after catalogue/Offer expiry.
 These terms checks do not execute Bitcoin Script, authenticate complete
 lineage, assess release, issue a License or authorize playback. Compose the
-independent verifiers before financial work; the complete covenant licensing
-and application demonstration remain checkpoint-two work.
+independent verifiers before financial work. The current reference composition
+uses the separately selected `validateLCHOverlayCovenantProfileTerms`, immutable
+collector and current buyer/seller domains described below; the historical terms
+interface does not select the replacement family.
 
 The historical `LCHOverlayCovenantDomain` remains available through
 `@bsv/lch/overlay-covenant` for its original standing-collector buyer validation

@@ -104,7 +104,9 @@ composed acquisition owner.
 Evidence includes unchanged positive genesis/activation and both purchases,
 complete signed split/payout histories, both retirement Scripts, original
 minimum 300-run properties, ownership and bounded lifecycle checks. The chain
-is disclosed synthetic easy-work evidence, not a live purchase or native wallet
-containment proof. LCH collector integration, fixed-child remittance, durable
-alias custody and complete qualification remain checkpoint-two work in the
-[alignment inventory](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).
+is disclosed synthetic easy-work evidence, not a live purchase. The separately
+installed native reference composition combines this lineage verifier with LCH,
+protected fixed-child remittance, wallet containment, durable alias custody and
+authenticated admission/recovery. See the [checkpoint inventory](https://github.com/bsv-blockchain/ts-stack/pull/674)
+for its integration selectors. Complete exact-source qualification remains a
+separate requirement recorded in the [alignment inventory](https://github.com/bsv-blockchain/ts-stack/blob/codex/utxo-application-runtime/specs/output-knowledge/SPEC-ALIGNMENT.md).

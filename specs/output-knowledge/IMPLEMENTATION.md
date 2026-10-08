@@ -7197,3 +7197,42 @@ Public exports, return shapes, limits and refusal identities remain unchanged.
 All original properties, unit bodies, examples, policies and bundle ceilings
 remain intact. Fresh published-source functional, platform, consumer, analyzer
 and full151-target/398-row mutation qualification remain mandatory.
+
+### October 8: fresh native header inventory encoding
+
+Published5416 passes every functional job except the unchanged disclosure and
+coordinator properties, which interrupt at198/300 and190/300 under150 seconds.
+The final gate correctly rejects that baseline. SDK8,591/wallet882 tests including
+8_BEEF, application shards3/4, browser/mobile, complete other-package native
+HTTP/LCH composition, packed consumers, conformance, codegen and container checks
+pass. Actual Sonar and CodeQL have zero new findings; all21 reviews are resolved.
+This does not qualify the full checkpoint or mutation campaign.
+
+All current CPU traces are wholly excluded for negative/reordered samples,
+without sample or timing salvage. Independently admitted original function
+counters remain valid: disclosure validates496,338 native headers and coordinator
+506,310, alongside349,729 and346,924 associated-data calls. Isolated outcomes
+remain other-failure with completed counts unavailable; counters are not timing
+or proof of a runtime speedup. The earlier independently valid disclosure trace
+at73cb established substantial generic JSON traversal cost; its timings do not
+qualify the different5416 implementation.
+
+The next compatible native correction validates every raw row with the original
+header codec, then formats only its own fresh scalar records in fixed UTF-16
+field order. The private formatter accepts no caller-owned headers. The original
+general inventory interface retains full canonical validation; both interfaces
+share the same aggregate assertions, hash framing, order and reservation totals.
+Native SQL, every revision/current-access fence, encryption and effect check
+remain unchanged. No cache or persisted-format migration is introduced.
+Independent digest and scalar-boundary cases plus row/aggregate refusal ordering
+are added while all original tests,141 properties and81 examples remain intact.
+
+Current LCH/lineage guides and release notes are also reconciled to the implemented
+reference composition, preserving historical interfaces and distinguishing
+installed responsibilities from final exact-source qualification. Original
+generators produce the owned migration ledger. Fresh hosted qualification and
+all151 targets/398 execution rows remain required before Checkpoint2 review.
+
+Live kind-registry extensions outside the fixed ASCII grammar retain the original
+canonical encoder, including Unicode, escaping and resource refusals. The new
+regression covers those extensions without narrowing historical acceptance.

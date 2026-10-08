@@ -1439,3 +1439,21 @@ prototype, symbol, required-field, allowed-field and data-descriptor checks. Com
 value normalization, encrypted custody, revision, clock, authorization and selected-chain
 validation remain independent and current on every operation. No incoming value or
 validation result is retained by these definitions.
+
+### Native ledger inventory framing
+
+Native ledger reads validate every raw header row afresh before aggregating its
+capacity and inventory commitment. The dedicated internal row companion creates
+private seven-field scalar records and encodes their fixed canonical field order
+directly. Key/digest hex, allowed ASCII kinds, u64 revisions, positive safe-integer
+byte amounts and bounded update counts are checked by the existing header codec
+on every call. This fixed shape has depth two, seven names and fewer than512 bytes
+within the original JSON fences. No row, authorization or validation verdict is
+retained. The general inventory helper still performs full canonical validation
+on caller-owned objects. Native database reads, every aggregate refusal, revision
+fence, encryption check and custody effect remain fresh and unchanged. This
+implementation detail supplies no chain, ownership or release authority.
+
+Live kind-registry extensions outside the fixed ASCII grammar retain the original
+canonical encoder, including Unicode, escaping and resource refusals. The new
+regression covers those extensions without narrowing historical acceptance.

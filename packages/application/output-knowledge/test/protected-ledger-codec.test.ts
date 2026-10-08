@@ -6,6 +6,7 @@ import {
   protectedHeader,
   protectedInteger,
   protectedInventory,
+  protectedNativeInventory,
   protectedLedgerKinds,
   protectedRevisionCapacity,
   protectedUpdates,
@@ -274,6 +275,89 @@ it('retains live kind membership and the original Unicode and byte-bound fallbac
     expect(() => protectedHeader({ ...header() }, 16)).toThrow(
       'Invalid protected ledger record kind'
     )
+  } finally {
+    kinds.splice(0, kinds.length, ...original)
+  }
+})
+
+it('native inventory retains the independent ordered digest and exact fresh ownership', () => {
+  const rows = [
+    { ...header() },
+    { ...header(), key: '33'.repeat(32), reservedBytes: 32, reservedUpdates: 3 }
+  ]
+  const result = protectedNativeInventory(rows, 32, 2, 48)
+  expect(result.actual).toEqual({
+    inventory: 'e4235ef5d426d63ce4e9c39d519f54fe11b36edb99ff022cb2b59a916eccd236',
+    records: 2,
+    reservedBytes: 48,
+    reservedUpdates: 5
+  })
+  rows[0].key = '55'.repeat(32)
+  expect(result.headers[0]).toEqual(header())
+  expect(protectedInventory(result.headers, 2, 48)).toEqual(result.actual)
+})
+it('native inventory agrees with general framing for every kind and scalar boundary', () => {
+  for (const kind of protectedLedgerKinds) {
+    for (const revision of ['1', '18446744073709551615']) {
+      for (const reservedBytes of [1, Number.MAX_SAFE_INTEGER]) {
+        for (const reservedUpdates of [0, 64]) {
+          const rows = [
+            { ...header(), kind, revision, reservedBytes, bytes: reservedBytes, reservedUpdates }
+          ]
+          const result = protectedNativeInventory(
+            rows,
+            Number.MAX_SAFE_INTEGER,
+            1,
+            Number.MAX_SAFE_INTEGER
+          )
+          expect(result.actual).toEqual(
+            protectedInventory(result.headers, 1, Number.MAX_SAFE_INTEGER)
+          )
+        }
+      }
+    }
+  }
+  expect(protectedNativeInventory([], 16, 0, 0).actual).toEqual(protectedInventory([], 0, 0))
+})
+it('native inventory retains fresh row refusals before the original aggregate fences', () => {
+  expect(() =>
+    protectedNativeInventory([{ ...header() }, { ...header(), revision: '0' }], 16, 1, 32)
+  ).toThrow(
+    expect.objectContaining({ code: 'unavailable', message: 'Invalid protected record revision' })
+  )
+  expect(() => protectedNativeInventory([{ ...header() }, { ...header() }], 16, 1, 32)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Protected ledger record capacity exceeded'
+    })
+  )
+  expect(() => protectedNativeInventory([{ ...header(), bytes: 17 }], 17, 1, 16)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Protected record exceeds its reserved capacity'
+    })
+  )
+  expect(() => protectedNativeInventory([{ ...header() }, { ...header() }], 16, 2, 31)).toThrow(
+    expect.objectContaining({
+      code: 'unavailable',
+      message: 'Protected ledger allocation capacity exceeded'
+    })
+  )
+  expect(() =>
+    protectedNativeInventory([{ ...header(), sealedDigest: 'not-hex' }], 16, 1, 16)
+  ).toThrow()
+})
+
+it('native inventory retains canonical framing for live kind extensions', () => {
+  const kinds = protectedLedgerKinds as unknown as string[]
+  const original = [...kinds]
+  try {
+    for (const kind of ['future-kind', 'a'.repeat(100), 'é', 'quoted"kind', 'line\nkind']) {
+      kinds.push(kind)
+      const result = protectedNativeInventory([{ ...header(), kind }], 16, 1, 16)
+      expect(result.actual).toEqual(protectedInventory(result.headers, 1, 16))
+      kinds.pop()
+    }
   } finally {
     kinds.splice(0, kinds.length, ...original)
   }
