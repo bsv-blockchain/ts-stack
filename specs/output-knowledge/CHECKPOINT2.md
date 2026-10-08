@@ -128,8 +128,9 @@ missed-state reconnect, hidden-tab expiry, native IndexedDB reopen and provider
 restart, with exactly two original Opens and no browser exceptions. Both original final-output browser profiles also pass with the additional entry.
 Provider shutdown joins the same drain promise; the native admission suite now
 passes ten cases. Final source qualification is still required.
-Complete mutation campaigns, final package/platform checks and exact-head hosted
-gates remain open. No local synthetic-chain receipt announces production or
+Final acceptance requires complete mutation campaigns, package/platform checks
+and exact-head hosted gates. The PR completion evidence records their current
+status and immutable runs. No local synthetic-chain receipt announces production or
 checkpoint readiness.
 
 ## Reproduce the reference compositions
@@ -194,10 +195,10 @@ are checked against exact tarballs. Final acceptance also requires all affected
 native/browser/mobile profiles, complete governed mutation qualification and
 terminal successful hosted checks on the final published head.
 
-## Remaining final acceptance gates
+## Final acceptance requirements
 
-- [ ] Pass complete uninstrumented coverage on the final published source, including the original 300-run disclosure and coordinator properties.
-- [ ] Pass the full 151-target/398-row governed mutation campaign and independently reconcile every raw result.
-- [ ] Verify final packed consumers, platforms, conformance, actual CodeQL and zero-new Sonar findings on the same published head.
+- Pass complete uninstrumented coverage on the final published source, including the original 300-run disclosure and coordinator properties.
+- Pass the full 151-target/398-row governed mutation campaign and independently reconcile every raw result.
+- Verify final packed consumers, platforms, conformance, actual CodeQL and zero-new Sonar findings on the same published head.
 
-These gates remain open. Demonstrated reference components do not by themselves complete Checkpoint 2.
+The PR completion evidence must establish each requirement on the exact published head. Demonstrated reference components do not by themselves complete Checkpoint 2; this source inventory does not self-certify qualification.

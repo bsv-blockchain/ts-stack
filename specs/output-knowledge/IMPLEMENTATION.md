@@ -7236,3 +7236,31 @@ all151 targets/398 execution rows remain required before Checkpoint2 review.
 Live kind-registry extensions outside the fixed ASCII grammar retain the original
 canonical encoder, including Unicode, escaping and resource refusals. The new
 regression covers those extensions without narrowing historical acceptance.
+
+### October 8: reconcile genuine native mutation sites
+
+Published `0a670aa` retains the current BRC295 contract and the fresh native
+header correction. All seven local root gates, five compiler contexts,
+reference compiler and unchanged browser/package ceilings pass. The hosted
+build's original pinned-engine integration refuses old source counts: the
+native-clock target grows from 1,568 to 1,570 sites and protected-ledger from
+898 to 925. Independently admitted full source inventory confirms exactly
+62,176 sites, 151 targets, 398 execution rows and all original disjoint unions.
+Only those two source-count goldens change; original ranges, targets, policies,
+resources, thresholds and every integration assertion remain. The original
+source-only engine/configuration integration is added to the local preflight.
+
+Conformance, codegen, container contracts and actual Sonar/CodeQL pass on that
+head, with zero new findings and hotspots; all 21 review threads are resolved.
+The failed early gate skips application, native, platform and packed-consumer
+qualification, so this run supplies no functional or speedup evidence for the
+header correction. No diagnostic producer or full runtime mutation campaign
+ran. Earlier 5416 property timeouts and wholly excluded CPU traces remain
+historical evidence and cannot qualify this source.
+
+The checkpoint source inventory now states durable acceptance requirements
+and directs readers to exact-head PR completion evidence for current statuses.
+It neither asserts evergreen pending status nor self-certifies acceptance.
+Complete source/root/engine checks precede publication; fresh complete hosted
+functional, platform, consumer, analyzer and runtime mutation qualification
+remain mandatory.
