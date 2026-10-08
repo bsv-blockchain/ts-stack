@@ -12,7 +12,7 @@ import {
 } from './OutputProtocol.js'
 import {
   OUTPUT_JSON_LIMITS,
-  ownOutputJSON,
+  ownOutputJSONValue,
   parseOutputJSON,
   type OutputJSON,
   type OutputJSONObject
@@ -147,7 +147,7 @@ export function normalized<T>(input: unknown, schema: Schema<T>, maximumBytes = 
   const value =
     typeof input === 'string' || input instanceof Uint8Array
       ? parseOutputJSON(input, limits)
-      : ownOutputJSON(input, limits).value
+      : ownOutputJSONValue(input, limits)
   return schema(value)
 }
 

@@ -6818,3 +6818,51 @@ contexts pass without executing a target. The coherent adopted tree, original
 test/policy preservation, complete source inventory, package budgets and fresh
 exact published-head hosted qualification are still required. No comparative
 speed or causal performance conclusion is established.
+
+### October 8: fixed Mongo binary before reference suite workers
+
+Published9ddfbe4 passes all262 SDK suites/8590 tests and native wallet
+shard3's79 suites/882 tests, including original8_BEEF. Its actual Sonar
+qualityOK/issues0/hotspots0 and both actual CodeQL analyses are verified
+against the exact current head tree, with zero open PR-ref alerts.
+The non-coverage reference application job fails before its application assertions:
+concurrent suites encounter an8.2.6 Mongo binary download lock owned by another
+process. Remaining functional jobs and the full151/398 mutation campaign have
+not been qualified; Checkpoint2 remains incomplete.
+
+The shared test fixture now exports a fixed-binary preflight, installed as the
+reference application's Vitest global setup. It obtains MongoDB8.2.6 before
+isolated suite workers begin; it does not start or share a database. Each original
+fixture still owns its independent three-member replica set, ports, clients and
+cleanup. No existing test body, selector, assertion, seed, case count, deadline,
+coverage or mutation control changes. The initial source-only app compiler check
+passes with all original tests; fresh coherent source/artifact checks and hosted
+execution must still qualify this setup on the eventual published commit.
+
+### October 8: value-only normalization and native primitive-name sorting
+
+Published9ddfbe4's disclosure and coordinator properties interrupt at228/300
+and198/300 under their unchanged150-second limits, with no nonempty
+counterexample. Its app3 passes63 suites/930 tests. The guarded diagnostic
+producer passes, but all three CPU traces contain negative/reordered samples
+and are excluded entirely. Its monotonic native-call totals are independently
+valid, inclusive and overlapping; they do not establish JS attribution, causal
+comparison or functional qualification.
+
+Program-value normalization previously discarded the canonical text produced
+while taking its owned snapshot. Its internal value-only path now performs
+the identical traversal, UTF-8 counting, descriptor and Unicode validation,
+resource predicates, private graph construction and refusal order, without
+retaining that text. The full-text ownership and canonical APIs retain their
+original outputs. No input, graph, authority or validation verdict is cached.
+Fresh primitive property-name arrays use native UTF-16 sorting after the same
+inversion scan; the standard's string comparison is equivalent to the original
+primitive-string comparator. Existing canonical ordering boundary cases remain.
+
+Mechanical inverse AST comparison restores the complete original parser,
+serializer and schema modules; an additive unit case covers independent copies,
+exact multibyte bounds, refusal before schema callbacks, getters and malformed
+Unicode. All original tests, properties, examples and151/398 controls remain.
+The coherent source and exact future published commit still require complete
+functional, analyzer and mutation qualification. No comparative speed or causal
+performance result is claimed; Checkpoint2 remains incomplete.

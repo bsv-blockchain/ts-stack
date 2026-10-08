@@ -322,26 +322,26 @@ interface OutputJSONFrame {
   bytes: number
   readonly bounds: OutputJSONLimits
   readonly path: Set<object>
-  readonly copy: boolean
+  readonly capture: 0 | 1 | 2
 }
 
 function serializeOutputJSON(
   value: unknown,
   bounds: OutputJSONLimits,
-  capture: true
+  capture: 1 | 2
 ): { text: string; value: OutputJSON }
-function serializeOutputJSON(value: unknown, bounds: OutputJSONLimits, capture?: false): string
+function serializeOutputJSON(value: unknown, bounds: OutputJSONLimits, capture?: 0): string
 function serializeOutputJSON(
   value: unknown,
   bounds: OutputJSONLimits,
-  capture = false
+  capture: 0 | 1 | 2 = 0
 ): string | { text: string; value: OutputJSON } {
   const frame: OutputJSONFrame = {
     text: '',
     path: new Set<object>(),
     bytes: 0,
     bounds,
-    copy: capture
+    capture
   }
   const owned = visitOutputJSON(frame, value, 1)
   return capture ? { text: frame.text, value: owned as OutputJSON } : frame.text
@@ -354,7 +354,7 @@ function emitOutputJSON(frame: OutputJSONFrame, chunk: string, knownASCII = fals
   frame.bytes +=
     knownASCII || /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
   outputJSONLimit(frame.bytes <= frame.bounds.bytes)
-  frame.text += chunk
+  if (frame.capture !== 2) frame.text += chunk
 }
 
 function emitOutputJSONString(frame: OutputJSONFrame, text: string, suffix = ''): void {
@@ -380,7 +380,7 @@ function visitOutputJSONArray(
       Object.keys(node).length === node.length,
     'Sparse or decorated JSON array'
   )
-  const owned = frame.copy ? new Map<number, OutputJSON>() : undefined
+  const owned = frame.capture ? new Map<number, OutputJSON>() : undefined
   emitOutputJSON(frame, '[', true)
   for (let i = 0; i < node.length; i++) {
     if (i > 0) emitOutputJSON(frame, ',', true)
@@ -402,16 +402,16 @@ function visitOutputJSONObject(
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
   // These are fresh primitive names. Already ordered names need no sorting;
-  // any inversion still uses the original UTF-16 code-unit comparator.
+  // any inversion still uses the same native UTF-16 string ordering.
   // Begin with the first actual predecessor in this private primitive-name array.
   for (let index = 1; index < keys.length; index++) {
     if (keys[index] < keys[index - 1]) {
-      keys.sort((a, b) => +(a > b) - +(a < b))
+      keys.sort()
       break
     }
   }
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
-  const owned = frame.copy ? new Map<string, OutputJSON>() : undefined
+  const owned = frame.capture ? new Map<string, OutputJSON>() : undefined
   emitOutputJSON(frame, '{', true)
   let index = 0
   for (const key of keys) {
@@ -473,5 +473,14 @@ export function ownOutputJSON(
   input: unknown,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): { text: string; value: OutputJSON } {
-  return serializeOutputJSON(input, limitsFor(limits), true)
+  return serializeOutputJSON(input, limitsFor(limits), 1)
+}
+
+/** @internal Same fresh ownership and complete canonical byte fences, without
+ * retaining text that the schema layer would immediately discard. */
+export function ownOutputJSONValue(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): OutputJSON {
+  return serializeOutputJSON(input, limitsFor(limits), 2).value
 }

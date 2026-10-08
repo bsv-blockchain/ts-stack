@@ -1,6 +1,16 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
 export default defineConfig({
+  test: {
+    globalSetup: [
+      fileURLToPath(
+        new URL(
+          '../../packages/overlays/overlay/src/__tests/mongo/MongoReplicaFixture.ts',
+          import.meta.url
+        )
+      )
+    ]
+  },
   build: {
     rollupOptions: {
       input: {

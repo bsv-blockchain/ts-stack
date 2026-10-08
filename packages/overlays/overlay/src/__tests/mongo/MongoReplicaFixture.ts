@@ -2,8 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
 import { MongoClient, type Db, type Document, type MongoClientOptions } from 'mongodb'
-import { MongoMemoryReplSet } from 'mongodb-memory-server'
+import { MongoBinary, MongoMemoryReplSet } from 'mongodb-memory-server'
 import type { StorageScope } from '@bsv/overlay'
+
+/** Obtain the fixed test binary once, before isolated suite workers start. */
+export default async function prepareMongoReplicaFixture(): Promise<void> {
+  await MongoBinary.getPath({ version: '8.2.6' })
+}
 
 /** Serial startup for this fixture's unauthenticated, isolated replica members. */
 export class SequentialMongoFixtureReplicaSet extends MongoMemoryReplSet {

@@ -574,3 +574,41 @@ test('full-text UTF-8 accounting keeps exact ASCII, Unicode and disguised-byte-v
     expect(() => inspectOutputJSONEncoding(JSON.stringify({ value }))).toThrow(invalid)
   }
 })
+
+test('value-only normalization retains canonical byte fences, refusal order and fresh owned data', () => {
+  const input = { rows: [{ ['__proto__']: ['é😀', null, -0, true] }] }
+  const bytes = new TextEncoder().encode(canonicalOutputJSON(input)).length
+  const first = s.normalized(input, s.json, bytes),
+    second = s.normalized(input, s.json, bytes)
+  owned(first)
+  owned(second)
+  expect(isDeepStrictEqual(first, ownOutputJSON(input, { bytes }).value)).toBe(true)
+  expect(first).not.toBe(second)
+  const copy = first as { rows: { __proto__: unknown[] }[] }
+  copy.rows[0].__proto__.push('changed')
+  expect(input.rows[0].__proto__).toHaveLength(4)
+  expect(canonicalOutputJSON(second)).toBe(canonicalOutputJSON(input))
+  let called = false
+  expect(() =>
+    s.normalized(
+      input,
+      value => {
+        called = true
+        return value
+      },
+      bytes - 1
+    )
+  ).toThrow(expect.objectContaining({ code: 'limited', message: 'Output JSON byte limit' }))
+  expect(called).toBe(false)
+  let reads = 0
+  Object.defineProperty(input, 'hidden', {
+    enumerable: true,
+    get() {
+      reads++
+      return 1
+    }
+  })
+  expect(() => s.normalized(input, s.json)).toThrow('JSON accessor or hidden key')
+  expect(reads).toBe(0)
+  expect(() => s.normalized({ text: '\uD800' }, s.json)).toThrow('Unpaired JSON surrogate')
+})

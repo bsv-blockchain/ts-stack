@@ -107,6 +107,10 @@ The proposal pipeline test starts an isolated three-member MongoDB 8.2.6 replica
 set through the workspace's existing audited test fixture. Its first run needs
 the pinned Mongo binary available or downloadable; it never contacts an existing
 Mongo database. The fixture closes its own processes, connections and files.
+Vitest first obtains that fixed binary in its global setup, before isolated suite
+workers start. This prevents concurrent initial downloads from contending for
+the same binary lock. Each suite still starts and closes its own original replica
+set; the preflight neither starts a database nor reuses another suite's database.
 Run just that composition with
 `pnpm --filter output-knowledge-reference-app exec vitest run test/proposalPipeline.test.ts`.
 It records a signed private proposal, rejects an unauthorized reader and invalid
