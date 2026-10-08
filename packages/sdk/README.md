@@ -451,13 +451,14 @@ wallet-derived locking key, and field signature before reading or spending it.
   descriptor inspection and failed calls cannot reuse another frame's text,
   byte counter, bounds or ancestor set. Resource assertions retain their exact
   predicates and refusal messages. Validated safe integers use the same decimal
-  text, including conversion of negative zero to zero. Object and array ownership
-  yield freshly checked children to native own-data construction. Neither retains
-  an intermediate value Map or reparses generated text. Each object is constructed
-  once with `Object.fromEntries`, then its prototype is set to `null` before the
-  private record is exposed; there is no dynamic property assignment or second
-  spread copy. Text-only traversal performs the same checks without constructing
-  a graph. No input or verdict is retained between calls.
+  text, including conversion of negative zero to zero. Program-value ownership
+  completes this bounded canonical traversal before constructing a fresh graph
+  from its generated text with native JSON parsing. A private internal reviver
+  selects null prototypes only on freshly created, unexposed records. Native
+  parsing defines ordinary own data fields, including `__proto__`, without
+  invoking inherited setters. Caller objects never enter that reviver. Text-only
+  serialization performs the same checks without constructing a graph. No input
+  or verdict is retained between calls.
 
   Parsing decodes values once into a bounded private graph, exposing it only
   after complete syntax, Unicode, integer, resource and trailing-data checks.
@@ -473,8 +474,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   each fresh primitive-name array with the original UTF-16 comparator captured
   once, including numeric-looking and supplementary keys. It allocates no
   per-object ordering callback. The
-  same traversal captures independent children, preserving attributes and null
-  prototypes. Every caller descriptor is still inspected in canonical order. No input or result
+  bounded traversal checks every caller descriptor in canonical order before
+  independent ownership construction. No input or result
   is retained between calls.
 
   `createClosedOutputObjectValidator(required, optional)` captures its field
@@ -488,8 +489,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   Shared normalization selects the fixed immutable default limits only by exact
   primitive equality; different bounds remain freshly validated. Every supplied
   value still receives full normalization and schema checks.
-  For program values, the schema layer captures the same fresh data-only graph
-  and checks every canonical byte fence without retaining text it would discard.
+  For program values, the schema layer constructs the same fresh data-only graph
+  after every canonical byte fence, then discards the temporary generated text.
   Full-text ownership and canonical serialization retain their original outputs.
   Sorting fresh primitive names uses the same fixed string comparison as
   the previous comparator, including numeric-looking and supplementary keys

@@ -7162,3 +7162,38 @@ an unpublished minor candidate with no migration. Source preservation,
 compiler/root/browser/packed checks precede publication; fresh actual analyzer
 and full functional qualification, followed by all151 targets/398 execution rows,
 remain necessary on the final published source.
+
+### October 8: ownership construction after complete canonical validation
+
+The73cb published correction clears actual Sonar and CodeQL with no new findings
+and resolves all21 review threads without suppressions or dismissal. Its complete
+ordinary disclosure and coordinator properties still interrupt at170/300 and
+226/300 under the original150-second fence. SDK8,591 tests, wallet shard3 882
+tests, browser/mobile, application shards3/4 and packed documentation consumers
+pass. This is not completed checkpoint or mutation qualification.
+
+Current independently admitted diagnostics identify substantial JSON traversal
+and record-construction self time in the valid disclosure CPU trace. Whole
+coordinator and native HTTP CPU traces are excluded for negative/reordered
+samples. Isolated property outcomes remain other-failure with completed counts
+unavailable. Original function counters and native monotonic measurements are
+separate evidence. No runtime improvement is inferred.
+
+The next compatible correction performs every original program-value descriptor,
+prototype, symbol, cycle, integer, Unicode, depth, item, UTF-16 ordering and
+canonical byte check before native construction of a fresh owned graph from its
+fully validated generated text. It removes per-container serialization generators
+and capture branches. An internal reviver receives only newly parsed data and
+selects null prototypes before exposure. Native JSON parsing defines ordinary
+writable/configurable/enumerable own data fields, including special names,
+without inherited setters. Caller objects never reach the reviver; reentrant
+checks retain separate private frames. Negative zero retains canonical zero.
+Incoming text and bytes still use the unchanged duplicate-aware bounded parser.
+No schema, input, secret, authorization or currentness verdict is cached.
+
+Schema ownership now discards temporary generated text after graph construction;
+the earlier capture-only implementation descriptions above are historical.
+Public exports, return shapes, limits and refusal identities remain unchanged.
+All original properties, unit bodies, examples, policies and bundle ceilings
+remain intact. Fresh published-source functional, platform, consumer, analyzer
+and full151-target/398-row mutation qualification remain mandatory.

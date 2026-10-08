@@ -325,29 +325,12 @@ interface OutputJSONFrame {
   bytes: number
   readonly bounds: OutputJSONLimits
   readonly path: Set<object>
-  readonly capture: 0 | 1 | 2
 }
 
-function serializeOutputJSON(
-  value: unknown,
-  bounds: OutputJSONLimits,
-  capture: 1 | 2
-): { text: string; value: OutputJSON }
-function serializeOutputJSON(value: unknown, bounds: OutputJSONLimits, capture?: 0): string
-function serializeOutputJSON(
-  value: unknown,
-  bounds: OutputJSONLimits,
-  capture: 0 | 1 | 2 = 0
-): string | { text: string; value: OutputJSON } {
-  const frame: OutputJSONFrame = {
-    text: '',
-    path: new Set<object>(),
-    bytes: 0,
-    bounds,
-    capture
-  }
-  const owned = visitOutputJSON(frame, value, 1)
-  return capture ? { text: frame.text, value: owned as OutputJSON } : frame.text
+function serializeOutputJSON(value: unknown, bounds: OutputJSONLimits): string {
+  const frame: OutputJSONFrame = { text: '', path: new Set<object>(), bytes: 0, bounds }
+  visitOutputJSON(frame, value, 1)
+  return frame.text
 }
 
 function emitOutputJSON(frame: OutputJSONFrame, chunk: string, knownASCII = false): void {
@@ -357,7 +340,7 @@ function emitOutputJSON(frame: OutputJSONFrame, chunk: string, knownASCII = fals
   frame.bytes +=
     knownASCII || /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
   outputJSONLimit(frame.bytes <= frame.bounds.bytes)
-  if (frame.capture !== 2) frame.text += chunk
+  frame.text += chunk
 }
 
 function emitOutputJSONString(frame: OutputJSONFrame, text: string, suffix = ''): void {
@@ -372,23 +355,7 @@ function emitOutputJSONString(frame: OutputJSONFrame, text: string, suffix = '')
   }
 }
 
-function visitOutputJSONArray(
-  frame: OutputJSONFrame,
-  node: unknown[],
-  depth: number
-): OutputJSON[] | undefined {
-  const items = outputJSONArrayItems(frame, node, depth)
-  if (frame.capture) return Array.from(items)
-  // Text-only traversal never yields. One advance runs every check and emission.
-  items.next()
-  return undefined
-}
-
-function* outputJSONArrayItems(
-  frame: OutputJSONFrame,
-  node: unknown[],
-  depth: number
-): Generator<OutputJSON, void> {
+function visitOutputJSONArray(frame: OutputJSONFrame, node: unknown[], depth: number): void {
   outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
   outputAssert(
     Object.getOwnPropertyNames(node).length === node.length + 1 &&
@@ -400,29 +367,12 @@ function* outputJSONArrayItems(
     if (i > 0) emitOutputJSON(frame, ',', true)
     const descriptor = Object.getOwnPropertyDescriptor(node, i)
     outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
-    const child = visitOutputJSON(frame, descriptor.value, depth + 1)
-    if (frame.capture) yield child as OutputJSON
+    visitOutputJSON(frame, descriptor.value, depth + 1)
   }
   emitOutputJSON(frame, ']', true)
 }
 
-function visitOutputJSONObject(
-  frame: OutputJSONFrame,
-  node: object,
-  depth: number
-): OutputJSONObject | undefined {
-  const entries = outputJSONObjectEntries(frame, node, depth)
-  if (frame.capture) return ownedOutputJSONRecord(entries)
-  // Text-only traversal never yields. One advance runs every check and emission.
-  entries.next()
-  return undefined
-}
-
-function* outputJSONObjectEntries(
-  frame: OutputJSONFrame,
-  node: object,
-  depth: number
-): Generator<readonly [string, OutputJSON], void> {
+function visitOutputJSONObject(frame: OutputJSONFrame, node: object, depth: number): void {
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
@@ -438,38 +388,29 @@ function* outputJSONObjectEntries(
     // The colon is the next byte before visiting the value. One emission
     // retains the same byte-limit refusal before any value validation.
     emitOutputJSONString(frame, key, ':')
-    const child = visitOutputJSON(frame, descriptor.value, depth + 1)
-    if (frame.capture) yield [key, child as OutputJSON]
+    visitOutputJSON(frame, descriptor.value, depth + 1)
   }
   emitOutputJSON(frame, '}', true)
 }
 
-function visitOutputJSON(
-  frame: OutputJSONFrame,
-  node: unknown,
-  depth: number
-): OutputJSON | undefined {
+function visitOutputJSON(frame: OutputJSONFrame, node: unknown, depth: number): void {
   outputJSONLimit(depth <= frame.bounds.depth, 1)
   const number = typeof node === 'number'
   if (node === null || typeof node === 'boolean' || number) {
     outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
     // Safe integers never use exponent notation here; both encoders map -0 to 0.
     emitOutputJSON(frame, String(node), true)
-    return number && node === 0 ? 0 : (node as OutputJSONScalar)
   } else if (typeof node === 'string') {
     emitOutputJSONString(frame, node)
-    return node
   } else {
     // The preceding scalar branch has already handled null.
     outputAssert(typeof node === 'object', 'Expected a JSON value')
     outputAssert(!frame.path.has(node), 'Cyclic JSON value')
     outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
     frame.path.add(node)
-    const owned = Array.isArray(node)
-      ? visitOutputJSONArray(frame, node, depth)
-      : visitOutputJSONObject(frame, node, depth)
+    if (Array.isArray(node)) visitOutputJSONArray(frame, node, depth)
+    else visitOutputJSONObject(frame, node, depth)
     frame.path.delete(node)
-    return owned
   }
 }
 
@@ -480,25 +421,38 @@ function ownedOutputJSONRecord(fields: Iterable<readonly [string, OutputJSON]>):
   return Object.setPrototypeOf(Object.fromEntries(fields), null) as OutputJSONObject
 }
 
+/** Construct an independent graph only from text just fully validated here.
+ * Native parsing defines ordinary own data fields, including __proto__. The
+ * private reviver selects null prototypes only on fresh, unexposed records.
+ * Caller objects and incoming text never pass through this construction path.
+ */
+function ownValidatedOutputJSON(text: string): OutputJSON {
+  return JSON.parse(text, (_key: string, value: unknown) => {
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.setPrototypeOf(value, null)
+    }
+    return value
+  }) as OutputJSON
+}
+
 /**
- * Validate and capture bounded canonical text and an independent data-only graph.
- * Every representation/resource check runs before its privately captured child
- * is retained. Fresh null-prototype records and ordinary array data properties
- * preserve ownership without reparsing the generated text or retaining verdicts.
+ * Validate bounded canonical text, then construct an independent data-only graph.
+ * Every representation and resource check completes before graph construction.
+ * Records have null prototypes; arrays and records have ordinary own data fields.
  * Incoming text/bytes still require parseOutputJSON to retain duplicate evidence.
  */
 export function ownOutputJSON(
   input: unknown,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): { text: string; value: OutputJSON } {
-  return serializeOutputJSON(input, limitsFor(limits), 1)
+  const text = serializeOutputJSON(input, limitsFor(limits))
+  return { text, value: ownValidatedOutputJSON(text) }
 }
 
-/** @internal Same fresh ownership and complete canonical byte fences, without
- * retaining text that the schema layer would immediately discard. */
+/** @internal Same fresh ownership and complete canonical byte fences. */
 export function ownOutputJSONValue(
   input: unknown,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): OutputJSON {
-  return serializeOutputJSON(input, limitsFor(limits), 2).value
+  return ownValidatedOutputJSON(serializeOutputJSON(input, limitsFor(limits)))
 }
