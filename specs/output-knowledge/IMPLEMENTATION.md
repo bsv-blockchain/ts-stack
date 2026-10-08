@@ -6916,3 +6916,35 @@ Mechanical inverse comparison must restore the complete original JSON module;
 all original units, properties, examples, policies and151/398 controls remain.
 Coherent source/compiler/artifact checks and fresh exact-head hosted functional,
 analyzer and mutation qualification are required. Checkpoint2 is incomplete.
+
+### October 8: checked serialization entries without an intermediate value Map
+
+Publishedc4aa4cd6 passes262 SDK suites/8,591 tests and native wallet79/882,
+including original8_BEEF. Actual Sonar and both actual CodeQL analyses qualify
+its exact tree with zero new findings or open PR-ref alerts; all21 review
+threads are resolved. Its coordinator property interrupts194/300 at the
+unchanged150-second limit, while the other985 tests pass. No nonempty
+counterexample is reported. Complete coverage and151/398 mutations remain
+unqualified; Checkpoint2 is incomplete.
+
+The independently admitted preceding0ecd coordinator CPU trace is valid and
+identifies owned JSON traversal and record construction as substantial work.
+Disclosure and native CPU traces are excluded entirely for negative/reordered
+samples. No comparative or causal performance claim follows from that trace.
+
+The next serializer yields each child only after its original descriptor,
+Unicode, scalar, structural and resource checks, directly to native
+Object.fromEntries own-data construction. It removes the intermediate value
+Map for serialization only. The fresh resulting graph still contains
+independently owned children and ordinary own data properties in null-prototype
+records. No input-selected property write is introduced. Text-only traversal
+does not yield; one iterator advance exhausts all original checks and emissions.
+The private capture mode is immutable throughout each traversal. The
+duplicate-aware parser, its Maps, method bodies and initialization remain exact.
+
+Every prototype, symbol, cycle, canonical ordering, descriptor, UTF-8 byte,
+integer, depth and item fence retains its order. Public schemas, errors and
+owned graph attributes remain. Whole-module mechanical inverse preservation,
+all original tests/examples/policies, coherent compiler/root/artifact checks
+and complete source inventory must pass before publication. Fresh exact-head
+hosted functional/analyzer and mutation qualification remain mandatory.

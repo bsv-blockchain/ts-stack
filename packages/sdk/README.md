@@ -451,9 +451,10 @@ wallet-derived locking key, and field signature before reading or spending it.
   descriptor inspection and failed calls cannot reuse another frame's text,
   byte counter, bounds or ancestor set. Resource assertions retain their exact
   predicates and refusal messages. Validated safe integers use the same decimal
-  text, including conversion of negative zero to zero. Ownership captures each
-  validated child into a fresh private data graph during the same traversal,
-  without reparsing the generated text or retaining values between calls.
+  text, including conversion of negative zero to zero. Ownership yields each freshly validated child to native own-data construction
+  during the same traversal. It retains no intermediate value Map, reparses no
+  generated text and retains no values between calls. Text-only traversal exhausts
+  the same checks without yielding children or constructing a graph.
 
   Parsing decodes values once into a bounded private graph, exposing it only
   after complete syntax, Unicode, integer, resource and trailing-data checks.
@@ -463,7 +464,7 @@ wallet-derived locking key, and field signature before reading or spending it.
   only after successful values. Native container construction gives arrays ordinary writable, configurable,
   enumerable data properties without invoking inherited indexed setters.
   The new private graph creates each null-prototype record directly and copies
-  staged own data with standard object spread, without changing a record prototype;
+  checked own data with standard object spread, without changing a record prototype;
   keys such as `__proto__` remain ordinary writable data. Canonical property ordering sorts
   each fresh primitive-name array with the original UTF-16 comparator captured
   once, including numeric-looking and supplementary keys. It allocates no

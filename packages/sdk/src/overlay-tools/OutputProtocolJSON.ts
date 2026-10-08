@@ -401,13 +401,24 @@ function visitOutputJSONObject(
   node: object,
   depth: number
 ): OutputJSONObject | undefined {
+  const entries = outputJSONObjectEntries(frame, node, depth)
+  if (frame.capture) return ownedOutputJSONRecord(entries)
+  // Text-only traversal never yields. One advance runs every check and emission.
+  entries.next()
+  return undefined
+}
+
+function* outputJSONObjectEntries(
+  frame: OutputJSONFrame,
+  node: object,
+  depth: number
+): Generator<readonly [string, OutputJSON], void> {
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   // RFC 8785 orders primitive property-name strings by UTF-16 code units.
   const keys = Object.getOwnPropertyNames(node)
   // The fresh primitive names use one fixed locale-independent comparator.
   keys.sort(compareOutputJSONKeys)
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
-  const owned = frame.capture ? new Map<string, OutputJSON>() : undefined
   emitOutputJSON(frame, '{', true)
   let index = 0
   for (const key of keys) {
@@ -418,10 +429,9 @@ function visitOutputJSONObject(
     // retains the same byte-limit refusal before any value validation.
     emitOutputJSONString(frame, key, ':')
     const child = visitOutputJSON(frame, descriptor.value, depth + 1)
-    if (owned) owned.set(key, child as OutputJSON)
+    if (frame.capture) yield [key, child as OutputJSON]
   }
   emitOutputJSON(frame, '}', true)
-  return owned ? ownedOutputJSONRecord(owned) : undefined
 }
 
 function visitOutputJSON(
@@ -453,8 +463,8 @@ function visitOutputJSON(
   }
 }
 
-/** Copy staged own data into a record whose prototype is null from creation. */
-function ownedOutputJSONRecord(fields: Map<string, OutputJSON>): OutputJSONObject {
+/** Construct checked entries as own data, then copy to a fresh null-prototype record. */
+function ownedOutputJSONRecord(fields: Iterable<readonly [string, OutputJSON]>): OutputJSONObject {
   return { __proto__: null, ...Object.fromEntries(fields) } as OutputJSONObject
 }
 
