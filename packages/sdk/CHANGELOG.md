@@ -216,6 +216,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.3 source candidate)
 
+- Construct each privately owned JSON record with a null prototype from creation, using standard own-data copying after the same validated Map staging. All key, attribute, ownership, validation and refusal behavior remains unchanged.
 - Sort fresh canonical JSON names with the original locale-independent UTF-16 comparator captured once. Schema normalization still counts every canonical byte and creates an independent owned graph while omitting discarded text; public serialization, all refusal boundaries and limits remain unchanged.
 - Add `inspectOutputJSONEncoding` for fresh duplicate-aware, bounded parsing with a canonical-input flag and an independently owned value. The flag is not a schema, signature or authorization verdict. Ordinary parsing, canonical UTF-16 key order, literal/number encodings, limits and refusal order are preserved; optional inspection code stays separate from ordinary parser bundles.
 - Preserve Map-based duplicate detection and own-data-property construction for fresh null-prototype parsed records; traverse canonical fields in order without per-field callbacks. Preserve special property names, all bounds, exact encodings and refusal order.

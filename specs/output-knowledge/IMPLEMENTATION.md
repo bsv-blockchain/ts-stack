@@ -6885,3 +6885,34 @@ Source preservation, compiler contexts, exact unchanged artifact budgets and
 the complete151/398 inventory must pass before publication. Fresh hosted
 functional/analyzer/mutation qualification is still required; no comparative
 speed claim is made and Checkpoint2 remains incomplete.
+
+### October 8: null-prototype record construction from creation
+
+Published0ecd5bbd passes all262 SDK suites/8,591 tests and native wallet
+shard3's79 suites/882 tests, including original8_BEEF. Actual Sonar has
+qualityOK with zero findings/hotspots; both actual CodeQL analyses match
+the published tree with zero open PR-ref alerts. All21 review threads are
+resolved. Its coordinator property still interrupts232/300 at the original
+150-second limit, with no nonempty counterexample; the other985 tests in
+that shard pass. The complete functional baseline and151/398 mutation
+campaign remain unqualified.
+
+The preceding8716 artifact has one valid coordinator CPU trace. Its disclosure
+and native traces contain negative/reordered samples and are excluded entirely;
+all three9ddf traces remain excluded. The valid coordinator trace identifies
+owned-record construction as substantial work in that instrumented run. It does
+not establish comparative speed or performance of this new candidate.
+
+The next constructor retains fresh private Map staging and native
+Object.fromEntries, but copies the staged own data into a record whose
+prototype is null from creation. Standard object spread defines ordinary
+writable, configurable, enumerable own data properties, including **proto**,
+without invoking inherited setters or changing a record's prototype afterward.
+All source descriptors, duplicate detection, canonical order, byte counting,
+Unicode, integer, depth and item checks retain their order; child ownership
+and error identities are unchanged. No input or verdict cache is introduced.
+
+Mechanical inverse comparison must restore the complete original JSON module;
+all original units, properties, examples, policies and151/398 controls remain.
+Coherent source/compiler/artifact checks and fresh exact-head hosted functional,
+analyzer and mutation qualification are required. Checkpoint2 is incomplete.

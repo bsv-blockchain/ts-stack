@@ -453,9 +453,9 @@ function visitOutputJSON(
   }
 }
 
-/** Construct own data properties, then remove the fresh record's prototype. */
+/** Copy staged own data into a record whose prototype is null from creation. */
 function ownedOutputJSONRecord(fields: Map<string, OutputJSON>): OutputJSONObject {
-  return Object.setPrototypeOf(Object.fromEntries(fields), null) as OutputJSONObject
+  return { __proto__: null, ...Object.fromEntries(fields) } as OutputJSONObject
 }
 
 /**

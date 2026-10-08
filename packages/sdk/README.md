@@ -462,7 +462,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   rejected before the map-size fence or value parsing. Collection sizes advance
   only after successful values. Native container construction gives arrays ordinary writable, configurable,
   enumerable data properties without invoking inherited indexed setters.
-  The new private graph has null-prototype records before being exposed;
+  The new private graph creates each null-prototype record directly and copies
+  staged own data with standard object spread, without changing a record prototype;
   keys such as `__proto__` remain ordinary writable data. Canonical property ordering sorts
   each fresh primitive-name array with the original UTF-16 comparator captured
   once, including numeric-looking and supplementary keys. It allocates no
