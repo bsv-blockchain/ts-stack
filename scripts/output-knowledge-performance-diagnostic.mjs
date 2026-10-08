@@ -720,6 +720,144 @@ function collectEntrySummary({
   }
 }
 
+/** Preparation is separate from measurement and cannot supply qualification. */
+export function nativePreparationMayContinue(result) {
+  return result?.exitCode === 0 && diagnosticMayContinueValidation('profile-summary', result)
+}
+
+async function prepareNativeRuntime() {
+  assert.equal(process.platform, 'linux', 'Application diagnostics require hosted Linux')
+  assert.equal(process.env.GITHUB_ACTIONS, 'true')
+  assert.match(process.env.GITHUB_SHA ?? '', /^[0-9a-f]{40}$/)
+  assert.match(process.env.GITHUB_RUN_ID ?? '', /^[1-9]\d*$/)
+  assert.match(process.env.GITHUB_RUN_ATTEMPT ?? '', /^[1-9]\d*$/)
+  assert.ok(process.env.RUNNER_TEMP, 'Hosted native runtime directory is required')
+  const root = fileURLToPath(new URL('..', import.meta.url)),
+    cache = path.join(process.env.RUNNER_TEMP, 'mongodb-binaries'),
+    until = performance.now() + 180000,
+    frozen = new Map(),
+    links = new Map()
+  assert.equal(process.env.MONGOMS_DOWNLOAD_DIR, cache, 'Unselected Mongo runtime directory')
+  const aborted = () => (performance.now() >= until ? 'preparation-calendar-expired' : null)
+  const freeze = file => {
+    assert.equal(aborted(), null)
+    frozen.set(file, hash(file))
+  }
+  const files = execFileSync('/usr/bin/git', ['ls-files', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 15000
+  })
+    .split('\0')
+    .filter(Boolean)
+  for (const file of files) freeze(path.join(root, file))
+  freeze(process.execPath)
+  const walk = directory => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name)
+      if (entry.isDirectory()) walk(file)
+      else if (entry.isFile()) freeze(file)
+      else if (entry.isSymbolicLink()) links.set(file, fs.readlinkSync(file))
+    }
+  }
+  // Bind installed code and resolution links without importing any application.
+  walk(path.join(root, 'node_modules'))
+  walk(path.join(root, 'packages/overlays/overlay/node_modules'))
+  const guard = () => {
+    assert.equal(aborted(), null)
+    assert.equal(
+      execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
+        cwd: root,
+        encoding: 'utf8',
+        timeout: 15000
+      }).trim(),
+      process.env.GITHUB_SHA
+    )
+    for (const [file, target] of links) {
+      assert.equal(aborted(), null)
+      assert.equal(fs.readlinkSync(file), target)
+    }
+    for (const [file, digest] of frozen) {
+      assert.equal(aborted(), null)
+      assert.equal(hash(file), digest)
+    }
+  }
+  fs.mkdirSync(cache, { recursive: true })
+  assert.equal(fs.realpathSync(cache), cache, 'Mongo runtime directory must be owned')
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'output-knowledge-prepare-')),
+    output = path.join(
+      root,
+      '.coverage-output',
+      `performance-diagnostic-native-preparation-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`
+    )
+  fs.mkdirSync(path.dirname(output), { recursive: true })
+  fs.mkdirSync(output)
+  let result,
+    cancelled = false
+  const onCancel = () => {
+    cancelled = true
+  }
+  process.on('SIGTERM', onCancel)
+  process.on('SIGINT', onCancel)
+  try {
+    guard()
+    result = await supervise(
+      [
+        '--input-type=module',
+        '-e',
+        "import { MongoBinary } from 'mongodb-memory-server'; await MongoBinary.getPath({ version: '8.2.6' });"
+      ],
+      path.join(root, 'packages/overlays/overlay'),
+      path.join(directory, 'preparation.log'),
+      120,
+      {
+        ...process.env,
+        NODE_OPTIONS: '',
+        NODE_V8_COVERAGE: '',
+        MONGOMS_SYSTEM_BINARY: '',
+        MONGOMS_VERSION: '8.2.6',
+        MONGOMS_MD5_CHECK: 'true',
+        MONGOMS_RUNTIME_DOWNLOAD: 'true'
+      },
+      () => (cancelled ? 'operator-cancelled' : aborted())
+    )
+    guard()
+    assert.ok(!cancelled && nativePreparationMayContinue(result), 'Native preparation refused')
+    freezeNativeDiagnosticRuntime(
+      root,
+      applicationDiagnosticSelection('native-http'),
+      () => {},
+      () => {}
+    )
+    console.log(
+      'Fixed MongoDB 8.2.6 preparation passed; independent measurement and qualification remain required.'
+    )
+  } finally {
+    fs.writeFileSync(
+      path.join(output, 'diagnostic.json'),
+      JSON.stringify(
+        {
+          source: process.env.GITHUB_SHA,
+          run: process.env.GITHUB_RUN_ID,
+          attempt: process.env.GITHUB_RUN_ATTEMPT,
+          preparationOnly: true,
+          mongoVersion: '8.2.6',
+          calendarSeconds: 180,
+          result: result ?? null,
+          rawPayloadPrinted: false,
+          fullFunctionalQualified: false,
+          fullCampaignQualified: false
+        },
+        null,
+        2
+      )
+    )
+    fs.rmSync(directory, { recursive: true, force: true })
+    process.removeListener('SIGTERM', onCancel)
+    process.removeListener('SIGINT', onCancel)
+  }
+}
+
 async function main() {
   assert.equal(process.platform, 'linux', 'Application diagnostics require hosted Linux')
   assert.equal(process.env.GITHUB_ACTIONS, 'true')
@@ -1001,7 +1139,9 @@ async function main() {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
-    await main()
+    if (process.argv.length === 3 && process.argv[2] === '--prepare-native-runtime')
+      await prepareNativeRuntime()
+    else await main()
   } catch {
     console.error('Application performance diagnostic refused; inspect Boolean metadata only.')
     process.exitCode = 1

@@ -56,8 +56,15 @@ HTTP integration cases in the `private-esm` project with coverage. Their
 diagnostic has a 600-second child bound within its own 900-second calendar and
 uses the same log/profile bounds, source guards and complete process drainage.
 It freezes the additional built Overlay, Overlay Express and LCH inputs and the
-exact cached MongoDB 8.2.6 executable before starting the fixture. Missing or
-ambiguous binaries refuse the measurement; runtime downloads are disabled and
+exact cached MongoDB 8.2.6 executable before starting the fixture. A separate
+hosted preparation step obtains that fixed executable when the cache is cold,
+without starting a database or importing application code. It binds the tracked
+source, Node executable and complete installed pnpm store, supervises only the
+fixed downloader with a 120-second child bound within a 180-second preparation
+calendar, and independently retains Boolean triage and whole-group drainage.
+Preparation records no raw output and supplies no qualification. Cancellation,
+a fault, deadline, source change or unsuccessful child refuses preparation.
+The measurement still rejects missing or ambiguous binaries; runtime downloads are disabled and
 version checking remains enabled. The complete ordinary suite still qualifies
 the integration. The three fixed selectors have distinct report directories and
 identities; none accepts arbitrary paths or test-name filters.

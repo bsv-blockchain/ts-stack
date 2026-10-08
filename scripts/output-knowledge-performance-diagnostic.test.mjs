@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   applicationDiagnosticSelection,
+  nativePreparationMayContinue,
   diagnosticMayContinueValidation,
   functionEntryRefusal,
   readBoundedProfile,
@@ -619,5 +620,51 @@ test('duplicate property summaries refuse mismatched counts, outcomes, excess re
       { ...safeMeasurement, exitCode: 0 }
     ),
     { outcome: 'other-failure', completedCases: null }
+  )
+})
+
+test('cold-cache preparation refuses every unsafe result and cannot accept an ordinary failure', () => {
+  const success = {
+    exitCode: 0,
+    signal: null,
+    processGroupGone: true,
+    timedOut: false,
+    stopReason: null,
+    knownNativeFaultMarker: false,
+    boundedTriageExceeded: false,
+    testCaseTimeoutMarker: false
+  }
+  assert.equal(nativePreparationMayContinue(success), true)
+  for (const change of [
+    { exitCode: 1 },
+    { exitCode: null },
+    { signal: 'SIGTERM' },
+    { processGroupGone: false },
+    { timedOut: true },
+    { stopReason: 'source-changed' },
+    { knownNativeFaultMarker: true },
+    { boundedTriageExceeded: true },
+    { testCaseTimeoutMarker: true }
+  ])
+    assert.equal(nativePreparationMayContinue({ ...success, ...change }), false)
+  assert.equal(nativePreparationMayContinue(undefined), false)
+  const workflow = fs.readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+    preparation = workflow.indexOf(
+      '      - name: Prepare the fixed Mongo binary before optional measurement'
+    ),
+    measure = workflow.indexOf(
+      '      - name: Measure the unchanged application property on hosted Linux'
+    ),
+    restore = workflow.indexOf(
+      '      - name: Restore the fixed Mongo binary for optional native diagnostics'
+    )
+  assert.ok(restore < preparation && preparation < measure)
+  assert.match(
+    workflow.slice(preparation, measure),
+    /MONGOMS_DOWNLOAD_DIR: \$\{\{ runner.temp \}\}\/mongodb-binaries/
+  )
+  assert.match(
+    workflow.slice(preparation, measure),
+    /run: node scripts\/output-knowledge-performance-diagnostic\.mjs --prepare-native-runtime/
   )
 })

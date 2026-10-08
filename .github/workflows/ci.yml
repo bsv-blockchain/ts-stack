@@ -489,6 +489,11 @@ jobs:
         with:
           path: ${{ runner.temp }}/mongodb-binaries
           key: mongodb-memory-server-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Prepare the fixed Mongo binary before optional measurement
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --prepare-native-runtime
       - name: Measure the unchanged application property on hosted Linux
         if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
         env:
