@@ -124,17 +124,13 @@ export class NodeProtectedPayloadCodec {
     const reader = this.open
     const owned = parseOutputJSON(input, { bytes: maximumEnvelopeBytes })
     if (reader !== defaultObjectReader) return Reflect.apply(reader, this, [binding, owned])
+    const fields = ['format', 'keyId', 'salt', 'nonce', 'ciphertext', 'tag']
     const stringsOnly =
       owned !== null &&
       typeof owned === 'object' &&
       !Array.isArray(owned) &&
-      Object.keys(owned).length === 6 &&
-      typeof owned.format === 'string' &&
-      typeof owned.keyId === 'string' &&
-      typeof owned.salt === 'string' &&
-      typeof owned.nonce === 'string' &&
-      typeof owned.ciphertext === 'string' &&
-      typeof owned.tag === 'string'
+      Object.keys(owned).length === fields.length &&
+      fields.every(name => typeof owned[name] === 'string')
     // Six owned string fields have canonical JSON no larger than their bounded
     // serialized input. Preserve the original canonicalization/error order for
     // every malformed shape or nonstring field rather than broadening that path.

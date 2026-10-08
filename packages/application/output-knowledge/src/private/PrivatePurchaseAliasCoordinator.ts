@@ -825,13 +825,12 @@ export class PrivatePurchaseAliasCoordinator {
     }
   }
   private current(caller: PrivatePurchaseCaller, signal: AbortSignal): boolean {
-    return (
-      !signal.aborted &&
-      !caller.signal?.aborted &&
-      this.unchanged.every(unchangedMethod) &&
-      permitted(caller.current()) &&
-      !signal.aborted
-    )
+    if (signal.aborted || caller.signal?.aborted) return false
+    for (const method of this.unchanged) {
+      // Read each installed property afresh, retaining its original order.
+      if (method.owner[method.key] !== method.original) return false
+    }
+    return permitted(caller.current()) && !signal.aborted
   }
   private requireCurrent(caller: PrivatePurchaseCaller, signal: AbortSignal): void {
     checkOutputWork(signal, 'Purchase work cancelled')
@@ -888,10 +887,6 @@ function pin<T extends object, K extends keyof T>(owner: T, key: K): InstalledMe
   outputAssert(typeof original === 'function', 'Purchase installed port is required')
   // Installation metadata contains expected identities, never a currentness verdict.
   return Object.freeze({ owner: owner as Record<PropertyKey, unknown>, key, original })
-}
-function unchangedMethod(method: InstalledMethod): boolean {
-  // Every visited port performs the same fresh property read, in the same order.
-  return method.owner[method.key] === method.original
 }
 function permitted(value: unknown): boolean {
   if (value instanceof Promise) {

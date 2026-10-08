@@ -1352,12 +1352,11 @@ the original observation sequence, and accessors, extra/hidden/symbol fields,
 other prototypes and other representations retain the general JSON validator.
 No input, shape, authorization, ciphertext or validation verdict is cached.
 
-Serialized private envelopes retain complete fresh lexical validation and exact
-six-field membership. Their fixed string fields are checked directly in original
-order without a per-call field-list allocation or callback. Every malformed shape
-keeps the original canonicalization path, refusal order and capacity checks.
-Custody lookup, derivation, authenticated decryption and custom-reader dispatch
-remain independent on every read; no key, input or validation verdict is cached.
+The alias coordinator checks each installed owner/key/method identity directly
+in its original order on every currentness boundary. It checks cancellation
+before those reads and caller authorization afterward, retaining the original
+short-circuit behavior and method receiver. Fixed installation metadata holds
+expected identities; it never holds a currentness or authorization verdict.
 
 ## Paid acquisition foundation
 

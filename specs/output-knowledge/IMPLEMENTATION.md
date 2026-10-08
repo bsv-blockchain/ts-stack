@@ -7537,3 +7537,37 @@ object reader and verifies a subsequent fresh valid read. Custody lookup, key
 derivation, GCM authentication, reader override capture and all capacities remain
 unchanged. This removes local field-list/callback allocation without caching any
 input, plaintext, key or authority verdict; hosted performance is still unproved.
+
+## October 8: preserve engine goldens and direct installed-method checks
+
+Published51d69e3 has terminal CI failure16success/4failure/15skip. The actual
+Sonar analysis has zero findings in every checked classification and zero
+unreviewed hotspots. Conformance, code generation and container contracts pass.
+The early installed mutation-engine control rejects the protected-ledger
+inventory at1009 rather than its original994 golden. Dependent build/test,
+mutation gate and merge gate fail without qualifying application properties.
+The final envelope-field source change should have rerun this original engine
+control in addition to the full151/398 inventory; the missed check is recorded.
+
+The direct six-envelope-field source change is reverted exactly to priora369
+source, preserving the original994 golden and all three original engine tests,
+all20 reference counts, both overlay configurations and every selector/setting.
+The appended six-field negative test remains additional ordinary coverage.
+No artificial mutant padding, weakened assertion, removed original test or
+narrowed target range is introduced. Its failed receipt remains historical.
+
+The alias coordinator instead traverses its installed owner/key/method metadata
+directly. Every visited method property is read afresh in the original order.
+Cancellation checks still precede the loop; the first changed method refuses
+before later methods or caller authority, and caller authorization plus the final
+abort check retain their original order. Existing all-method-replacement and
+repeated getter-order regressions remain unchanged. Expected installation
+identities are fixed metadata, never an authorization or currentness verdict.
+This removes per-method callbacks; no hosted speedup is claimed before evidence.
+
+Fresh full root/engine/typing/declaration/inventory/source-preservation controls,
+then exact-published-head hosted qualification, remain required. Original300cases,
+seed3242026, empty replay,150-second interruption and180-second individual limits,
+workers, isolation,151targets/398rows, thresholds and bundle ceilings remain.
+The pending mutation-budget proposal remains unapproved and unapplied. Checkpoint
+two is incomplete, with no publication, deployment, funding, broadcast or merge.
