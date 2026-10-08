@@ -214,6 +214,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Yield freshly validated serialization array children directly to native own-data array construction. Text-only traversal completes every original check and emission without yielding; ordinary array attributes, inherited-setter isolation, negative-zero behavior and all refusal boundaries are retained.
+
 ### Added (3.3 source candidate)
 
 - Yield each freshly validated serialization child directly to native own-data record construction, without retaining an intermediate value Map. Text-only traversal performs every original check and byte emission without yielding children; the duplicate-aware parser retains its fresh Maps and all boundaries remain unchanged.

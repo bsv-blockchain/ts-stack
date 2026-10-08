@@ -458,7 +458,7 @@ wallet-derived locking key, and field signature before reading or spending it.
 
   Parsing decodes values once into a bounded private graph, exposing it only
   after complete syntax, Unicode, integer, resource and trailing-data checks.
-  Fresh Maps stage validated children and decoded-key membership before native
+  Fresh parser Maps stage validated children and decoded-key membership before native
   record and array construction; duplicates are
   rejected before the map-size fence or value parsing. Collection sizes advance
   only after successful values. Native container construction gives arrays ordinary writable, configurable,

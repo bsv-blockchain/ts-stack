@@ -6948,3 +6948,64 @@ owned graph attributes remain. Whole-module mechanical inverse preservation,
 all original tests/examples/policies, coherent compiler/root/artifact checks
 and complete source inventory must pass before publication. Fresh exact-head
 hosted functional/analyzer and mutation qualification remain mandatory.
+
+### October 8: fresh canonical key-order inspection
+
+Published `fd6d483d` passes all 262 SDK suites and 8,591 tests, application
+shard 1's 64 suites and 859 tests (including the original disclosure property),
+application shard 3's 63 suites and 930 tests, native wallet shard 3's 79 suites
+and 882 tests, packed/documentation consumers and completed browser/mobile
+profiles. Actual Sonar has zero findings and unreviewed hotspots. Both actual
+CodeQL analyses match its exact tree with zero open PR-ref alerts; all 21 review
+threads are resolved. Coordinator shard 2 interrupts at 236 of 300 cases at the
+unchanged 150-second limit; the other 985 tests pass without a reported nonempty
+counterexample. Remaining coverage and full mutations are unqualified.
+
+The current diagnostic's disclosure CPU trace has no negative or reordered
+samples. It identifies work in shared JSON traversal and record construction.
+The coordinator and native CPU traces are excluded entirely for invalid sample
+order. Both property diagnostics report an unclassified failure; their measured
+work qualifies neither functionality nor the coordinator's cause. No comparative
+speed claim or inference from excluded traces is made.
+
+The next proposal inspects each newly obtained primitive-key array for an
+inversion. If all adjacent keys are ordered, they already have the required
+UTF-16 order; otherwise the original captured comparator sorts the array.
+It retains every prototype, symbol, cycle, descriptor, Unicode, integer,
+canonical-byte, depth and item check in the original order. No input, verdict,
+authority or key-array result is cached. Owned graph construction, parser Maps,
+private framing, public outputs and refusal identities remain unchanged.
+
+Whole-module mechanical inverse comparison, original tests/examples/policies,
+coherent source/compiler/root/artifact checks and the complete 151-target/398-row
+inventory must pass before adoption and publication. Fresh complete hosted
+functional, analyzer and mutation qualification remains mandatory.
+
+The first ordering-loop form passed all seven root gates and the SDK package
+check, but the LCH browser consumer exceeded its unchanged uncompressed limit
+by 61 bytes (308,061 against 308,000). That candidate is not published or
+qualified. A compact adjacent-order scan preserves the same fresh UTF-16
+inspection and fallback comparator; its complete package checks remain required.
+
+Both key-order candidates fail the same unchanged LCH limit and are withdrawn.
+The published original explicit UTF-16 sort remains the implementation target;
+no key-order shortcut is being adopted or qualified.
+
+## October 8: direct native array ownership after fresh validation
+
+The next source candidate removes the serializer array's intermediate value Map.
+A private generator performs the original array length, decoration, descriptor,
+child, byte and refusal checks in exactly their original order. Captured children
+flow directly into native Array.from, which defines ordinary own data properties
+and bypasses inherited indexed setters. Text-only mode never yields and exhausts
+the same checks with one advance. The same immutable capture modes, canonical
+encodings, negative-zero semantics, graph independence and error identities remain.
+Duplicate-aware parsing, object ownership and the original key comparator remain
+unchanged. No input, graph, schema, authority or currentness verdict is cached.
+
+The valid disclosure CPU trace shows serialization array traversal among the
+observed work; it does not establish the cause of the coordinator timeout or
+predict this candidate's runtime. Complete compiler, preservation, root and
+unchanged packed-consumer checks must pass before publication. Only fresh hosted
+functional and analyzer qualification and the complete 151/398 mutation campaign
+can complete checkpoint two.

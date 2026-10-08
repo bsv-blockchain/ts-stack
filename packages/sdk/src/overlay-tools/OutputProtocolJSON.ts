@@ -377,23 +377,33 @@ function visitOutputJSONArray(
   node: unknown[],
   depth: number
 ): OutputJSON[] | undefined {
+  const items = outputJSONArrayItems(frame, node, depth)
+  if (frame.capture) return Array.from(items)
+  // Text-only traversal never yields. One advance runs every check and emission.
+  items.next()
+  return undefined
+}
+
+function* outputJSONArrayItems(
+  frame: OutputJSONFrame,
+  node: unknown[],
+  depth: number
+): Generator<OutputJSON, void> {
   outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
   outputAssert(
     Object.getOwnPropertyNames(node).length === node.length + 1 &&
       Object.keys(node).length === node.length,
     'Sparse or decorated JSON array'
   )
-  const owned = frame.capture ? new Map<number, OutputJSON>() : undefined
   emitOutputJSON(frame, '[', true)
   for (let i = 0; i < node.length; i++) {
     if (i > 0) emitOutputJSON(frame, ',', true)
     const descriptor = Object.getOwnPropertyDescriptor(node, i)
     outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
     const child = visitOutputJSON(frame, descriptor.value, depth + 1)
-    if (owned) owned.set(i, child as OutputJSON)
+    if (frame.capture) yield child as OutputJSON
   }
   emitOutputJSON(frame, ']', true)
-  return owned ? Array.from(owned.values()) : undefined
 }
 
 function visitOutputJSONObject(
