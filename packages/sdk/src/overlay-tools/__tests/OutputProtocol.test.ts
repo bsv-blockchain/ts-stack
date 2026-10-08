@@ -1295,3 +1295,55 @@ describe('fresh flat string-record parsing', () => {
     )
   })
 })
+
+describe('explicit string-record parser', () => {
+  it('follows quoted key/value pairs with punctuation and preserves all generic refusals', async () => {
+    const { parseOutputJSONWithStringRecords: parse } = await import('../OutputProtocolJSON.js')
+    const records = [
+      {},
+      Object.fromEntries([
+        ['a', ','],
+        [':', 'colon'],
+        [',', 'comma'],
+        ['', 'empty'],
+        ['__proto__', 'ordinary'],
+        ['constructor', 'data']
+      ]),
+      { ':': ',:', ',': ':,', 'a,b:c': 'text with , : { } [ ]', unicode: 'é😀' }
+    ]
+    for (const record of records) {
+      const text = JSON.stringify(record)
+      for (const input of [text, new TextEncoder().encode(text)]) {
+        const first = parse(input),
+          second = parse(input)
+        expect(first).toEqual(parseOutputJSON(input))
+        expect(second).toEqual(first)
+        expect(second).not.toBe(first)
+        expect(Object.getPrototypeOf(first)).toBeNull()
+      }
+    }
+    for (const text of [
+      '{"a":",",":":"one",":":"two"}',
+      '{"a":"one","a":"two"}',
+      '{"a":"one","\\u0061":"two"}',
+      '{"a":"line\nfeed"}',
+      '{"a":"one"}x'
+    ]) {
+      expect(() => parse(text)).toThrow(OutputProtocolError)
+      expect(parse('{"a":"valid"}')).toEqual({ a: 'valid' })
+    }
+    const text = JSON.stringify({ a: ',', ':': 'one' })
+    expect(() => parse(text, { mapKeys: 1 })).toThrow('JSON map limit')
+    expect(() => parse(text, { depth: 1 })).toThrow('JSON depth limit')
+    expect(() => parse(text, { bytes: text.length - 1 })).toThrow('Output JSON byte limit')
+    expect(parse('{}', { depth: 1 })).toEqual({})
+    for (const text of [
+      ' {"a":"one"}\n',
+      '{"a":"\\u0061"}',
+      '{"a":{"b":"nested"}}',
+      '{"a":[1,true,null]}'
+    ]) {
+      expect(parse(text)).toEqual(parseOutputJSON(text))
+    }
+  })
+})

@@ -502,14 +502,16 @@ wallet-derived locking key, and field signature before reading or spending it.
   after token recognition. Both paths retain Unicode validation, duplicate-key
   rejection and the same errors, limits and encoding inspection.
 
-  Flat records containing only unescaped string names and values receive a
-  complete fresh lexical proof before native construction: framing, controls,
-  duplicate names, map size, depth, Unicode and bytes are checked for that input.
-  The only retained expression is fixed syntax grammar; the key Set and matcher
-  belong to one invocation. Other shapes, escaped text and refused records use
-  the original parser and its error order. Every successful graph remains newly
-  owned, and endpoint schema, binding, authentication and currentness checks still
-  run independently. Encoding inspection keeps its original parser and byte checks.
+  `parseOutputJSONWithStringRecords(input, limits)` explicitly selects a fresh
+  string-record path with the same complete parsing and ownership contract.
+  Ordinary `parseOutputJSON` retains its original path. The opt-in path proves
+  flat unescaped string framing, controls, duplicate decoded names, map size,
+  depth, Unicode and bytes before native construction. A local cursor follows
+  grammar-proven quote boundaries, including when punctuation occurs inside
+  names or values. Other shapes and refusals use the original parser/error order.
+  Only fixed grammar is retained. Each graph is newly owned; endpoint schemas,
+  bindings, authentication and currentness checks remain independent. The Node
+  private-payload codec selects this path; browser companions do not require it.
 
   `outputString` retains its nonempty primitive, 1,024-code-unit and 1,024-byte
   UTF-8 limits. Fresh ASCII evidence establishes well-formed Unicode and one

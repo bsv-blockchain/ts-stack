@@ -3763,6 +3763,10 @@ export function buildMutationTargets(repositoryRoot) {
       ...selectors,
       ...aliasCoreTests.filter(test => !selectors.includes(test))
     ]
+    // Complete initial-suite budget only: nine base profiles and five derived
+    // alias profiles registered below. Preserve individual property deadlines,
+    // tests, mutation ranges, thresholds, worker isolation and overall job limits.
+    targets[id].runnerOptions.dryRunTimeoutMinutes = id === 'private-purchase-buyer' ? 30 : 15
     targets[id].additionalInputs = [
       ...targets[id].additionalInputs,
       'test/private-purchase-alias*.ts',

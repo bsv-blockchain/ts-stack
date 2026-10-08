@@ -10,7 +10,7 @@ import {
   canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputString,
-  parseOutputJSON,
+  parseOutputJSONWithStringRecords as parseOutputJSON,
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'

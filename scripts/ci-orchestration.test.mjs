@@ -267,7 +267,10 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
       const executionJob = workflowJobBlocks(executor).find(
         candidate => candidate.name === 'execution'
       )
-      assert.equal(executionJob?.source.match(/^ {4}timeout-minutes: .+$/m)?.[0], expected)
+      const actualTimeout = executionJob?.source.match(/^ {4}timeout-minutes: .+$/m)?.[0]
+      const qualificationPrefix = `inputs.profile == 'qualification' && contains(fromJSON('["wallet-funding-controller","revenue-listing-authority","revenue-listing-profile"]'), matrix.target) && 180 || `
+      assert.equal(actualTimeout, expected.replace('${{ ', '${{ ' + qualificationPrefix))
+      assert.equal(actualTimeout.replace(qualificationPrefix, ''), expected)
       const dedicated = readFileSync(
         join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'),
         'utf8'

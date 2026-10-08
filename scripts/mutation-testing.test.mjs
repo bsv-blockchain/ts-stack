@@ -1668,3 +1668,30 @@ test('current immutable listing qualification adds complete sources without chan
     )
   )
 })
+
+test('complete alias regression initial-suite allowances retain their exact fourteen-target scope', () => {
+  const allowances = new Map([
+    ['private-purchase-alias-state', 15],
+    ['private-purchase-alias-custody', 15],
+    ['private-purchase-state', 15],
+    ['private-purchase-native-clock', 15],
+    ['private-purchase-coordination', 15],
+    ['private-purchase-evidence', 15],
+    ['private-purchase-disclosure', 15],
+    ['private-purchase-buyer', 30],
+    ['protected-operation-objects', 15],
+    ['private-purchase-alias-owner', 15],
+    ['private-purchase-alias-currentness', 15],
+    ['private-purchase-alias-coordinator', 15],
+    ['private-purchase-alias-disclosure', 15],
+    ['private-purchase-buyer-alias', 15]
+  ])
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  for (const [id, target] of Object.entries(configured)) {
+    assert.equal(target.runnerOptions.dryRunTimeoutMinutes, allowances.get(id), id)
+    if (allowances.has(id))
+      for (const selector of currentAliasRegressionTests)
+        assert.ok(target.runnerOptions.jest.config.testMatch.includes(selector), id)
+  }
+  for (const id of allowances.keys()) assert.ok(Object.hasOwn(configured, id), id)
+})

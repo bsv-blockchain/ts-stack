@@ -7882,3 +7882,69 @@ and CodeQL analyses pass, with zero checked findings and unresolved review threa
 Complete qualification on the new published source and the full independently
 reconciled mutation campaign remain required. The scoped campaign-budget proposal
 remains unapproved and unapplied. Checkpoint 2 remains open.
+
+## October 8: explicitly selected string records and quote boundaries
+
+The initial general-parser attempt on a073 revealed two blockers: the hosted
+LCH overlay-acquisition Vite graph measured 308,412 bytes against its unchanged
+308,000-byte ceiling, and source review found delimiter-boundary ambiguity in
+the unescaped field matcher. That attempt does not qualify the parser.
+
+Ordinary parseOutputJSON is restored to its original source path. The additive
+parseOutputJSONWithStringRecords entry owns fresh lexical/duplicate/resource
+checks and constructs a new data-only graph. Its local cursor follows complete
+grammar-proven quote boundaries rather than searching punctuation for keys.
+Other shapes and refusals retain the original parser/error order. Native private
+payload decoding selects the new entry through an import alias; its call sites,
+framing, scalar/schema, custody, authentication and zeroization remain unchanged.
+Browser companions retain their original parsing path and budgets.
+
+An appended regression exercises punctuation-bearing names/values, duplicate
+refusal, Unicode, independent ownership, narrowed resources and generic fallback.
+Every preceding test body is retained. Source-only pinned inventory, strict
+compilation, declaration compatibility and both operations/LCH browser screens
+must validate the final proposal before adoption. This entry records the design;
+no speedup, runtime qualification or checkpoint completion is claimed.
+
+Source-only qualification of this correction passes in all five complete selected
+package contexts with the normal package-resolution rules and emitted SDK type
+overlays. All 234 existing SDK declaration files retain their previous declarations;
+only the additive parser function and its barrel export are added. Pinned
+instrumentation retains all 952 original SDK JSON sites and adds 49 (1,001 total),
+and retains every original protected-ledger site at exactly 994. Targets, rows,
+ranges, thresholds, original engine bodies/configurations/goldens and runtime
+settings remain unchanged.
+
+Static compiled-graph screening replaces both SDK JSON and barrel modules in the
+exact browser-consumer builds. The operations entry measures 62,061 Vite raw bytes
+and 69,097 esbuild raw bytes. LCH overlay-acquisition measures 307,964 and 257,937
+raw bytes respectively, preserving the 308,000/259,000 ceilings and every compressed
+budget. These compiler/bundler checks evaluate no SDK/application/native target
+and do not replace fresh packed/runtime qualification.
+
+The preceding a073 head's formerly interrupted application shards now complete
+all 861 and 988 tests without property interruption or failure; the original
+300-case requirements and deadlines remain unchanged. That head's actual Sonar
+findings/hotspots and verified CodeQL PR-ref alerts are zero, but its browser
+ceiling failure and field-matcher issue prevent qualification. This corrected
+source still requires all root gates and new exact-head hosted qualification.
+The unchanged full 151-target/398-row campaign must be independently reconciled.
+The campaign allowance proposal remains unapproved and unapplied.
+
+## Approved complete-campaign time allowances
+
+The maintainer approved the prepared outer-time allowance proposal on 2026-10-08.
+Complete initial suites receive 15 minutes for the thirteen private-purchase/alias
+and protected-operation profiles, and 30 minutes for private-purchase-buyer.
+Qualification jobs for wallet-funding-controller, revenue-listing-authority and
+revenue-listing-profile receive 180 minutes. Ordinary whole-job 45/90-minute
+allowances remain unchanged. The registry and regression tests enumerate the exact
+fourteen initial-suite and three qualification-job scopes.
+
+This changes only the approved outer allowances. All 151 targets and 398 execution
+rows, mutation ranges and disjoint unions, original properties and tests, minimum
+300 cases, seed 3242026, empty replay, individual 150-second interruption and
+180-second case limits, worker/isolation limits, thresholds, protected-site IDs
+and browser budgets remain required. Earlier failed campaigns remain failed
+evidence. A fresh complete campaign and independent reconciliation are necessary
+for checkpoint two; an allowance change does not qualify a run.

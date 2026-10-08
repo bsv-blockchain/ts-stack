@@ -85,8 +85,6 @@ export function parseOutputJSON(
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): OutputJSON {
   const [source, bounds] = outputJSONSource(input, limits)
-  const flat = ownFlatOutputJSONStringRecord(source, bounds)
-  if (flat !== undefined) return flat
   return new OutputJSONParser(source, bounds).parse()
 }
 
@@ -497,18 +495,32 @@ function ownFlatOutputJSONStringRecord(
   bounds: OutputJSONLimits
 ): OutputJSONObject | undefined {
   if (/[^\u0020-\uFFFF]/.test(source) || !flatOutputJSONStringRecord.test(source)) return undefined
-  const names = new Set<string>(),
-    fields = /(?:^\{|,)"([^"]*)":"/g
-  let match: RegExpExecArray | null
-  // Full syntax above proves this token pattern sees only actual key boundaries;
-  // value strings contain no quotes or escapes. The matcher is local and fresh.
-  while ((match = fields.exec(source)) !== null) {
-    const name = match[1]
+  const names = new Set<string>()
+  let position = 2
+  // The complete grammar proves unescaped quoted key/value pairs. Follow their
+  // quote boundaries; punctuation inside a string cannot become a separator.
+  while (position < source.length - 1) {
+    const nameEnd = source.indexOf('"', position),
+      name = source.slice(position, nameEnd)
     if (names.has(name) || names.size >= bounds.mapKeys) return undefined
     names.add(name)
+    position = source.indexOf('"', nameEnd + 3) + 3
   }
   if (names.size !== 0 && bounds.depth < 2) return undefined
   // Source byte/Unicode/BOM limits have already passed. Root depth is one;
   // nonempty string fields have depth two, and there are no arrays or children.
   return ownValidatedOutputJSON(source) as OutputJSONObject
+}
+
+/** Opt-in string-record path with the same complete parsing and ownership contract.
+ * Other shapes and refusals retain parseOutputJSON's original parser/error order.
+ * Ordinary parseOutputJSON and browser consumers do not select this path.
+ */
+export function parseOutputJSONWithStringRecords(
+  input: Uint8Array | string,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): OutputJSON {
+  const [source, bounds] = outputJSONSource(input, limits)
+  const flat = ownFlatOutputJSONStringRecord(source, bounds)
+  return flat === undefined ? new OutputJSONParser(source, bounds).parse() : flat
 }

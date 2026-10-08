@@ -174,7 +174,7 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
   assert.equal(ci.jobs['mutation-tests'].with.mode, 'diagnostic')
   const deadline = executor['timeout-minutes']
   assert.equal(ciExecutor['timeout-minutes'], deadline)
-  const allowance = JSON.parse(/fromJSON\('([^']+)'\)/.exec(deadline)[1])
+  const allowance = JSON.parse([...deadline.matchAll(/fromJSON\('([^']+)'\)/g)].at(-1)[1])
   for (const target of [
     'wallet-retained-snapshot',
     'wallet-snapshot-sync',
@@ -467,4 +467,30 @@ test('mutation execution retains the exact caller runtime and ordinary CI baseli
     ],
     "${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}"
   )
+})
+
+test('long complete-job allowances apply only to three qualification targets', async () => {
+  const { parse } = await import('yaml')
+  const full = parse(
+    readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
+  )
+  const executor = await mutationExecutor(full)
+  const deadline = executor['timeout-minutes']
+  const match =
+    /^\$\{\{ inputs\.profile == 'qualification' && contains\(fromJSON\('([^']+)'\), matrix\.target\) && 180 \|\| contains\(fromJSON\('([^']+)'\), matrix\.target\) && 90 \|\| 45 \}\}$/.exec(
+      deadline
+    )
+  assert.ok(match, 'Qualification scope and original diagnostic fallback must remain explicit')
+  const extended = JSON.parse(match[1])
+  assert.deepEqual(extended, [
+    'wallet-funding-controller',
+    'revenue-listing-authority',
+    'revenue-listing-profile'
+  ])
+  const originalNinetyMinuteTargets = JSON.parse(match[2])
+  const configured = buildMutationTargets(REPOSITORY_ROOT)
+  for (const id of extended) {
+    assert.ok(Object.hasOwn(configured, id), id)
+    assert.equal(originalNinetyMinuteTargets.includes(id), false, id)
+  }
 })

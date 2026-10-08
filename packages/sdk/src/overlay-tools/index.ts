@@ -9,6 +9,7 @@ export {
   ownOutputJSON,
   OUTPUT_JSON_LIMITS,
   parseOutputJSON,
+  parseOutputJSONWithStringRecords,
   type OutputJSON,
   type OutputJSONObject,
   type OutputJSONLimits

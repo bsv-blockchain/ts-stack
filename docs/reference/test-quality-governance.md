@@ -454,3 +454,20 @@ deadlines and complete-campaign-only qualification. Neither has a source partiti
 or an excluded source region. Their registrations are additional obligations;
 passing component tests does not establish admission, release or full campaign
 completion.
+
+## Complete alias initial suites and qualification jobs
+
+The approved private-purchase/alias composition keeps every original test and
+mutation target. Its complete initial-suite allowance is 15 minutes for thirteen
+profiles and 30 minutes for private-purchase-buyer; the registry regression tests
+enumerate all fourteen, including five derived alias profiles. This is an outer
+suite allowance, separate from each property's original 300-case minimum,
+150-second interruption and 180-second case timeout.
+
+Only the qualification profile grants 180-minute whole jobs to
+wallet-funding-controller, revenue-listing-authority and revenue-listing-profile.
+Ordinary diagnostic 45/90-minute limits and all other job limits are unchanged.
+The complete 151-target/398-row campaign, unchanged source partitions, worker
+limits and score gates still require successful final reports and independent
+reconciliation on the exact published commit. A timeout or missing report remains
+a failed run; prior failures cannot be reclassified by the larger allowance.
