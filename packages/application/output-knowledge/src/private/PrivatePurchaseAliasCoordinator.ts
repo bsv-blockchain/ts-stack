@@ -93,6 +93,12 @@ export interface PrivatePurchaseAliasCoordinatorOptions {
   timeoutMs?: number
 }
 
+interface InstalledMethod {
+  readonly owner: Record<PropertyKey, unknown>
+  readonly key: PropertyKey
+  readonly original: unknown
+}
+
 /** Explicit alias-custody companion. Legacy exact-txid coordinators remain
  * unchanged. Bitcoin/domain validation, native effect custody, admission,
  * currentness, issuance and physical HTTP disclosure retain separate authority. */
@@ -100,7 +106,7 @@ export class PrivatePurchaseAliasCoordinator {
   private readonly ports: Readonly<PrivatePurchaseAliasCoordinatorOptions>
   private readonly installed: ReturnType<PrivatePurchaseContracts['configuration']>
   private readonly policy: { id: string; digest: string }
-  private readonly unchanged: readonly (() => boolean)[]
+  private readonly unchanged: readonly InstalledMethod[]
   private readonly candidateProfile = 'full-purchase-commitment-v1' as const
   private readonly work: BoundedOutputWork
   private readonly stopping = new AbortController()
@@ -822,7 +828,7 @@ export class PrivatePurchaseAliasCoordinator {
     return (
       !signal.aborted &&
       !caller.signal?.aborted &&
-      this.unchanged.every(check => check()) &&
+      this.unchanged.every(unchangedMethod) &&
       permitted(caller.current()) &&
       !signal.aborted
     )
@@ -877,10 +883,15 @@ export class PrivatePurchaseAliasCoordinator {
     await this.drainReconciliation()
   }
 }
-function pin<T, K extends keyof T>(owner: T, key: K): () => boolean {
+function pin<T extends object, K extends keyof T>(owner: T, key: K): InstalledMethod {
   const original = owner[key]
   outputAssert(typeof original === 'function', 'Purchase installed port is required')
-  return () => owner[key] === original
+  // Installation metadata contains expected identities, never a currentness verdict.
+  return Object.freeze({ owner: owner as Record<PropertyKey, unknown>, key, original })
+}
+function unchangedMethod(method: InstalledMethod): boolean {
+  // Every visited port performs the same fresh property read, in the same order.
+  return method.owner[method.key] === method.original
 }
 function permitted(value: unknown): boolean {
   if (value instanceof Promise) {

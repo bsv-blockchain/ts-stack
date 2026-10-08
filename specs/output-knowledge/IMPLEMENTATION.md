@@ -7405,3 +7405,40 @@ This correction requires fresh published-source functional and full mutation
 qualification. Neither the earlier green baseline nor the virtual compiler
 result completes checkpoint two. No local SDK/native test execution, package
 publication, deployment, funding, broadcast or merge is performed.
+
+## October 8: installed-method metadata with fresh ownership checks
+
+Published `d213c68b` passes the SDK, all wallet shards (including both new funding
+regressions), native/private/HTTP reference compositions, browser/mobile lanes,
+packed documentation consumers, conformance and actual zero-new analyzer checks.
+All 23 review threads are resolved. Complete CI still fails: the original
+disclosure and coordinator properties stop at 180/300 and 202/300 cases, then
+177/300 and 207/300 on one controlled repeat, under the unchanged 150-second
+interruption limit. Neither run reports a nonempty counterexample. These failures
+remain qualification failures; the historical green baseline does not qualify
+this source. Full mutation qualification is still incomplete and checkpoint two
+remains open. No deadline proposal has been adopted.
+
+All three current diagnostic CPU traces contain invalid sample ordering and are
+excluded in full, including timing and sample aggregates. Independently admitted
+original-Jest function-entry counters identify repeated installed-method callback
+visits separately. They motivate an execution-cost candidate, not a speed claim.
+The alias coordinator now retains immutable owner/key/original-method metadata
+and uses one shared predicate instead of a per-method closure plus a calling
+closure. Every visited method still performs its original fresh owner-property
+read and identity comparison, in the original order and with the original receiver.
+Native `every` short-circuiting, abort checks, caller assessment, error identities
+and every domain/custody/currentness boundary are retained. No input, secret,
+validation or authority verdict is cached.
+
+Two appended ordinary regressions replace each of all 25 installed methods and
+verify refusal before recovery/effects, then exercise fresh getters in original
+order across repeated recovery calls. Removing only the reviewed private metadata
+changes restores the whole original production file; removing only the additions
+restores the original whole test file. Original public declarations emit byte for
+byte identically. All original properties, SDK unit bodies, compiled examples,
+source selectors, thresholds and resource settings remain unchanged. Source-only
+compiler and preservation results precede coherent root checks and publication.
+Fresh complete hosted functional, analyzer, packed/native and mutation evidence
+remains required; this candidate does not announce a performance improvement or
+checkpoint readiness.

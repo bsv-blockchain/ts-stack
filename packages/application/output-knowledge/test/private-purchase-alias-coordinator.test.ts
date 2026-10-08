@@ -142,3 +142,107 @@ it('refuses a changed native alias head during signing before committing histori
     await f.dispose()
   }
 })
+
+function installedMethods(f: ReturnType<typeof purchaseAliasCoordinatorFixture>) {
+  const methods: ReadonlyArray<readonly [string, object, string]> = [
+    ['store.load', f.installation.store, 'load'],
+    ['store.installedOn', f.installation.store, 'installedOn'],
+    ['store.prepare', f.installation.store, 'prepare'],
+    ['store.retain', f.installation.store, 'retain'],
+    ['store.fail', f.installation.store, 'fail'],
+    ['store.complete', f.installation.store, 'complete'],
+    ['contracts.configuration', f.installation.contracts, 'configuration'],
+    ['contracts.retain', f.installation.contracts, 'retain'],
+    ['contracts.restore', f.installation.contracts, 'restore'],
+    ['contracts.prepare', f.installation.contracts, 'prepare'],
+    ['contracts.authenticate', f.installation.contracts, 'authenticate'],
+    ['contracts.original', f.installation.contracts, 'original'],
+    ['access.guard', f.installation.access, 'guard'],
+    ['domain.prepare', f.installation.domain, 'prepare'],
+    ['domain.verify', f.installation.domain, 'verify'],
+    ['domain.isCurrent', f.installation.domain, 'isCurrent'],
+    ['domain.issue', f.installation.domain, 'issue'],
+    ['admission.recover', f.installation.admission, 'recover'],
+    ['release.assess', f.installation.release, 'assess'],
+    ['aliases.installedOn', f.installation.aliases, 'installedOn'],
+    ['aliases.configuration', f.installation.aliases, 'configuration'],
+    ['aliases.propose', f.installation.aliases, 'propose'],
+    ['aliases.admission', f.installation.aliases, 'admission'],
+    ['currentness.assess', f.installation.currentness, 'assess'],
+    ['failure.assess', f.installation.failure!, 'assess']
+  ]
+  return methods
+}
+
+it('refuses every changed installed method before recovery or external effects', async () => {
+  const f = purchaseAliasCoordinatorFixture()
+  try {
+    await f.prepare()
+    const originalState = canonicalOutputJSON(f.load().state)
+    const originalAliases = canonicalOutputJSON(f.load().aliases.state)
+    const counts = { ...f.base.counts }
+    for (const [label, owner, key] of installedMethods(f)) {
+      const descriptor = Object.getOwnPropertyDescriptor(owner, key)
+      try {
+        Object.defineProperty(owner, key, {
+          configurable: true,
+          enumerable: descriptor?.enumerable ?? false,
+          value() {
+            throw new Error(`Changed installed method reached: ${label}`)
+          }
+        })
+        await expect(f.recover()).rejects.toThrow('Purchase owner/authentication changed')
+      } finally {
+        if (descriptor) Object.defineProperty(owner, key, descriptor)
+        else Reflect.deleteProperty(owner, key)
+      }
+      expect(f.base.counts).toEqual(counts)
+      expect(canonicalOutputJSON(f.load().state)).toBe(originalState)
+      expect(canonicalOutputJSON(f.load().aliases.state)).toBe(originalAliases)
+    }
+  } finally {
+    await f.dispose()
+  }
+})
+
+it('reads installed getters afresh in original order before each caller assessment', async () => {
+  const f = purchaseAliasCoordinatorFixture()
+  const reads: string[] = []
+  const restore: Array<() => void> = []
+  try {
+    await f.prepare()
+    const methods = installedMethods(f)
+    for (const [label, owner, key] of methods) {
+      const descriptor = Object.getOwnPropertyDescriptor(owner, key)
+      const original: unknown = Reflect.get(owner, key)
+      Object.defineProperty(owner, key, {
+        configurable: true,
+        enumerable: descriptor?.enumerable ?? false,
+        get() {
+          reads.push(label)
+          return original
+        }
+      })
+      restore.push(() => {
+        if (descriptor) Object.defineProperty(owner, key, descriptor)
+        else Reflect.deleteProperty(owner, key)
+      })
+    }
+    const caller = {
+      ...f.base.caller,
+      current() {
+        reads.push('caller.current')
+        return f.base.caller.current()
+      }
+    }
+    const expected = [...methods.map(([label]) => label), 'caller.current']
+    for (let attempt = 0; attempt < 2; attempt++) {
+      reads.length = 0
+      await f.coordinator.recover(f.f.base.id, caller)
+      expect(reads.slice(0, expected.length)).toEqual(expected)
+    }
+  } finally {
+    for (const reset of [...restore].reverse()) reset()
+    await f.dispose()
+  }
+})

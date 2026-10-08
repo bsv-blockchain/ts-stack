@@ -2,9 +2,9 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.6'
-last_updated: '2026-10-07'
-last_verified: '2026-10-07'
+version: '0.1.7'
+last_updated: '2026-10-08'
+last_verified: '2026-10-08'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -88,6 +88,12 @@ of the currently chosen candidate and historical entitlement. Each pass is bound
 by installed capacity. An unresolved job stays pending while the remaining jobs
 can be reconciled. All external effects, result writers and physical disclosure
 recheck current recipient authority and the original installed capabilities.
+
+The coordinator retains immutable installation metadata for each required method.
+Every currentness visit still reads the original owner property afresh, in the
+original installation order, and compares its identity before assessing the caller.
+A replaced method refuses recovery before effects; getters remain observable on
+every visit. The metadata contains no input, secret or cached authority verdict.
 
 Pending jobs may occupy the original, selected or unconfirmed-cache roles as well
 as the extra pending slots. Recovery deduplicates their transaction IDs and visits

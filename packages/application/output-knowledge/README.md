@@ -137,6 +137,10 @@ chain through free recovery; it neither repays nor replaces the original License
 The `private/node` and portable `private/purchase-buyer` entries expose the
 respective explicit companions. These components are under qualification; their
 source and interface descriptions are not full runtime or Checkpoint 2 evidence.
+The alias coordinator retains fixed installed-method identities while re-reading
+each owner property on every currentness visit. Method replacement and getter
+observation retain their original refusal and ordering behavior; no authority
+verdict is cached.
 BRC-197's immutable collector is one concrete exemplar of this architecture.
 The purchase guide labels the earlier native six-route and authenticated
 Engine/Mongo/LCH demonstrations as historical-profile evidence.
