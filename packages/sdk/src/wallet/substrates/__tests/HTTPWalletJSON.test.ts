@@ -3,6 +3,10 @@ import { WERR_INVALID_PARAMETER } from '../../WERR_INVALID_PARAMETER'
 import { WERR_INSUFFICIENT_FUNDS } from '../../WERR_INSUFFICIENT_FUNDS'
 import { WERR_REVIEW_ACTIONS } from '../../WERR_REVIEW_ACTIONS'
 import Transaction from '../../../transaction/Transaction'
+import UnlockingScript from '../../../script/UnlockingScript'
+import { withDoubleSpendRetry } from '../../../overlay-tools/withDoubleSpendRetry'
+import Beef from '../../../transaction/Beef'
+import type TopicBroadcaster from '../../../overlay-tools/SHIPBroadcaster'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -338,6 +342,260 @@ describe('HTTPWalletJSON – api() error responses', () => {
 
     await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(
       'reviewActionResults[0].txid'
+    )
+  })
+
+  it('preserves pre-construction double-spend evidence bound to an explicit requested input', async () => {
+    const winner = new Transaction(
+      1,
+      [
+        {
+          sourceTXID: VALID_TXID,
+          sourceOutputIndex: 0,
+          unlockingScript: new UnlockingScript(),
+          sequence: 0xffffffff
+        }
+      ],
+      [],
+      0
+    )
+    const body = {
+      isError: true,
+      code: 5,
+      reviewActionResults: [
+        {
+          txid: '',
+          status: 'doubleSpend',
+          competingTxs: [winner.id('hex')],
+          competingBeef: winner.toBEEF(true)
+        }
+      ],
+      sendWithResults: []
+    }
+    const client = makeClient(makeFetch(body, { ok: false, status: 400 }))
+    const error = await client
+      .createAction({
+        description: 'hello world',
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.0`,
+            unlockingScript: '00',
+            inputDescription: 'existing shared checkpoint'
+          }
+        ]
+      })
+      .catch(error => error)
+    expect(error).toBeInstanceOf(WERR_REVIEW_ACTIONS)
+    expect(error.reviewActionResults).toEqual(body.reviewActionResults)
+    expect(error.txid).toBeUndefined()
+  })
+
+  it('synchronizes proven conflict evidence before invoking a fresh save attempt', async () => {
+    const winner = new Transaction(
+      1,
+      [
+        {
+          sourceTXID: VALID_TXID,
+          sourceOutputIndex: 0,
+          unlockingScript: new UnlockingScript(),
+          sequence: 0xffffffff
+        }
+      ],
+      [],
+      0
+    )
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          reviewActionResults: [
+            {
+              txid: '',
+              status: 'doubleSpend',
+              competingTxs: [winner.id('hex')],
+              competingBeef: winner.toBEEF(true)
+            }
+          ],
+          sendWithResults: []
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    const events: string[] = []
+    const broadcast = jest.fn(async (tx: Transaction) => {
+      events.push('synchronize')
+      expect(tx.id('hex')).toBe(winner.id('hex'))
+      return { status: 'success', txid: tx.id('hex'), message: 'accepted' }
+    })
+    let attempts = 0
+    const result = await withDoubleSpendRetry(
+      async () => {
+        events.push('read latest checkpoint')
+        if (++attempts === 1)
+          return await client.createAction({
+            description: 'hello world',
+            inputs: [
+              {
+                outpoint: `${VALID_TXID}.0`,
+                unlockingScript: '00',
+                inputDescription: 'existing checkpoint'
+              }
+            ]
+          })
+        return 'saved'
+      },
+      { broadcast } as unknown as TopicBroadcaster
+    )
+    expect(result).toBe('saved')
+    expect(events).toEqual(['read latest checkpoint', 'synchronize', 'read latest checkpoint'])
+    expect(broadcast).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['missing inputs', { inputs: [] }, {}],
+    [
+      'different input',
+      {
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.1`,
+            unlockingScript: '00',
+            inputDescription: 'existing checkpoint'
+          }
+        ]
+      },
+      {}
+    ],
+    ['constructed transaction', {}, { txid: VALID_TXID }],
+    ['returned envelope', {}, { tx: MINIMAL_BEEF }],
+    ['change outputs', {}, { noSendChange: [] }],
+    ['batch results', {}, { sendWithResults: [{ txid: VALID_TXID, status: 'success' }] }],
+    [
+      'missing proof',
+      {},
+      { reviewActionResults: [{ txid: '', status: 'doubleSpend', competingTxs: [MINIMAL_TXID] }] }
+    ],
+    [
+      'unrelated proof',
+      {},
+      {
+        reviewActionResults: [
+          {
+            txid: '',
+            status: 'doubleSpend',
+            competingTxs: [MINIMAL_TXID],
+            competingBeef: VALID_BEEF
+          }
+        ]
+      }
+    ],
+    ['non-conflict status', {}, { reviewActionResults: [{ txid: '', status: 'serviceError' }] }],
+    [
+      'multiple reviews',
+      {},
+      {
+        reviewActionResults: [
+          { txid: '', status: 'doubleSpend' },
+          { txid: VALID_TXID, status: 'success' }
+        ]
+      }
+    ]
+  ])('rejects pre-construction review with %s', async (_name, requestChanges, responseChanges) => {
+    const winner = new Transaction(
+      1,
+      [
+        {
+          sourceTXID: VALID_TXID,
+          sourceOutputIndex: 0,
+          unlockingScript: new UnlockingScript(),
+          sequence: 0xffffffff
+        }
+      ],
+      [],
+      0
+    )
+    const body = {
+      isError: true,
+      code: 5,
+      reviewActionResults: [
+        {
+          txid: '',
+          status: 'doubleSpend',
+          competingTxs: [winner.id('hex')],
+          competingBeef: winner.toBEEF(true)
+        }
+      ],
+      sendWithResults: [],
+      ...responseChanges
+    }
+    const client = makeClient(makeFetch(body, { ok: false, status: 400 }))
+    const error = await client
+      .createAction({
+        description: 'hello world',
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.0`,
+            unlockingScript: '00',
+            inputDescription: 'existing checkpoint'
+          }
+        ],
+        ...requestChanges
+      })
+      .catch(error => error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error).not.toBeInstanceOf(WERR_REVIEW_ACTIONS)
+  })
+
+  it('rejects ID-only competing evidence without a transaction to bind', async () => {
+    const proof = new Beef()
+    proof.mergeTxidOnly(VALID_TXID)
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          reviewActionResults: [
+            {
+              txid: '',
+              status: 'doubleSpend',
+              competingTxs: [VALID_TXID],
+              competingBeef: proof.toBinary()
+            }
+          ],
+          sendWithResults: []
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    await expect(
+      client.createAction({
+        description: 'hello world',
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.0`,
+            unlockingScript: '00',
+            inputDescription: 'existing checkpoint'
+          }
+        ]
+      })
+    ).rejects.toThrow('competingBeef')
+  })
+
+  it('does not accept a pre-construction review for signAction', async () => {
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          reviewActionResults: [{ txid: '', status: 'doubleSpend' }],
+          sendWithResults: []
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    await expect(client.signAction({ reference: 'AQ==', spends: {} })).rejects.toThrow(
+      'pre-construction review'
     )
   })
 

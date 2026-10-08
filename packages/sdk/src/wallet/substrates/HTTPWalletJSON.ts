@@ -123,7 +123,11 @@ function requireErrorSatoshis(value: unknown, name: string): number {
   return value as number
 }
 
-function validateReviewActionResults(value: unknown, allowedTxids: Set<string>): void {
+function validateReviewActionResults(
+  value: unknown,
+  allowedTxids: Set<string>,
+  preConstructionInputs?: Set<string>
+): void {
   if (!Array.isArray(value)) throw new Error('Invalid wallet error reviewActionResults')
   if (value.length > MAXIMUM_SEND_WITH_TRANSACTIONS + 1) {
     throw new Error('Invalid wallet error reviewActionResults')
@@ -135,15 +139,22 @@ function validateReviewActionResults(value: unknown, allowedTxids: Set<string>):
       throw new Error(`Invalid wallet error reviewActionResults[${index}]`)
     }
     const result = item as Record<string, unknown>
-    if (typeof result.txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(result.txid)) {
+    const preConstruction = preConstructionInputs !== undefined && result.txid === ''
+    if (
+      !preConstruction &&
+      (typeof result.txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(result.txid))
+    ) {
       throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
     }
-    const reviewedTxid = result.txid.toLowerCase()
-    if (reviewedTxids.has(reviewedTxid) || !allowedTxids.has(reviewedTxid)) {
+    const reviewedTxid = (result.txid as string).toLowerCase()
+    if (reviewedTxids.has(reviewedTxid) || (!preConstruction && !allowedTxids.has(reviewedTxid))) {
       throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
     }
     reviewedTxids.add(reviewedTxid)
-    if (!statuses.has(result.status as string)) {
+    if (
+      !statuses.has(result.status as string) ||
+      (preConstruction && result.status !== 'doubleSpend')
+    ) {
       throw new Error(`Invalid wallet error reviewActionResults[${index}].status`)
     }
     if (
@@ -176,18 +187,39 @@ function validateReviewActionResults(value: unknown, allowedTxids: Set<string>):
         competingTxs.push(normalized)
       }
     }
+    if (preConstruction && result.competingBeef === undefined) {
+      throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
+    }
     if (result.competingBeef !== undefined) {
       if (competingTxs == null || competingTxs.length === 0) {
         throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
       }
       const competingBeef = normalizeBRC100ByteArray(result.competingBeef)
-      if (competingBeef == null) {
+      if (competingBeef == null || (preConstruction && competingBeef.length > 32 * 1024 * 1024)) {
         throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
       }
       try {
         const parsed = Beef.fromBinaryStrict(competingBeef)
         for (const competingTxid of competingTxs) {
-          if (parsed.findTxid(competingTxid) == null) throw new Error()
+          const competing = parsed.findTxid(competingTxid)
+          if (competing == null) throw new Error()
+          if (preConstruction) {
+            // A pre-construction failure has no attempted TXID. Bind each full
+            // competing transaction to an explicit input of this request instead.
+            const tx = competing.tx
+            if (
+              tx == null ||
+              tx.id('hex') !== competingTxid ||
+              !tx.inputs.some(input => {
+                const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+                return (
+                  source !== undefined &&
+                  preConstructionInputs!.has(`${source.toLowerCase()}.${input.sourceOutputIndex}`)
+                )
+              })
+            )
+              throw new Error()
+          }
         }
       } catch {
         throw new Error(`Invalid wallet error reviewActionResults[${index}].competingBeef`)
@@ -223,23 +255,45 @@ function deserializeWalletError(
           returnTXIDOnly: true
         }
       }
-      validateWalletResult(
-        call,
-        {
-          txid: data.txid,
-          tx: data.tx,
-          noSendChange: data.noSendChange,
-          sendWithResults: data.sendWithResults
-        },
-        reviewRequest
-      )
+      const preConstruction =
+        Array.isArray(data.reviewActionResults) &&
+        data.reviewActionResults.length === 1 &&
+        data.reviewActionResults[0]?.txid === ''
+      let preConstructionInputs: Set<string> | undefined
+      if (preConstruction) {
+        const inputs = (args as CreateActionArgs).inputs
+        if (
+          call !== 'createAction' ||
+          data.txid !== undefined ||
+          data.tx !== undefined ||
+          data.noSendChange !== undefined ||
+          data.signableTransaction !== undefined ||
+          data.sendWithResults.length !== 0 ||
+          inputs === undefined ||
+          inputs.length === 0
+        ) {
+          throw new Error('Invalid wallet error pre-construction review')
+        }
+        preConstructionInputs = new Set(inputs.map(input => input.outpoint.toLowerCase()))
+      } else {
+        validateWalletResult(
+          call,
+          {
+            txid: data.txid,
+            tx: data.tx,
+            noSendChange: data.noSendChange,
+            sendWithResults: data.sendWithResults
+          },
+          reviewRequest
+        )
+      }
       const allowedTxids = new Set<string>()
       if (typeof data.txid === 'string') allowedTxids.add(data.txid.toLowerCase())
       const requestOptions = (args as { options?: { sendWith?: unknown } }).options
       if (Array.isArray(requestOptions?.sendWith)) {
         for (const txid of requestOptions.sendWith) allowedTxids.add(String(txid).toLowerCase())
       }
-      validateReviewActionResults(data.reviewActionResults, allowedTxids)
+      validateReviewActionResults(data.reviewActionResults, allowedTxids, preConstructionInputs)
       return new WERR_REVIEW_ACTIONS(
         data.reviewActionResults as never,
         data.sendWithResults as never,

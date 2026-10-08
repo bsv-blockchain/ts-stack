@@ -595,3 +595,16 @@ option; older SDKs retain their existing strict behavior. This additive API is
 included in the SDK 3.1 source candidate. The separate SDK3 identity migration
 still applies; SDK2 applications need an additive backport or a coordinated SDK3
 upgrade. No BRC-100 wire or wallet-data changes are introduced by this option.
+
+## Pre-construction wallet reviews
+
+The 3.2.1 candidate accepts a storage pre-construction double-spend review through
+`HTTPWalletJSON` only for `createAction` with explicit inputs. It requires one
+empty attempted-TXID result, no constructed-action fields, and complete competing
+transactions that spend those requested outpoints. Malformed, unrelated and
+ID-only evidence remains invalid. The existing bounded retry helper synchronizes
+the winning transactions before re-invoking the operation to read fresh state.
+Use a wallet with the matching Toolbox parser fix. The binary wire format is
+unchanged and cannot carry structured review evidence; choose a compatible
+transport before financial operations rather than retrying an ambiguous failure.
+No BRC-100 call or storage-schema migration is required.
