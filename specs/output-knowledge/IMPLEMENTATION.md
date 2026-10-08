@@ -7710,3 +7710,40 @@ still required, followed by the full151/398 raw mutation reconciliation. The
 budget proposal remains unanswered and unapplied. Checkpoint two is incomplete;
 no runtime improvement, package publication, deployment, funding, broadcast or upstream merge is
 claimed.
+
+## October 8: separate decoder initialization from the decode expression
+
+Published9a47108d's strict Sonar gate reports one actual open finding,
+`typescript:S1121`, at the decoder initialization embedded inside the decode
+expression. Sonar's ordinary quality rating isOK, but the repository's zero-finding
+contract correctly fails. The finding is retained and corrected in source; no
+suppression, accepted classification or gate change is used. Current actual
+CodeQL analyses verify both language categories, exact f77d6722/9a47108d merge
+parents and tree, and zero open PR-ref alerts. Full pagination finds23 resolved
+review threads. Conformance, Codegen and container contracts pass. The final CI result is 38 successful jobs, four failed jobs and four expected
+scope skips. The SDK passes all 8,596 tests across 262 suites, including repeated
+decoder failure/retry coverage. The disclosure property interrupts after 184 of
+its required 300 cases, with no nonempty counterexample; 860 other application
+tests pass. The other application log triggers the case-timeout guard and is
+wholly excluded from qualification and scalar extraction. Its source identity
+and process-group termination are independently reconciled without reading the
+rejected payload. The derived merge gate therefore also fails. Published
+9a47108d is not a completed baseline or Checkpoint 2 acceptance.
+
+Decoder initialization is now an ordinary separate nullish-assignment statement,
+followed by the original synchronous decode inside the same try/catch. Lazy
+construction, fixed options, fresh input/refusal checks, non-streaming resets and
+original malformed-UTF8 handling are unchanged. The existing repeated invalid/
+valid retry regression is retained. Before adoption, full compiler emissions
+preserve all234 declaration files byte-for-byte, and all eight complete SDK/LCH
+static browser graphs pass every unchanged ceiling. LCH Vite is307979 raw bytes
+under308000. Complete actual installed compiler/bundler/input closures are frozen.
+No SDK/application/native target runs locally and no runtime speedup is claimed.
+
+All original unit/property/example bodies, engine tests/both overlay configs/
+all20goldens, source ranges, seed/replay, min300 cases,150/180-second per-case
+limits, workers, isolation, thresholds and bundle ceilings remain. Coherent root
+controls, complete source inventories, fresh exact published-source hosted gates
+and all151-target/398-row raw mutation reconciliation remain required. The
+budget proposal is unanswered and unapplied. No package publication, deployment,
+funding, broadcast or upstream merge is performed. Checkpoint2 remains incomplete.

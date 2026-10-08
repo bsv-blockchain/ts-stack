@@ -123,9 +123,8 @@ function outputJSONSource(
     bytes = input.byteLength
     outputJSONLimit(bytes <= bounds.bytes)
     try {
-      source = (utf8Decoder ??= new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })).decode(
-        input
-      )
+      utf8Decoder ??= new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+      source = utf8Decoder.decode(input)
     } catch {
       throw new OutputProtocolError('invalid', 'Malformed UTF-8')
     }
