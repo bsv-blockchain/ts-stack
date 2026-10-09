@@ -92,6 +92,78 @@ function transactionInputOutpoint(transaction: Transaction, inputIndex: number):
   return `${sourceTxid.toLowerCase()}.${input.sourceOutputIndex}`
 }
 
+async function hasInternalizedFaucetOutput(
+  wallet: WalletInterface,
+  redemptionTxid: string,
+  outputIndex: number,
+  satoshis: number,
+  faucetOutpoint: string,
+  label: string,
+  adminOriginator: string
+): Promise<boolean> {
+  // Wallet.listActions hides external inputs and custom instructions, while
+  // internalization moves the funding output from recovery to the default basket.
+  // Prove the original spend using the spendable output and its transaction BEEF.
+  const outpoint = `${redemptionTxid}.${outputIndex}`.toLowerCase()
+  const pageSize = 100
+  let offset = 0
+  while (true) {
+    const page = await wallet.listOutputs(
+      { basket: 'default', includeLabels: true, limit: pageSize, offset },
+      adminOriginator
+    )
+    if (
+      !Array.isArray(page.outputs) ||
+      !Number.isSafeInteger(page.totalOutputs) ||
+      page.totalOutputs < 0 ||
+      page.outputs.length > pageSize ||
+      offset + page.outputs.length > page.totalOutputs
+    ) {
+      throw new Error('Wallet returned invalid faucet payment outputs.')
+    }
+    for (let index = 0; index < page.outputs.length; index++) {
+      const output = page.outputs[index]
+      if (output.outpoint.toLowerCase() !== outpoint) continue
+      if (output.spendable !== true || output.satoshis !== satoshis || !output.labels?.includes(label)) {
+        throw new Error('Wallet returned unrelated internalized faucet output.')
+      }
+      const proof = await wallet.listOutputs(
+        {
+          basket: 'default', include: 'entire transactions', includeLabels: true,
+          limit: 1, offset: offset + index
+        },
+        adminOriginator
+      )
+      const provenOutput = proof.outputs?.[0]
+      if (
+        proof.outputs?.length !== 1 ||
+        provenOutput?.outpoint.toLowerCase() !== outpoint ||
+        provenOutput.spendable !== true ||
+        provenOutput.satoshis !== satoshis ||
+        !provenOutput.labels?.includes(label) ||
+        !Array.isArray(proof.BEEF) ||
+        proof.BEEF.length === 0 ||
+        proof.BEEF.length > MAX_WAB_FAUCET_RECOVERY_BEEF_BYTES
+      ) {
+        throw new Error('Wallet omitted internalized faucet transaction evidence.')
+      }
+      const transaction = Beef.fromBinaryStrict(proof.BEEF).findTxid(redemptionTxid)?.tx
+      if (
+        transaction?.outputs[outputIndex]?.satoshis !== satoshis ||
+        transaction.inputs.filter((_, inputIndex) =>
+          transactionInputOutpoint(transaction, inputIndex) === faucetOutpoint
+        ).length !== 1
+      ) {
+        throw new Error('Wallet returned unrelated internalized faucet transaction evidence.')
+      }
+      return true
+    }
+    offset += page.outputs.length
+    if (offset >= page.totalOutputs) return false
+    if (page.outputs.length === 0) throw new Error('Wallet returned an incomplete faucet output page.')
+  }
+}
+
 async function recoverWABFaucetPayment(
   wallet: WalletInterface,
   faucetOutpoint: string,
@@ -179,6 +251,21 @@ async function recoverWABFaucetPayment(
   if (matchingActions.length === 0) return false
   if (matchingActions.length !== 1) throw new Error('Wallet returned ambiguous faucet recovery actions.')
   const action = matchingActions[0]
+  const internalized = action.outputs?.filter(output => output.basket === 'default' && output.spendable === true) ?? []
+  if (
+    (action.status === 'completed' || action.status === 'sending' || action.status === 'unproven') &&
+    internalized.length === 1 &&
+    /^[0-9a-f]{64}$/i.test(action.txid) &&
+    Number.isSafeInteger(internalized[0].outputIndex) &&
+    internalized[0].outputIndex >= 0 &&
+    internalized[0].outputIndex <= 0xffffffff &&
+    await hasInternalizedFaucetOutput(
+      wallet, action.txid.toLowerCase(), internalized[0].outputIndex,
+      internalized[0].satoshis, faucetOutpoint, label, adminOriginator
+    )
+  ) {
+    return true
+  }
   const matchingInputs = action.inputs?.filter(input => input.sourceOutpoint.toLowerCase() === faucetOutpoint) ?? []
   const matchingOutputs =
     action.outputs?.filter(output => {

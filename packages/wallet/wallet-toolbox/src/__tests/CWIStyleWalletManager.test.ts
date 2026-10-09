@@ -263,6 +263,98 @@ describe('CWIStyleWalletManager Tests', () => {
       expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
     })
 
+    test('clears a resolved checkpoint when a published snapshot for the same account is restored', async () => {
+      let savedToken: number[] | undefined
+      const first = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        async () => {},
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async token => {
+          savedToken = [...token]
+        }
+      )
+      await first.providePresentationKey(presentationKey)
+      await first.providePassword('test-password')
+      const snapshot = first.saveSnapshot()
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const restarted = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      restarted.loadPendingRegistrationToken(savedToken)
+      await restarted.loadSnapshot(snapshot)
+      expect(restarted.authenticated).toBe(true)
+      expect(restarted.hasPendingRegistrationToken()).toBe(false)
+    })
+
+    test('retains a pending root when a different root has published under the same presentation key', async () => {
+      let savedToken: number[] | undefined
+      const pending = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        async () => {
+          throw new Error('broadcast response lost')
+        },
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async token => {
+          savedToken = [...token]
+        }
+      )
+      await pending.providePresentationKey(presentationKey)
+      await expect(pending.providePassword('test-password')).rejects.toThrow('broadcast response lost')
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const other = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      await other.providePresentationKey(presentationKey)
+      await other.providePassword('test-password')
+
+      const restarted = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      restarted.loadPendingRegistrationToken(savedToken)
+      await restarted.loadSnapshot(other.saveSnapshot())
+      expect(restarted.hasPendingRegistrationToken()).toBe(true)
+
+      const lookup = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      lookup.loadPendingRegistrationToken(savedToken)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as jest.Mock).mockResolvedValueOnce(
+        (other as any).currentUMPToken
+      )
+      await lookup.providePresentationKey(presentationKey)
+      expect(lookup.hasPendingRegistrationToken()).toBe(true)
+    })
+
     test('never invokes the funder when the pending token cannot be persisted', async () => {
       const funder = jest.fn(async () => {})
       const managerWithFailedStore = new CWIStyleWalletManager(

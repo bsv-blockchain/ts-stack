@@ -95,7 +95,7 @@ export const ARGON2ID_MAX_PARALLELISM = 16
 export const KDF_MAX_HASH_LENGTH = 64
 export const PBKDF2_MAX_ITERATIONS = 10_000_000
 export const MAX_STATE_SNAPSHOT_BYTES = 16 * 1024 * 1024
-export const MAX_PENDING_REGISTRATION_TOKEN_BYTES = 64 * 1024
+const MAX_PENDING_REGISTRATION_TOKEN_BYTES = 64 * 1024
 
 function readSerializedOutpoint(reader: Reader, allowUnpublished: boolean): string {
   const outpointLen = reader.readVarIntNumStrict(false)
@@ -1746,7 +1746,7 @@ export class CWIStyleWalletManager implements WalletInterface {
 
   /**
    * Restores an unpublished UMP token before authentication. The token contains
-   * encrypted key fields but no wallet root, snapshot key, or on-chain outpoint.
+   * an encrypted wallet root, but no plaintext root, snapshot key, or on-chain outpoint.
    */
   loadPendingRegistrationToken(bytes: number[]): void {
     if (this.authenticated || this.authenticationFlow !== 'unknown' || this.currentUMPToken != null) {
@@ -1840,7 +1840,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       this.authenticationFlow = 'existing-user'
       this.presentationKey = key
       this.currentUMPToken = token
-      if (pendingTokenMatches) this.pendingRegistrationToken = undefined
+      this.clearPublishedPendingRegistration(token)
     }
     this.telemetry.capture({
       name: 'wallet-toolbox.authentication.account-lookup.completed',
@@ -2170,6 +2170,8 @@ export class CWIStyleWalletManager implements WalletInterface {
       await this.setupRoot(rootPrimaryKey) // Will automatically load profiles
       await this.switchProfile(activeProfileId) // Switch to the profile saved in the snapshot
 
+      this.clearPublishedPendingRegistration(token)
+
       this.authenticationFlow = 'existing-user' // Loading implies existing user
       this.telemetry.capture({
         name: 'wallet-toolbox.snapshot.loaded',
@@ -2225,6 +2227,18 @@ export class CWIStyleWalletManager implements WalletInterface {
     await this.setupRoot(this.rootPrimaryKey)
     this.saveSnapshot()
     return true
+  }
+
+  private clearPublishedPendingRegistration(token: UMPToken): void {
+    // A conflicting wallet root can share the same presentation key; match the
+    // encrypted root field before discarding the unpublished token.
+    if (
+      this.pendingRegistrationToken != null &&
+      toHex(this.pendingRegistrationToken.presentationHash) === toHex(token.presentationHash) &&
+      toHex(this.pendingRegistrationToken.passwordPresentationPrimary) === toHex(token.passwordPresentationPrimary)
+    ) {
+      this.pendingRegistrationToken = undefined
+    }
   }
 
   /**
@@ -2944,7 +2958,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     rootKey: number[],
     ephemeralRootPrivilegedKey?: number[],
     authenticated = true
-  ): void {
+  ): Promise<void> {
     if (this.currentUMPToken == null) {
       throw new Error('A UMP token must exist before setting up root infrastructure!')
     }
@@ -3019,6 +3033,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     this.authenticated = authenticated
     // Note: We don't call switchProfile here anymore.
     // It's called by the auth methods (providePassword/provideRecoveryKey) or loadSnapshot after this.
+    return Promise.resolve()
   }
 
   /*
