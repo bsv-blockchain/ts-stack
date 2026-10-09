@@ -428,6 +428,24 @@
       "created": "2026-10-03",
       "reviewBy": "2026-11-02",
       "removeWhen": "Remove the patch, exact-version package extension and parent-scoped removal together when an official compatible Metro/file-map release removes the affected dependency path. Require the complete independent watcher oracle, frozen graph, full unexcluded audit and packed Metro/Hermes platform checks before retirement."
+    },
+    {
+      "id": "handlebars-ts-jest-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override for handlebars releases below 4.7.10, plus a temporary handlebars minimumReleaseAgeExclude until 2026-10-12T22:37:37Z",
+      "owner": "ts-stack-maintainers",
+      "reason": "ts-jest still admits handlebars <=4.7.9 through its istanbul/template graph. GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f, published 2026-10-08T17:52Z after main last passed CI, require 4.7.10. Selecting 4.7.10 is the first patched release and leaves the Handlebars compile API that ts-jest consumes unchanged. The patched release published 2026-10-05T22:37:37Z is younger than the 7-day minimumReleaseAge floor until 2026-10-12T22:37:37Z, so handlebars is temporarily excluded from that floor for this security-urgent install only.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "pnpm-workspace.yaml#minimumReleaseAgeExclude",
+        "pnpm-lock.yaml#overrides",
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "https://github.com/advisories/GHSA-8r5x-fm3f-whwj",
+        "https://github.com/advisories/GHSA-p8wg-vrv2-v86f"
+      ],
+      "created": "2026-10-09",
+      "reviewBy": "2026-11-08",
+      "removeWhen": "Remove the minimumReleaseAgeExclude after 2026-10-12T22:37:37Z. Remove the version-bounded override when the supported ts-jest graph natively resolves handlebars 4.7.10 or newer and the frozen high-severity audit remains green without the substitution."
     }
   ]
 }
