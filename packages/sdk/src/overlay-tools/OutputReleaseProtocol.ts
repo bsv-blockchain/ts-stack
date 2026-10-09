@@ -1,15 +1,16 @@
 import * as s from './OutputProtocolSchema.js'
-import { parseOutputReleasePolicy, type OutputReleasePolicy } from './OutputCapabilities.js'
+import {
+  parseOutputReleasePolicy,
+  parseOutputReleasePolicyWithInlineStrings,
+  type OutputReleasePolicy
+} from './OutputCapabilities.js'
 import {
   decodeOutputBytes,
   outputU64,
   verifyOutputPacket,
   type OutputChain
 } from './OutputProtocol.js'
-import {
-  canonicalOutputJSON,
-  canonicalOutputJSONWithInlineRecords
-} from './OutputProtocolJSON.js'
+import { canonicalOutputJSON, canonicalOutputJSONWithInlineRecords } from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'
 import { toArray, toBase64 } from '../primitives/utils.js'
 
@@ -143,7 +144,7 @@ export function verifyOutputProcessorAcceptance(
 /** Explicit fresh-ownership companion. Every representation, arithmetic and binding
  * check is repeated; no input, custody, currentness or validation result is retained. */
 export function parseOutputReleaseEvidenceWithInlineStrings(input: unknown): OutputReleaseEvidence {
-  const result = s.normalizedWithInlineStrings(input, release),
+  const result = s.normalizedWithInlineStrings(input, releaseWithInlineStrings()),
     policy = result.policy
   outputAssert(
     Object.hasOwn(result, 'processorEvidence') === (policy.kind === 'processor-accepted') &&
@@ -177,7 +178,7 @@ export function bindOutputReleaseEvidenceWithInlineStrings(
     s.fixedObject({
       chain: s.chain,
       txid: s.hex,
-      policy: parseOutputReleasePolicy
+      policy: parseOutputReleasePolicyWithInlineStrings
     })
   )
   const evidence = parseOutputReleaseEvidenceWithInlineStrings(input)
@@ -190,4 +191,18 @@ export function bindOutputReleaseEvidenceWithInlineStrings(
     'Release evidence binding mismatch'
   )
   return evidence
+}
+
+// Fixed companion grammar only; every supplied value is owned and checked afresh.
+let releaseWithInlineStringsGrammar: s.Schema<OutputReleaseEvidence> | undefined
+function releaseWithInlineStrings(): s.Schema<OutputReleaseEvidence> {
+  return (releaseWithInlineStringsGrammar ??= s.fixedObject(
+    {
+      chain: s.chain,
+      txid: s.hex,
+      policy: parseOutputReleasePolicyWithInlineStrings,
+      acceptedAt: s.u64
+    },
+    { processorEvidence: s.bytes, blockEvidence: block }
+  ))
 }

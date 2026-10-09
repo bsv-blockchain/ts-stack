@@ -422,3 +422,9 @@ export function selectOutputCapabilityWithInlineStrings(
     headers: { 'x-bsv-overlay-capability': digest, 'x-bsv-overlay-profile': selectedProfile.id }
   }
 }
+
+/** @internal Fresh bounded policy ownership for explicitly composed schemas.
+ * Selection, processor trust and current authority remain caller decisions. */
+export function parseOutputReleasePolicyWithInlineStrings(input: unknown): OutputReleasePolicy {
+  return s.normalizedWithInlineStrings(input, release)
+}

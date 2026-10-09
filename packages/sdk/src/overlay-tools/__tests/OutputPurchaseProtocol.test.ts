@@ -1135,3 +1135,43 @@ it('retains exact failures and byte framing across every purchase response statu
     ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseEnvelope(candidate)))
   }
 })
+
+it('preserves nested envelope representations, signed bindings and fresh policy/STEAK copies', () => {
+  const f = fixture()
+  const input = {
+    ...f.envelope,
+    result: {
+      ...f.envelope.result,
+      steak: canonicalOutputJSON(f.envelope.result.steak),
+      potatoes: {
+        ...f.envelope.result.potatoes,
+        body: { ...f.potatoesBody, releasePolicy: canonicalOutputJSON(f.body.releasePolicy) }
+      }
+    },
+    releaseEvidence: canonicalOutputJSON(f.evidence)
+  }
+  expect(parseOutputPurchaseEnvelopeWithInlineStrings(input)).toEqual(
+    parseOutputPurchaseEnvelope(input)
+  )
+  expect(verifyOutputPurchaseEnvelopeWithInlineStrings(input, f.terms, txid)).toEqual(
+    verifyOutputPurchaseEnvelope(input, f.terms, txid)
+  )
+  const terms = {
+    ...f.terms,
+    body: { ...f.body, releasePolicy: canonicalOutputJSON(f.body.releasePolicy) }
+  }
+  expect(parseOutputPurchaseTermsWithInlineStrings(terms)).toEqual(parseOutputPurchaseTerms(terms))
+  const owned = parseOutputPurchaseEnvelopeWithInlineStrings(input)
+  input.result.steak = '{"tm_fixture":{},"tm_fixture":{}}'
+  expect(
+    purchaseCompanionOutcome(() => parseOutputPurchaseEnvelopeWithInlineStrings(input))
+  ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseEnvelope(input)))
+  expect(owned.result).toEqual(parseOutputPurchaseEnvelope(f.envelope).result)
+  const invalidPolicy = {
+    ...terms,
+    body: { ...terms.body, releasePolicy: '{"kind":"mined","confirmations":0}' }
+  }
+  expect(
+    purchaseCompanionOutcome(() => parseOutputPurchaseTermsWithInlineStrings(invalidPolicy))
+  ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseTerms(invalidPolicy)))
+})

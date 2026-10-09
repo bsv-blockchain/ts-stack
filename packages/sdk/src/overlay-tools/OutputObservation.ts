@@ -202,3 +202,8 @@ export function parseOutputObservation(
   validateOutputObservation(result, supportedExtensions)
   return result
 }
+
+/** @internal Fresh bounded STEAK representation for composed opt-in envelopes.
+ * This validates shape only; it never establishes admission or mining. */
+export const parseOutputSTEAKWithInlineStrings = (input: unknown): ReturnType<typeof steak> =>
+  s.normalizedWithInlineStrings(input, steak)

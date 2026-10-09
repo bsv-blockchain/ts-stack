@@ -351,3 +351,28 @@ it('keeps release companions fresh across policies, intrinsic arithmetic, bindin
     ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(candidate)))
   }
 })
+
+it('retains nested policy text, duplicate-key refusal and fresh ownership in composed release schemas', () => {
+  for (const evidence of [local(), mined(), accepted().evidence]) {
+    const input = { ...evidence, policy: canonicalOutputJSON(evidence.policy) }
+    expect(
+      releaseCompanionOutcome(() => parseOutputReleaseEvidenceWithInlineStrings(input))
+    ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(input)))
+    const original = parseOutputReleaseEvidenceWithInlineStrings(input)
+    input.policy = '{"kind":"local-admission","kind":"mined"}'
+    expect(
+      releaseCompanionOutcome(() => parseOutputReleaseEvidenceWithInlineStrings(input))
+    ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(input)))
+    expect(original.policy).toEqual(evidence.policy)
+  }
+  const input = mined(),
+    binding = { chain, txid, policy: parseOutputReleasePolicy(input.policy) }
+  const represented = { ...input, policy: canonicalOutputJSON(input.policy) }
+  expect(bindOutputReleaseEvidenceWithInlineStrings(represented, binding)).toEqual(
+    bindOutputReleaseEvidence(represented, binding)
+  )
+  const malformed = { ...represented, blockEvidence: { ...input.blockEvidence, height: '01' } }
+  expect(
+    releaseCompanionOutcome(() => bindOutputReleaseEvidenceWithInlineStrings(malformed, binding))
+  ).toEqual(releaseCompanionOutcome(() => bindOutputReleaseEvidence(malformed, binding)))
+})

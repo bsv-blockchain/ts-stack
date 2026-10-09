@@ -235,6 +235,8 @@ No migration is required. Hosted qualification remains separate.
 
 ### Added (3.3 source candidate)
 
+- Lazily instantiate fixed nested companion grammars so unused paths can be removed from browser bundles; retain no supplied input or verdict. Carry explicit fresh-ownership purchase and release parsing through fixed nested policy, STEAK and release-evidence companion grammars. Preserve ordinary schemas, nested JSON-text inputs, all bounds/refusals and signature/request bindings. Internal helpers add no root SDK export; no input or verdict is cached.
+
 - Assemble the explicit native owner's private independent graph during fresh canonical traversal; return both results only after all checks pass. Preserve ordinary ownership, complete descriptor/refusal order, canonical bytes, resource limits and array/record attributes. Add ordered-reflection, reentrancy, refusal and 300-case recursive differential tests without changing original tests or mutation sites.
 
 - Add explicit `ownOutputJSONWithInlineStrings` returning fresh canonical text and independent null-prototype data through the separately selected serializer. Native protected-ledger copies select it; ordinary ownership, all representation/resource checks, schemas and authority fences remain unchanged. No input, graph, shape or verdict is cached.
