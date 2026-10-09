@@ -92,13 +92,17 @@ function transactionInputOutpoint(transaction: Transaction, inputIndex: number):
   return `${sourceTxid.toLowerCase()}.${input.sourceOutputIndex}`
 }
 
+interface InternalizedFaucetProof {
+  redemptionTxid: string
+  outputIndex: number
+  satoshis: number
+  faucetOutpoint: string
+  label: string
+}
+
 async function proveInternalizedFaucetOutput(
   wallet: WalletInterface,
-  redemptionTxid: string,
-  outputIndex: number,
-  satoshis: number,
-  faucetOutpoint: string,
-  label: string,
+  { redemptionTxid, outputIndex, satoshis, faucetOutpoint, label }: InternalizedFaucetProof,
   adminOriginator: string,
   offset: number
 ): Promise<void> {
@@ -170,8 +174,8 @@ async function hasInternalizedFaucetOutput(
         throw new Error('Wallet returned unrelated internalized faucet output.')
       }
       await proveInternalizedFaucetOutput(
-        wallet, redemptionTxid, outputIndex, satoshis, faucetOutpoint, label,
-        adminOriginator, offset + index
+        wallet, { redemptionTxid, outputIndex, satoshis, faucetOutpoint, label }, adminOriginator,
+        offset + index
       )
       return true
     }
