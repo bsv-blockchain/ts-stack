@@ -22,7 +22,7 @@ function validateRecipientIdentity(value: unknown): string {
   try {
     if (typeof value !== 'string' || !/^(02|03)[0-9a-f]{64}$/.test(value)) throw new Error('encoding')
     const key = PublicKey.fromString(value)
-    if (key.isInfinity() || !key.validate()) throw new Error('point')
+    if (key.isInfinity() || !key.validate() || key.toString() !== value) throw new Error('point')
     return key.toString()
   } catch {
     throw new WERR_INVALID_PARAMETER('recipientIdentityKey', 'a canonical compressed secp256k1 public key')

@@ -6,6 +6,8 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.15.0 (source candidate)
 
+- Require an exact canonical compressed public-key round trip for opt-in BRC-197 fixed-child recipients before ownership. Add native lifecycle coverage that preserves pre-existing transaction accounting and uses distinct fixture references; ordinary internalization is unchanged.
+
 - Add opt-in local SQLite action recovery for atomic allocation, exact prepared
   and signed `noSend` transactions, and durable processing reconciliation.
 - Add local BRC-29 funding recovery with unique outpoint ownership, atomic wallet

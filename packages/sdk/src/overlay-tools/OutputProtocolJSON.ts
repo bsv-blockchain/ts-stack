@@ -666,13 +666,107 @@ export function canonicalOutputJSONWithInlineStrings(
   return frame.text
 }
 
+/** Fresh private graph assembly alongside canonical emission. Descriptor
+ * observations and refusals retain the original order; no partial graph escapes
+ * if any later representation or resource check fails. */
+function visitOwnedOutputJSONInlineRecord(
+  frame: OutputJSONFrame,
+  node: unknown,
+  depth: number
+): OutputJSON {
+  if (node === null || typeof node !== 'object') {
+    visitOutputJSON(frame, node, depth)
+    // Ordinary ownership also normalizes negative zero through JSON parsing.
+    return typeof node === 'number' && node === 0 ? 0 : (node as OutputJSON)
+  }
+  outputJSONLimit(depth <= frame.bounds.depth, 1)
+  outputAssert(!frame.path.has(node), 'Cyclic JSON value')
+  outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
+  frame.path.add(node)
+  const owned = Array.isArray(node)
+    ? ownOutputJSONInlineArray(frame, node, depth)
+    : ownOutputJSONInlineObject(frame, node, depth)
+  frame.path.delete(node)
+  return owned
+}
+
+function ownOutputJSONInlineArray(
+  frame: OutputJSONFrame,
+  node: unknown[],
+  depth: number
+): OutputJSON[] {
+  outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
+  outputAssert(
+    Object.getOwnPropertyNames(node).length === node.length + 1 &&
+      Object.keys(node).length === node.length,
+    'Sparse or decorated JSON array'
+  )
+  const owned: OutputJSON[] = []
+  emitOutputJSON(frame, '[', true)
+  for (let i = 0; i < node.length; i++) {
+    if (i > 0) emitOutputJSON(frame, ',', true)
+    const descriptor = Object.getOwnPropertyDescriptor(node, i)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
+    // Define ordinary own data without consulting an inherited array setter.
+    Object.defineProperty(owned, i, {
+      value: visitOwnedOutputJSONInlineRecord(frame, descriptor.value, depth + 1),
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  }
+  emitOutputJSON(frame, ']', true)
+  return owned
+}
+
+function ownOutputJSONInlineObject(
+  frame: OutputJSONFrame,
+  node: object,
+  depth: number
+): OutputJSONObject {
+  outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
+  const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
+  outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  const owned = Object.create(null) as OutputJSONObject
+  emitOutputJSON(frame, '{', true)
+  let index = 0
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(node, key)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
+    if (index++ > 0) emitOutputJSON(frame, ',', true)
+    emitOutputJSONString(frame, key, ':')
+    const value: unknown = descriptor.value
+    if (typeof value === 'string') {
+      outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
+      outputJSONLimit(value.length <= frame.bounds.bytes)
+      if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(value)) {
+        const size = value.length + 2
+        outputJSONLimit(size <= frame.bounds.bytes)
+        frame.bytes += size
+        outputJSONLimit(frame.bytes <= frame.bounds.bytes)
+        frame.text += '"' + value + '"'
+      } else emitOutputJSONString(frame, value)
+      owned[key] = value
+    } else owned[key] = visitOwnedOutputJSONInlineRecord(frame, value, depth + 1)
+  }
+  emitOutputJSON(frame, '}', true)
+  return owned
+}
+
 /** Explicit native ownership companion. Each call independently validates and
- * serializes its complete input, then constructs a fresh null-prototype graph.
- * It retains no caller value, normalized graph, shape or authority verdict. */
+ * emits its complete input while assembling a fresh private null-prototype graph.
+ * Both results are returned only after every check succeeds. It retains no caller
+ * value, normalized graph, shape or authority verdict between calls. */
 export function ownOutputJSONWithInlineStrings(
   input: unknown,
   limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
 ): { text: string; value: OutputJSON } {
-  const text = canonicalOutputJSONWithInlineStrings(input, limits)
-  return { text, value: ownValidatedOutputJSON(text) }
+  const frame: OutputJSONFrame = {
+    text: '',
+    path: new Set<object>(),
+    bytes: 0,
+    bounds: limitsFor(limits)
+  }
+  const value = visitOwnedOutputJSONInlineRecord(frame, input, 1)
+  return { text: frame.text, value }
 }

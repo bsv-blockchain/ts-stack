@@ -228,6 +228,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.3 source candidate)
 
+- Assemble the explicit native owner's private independent graph during fresh canonical traversal; return both results only after all checks pass. Preserve ordinary ownership, complete descriptor/refusal order, canonical bytes, resource limits and array/record attributes. Add ordered-reflection, reentrancy, refusal and 300-case recursive differential tests without changing original tests or mutation sites.
+
 - Add explicit `ownOutputJSONWithInlineStrings` returning fresh canonical text and independent null-prototype data through the separately selected serializer. Native protected-ledger copies select it; ordinary ownership, all representation/resource checks, schemas and authority fences remain unchanged. No input, graph, shape or verdict is cached.
 
 - Add opt-in `canonicalOutputJSONWithInlineStrings` with direct ASCII field emission and the original complete fresh traversal, descriptor/reflection order, canonical bytes and resource refusals. Private native payload/ledger serialization selects the companion; ordinary SDK serialization is unchanged. No input, graph or verdict is cached. Simplify the scalar inspector to a complete member grammar with explicit separator and safe-integer checks, retaining unsupported-shape/error fallbacks.

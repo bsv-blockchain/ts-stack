@@ -524,7 +524,18 @@ it('retains the explicit originator refusal before any protected operation', asy
   const f = await profileAuthorityFixture()
   await expect(
     RevenueListingProfileAuthority.create({ ...f.options, originator: '' })
-  ).rejects.toThrow('Profile authority requires an explicit originator')
+  ).rejects.toMatchObject({
+    name: 'WERR_INVALID_PARAMETER',
+    code: 6,
+    parameter: 'originator',
+    message: 'The originator parameter must be at least 1 length.'
+  })
+  expect(f.calls).toHaveLength(0)
+  const absent = { ...f.options }
+  Reflect.deleteProperty(absent, 'originator')
+  await expect(RevenueListingProfileAuthority.create(absent)).rejects.toThrow(
+    'Profile authority requires an explicit originator'
+  )
   expect(f.calls).toHaveLength(0)
 })
 

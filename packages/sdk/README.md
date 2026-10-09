@@ -960,8 +960,9 @@ result between operations.
 `ownOutputJSONWithInlineStrings(value, limits)` is the explicit native ownership
 companion to `canonicalOutputJSONWithInlineStrings`. It returns bounded canonical
 `text` and an independent `value`, with null-prototype records and ordinary arrays.
-The complete input is freshly checked before construction, including descriptors,
-cycles, Unicode, safe integers, canonical order and resource limits. Neither the
+Each call freshly checks descriptors, cycles, Unicode, safe integers, canonical
+order and resource limits while assembling a private graph beside its canonical
+text. Both results are exposed only after every check succeeds. Neither the
 caller graph nor a normalized value, shape or verdict is retained between calls.
 A string input remains a string value; incoming JSON text must use a parser to
 preserve duplicate-key evidence. Ordinary `ownOutputJSON` is unchanged. Schemas,

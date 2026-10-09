@@ -804,7 +804,7 @@ describe('shared internalization lifecycle and persisted metadata', () => {
           userId: ctx.userId,
           txid,
           status: 'nosend',
-          reference: 'cHVibGlj',
+          reference: Utils.toBase64(Utils.toArray('public-' + lifecycle, 'utf8')),
           isOutgoing: false,
           satoshis: 0,
           description: 'Synthetic pending receipt'
@@ -842,7 +842,8 @@ describe('shared internalization lifecycle and persisted metadata', () => {
         userId: ctx.userId,
         txid,
         status: mined ? 'completed' : 'unproven',
-        satoshis: 100,
+        // Merging preserves the pre-existing transaction's accounting amount.
+        satoshis: lifecycle.startsWith('nosend') ? 0 : 100,
         isOutgoing: false
       })
       if (transactionId !== undefined) expect(row.transactionId).toBe(transactionId)

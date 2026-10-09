@@ -1669,3 +1669,148 @@ describe('explicit native JSON ownership', () => {
     }
   })
 })
+
+describe('fresh single-pass ownership compatibility', () => {
+  const { ownOutputJSON, ownOutputJSONWithInlineStrings } =
+    require('../OutputProtocolJSON.js') as typeof import('../OutputProtocolJSON.js')
+
+  it('retains one ordered reflection of every input descriptor and caller limit', () => {
+    const capture = (method: typeof ownOutputJSON) => {
+      const trace: string[] = []
+      const watch = (target: object, label: string) =>
+        new Proxy(target, {
+          ownKeys(value) {
+            trace.push(label + ':keys')
+            return Reflect.ownKeys(value)
+          },
+          getOwnPropertyDescriptor(value, key) {
+            trace.push(label + ':descriptor:' + String(key))
+            return Reflect.getOwnPropertyDescriptor(value, key)
+          },
+          getPrototypeOf(value) {
+            trace.push(label + ':prototype')
+            return Reflect.getPrototypeOf(value)
+          },
+          get(value, key, receiver) {
+            trace.push(label + ':read:' + String(key))
+            return Reflect.get(value, key, receiver)
+          }
+        })
+      const child = watch({ ['__proto__']: 'own', unicode: '𝄞', number: -0 }, 'child'),
+        input = watch({ z: watch([child], 'array'), a: child }, 'root')
+      const result = method(input, {
+        get bytes() {
+          trace.push('limit:bytes')
+          return 1024
+        }
+      })
+      return { result, trace }
+    }
+    const original = capture(ownOutputJSON),
+      current = capture(ownOutputJSONWithInlineStrings)
+    expect(current.trace).toEqual(original.trace)
+    expect(current.trace.filter(item => item === 'limit:bytes')).toHaveLength(1)
+    expect(current.result).toEqual(original.result)
+  })
+
+  it('owns dense ordinary array fields and builtin-looking names without aliasing', () => {
+    const child = { ['__proto__']: 'literal', constructor: 'data', prototype: 'data', zero: -0 },
+      input = [child, [child]],
+      actual = ownOutputJSONWithInlineStrings(input),
+      value = actual.value as Array<Record<string, unknown> | Array<Record<string, unknown>>>,
+      first = value[0] as Record<string, unknown>,
+      nested = value[1] as Array<Record<string, unknown>>
+    expect(actual).toEqual(ownOutputJSON(input))
+    expect(Array.isArray(value)).toBe(true)
+    expect(Object.getPrototypeOf(value)).toBe(Array.prototype)
+    expect(Object.getOwnPropertyDescriptor(value, '0')).toEqual({
+      value: first,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+    expect(Object.getPrototypeOf(first)).toBeNull()
+    expect(Object.hasOwn(first, '__proto__')).toBe(true)
+    expect(Object.is(first.zero, 0)).toBe(true)
+    expect(Object.is(first.zero, -0)).toBe(false)
+    expect(first).not.toBe(child)
+    expect(nested[0]).not.toBe(first)
+    Object.defineProperty(first, 'constructor', {
+      value: 'changed',
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+    expect(Object.getOwnPropertyDescriptor(first, 'constructor')!.value).toBe('changed')
+    expect(child.constructor).toBe('data')
+    expect(nested[0].constructor).toBe('data')
+    child.prototype = 'caller change'
+    expect(first.prototype).toBe('data')
+  })
+
+  it('retains exact competing refusal identities and leaves subsequent calls independent', () => {
+    const accessor = Object.defineProperty({}, 'a', {
+        enumerable: true,
+        get() {
+          throw new Error('Accessor must not run')
+        }
+      }),
+      hidden = Object.defineProperty({}, 'a', { value: true }),
+      decorated = Object.assign([true], { extra: true }),
+      sparse = [true, true],
+      cycle: Record<string, unknown> = {}
+    cycle.self = cycle
+    Reflect.deleteProperty(sparse, '0')
+    const rows: Array<[unknown, Parameters<typeof ownOutputJSON>[1]]> = [
+      [accessor, { bytes: 1 }],
+      [hidden, {}],
+      [decorated, { arrayElements: 1 }],
+      [sparse, {}],
+      [[{ a: '𝄞' }], { depth: 2 }],
+      [{ a: '𝄞' }, { bytes: 10 }],
+      [Object.assign({}, { [Symbol('field')]: true }), { mapKeys: 1 }],
+      [cycle, {}],
+      [{ a: Number.NaN }, {}],
+      [{ a: 1.5 }, {}],
+      [{ a: undefined }, {}],
+      [{ a: '\uD800' }, { bytes: 8 }],
+      [{ a: true, b: false }, { mapKeys: 1 }]
+    ]
+    const refusal = (
+      method: typeof ownOutputJSON,
+      input: unknown,
+      limits: Parameters<typeof ownOutputJSON>[1]
+    ) => {
+      try {
+        method(input, limits)
+        throw new Error('Expected refusal')
+      } catch (error) {
+        expect(error).toBeInstanceOf(OutputProtocolError)
+        return { code: (error as OutputProtocolError).code, message: (error as Error).message }
+      }
+    }
+    for (const [input, limits] of rows) {
+      expect(refusal(ownOutputJSONWithInlineStrings, input, limits)).toEqual(
+        refusal(ownOutputJSON, input, limits)
+      )
+      expect(ownOutputJSONWithInlineStrings({ accepted: ['fresh'] })).toEqual(
+        ownOutputJSON({ accepted: ['fresh'] })
+      )
+    }
+  })
+
+  it('isolates a reentrant descriptor observation from the outer private frame', () => {
+    let nested: ReturnType<typeof ownOutputJSON> | undefined
+    const input = new Proxy(
+      { a: 'outer', z: [true] },
+      {
+        getOwnPropertyDescriptor(target, key) {
+          if (key === 'a') nested = ownOutputJSONWithInlineStrings({ inner: ['independent'] })
+          return Reflect.getOwnPropertyDescriptor(target, key)
+        }
+      }
+    )
+    expect(ownOutputJSONWithInlineStrings(input).text).toBe('{"a":"outer","z":[true]}')
+    expect(nested).toEqual(ownOutputJSON({ inner: ['independent'] }))
+  })
+})

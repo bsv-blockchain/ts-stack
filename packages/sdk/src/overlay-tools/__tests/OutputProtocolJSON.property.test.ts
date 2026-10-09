@@ -252,3 +252,64 @@ test('explicit native ownership preserves generated nested bytes, limits and ind
     )
   )
 })
+
+test('fresh recursive ownership matches ordinary bytes, attributes and exact fences over 300 cases', () => {
+  const { ownOutputJSONWithInlineStrings } =
+    require('../OutputProtocolJSON.js') as typeof import('../OutputProtocolJSON.js')
+  const data = fc.letrec<{ value: OutputJSON }>(tie => ({
+    value: fc.oneof(
+      { maxDepth: 4, depthSize: 'small' },
+      fc.constant(null),
+      fc.boolean(),
+      fc.integer(),
+      fc.constant(-0),
+      fc.oneof(fc.string({ maxLength: 24 }), fc.constantFrom('𝄞', 'é', '\n"\\', 'a,b:c')),
+      fc.array(tie('value'), { maxLength: 6 }),
+      fc
+        .array(
+          fc.tuple(
+            fc.oneof(
+              fc.string({ maxLength: 12 }),
+              fc.constantFrom('__proto__', 'constructor', 'prototype')
+            ),
+            tie('value')
+          ),
+          { maxLength: 6 }
+        )
+        .map(entries => Object.fromEntries(entries))
+    )
+  })).value
+  const inspect = (input: OutputJSON, owned: OutputJSON): void => {
+    if (input === null || typeof input !== 'object') {
+      expect(owned).toBe(typeof input === 'number' && input === 0 ? 0 : input)
+      return
+    }
+    expect(owned).not.toBe(input)
+    expect(Object.getPrototypeOf(owned)).toBe(Array.isArray(input) ? Array.prototype : null)
+    for (const key of Object.keys(input)) {
+      const expected = Object.getOwnPropertyDescriptor(input, key)!,
+        actual = Object.getOwnPropertyDescriptor(owned, key)!
+      expect(actual).toMatchObject({ enumerable: true, writable: true, configurable: true })
+      expect(Object.hasOwn(actual, 'get')).toBe(false)
+      inspect(expected.value as OutputJSON, actual.value as OutputJSON)
+    }
+  }
+  fc.assert(
+    fc.property(data, input => {
+      const expected = ownOutputJSON(input),
+        bytes = new TextEncoder().encode(expected.text).length,
+        actual = ownOutputJSONWithInlineStrings(input, { bytes }),
+        repeated = ownOutputJSONWithInlineStrings(input, { bytes })
+      deepStrictEqual(actual, expected)
+      deepStrictEqual(repeated, expected)
+      inspect(input, actual.value)
+      expect(canonicalOutputJSON(actual.value, { bytes })).toBe(expected.text)
+      if (input !== null && typeof input === 'object') expect(repeated.value).not.toBe(actual.value)
+      if (bytes > 1)
+        expect(() => ownOutputJSONWithInlineStrings(input, { bytes: bytes - 1 })).toThrow(
+          'byte limit'
+        )
+      expect(ownOutputJSONWithInlineStrings(input)).toEqual(expected)
+    })
+  )
+})

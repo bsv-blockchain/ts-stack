@@ -86,3 +86,16 @@ profiles also pass. This is component evidence. Every protected profile route,
 activation-before-funding, durable alias recovery and the final hosted,
 package/platform/mutation campaign remain Checkpoint 2 gates. A capability shape
 or a passing receipt example does not establish those broader prerequisites.
+
+The fixed-child recipient identity must be a canonical lowercase compressed
+secp256k1 key. The validator checks the point and requires its compressed
+re-encoding to match the supplied bytes exactly; coordinates reduced modulo the
+curve field cannot become a different accepted identity. This is specific to the
+explicit fixed-child capability and does not change ordinary BRC-29 intake.
+
+Native lifecycle fixtures independently cover a new mined receipt and existing
+no-send receipts with and without a proof. Merging retains the transaction's
+pre-existing accounting amount while its newly owned outputs change wallet
+balance. The proof and request lifecycle, original transaction identity, fixed
+remittance, labels and idempotent replay are asserted separately. Complete
+current-head hosted qualification remains required.
