@@ -230,9 +230,9 @@
     {
       "name": "create-bsv-app",
       "publishedVersion": "1.1.2",
-      "releaseType": "none",
-      "summary": "Advances the scaffold release metadata so generated applications consume the compatibility-preserving security hardening in this release train.",
-      "migration": "Existing CLI flags, network choices, and generated project structure are unchanged. Regenerate or update dependencies after the patched packages are published. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
+      "releaseType": "minor",
+      "summary": "New projects created through the interactive terminal flow or --ui now default to the full custom stack: React frontend, Express backend, and every capability selected, with None as the last option. The BSV helpers directory is no longer prompted (use --bsv-dir or the config file bsvDir), and the glue prompt is reworded for non-technical users. --ui now honours CLI flags, submits only visible fields, defaults the project name to the target directory, shows the actual configuration error, includes --dir and --name in the copied command, keeps per-mode values when switching between new and add, and rejects unknown --capabilities or an unsafe --bsv-dir before starting. Repository starters such as meter can now be generated from --ui. Both flows say when an existing project already has every capability.",
+      "migration": "No consumer migration is required. --yes and --file resolve exactly as before and still need --frontend or --backend for a new project. Interactive users who want the previous minimal project deselect the frontend, backend, or capabilities they do not need; scripts that set the helpers directory should pass --bsv-dir. The package exports no public API. Distributors must retain THIRD_PARTY_NOTICES.md and LICENSES/ with the package."
     }
   ]
 }

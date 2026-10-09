@@ -302,7 +302,7 @@
     "@bsv/air-gap": "0.1.3",
     "@bsv/amountinator": "2.1.7",
     "@bsv/wallet-helper": "0.1.9",
-    "create-bsv-app": "1.1.2",
+    "create-bsv-app": "1.2.0",
     "@bsv/did": "0.3.0",
     "@bsv/fund-wallet": "1.5.3",
     "@bsv/simple": "0.7.0",

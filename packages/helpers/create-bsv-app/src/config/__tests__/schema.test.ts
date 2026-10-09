@@ -69,6 +69,17 @@ describe('config schema', () => {
     expect(isFieldVisible(f, { mode: 'add', starter: 'custom', frontend: 'react' })).toBe(false)
   })
 
+  test('stack defaults to the full project: react frontend, express backend', () => {
+    expect(field('frontend').default).toBe('react')
+    expect(field('backend').default).toBe('express')
+    expect(field('frontend').options?.map(o => o.value)).toEqual(['react', 'none'])
+    expect(field('backend').options?.map(o => o.value)).toEqual(['express', 'none'])
+  })
+
+  test('bsvDir is not prompted (set via --bsv-dir or config file)', () => {
+    expect(() => field('bsvDir')).toThrow('field not found')
+  })
+
   test('capabilities options come from the registry (includes wallet-login)', () => {
     expect(field('capabilities').options?.map(o => o.value)).toContain('wallet-login')
   })

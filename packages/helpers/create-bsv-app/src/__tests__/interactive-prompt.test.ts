@@ -3,12 +3,11 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals'
 const intro = jest.fn()
 const outro = jest.fn()
 const cancel = jest.fn()
+const log = { info: jest.fn() }
 const isCancel = jest.fn(() => false)
-const text = jest.fn(async ({ message }: { message: string }) =>
-  message === 'Project name' ? 'interactive-demo' : 'src/bsv'
-)
+const text = jest.fn(async () => 'interactive-demo')
 const confirm = jest.fn(async () => true)
-const multiselect = jest.fn(async () => ['wallet-login'])
+const multiselect = jest.fn(async (_opts: { initialValues?: string[] }) => ['wallet-login'])
 const select = jest.fn(async ({ message }: { message: string }) => {
   const answers: Record<string, string> = {
     'Create a new project or add to an existing one?': 'new',
@@ -27,6 +26,7 @@ jest.mock('@clack/prompts', () => ({
   confirm,
   intro,
   isCancel,
+  log,
   multiselect,
   outro,
   select,
@@ -61,6 +61,36 @@ describe('interactiveConfigPrompt', () => {
     expect(multiselect).toHaveBeenCalled()
     expect(select).toHaveBeenCalled()
     expect(cancel).not.toHaveBeenCalled()
+  })
+
+  test('passes the full-project defaults as clack initial values', async () => {
+    await interactiveConfigPrompt({ existing: null, flags: {} })
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Frontend', initialValue: 'react' })
+    )
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Backend', initialValue: 'express' })
+    )
+    expect(multiselect).toHaveBeenCalledWith(
+      expect.objectContaining({ initialValues: expect.arrayContaining(['wallet-login']) })
+    )
+  })
+
+  test('says so instead of an empty multiselect when the project has every capability', async () => {
+    const existing = {
+      version: 1 as const,
+      name: 'full',
+      network: 'test' as const,
+      stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } },
+      bsvDir: 'src/bsv',
+      capabilities: ['wallet-connect', 'wallet-login', 'signed-requests']
+    }
+    const config = await interactiveConfigPrompt({ existing, flags: {} })
+
+    expect(multiselect).not.toHaveBeenCalled()
+    expect(log.info).toHaveBeenCalledWith('Project already includes all available capabilities')
+    expect(config.capabilities).toEqual(existing.capabilities)
   })
 
   test('reports cancellation and exits without resolving a partial configuration', async () => {
