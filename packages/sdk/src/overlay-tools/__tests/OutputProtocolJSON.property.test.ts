@@ -150,3 +150,42 @@ test('bounded ownership preserves nested canonical values, descriptors and indep
     { interruptAfterTimeLimit: 150000, markInterruptAsFailure: true }
   )
 })
+
+test('explicit scalar inspection matches original complete canonical/refusal behavior for fresh generated maps', async () => {
+  const {
+    inspectOutputJSONEncoding: original,
+    inspectOutputJSONEncodingWithScalarRecords: inspect
+  } = await import('../OutputProtocolJSON.js')
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(
+        fc.tuple(
+          fc.oneof(
+            fc.string({ maxLength: 16 }),
+            fc.constantFrom('constructor', 'prototype', '__proto__', 'a,b:c')
+          ),
+          fc.oneof(fc.integer(), fc.string({ maxLength: 32 }), fc.boolean(), fc.constant(null))
+        ),
+        { maxLength: 16, selector: entry => entry[0] }
+      ),
+      entries => {
+        const source = canonicalOutputJSON(Object.fromEntries(entries)),
+          bytes = new TextEncoder().encode(source)
+        for (const input of [source, bytes, ' ' + source + '\n']) {
+          const first = inspect(input),
+            second = inspect(input),
+            expected = original(input)
+          deepStrictEqual(first, expected)
+          deepStrictEqual(second, expected)
+          expect(first.value).not.toBe(second.value)
+          expect(Object.getPrototypeOf(first.value)).toBeNull()
+          expect(canonicalOutputJSON(first.value)).toBe(source)
+        }
+        expect(inspect(source, { bytes: bytes.length })).toEqual(
+          original(source, { bytes: bytes.length })
+        )
+        expect(() => inspect(source, { bytes: bytes.length - 1 })).toThrow()
+      }
+    )
+  )
+})

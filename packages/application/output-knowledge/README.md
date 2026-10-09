@@ -1479,3 +1479,13 @@ implementation detail supplies no chain, ownership or release authority.
 Live kind-registry extensions outside the fixed ASCII grammar retain the original
 canonical encoder, including Unicode, escaping and resource refusals. The new
 regression covers those extensions without narrowing historical acceptance.
+
+The native ledger explicitly selects the SDK scalar-record inspection companion
+for fresh authenticated plaintext. Compact scalar head records still receive
+whole-text lexical, Unicode, duplicate-name, order, map/depth and byte validation
+before a new owned graph; other representations and refusals retain the original
+inspector. Encrypted framing, associated data, exact fields, current custody,
+inventory, capacity, revisions and transaction checks remain fresh. This changes
+one local import binding, no stored format, public interface or recovery rule.
+No record or validation verdict is cached; runtime and mutation qualification
+remain separate from this source change.

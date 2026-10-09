@@ -1347,3 +1347,126 @@ describe('explicit string-record parser', () => {
     }
   })
 })
+
+describe('explicit scalar-record encoding inspector', () => {
+  it('matches original canonical flags and independent data graphs for compact scalars and fallbacks', async () => {
+    const {
+      inspectOutputJSONEncoding: original,
+      inspectOutputJSONEncodingWithScalarRecords: inspect
+    } = await import('../OutputProtocolJSON.js')
+    for (const text of [
+      '{}',
+      '{"a":1}',
+      '{"z":null,"a":true}',
+      '{"a":true,"b":false,"c":null,"d":0,"e":-1,"f":9007199254740991,"g":-9007199254740991}',
+      '{"__proto__":"data","a,b:c":"text , : { } [ ]","constructor":"é😀"}',
+      '{"10":"ten","2":"two"}',
+      '{"a":-0}',
+      '{"a":1.0}',
+      '{"a":1e0}',
+      ' {"a":1}\n',
+      '{"a":"\\u0061"}',
+      '{"a":{"b":[true,1,null]}}',
+      '[1,true,null]'
+    ]) {
+      for (const input of [text, new TextEncoder().encode(text)]) {
+        const first = inspect(input),
+          second = inspect(input),
+          expected = original(input)
+        expect(first).toEqual(expected)
+        expect(second).toEqual(expected)
+        expect(first.value).not.toBe(second.value)
+        if (!Array.isArray(first.value)) expect(Object.getPrototypeOf(first.value)).toBeNull()
+        if (first.value && typeof first.value === 'object') {
+          for (const key of Object.keys(first.value)) {
+            expect(Object.getOwnPropertyDescriptor(first.value, key)).toEqual(
+              Object.getOwnPropertyDescriptor(expected.value, key)
+            )
+          }
+        }
+      }
+    }
+  })
+
+  it('preserves refusal identity/order and fresh limits across supported and unsupported shapes', async () => {
+    const {
+      inspectOutputJSONEncoding: original,
+      inspectOutputJSONEncodingWithScalarRecords: inspect
+    } = await import('../OutputProtocolJSON.js')
+    const refusal = (run: () => unknown) => {
+      try {
+        run()
+        throw new Error('Expected refusal')
+      } catch (error) {
+        expect(error).toBeInstanceOf(OutputProtocolError)
+        return { code: (error as OutputProtocolError).code, message: (error as Error).message }
+      }
+    }
+    for (const text of [
+      '{"a":1,"a":2}',
+      '{"a":1,"\\u0061":2}',
+      '{"a":9007199254740992}',
+      '{"a":-9007199254740992}',
+      '{"a":0.1}',
+      '{"a":1}x',
+      '{"a":1}\nfalse',
+      '{"a":"line\nfeed"}',
+      '{"a":"\\ud800"}',
+      '{"a":"unterminated}',
+      '\ufeff{}'
+    ]) {
+      expect(refusal(() => inspect(text))).toEqual(refusal(() => original(text)))
+      expect(inspect('{"a":1}')).toEqual(original('{"a":1}'))
+    }
+    const text = '{"a":1,"b":null}'
+    for (const limits of [{ mapKeys: 1 }, { depth: 1 }, { bytes: text.length - 1 }]) {
+      expect(refusal(() => inspect(text, limits))).toEqual(refusal(() => original(text, limits)))
+    }
+    expect(inspect('{}', { depth: 1 })).toEqual(original('{}', { depth: 1 }))
+  })
+
+  it('captures limits and byteLength once and retains lexical-before-decoded-byte refusal', async () => {
+    const {
+      inspectOutputJSONEncoding: original,
+      inspectOutputJSONEncodingWithScalarRecords: inspect
+    } = await import('../OutputProtocolJSON.js')
+    for (const text of ['{"a":1}', ' {"a":1}', '{"a":{"b":1}}']) {
+      let reads = 0
+      expect(
+        inspect(text, {
+          get mapKeys() {
+            reads++
+            return 1
+          }
+        })
+      ).toEqual(original(text))
+      expect(reads).toBe(1)
+    }
+    let reads = 0
+    const outcome = (method: typeof inspect, text: string) => {
+      reads = 0
+      const input = new TextEncoder().encode(text)
+      Object.defineProperty(input, 'byteLength', {
+        get() {
+          reads++
+          return 1
+        }
+      })
+      try {
+        method(input, { bytes: 1 })
+        throw new Error('Expected refusal')
+      } catch (error) {
+        expect(error).toBeInstanceOf(OutputProtocolError)
+        return {
+          reads,
+          code: (error as OutputProtocolError).code,
+          message: (error as Error).message
+        }
+      }
+    }
+    for (const text of ['{"a":1}', '{"a":1,"a":2}', '{"a":"\\u0061"}']) {
+      expect(outcome(inspect, text)).toEqual(outcome(original, text))
+      expect(reads).toBe(1)
+    }
+  })
+})

@@ -524,3 +524,71 @@ export function parseOutputJSONWithStringRecords(
   const flat = ownFlatOutputJSONStringRecord(source, bounds)
   return flat ?? new OutputJSONParser(source, bounds).parse()
 }
+
+// Fixed compact scalar grammar only; every invocation proves its own complete text.
+// Escapes, whitespace, noncanonical number spellings and nested values retain the
+// original inspector. Unescaped strings still require fresh complete Unicode proof.
+const flatOutputJSONScalarRecord =
+  /^\{(?:"[^"\\]*":(?:"[^"\\]*"|0|[1-9]\d*|-[1-9]\d*|true|false|null)(?:,"[^"\\]*":(?:"[^"\\]*"|0|[1-9]\d*|-[1-9]\d*|true|false|null))*)?\}(?![\s\S])/
+
+function inspectFlatOutputJSONScalarRecord(
+  source: string,
+  bounds: OutputJSONLimits
+): { value: OutputJSON; canonical: boolean } | undefined {
+  if (/[^\u0020-\uFFFF]/.test(source) || !flatOutputJSONScalarRecord.test(source)) return undefined
+  const names = new Set<string>()
+  let position = 1,
+    previous: string | undefined,
+    canonical = true
+  while (position < source.length - 1) {
+    const nameEnd = source.indexOf('"', position + 1),
+      name = source.slice(position + 1, nameEnd),
+      valueStart = nameEnd + 2
+    if (names.has(name) || names.size >= bounds.mapKeys) return undefined
+    names.add(name)
+    canonical &&= previous === undefined || previous < name
+    previous = name
+    // The complete grammar proves quote boundaries. Commas/braces inside a
+    // string never delimit its member; scalar tokens contain no such characters.
+    let valueEnd = source.indexOf(',', valueStart)
+    if (source[valueStart] === '"') valueEnd = source.indexOf('"', valueStart + 1) + 1
+    else if (valueEnd < 0) valueEnd = source.length - 1
+    const token = source.slice(valueStart, valueEnd)
+    if (
+      source[valueStart] !== '"' &&
+      token !== 'true' &&
+      token !== 'false' &&
+      token !== 'null' &&
+      !Number.isSafeInteger(JSON.parse(token))
+    )
+      return undefined
+    position = valueEnd + 1
+  }
+  if (names.size !== 0 && bounds.depth < 2) return undefined
+  // Safe integers use exactly these decimal spellings; strings have no escapes
+  // or controls. Reordering keys cannot change the canonical UTF-8 byte length.
+  return { value: ownValidatedOutputJSON(source), canonical }
+}
+
+/** Explicit flat-scalar inspection with the original complete ownership contract.
+ * The ordinary inspector remains unchanged. Unsupported shapes and all refusals
+ * use its original lexical observer with the already captured source/bounds,
+ * preserving one observation of caller limits and byteLength. No input or verdict
+ * is cached; canonical describes only this fresh input, never its later mutation.
+ */
+export function inspectOutputJSONEncodingWithScalarRecords(
+  input: Uint8Array | string,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { value: OutputJSON; canonical: boolean } {
+  const [source, bounds, bytes] = outputJSONSource(input, limits),
+    originalBytes = typeof input === 'string' ? bytes : outputJSONUTF8Length(source),
+    flat = inspectFlatOutputJSONScalarRecord(source, bounds)
+  if (flat) {
+    outputJSONLimit(originalBytes <= bounds.bytes)
+    return flat
+  }
+  const encoding = new OutputJSONEncodingInspection(originalBytes),
+    value = new OutputJSONParser(source, bounds, encoding).parse()
+  outputJSONLimit(originalBytes <= bounds.bytes && encoding.bytes <= bounds.bytes)
+  return { value, canonical: encoding.canonical }
+}

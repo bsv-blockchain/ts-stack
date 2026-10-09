@@ -5,6 +5,7 @@ export * from './OutputProtocolError.js'
 export {
   canonicalOutputJSON,
   inspectOutputJSONEncoding,
+  inspectOutputJSONEncodingWithScalarRecords,
   isOutputPlainObject,
   ownOutputJSON,
   OUTPUT_JSON_LIMITS,

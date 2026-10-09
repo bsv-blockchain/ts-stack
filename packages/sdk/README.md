@@ -563,6 +563,19 @@ wallet-derived locking key, and field signature before reading or spending it.
   It supplies no schema, signature, custody or authorization decision, and
   ordinary `parseOutputJSON` continues accepting noncanonical valid JSON.
 
+  `inspectOutputJSONEncodingWithScalarRecords(input, limits)` is an explicit
+  companion with the same complete inspection and independent-ownership contract.
+  Compact flat records of unescaped strings, safe decimal integers, booleans and
+  null receive fresh whole-text grammar, controls, Unicode, duplicate-name,
+  key-order, map/depth and byte checks. Each call constructs a new null-prototype
+  graph. Other shapes, number spellings, escapes and all refusals retain the
+  original lexical observer and error order with the already captured input and
+  limits. Caller limits and byteLength are observed once. The native protected
+  ledger selects this companion for authenticated plaintext inspection; ordinary
+  SDK inspection and browser companions retain their existing paths. No input,
+  shape, secret, currentness, authorization or validation verdict is cached. This
+  addition requires no existing consumer, wire or stored-data migration.
+
   `retainOutputCapability(manifest, request)` validates a new selection and returns
   `{ record, selection }` as independent owned copies. Atomically persist `record`
   with the operation before any effect. `restoreOutputCapability(record, trust)`

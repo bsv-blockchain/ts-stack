@@ -7978,3 +7978,41 @@ bodies and IDs, 300 cases, seed/replay, individual 150/180-second controls, appr
 outer allowances, worker/score settings and browser ceilings remain required.
 This record makes no performance or qualification claim. Fresh exact-head runtime,
 consumer, analyzer and complete mutation evidence remains necessary for Checkpoint 2.
+
+## October 9: explicit native plaintext scalar inspection
+
+Published 3836dbe5638bfc2ea6b2e879ad283a117ead562a has 39 successful CI jobs,
+two original property-deadline failures and the correctly failing merge gate.
+Disclosure and coordinator properties interrupt after 182 and 230 cases at their
+unchanged 150-second controls, without a counterexample. Actual Sonar has zero
+findings in every checked classification and zero unreviewed hotspots. Actual
+CodeQL has zero open PR-ref alerts; both categories and the analyzed merge
+parents/tree are independently verified. All 23 review threads are resolved.
+These facts do not qualify the head or establish a speedup.
+
+The existing metadata parser selection does not remove the ordinary canonical
+inspection of each freshly authenticated plaintext. A separately selected SDK
+inspectOutputJSONEncodingWithScalarRecords companion now supplies an equivalent
+inspection contract for compact flat scalar records. It proves the whole grammar,
+controls, Unicode, unique decoded names, UTF-16 order, safe decimal integers,
+map/depth and original/canonical byte bounds before fresh independent graph
+construction. Whitespace, escapes, other number spellings, nested values and
+refusals retain the original lexical observer with already captured source/bounds.
+Caller limits and byteLength are observed once. Ordinary SDK inspection remains
+unchanged. SQLiteProtectedLedger selects the companion through one import alias;
+every other ledger byte and original test body remains exact. Authentication,
+framing, custody, schema, inventory, revision and transaction checks remain fresh.
+No input, graph, shape, secret, authorization, currentness or verdict is cached.
+
+Static proofs retain all 234 previous SDK declaration files, adding only the
+function and barrel export. Five complete selected compiler contexts pass with
+actual source/declaration inputs frozen. All 999 existing SDK JSON mutation sites
+remain, with 127 additional sites in the unchanged full-file scope. Every one of
+the 994 ledger sites, IDs and their order is exact. All 151 targets/398 rows,
+original engine controls and goldens, original property/unit/example bodies,
+300 cases, seed/replay, individual 150/180-second limits, approved outer
+allowances, worker/score settings and browser ceilings remain required. Both
+affected static browser graphs fit unchanged ceilings. Source checks and static
+bundles supply neither runtime qualification nor a performance claim. Fresh
+exact-head runtime, platform/consumer, analyzer, review and complete mutation
+reconciliation remain necessary before Checkpoint 2.

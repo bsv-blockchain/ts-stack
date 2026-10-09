@@ -5,7 +5,7 @@ import {
   canonicalOutputJSON,
   createClosedOutputObjectValidator,
   incrementOutputU64,
-  inspectOutputJSONEncoding,
+  inspectOutputJSONEncodingWithScalarRecords as inspectOutputJSONEncoding,
   outputAssert,
   outputHex32,
   outputU64,
