@@ -376,6 +376,89 @@ describe('WalletAuthenticationManager faucet boundaries', () => {
     }
   })
 
+  it('recognizes an already internalized faucet payment using wallet-visible output and transaction evidence', async () => {
+    const { paymentData, faucetOutpoint, payment } = faucetFixture()
+    const label = `wab faucet ${payment.id('hex')}`
+    const redemption = new Transaction(
+      1,
+      [{
+        sourceTransaction: payment,
+        sourceOutputIndex: 0,
+        sequence: 0xffffffff,
+        unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+      }],
+      [{ satoshis: 900, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+      0
+    )
+    const wallet = {
+      // Real Wallet.listActions omits external inputs and strips customInstructions.
+      listActions: jest.fn(async () => ({
+        totalActions: 1,
+        actions: [{
+          txid: redemption.id('hex'), status: 'unproven', labels: [label], inputs: [],
+          outputs: [{ outputIndex: 0, basket: 'default', spendable: true, satoshis: 900 }]
+        }]
+      })),
+      listOutputs: jest.fn(async (args: { basket: string }) => args.basket === 'default'
+        ? {
+            totalOutputs: 1,
+            BEEF: redemption.toAtomicBEEF(),
+            outputs: [{
+              outpoint: `${redemption.id('hex')}.0`, satoshis: 900, spendable: true,
+              labels: [label]
+            }]
+          }
+        : { totalOutputs: 0, outputs: [] })
+    }
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).resolves.toBeUndefined()
+    expect(wallet.listOutputs).toHaveBeenCalledWith(
+      expect.objectContaining({ basket: 'default' }), 'admin.example'
+    )
+    expect(wallet.listActions).toHaveBeenCalledTimes(1)
+    expect(faucetOutpoint).toBe(`${payment.id('hex')}.0`)
+  })
+
+  it('rejects a labeled default output whose transaction spent a different faucet output', async () => {
+    const { paymentData, payment } = faucetFixture()
+    const otherPayment = faucetFixture(undefined, 1_000, 3).payment
+    const label = `wab faucet ${payment.id('hex')}`
+    const redemption = new Transaction(
+      1,
+      [{
+        sourceTransaction: otherPayment,
+        sourceOutputIndex: 0,
+        sequence: 0xffffffff,
+        unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+      }],
+      [{ satoshis: 900, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+      0
+    )
+    const wallet = {
+      listActions: jest.fn(async () => ({
+        totalActions: 1,
+        actions: [{
+          txid: redemption.id('hex'), status: 'unproven', labels: [label], inputs: [],
+          outputs: [{ outputIndex: 0, basket: 'default', spendable: true, satoshis: 900 }]
+        }]
+      })),
+      listOutputs: jest.fn(async (args: { basket: string }) => args.basket === 'default'
+        ? {
+            totalOutputs: 1,
+            BEEF: redemption.toAtomicBEEF(),
+            outputs: [{
+              outpoint: `${redemption.id('hex')}.0`, satoshis: 900, spendable: true,
+              labels: [label]
+            }]
+          }
+        : { totalOutputs: 0, outputs: [] })
+    }
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).rejects.toThrow(
+      'unrelated internalized faucet transaction evidence'
+    )
+  })
+
   it('broadcasts a no-send recovery action only once before requiring reconciliation', async () => {
     const { paymentData, faucetOutpoint, payment } = faucetFixture()
     const label = `wab faucet ${payment.id('hex')}`
