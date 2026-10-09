@@ -509,3 +509,489 @@ describe('explicit local BRC-197 fixed-child ownership', () => {
     }
   })
 })
+
+import {
+  validateBrc197InternalizeActionArgs,
+  ownBrc197InternalizeActionArgs,
+  assertBrc197Recipient
+} from '../../src/sdk/Brc197Internalization'
+import { WERR_INVALID_PARAMETER } from '../../src/sdk/WERR_errors'
+import { internalizeActionCore as signerInternalizationCore } from '../../src/signer/methods/internalizeActionCore'
+import { internalizeActionCore as storageInternalizationCore } from '../../src/storage/methods/internalizeActionCore'
+
+function unavailableMethod(target: object, name: string): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(target, name)
+  Object.defineProperty(target, name, { configurable: true, writable: true, value: undefined })
+  return () => {
+    if (descriptor) Object.defineProperty(target, name, descriptor)
+    else Reflect.deleteProperty(target, name)
+  }
+}
+
+describe('fixed-child contract refusals and fresh ownership', () => {
+  let ctx: TestWalletNoSetup
+  beforeAll(async () => {
+    ctx = await _tu.createLegacyWalletSQLiteCopy('brc197-contract-boundaries', 'legacy')
+  })
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+  afterAll(async () => {
+    await ctx.wallet.destroy()
+  })
+  function payment() {
+    const f = fundingFixture(ctx)
+    f.tx.outputs[1].lockingScript = new P2PKH().lock(
+      PublicKey.fromString(brc197ChildPublicKey(ctx.identityKey)).toAddress()
+    )
+    const args: Brc197InternalizeActionArgs = {
+      profile: BRC197_INTERNALIZATION_PROFILE,
+      recipientIdentityKey: ctx.identityKey,
+      tx: f.tx.toAtomicBEEF(),
+      description: 'Independent fixed-child contract boundaries',
+      outputs: [
+        {
+          outputIndex: 1,
+          protocol: 'wallet payment',
+          paymentRemittance: {
+            derivationPrefix: 'brc197',
+            derivationSuffix: 'authority',
+            senderIdentityKey: BRC197_COUNTERPARTY
+          }
+        }
+      ]
+    }
+    return { f, args }
+  }
+  function altered(args: Brc197InternalizeActionArgs, field: string): Brc197InternalizeActionArgs {
+    const copy = structuredClone(args),
+      output = copy.outputs[0]
+    switch (field) {
+      case 'profile':
+        return { ...copy, profile: 'future' } as unknown as Brc197InternalizeActionArgs
+      case 'identity type':
+        return { ...copy, recipientIdentityKey: 1 } as unknown as Brc197InternalizeActionArgs
+      case 'identity encoding':
+        copy.recipientIdentityKey = '04' + '11'.repeat(32)
+        break
+      case 'identity point':
+        copy.recipientIdentityKey = '02' + 'ff'.repeat(32)
+        break
+      case 'output collection':
+        return { ...copy, outputs: null } as unknown as Brc197InternalizeActionArgs
+      case 'protocol':
+        output.protocol = 'basket insertion'
+        break
+      case 'insertion':
+        output.insertionRemittance = { basket: 'other' }
+        break
+      case 'prefix':
+        output.paymentRemittance!.derivationPrefix = 'other'
+        break
+      case 'suffix':
+        output.paymentRemittance!.derivationSuffix = 'other'
+        break
+      case 'counterparty':
+        output.paymentRemittance!.senderIdentityKey = ctx.identityKey
+        break
+      case 'duplicate':
+        copy.outputs.push(structuredClone(output))
+        break
+      default:
+        throw new Error('Unknown boundary fixture')
+    }
+    return copy
+  }
+  test.each([
+    ['profile', 'profile'],
+    ['identity type', 'recipientIdentityKey'],
+    ['identity encoding', 'recipientIdentityKey'],
+    ['identity point', 'recipientIdentityKey'],
+    ['output collection', 'outputs'],
+    ['protocol', 'outputs'],
+    ['insertion', 'outputs'],
+    ['prefix', 'outputs'],
+    ['suffix', 'outputs'],
+    ['counterparty', 'outputs'],
+    ['duplicate', 'outputs']
+  ])('refuses %s with the stable parameter identity before ownership effects', async (field, parameter) => {
+    const { f, args } = payment(),
+      invalid = altered(args, field)
+    expect(() => validateBrc197InternalizeActionArgs(invalid)).toThrow(WERR_INVALID_PARAMETER)
+    const capability = jest.spyOn(ctx.wallet, 'getBrc197InternalizationCapabilities')
+    await expect(ctx.wallet.internalizeBrc197Action(invalid)).rejects.toMatchObject({
+      name: 'WERR_INVALID_PARAMETER',
+      parameter
+    })
+    expect(capability).not.toHaveBeenCalled()
+    expect(await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid: f.tx.id('hex') } })).toHaveLength(
+      0
+    )
+  })
+  test('owns ordinary bytes and remittance without leaving placeholder invoice fields', () => {
+    const { args } = payment(),
+      expected = structuredClone(args),
+      owned = ownBrc197InternalizeActionArgs(args)
+    expect(owned).toMatchObject(expected)
+    expect(owned.tx).not.toBe(args.tx)
+    expect(owned.outputs).not.toBe(args.outputs)
+    expect(owned.outputs[0]).not.toBe(args.outputs[0])
+    expect(owned.outputs[0].paymentRemittance).not.toBe(args.outputs[0].paymentRemittance)
+    args.tx[0] ^= 1
+    args.outputs[0].paymentRemittance!.derivationPrefix = 'changed'
+    args.recipientIdentityKey = new PrivateKey(91).toPublicKey().toString()
+    expect(owned.tx).toEqual(expected.tx)
+    expect(owned.outputs[0].paymentRemittance).toEqual(expected.outputs[0].paymentRemittance)
+    expect(owned.recipientIdentityKey).toBe(expected.recipientIdentityKey)
+    expect(() => assertBrc197Recipient(owned, expected.recipientIdentityKey)).not.toThrow()
+    expect(() => assertBrc197Recipient(owned, args.recipientIdentityKey)).toThrow('the authenticated wallet identity')
+  })
+  test.each(['profile', 'recipientIdentityKey', 'childPublicKey'] as const)(
+    'rejects a provider capability with wrong %s before credit',
+    async field => {
+      const { f, args } = payment(),
+        actual = await ctx.storage.getBrc197InternalizationCapabilities()
+      const invalid = { ...actual, [field]: 'wrong' }
+      jest.spyOn(ctx.storage, 'getBrc197InternalizationCapabilities').mockResolvedValue(invalid)
+      await expect(ctx.wallet.internalizeBrc197Action(args)).rejects.toMatchObject({
+        name: 'WERR_INVALID_PARAMETER',
+        parameter: 'storage'
+      })
+      expect(
+        await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid: f.tx.id('hex') } })
+      ).toHaveLength(0)
+    }
+  )
+  test('queries the own fixed child with the exact public protocol selection', async () => {
+    const getKey = jest.spyOn(ctx.wallet, 'getPublicKey'),
+      result = await ctx.wallet.getBrc197InternalizationCapabilities()
+    expect(getKey.mock.calls).toEqual([
+      [{ identityKey: true }],
+      [{ protocolID: [2, '3241645161d8'], keyID: 'brc197 authority', counterparty: 'anyone', forSelf: true }]
+    ])
+    expect(result).toEqual({
+      profile: BRC197_INTERNALIZATION_PROFILE,
+      recipientIdentityKey: ctx.identityKey,
+      childPublicKey: brc197ChildPublicKey(ctx.identityKey)
+    })
+  })
+  test('refuses missing wallet-storage and writer capability without fallback', async () => {
+    const restoreStorage = unavailableMethod(ctx.storage, 'getBrc197InternalizationCapabilities')
+    try {
+      await expect(ctx.wallet.getBrc197InternalizationCapabilities()).rejects.toMatchObject({
+        name: 'WERR_NOT_IMPLEMENTED',
+        message: 'Local BRC-197 fixed-child internalization is unsupported.'
+      })
+    } finally {
+      restoreStorage()
+    }
+    const restoreWriter = unavailableMethod(ctx.activeStorage, 'internalizeBrc197Action')
+    try {
+      await expect(ctx.storage.getBrc197InternalizationCapabilities()).rejects.toMatchObject({
+        name: 'WERR_NOT_IMPLEMENTED',
+        message: 'The active provider does not support local BRC-197 fixed-child internalization.'
+      })
+      await expect(ctx.storage.internalizeBrc197Action(payment().args)).rejects.toMatchObject({
+        name: 'WERR_NOT_IMPLEMENTED',
+        message: 'The active provider does not support local BRC-197 fixed-child internalization.'
+      })
+    } finally {
+      restoreWriter()
+    }
+  })
+  test.each([0, -1, 0.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
+    'refuses unauthenticated storage user %s before ownership',
+    async userId => {
+      const { f, args } = payment(),
+        auth = await ctx.storage.getAuth(true),
+        find = jest.spyOn(ctx.activeStorage, 'findUsers')
+      await expect(ctx.activeStorage.internalizeBrc197Action({ ...auth, userId }, args)).rejects.toMatchObject({
+        name: 'WERR_INVALID_PARAMETER',
+        parameter: 'auth'
+      })
+      expect(find).not.toHaveBeenCalled()
+      expect(
+        await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid: f.tx.id('hex') } })
+      ).toHaveLength(0)
+    }
+  )
+  test('rejects an authenticated identity that differs from the stored user', async () => {
+    const { f, args } = payment(),
+      auth = await ctx.storage.getAuth(true),
+      foreign = new PrivateKey(91).toPublicKey().toString()
+    await expect(
+      ctx.activeStorage.internalizeBrc197Action(
+        { ...auth, identityKey: foreign },
+        { ...args, recipientIdentityKey: foreign }
+      )
+    ).rejects.toMatchObject({
+      name: 'WERR_INVALID_PARAMETER',
+      parameter: 'auth',
+      message: 'The auth parameter must be the authenticated storage user identity'
+    })
+    expect(await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid: f.tx.id('hex') } })).toHaveLength(
+      0
+    )
+  })
+  test('refuses unknown core profiles and foreign hooks before evidence or storage writes', async () => {
+    const { args } = payment(),
+      auth = await ctx.storage.getAuth(true),
+      future = 'future' as typeof BRC197_INTERNALIZATION_PROFILE
+    await expect(signerInternalizationCore(ctx.wallet, auth, args, future)).rejects.toMatchObject({
+      name: 'WERR_INVALID_PARAMETER',
+      parameter: 'profile'
+    })
+    await expect(storageInternalizationCore(ctx.activeStorage, auth, args, future)).rejects.toMatchObject({
+      name: 'WERR_INVALID_PARAMETER',
+      parameter: 'profile'
+    })
+    const commit = jest.fn(async () => {
+      throw new Error('Hook must not run')
+    })
+    await expect(
+      signerInternalizationCore(ctx.wallet, auth, args, BRC197_INTERNALIZATION_PROFILE, commit)
+    ).rejects.toMatchObject({ name: 'WERR_INVALID_PARAMETER', parameter: 'commit' })
+    expect(commit).not.toHaveBeenCalled()
+  })
+})
+
+import { Utils } from '@bsv/sdk'
+import {
+  genesisHeader,
+  serializeBaseBlockHeader,
+  blockHash
+} from '../../src/services/chaintracker/chaintracks/util/blockHeaderUtilities'
+import { EntityProvenTxReq } from '../../src/storage/schema/entities/EntityProvenTxReq'
+
+describe('shared internalization lifecycle and persisted metadata', () => {
+  let ctx: TestWalletNoSetup
+  beforeAll(async () => {
+    ctx = await _tu.createLegacyWalletSQLiteCopy('shared-internalization-contract', 'legacy')
+  })
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+  afterAll(async () => {
+    await ctx.wallet.destroy()
+  })
+  test.each(['new mined', 'nosend mined', 'nosend unmined'] as const)(
+    'retains exact fixed-child ownership through %s',
+    async lifecycle => {
+      const f = fundingFixture(ctx),
+        child = brc197ChildPublicKey(ctx.identityKey)
+      f.tx.lockTime = 100 + ['new mined', 'nosend mined', 'nosend unmined'].indexOf(lifecycle)
+      f.tx.outputs[1].lockingScript = new P2PKH().lock(PublicKey.fromString(child).toAddress())
+      const txid = f.tx.id('hex'),
+        mined = lifecycle !== 'nosend unmined'
+      if (mined) f.tx.merklePath = new MerklePath(1500, [[{ offset: 0, hash: txid, txid: true }]])
+      const header = serializeBaseBlockHeader({ ...genesisHeader(ctx.chain), merkleRoot: txid })
+      jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
+        currentHeight: async () => 2000,
+        isValidRootForHeight: async (root, height) =>
+          (mined && root === txid && height === 1500) || (await f.tracker.isValidRootForHeight(root, height))
+      })
+      jest.spyOn(ctx.services, 'getHeaderForHeight').mockResolvedValue(header)
+      const broadcast = jest
+        .spyOn(ctx.services, 'postBeef')
+        .mockRejectedValue(new Error('No network publication in lifecycle fixtures'))
+      let transactionId: number | undefined
+      if (lifecycle.startsWith('nosend')) {
+        const now = new Date()
+        transactionId = await ctx.activeStorage.insertTransaction({
+          created_at: now,
+          updated_at: now,
+          transactionId: 0,
+          userId: ctx.userId,
+          txid,
+          status: 'nosend',
+          reference: 'cHVibGlj',
+          isOutgoing: false,
+          satoshis: 0,
+          description: 'Synthetic pending receipt'
+        })
+        const req = EntityProvenTxReq.fromTxid(txid, f.tx.toBinary(), f.tx.toAtomicBEEF())
+        req.status = 'nosend'
+        await ctx.activeStorage.insertProvenTxReq(req.toApi())
+      }
+      const args: Brc197InternalizeActionArgs = {
+        profile: BRC197_INTERNALIZATION_PROFILE,
+        recipientIdentityKey: ctx.identityKey,
+        tx: f.tx.toAtomicBEEF(),
+        outputs: [
+          {
+            outputIndex: 1,
+            protocol: 'wallet payment',
+            paymentRemittance: {
+              derivationPrefix: 'brc197',
+              derivationSuffix: 'authority',
+              senderIdentityKey: BRC197_COUNTERPARTY
+            }
+          }
+        ],
+        description: 'Public fixed-child lifecycle receipt',
+        labels: ['fixed receipt']
+      }
+      const before = await ctx.wallet.balance(),
+        result = await ctx.wallet.internalizeBrc197Action(args)
+      expect(result).toMatchObject({ accepted: true, isMerge: lifecycle.startsWith('nosend'), txid, satoshis: 100 })
+      expect(await ctx.wallet.balance()).toBe(before + 100)
+      const transactions = await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })
+      expect(transactions).toHaveLength(1)
+      const row = transactions[0]
+      expect(row).toMatchObject({
+        userId: ctx.userId,
+        txid,
+        status: mined ? 'completed' : 'unproven',
+        satoshis: 100,
+        isOutgoing: false
+      })
+      if (transactionId !== undefined) expect(row.transactionId).toBe(transactionId)
+      const basket = (
+        await ctx.activeStorage.findOutputBaskets({ partial: { userId: ctx.userId, name: 'default' } })
+      )[0]
+      const outputs = await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
+      expect(outputs).toHaveLength(1)
+      expect(outputs[0]).toMatchObject({
+        transactionId: row.transactionId,
+        userId: ctx.userId,
+        vout: 1,
+        txid,
+        satoshis: 100,
+        basketId: basket.basketId,
+        spendable: true,
+        type: 'P2PKH',
+        providedBy: 'storage',
+        purpose: 'change',
+        change: true,
+        derivationPrefix: 'brc197',
+        derivationSuffix: 'authority',
+        senderIdentityKey: BRC197_COUNTERPARTY,
+        outputDescription: ''
+      })
+      expect(Utils.toHex(outputs[0].lockingScript!)).toBe(f.tx.outputs[1].lockingScript.toHex())
+      expect(outputs[0].spentBy).toBeUndefined()
+      expect(outputs[0].customInstructions).toBeUndefined()
+      const proofs = await ctx.activeStorage.findProvenTxs({ partial: { txid } })
+      expect(proofs).toHaveLength(mined ? 1 : 0)
+      if (mined) {
+        expect(proofs[0]).toMatchObject({
+          txid,
+          height: 1500,
+          index: 0,
+          blockHash: blockHash(header),
+          merkleRoot: txid
+        })
+        expect(Utils.toHex(proofs[0].rawTx)).toBe(f.tx.toHex())
+        expect(Utils.toHex(proofs[0].merklePath)).toBe(Utils.toHex(f.tx.merklePath!.toBinary()))
+        expect(row.provenTxId).toBe(proofs[0].provenTxId)
+      }
+      const reqs = await ctx.activeStorage.findProvenTxReqs({ partial: { txid } })
+      if (lifecycle.startsWith('nosend')) {
+        expect(reqs).toHaveLength(1)
+        expect(reqs[0].status).toBe(mined ? 'completed' : 'unmined')
+        expect(reqs[0].history).toContain(mined ? 'internalizeAction-bumpRetire' : 'internalizeAction-nosendRetire')
+        if (mined) expect(reqs[0].provenTxId).toBe(row.provenTxId)
+      } else expect(reqs).toHaveLength(0)
+      expect((await ctx.wallet.internalizeBrc197Action(args)).satoshis).toBe(0)
+      expect(await ctx.wallet.balance()).toBe(before + 100)
+      expect(broadcast).not.toHaveBeenCalled()
+      expect(
+        await ctx.activeStorage.findTxLabels({ partial: { userId: ctx.userId, label: 'fixed receipt' } })
+      ).toHaveLength(1)
+    }
+  )
+  test('persists complete custom metadata and updates only the same application basket on replay', async () => {
+    const f = fundingFixture(ctx)
+    f.tx.lockTime = 200
+    const txid = f.tx.id('hex')
+    f.tx.merklePath = new MerklePath(1500, [[{ offset: 0, hash: txid, txid: true }]])
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
+      currentHeight: async () => 2000,
+      isValidRootForHeight: async (root, height) =>
+        (root === txid && height === 1500) || (await f.tracker.isValidRootForHeight(root, height))
+    })
+    jest
+      .spyOn(ctx.services, 'getHeaderForHeight')
+      .mockResolvedValue(serializeBaseBlockHeader({ ...genesisHeader(ctx.chain), merkleRoot: txid }))
+    const broadcast = jest
+      .spyOn(ctx.services, 'postBeef')
+      .mockRejectedValue(new Error('No network publication in metadata fixtures'))
+    const args = {
+      tx: f.tx.toAtomicBEEF(),
+      outputs: [0, 1].map(outputIndex => ({
+        outputIndex,
+        protocol: 'basket insertion' as const,
+        insertionRemittance: {
+          basket: 'public contract records',
+          customInstructions: 'original contract instructions',
+          tags: ['visible record', 'shared contract']
+        }
+      })),
+      description: 'Public custom-output metadata fixture',
+      labels: ['custom receipt']
+    }
+    expect(await ctx.wallet.internalizeAction(args)).toMatchObject({
+      accepted: true,
+      isMerge: false,
+      txid,
+      satoshis: 0
+    })
+    const first = await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
+    expect(first).toHaveLength(2)
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({ partial: { userId: ctx.userId, name: 'public contract records' } })
+    )[0]
+    for (const output of first) {
+      expect(output).toMatchObject({
+        userId: ctx.userId,
+        txid,
+        spendable: true,
+        type: 'custom',
+        change: false,
+        providedBy: 'you',
+        purpose: '',
+        customInstructions: 'original contract instructions',
+        basketId: basket.basketId,
+        outputDescription: '',
+        satoshis: f.tx.outputs[output.vout].satoshis
+      })
+      expect(Utils.toHex(output.lockingScript!)).toBe(f.tx.outputs[output.vout].lockingScript.toHex())
+      expect(output.derivationPrefix).toBeUndefined()
+      expect(output.derivationSuffix).toBeUndefined()
+      expect(output.senderIdentityKey).toBeUndefined()
+      expect(output.spentBy).toBeUndefined()
+    }
+    expect(
+      await ctx.activeStorage.findOutputTags({ partial: { userId: ctx.userId, tag: 'visible record' } })
+    ).toHaveLength(1)
+    expect(
+      await ctx.activeStorage.findOutputTags({ partial: { userId: ctx.userId, tag: 'shared contract' } })
+    ).toHaveLength(1)
+    const changed = {
+      ...args,
+      outputs: args.outputs.map(output => ({
+        ...output,
+        insertionRemittance: { ...output.insertionRemittance, customInstructions: 'revised contract instructions' }
+      }))
+    }
+    expect(await ctx.wallet.internalizeAction(changed)).toMatchObject({
+      accepted: true,
+      isMerge: true,
+      txid,
+      satoshis: 0
+    })
+    const second = await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
+    expect(second.map(output => output.outputId).sort()).toEqual(first.map(output => output.outputId).sort())
+    for (const output of second)
+      expect(output).toMatchObject({
+        basketId: basket.basketId,
+        type: 'custom',
+        change: false,
+        customInstructions: 'revised contract instructions',
+        providedBy: 'you',
+        purpose: ''
+      })
+    expect((await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } }))[0].satoshis).toBe(0)
+    expect(broadcast).not.toHaveBeenCalled()
+  })
+})

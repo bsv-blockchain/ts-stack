@@ -265,3 +265,291 @@ it('refuses a valid high-S child signature instead of normalizing a protected re
   await expect(authority.signTransaction(f.request)).rejects.toThrow('retained funded input')
   expect(f.calls).toHaveLength(2)
 })
+
+import { Hash } from '@bsv/sdk'
+
+it.each([
+  {
+    label: 'wrong identity',
+    change: (r: AlteredRequest) => {
+      r.identity = new PrivateKey(91).toPublicKey().toString()
+    }
+  },
+  {
+    label: 'wrong child',
+    change: (r: AlteredRequest) => {
+      r.publicKey = fixture.descriptor.seller
+    }
+  },
+  {
+    label: 'wrong scope',
+    change: (r: AlteredRequest) => {
+      r.scope = 193
+    }
+  }
+])(
+  'retains the fixed-child selection refusal and no signing effect for $label',
+  async ({ change }) => {
+    const f = await profileAuthorityFixture(),
+      authority = await RevenueListingProfileAuthority.create(f.options)
+    const request = { ...structuredClone(f.request) }
+    change(request)
+    await expect(authority.signTransaction(request)).rejects.toThrow(
+      'Profile authority selection differs from the fixed seller child'
+    )
+    expect(f.calls).toHaveLength(1)
+  }
+)
+
+it.each([
+  {
+    label: 'missing byte',
+    change: (a: number[]) => {
+      delete a[0]
+    },
+    message: 'Invalid profile authority byte field'
+  },
+  {
+    label: 'hidden byte',
+    change: (a: number[]) => {
+      Object.defineProperty(a, '0', { value: a[0], enumerable: false })
+    },
+    message: 'Invalid profile authority byte field'
+  },
+  {
+    label: 'negative byte',
+    change: (a: number[]) => {
+      a[0] = -1
+    },
+    message: 'Invalid profile authority byte'
+  },
+  {
+    label: 'large byte',
+    change: (a: number[]) => {
+      a[0] = 256
+    },
+    message: 'Invalid profile authority byte'
+  },
+  {
+    label: 'fractional byte',
+    change: (a: number[]) => {
+      a[0] = 0.5
+    },
+    message: 'Invalid profile authority byte'
+  },
+  {
+    label: 'NaN byte',
+    change: (a: number[]) => {
+      a[0] = Number.NaN
+    },
+    message: 'Invalid profile authority byte'
+  }
+])(
+  'refuses $label in retained signing bytes before the protected signer',
+  async ({ change, message }) => {
+    const f = await profileAuthorityFixture(),
+      authority = await RevenueListingProfileAuthority.create(f.options)
+    const request = { ...structuredClone(f.request) }
+    change(request.preimage)
+    await expect(authority.signTransaction(request)).rejects.toThrow(message)
+    expect(f.calls).toHaveLength(1)
+  }
+)
+
+it.each([
+  {
+    label: 'preimage length',
+    change: (r: AlteredRequest) => {
+      r.preimage.pop()
+    },
+    message: 'Invalid profile authority bytes'
+  },
+  {
+    label: 'digest length',
+    change: (r: AlteredRequest) => {
+      r.data.pop()
+    },
+    message: 'Invalid profile authority bytes'
+  },
+  {
+    label: 'compact-size prefix',
+    change: (r: AlteredRequest) => {
+      r.preimage[104] ^= 1
+      r.data = Hash.sha256(r.preimage)
+    },
+    message: 'Profile authority preimage does not match the active family'
+  },
+  {
+    label: 'literal program',
+    change: (r: AlteredRequest) => {
+      r.preimage[828] ^= 1
+      r.data = Hash.sha256(r.preimage)
+    },
+    message: 'Profile authority preimage does not match the active family'
+  },
+  {
+    label: 'signature scope tail',
+    change: (r: AlteredRequest) => {
+      r.preimage[r.preimage.length - 4] = 193
+      r.data = Hash.sha256(r.preimage)
+    },
+    message: 'Profile authority preimage does not match the active family'
+  },
+  {
+    label: 'different digest',
+    change: (r: AlteredRequest) => {
+      r.data[0] ^= 1
+    },
+    message: 'Profile authority preimage does not match the active family'
+  }
+])(
+  'retains the refusal for $label independently of the other checks',
+  async ({ change, message }) => {
+    const f = await profileAuthorityFixture(),
+      authority = await RevenueListingProfileAuthority.create(f.options)
+    const request = { ...structuredClone(f.request) }
+    change(request)
+    await expect(authority.signTransaction(request)).rejects.toThrow(message)
+    expect(f.calls).toHaveLength(1)
+  }
+)
+
+it.each([0, 7, 73])(
+  'refuses returned DER length %i before decoding or disclosure',
+  async length => {
+    const f = await profileAuthorityFixture(),
+      authority = await RevenueListingProfileAuthority.create(f.options)
+    f.setSigner(() => Promise.resolve({ signature: Array<number>(length).fill(0) }))
+    await expect(authority.signTransaction(f.request)).rejects.toThrow(
+      'Invalid protected DER signature length'
+    )
+    await expect(
+      authority.signGenesis(fixture.descriptor, fixture.genesis.body.genesis)
+    ).rejects.toThrow('Invalid protected DER signature length')
+    expect(f.calls).toHaveLength(3)
+  }
+)
+
+it('rejects an accessor in returned DER without evaluating it', async () => {
+  const f = await profileAuthorityFixture(),
+    authority = await RevenueListingProfileAuthority.create(f.options)
+  const getter = jest.fn(() => 1),
+    signature = Array<number>(8).fill(0)
+  Object.defineProperty(signature, '0', { enumerable: true, get: getter })
+  f.setSigner(() => Promise.resolve({ signature }))
+  await expect(authority.signTransaction(f.request)).rejects.toThrow(
+    'Invalid profile authority byte field'
+  )
+  expect(getter).not.toHaveBeenCalled()
+})
+
+it.each([false, true])(
+  'rechecks installation authority after %s child-key lookup',
+  async childLookup => {
+    const f = await profileAuthorityFixture(),
+      getKey = f.options.wallet.getPublicKey
+    const options = {
+      ...f.options,
+      wallet: {
+        ...f.options.wallet,
+        getPublicKey: async (...args: Parameters<typeof getKey>) => {
+          const result = await getKey(...args)
+          if ((args[0].identityKey !== true) === childLookup) f.deny()
+          return result
+        }
+      }
+    }
+    await expect(RevenueListingProfileAuthority.create(options)).rejects.toThrow(
+      'Changed protected authority'
+    )
+    expect(f.calls).toHaveLength(0)
+  }
+)
+
+it('does not accept a non-void synchronous installation fence', async () => {
+  const f = await profileAuthorityFixture()
+  await expect(
+    RevenueListingProfileAuthority.create({ ...f.options, checkCurrent: () => false })
+  ).rejects.toThrow('Profile signing fence must be synchronous')
+  expect(f.calls).toHaveLength(0)
+})
+
+it('domain-separates the fresh preflight and keeps BRC77 randomness in the genesis child identifier', async () => {
+  const f = await profileAuthorityFixture()
+  const random = jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(array => {
+    if (array instanceof Uint8Array) array.fill(17)
+    return array
+  })
+  try {
+    const authority = await RevenueListingProfileAuthority.create(f.options)
+    expect(f.calls[0].args.data).toEqual(
+      Hash.sha256([
+        ...Utils.toArray('BRC-197/fixed-child-preflight/1\0', 'utf8'),
+        ...Utils.toArray(authority.identity, 'hex'),
+        ...Array<number>(32).fill(17)
+      ])
+    )
+    expect(f.calls[0].originator).toBe(f.options.originator)
+    const genesis = await authority.signGenesis(fixture.descriptor, fixture.genesis.body.genesis)
+    expect(f.calls[1].args).toMatchObject({
+      protocolID: [2, 'message signing'],
+      keyID: Utils.toBase64(Array<number>(32).fill(17)),
+      counterparty: 'anyone'
+    })
+    expect(verifyOutputPacket('sale-genesis', genesis, authority.identity)).toBe(true)
+    expect(random).toHaveBeenCalledTimes(2)
+  } finally {
+    random.mockRestore()
+  }
+})
+
+it.each(['seller', 'index', 'chain'] as const)(
+  'rejects a genesis %s mismatch before protected signing',
+  async field => {
+    const f = await profileAuthorityFixture(),
+      authority = await RevenueListingProfileAuthority.create(f.options)
+    const descriptor = structuredClone(fixture.descriptor),
+      genesis = structuredClone(fixture.genesis.body.genesis)
+    if (field === 'seller') descriptor.seller = new PrivateKey(91).toPublicKey().toString()
+    if (field === 'index') genesis.outputIndex = 1
+    if (field === 'chain') genesis.chain.genesisHash = '01'.repeat(32)
+    await expect(authority.signGenesis(descriptor, genesis)).rejects.toThrow(
+      'Profile genesis differs from the selected seller or chain'
+    )
+    expect(f.calls).toHaveLength(1)
+  }
+)
+
+it('retains the explicit originator refusal before any protected operation', async () => {
+  const f = await profileAuthorityFixture()
+  await expect(
+    RevenueListingProfileAuthority.create({ ...f.options, originator: '' })
+  ).rejects.toThrow('Profile authority requires an explicit originator')
+  expect(f.calls).toHaveLength(0)
+})
+
+it('binds protected operations and the currentness fence to their installed owners', async () => {
+  const f = await profileAuthorityFixture()
+  const wallet = {
+    getPublicKey(...args: Parameters<typeof f.options.wallet.getPublicKey>) {
+      expect(this).toBe(wallet)
+      return f.options.wallet.getPublicKey(...args)
+    },
+    createSignature(...args: Parameters<typeof f.options.wallet.createSignature>) {
+      expect(this).toBe(wallet)
+      return f.options.wallet.createSignature(...args)
+    }
+  }
+  const options = {
+    ...f.options,
+    wallet,
+    checkCurrent(): void {
+      expect(this).toBe(options)
+      f.options.checkCurrent()
+    }
+  }
+  const authority = await RevenueListingProfileAuthority.create(options)
+  await authority.signTransaction(f.request)
+  const genesis = await authority.signGenesis(fixture.descriptor, fixture.genesis.body.genesis)
+  expect(verifyOutputPacket('sale-genesis', genesis, authority.identity)).toBe(true)
+})
