@@ -525,48 +525,59 @@ export function parseOutputJSONWithStringRecords(
   return flat ?? new OutputJSONParser(source, bounds).parse()
 }
 
-// Fixed compact scalar grammar only; every invocation proves its own complete text.
-// Escapes, whitespace, noncanonical number spellings and nested values retain the
-// original inspector. Unescaped strings still require fresh complete Unicode proof.
-const flatOutputJSONScalarRecord =
-  /^\{(?:"[^"\\]*":(?:"[^"\\]*"|0|[1-9]\d*|-[1-9]\d*|true|false|null)(?:,"[^"\\]*":(?:"[^"\\]*"|0|[1-9]\d*|-[1-9]\d*|true|false|null))*)?\}(?![\s\S])/
+// Fixed member grammar only; a fresh sticky cursor proves every member and
+// separator. No duplicate whole-record pattern or retained matching state.
+const flatOutputJSONScalarMember = /"[^"\\]*":(?:"[^"\\]*"|-?\d+|true|false|null)(?=[,}])/
+const canonicalOutputJSONIntegerToken = /^(?:0|-?[1-9]\d*)$/
+
+function safeOutputJSONScalarToken(token: string): boolean {
+  return (
+    token[0] === '"' ||
+    token === 'true' ||
+    token === 'false' ||
+    token === 'null' ||
+    (canonicalOutputJSONIntegerToken.test(token) && Number.isSafeInteger(JSON.parse(token)))
+  )
+}
+
+function outputJSONScalarNextPosition(source: string, end: number): number | undefined {
+  const next = end + 1
+  if (next === source.length) return end
+  if (source[end] === ',' && next < source.length - 1) return next
+  return undefined
+}
 
 function inspectFlatOutputJSONScalarRecord(
   source: string,
   bounds: OutputJSONLimits
 ): { value: OutputJSON; canonical: boolean } | undefined {
-  if (/[^\u0020-\uFFFF]/.test(source) || !flatOutputJSONScalarRecord.test(source)) return undefined
-  const names = new Set<string>()
+  if (/[^\u0020-\uFFFF]/.test(source) || source[0] !== '{' || source.at(-1) !== '}')
+    return undefined
+  const members = new RegExp(flatOutputJSONScalarMember.source, 'y'),
+    names = new Set<string>()
   let position = 1,
     previous: string | undefined,
     canonical = true
   while (position < source.length - 1) {
+    members.lastIndex = position
+    const member = members.exec(source)
+    if (member === null) return undefined
     const nameEnd = source.indexOf('"', position + 1),
       name = source.slice(position + 1, nameEnd),
-      valueStart = nameEnd + 2
+      valueStart = nameEnd + 2,
+      valueEnd = position + member[0].length
     if (names.has(name) || names.size >= bounds.mapKeys) return undefined
     names.add(name)
     canonical &&= previous === undefined || previous < name
     previous = name
-    // The complete grammar proves quote boundaries. Commas/braces inside a
-    // string never delimit its member; scalar tokens contain no such characters.
-    let valueEnd = source.indexOf(',', valueStart)
-    if (source[valueStart] === '"') valueEnd = source.indexOf('"', valueStart + 1) + 1
-    else if (valueEnd < 0) valueEnd = source.length - 1
-    const token = source.slice(valueStart, valueEnd)
-    if (
-      source[valueStart] !== '"' &&
-      token !== 'true' &&
-      token !== 'false' &&
-      token !== 'null' &&
-      !Number.isSafeInteger(JSON.parse(token))
-    )
-      return undefined
-    position = valueEnd + 1
+    if (!safeOutputJSONScalarToken(source.slice(valueStart, valueEnd))) return undefined
+    const next = outputJSONScalarNextPosition(source, valueEnd)
+    if (next === undefined) return undefined
+    position = next
   }
   if (names.size !== 0 && bounds.depth < 2) return undefined
-  // Safe integers use exactly these decimal spellings; strings have no escapes
-  // or controls. Reordering keys cannot change the canonical UTF-8 byte length.
+  // Only exact safe decimal integers and unescaped scalar strings reach here.
+  // Full framing and key order have been proved; reordering preserves byte size.
   return { value: ownValidatedOutputJSON(source), canonical }
 }
 
@@ -591,4 +602,66 @@ export function inspectOutputJSONEncodingWithScalarRecords(
     value = new OutputJSONParser(source, bounds, encoding).parse()
   outputJSONLimit(originalBytes <= bounds.bytes && encoding.bytes <= bounds.bytes)
   return { value, canonical: encoding.canonical }
+}
+
+/** The same fresh traversal/refusal order, with ASCII string fields emitted
+ * directly. Reflection captures each descriptor exactly once; this frame never
+ * retains a caller record, normalized shape or authority decision between calls. */
+function visitOutputJSONInlineRecord(frame: OutputJSONFrame, node: unknown, depth: number): void {
+  if (node === null || typeof node !== 'object') {
+    visitOutputJSON(frame, node, depth)
+    return
+  }
+  outputJSONLimit(depth <= frame.bounds.depth, 1)
+  outputAssert(!frame.path.has(node), 'Cyclic JSON value')
+  outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
+  frame.path.add(node)
+  if (Array.isArray(node)) {
+    visitOutputJSONArray(frame, node, depth)
+    frame.path.delete(node)
+    return
+  }
+  outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
+  const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
+  outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  emitOutputJSON(frame, '{', true)
+  let index = 0
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(node, key)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
+    if (index++ > 0) emitOutputJSON(frame, ',', true)
+    emitOutputJSONString(frame, key, ':')
+    const value: unknown = descriptor.value
+    if (typeof value === 'string') {
+      outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
+      outputJSONLimit(value.length <= frame.bounds.bytes)
+      if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(value)) {
+        const size = value.length + 2
+        outputJSONLimit(size <= frame.bounds.bytes)
+        frame.bytes += size
+        outputJSONLimit(frame.bytes <= frame.bounds.bytes)
+        frame.text += '"' + value + '"'
+      } else emitOutputJSONString(frame, value)
+    } else visitOutputJSONInlineRecord(frame, value, depth + 1)
+  }
+  emitOutputJSON(frame, '}', true)
+  frame.path.delete(node)
+}
+
+/** Explicit serialization with inlined ASCII string-field emission. All values,
+ * descriptors, Unicode, cycles and limits are freshly checked in the original
+ * traversal order. Arrays and other scalar shapes retain the original visitor.
+ * The ordinary canonicalOutputJSON entry and its browser graph are unchanged. */
+export function canonicalOutputJSONWithInlineStrings(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): string {
+  const frame: OutputJSONFrame = {
+    text: '',
+    path: new Set<object>(),
+    bytes: 0,
+    bounds: limitsFor(limits)
+  }
+  visitOutputJSONInlineRecord(frame, input, 1)
+  return frame.text
 }

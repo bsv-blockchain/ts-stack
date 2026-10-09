@@ -4,6 +4,7 @@ export * from './withDoubleSpendRetry.js'
 export * from './OutputProtocolError.js'
 export {
   canonicalOutputJSON,
+  canonicalOutputJSONWithInlineStrings,
   inspectOutputJSONEncoding,
   inspectOutputJSONEncodingWithScalarRecords,
   isOutputPlainObject,

@@ -189,3 +189,31 @@ test('explicit scalar inspection matches original complete canonical/refusal beh
     )
   )
 })
+
+test('inlined string serialization matches the original nested canonical and exact resource contract over 300 cases', async () => {
+  const { canonicalOutputJSONWithInlineStrings: encode } = await import('../OutputProtocolJSON.js')
+  const data = fc.letrec<{ value: OutputJSON }>(tie => ({
+    value: fc.oneof(
+      { maxDepth: 4, depthSize: 'small' },
+      fc.constant(null),
+      fc.boolean(),
+      fc.integer(),
+      fc.string({ maxLength: 32 }),
+      fc.array(tie('value'), { maxLength: 8 }),
+      fc
+        .array(fc.tuple(fc.string({ maxLength: 16 }), tie('value')), { maxLength: 8 })
+        .map(entries => Object.fromEntries(entries))
+    )
+  })).value
+  fc.assert(
+    fc.property(data, input => {
+      const expected = canonicalOutputJSON(input),
+        bytes = new TextEncoder().encode(expected).length
+      expect(encode(input)).toBe(expected)
+      expect(encode(input, { bytes })).toBe(expected)
+      expect(encode(input)).toBe(expected)
+      if (bytes > 1) expect(() => encode(input, { bytes: bytes - 1 })).toThrow('byte limit')
+      expect(canonicalOutputJSON(input)).toBe(expected)
+    })
+  )
+})

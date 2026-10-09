@@ -8016,3 +8016,43 @@ affected static browser graphs fit unchanged ceilings. Source checks and static
 bundles supply neither runtime qualification nor a performance claim. Fresh
 exact-head runtime, platform/consumer, analyzer, review and complete mutation
 reconciliation remain necessary before Checkpoint 2.
+
+## October 9: scalar grammar and native canonical traversal
+
+Published 6989bd8d52b0d9a3e987611a0e17ea91253a138f has 38 successful CI
+jobs, two original property interruptions at 242/205 cases, a real Sonar S5843
+regular-expression complexity finding and the dependent merge-gate failure.
+The properties retain their original 300-case minimum and 150-second interruption
+limit and report no counterexample. Actual CodeQL verifies both categories and
+merge parents/tree with zero open PR-ref alerts; all 23 reviews are resolved.
+Eight substantive predecessor3836 mutation failures are independently classified
+as initial property-run interruptions, with no mutation score or threshold failure.
+
+The current disclosure CPU summary has zero negative/reordered samples and is
+independently source/run/attempt bound. It identifies repeated canonical traversal
+and ownership work as the main JavaScript cost; parser work is smaller. The other
+two current reports and six earlier invalid CPU reports remain excluded whole.
+Native-monotonic, original-Jest and wall observations remain separate, and
+inclusive durations are not summed. These diagnostics establish no speedup or
+functional qualification.
+
+The scalar-record inspector now recognizes one member at a time with fresh sticky
+matching state, complete braces/separators and separately checked canonical safe
+integers. Duplicate names, order, Unicode and map/depth/byte bounds are checked
+before native graph construction. Unsupported representations and every refusal
+retain the original observer and captured-source error order. No matching state,
+input or verdict survives a call.
+
+The separately selected canonicalOutputJSONWithInlineStrings companion emits
+common ASCII record fields directly while retaining the original fresh traversal,
+reflection, resource and refusal order. Nested records use the same per-call frame;
+arrays and other scalar shapes retain the original visitor. Ordinary SDK
+serialization stays unchanged. Native payload and ledger import aliases select
+the companion; all other native source bytes, every original test body and all
+994 protected-ledger mutation sites/order/IDs remain exact. Added differential
+cases cover canonical bytes, limits, mutation between calls, malformed shapes,
+Unicode, cycles, accessors, symbols and proxy/reflection order. Original 300-case
+controls remain mandatory. No input, graph, shape, secret or authority/currentness
+verdict is cached. Source/declaration/inventory/browser checks precede adoption;
+fresh exact-head runtime, platform, analyzer and complete mutation evidence remain
+required for Checkpoint 2. No static result supplies a performance claim.

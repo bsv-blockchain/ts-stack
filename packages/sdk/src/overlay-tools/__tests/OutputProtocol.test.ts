@@ -1470,3 +1470,142 @@ describe('explicit scalar-record encoding inspector', () => {
     }
   })
 })
+
+describe('explicit inlined string-field serialization', () => {
+  it('preserves canonical bytes and refusal order for nested, mutable and boundary inputs', async () => {
+    const { canonicalOutputJSONWithInlineStrings: encode } =
+      await import('../OutputProtocolJSON.js')
+    const outcome = (work: () => string) => {
+      try {
+        return { text: work() }
+      } catch (error) {
+        return {
+          name: (error as Error).name,
+          code: (error as OutputProtocolError).code,
+          message: (error as Error).message
+        }
+      }
+    }
+    const cycle: Record<string, unknown> = {}
+    cycle.self = cycle
+    const accessor = Object.defineProperty({}, 'secret', {
+      enumerable: true,
+      get() {
+        throw new Error('Getter must not run')
+      }
+    })
+    const hidden = Object.defineProperty({}, 'secret', { value: 'hidden' })
+    const decorated = Object.assign(['one'], { extra: true })
+    const revoked = () => {
+      const x = Proxy.revocable({}, {})
+      x.revoke()
+      return x.proxy
+    }
+    for (const input of [
+      { z: 'last', a: 'first', nested: { binding: 'fresh', unicode: 'é😀', escaped: '"\\\n' } },
+      { '10': 'ten', '2': 'two', __proto__: null, constructor: 'data', toJSON: 'data' },
+      {
+        integer: Number.MAX_SAFE_INTEGER,
+        minimum: Number.MIN_SAFE_INTEGER,
+        zero: -0,
+        yes: true,
+        no: false,
+        empty: null
+      },
+      [],
+      [null, { a: 'inside-array' }],
+      Object.create(null) as object,
+      cycle,
+      accessor,
+      hidden,
+      decorated,
+      Array(1),
+      { a: '\ud800' },
+      { a: undefined },
+      { a: Number.NaN },
+      { a: 1.5 },
+      { a: BigInt(1) },
+      { [Symbol('key')]: 'symbol' },
+      Object.create({ inherited: 'nonplain' }) as object,
+      revoked()
+    ]) {
+      for (const limits of [
+        {},
+        { bytes: 2 },
+        { bytes: 16 },
+        { depth: 1 },
+        { depth: 2 },
+        { mapKeys: 1 },
+        { arrayElements: 1 }
+      ])
+        expect(outcome(() => encode(input, limits))).toEqual(
+          outcome(() => canonicalOutputJSON(input, limits))
+        )
+    }
+    const input = { a: 'fresh' },
+      bytes = canonicalOutputJSON(input).length
+    expect(encode(input, { bytes })).toBe(canonicalOutputJSON(input))
+    input.a = 'changed'
+    expect(encode(input)).toBe(canonicalOutputJSON(input))
+  })
+
+  it('retains proxy reflection order and captures caller limits once on each call', async () => {
+    const { canonicalOutputJSONWithInlineStrings: encode } =
+      await import('../OutputProtocolJSON.js')
+    const capture = (method: typeof encode) => {
+      const trace: string[] = []
+      const value = new Proxy(
+        { z: 'last', a: { first: 'nested' } },
+        {
+          ownKeys(target) {
+            trace.push('names')
+            return Reflect.ownKeys(target)
+          },
+          getOwnPropertyDescriptor(target, key) {
+            trace.push('descriptor:' + String(key))
+            return Reflect.getOwnPropertyDescriptor(target, key)
+          },
+          getPrototypeOf(target) {
+            trace.push('prototype')
+            return Reflect.getPrototypeOf(target)
+          }
+        }
+      )
+      const text = method(value, {
+        get bytes() {
+          trace.push('limit')
+          return 1024
+        }
+      })
+      return { text, trace }
+    }
+    expect(capture(encode)).toEqual(capture(canonicalOutputJSON))
+  })
+
+  it('retains full scalar grammar framing and numeric fallbacks after member-scanner simplification', async () => {
+    const {
+      inspectOutputJSONEncodingWithScalarRecords: inspect,
+      inspectOutputJSONEncoding: original
+    } = await import('../OutputProtocolJSON.js')
+    for (const text of [
+      '{"a":1,}',
+      '{"a":01}',
+      '{"a":-01}',
+      '{"a":1},"b":2}',
+      '{"a":1 "b":2}',
+      '{"a":1}}',
+      '{"a":1,{"b":2}}'
+    ]) {
+      const refusal = (method: typeof inspect) => {
+        try {
+          method(text)
+          throw new Error('Expected refusal')
+        } catch (error) {
+          expect(error).toBeInstanceOf(OutputProtocolError)
+          return { code: (error as OutputProtocolError).code, message: (error as Error).message }
+        }
+      }
+      expect(refusal(inspect)).toEqual(refusal(original))
+    }
+  })
+})

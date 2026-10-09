@@ -1489,3 +1489,12 @@ inventory, capacity, revisions and transaction checks remain fresh. This changes
 one local import binding, no stored format, public interface or recovery rule.
 No record or validation verdict is cached; runtime and mutation qualification
 remain separate from this source change.
+
+Native protected-payload and ledger canonical serialization explicitly select
+`canonicalOutputJSONWithInlineStrings`. The walker preserves fresh prototype,
+symbol, descriptor, cycle, Unicode, integer, canonical-order and resource checks,
+including the original proxy reflection and refusal order. Direct ASCII field
+emission creates no input or validation cache. Encryption, associated-data bytes,
+current custody resolution, revision fences and recovery behavior remain unchanged.
+All original native method bodies remain exact; two local import aliases select
+the companion. Hosted properties and full mutation evidence must still qualify it.

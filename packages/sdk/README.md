@@ -576,6 +576,17 @@ wallet-derived locking key, and field signature before reading or spending it.
   shape, secret, currentness, authorization or validation verdict is cached. This
   addition requires no existing consumer, wire or stored-data migration.
 
+  `canonicalOutputJSONWithInlineStrings(value, limits)` is an explicit serialization
+  companion with the original canonical bytes, fresh validation and refusal order.
+  Its per-call record walker emits unescaped ASCII string fields directly; Unicode,
+  escaping, arrays and other scalar values retain the original checks. Descriptors
+  are captured once in the same order, including proxies; cycles, plain prototypes,
+  hidden/accessor/symbol fields, UTF-16 key order and all resource bounds remain
+  enforced. Native private-payload and ledger serialization select it through local
+  import aliases. Ordinary `canonicalOutputJSON` stays unchanged. No input, shape,
+  graph, secret or verdict is cached, and no stored-data or consumer migration is
+  required. Runtime qualification remains separate from this implementation choice.
+
   `retainOutputCapability(manifest, request)` validates a new selection and returns
   `{ record, selection }` as independent owned copies. Atomically persist `record`
   with the operation before any effect. `restoreOutputCapability(record, trust)`
