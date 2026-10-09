@@ -348,3 +348,14 @@ weakening the production completeness guard. The checkpoint inventory records th
 current reference workflows and reproduction selectors. Complete whole-source
 mutation, packed/browser/platform, conformance and exact published-head hosted
 checks remain separate final acceptance requirements, reconciled in the PR evidence.
+
+The native alias journal and acquisition owner explicitly select
+`canonicalOutputJSONWithInlineStrings` and `ownOutputJSONWithInlineStrings` through
+local imports. The protected ledger codec selects the same canonical companion.
+Every invocation still checks the complete fresh representation and resource
+bounds and produces independent ownership. No request, normalized graph, shape,
+secret, authorization or currentness verdict is retained between calls. These
+bindings change neither the public interfaces nor persisted framing, signatures,
+custody, reservations or release decisions. Ordinary SDK and portable entry paths
+remain unchanged. Static compatibility checks and prior SDK regressions do not
+establish runtime speed or complete the current hosted qualification.

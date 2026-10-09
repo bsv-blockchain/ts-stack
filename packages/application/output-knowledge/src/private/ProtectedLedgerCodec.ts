@@ -1,6 +1,6 @@
 import {
   ownOutputJSONWithInlineStrings as ownOutputJSON,
-  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,

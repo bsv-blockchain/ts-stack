@@ -1506,3 +1506,14 @@ constructing an independent graph. The selection changes two imports; it does
 not cache plaintext, secrets, schema acceptance, authorization or currentness.
 Every persisted frame, encryption binding, custody check and public default
 remains unchanged. Portable consumers continue selecting ordinary SDK ownership.
+
+The native alias journal and acquisition owner explicitly select
+`canonicalOutputJSONWithInlineStrings` and `ownOutputJSONWithInlineStrings` through
+local imports. The protected ledger codec selects the same canonical companion.
+Every invocation still checks the complete fresh representation and resource
+bounds and produces independent ownership. No request, normalized graph, shape,
+secret, authorization or currentness verdict is retained between calls. These
+bindings change neither the public interfaces nor persisted framing, signatures,
+custody, reservations or release decisions. Ordinary SDK and portable entry paths
+remain unchanged. Static compatibility checks and prior SDK regressions do not
+establish runtime speed or complete the current hosted qualification.
