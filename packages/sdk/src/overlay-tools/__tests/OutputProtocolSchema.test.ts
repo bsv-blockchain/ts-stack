@@ -877,7 +877,7 @@ test('owned-record traversal preserves UTF-16 order for integer, builtin and ast
   expect(canonicalOutputJSONWithInlineRecords(input)).toBe(expected)
   const owned = ownOutputJSONWithInlineRecords(input)
   expect(owned.text).toBe(expected)
-  expect(Object.getPrototypeOf(owned.value)).toBe(null)
+  expect(Object.getPrototypeOf(owned.value)).toBeNull()
   expect(isDeepStrictEqual(owned.value, ownOutputJSON(input).value)).toBe(true)
   Object.defineProperty(input, 'hidden', { value: 'refuse' })
   expect(() => canonicalOutputJSONWithInlineRecords(input)).toThrow()

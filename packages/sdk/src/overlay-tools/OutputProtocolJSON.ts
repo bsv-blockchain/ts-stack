@@ -1035,8 +1035,8 @@ function visitOutputJSONOwnedObject(
   own: boolean
 ): OutputJSONObject | undefined {
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
-  // Fresh primitive names use native UTF-16 ordering, as required by JCS.
-  const keys = Object.getOwnPropertyNames(node).sort()
+  // Fresh primitive names use the fixed UTF-16 comparator required by JCS.
+  const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
   const result: OutputJSONObject | undefined = own ? Object.create(null) : undefined
   emitOutputJSON(frame, '{', true)
