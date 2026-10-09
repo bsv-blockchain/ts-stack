@@ -522,5 +522,5 @@ export function parseOutputJSONWithStringRecords(
 ): OutputJSON {
   const [source, bounds] = outputJSONSource(input, limits)
   const flat = ownFlatOutputJSONStringRecord(source, bounds)
-  return flat === undefined ? new OutputJSONParser(source, bounds).parse() : flat
+  return flat ?? new OutputJSONParser(source, bounds).parse()
 }
