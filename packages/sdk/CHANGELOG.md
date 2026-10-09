@@ -227,13 +227,18 @@ No migration is required. Hosted qualification remains separate.
   exact byte length directly; non-ASCII strings retain surrogate-before-size
   refusal order. No input or verdict is cached and no consumer migration is needed.
 
-- Retain the original Base64 padding-only tail check. A syntax regression covers
-  trailing line terminators, encoded-bound precedence and valid retries. The
-  nonmultiline syntax expression already rejects those terminators before decoding.
+- Reject trailing line terminators in canonical U64, Hex32, compressed identity,
+  Base64 and request-ID primitives using strict absolute end assertions. Preserve
+  valid canonical forms, encoded-bound precedence and Base64 padding-bit checks.
 
 - Construct program-value ownership with native JSON parsing only after complete bounded canonical validation and byte emission. A bounded private traversal selects null prototypes only on fresh, unexposed records; incoming text retains duplicate-aware parsing. Special keys, own data attributes, independent ownership, UTF-16 order and all refusal boundaries remain unchanged.
 
 ### Added (3.3 source candidate)
+
+- Select the existing owned-record lexical JSON parser for explicitly selected
+  schema text/byte inputs. Preserve complete fresh syntax, duplicate-key, Unicode,
+  safe-integer and resource checks; ordinary/default parsers and declarations
+  remain unchanged. No input, graph or verdict is cached.
 
 - Compose nested policy, STEAK and release grammar checks after complete fresh parent ownership; keep embedded-text parsing, every bound/refusal and intrinsic/authority check, original APIs and no input/verdict cache or new root export.
 

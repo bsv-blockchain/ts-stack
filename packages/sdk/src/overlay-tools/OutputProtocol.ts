@@ -103,7 +103,7 @@ function rememberMathematicalFact(cache: Set<string>, key: string): void {
 
 export function outputU64(value: unknown): bigint {
   outputAssert(
-    typeof value === 'string' && value.length <= 20 && /^(0|[1-9]\d*)$/.test(value),
+    typeof value === 'string' && value.length <= 20 && /^(0|[1-9]\d*)$(?![^])/.test(value),
     'Expected canonical U64'
   )
   const integer = BigInt(value)
@@ -126,7 +126,7 @@ export function outputU32(value: unknown): number {
 }
 
 export function outputHex32(value: unknown): string {
-  outputAssert(typeof value === 'string' && /^[0-9a-f]{64}$/.test(value), 'Expected Hex32')
+  outputAssert(typeof value === 'string' && /^[0-9a-f]{64}$(?![^])/.test(value), 'Expected Hex32')
   return value
 }
 
@@ -147,7 +147,7 @@ export function outputString(value: unknown): string {
 
 export function outputIdentity(value: unknown): string {
   outputAssert(
-    typeof value === 'string' && /^(02|03)[0-9a-f]{64}$/.test(value),
+    typeof value === 'string' && /^(02|03)[0-9a-f]{64}$(?![^])/.test(value),
     'Expected compressed identity'
   )
   if (curvePoints.has(value)) return value
@@ -180,12 +180,12 @@ export function decodeOutputBytes(
   outputAssert(typeof value === 'string', 'Expected base64 bytes')
   outputAssert(value.length <= 4 * Math.ceil(maximumBytes / 3), 'Decoded byte limit', 'limited')
   outputAssert(
-    value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(value),
+    value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$(?![^])/.test(value),
     'Noncanonical base64'
   )
   const decoded: number[] = toArray(value, 'base64')
   outputAssert(decoded.length <= maximumBytes, 'Decoded byte limit', 'limited')
-  // The syntax regex has no multiline flag: line terminators fail syntax.
+  // The strict end-of-input assertion rejects trailing line terminators.
   // Syntax and decoded length are checked before this exact padding-bit rule.
   // A canonical final sextet has four zero bits with two pads, two with one.
   // This is fresh representation validation, without a second full encoding.

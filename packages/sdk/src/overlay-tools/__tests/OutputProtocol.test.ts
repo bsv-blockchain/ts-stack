@@ -2101,3 +2101,26 @@ describe('public counted-record ownership', () => {
     )
   })
 })
+
+it('rejects trailing line terminators at canonical primitive boundaries', () => {
+  const identity = PrivateKey.fromString('1', 'hex').toPublicKey().toString()
+  const cases: [string, (value: unknown) => unknown][] = [
+    ['1', outputU64],
+    ['11'.repeat(32), outputHex32],
+    [identity, outputIdentity],
+    ['YQ==', decodeOutputBytes],
+    ['YWJj', decodeOutputBytes]
+  ]
+  for (const [valid, check] of cases) {
+    expect(() => check(valid)).not.toThrow()
+    for (const suffix of ['\n', '\r', '\u2028', '\u2029']) {
+      expect(() => check(valid + suffix)).toThrow()
+      expect(() => check(valid)).not.toThrow()
+    }
+  }
+  // An unpadded prefix followed by whitespace must not be normalized as bytes.
+  for (const malformed of ['YQ=\n', 'YWI\n', 'YWJ\n'])
+    expect(() => decodeOutputBytes(malformed)).toThrow()
+  expect(decodeOutputBytes('YQ==')).toEqual([97])
+  expect(decodeOutputBytes('YWI=')).toEqual([97, 98])
+})

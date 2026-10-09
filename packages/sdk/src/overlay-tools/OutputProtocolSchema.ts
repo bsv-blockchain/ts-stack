@@ -15,6 +15,7 @@ import {
   ownOutputJSONValue,
   ownOutputJSONForSchema as ownOutputJSONWithInlineStrings,
   parseOutputJSON,
+  parseOutputJSONWithOwnedRecords,
   type OutputJSON,
   type OutputJSONObject
 } from './OutputProtocolJSON.js'
@@ -120,7 +121,7 @@ export const iri: Schema<string> = value => {
 }
 export const requestId: Schema<string> = value => {
   outputAssert(
-    typeof value === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(value),
+    typeof value === 'string' && /^[A-Za-z0-9_-]{16,128}$(?![^])/.test(value),
     'Invalid request ID'
   )
   return value
@@ -175,11 +176,12 @@ export function normalizedWithInlineStrings<T>(
   schema: Schema<T>,
   maximumBytes = 4194304
 ): T {
+  // Encoded inputs select complete fresh owned-record lexical traversal.
   const limits =
     maximumBytes === OUTPUT_JSON_LIMITS.bytes ? OUTPUT_JSON_LIMITS : { bytes: maximumBytes }
   const value =
     typeof input === 'string' || input instanceof Uint8Array
-      ? parseOutputJSON(input, limits)
+      ? parseOutputJSONWithOwnedRecords(input, limits)
       : ownOutputJSONWithInlineStrings(input, limits).value
   return schema(value)
 }

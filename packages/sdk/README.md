@@ -532,8 +532,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   final sextet's unused bits directly: four zero bits with two padding characters,
   two with one. Decoded bytes and refusal order are unchanged; this avoids a
   complete re-encoding solely to verify padding. No byte value or verdict is cached.
-  The syntax expression has no multiline flag: trailing line terminators fail
-  syntax before decoding, after the original encoded allocation bound.
+  A strict absolute end-of-input assertion rejects trailing line terminators
+  before decoding, after the original encoded allocation bound.
 
   Purchase and release parsers retain fresh complete normalization at both
   public and nested packet boundaries. Nested ownership also preserves canonical
@@ -1000,3 +1000,5 @@ The explicit purchase and release companions select fixed nested companion gramm
 Fixed nested companion grammars are instantiated lazily and retained as immutable validator configuration. Unused companion paths can be removed from browser bundles. This retains neither supplied input nor normalized data, secret or verdict; every call still owns and validates the complete current representation independently.
 
 The explicit purchase/release parser owns and bounds the complete enclosing packet on every call. Fixed child grammars then validate that newly owned graph without repeating ownership of object subtrees. Embedded JSON text keeps its complete parser, including duplicate-name and resource checks. Intrinsic release arithmetic, signatures, digests, original-request bindings, custody and current authority remain separate fresh checks. Internal child validators require an already owned and bounded parent and are not standalone public packet parsers or SDK root exports. No input, partial graph, secret or validation/authority result is retained between calls. Existing default and standalone parsers retain their paths. Hosted property/mutation qualification remains required and no speedup is claimed from source checks.
+
+Explicit schema text/byte inputs select the existing owned-record lexical parser directly. Complete fresh syntax, decoded-name duplicates, Unicode, safe integers, depth and input-byte fences remain mandatory; ordinary parser entry points are unchanged. Canonical U64, Hex32, compressed identities, standard base64 and request IDs use strict end-of-input assertions so line terminators cannot be accepted as part of a canonical primitive. Valid canonical representations, defaults, wire bytes and signature/authority checks remain unchanged. No input, graph or verdict is cached. Hosted qualification is still required; source checks establish no speedup.

@@ -924,3 +924,53 @@ it('composes fresh owned children and independently frames text or byte represen
   expect(() => s.normalizedWithInlineStrings({ left: accessor, right: supplied }, parent)).toThrow()
   expect(observed).toBe(false)
 })
+
+it('owns opt-in encoded input directly while retaining complete ordinary parser outcomes', () => {
+  const outcome = (call: () => unknown): unknown => {
+    try {
+      return { value: call() }
+    } catch (error) {
+      return {
+        name: (error as Error).name,
+        code: (error as { code?: unknown }).code,
+        message: (error as Error).message
+      }
+    }
+  }
+  const sources = [
+    'null',
+    'true',
+    '-0',
+    '1e3',
+    '[1,2,3]',
+    '{"z":"é😀","2":{"constructor":[]},"10":"data"}',
+    '{"a":"\u0061","b":[{"c":"\ud83d\ude00"}]}',
+    '{"a":1,"\u0061":2}',
+    '"\ud800"',
+    '[1,]',
+    '{"a":1} trailing'
+  ]
+  for (const source of sources) {
+    for (const input of [source, new TextEncoder().encode(source)]) {
+      expect(outcome(() => s.normalizedWithInlineStrings(input, s.json))).toEqual(
+        outcome(() => s.normalized(input, s.json))
+      )
+    }
+  }
+  const source = '{"a":[{"b":"unchanged"}]}'
+  const first = s.normalizedWithInlineStrings(source, s.json) as { a: { b: string }[] }
+  const second = s.normalizedWithInlineStrings(source, s.json)
+  owned(first)
+  owned(second)
+  first.a[0].b = 'changed'
+  expect(second).toEqual({ a: [{ b: 'unchanged' }] })
+  for (const bound of [2, 3, source.length - 1, source.length])
+    expect(outcome(() => s.normalizedWithInlineStrings(source, s.json, bound))).toEqual(
+      outcome(() => s.normalized(source, s.json, bound))
+    )
+  expect(s.normalizedWithInlineStrings('1e3', s.json, 3)).toBe(1000)
+  const valid = 'r'.repeat(16)
+  expect(s.requestId(valid)).toBe(valid)
+  for (const suffix of ['\n', '\r', '\u2028', '\u2029'])
+    expect(() => s.requestId(valid + suffix)).toThrow()
+})
