@@ -166,7 +166,7 @@ interface ChangeRecaptureRequest extends SurplusChangeMaterializationRequest {
  */
 function materializeSurplusChangeOutput(request: SurplusChangeMaterializationRequest): void {
   const { params, result } = request
-  if (!params.surplusPoolShaping || result.changeOutputs.length > 0) return
+  if (!params.surplusPoolShaping || result.changeOutputs.length > 0 || params.surplusToFee === true) return
 
   const availableAfterOutputFee = request.feeExcess(0, 1)
   if (availableAfterOutputFee < request.dustFloor) return
@@ -187,6 +187,8 @@ async function requireViableChangeOrRetainBoundedFee(request: ChangeRecaptureReq
   const { params, result } = request
   const feeExcessNow = request.feeExcess()
   if (result.changeOutputs.length > 0 || feeExcessNow <= 0) return
+  // The caller sized its funding exactly and asked for any surplus as fee.
+  if (params.surplusToFee === true) return
 
   const hasOnlyUnreturnableShapingSurplus =
     params.surplusPoolShaping === true && request.feeExcess(0, 1) < request.dustFloor
@@ -354,10 +356,12 @@ async function generateChangeSdkCore(
      * Applies the per-transaction limit so that the UTXO pool grows
      * gradually rather than all at once.
      */
-    const maxChangeOutputs =
+    let maxChangeOutputs =
       params.maxChangeOutputs === -1
         ? Number.MAX_SAFE_INTEGER
         : (params.maxChangeOutputs ?? maxChangeOutputsPerTransaction)
+    // No change output is ever added; surplus stays in the fee.
+    if (params.surplusToFee === true) maxChangeOutputs = 0
     const surplusPoolShaping = params.surplusPoolShaping === true
 
     const randomVals = [...(params.randomVals || [])]
@@ -741,7 +745,8 @@ export function validateGenerateChangeSdkResult(
     r.changeOutputs.length === 0 &&
     r.fee > feeRequired &&
     r.fee - feeWithChangeOutput < dustFloor
-  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus) {
+  const isSurplusToFee = params.surplusToFee === true && r.changeOutputs.length === 0 && r.fee > feeRequired
+  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus && !isSurplusToFee) {
     log += `required fee error ${feeRequired} !== ${r.fee};`
     ok = false
   }
@@ -805,6 +810,13 @@ export interface GenerateChangeSdkParams {
    * is preferred.
    */
   maxChangeOutputs?: number
+
+  /**
+   * When true, no change outputs are created and any surplus beyond the
+   * required fee is paid as fee. Set only by callers that have already sized
+   * their funding exactly, e.g. a BRC-177 protected action.
+   */
+  surplusToFee?: boolean
 
   /**
    * When true, targetNetCount shapes only genuine post-funding surplus. The

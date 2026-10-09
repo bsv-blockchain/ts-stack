@@ -1087,6 +1087,42 @@ describe('generateChange tests', () => {
     expectTransactionSize(params, r)
   })
 
+  test.each([true, false])(
+    '9a2 surplusToFee creates no change and pays the surplus as fee (surplusPoolShaping=%s)',
+    async surplusPoolShaping => {
+      const params: GenerateChangeSdkParams = {
+        ...defParams,
+        fixedInputs: [{ satoshis: 1, unlockingScriptLength: 1 }],
+        fixedOutputs: [{ satoshis: 1, lockingScriptLength: 1 }],
+        feeModel: { model: 'sat/kb', value: 1 },
+        targetNetCount: 8,
+        maxChangeOutputs: 1,
+        surplusToFee: true,
+        surplusPoolShaping
+      }
+      const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([{ satoshis: 194, outputId: 1 }])
+
+      const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+      expect(r.allocatedChangeInputs).toMatchObject([{ satoshis: 194, outputId: 1 }])
+      expect(r.changeOutputs).toHaveLength(0)
+      expect(r.fee).toBe(194)
+      expect(r.fee).toBeGreaterThan(Math.ceil((r.size / 1000) * 1))
+      expectTransactionSize(params, r)
+    }
+  )
+
+  test('9a3 maxChangeOutputs 0 is still rejected', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [{ satoshis: 1, lockingScriptLength: 1 }],
+      maxChangeOutputs: 0
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([{ satoshis: 194, outputId: 1 }])
+
+    await expect(generateChangeSdk(params, allocateChangeInput, releaseChangeInput)).rejects.toThrow('maxChangeOutputs')
+  })
+
   test('9b maxChangeOutputs cap: gradual pool build-up over multiple transactions', async () => {
     // Simulates a user importing one large UTXO and making sequential actions.
     // Each action should add at most maxChangeOutputsPerTransaction net new outputs.
