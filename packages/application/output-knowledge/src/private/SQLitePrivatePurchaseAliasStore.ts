@@ -1,5 +1,5 @@
 import {
-  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   inspectOutputJSONEncoding,
   Hash,
   Utils,
@@ -12,7 +12,7 @@ import {
   outputIdentity,
   outputString,
   outputU64,
-  ownOutputJSONWithInlineStrings as ownOutputJSON,
+  ownOutputJSONWithInlineRecords as ownOutputJSON,
   parseOutputJSON,
   type OutputPurchaseEnvelope,
   type OutputSignedPurchaseTerms

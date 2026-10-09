@@ -9,7 +9,10 @@ import {
   verifyOutputPacket,
   verifyOutputPacketWithInlineStrings
 } from './OutputProtocol.js'
-import { canonicalOutputJSON, canonicalOutputJSONWithInlineStrings } from './OutputProtocolJSON.js'
+import {
+  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSONWithInlineStrings
+} from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'
 
 const prepare = s.fixedObject({

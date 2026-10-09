@@ -1,10 +1,10 @@
 import {
-  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   decodeOutputBytes,
   Hash,
   outputAssert,
   outputHex32,
-  ownOutputJSONWithInlineStrings as ownOutputJSON,
+  ownOutputJSONWithInlineRecords as ownOutputJSON,
   closedOutputObject,
   parseOutputChain,
   outputU64,

@@ -84,3 +84,10 @@ export {
   parseOutputCapabilitiesWithInlineStrings,
   selectOutputCapabilityWithInlineStrings
 } from './OutputCapabilities.js'
+
+export {
+  parseOutputJSONWithOwnedRecords,
+  inspectOutputJSONEncodingWithOwnedRecords,
+  canonicalOutputJSONWithInlineRecords,
+  ownOutputJSONWithInlineRecords
+} from './OutputProtocolJSON.js'

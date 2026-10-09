@@ -7,7 +7,7 @@ import { outputAssert, OutputProtocolError } from './OutputProtocolError.js'
 import {
   assertOutputJSONUnicode,
   canonicalOutputJSON,
-  canonicalOutputJSONWithInlineStrings,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSONWithInlineStrings,
   isOutputPlainObject,
   OUTPUT_JSON_LIMITS,
   type OutputJSONObject

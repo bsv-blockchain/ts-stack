@@ -510,9 +510,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   grammar-proven quote boundaries, including when punctuation occurs inside
   names or values. Other shapes and refusals use the original parser/error order.
   Only fixed grammar is retained. Each graph is newly owned; endpoint schemas,
-  bindings, authentication and currentness checks remain independent. The Node
-  private-payload codec and native protected-ledger envelope-metadata reader
-  select this path; browser companions do not require it.
+  bindings, authentication and currentness checks remain independent. The owned-record companion below preserves this shallow fast path; current
+  native bindings select that companion. Existing consumers may retain this entry.
 
   `outputString` retains its nonempty primitive, 1,024-code-unit and 1,024-byte
   UTF-8 limits. Fresh ASCII evidence establishes well-formed Unicode and one
@@ -570,9 +569,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   key-order, map/depth and byte checks. Each call constructs a new null-prototype
   graph. Other shapes, number spellings, escapes and all refusals retain the
   original lexical observer and error order with the already captured input and
-  limits. Caller limits and byteLength are observed once. The native protected
-  ledger selects this companion for authenticated plaintext inspection; ordinary
-  SDK inspection and browser companions retain their existing paths. No input,
+  limits. Caller limits and byteLength are observed once. The owned-record inspector below preserves this shallow path and is selected by
+  current native ledger bindings. Ordinary SDK inspection retains its existing path. No input,
   shape, secret, currentness, authorization or validation verdict is cached. This
   addition requires no existing consumer, wire or stored-data migration.
 
@@ -582,8 +580,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   escaping, arrays and other scalar values retain the original checks. Descriptors
   are captured once in the same order, including proxies; cycles, plain prototypes,
   hidden/accessor/symbol fields, UTF-16 key order and all resource bounds remain
-  enforced. Native private-payload and ledger serialization select it through local
-  import aliases. Ordinary `canonicalOutputJSON` stays unchanged. No input, shape,
+  enforced. The recursive record companion below is selected by current native serialization
+  bindings; this earlier opt-in companion remains available. Ordinary `canonicalOutputJSON` stays unchanged. No input, shape,
   graph, secret or verdict is cached, and no stored-data or consumer migration is
   required. Runtime qualification remains separate from this implementation choice.
 
@@ -970,4 +968,8 @@ authorization and currentness checks remain the responsibility of each operation
 
 `parseOutputPurchasePrepareWithInlineStrings`, `parseOutputPurchaseTermsWithInlineStrings` and `parseOutputPurchaseSubmitWithInlineStrings` explicitly select the existing fresh owned-copy implementation for object inputs. Terms retain the intrinsic recovery-deadline check; authentication and domain validation remain separate. Text and bytes retain the general parser. Ordinary purchase parsers, general normalization and digests keep their existing paths. The internal schema companion is also an additive deep-module export. Existing signatures, encodings and limits remain unchanged; no input, normalized value or verdict is cached. Native contract and alias bindings opt in; browser callers retain ordinary parsing by default.
 
-Native purchase contracts explicitly select additive inline companions for capability selection and retention, packet digests and verification, and signed purchase terms. Each invocation owns and validates its complete input afresh. Historical capability restoration still checks the recorded selection time, original signature, selected endpoint, identity, chain, selector, installed rules and digest. Current caller authorization and actual operation deadlines remain separate checks. Ordinary SDK entry points, wire text and bytes, canonical encodings, resource limits, error identities and custody formats retain their existing behavior. No input, parsed packet, shape, secret, currentness or authority verdict is cached; only the existing bounded mathematical signature facts and fixed grammar are shared. This is an implementation choice with identical protocol semantics, not a new advertised protocol profile. Hosted property and full mutation qualification remain required.
+Native purchase contracts explicitly select additive inline companions for historical capability restoration, packet digests and verification, and signed purchase terms. Capability parsing, selection and retention companions are available separately in the SDK; the native initiation method retains its existing binding. Each invocation owns and validates its complete input afresh. Historical capability restoration still checks the recorded selection time, original signature, selected endpoint, identity, chain, selector, installed rules and digest. Current caller authorization and actual operation deadlines remain separate checks. Ordinary SDK entry points, wire text and bytes, canonical encodings, resource limits, error identities and custody formats retain their existing behavior. No input, parsed packet, shape, secret, currentness or authority verdict is cached; only the existing bounded mathematical signature facts and fixed grammar are shared. This is an implementation choice with identical protocol semantics, not a new advertised protocol profile. Hosted property and full mutation qualification remain required.
+
+The additive `parseOutputJSONWithOwnedRecords` and `inspectOutputJSONEncodingWithOwnedRecords` preserve the existing shallow string/scalar paths and construct independently owned records during complete lexical traversal of complex JSON. Duplicate decoded names, escaped Unicode, safe integers, framing, depth, item limits and refusal order retain the ordinary parser's rules. Each complete input is captured once. Arrays have ordinary own data fields and records have null prototypes. No partial graph escapes if a later syntax or resource check fails. Parsing preserves lexical negative zero; canonical ownership normalizes it exactly as the ordinary owner does. Encoding inspection describes this input only and supplies no schema, trust or operation authorization.
+
+`canonicalOutputJSONWithInlineRecords` and `ownOutputJSONWithInlineRecords` extend fresh inline key/string emission through nested records and arrays. They preserve canonical bytes, descriptor observation order, prototype/symbol/cycle checks, Unicode, integers and exact resource bounds. The owner returns `{ text, value }`; repeated input references become independent owned nodes. Frames are private to one complete call and failures expose no partial state. The earlier ordinary and opt-in entry points remain available. Current native private-state bindings and the explicit schema/verification companions select these implementations through imports; existing default entry points retain their paths. This changes neither a protocol profile nor a wire, custody or public interface contract. No input, parsed graph, shape, secret, authorization or currentness verdict is cached. Hosted qualification remains required; no performance improvement is claimed from source checks.

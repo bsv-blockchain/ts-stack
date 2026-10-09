@@ -313,3 +313,67 @@ test('fresh recursive ownership matches ordinary bytes, attributes and exact fen
     })
   )
 })
+
+test('owned-record parser and recursive inline codec retain original contracts over 300 nested cases', () => {
+  const {
+    parseOutputJSONWithOwnedRecords,
+    inspectOutputJSONEncodingWithOwnedRecords,
+    inspectOutputJSONEncoding,
+    canonicalOutputJSONWithInlineRecords,
+    ownOutputJSONWithInlineRecords
+  } = require('../OutputProtocolJSON.js') as typeof import('../OutputProtocolJSON.js')
+  const data = fc.letrec<{ value: OutputJSON }>(tie => ({
+    value: fc.oneof(
+      { maxDepth: 4, depthSize: 'small' },
+      fc.constant(null),
+      fc.boolean(),
+      fc.integer(),
+      fc.constant(-0),
+      fc.oneof(fc.string({ maxLength: 24 }), fc.constantFrom('𝄞', 'é', '\n"\\', 'a,b:c')),
+      fc.array(tie('value'), { maxLength: 6 }),
+      fc
+        .array(
+          fc.tuple(
+            fc.oneof(
+              fc.string({ maxLength: 12 }),
+              fc.constantFrom('__proto__', 'constructor', 'prototype')
+            ),
+            tie('value')
+          ),
+          { maxLength: 6 }
+        )
+        .map(entries => Object.fromEntries(entries))
+    )
+  })).value
+  fc.assert(
+    fc.property(data, input => {
+      const expected = ownOutputJSON(input),
+        size = new TextEncoder().encode(expected.text).length,
+        encoded = JSON.stringify(input),
+        wireSize = new TextEncoder().encode(encoded).length,
+        actual = ownOutputJSONWithInlineRecords(input, { bytes: size })
+      deepStrictEqual(actual, expected)
+      expect(canonicalOutputJSONWithInlineRecords(input, { bytes: size })).toBe(expected.text)
+      for (const source of [encoded, new TextEncoder().encode(encoded)]) {
+        deepStrictEqual(
+          parseOutputJSONWithOwnedRecords(source, { bytes: wireSize }),
+          parseOutputJSON(source, { bytes: wireSize })
+        )
+        deepStrictEqual(
+          inspectOutputJSONEncodingWithOwnedRecords(source),
+          inspectOutputJSONEncoding(source)
+        )
+      }
+      deepStrictEqual(parseOutputJSONWithOwnedRecords(expected.text), expected.value)
+      if (input !== null && typeof input === 'object') expect(actual.value).not.toBe(input)
+      if (size > 1) {
+        expect(() => canonicalOutputJSONWithInlineRecords(input, { bytes: size - 1 })).toThrow(
+          'byte limit'
+        )
+        expect(() => ownOutputJSONWithInlineRecords(input, { bytes: size - 1 })).toThrow(
+          'byte limit'
+        )
+      }
+    })
+  )
+})

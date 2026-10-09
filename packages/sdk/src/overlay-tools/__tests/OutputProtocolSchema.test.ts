@@ -657,3 +657,178 @@ describe('Explicit fresh-owned schema normalization', () => {
     expect(() => s.normalizedWithInlineStrings({ text: 'x'.repeat(length + 1) }, s.json)).toThrow()
   })
 })
+
+import {
+  parseOutputJSONWithOwnedRecords,
+  inspectOutputJSONEncodingWithOwnedRecords,
+  canonicalOutputJSONWithInlineRecords,
+  ownOutputJSONWithInlineRecords
+} from '../OutputProtocolJSON.js'
+
+test('owned-record parsing retains lexical values, complete framing and canonical inspection', () => {
+  for (const source of [
+    '{"rows":[{"__proto__":{"constructor":["é😀",null,-0,true]}}],"empty":{}}',
+    ' { "z" : [1e0, true, false, null], "a" : "\\u0061" } ',
+    '[[],{},"comma,:quote\\\"",{"𝄞":"é"}]',
+    '-0',
+    '0',
+    'true',
+    'null',
+    '"escaped\\nline"'
+  ]) {
+    const bytes = new TextEncoder().encode(source),
+      original = parseOutputJSON(source),
+      expectedInspection = inspectOutputJSONEncoding(source)
+    for (const input of [source, bytes]) {
+      const actual = parseOutputJSONWithOwnedRecords(input, { bytes: bytes.length })
+      expect(isDeepStrictEqual(actual, original)).toBe(true)
+      owned(actual)
+      expect(
+        isDeepStrictEqual(inspectOutputJSONEncodingWithOwnedRecords(input), expectedInspection)
+      ).toBe(true)
+      if (bytes.length > 1)
+        expect(() => parseOutputJSONWithOwnedRecords(input, { bytes: bytes.length - 1 })).toThrow(
+          'byte limit'
+        )
+    }
+  }
+  expect(Object.is(parseOutputJSONWithOwnedRecords('-0'), -0)).toBe(true)
+  expect(Object.is(ownOutputJSONWithInlineRecords(-0).value, -0)).toBe(false)
+})
+
+test('owned-record parsing refuses decoded duplicates, syntax, Unicode and exact structural fences', () => {
+  const errorOf = (operation: () => unknown): { name: string; code: unknown; message: string } => {
+    try {
+      operation()
+    } catch (error) {
+      const actual = error as Error & { code?: unknown }
+      return { name: actual.name, code: actual.code, message: actual.message }
+    }
+    throw new Error('Expected refusal')
+  }
+  for (const source of [
+    '{"x":1,"x":2}',
+    '[{"x":1,"\\u0078":2}]',
+    '{"é":1,"\\u00e9":2}',
+    '{"x":}',
+    '[1,]',
+    '{"x":1,}',
+    '[1] trailing',
+    '01',
+    '1e',
+    '9007199254740992',
+    '"\\uD800"',
+    '["\\uDC00"]',
+    '\uFEFF{}',
+    '"raw\ncontrol"',
+    '{"x":truefalse}'
+  ]) {
+    const expected = errorOf(() => parseOutputJSON(source))
+    expect(errorOf(() => parseOutputJSONWithOwnedRecords(source))).toEqual(expected)
+    expect(errorOf(() => inspectOutputJSONEncodingWithOwnedRecords(source))).toEqual(
+      errorOf(() => inspectOutputJSONEncoding(source))
+    )
+  }
+  for (const [source, limits] of [
+    ['{"a":{"b":1}}', { depth: 2 }],
+    ['[1,2]', { arrayElements: 1 }],
+    ['{"a":1,"b":2}', { mapKeys: 1 }],
+    ['"é"', { bytes: 3 }],
+    ['{}', { depth: 0 }]
+  ] as const) {
+    expect(errorOf(() => parseOutputJSONWithOwnedRecords(source, limits))).toEqual(
+      errorOf(() => parseOutputJSON(source, limits))
+    )
+    expect(errorOf(() => inspectOutputJSONEncodingWithOwnedRecords(source, limits))).toEqual(
+      errorOf(() => inspectOutputJSONEncoding(source, limits))
+    )
+  }
+  for (const bytes of [
+    Uint8Array.from([0xc0, 0x80]),
+    Uint8Array.from([0xef, 0xbb, 0xbf, 0x7b, 0x7d])
+  ]) {
+    expect(errorOf(() => parseOutputJSONWithOwnedRecords(bytes))).toEqual(
+      errorOf(() => parseOutputJSON(bytes))
+    )
+    expect(parseOutputJSONWithOwnedRecords('{"valid":[1]}')).toEqual(
+      parseOutputJSON('{"valid":[1]}')
+    )
+  }
+})
+
+test('recursive inline records preserve keys, independent graphs and exact byte boundaries', () => {
+  const shared = { ['__proto__']: ['plain', 'é😀', '\n"\\', -0, null, true] },
+    input = { z: [shared, shared], a: shared, ['𝄞']: { ['é']: 'v' } },
+    expected = ownOutputJSON(input),
+    bytes = new TextEncoder().encode(expected.text).length,
+    first = ownOutputJSONWithInlineRecords(input, { bytes }),
+    second = ownOutputJSONWithInlineRecords(input, { bytes })
+  expect(canonicalOutputJSONWithInlineRecords(input, { bytes })).toBe(expected.text)
+  expect(isDeepStrictEqual(first, expected)).toBe(true)
+  owned(first.value)
+  const graph = first.value as { z: Array<Record<string, unknown>>; a: Record<string, unknown> }
+  expect(graph.z[0]).not.toBe(graph.z[1])
+  expect(graph.a).not.toBe(graph.z[0])
+  graph.a.changed = 'owned'
+  expect(Object.hasOwn(shared, 'changed')).toBe(false)
+  expect(Object.hasOwn(graph.z[0], 'changed')).toBe(false)
+  expect(isDeepStrictEqual(second, expected)).toBe(true)
+  expect(() => canonicalOutputJSONWithInlineRecords(input, { bytes: bytes - 1 })).toThrow(
+    'byte limit'
+  )
+  expect(() => ownOutputJSONWithInlineRecords(input, { bytes: bytes - 1 })).toThrow('byte limit')
+  expect(ownOutputJSONWithInlineRecords({ revised: ['after failure'] })).toEqual(
+    ownOutputJSON({ revised: ['after failure'] })
+  )
+})
+
+test('recursive inline records retain descriptor observations and refusal before any getter', () => {
+  const observes = (operation: (input: unknown) => unknown): string[] => {
+    const events: string[] = [],
+      input = new Proxy(
+        { rows: [{ value: 'ascii' }] },
+        {
+          getPrototypeOf(target) {
+            events.push('prototype')
+            return Reflect.getPrototypeOf(target)
+          },
+          ownKeys(target) {
+            events.push('keys')
+            return Reflect.ownKeys(target)
+          },
+          getOwnPropertyDescriptor(target, key) {
+            events.push('descriptor:' + String(key))
+            return Reflect.getOwnPropertyDescriptor(target, key)
+          }
+        }
+      )
+    operation(input)
+    return events
+  }
+  expect(observes(canonicalOutputJSONWithInlineRecords)).toEqual(observes(canonicalOutputJSON))
+  expect(observes(ownOutputJSONWithInlineRecords)).toEqual(observes(ownOutputJSON))
+  let reads = 0
+  const accessor = Object.defineProperty({}, 'bad', {
+      enumerable: true,
+      get() {
+        reads++
+        return 'never'
+      }
+    }),
+    cycle: Record<string, unknown> = {}
+  cycle.self = cycle
+  for (const input of [
+    accessor,
+    cycle,
+    Object.assign([], { 1: 1 }),
+    Object.assign([1], { extra: true }),
+    { bad: '\uD800' },
+    { [Symbol('hidden')]: true },
+    { n: 1.5 },
+    Object.defineProperty({}, 'hidden', { value: 1 })
+  ]) {
+    expect(() => canonicalOutputJSONWithInlineRecords(input)).toThrow()
+    expect(() => ownOutputJSONWithInlineRecords(input)).toThrow()
+  }
+  expect(reads).toBe(0)
+})

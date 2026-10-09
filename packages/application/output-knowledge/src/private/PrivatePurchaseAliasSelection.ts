@@ -1,10 +1,10 @@
 import {
-  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
   outputU64,
-  ownOutputJSONWithInlineStrings as ownOutputJSON
+  ownOutputJSONWithInlineRecords as ownOutputJSON
 } from '@bsv/sdk'
 import type { PrivatePurchaseOriginal } from './PrivatePurchaseContracts.js'
 import {

@@ -2,7 +2,7 @@ import {
   createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
-  ownOutputJSONWithInlineStrings as ownOutputJSON,
+  ownOutputJSONWithInlineRecords as ownOutputJSON,
   type OutputJSONObject
 } from '@bsv/sdk'
 

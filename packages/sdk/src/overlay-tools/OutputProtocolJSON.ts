@@ -770,3 +770,301 @@ export function ownOutputJSONWithInlineStrings(
   const value = visitOwnedOutputJSONInlineRecord(frame, input, 1)
   return { text: frame.text, value }
 }
+
+class OutputJSONOwnedParser {
+  readonly #frame: {
+    o: number
+    readonly t: string
+    readonly b: OutputJSONLimits
+    readonly e?: OutputJSONEncodingObserver
+  }
+
+  constructor(text: string, bounds: OutputJSONLimits, encoding?: OutputJSONEncodingObserver) {
+    this.#frame = { o: 0, t: text, b: bounds, e: encoding }
+  }
+
+  parse(): OutputJSON {
+    const frame = this.#frame
+    const value = this.#value(1)
+    this.#whitespace()
+    outputAssert(frame.o === frame.t.length, 'Trailing JSON data')
+    // The private graph becomes observable only after duplicate, syntax and
+    // resource checks have all completed; failed partial graphs never escape.
+    return value
+  }
+
+  #whitespace(): void {
+    const frame = this.#frame
+    while (' \r\n\t'.includes(frame.t[frame.o] ?? '\0')) {
+      frame.o++
+      frame.e?.whitespace()
+    }
+  }
+
+  #string(): string {
+    const frame = this.#frame
+    outputAssert(frame.t[frame.o] === '"', 'Expected JSON string')
+    const start = frame.o++
+    // Each quote search advances. Backslash runs preceding candidate quotes
+    // cannot overlap, so even malformed tokens require only linear work.
+    // Native decoding still validates all escapes and raw controls.
+    let end = start
+    while ((end = frame.t.indexOf('"', end + 1)) >= 0) {
+      let backslashStart = end
+      while (backslashStart > start && frame.t[backslashStart - 1] === '\\') backslashStart--
+      if ((end - backslashStart) % 2 === 0) break
+    }
+    frame.o = end < 0 ? frame.t.length : end + 1
+    outputAssert(end >= 0, 'Unterminated JSON string')
+    const encoded = frame.t.slice(start, frame.o)
+    // Fresh text validation already proves unescaped Unicode well-formed;
+    // ASCII quote boundaries cannot split a pair. Only decoding escapes can
+    // introduce a lone surrogate or change canonical string representation.
+    if (!/[^\u0020-\u005B\u005D-\uFFFF]/.test(encoded)) return encoded.slice(1, -1)
+    let decoded: string
+    try {
+      decoded = JSON.parse(encoded) as string
+    } catch {
+      throw new OutputProtocolError('invalid', 'Malformed JSON string')
+    }
+    wellFormed(decoded)
+    frame.e?.string(encoded, decoded)
+    return decoded
+  }
+
+  #object(depth: number): OutputJSONObject {
+    const frame = this.#frame
+    frame.o++
+    this.#whitespace()
+    const result = Object.create(null) as OutputJSONObject
+    const keys = new Set<string>()
+    let previous: string | undefined
+    if (frame.t[frame.o] === '}') {
+      frame.o++
+    } else {
+      for (;;) {
+        this.#whitespace()
+        const key = this.#string()
+        outputAssert(!keys.has(key), 'Duplicate decoded JSON key')
+        outputJSONLimit(keys.size < frame.b.mapKeys, 2)
+        frame.e?.key(previous, key)
+        previous = key
+        this.#whitespace()
+        outputAssert(frame.t[frame.o++] === ':', 'Expected JSON colon')
+        result[key] = this.#value(depth + 1)
+        keys.add(key)
+        this.#whitespace()
+        const end = frame.t[frame.o++]
+        if (end === '}') break
+        outputAssert(end === ',', 'Expected JSON object separator')
+      }
+    }
+    return result
+  }
+
+  #array(depth: number): OutputJSON[] {
+    const frame = this.#frame
+    frame.o++
+    this.#whitespace()
+    const result: OutputJSON[] = []
+    let size = 0
+    if (frame.t[frame.o] === ']') {
+      frame.o++
+      return result
+    }
+    for (;;) {
+      outputJSONLimit(size < frame.b.arrayElements, 3)
+      Object.defineProperty(result, size, {
+        value: this.#value(depth + 1),
+        enumerable: true,
+        writable: true,
+        configurable: true
+      })
+      size++
+      this.#whitespace()
+      const end = frame.t[frame.o++]
+      if (end === ']') return result
+      outputAssert(end === ',', 'Expected JSON array separator')
+    }
+  }
+
+  #value(depth: number): OutputJSON {
+    const frame = this.#frame
+    outputJSONLimit(depth <= frame.b.depth, 1)
+    this.#whitespace()
+    switch (frame.t[frame.o]) {
+      case '"':
+        return this.#string()
+      case '{':
+        return this.#object(depth)
+      case '[':
+        return this.#array(depth)
+      default: {
+        const rest = frame.t.slice(frame.o)
+        const token =
+          /^(?:true|false|null)/.exec(rest)?.[0] ??
+          /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(rest)?.[0]
+        outputAssert(token !== undefined, 'Invalid JSON token')
+        frame.o += token.length
+        const result: unknown = JSON.parse(token)
+        outputAssert(
+          typeof result !== 'number' || Number.isSafeInteger(result),
+          'Protocol numbers must be safe integers'
+        )
+        frame.e?.value(token, result as OutputJSONScalar)
+        return result as OutputJSONScalar
+      }
+    }
+  }
+}
+
+/** Explicit parser that constructs fresh owned records during the complete
+ * lexical traversal. Duplicate decoded names, escaped Unicode, safe integers,
+ * framing and every resource limit retain the ordinary parser's refusal order.
+ * No partial graph escapes, and no input or verdict is retained between calls. */
+export function parseOutputJSONWithOwnedRecords(
+  input: Uint8Array | string,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): OutputJSON {
+  const [source, bounds] = outputJSONSource(input, limits)
+  const flat = ownFlatOutputJSONStringRecord(source, bounds)
+  return flat ?? new OutputJSONOwnedParser(source, bounds).parse()
+}
+
+/** Explicit owned-record inspection; canonicality still describes only the
+ * current encoding. It confers no schema, custody, trust or authorization. */
+export function inspectOutputJSONEncodingWithOwnedRecords(
+  input: Uint8Array | string,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { value: OutputJSON; canonical: boolean } {
+  const [source, bounds, bytes] = outputJSONSource(input, limits),
+    originalBytes = typeof input === 'string' ? bytes : outputJSONUTF8Length(source),
+    flat = inspectFlatOutputJSONScalarRecord(source, bounds)
+  if (flat) {
+    outputJSONLimit(originalBytes <= bounds.bytes)
+    return flat
+  }
+  const encoding = new OutputJSONEncodingInspection(originalBytes),
+    value = new OutputJSONOwnedParser(source, bounds, encoding).parse()
+  outputJSONLimit(originalBytes <= bounds.bytes && encoding.bytes <= bounds.bytes)
+  return { value, canonical: encoding.canonical }
+}
+
+function emitOutputJSONRecordString(frame: OutputJSONFrame, value: string, suffix = ''): void {
+  outputJSONLimit(value.length <= frame.bounds.bytes)
+  if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(value)) {
+    const size = value.length + 2 + suffix.length
+    outputJSONLimit(size <= frame.bounds.bytes)
+    frame.bytes += size
+    outputJSONLimit(frame.bytes <= frame.bounds.bytes)
+    frame.text += '"' + value + '"' + suffix
+  } else emitOutputJSONString(frame, value, suffix)
+}
+
+/** Complete private recursive traversal. The ownership flag chooses only fresh
+ * graph construction; both modes perform identical fresh observations, checks,
+ * canonical emission and refusal ordering. A frame is never shared or exposed. */
+function visitOutputJSONInlineRecords(
+  frame: OutputJSONFrame,
+  node: unknown,
+  depth: number,
+  own: boolean
+): OutputJSON | undefined {
+  outputJSONLimit(depth <= frame.bounds.depth, 1)
+  const number = typeof node === 'number'
+  if (node === null || typeof node === 'boolean' || number) {
+    outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
+    emitOutputJSON(frame, String(node), true)
+    const value = number && node === 0 ? 0 : (node as OutputJSON)
+    return own ? value : undefined
+  }
+  if (typeof node === 'string') {
+    emitOutputJSONRecordString(frame, node)
+    return own ? node : undefined
+  }
+  outputAssert(typeof node === 'object', 'Expected a JSON value')
+  outputAssert(!frame.path.has(node), 'Cyclic JSON value')
+  outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
+  frame.path.add(node)
+  if (Array.isArray(node)) {
+    outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
+    outputAssert(
+      Object.getOwnPropertyNames(node).length === node.length + 1 &&
+        Object.keys(node).length === node.length,
+      'Sparse or decorated JSON array'
+    )
+    const result: OutputJSON[] | undefined = own ? [] : undefined
+    emitOutputJSON(frame, '[', true)
+    for (let i = 0; i < node.length; i++) {
+      if (i > 0) emitOutputJSON(frame, ',', true)
+      const descriptor = Object.getOwnPropertyDescriptor(node, i)
+      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
+      const value = visitOutputJSONInlineRecords(frame, descriptor.value, depth + 1, own)
+      if (result !== undefined)
+        Object.defineProperty(result, i, {
+          value,
+          enumerable: true,
+          writable: true,
+          configurable: true
+        })
+    }
+    emitOutputJSON(frame, ']', true)
+    frame.path.delete(node)
+    return result
+  }
+  outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
+  const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
+  outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  const result: OutputJSONObject | undefined = own ? Object.create(null) : undefined
+  emitOutputJSON(frame, '{', true)
+  let index = 0
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(node, key)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
+    if (index++ > 0) emitOutputJSON(frame, ',', true)
+    emitOutputJSONRecordString(frame, key, ':')
+    const supplied: unknown = descriptor.value
+    let value: OutputJSON | undefined
+    if (typeof supplied === 'string') {
+      outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
+      emitOutputJSONRecordString(frame, supplied)
+      value = supplied
+    } else value = visitOutputJSONInlineRecords(frame, supplied, depth + 1, own)
+    if (result !== undefined) result[key] = value as OutputJSON
+  }
+  emitOutputJSON(frame, '}', true)
+  frame.path.delete(node)
+  return result
+}
+
+/** Opt-in recursive record/key/string emission. Ordinary canonical serialization
+ * remains unchanged; all descriptors, Unicode, cycles and bounds remain fresh. */
+export function canonicalOutputJSONWithInlineRecords(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): string {
+  const frame: OutputJSONFrame = {
+    text: '',
+    path: new Set<object>(),
+    bytes: 0,
+    bounds: limitsFor(limits)
+  }
+  visitOutputJSONInlineRecords(frame, input, 1, false)
+  return frame.text
+}
+
+/** Opt-in independently owned graph plus complete canonical text. Repeated input
+ * nodes become distinct records; failures expose neither a graph nor a frame. */
+export function ownOutputJSONWithInlineRecords(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { text: string; value: OutputJSON } {
+  const frame: OutputJSONFrame = {
+    text: '',
+    path: new Set<object>(),
+    bytes: 0,
+    bounds: limitsFor(limits)
+  }
+  const value = visitOutputJSONInlineRecords(frame, input, 1, true) as OutputJSON
+  return { text: frame.text, value }
+}

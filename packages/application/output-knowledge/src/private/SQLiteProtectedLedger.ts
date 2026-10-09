@@ -1,15 +1,15 @@
 import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import {
-  ownOutputJSONWithInlineStrings as ownOutputJSON,
-  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
+  ownOutputJSONWithInlineRecords as ownOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   incrementOutputU64,
-  inspectOutputJSONEncodingWithScalarRecords as inspectOutputJSONEncoding,
+  inspectOutputJSONEncodingWithOwnedRecords as inspectOutputJSONEncoding,
   outputAssert,
   outputHex32,
   outputU64,
-  parseOutputJSONWithStringRecords as parseOutputJSON,
+  parseOutputJSONWithOwnedRecords as parseOutputJSON,
   type OutputJSONObject,
   type OutputJSON
 } from '@bsv/sdk'

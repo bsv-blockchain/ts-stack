@@ -7,10 +7,10 @@ import {
   randomBytes
 } from 'node:crypto'
 import {
-  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputString,
-  parseOutputJSONWithStringRecords as parseOutputJSON,
+  parseOutputJSONWithOwnedRecords as parseOutputJSON,
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'

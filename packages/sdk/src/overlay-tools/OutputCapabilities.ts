@@ -11,7 +11,7 @@ import {
 } from './OutputProtocol.js'
 import {
   canonicalOutputJSON,
-  canonicalOutputJSONWithInlineStrings,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSONWithInlineStrings,
   type OutputJSONObject
 } from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'

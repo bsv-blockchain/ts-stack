@@ -13,7 +13,7 @@ import {
 import {
   OUTPUT_JSON_LIMITS,
   ownOutputJSONValue,
-  ownOutputJSONWithInlineStrings,
+  ownOutputJSONWithInlineRecords as ownOutputJSONWithInlineStrings,
   parseOutputJSON,
   type OutputJSON,
   type OutputJSONObject
