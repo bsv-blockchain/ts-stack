@@ -771,6 +771,17 @@ export function ownOutputJSONWithInlineStrings(
   return { text: frame.text, value }
 }
 
+/** Fixed lexical grammar only; every search advances on the current text. */
+function findOutputJSONOwnedStringEnd(text: string, start: number): number {
+  let end = start
+  while ((end = text.indexOf('"', end + 1)) >= 0) {
+    let backslashStart = end
+    while (backslashStart > start && text[backslashStart - 1] === '\\') backslashStart--
+    if ((end - backslashStart) % 2 === 0) return end
+  }
+  return -1
+}
+
 class OutputJSONOwnedParser {
   readonly #frame: {
     o: number
@@ -795,7 +806,9 @@ class OutputJSONOwnedParser {
 
   #whitespace(): void {
     const frame = this.#frame
-    while (' \r\n\t'.includes(frame.t[frame.o] ?? '\0')) {
+    for (;;) {
+      const unit = frame.t.charCodeAt(frame.o)
+      if (unit !== 0x20 && unit !== 0x0d && unit !== 0x0a && unit !== 0x09) return
       frame.o++
       frame.e?.whitespace()
     }
@@ -805,15 +818,7 @@ class OutputJSONOwnedParser {
     const frame = this.#frame
     outputAssert(frame.t[frame.o] === '"', 'Expected JSON string')
     const start = frame.o++
-    // Each quote search advances. Backslash runs preceding candidate quotes
-    // cannot overlap, so even malformed tokens require only linear work.
-    // Native decoding still validates all escapes and raw controls.
-    let end = start
-    while ((end = frame.t.indexOf('"', end + 1)) >= 0) {
-      let backslashStart = end
-      while (backslashStart > start && frame.t[backslashStart - 1] === '\\') backslashStart--
-      if ((end - backslashStart) % 2 === 0) break
-    }
+    const end = findOutputJSONOwnedStringEnd(frame.t, start)
     frame.o = end < 0 ? frame.t.length : end + 1
     outputAssert(end >= 0, 'Unterminated JSON string')
     const encoded = frame.t.slice(start, frame.o)
@@ -986,32 +991,49 @@ function visitOutputJSONInlineRecords(
   outputAssert(!frame.path.has(node), 'Cyclic JSON value')
   outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
   frame.path.add(node)
-  if (Array.isArray(node)) {
-    outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
-    outputAssert(
-      Object.getOwnPropertyNames(node).length === node.length + 1 &&
-        Object.keys(node).length === node.length,
-      'Sparse or decorated JSON array'
-    )
-    const result: OutputJSON[] | undefined = own ? [] : undefined
-    emitOutputJSON(frame, '[', true)
-    for (let i = 0; i < node.length; i++) {
-      if (i > 0) emitOutputJSON(frame, ',', true)
-      const descriptor = Object.getOwnPropertyDescriptor(node, i)
-      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
-      const value = visitOutputJSONInlineRecords(frame, descriptor.value, depth + 1, own)
-      if (result !== undefined)
-        Object.defineProperty(result, i, {
-          value,
-          enumerable: true,
-          writable: true,
-          configurable: true
-        })
-    }
-    emitOutputJSON(frame, ']', true)
-    frame.path.delete(node)
-    return result
+  return Array.isArray(node)
+    ? visitOutputJSONOwnedArray(frame, node, depth, own)
+    : visitOutputJSONOwnedObject(frame, node, depth, own)
+}
+
+function visitOutputJSONOwnedArray(
+  frame: OutputJSONFrame,
+  node: unknown[],
+  depth: number,
+  own: boolean
+): OutputJSON[] | undefined {
+  outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
+  outputAssert(
+    Object.getOwnPropertyNames(node).length === node.length + 1 &&
+      Object.keys(node).length === node.length,
+    'Sparse or decorated JSON array'
+  )
+  const result: OutputJSON[] | undefined = own ? [] : undefined
+  emitOutputJSON(frame, '[', true)
+  for (let i = 0; i < node.length; i++) {
+    if (i > 0) emitOutputJSON(frame, ',', true)
+    const descriptor = Object.getOwnPropertyDescriptor(node, i)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
+    const value = visitOutputJSONInlineRecords(frame, descriptor.value, depth + 1, own)
+    if (result !== undefined)
+      Object.defineProperty(result, i, {
+        value,
+        enumerable: true,
+        writable: true,
+        configurable: true
+      })
   }
+  emitOutputJSON(frame, ']', true)
+  frame.path.delete(node)
+  return result
+}
+
+function visitOutputJSONOwnedObject(
+  frame: OutputJSONFrame,
+  node: object,
+  depth: number,
+  own: boolean
+): OutputJSONObject | undefined {
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
   const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)

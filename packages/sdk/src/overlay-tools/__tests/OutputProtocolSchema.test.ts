@@ -832,3 +832,30 @@ test('recursive inline records retain descriptor observations and refusal before
   }
   expect(reads).toBe(0)
 })
+
+test('owned-record lexical traversal accepts exactly the four JSON whitespace units', () => {
+  for (const whitespace of [' ', '\r', '\n', '\t', ' \r\n\t']) {
+    const source = `${whitespace}{${whitespace}"rows"${whitespace}:${whitespace}[${whitespace}1${whitespace}]${whitespace}}${whitespace}`
+    for (const input of [source, new TextEncoder().encode(source)]) {
+      expect(
+        isDeepStrictEqual(parseOutputJSONWithOwnedRecords(input), parseOutputJSON(input))
+      ).toBe(true)
+      expect(
+        isDeepStrictEqual(
+          inspectOutputJSONEncodingWithOwnedRecords(input),
+          inspectOutputJSONEncoding(input)
+        )
+      ).toBe(true)
+    }
+  }
+  for (const forbidden of ['\v', '\f', '\u0085', '\u00a0']) {
+    for (const source of [forbidden + '{}', '{}' + forbidden]) {
+      expect(() => parseOutputJSONWithOwnedRecords(source)).toThrow()
+      expect(() => parseOutputJSON(source)).toThrow()
+      expect(() => inspectOutputJSONEncodingWithOwnedRecords(source)).toThrow()
+    }
+    expect(parseOutputJSONWithOwnedRecords('\t{ "valid": [1] }\r\n')).toEqual(
+      parseOutputJSON('\t{ "valid": [1] }\r\n')
+    )
+  }
+})
