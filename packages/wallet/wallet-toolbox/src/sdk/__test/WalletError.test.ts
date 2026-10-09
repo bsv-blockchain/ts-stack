@@ -223,11 +223,13 @@ describe('WalletError tests', () => {
 
   test('6 - WERR_NETWORK_CHAIN test', async () => {
     const werr = new WERR_NETWORK_CHAIN('Chain mismatch')
+    expect(werr).toBeInstanceOf(WERR_NETWORK_CHAIN)
     expect(werr.name).toBe('WERR_NETWORK_CHAIN')
     expect(werr.message).toBe('Chain mismatch')
 
     const json = WalletError.unknownToJson(werr)
     const werr2 = WalletErrorFromJson(JSON.parse(json))
+    expect(werr2).toBeInstanceOf(WERR_NETWORK_CHAIN)
     expect(werr2.name).toBe('WERR_NETWORK_CHAIN')
     expect(werr2.message).toBe('Chain mismatch')
   })

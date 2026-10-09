@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.4'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+version: '1.3.5'
+last_updated: '2026-10-09'
+last_verified: '2026-10-09'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -156,7 +156,7 @@ must be a dependency or peer, and clean packed consumers must typecheck it.
 This keeps build-only advisory trees out of consumer installs without shipping
 unresolvable public declarations.
 
-The root workspace carries seven narrow audited dependency overrides:
+The root workspace carries narrow audited dependency overrides:
 
 - Jest 30.4.2 and Stryker still constrain parts of their reporting and coverage
   graphs to minimatch releases with older `brace-expansion` ranges.
@@ -183,6 +183,10 @@ The root workspace carries seven narrow audited dependency overrides:
 - Jest's Istanbul reporting chain and the standalone WAB server can still
   select `js-yaml` 3.15.1. The workspace and WAB lock select the compatible
   3.15.2 security release until those parent ranges advance naturally.
+- `ts-jest` still admits `handlebars` releases at or below 4.7.9. GHSA-8r5x-fm3f-whwj
+  and GHSA-p8wg-vrv2-v86f require 4.7.10, so the workspace selects that first
+  patched release. `handlebars` is also listed in `minimumReleaseAgeExclude`
+  until 2026-10-12T22:37:37Z because 4.7.10 is younger than the 7-day floor.
 
 These substitutions are verified through their affected Jest, mutation,
 documentation, and build paths and have owners, evidence, review dates, and

@@ -4975,6 +4975,18 @@ nextCheckpoint?: SyncCheckpoint
 ```
 See also: [SyncCheckpoint](./client.md#interface-synccheckpoint)
 
+###### Property error
+
+Optional non-throwing failure from a custom writer. First-party
+`StorageProvider` implementations throw instead of setting this field.
+`WalletStorageManager.syncToWriter` and `syncFromReader` throw `error`
+immediately and do not request another chunk.
+
+```ts
+error?: WalletError
+```
+See also: [WalletError](./client.md#class-walleterror)
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
@@ -12803,6 +12815,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Class: WERR_NETWORK_CHAIN
 
 Configured network chain is invalid or does not match across services.
+
+Live `WalletStorageManager.syncToWriter` and `syncFromReader` throw this
+before any sync chunk moves when the reader and writer `TableSettings.chain`
+values differ.
 
 ```ts
 export class WERR_NETWORK_CHAIN extends WalletError {

@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.14.6
 
+- Live `syncToWriter` / `syncFromReader` compare reader and writer
+  `TableSettings.chain` before any chunk moves and throw `WERR_NETWORK_CHAIN`
+  on mismatch. The class remains a public sdk export with its deserializer and
+  JSON round-trip. Portable BRC-38 import still throws a generic `Error`.
+  Custom `processSyncChunk` writers may set `ProcessSyncChunkResult.error`;
+  both live-sync loops throw that error and stop. First-party providers still
+  throw. No API or schema migration is required.
+
 - UMP support pins anchor verified update lineage. Password and token updates
   supersede the pinned predecessor, including multi-hop updates and recovery-hash
   continuity. Unrelated historical continuations cannot override the anchor.

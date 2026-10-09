@@ -1319,6 +1319,7 @@ components:
           description: true if no more chunks are needed.
         error:
           type: string
+          description: Optional non-throwing failure from a custom writer. First-party providers throw instead. Live sync loops throw this error and stop.
 
     FindOrInsertSyncStateRequest:
       type: object
