@@ -1498,3 +1498,11 @@ emission creates no input or validation cache. Encryption, associated-data bytes
 current custody resolution, revision fences and recovery behavior remain unchanged.
 All original native method bodies remain exact; two local import aliases select
 the companion. Hosted properties and full mutation evidence must still qualify it.
+
+Protected native ledger ownership also explicitly selects
+`ownOutputJSONWithInlineStrings` in SQLiteProtectedLedger and ProtectedLedgerCodec.
+Each call retains the complete canonical validation and resource bounds before
+constructing an independent graph. The selection changes two imports; it does
+not cache plaintext, secrets, schema acceptance, authorization or currentness.
+Every persisted frame, encryption binding, custody check and public default
+remains unchanged. Portable consumers continue selecting ordinary SDK ownership.

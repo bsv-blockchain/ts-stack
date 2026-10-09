@@ -956,3 +956,13 @@ ASCII text has one UTF-8 byte per code unit; non-ASCII text retains native encod
 Byte-view inspection counts decoded bytes independently of an overridable
 byteLength property. These per-call calculations retain no input or validation
 result between operations.
+
+`ownOutputJSONWithInlineStrings(value, limits)` is the explicit native ownership
+companion to `canonicalOutputJSONWithInlineStrings`. It returns bounded canonical
+`text` and an independent `value`, with null-prototype records and ordinary arrays.
+The complete input is freshly checked before construction, including descriptors,
+cycles, Unicode, safe integers, canonical order and resource limits. Neither the
+caller graph nor a normalized value, shape or verdict is retained between calls.
+A string input remains a string value; incoming JSON text must use a parser to
+preserve duplicate-key evidence. Ordinary `ownOutputJSON` is unchanged. Schemas,
+authorization and currentness checks remain the responsibility of each operation.

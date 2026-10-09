@@ -9,6 +9,7 @@ export {
   inspectOutputJSONEncodingWithScalarRecords,
   isOutputPlainObject,
   ownOutputJSON,
+  ownOutputJSONWithInlineStrings,
   OUTPUT_JSON_LIMITS,
   parseOutputJSON,
   parseOutputJSONWithStringRecords,

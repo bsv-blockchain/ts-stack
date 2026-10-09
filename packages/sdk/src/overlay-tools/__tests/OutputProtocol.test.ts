@@ -1609,3 +1609,63 @@ describe('explicit inlined string-field serialization', () => {
     }
   })
 })
+
+describe('explicit native JSON ownership', () => {
+  const { ownOutputJSON, ownOutputJSONWithInlineStrings } =
+    require('../OutputProtocolJSON.js') as typeof import('../OutputProtocolJSON.js')
+
+  it('preserves complete canonical bytes and independent nested ownership', () => {
+    const input = {
+      plain: 'ascii',
+      nested: [{ unicode: '𝄞', escaped: '\n"', number: -0 }],
+      ['__proto__']: 'own-data'
+    }
+    const expected = ownOutputJSON(input),
+      size = Buffer.byteLength(expected.text),
+      actual = ownOutputJSONWithInlineStrings(input, { bytes: size })
+    expect(actual).toEqual(expected)
+    expect(Object.getPrototypeOf(actual.value)).toBeNull()
+    const value = actual.value as Record<string, unknown>,
+      nested = value.nested as Array<Record<string, unknown>>
+    expect(Object.getPrototypeOf(nested[0])).toBeNull()
+    input.plain = 'changed'
+    input.nested[0].unicode = 'changed'
+    expect(value.plain).toBe('ascii')
+    expect(nested[0].unicode).toBe('𝄞')
+    nested[0].number = 7
+    expect(input.nested[0].number).toBe(-0)
+    expect(() => ownOutputJSONWithInlineStrings(input, { bytes: 1 })).toThrow(OutputProtocolError)
+  })
+
+  it('preserves descriptor, cycle and Unicode refusal before construction', () => {
+    const accessor = Object.defineProperty({}, 'key', {
+        enumerable: true,
+        get() {
+          throw new Error('must not invoke')
+        }
+      }),
+      cycle: Record<string, unknown> = {}
+    cycle.self = cycle
+    for (const input of [
+      accessor,
+      cycle,
+      { key: '\uD800' },
+      { key: undefined },
+      { key: 1.5 },
+      Object.assign({}, { [Symbol('key')]: true })
+    ]) {
+      const observed = (operation: () => unknown) => {
+        try {
+          operation()
+          throw new Error('Unexpected acceptance')
+        } catch (error) {
+          expect(error).toBeInstanceOf(OutputProtocolError)
+          return { code: (error as OutputProtocolError).code, message: (error as Error).message }
+        }
+      }
+      expect(observed(() => ownOutputJSONWithInlineStrings(input))).toEqual(
+        observed(() => ownOutputJSON(input))
+      )
+    }
+  })
+})

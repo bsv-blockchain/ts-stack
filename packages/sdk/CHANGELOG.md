@@ -228,6 +228,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added (3.3 source candidate)
 
+- Add explicit `ownOutputJSONWithInlineStrings` returning fresh canonical text and independent null-prototype data through the separately selected serializer. Native protected-ledger copies select it; ordinary ownership, all representation/resource checks, schemas and authority fences remain unchanged. No input, graph, shape or verdict is cached.
+
 - Add opt-in `canonicalOutputJSONWithInlineStrings` with direct ASCII field emission and the original complete fresh traversal, descriptor/reflection order, canonical bytes and resource refusals. Private native payload/ledger serialization selects the companion; ordinary SDK serialization is unchanged. No input, graph or verdict is cached. Simplify the scalar inspector to a complete member grammar with explicit separator and safe-integer checks, retaining unsupported-shape/error fallbacks.
 
 - Add opt-in `inspectOutputJSONEncodingWithScalarRecords` with fresh complete compact-scalar validation, canonical-input inspection and independent ownership. Unsupported shapes and refusals retain the original lexical observer/error order, including one observation of limits and byteLength. Native protected-ledger plaintext inspection explicitly selects it; ordinary SDK inspection, browser paths, authentication, custody and all bounds remain unchanged. No input or verdict is cached and no existing consumer migration is required.

@@ -532,7 +532,7 @@ const canonicalOutputJSONIntegerToken = /^(?:0|-?[1-9]\d*)$/
 
 function safeOutputJSONScalarToken(token: string): boolean {
   return (
-    token[0] === '"' ||
+    token.startsWith('"') ||
     token === 'true' ||
     token === 'false' ||
     token === 'null' ||
@@ -551,7 +551,7 @@ function inspectFlatOutputJSONScalarRecord(
   source: string,
   bounds: OutputJSONLimits
 ): { value: OutputJSON; canonical: boolean } | undefined {
-  if (/[^\u0020-\uFFFF]/.test(source) || source[0] !== '{' || source.at(-1) !== '}')
+  if (/[^\u0020-\uFFFF]/.test(source) || !source.startsWith('{') || source.at(-1) !== '}')
     return undefined
   const members = new RegExp(flatOutputJSONScalarMember.source, 'y'),
     names = new Set<string>()
@@ -664,4 +664,15 @@ export function canonicalOutputJSONWithInlineStrings(
   }
   visitOutputJSONInlineRecord(frame, input, 1)
   return frame.text
+}
+
+/** Explicit native ownership companion. Each call independently validates and
+ * serializes its complete input, then constructs a fresh null-prototype graph.
+ * It retains no caller value, normalized graph, shape or authority verdict. */
+export function ownOutputJSONWithInlineStrings(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { text: string; value: OutputJSON } {
+  const text = canonicalOutputJSONWithInlineStrings(input, limits)
+  return { text, value: ownValidatedOutputJSON(text) }
 }

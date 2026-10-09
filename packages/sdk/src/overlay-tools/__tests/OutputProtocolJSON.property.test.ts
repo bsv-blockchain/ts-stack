@@ -217,3 +217,38 @@ test('inlined string serialization matches the original nested canonical and exa
     })
   )
 })
+
+test('explicit native ownership preserves generated nested bytes, limits and independent graphs', () => {
+  const { ownOutputJSONWithInlineStrings } =
+    require('../OutputProtocolJSON.js') as typeof import('../OutputProtocolJSON.js')
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(
+        fc.tuple(
+          fc.string({ maxLength: 12 }),
+          fc.oneof(fc.string({ maxLength: 24 }), fc.integer(), fc.boolean(), fc.constant(null))
+        ),
+        { maxLength: 10, selector: entry => entry[0] }
+      ),
+      entries => {
+        const record = Object.fromEntries(entries),
+          input = { payload: record, history: [record], version: 1 },
+          expected = ownOutputJSON(input),
+          size = new TextEncoder().encode(expected.text).length,
+          actual = ownOutputJSONWithInlineStrings(input, { bytes: size })
+        deepStrictEqual(actual, expected)
+        const graph = actual.value as Record<string, OutputJSON>,
+          payload = graph.payload as Record<string, OutputJSON>,
+          history = graph.history as Array<Record<string, OutputJSON>>
+        expect(Object.getPrototypeOf(payload)).toBeNull()
+        expect(Object.getPrototypeOf(history[0])).toBeNull()
+        expect(payload).not.toBe(record)
+        expect(payload).not.toBe(history[0])
+        payload['new-owned-field'] = true
+        expect(Object.hasOwn(record, 'new-owned-field')).toBe(false)
+        expect(Object.hasOwn(history[0], 'new-owned-field')).toBe(false)
+        expect(() => ownOutputJSONWithInlineStrings(input, { bytes: size - 1 })).toThrow()
+      }
+    )
+  )
+})

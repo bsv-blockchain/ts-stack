@@ -1,5 +1,5 @@
 import {
-  ownOutputJSON,
+  ownOutputJSONWithInlineStrings as ownOutputJSON,
   canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputAssert,

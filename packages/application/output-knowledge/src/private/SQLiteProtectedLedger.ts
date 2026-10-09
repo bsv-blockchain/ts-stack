@@ -1,7 +1,7 @@
 import { closeSync, openSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import {
-  ownOutputJSON,
+  ownOutputJSONWithInlineStrings as ownOutputJSON,
   canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   incrementOutputU64,

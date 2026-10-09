@@ -8056,3 +8056,29 @@ controls remain mandatory. No input, graph, shape, secret or authority/currentne
 verdict is cached. Source/declaration/inventory/browser checks precede adoption;
 fresh exact-head runtime, platform, analyzer and complete mutation evidence remain
 required for Checkpoint 2. No static result supplies a performance claim.
+
+## Explicit native ownership companion
+
+Source review after the serialization selection identifies a separate remaining
+path: ownOutputJSON still calls the ordinary serializer before creating fresh
+owned data. The additive SDK ownOutputJSONWithInlineStrings companion uses the
+explicit serializer and constructs an independent null-prototype graph from its
+complete validated text. SQLiteProtectedLedger and ProtectedLedgerCodec select
+it through import aliases. Every other byte in those native modules remains
+unchanged, as do all 994 protected-ledger mutation sites, their order and IDs.
+Ordinary SDK ownership and portable consumers retain their existing selection.
+Two appended ownership boundary tests and one 300-case differential property
+exercise exact bytes, tight bounds, refusal identity and independent nested data.
+The scalar inspector's two first-character comparisons now use startsWith,
+resolving the actual S6557 findings without suppression or a contract change.
+
+These source changes supply no measured speedup or checkpoint qualification.
+The 3bda disclosure/coordinator properties interrupted at185/212 original cases,
+without counterexamples. All three CPU traces from that head are invalid and
+excluded whole; the two invalid6989 and six earlier invalid traces remain
+excluded. Native-monotonic, original-Jest and wall domains stay separate and
+inclusive times are never summed. The earlier6989 wallet funding and revenue
+signing campaigns also expose real coverage gaps in their independently bound
+raw reports; those require meaningful additional contract coverage. Complete
+fresh published-source runtime, analyzers, consumers and151-target/398-row
+mutation qualification remain required. No Mac target evaluation is performed.
