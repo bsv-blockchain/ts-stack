@@ -6,7 +6,10 @@ import {
   verifyOutputPacket,
   type OutputChain
 } from './OutputProtocol.js'
-import { canonicalOutputJSON } from './OutputProtocolJSON.js'
+import {
+  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords
+} from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'
 import { toArray, toBase64 } from '../primitives/utils.js'
 
@@ -136,8 +139,6 @@ export function verifyOutputProcessorAcceptance(
   )
   return packet
 }
-
-import { canonicalOutputJSONWithInlineRecords } from './OutputProtocolJSON.js'
 
 /** Explicit fresh-ownership companion. Every representation, arithmetic and binding
  * check is repeated; no input, custody, currentness or validation result is retained. */

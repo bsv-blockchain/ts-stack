@@ -1,7 +1,11 @@
 import * as s from './OutputProtocolSchema.js'
 import { parseOutputReleasePolicy } from './OutputCapabilities.js'
 import { parseOutputSTEAK } from './OutputObservation.js'
-import { bindOutputReleaseEvidence, parseOutputReleaseEvidence } from './OutputReleaseProtocol.js'
+import {
+  bindOutputReleaseEvidence,
+  bindOutputReleaseEvidenceWithInlineStrings,
+  parseOutputReleaseEvidence
+} from './OutputReleaseProtocol.js'
 import {
   outputPacketDigest,
   outputPacketDigestWithInlineStrings,
@@ -415,8 +419,6 @@ export function verifyOutputPurchaseTermsWithInlineStrings(
   )
   return packet
 }
-
-import { bindOutputReleaseEvidenceWithInlineStrings } from './OutputReleaseProtocol.js'
 
 /** Explicit fresh ownership; ordinary public parser paths remain unchanged. */
 export const parseOutputPotatoesWithInlineStrings = (input: unknown): OutputSignedPotatoes =>
