@@ -653,7 +653,7 @@ describe('Explicit fresh-owned schema normalization', () => {
     const result = s.normalizedWithInlineStrings({ text: 'x'.repeat(length) }, s.json) as {
       text: string
     }
-    expect(result.text.length).toBe(length)
+    expect(result.text).toHaveLength(length)
     expect(() => s.normalizedWithInlineStrings({ text: 'x'.repeat(length + 1) }, s.json)).toThrow()
   })
 })
