@@ -7,7 +7,7 @@ import {
   SYNC_TRANSFER_MAX_BYTES,
   SYNC_TRANSFER_PART_BYTES
 } from './SyncTransfer'
-import { syncChunkBinary } from './syncChunkBinary'
+import { syncChunkBinary, tableRowsBinary } from './syncChunkBinary'
 /**
  * StorageServer.ts
  *
@@ -186,9 +186,21 @@ const pagedLimitArgument = new Map<string, number>([
   ['findProvenTxReqs', 0]
 ])
 
+const binaryRowResults = new Map<string, 'outputs' | 'provenTxReqs'>([
+  ['findOutputsAuth', 'outputs'],
+  ['findProvenTxReqs', 'provenTxReqs']
+])
+
 interface RpcDispatchResult {
   found: boolean
   result?: unknown
+}
+
+/** Copy a result's schema-defined byte fields for the already negotiated binary JSON codec. */
+function binaryRpcResult(method: string, result: unknown): unknown {
+  if (method === 'getSyncChunk') return syncChunkBinary(result as SyncChunk)
+  const table = binaryRowResults.get(method)
+  return table != null && Array.isArray(result) ? tableRowsBinary(table, result) : result
 }
 
 function requiredAuthenticatedIdentityKey(req: Request): string {
@@ -656,8 +668,7 @@ export class StorageServer {
           400
         )
       }
-      const result =
-        useBinary && method === 'getSyncChunk' ? syncChunkBinary(dispatch.result as SyncChunk) : dispatch.result
+      const result = useBinary ? binaryRpcResult(method, dispatch.result) : dispatch.result
       // JSON-RPC success responses must carry a result member. Preserve an
       // explicit null for void storage methods rather than letting
       // JSON.stringify silently omit an undefined result.

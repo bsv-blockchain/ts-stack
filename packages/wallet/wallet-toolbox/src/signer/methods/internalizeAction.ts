@@ -71,7 +71,7 @@ export async function internalizeAction(
 
   const r: StorageInternalizeActionResult = await wallet.storage.internalizeAction({
     ...args,
-    tx: ab.toBinaryAtomic(txid)
+    tx: ab.toUint8ArrayAtomic(txid)
   })
 
   return r
