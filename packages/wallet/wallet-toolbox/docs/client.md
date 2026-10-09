@@ -7065,10 +7065,11 @@ export interface ProcessSyncChunkResult {
     maxUpdated_at: Date | undefined;
     updates: number;
     inserts: number;
+    error?: WalletError;
 }
 ```
 
-See also: [SyncCheckpoint](./client.md#interface-synccheckpoint)
+See also: [SyncCheckpoint](./client.md#interface-synccheckpoint), [WalletError](./client.md#class-walleterror)
 
 ###### Property nextCheckpoint
 
@@ -7078,6 +7079,18 @@ Present only when requested, after the page and checkpoint commit together.
 nextCheckpoint?: SyncCheckpoint
 ```
 See also: [SyncCheckpoint](./client.md#interface-synccheckpoint)
+
+###### Property error
+
+Optional non-throwing failure from a custom writer. First-party
+`StorageProvider` implementations throw instead of setting this field.
+`WalletStorageManager.syncToWriter` and `syncFromReader` throw `error`
+immediately and do not request another chunk.
+
+```ts
+error?: WalletError
+```
+See also: [WalletError](./client.md#class-walleterror)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -12186,24 +12199,24 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [CWIStyleWalletManager](#class-cwistylewalletmanager) | [SdkWhatsOnChain](#class-sdkwhatsonchain) | [WERR_INVALID_PARAMETER](#class-werr_invalid_parameter) |
 | [CanonicalChangeSelector](#class-canonicalchangeselector) | [ServiceCollection](#class-servicecollection) | [WERR_INVALID_PUBLIC_KEY](#class-werr_invalid_public_key) |
 | [Chaintracks](#class-chaintracks) | [Services](#class-services) | [WERR_MISSING_PARAMETER](#class-werr_missing_parameter) |
-| [ChaintracksChainTracker](#class-chaintrackschaintracker) | [SetupClient](#class-setupclient) | [WERR_NOT_ACTIVE](#class-werr_not_active) |
-| [ChaintracksFetch](#class-chaintracksfetch) | [SimpleWalletManager](#class-simplewalletmanager) | [WERR_NOT_IMPLEMENTED](#class-werr_not_implemented) |
-| [ChaintracksFetchError](#class-chaintracksfetcherror) | [SingleWriterMultiReaderLock](#class-singlewritermultireaderlock) | [WERR_REVIEW_ACTIONS](#class-werr_review_actions) |
-| [ChaintracksServiceClient](#class-chaintracksserviceclient) | [StaleSyncProofError](#class-stalesyncprooferror) | [WERR_UNAUTHORIZED](#class-werr_unauthorized) |
-| [ChaintracksStorageBase](#class-chaintracksstoragebase) | [StorageClient](#class-storageclient) | [WERR_UTXO_REVIEW_INCONCLUSIVE](#class-werr_utxo_review_inconclusive) |
-| [ChaintracksStorageIdb](#class-chaintracksstorageidb) | [StorageClientBase](#class-storageclientbase) | [Wallet](#class-wallet) |
-| [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) | [StorageIdb](#class-storageidb) | [WalletAuthenticationManager](#class-walletauthenticationmanager) |
-| [DevConsoleInteractor](#class-devconsoleinteractor) | [StorageProvider](#class-storageprovider) | [WalletError](#class-walleterror) |
-| [EntityBase](#class-entitybase) | [StorageReader](#class-storagereader) | [WalletLogger](#class-walletlogger) |
-| [EntityCertificate](#class-entitycertificate) | [StorageReaderWriter](#class-storagereaderwriter) | [WalletMonitorTask](#class-walletmonitortask) |
-| [EntityCertificateField](#class-entitycertificatefield) | [StorageSyncReader](#class-storagesyncreader) | [WalletPermissionsManager](#class-walletpermissionsmanager) |
-| [EntityCommission](#class-entitycommission) | [SyncPageBudget](#class-syncpagebudget) | [WalletSettingsManager](#class-walletsettingsmanager) |
-| [EntityOutput](#class-entityoutput) | [TaskArcadeSSE](#class-taskarcadesse) | [WalletSigner](#class-walletsigner) |
-| [EntityOutputBasket](#class-entityoutputbasket) | [TaskCheckForProofs](#class-taskcheckforproofs) | [WalletStorageManager](#class-walletstoragemanager) |
-| [EntityOutputTag](#class-entityoutputtag) | [TaskCheckNoSends](#class-taskchecknosends) | [WhatsOnChain](#class-whatsonchain) |
-| [EntityOutputTagMap](#class-entityoutputtagmap) | [TaskCleanupActionBatches](#class-taskcleanupactionbatches) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
-| [EntityProvenTx](#class-entityproventx) | [TaskClock](#class-taskclock) | [WhatsOnChainServices](#class-whatsonchainservices) |
-| [EntityProvenTxReq](#class-entityproventxreq) | [TaskFailAbandoned](#class-taskfailabandoned) |  |
+| [ChaintracksChainTracker](#class-chaintrackschaintracker) | [SetupClient](#class-setupclient) | [WERR_NETWORK_CHAIN](#class-werr_network_chain) |
+| [ChaintracksFetch](#class-chaintracksfetch) | [SimpleWalletManager](#class-simplewalletmanager) | [WERR_NOT_ACTIVE](#class-werr_not_active) |
+| [ChaintracksFetchError](#class-chaintracksfetcherror) | [SingleWriterMultiReaderLock](#class-singlewritermultireaderlock) | [WERR_NOT_IMPLEMENTED](#class-werr_not_implemented) |
+| [ChaintracksServiceClient](#class-chaintracksserviceclient) | [StaleSyncProofError](#class-stalesyncprooferror) | [WERR_REVIEW_ACTIONS](#class-werr_review_actions) |
+| [ChaintracksStorageBase](#class-chaintracksstoragebase) | [StorageClient](#class-storageclient) | [WERR_UNAUTHORIZED](#class-werr_unauthorized) |
+| [ChaintracksStorageIdb](#class-chaintracksstorageidb) | [StorageClientBase](#class-storageclientbase) | [WERR_UTXO_REVIEW_INCONCLUSIVE](#class-werr_utxo_review_inconclusive) |
+| [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) | [StorageIdb](#class-storageidb) | [Wallet](#class-wallet) |
+| [DevConsoleInteractor](#class-devconsoleinteractor) | [StorageProvider](#class-storageprovider) | [WalletAuthenticationManager](#class-walletauthenticationmanager) |
+| [EntityBase](#class-entitybase) | [StorageReader](#class-storagereader) | [WalletError](#class-walleterror) |
+| [EntityCertificate](#class-entitycertificate) | [StorageReaderWriter](#class-storagereaderwriter) | [WalletLogger](#class-walletlogger) |
+| [EntityCertificateField](#class-entitycertificatefield) | [StorageSyncReader](#class-storagesyncreader) | [WalletMonitorTask](#class-walletmonitortask) |
+| [EntityCommission](#class-entitycommission) | [SyncPageBudget](#class-syncpagebudget) | [WalletPermissionsManager](#class-walletpermissionsmanager) |
+| [EntityOutput](#class-entityoutput) | [TaskArcadeSSE](#class-taskarcadesse) | [WalletSettingsManager](#class-walletsettingsmanager) |
+| [EntityOutputBasket](#class-entityoutputbasket) | [TaskCheckForProofs](#class-taskcheckforproofs) | [WalletSigner](#class-walletsigner) |
+| [EntityOutputTag](#class-entityoutputtag) | [TaskCheckNoSends](#class-taskchecknosends) | [WalletStorageManager](#class-walletstoragemanager) |
+| [EntityOutputTagMap](#class-entityoutputtagmap) | [TaskCleanupActionBatches](#class-taskcleanupactionbatches) | [WhatsOnChain](#class-whatsonchain) |
+| [EntityProvenTx](#class-entityproventx) | [TaskClock](#class-taskclock) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
+| [EntityProvenTxReq](#class-entityproventxreq) | [TaskFailAbandoned](#class-taskfailabandoned) | [WhatsOnChainServices](#class-whatsonchainservices) |
 | [EntitySyncState](#class-entitysyncstate) | [TaskMineBlock](#class-taskmineblock) |  |
 | [EntityTransaction](#class-entitytransaction) | [TaskMonitorCallHistory](#class-taskmonitorcallhistory) |  |
 
@@ -19446,6 +19459,25 @@ This is an example of an error object with a custom property `parameter`
 export class WERR_MISSING_PARAMETER extends WalletError {
     constructor(public parameter: string)
     override toJson(): string
+}
+```
+
+See also: [WalletError](./client.md#class-walleterror)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: WERR_NETWORK_CHAIN
+
+Configured network chain is invalid or does not match across services.
+
+Live `WalletStorageManager.syncToWriter` and `syncFromReader` throw this
+before any sync chunk moves when the reader and writer `TableSettings.chain`
+values differ.
+
+```ts
+export class WERR_NETWORK_CHAIN extends WalletError {
+    constructor(message?: string)
 }
 ```
 

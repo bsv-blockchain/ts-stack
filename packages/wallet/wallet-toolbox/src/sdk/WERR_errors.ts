@@ -169,6 +169,19 @@ export class WERR_BAD_REQUEST extends WalletError {
 }
 
 /**
+ * Configured network chain is invalid or does not match across services.
+ *
+ * Live `WalletStorageManager.syncToWriter` and `syncFromReader` throw this
+ * before any sync chunk moves when the reader and writer `TableSettings.chain`
+ * values differ.
+ */
+export class WERR_NETWORK_CHAIN extends WalletError {
+  constructor(message?: string) {
+    super('WERR_NETWORK_CHAIN', message ?? 'Configured network chain is invalid or does not match across services.')
+  }
+}
+
+/**
  * Access is denied due to an authorization error.
  */
 export class WERR_UNAUTHORIZED extends WalletError {
