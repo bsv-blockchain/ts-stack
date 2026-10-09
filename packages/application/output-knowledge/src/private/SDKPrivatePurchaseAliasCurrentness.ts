@@ -4,7 +4,7 @@ import {
   Hash,
   outputAssert,
   outputHex32,
-  ownOutputJSONWithInlineRecords as ownOutputJSON,
+  ownOutputJSONWithCountedRecords as ownOutputJSON,
   closedOutputObject,
   parseOutputChain,
   outputU64,

@@ -9,7 +9,7 @@ import {
   outputHex32,
   outputPacketDigestWithInlineStrings as outputPacketDigest,
   outputU64,
-  ownOutputJSONWithInlineRecords as ownOutputJSON,
+  ownOutputJSONWithCountedRecords as ownOutputJSON,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,
   parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
   type OutputJSONObject,

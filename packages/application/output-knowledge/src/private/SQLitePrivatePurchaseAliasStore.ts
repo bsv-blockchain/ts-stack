@@ -12,7 +12,7 @@ import {
   outputIdentity,
   outputString,
   outputU64,
-  ownOutputJSONWithInlineRecords as ownOutputJSON,
+  ownOutputJSONWithCountedRecords as ownOutputJSON,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,
   type OutputPurchaseEnvelope,
   type OutputSignedPurchaseTerms

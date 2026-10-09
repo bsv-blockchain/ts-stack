@@ -1,5 +1,5 @@
 import {
-  ownOutputJSONWithInlineRecords as ownOutputJSON,
+  ownOutputJSONWithCountedRecords as ownOutputJSON,
   OUTPUT_PROFILES,
   canonicalOutputBase,
   canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,

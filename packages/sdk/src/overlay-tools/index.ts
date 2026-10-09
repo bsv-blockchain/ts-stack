@@ -96,3 +96,5 @@ export {
   parseOutputReleaseEvidenceWithInlineStrings,
   bindOutputReleaseEvidenceWithInlineStrings
 } from './OutputReleaseProtocol.js'
+
+export { ownOutputJSONWithCountedRecords } from './OutputProtocolJSON.js'

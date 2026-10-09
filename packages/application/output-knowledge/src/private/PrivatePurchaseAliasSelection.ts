@@ -4,7 +4,7 @@ import {
   outputAssert,
   outputHex32,
   outputU64,
-  ownOutputJSONWithInlineRecords as ownOutputJSON
+  ownOutputJSONWithCountedRecords as ownOutputJSON
 } from '@bsv/sdk'
 import type { PrivatePurchaseOriginal } from './PrivatePurchaseContracts.js'
 import {

@@ -1220,3 +1220,15 @@ export function ownOutputJSONForSchema(
   }
   return { value: ownCountedOutputJSON(frame, input, 1) }
 }
+
+/** Explicit fresh value-only ownership with complete canonical byte accounting.
+ * Arrays retain ordinary own data fields and records have null prototypes.
+ * Every representation/resource check follows the full inline-record owner's
+ * refusal order, but no composite encoding is constructed or returned.
+ * No input, partial graph or verdict is retained; this makes no authority decision. */
+export function ownOutputJSONWithCountedRecords(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { value: OutputJSON } {
+  return ownOutputJSONForSchema(input, limits)
+}

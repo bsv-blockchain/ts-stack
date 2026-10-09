@@ -1,5 +1,5 @@
 import {
-  ownOutputJSONWithInlineRecords as ownOutputJSON,
+  ownOutputJSONWithCountedRecords as ownOutputJSON,
   Beef,
   canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   closedOutputObject,

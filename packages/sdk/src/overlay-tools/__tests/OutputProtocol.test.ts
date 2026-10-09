@@ -2054,3 +2054,50 @@ describe('fresh schema ownership without composite text', () => {
     })
   })
 })
+
+describe('public counted-record ownership', () => {
+  it('exports a fresh bounded value and preserves complete descriptor observation order', async () => {
+    const { ownOutputJSONWithCountedRecords, ownOutputJSONWithInlineRecords } =
+      await import('../index.js')
+    const trace = (owner: (input: unknown) => { value: unknown }) => {
+      const observations: string[] = []
+      const input = new Proxy(
+        { ['__proto__']: ['before', { nested: '😀' }], constructor: true },
+        {
+          getPrototypeOf(target) {
+            observations.push('prototype')
+            return Reflect.getPrototypeOf(target)
+          },
+          ownKeys(target) {
+            observations.push('keys')
+            return Reflect.ownKeys(target)
+          },
+          getOwnPropertyDescriptor(target, key) {
+            observations.push('descriptor:' + String(key))
+            return Reflect.getOwnPropertyDescriptor(target, key)
+          }
+        }
+      )
+      const result = owner(input)
+      return { observations, result }
+    }
+    const counted = trace(ownOutputJSONWithCountedRecords)
+    const emitted = trace(ownOutputJSONWithInlineRecords)
+    expect(counted.observations).toEqual(emitted.observations)
+    expect(counted.result.value).toEqual(emitted.result.value)
+    expect(Object.keys(counted.result)).toEqual(['value'])
+    expect(Object.getPrototypeOf(counted.result.value)).toBeNull()
+    const shared = { nested: ['before'] }
+    const first = ownOutputJSONWithCountedRecords({ left: shared, right: shared }).value as Record<
+      string,
+      unknown
+    >
+    expect(first.left).not.toBe(first.right)
+    shared.nested[0] = 'after'
+    expect(first.left).toEqual({ nested: ['before'] })
+    expect(ownOutputJSONWithCountedRecords(shared).value).toEqual({ nested: ['after'] })
+    expect(() => ownOutputJSONWithCountedRecords({ a: 'large' }, { bytes: 4 })).toThrow(
+      OutputProtocolError
+    )
+  })
+})
