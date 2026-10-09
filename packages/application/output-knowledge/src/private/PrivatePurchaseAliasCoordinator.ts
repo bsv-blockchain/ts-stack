@@ -1,6 +1,6 @@
 import {
   canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
-  bindOutputReleaseEvidence,
+  bindOutputReleaseEvidenceWithInlineStrings as bindOutputReleaseEvidence,
   decodeOutputBytes,
   outputAssert,
   outputHex32,
@@ -10,7 +10,7 @@ import {
   OutputProtocolError,
   parseOutputPurchasePrepareWithInlineStrings as parseOutputPurchasePrepare,
   parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
-  parseOutputPotatoes,
+  parseOutputPotatoesWithInlineStrings as parseOutputPotatoes,
   type OutputCapabilitySelection,
   type OutputJSONObject,
   type OutputPurchasePrepare,

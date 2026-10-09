@@ -415,3 +415,149 @@ export function verifyOutputPurchaseTermsWithInlineStrings(
   )
   return packet
 }
+
+import { bindOutputReleaseEvidenceWithInlineStrings } from './OutputReleaseProtocol.js'
+
+/** Explicit fresh ownership; ordinary public parser paths remain unchanged. */
+export const parseOutputPotatoesWithInlineStrings = (input: unknown): OutputSignedPotatoes =>
+  s.normalizedWithInlineStrings(input, potatoes)
+export const parseOutputPurchaseCommitmentBindingWithInlineStrings = (
+  input: unknown
+): OutputPurchaseCommitmentBinding => s.normalizedWithInlineStrings(input, commitmentBinding)
+
+/** Explicit fresh-ownership representation companion. Status and signed-body digest
+ * binding only; this does not verify signatures, custody or delivery. No input or verdict is cached. */
+export function parseOutputPurchaseEnvelopeWithInlineStrings(
+  input: unknown
+): OutputPurchaseEnvelope {
+  const parsed = s.normalizedWithInlineStrings(input, envelope)
+  const response = parsed.result
+  outputAssert(
+    Object.hasOwn(parsed, 'releaseEvidence') === (response.status === 'delivered'),
+    'Release evidence belongs exactly to delivered purchases'
+  )
+  outputAssert(
+    parsed.currentAlias === undefined || 'txid' in response,
+    'A current alias requires a reserved purchase'
+  )
+  if (response.status === 'delivered') {
+    const body = response.potatoes.body,
+      evidence = parsed.releaseEvidence!
+    outputAssert(
+      body.acquisitionId === response.acquisitionId &&
+        body.txid === response.txid &&
+        body.purchaseCommitment === response.purchaseCommitment &&
+        body.recoveryUntil === response.recoveryUntil &&
+        evidence.txid === response.txid &&
+        canonicalOutputJSONWithInlineStrings(body.releasePolicy) ===
+          canonicalOutputJSONWithInlineStrings(evidence.policy) &&
+        body.evidenceDigest === outputPacketDigestWithInlineStrings('release-evidence', evidence),
+      'Private result and release evidence differ'
+    )
+  }
+  return parsed
+}
+
+/** Explicit fresh-ownership companion. Signatures and original purchase associations
+ * are independently verified on every call; no delivered or authority verdict is cached. */
+export function verifyOutputPurchaseEnvelopeWithInlineStrings(
+  input: unknown,
+  originalTerms: OutputSignedPurchaseTerms,
+  expectedTxid?: string,
+  /** Independently derived from a fully verified domain purchase. A supplied
+   * commitment never relaxes exact historical txid or release-evidence checks.
+   */
+  expectedPurchaseCommitment?: string
+): OutputPurchaseEnvelope {
+  const original = parseOutputPurchaseTermsWithInlineStrings(originalTerms),
+    termsBody = original.body
+  outputAssert(
+    verifyOutputPacketWithInlineStrings('purchase-terms', original, termsBody.seller),
+    'Original purchase terms signature failed',
+    'unauthorized'
+  )
+  const txid = expectedTxid === undefined ? undefined : s.hex(expectedTxid),
+    commitment =
+      expectedPurchaseCommitment === undefined ? undefined : s.hex(expectedPurchaseCommitment)
+  const parsed = parseOutputPurchaseEnvelopeWithInlineStrings(input),
+    response = parsed.result
+  outputAssert(
+    response.acquisitionId === termsBody.acquisitionId &&
+      outputU64(response.recoveryUntil) >= outputU64(termsBody.recoveryUntil),
+    'Purchase response changed original identity or recovery promise'
+  )
+  if ('txid' in response) {
+    outputAssert(
+      txid !== undefined && response.txid === txid,
+      'Purchase response transaction mismatch'
+    )
+    if (termsBody.domainProfile === 'https://bsv.brc.dev/tokens/0197#listing-purchase-v1')
+      outputAssert(
+        response.purchaseCommitment !== undefined,
+        'Listing purchase commitment required'
+      )
+    if (commitment !== undefined)
+      outputAssert(response.purchaseCommitment === commitment, 'Purchase commitment mismatch')
+  }
+  if ('decision' in response) {
+    outputAssert(
+      canonicalOutputJSONWithInlineStrings(response.decision.policy) ===
+        canonicalOutputJSONWithInlineStrings(termsBody.releasePolicy),
+      'Purchase decision policy mismatch'
+    )
+  }
+  if ('steak' in response) {
+    outputAssert(
+      Object.hasOwn(response.steak, termsBody.topic),
+      'Purchase STEAK lacks the selected topic'
+    )
+  }
+  if (response.status === 'delivered') {
+    const body = response.potatoes.body
+    outputAssert(
+      body.requestDigest === termsBody.requestDigest &&
+        body.seller === termsBody.seller &&
+        body.recipient === termsBody.recipient &&
+        body.topic === termsBody.topic &&
+        body.assetId === termsBody.assetId &&
+        body.termsDigest === termsBody.termsDigest &&
+        canonicalOutputJSONWithInlineStrings(body.releasePolicy) ===
+          canonicalOutputJSONWithInlineStrings(termsBody.releasePolicy),
+      'Private result differs from original purchase terms'
+    )
+    bindOutputReleaseEvidenceWithInlineStrings(parsed.releaseEvidence, {
+      chain: termsBody.listing.chain,
+      txid: response.txid,
+      policy: termsBody.releasePolicy
+    })
+    outputAssert(
+      verifyOutputPacketWithInlineStrings('potatoes', response.potatoes, termsBody.seller),
+      'Private result signature failed',
+      'unauthorized'
+    )
+  }
+  return parsed
+}
+
+/** Explicit fresh-ownership companion. Signatures and original purchase associations
+ * are independently verified on every call; no delivered or authority verdict is cached. */
+export function verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings(
+  input: unknown,
+  originalTerms: OutputSignedPurchaseTerms,
+  expectedBinding: OutputPurchaseCommitmentBinding
+): OutputPurchaseEnvelope {
+  const original = parseOutputPurchaseTermsWithInlineStrings(originalTerms),
+    binding = parseOutputPurchaseCommitmentBindingWithInlineStrings(expectedBinding),
+    parsed = parseOutputPurchaseEnvelopeWithInlineStrings(input)
+  outputAssert(
+    binding.domainProfile === original.body.domainProfile,
+    'Purchase commitment binding changed domain',
+    'context-changed'
+  )
+  return verifyOutputPurchaseEnvelopeWithInlineStrings(
+    parsed,
+    original,
+    'txid' in parsed.result ? parsed.result.txid : undefined,
+    binding.purchaseCommitment
+  )
+}

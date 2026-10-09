@@ -973,3 +973,20 @@ Native purchase contracts explicitly select additive inline companions for histo
 The additive `parseOutputJSONWithOwnedRecords` and `inspectOutputJSONEncodingWithOwnedRecords` preserve the existing shallow string/scalar paths and construct independently owned records during complete lexical traversal of complex JSON. Duplicate decoded names, escaped Unicode, safe integers, framing, depth, item limits and refusal order retain the ordinary parser's rules. Each complete input is captured once. Arrays have ordinary own data fields and records have null prototypes. No partial graph escapes if a later syntax or resource check fails. Parsing preserves lexical negative zero; canonical ownership normalizes it exactly as the ordinary owner does. Encoding inspection describes this input only and supplies no schema, trust or operation authorization.
 
 `canonicalOutputJSONWithInlineRecords` and `ownOutputJSONWithInlineRecords` extend fresh inline key/string emission through nested records and arrays. They preserve canonical bytes, descriptor observation order, prototype/symbol/cycle checks, Unicode, integers and exact resource bounds. The owner returns `{ text, value }`; repeated input references become independent owned nodes. Frames are private to one complete call and failures expose no partial state. The earlier ordinary and opt-in entry points remain available. Current native private-state bindings and the explicit schema/verification companions select these implementations through imports; existing default entry points retain their paths. This changes neither a protocol profile nor a wire, custody or public interface contract. No input, parsed graph, shape, secret, authorization or currentness verdict is cached. Hosted qualification remains required; no performance improvement is claimed from source checks.
+
+The explicit `parseOutputPurchaseEnvelopeWithInlineStrings`,
+`verifyOutputPurchaseEnvelopeWithInlineStrings` and
+`verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings` companions extend fresh
+owned-copy normalization through response and original-contract checking.
+`parseOutputPotatoesWithInlineStrings` and
+`parseOutputPurchaseCommitmentBindingWithInlineStrings` provide the corresponding
+bounded representation boundaries. Release representations and caller-selected
+bindings have `parseOutputReleaseEvidenceWithInlineStrings` and
+`bindOutputReleaseEvidenceWithInlineStrings`. Each call checks the entire current
+input, original signatures, policy and transaction association as applicable.
+These functions retain no parsed graph, secret, authorization, currentness or
+validation result between calls. They confer neither Bitcoin validity nor domain
+eligibility. Ordinary entry points, encodings, error identities and resource
+limits remain unchanged. Current private-purchase bindings select these companions
+explicitly; historical recovery still verifies and returns the original signed
+result. Source checks do not establish a performance improvement.

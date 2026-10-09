@@ -685,3 +685,20 @@ remain unchanged. These imports create no saved input, parsed graph, shape,
 secret, authority, currentness or validation verdict. Runtime and full mutation
 qualification on the published source remain required; static checks establish
 neither a speedup nor checkpoint readiness.
+
+The explicit `parseOutputPurchaseEnvelopeWithInlineStrings`,
+`verifyOutputPurchaseEnvelopeWithInlineStrings` and
+`verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings` companions extend fresh
+owned-copy normalization through response and original-contract checking.
+`parseOutputPotatoesWithInlineStrings` and
+`parseOutputPurchaseCommitmentBindingWithInlineStrings` provide the corresponding
+bounded representation boundaries. Release representations and caller-selected
+bindings have `parseOutputReleaseEvidenceWithInlineStrings` and
+`bindOutputReleaseEvidenceWithInlineStrings`. Each call checks the entire current
+input, original signatures, policy and transaction association as applicable.
+These functions retain no parsed graph, secret, authorization, currentness or
+validation result between calls. They confer neither Bitcoin validity nor domain
+eligibility. Ordinary entry points, encodings, error identities and resource
+limits remain unchanged. Current private-purchase bindings select these companions
+explicitly; historical recovery still verifies and returns the original signed
+result. Source checks do not establish a performance improvement.

@@ -982,3 +982,156 @@ describe('fresh inline signed purchase terms', () => {
     ).toThrow('Purchase terms signature failed')
   })
 })
+
+import {
+  parseOutputPotatoesWithInlineStrings,
+  parseOutputPurchaseCommitmentBindingWithInlineStrings,
+  parseOutputPurchaseEnvelopeWithInlineStrings,
+  verifyOutputPurchaseEnvelopeWithInlineStrings,
+  verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings,
+  OutputProtocolError
+} from '../../../mod.js'
+
+function purchaseCompanionOutcome(work: () => unknown): unknown {
+  try {
+    return { value: work() }
+  } catch (error) {
+    if (!(error instanceof OutputProtocolError)) throw error
+    return { code: error.code, message: error.message, retryable: error.retryable }
+  }
+}
+
+it('keeps fresh purchase companion ownership, historical signatures and every changed signed field', () => {
+  const f = fixture()
+  expect(parseOutputPotatoesWithInlineStrings(f.envelope.result.potatoes)).toEqual(
+    parseOutputPotatoes(f.envelope.result.potatoes)
+  )
+  const parsed = parseOutputPurchaseEnvelopeWithInlineStrings(f.envelope)
+  expect(parsed).toEqual(parseOutputPurchaseEnvelope(f.envelope))
+  expect(verifyOutputPurchaseEnvelopeWithInlineStrings(f.envelope, f.terms, txid)).toEqual(
+    verifyOutputPurchaseEnvelope(f.envelope, f.terms, txid)
+  )
+  const same = (input: unknown, terms = f.terms, expected = txid, commitment?: string) =>
+    expect(
+      purchaseCompanionOutcome(() =>
+        verifyOutputPurchaseEnvelopeWithInlineStrings(input, terms, expected, commitment)
+      )
+    ).toEqual(
+      purchaseCompanionOutcome(() =>
+        verifyOutputPurchaseEnvelope(input, terms, expected, commitment)
+      )
+    )
+  for (const [key, value] of Object.entries(f.potatoesBody)) {
+    const changed = { ...f.potatoesBody, [key]: typeof value === 'string' ? '' : null }
+    same({
+      ...f.envelope,
+      result: { ...f.envelope.result, potatoes: { body: changed, signature: '' } }
+    })
+  }
+  for (const key of Object.keys(f.terms.body)) {
+    const changed = { ...f.terms.body, [key]: null }
+    same(f.envelope, { ...f.terms, body: changed } as typeof f.terms)
+  }
+  same(f.envelope, { ...f.terms, signature: 'AA==' })
+  same({
+    ...f.envelope,
+    result: { ...f.envelope.result, potatoes: { ...f.envelope.result.potatoes, signature: 'AA==' } }
+  })
+  same(f.envelope, f.terms, '99'.repeat(32))
+  same(f.envelope, f.terms, txid, '99'.repeat(32))
+  f.envelope.result.potatoes.body.secret = 'AQ=='
+  expect(parsed.result.status).toBe('delivered')
+  if (parsed.result.status !== 'delivered') throw new Error('Fixture delivery changed')
+  expect(parsed.result.potatoes.body.secret).toBe('AA==')
+  expect(() => verifyOutputPurchaseEnvelopeWithInlineStrings(f.envelope, f.terms, txid)).toThrow(
+    'signature failed'
+  )
+})
+
+it('retains exact failures and byte framing across every purchase response status and alias binding', () => {
+  const f = fixture(),
+    common = {
+      version: 1,
+      acquisitionId: f.body.acquisitionId,
+      recoveryUntil: f.body.recoveryUntil
+    },
+    reserved = { ...common, txid, purchaseCommitment: '98'.repeat(32) },
+    decision = { policy: f.body.releasePolicy, reason: 'fixture refusal', evidence: 'AA==' },
+    binding = {
+      profile: 'full-purchase-commitment-v1' as const,
+      domainProfile: f.body.domainProfile,
+      purchaseCommitment: reserved.purchaseCommitment
+    }
+  expect(parseOutputPurchaseCommitmentBindingWithInlineStrings(binding)).toEqual(
+    parseOutputPurchaseCommitmentBinding(binding)
+  )
+  const results = [
+    { ...common, status: 'prepared' },
+    { ...common, status: 'expired' },
+    { ...reserved, status: 'admission-pending' },
+    { ...reserved, status: 'admission-rejected', decision },
+    { ...reserved, status: 'admitted-delivery-pending', steak: f.envelope.result.steak },
+    { ...reserved, status: 'delivery-failed', steak: f.envelope.result.steak, decision },
+    f.envelope.result
+  ]
+  for (const result of results) {
+    const input = result.status === 'delivered' ? f.envelope : { result }
+    const text = canonicalOutputJSON(input)
+    for (const representation of [input, text, new TextEncoder().encode(text)]) {
+      expect(
+        purchaseCompanionOutcome(() => parseOutputPurchaseEnvelopeWithInlineStrings(representation))
+      ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseEnvelope(representation)))
+      expect(
+        purchaseCompanionOutcome(() =>
+          verifyOutputPurchaseEnvelopeWithInlineStrings(representation, f.terms, txid)
+        )
+      ).toEqual(
+        purchaseCompanionOutcome(() => verifyOutputPurchaseEnvelope(representation, f.terms, txid))
+      )
+      expect(
+        purchaseCompanionOutcome(() =>
+          verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings(representation, f.terms, binding)
+        )
+      ).toEqual(
+        purchaseCompanionOutcome(() =>
+          verifyOutputPurchaseCommitmentEnvelope(representation, f.terms, binding)
+        )
+      )
+    }
+    const malformed = [
+      { ...input, releaseEvidence: f.evidence },
+      { ...input, currentAlias: { txid: '99'.repeat(32), beef: 'AA==' } },
+      { ...input, unknown: true },
+      { ...input, result: { ...result, recoveryUntil: '0' } },
+      { ...input, result: { ...result, acquisitionId: '99'.repeat(32) } },
+      { ...input, result: { ...result, status: 'unknown' } }
+    ]
+    for (const candidate of malformed) {
+      expect(
+        purchaseCompanionOutcome(() => parseOutputPurchaseEnvelopeWithInlineStrings(candidate))
+      ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseEnvelope(candidate)))
+      expect(
+        purchaseCompanionOutcome(() =>
+          verifyOutputPurchaseEnvelopeWithInlineStrings(candidate, f.terms, txid)
+        )
+      ).toEqual(
+        purchaseCompanionOutcome(() => verifyOutputPurchaseEnvelope(candidate, f.terms, txid))
+      )
+    }
+  }
+  const accessor = Object.defineProperty({ result: f.envelope.result }, 'releaseEvidence', {
+    enumerable: true,
+    get() {
+      throw new Error('Accessor must not run')
+    }
+  })
+  for (const candidate of [
+    accessor,
+    { ...f.envelope, [Symbol('unknown')]: true },
+    '{"result":{},"result":{}}'
+  ]) {
+    expect(
+      purchaseCompanionOutcome(() => parseOutputPurchaseEnvelopeWithInlineStrings(candidate))
+    ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseEnvelope(candidate)))
+  }
+})

@@ -91,3 +91,8 @@ export {
   canonicalOutputJSONWithInlineRecords,
   ownOutputJSONWithInlineRecords
 } from './OutputProtocolJSON.js'
+
+export {
+  parseOutputReleaseEvidenceWithInlineStrings,
+  bindOutputReleaseEvidenceWithInlineStrings
+} from './OutputReleaseProtocol.js'

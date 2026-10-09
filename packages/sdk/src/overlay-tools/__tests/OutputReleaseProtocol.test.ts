@@ -268,3 +268,86 @@ describe('fresh release ownership and intrinsic checks after parent normalizatio
     )
   })
 })
+
+import {
+  parseOutputReleaseEvidenceWithInlineStrings,
+  bindOutputReleaseEvidenceWithInlineStrings,
+  OutputProtocolError
+} from '../../../mod.js'
+
+function releaseCompanionOutcome(work: () => unknown): unknown {
+  try {
+    return { value: work() }
+  } catch (error) {
+    if (!(error instanceof OutputProtocolError)) throw error
+    return { code: error.code, message: error.message, retryable: error.retryable }
+  }
+}
+
+it('keeps release companions fresh across policies, intrinsic arithmetic, bindings and malformed framing', () => {
+  for (const input of [local(), mined(), accepted().evidence]) {
+    const binding = { chain, txid, policy: parseOutputReleasePolicy(input.policy) },
+      text = canonicalOutputJSON(input)
+    for (const representation of [input, text, new TextEncoder().encode(text)]) {
+      expect(parseOutputReleaseEvidenceWithInlineStrings(representation)).toEqual(
+        parseOutputReleaseEvidence(representation)
+      )
+      expect(bindOutputReleaseEvidenceWithInlineStrings(representation, binding)).toEqual(
+        bindOutputReleaseEvidence(representation, binding)
+      )
+    }
+    for (const expected of [
+      binding,
+      { ...binding, txid: '99'.repeat(32) },
+      { ...binding, chain: { ...chain, network: 'other' } },
+      { ...binding, policy: { kind: 'local-admission' as const } }
+    ]) {
+      expect(
+        releaseCompanionOutcome(() => bindOutputReleaseEvidenceWithInlineStrings(input, expected))
+      ).toEqual(releaseCompanionOutcome(() => bindOutputReleaseEvidence(input, expected)))
+    }
+    for (const candidate of [
+      { ...input, acceptedAt: '01' },
+      { ...input, unknown: true },
+      { ...input, processorEvidence: 'AA==' },
+      { ...input, blockEvidence: mined().blockEvidence }
+    ]) {
+      expect(
+        releaseCompanionOutcome(() => parseOutputReleaseEvidenceWithInlineStrings(candidate))
+      ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(candidate)))
+    }
+  }
+  const input = mined(),
+    owned = parseOutputReleaseEvidenceWithInlineStrings(input)
+  for (const fields of [
+    { height: '100', tipHeight: '99' },
+    { height: '100', tipHeight: '101' },
+    { height: '100', tipHeight: '100' },
+    { height: '100', tipHeight: '100', tipHash: input.blockEvidence.blockHash },
+    { height: '100', tipHeight: '102' }
+  ]) {
+    const candidate = { ...input, blockEvidence: { ...input.blockEvidence, ...fields } }
+    expect(
+      releaseCompanionOutcome(() => parseOutputReleaseEvidenceWithInlineStrings(candidate))
+    ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(candidate)))
+  }
+  input.blockEvidence.tipHeight = '0'
+  expect(owned.blockEvidence!.tipHeight).toBe('102')
+  expect(() => parseOutputReleaseEvidenceWithInlineStrings(input)).toThrow('confirmation depth')
+  expect(parseOutputReleaseEvidenceWithInlineStrings(mined()).blockEvidence!.tipHeight).toBe('102')
+  const accessor = Object.defineProperty(local(), 'acceptedAt', {
+    enumerable: true,
+    get() {
+      throw new Error('Accessor must not run')
+    }
+  })
+  for (const candidate of [
+    accessor,
+    { ...local(), [Symbol('unknown')]: true },
+    '{"chain":{},"chain":{}}'
+  ]) {
+    expect(
+      releaseCompanionOutcome(() => parseOutputReleaseEvidenceWithInlineStrings(candidate))
+    ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(candidate)))
+  }
+})

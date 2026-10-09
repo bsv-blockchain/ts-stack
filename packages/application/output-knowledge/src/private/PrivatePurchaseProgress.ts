@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   ownOutputJSONWithInlineRecords as ownOutputJSON,
-  bindOutputReleaseEvidence,
+  bindOutputReleaseEvidenceWithInlineStrings as bindOutputReleaseEvidence,
   canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputAssert,
@@ -9,8 +9,8 @@ import {
   outputIdentity,
   outputString,
   outputU64,
-  parseOutputPurchaseEnvelope,
-  verifyOutputPurchaseEnvelope,
+  parseOutputPurchaseEnvelopeWithInlineStrings as parseOutputPurchaseEnvelope,
+  verifyOutputPurchaseEnvelopeWithInlineStrings as verifyOutputPurchaseEnvelope,
   type OutputPurchaseEnvelope,
   type OutputPurchaseResult,
   type OutputReleaseEvidence,

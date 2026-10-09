@@ -1,6 +1,6 @@
 import {
   canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
-  bindOutputReleaseEvidence,
+  bindOutputReleaseEvidenceWithInlineStrings as bindOutputReleaseEvidence,
   decodeOutputBytes,
   outputAssert,
   outputHex32,

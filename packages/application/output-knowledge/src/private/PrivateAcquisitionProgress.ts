@@ -1,7 +1,7 @@
 import {
   ownOutputJSON,
   bindOutputPaidLookupChallenge,
-  bindOutputReleaseEvidence,
+  bindOutputReleaseEvidenceWithInlineStrings as bindOutputReleaseEvidence,
   canonicalOutputJSON,
   closedOutputObject,
   inspectOutputPaidLookupFunding,

@@ -7,7 +7,7 @@ import {
   parseOutputPurchasePrepare,
   parseOutputPurchaseSubmit,
   verifyOutputPurchaseTerms,
-  verifyOutputPurchaseCommitmentEnvelope,
+  verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings as verifyOutputPurchaseCommitmentEnvelope,
   type OutputPurchaseCommitmentBinding,
   type OutputPurchaseEnvelope,
   type OutputPurchasePrepare,

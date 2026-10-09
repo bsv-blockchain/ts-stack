@@ -136,3 +136,57 @@ export function verifyOutputProcessorAcceptance(
   )
   return packet
 }
+
+import { canonicalOutputJSONWithInlineRecords } from './OutputProtocolJSON.js'
+
+/** Explicit fresh-ownership companion. Every representation, arithmetic and binding
+ * check is repeated; no input, custody, currentness or validation result is retained. */
+export function parseOutputReleaseEvidenceWithInlineStrings(input: unknown): OutputReleaseEvidence {
+  const result = s.normalizedWithInlineStrings(input, release),
+    policy = result.policy
+  outputAssert(
+    Object.hasOwn(result, 'processorEvidence') === (policy.kind === 'processor-accepted') &&
+      Object.hasOwn(result, 'blockEvidence') === (policy.kind === 'mined'),
+    'Release evidence fields differ from policy'
+  )
+  if (policy.kind === 'mined') {
+    const evidence = result.blockEvidence!
+    const height = outputU64(evidence.height),
+      tip = outputU64(evidence.tipHeight)
+    outputAssert(
+      tip >= height && tip - height + 1n >= BigInt(policy.confirmations),
+      'Insufficient declared confirmation depth'
+    )
+    outputAssert(
+      tip !== height || evidence.tipHash === evidence.blockHash,
+      'Same-height release headers differ'
+    )
+  }
+  return result
+}
+
+/** Explicit fresh-ownership companion. Every representation, arithmetic and binding
+ * check is repeated; no input, custody, currentness or validation result is retained. */
+export function bindOutputReleaseEvidenceWithInlineStrings(
+  input: unknown,
+  expected: OutputReleaseBinding
+): OutputReleaseEvidence {
+  const binding = s.normalizedWithInlineStrings(
+    expected,
+    s.fixedObject({
+      chain: s.chain,
+      txid: s.hex,
+      policy: parseOutputReleasePolicy
+    })
+  )
+  const evidence = parseOutputReleaseEvidenceWithInlineStrings(input)
+  outputAssert(
+    canonicalOutputJSONWithInlineRecords(evidence.chain) ===
+      canonicalOutputJSONWithInlineRecords(binding.chain) &&
+      evidence.txid === binding.txid &&
+      canonicalOutputJSONWithInlineRecords(evidence.policy) ===
+        canonicalOutputJSONWithInlineRecords(binding.policy),
+    'Release evidence binding mismatch'
+  )
+  return evidence
+}
