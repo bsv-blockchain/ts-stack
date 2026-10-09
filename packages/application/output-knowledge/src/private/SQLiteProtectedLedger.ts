@@ -9,7 +9,7 @@ import {
   outputAssert,
   outputHex32,
   outputU64,
-  parseOutputJSON,
+  parseOutputJSONWithStringRecords as parseOutputJSON,
   type OutputJSONObject,
   type OutputJSON
 } from '@bsv/sdk'

@@ -511,7 +511,8 @@ wallet-derived locking key, and field signature before reading or spending it.
   names or values. Other shapes and refusals use the original parser/error order.
   Only fixed grammar is retained. Each graph is newly owned; endpoint schemas,
   bindings, authentication and currentness checks remain independent. The Node
-  private-payload codec selects this path; browser companions do not require it.
+  private-payload codec and native protected-ledger envelope-metadata reader
+  select this path; browser companions do not require it.
 
   `outputString` retains its nonempty primitive, 1,024-code-unit and 1,024-byte
   UTF-8 limits. Fresh ASCII evidence establishes well-formed Unicode and one

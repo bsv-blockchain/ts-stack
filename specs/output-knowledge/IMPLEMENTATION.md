@@ -7948,3 +7948,33 @@ rows, mutation ranges and disjoint unions, original properties and tests, minimu
 and browser budgets remain required. Earlier failed campaigns remain failed
 evidence. A fresh complete campaign and independent reconciliation are necessary
 for checkpoint two; an allowance change does not qualify a run.
+
+## October 9: native ledger envelope-metadata selection
+
+Published 7c0114b90a694ea0b48290d85b94d615b4990b45 passes real-date governance,
+actual Sonar and CodeQL analysis, and browser/mobile platform checks. Its original
+300-case disclosure and coordinator properties interrupt at their unchanged
+150-second controls after 187 and 212 cases; neither reports a counterexample.
+These failures remain failed evidence. The current three CPU sampling reports
+contain negative/reordered samples and are wholly excluded from counts and timings,
+alongside the earlier invalid traces. Independently bound native monotonic records
+show frequent authenticated ledger reads; their inclusive durations are not summed
+or converted into a claimed speedup.
+
+The native payload codec already selects parseOutputJSONWithStringRecords, but
+SQLiteProtectedLedger.headSnapshot still parses the serialized encrypted envelope
+again through ordinary parseOutputJSON to obtain the custody label. Its local
+parser import now selects the same explicit entry. The entire remaining ledger
+source and all original tests remain unchanged. Full lexical/Unicode/byte, duplicate,
+map/depth and ownership checks precede the fresh graph; other shapes, escaped
+strings and refusals retain the original parser/error order. Exact envelope fields,
+current custody, authentication, plaintext canonical inspection, inventory,
+revision and transaction-boundary checks still run. No record, input, shape or
+verdict is cached. Ordinary SDK parsing and all browser entrypoints remain unchanged.
+
+Pinned source inventory and complete strict compilation must validate this proposal.
+All original 994 protected-ledger sites and IDs, all 151 targets/398 rows, property
+bodies and IDs, 300 cases, seed/replay, individual 150/180-second controls, approved
+outer allowances, worker/score settings and browser ceilings remain required.
+This record makes no performance or qualification claim. Fresh exact-head runtime,
+consumer, analyzer and complete mutation evidence remains necessary for Checkpoint 2.

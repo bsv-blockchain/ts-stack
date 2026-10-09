@@ -33,6 +33,8 @@ The package version does not indicate a published or production-qualified releas
 Private ledger, alias and purchase codecs capture their fixed field names once.
 The native protected-payload envelope also reuses a frozen six-name field list;
 its required-field loop still inspects all six fresh owned values on every open.
+The native payload codec and ledger envelope-metadata reader explicitly select
+the SDK string-record parser; plaintext canonical inspection remains unchanged.
 Every input still receives complete ownership, prototype, symbol, descriptor,
 required/unknown-field and scalar checks. Encrypted records, revision, clock,
 authority and custody checks remain fresh; no record, secret or validation verdict
