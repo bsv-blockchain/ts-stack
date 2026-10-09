@@ -196,7 +196,7 @@ export function bindOutputReleaseEvidenceWithInlineStrings(
 // Fixed companion grammar only; every supplied value is owned and checked afresh.
 let releaseWithInlineStringsGrammar: s.Schema<OutputReleaseEvidence> | undefined
 function releaseWithInlineStrings(): s.Schema<OutputReleaseEvidence> {
-  return (releaseWithInlineStringsGrammar ??= s.fixedObject(
+  releaseWithInlineStringsGrammar ??= s.fixedObject(
     {
       chain: s.chain,
       txid: s.hex,
@@ -204,5 +204,6 @@ function releaseWithInlineStrings(): s.Schema<OutputReleaseEvidence> {
       acceptedAt: s.u64
     },
     { processorEvidence: s.bytes, blockEvidence: block }
-  ))
+  )
+  return releaseWithInlineStringsGrammar
 }

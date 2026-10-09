@@ -572,7 +572,7 @@ export function verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings(
 // supplied input, partial graph, decision or current authority between calls.
 let termsWithInlineStringsGrammar: s.Schema<OutputPurchaseTerms> | undefined
 function termsWithInlineStrings(): s.Schema<OutputPurchaseTerms> {
-  return (termsWithInlineStringsGrammar ??= s.fixedObject({
+  termsWithInlineStringsGrammar ??= s.fixedObject({
     version: s.literal(1),
     acquisitionId: s.hex,
     requestDigest: s.hex,
@@ -587,20 +587,22 @@ function termsWithInlineStrings(): s.Schema<OutputPurchaseTerms> {
     releasePolicy: parseOutputReleasePolicyWithInlineStrings,
     purchaseUntil: s.u64,
     recoveryUntil: s.u64
-  }))
+  })
+  return termsWithInlineStringsGrammar
 }
 
 let signedTermsWithInlineStringsGrammar: s.Schema<OutputSignedPurchaseTerms> | undefined
 function signedTermsWithInlineStrings(): s.Schema<OutputSignedPurchaseTerms> {
-  return (signedTermsWithInlineStringsGrammar ??= s.fixedObject({
+  signedTermsWithInlineStringsGrammar ??= s.fixedObject({
     body: termsWithInlineStrings(),
     signature: s.bytes
-  }))
+  })
+  return signedTermsWithInlineStringsGrammar
 }
 
 let potatoesWithInlineStringsGrammar: s.Schema<OutputSignedPotatoes> | undefined
 function potatoesWithInlineStrings(): s.Schema<OutputSignedPotatoes> {
-  return (potatoesWithInlineStringsGrammar ??= s.fixedObject({
+  potatoesWithInlineStringsGrammar ??= s.fixedObject({
     body: s.fixedObject(
       {
         version: s.literal(1),
@@ -622,31 +624,34 @@ function potatoesWithInlineStrings(): s.Schema<OutputSignedPotatoes> {
       { purchaseCommitment: s.hex }
     ),
     signature: s.bytes
-  }))
+  })
+  return potatoesWithInlineStringsGrammar
 }
 
 let admittedWithInlineStringsGrammar: typeof admitted | undefined
 function admittedWithInlineStrings(): typeof admitted {
-  return (admittedWithInlineStringsGrammar ??= {
+  admittedWithInlineStringsGrammar ??= {
     ...reserved,
     steak: parseOutputSTEAKWithInlineStrings
-  })
+  }
+  return admittedWithInlineStringsGrammar
 }
 
 let decisionWithInlineStringsGrammar: typeof decision | undefined
 function decisionWithInlineStrings(): typeof decision {
-  return (decisionWithInlineStringsGrammar ??= s.fixedObject({
+  decisionWithInlineStringsGrammar ??= s.fixedObject({
     reason: s.text,
     policy: parseOutputReleasePolicyWithInlineStrings,
     evidence: s.bytes,
     decidedAt: s.u64,
     globalOutcome: s.literal('unknown')
-  }))
+  })
+  return decisionWithInlineStringsGrammar
 }
 
 let resultWithInlineStringsGrammar: s.Schema<OutputPurchaseResult> | undefined
 function resultWithInlineStrings(): s.Schema<OutputPurchaseResult> {
-  return (resultWithInlineStringsGrammar ??= s.tagged('status', {
+  resultWithInlineStringsGrammar ??= s.tagged('status', {
     prepared: purchaseState('prepared', common),
     expired: purchaseState('expired', common),
     'admission-pending': purchaseState('admission-pending', reserved, {}, candidateIdentity),
@@ -674,16 +679,18 @@ function resultWithInlineStrings(): s.Schema<OutputPurchaseResult> {
       { potatoes: potatoesWithInlineStrings() },
       candidateIdentity
     )
-  }))
+  })
+  return resultWithInlineStringsGrammar
 }
 
 let envelopeWithInlineStringsGrammar: s.Schema<OutputPurchaseEnvelope> | undefined
 function envelopeWithInlineStrings(): s.Schema<OutputPurchaseEnvelope> {
-  return (envelopeWithInlineStringsGrammar ??= s.fixedObject(
+  envelopeWithInlineStringsGrammar ??= s.fixedObject(
     { result: resultWithInlineStrings() },
     {
       releaseEvidence: parseOutputReleaseEvidenceWithInlineStrings,
       currentAlias: s.fixedObject({ txid: s.hex, beef: s.bytes })
     }
-  ))
+  )
+  return envelopeWithInlineStringsGrammar
 }
