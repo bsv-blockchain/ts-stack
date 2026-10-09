@@ -2,6 +2,7 @@ import * as s from './OutputProtocolSchema.js'
 import {
   parseOutputReleasePolicy,
   parseOutputReleasePolicyWithInlineStrings,
+  validateOutputReleasePolicyOfOwnedParent,
   type OutputReleasePolicy
 } from './OutputCapabilities.js'
 import {
@@ -178,7 +179,10 @@ export function bindOutputReleaseEvidenceWithInlineStrings(
     s.fixedObject({
       chain: s.chain,
       txid: s.hex,
-      policy: parseOutputReleasePolicyWithInlineStrings
+      policy: s.fromOwnedParent(
+        parseOutputReleasePolicyWithInlineStrings,
+        validateOutputReleasePolicyOfOwnedParent
+      )
     })
   )
   const evidence = parseOutputReleaseEvidenceWithInlineStrings(input)
@@ -200,10 +204,40 @@ function releaseWithInlineStrings(): s.Schema<OutputReleaseEvidence> {
     {
       chain: s.chain,
       txid: s.hex,
-      policy: parseOutputReleasePolicyWithInlineStrings,
+      policy: s.fromOwnedParent(
+        parseOutputReleasePolicyWithInlineStrings,
+        validateOutputReleasePolicyOfOwnedParent
+      ),
       acceptedAt: s.u64
     },
     { processorEvidence: s.bytes, blockEvidence: block }
   )
   return releaseWithInlineStringsGrammar
+}
+
+/** @internal Child grammar and intrinsic arithmetic for an enclosing packet that
+ * was freshly owned and bounded in full. Standalone input requires the complete
+ * parser. No signature, custody, chain or currentness verdict is implied. */
+export function validateOutputReleaseEvidenceOfOwnedParent(input: unknown): OutputReleaseEvidence {
+  const result = releaseWithInlineStrings()(input),
+    policy = result.policy
+  outputAssert(
+    Object.hasOwn(result, 'processorEvidence') === (policy.kind === 'processor-accepted') &&
+      Object.hasOwn(result, 'blockEvidence') === (policy.kind === 'mined'),
+    'Release evidence fields differ from policy'
+  )
+  if (policy.kind === 'mined') {
+    const evidence = result.blockEvidence!
+    const height = outputU64(evidence.height),
+      tip = outputU64(evidence.tipHeight)
+    outputAssert(
+      tip >= height && tip - height + 1n >= BigInt(policy.confirmations),
+      'Insufficient declared confirmation depth'
+    )
+    outputAssert(
+      tip !== height || evidence.tipHash === evidence.blockHash,
+      'Same-height release headers differ'
+    )
+  }
+  return result
 }

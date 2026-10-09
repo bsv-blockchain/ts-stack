@@ -428,3 +428,10 @@ export function selectOutputCapabilityWithInlineStrings(
 export function parseOutputReleasePolicyWithInlineStrings(input: unknown): OutputReleasePolicy {
   return s.normalizedWithInlineStrings(input, release)
 }
+
+/** @internal Child grammar for a freshly owned, bounded enclosing packet only.
+ * Standalone policy input requires a complete parser. Every policy field is
+ * checked afresh; this makes no selection or authority decision. */
+export function validateOutputReleasePolicyOfOwnedParent(input: unknown): OutputReleasePolicy {
+  return release(input)
+}

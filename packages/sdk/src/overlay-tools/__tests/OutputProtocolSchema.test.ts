@@ -884,3 +884,43 @@ test('owned-record traversal preserves UTF-16 order for integer, builtin and ast
   expect(() => ownOutputJSONWithInlineRecords(input)).toThrow()
   expect(owned.text).toBe(expected)
 })
+
+it('composes fresh owned children and independently frames text or byte representations', () => {
+  const grammar = s.fixedObject({ count: s.u32 })
+  const child = s.fromOwnedParent(value => s.normalizedWithInlineStrings(value, grammar), grammar)
+  const parent = s.fixedObject({ left: child, right: child })
+  const supplied = { count: 7 }
+  const result = s.normalizedWithInlineStrings({ left: supplied, right: supplied }, parent)
+  expect(result.left).toEqual({ count: 7 })
+  expect(result.left).not.toBe(supplied)
+  expect(result.left).not.toBe(result.right)
+  owned(result)
+  supplied.count = 8
+  expect(result.left.count).toBe(7)
+  expect(
+    s.normalizedWithInlineStrings({ left: supplied, right: supplied }, parent).left.count
+  ).toBe(8)
+  const bytes = new TextEncoder().encode('{"count":7}')
+  const framed = child(bytes)
+  bytes[9] = 56
+  expect(framed.count).toBe(7)
+  expect(child(bytes).count).toBe(8)
+  for (const representation of [
+    '{"count":7,"count":8}',
+    new TextEncoder().encode('{"count":7,"count":8}'),
+    Uint8Array.from([255])
+  ]) {
+    expect(() => child(representation)).toThrow()
+    expect(child('{"count":7}')).toEqual({ count: 7 })
+  }
+  let observed = false
+  const accessor = Object.defineProperty({}, 'count', {
+    enumerable: true,
+    get() {
+      observed = true
+      return 7
+    }
+  })
+  expect(() => s.normalizedWithInlineStrings({ left: accessor, right: supplied }, parent)).toThrow()
+  expect(observed).toBe(false)
+})

@@ -1175,3 +1175,50 @@ it('preserves nested envelope representations, signed bindings and fresh policy/
     purchaseCompanionOutcome(() => parseOutputPurchaseTermsWithInlineStrings(invalidPolicy))
   ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseTerms(invalidPolicy)))
 })
+
+it('keeps sibling policies independent and checks the complete envelope before child grammar validation', () => {
+  const f = fixture(),
+    shared = f.body.releasePolicy
+  const input = {
+    ...f.envelope,
+    result: {
+      ...f.envelope.result,
+      potatoes: {
+        ...f.envelope.result.potatoes,
+        body: { ...f.potatoesBody, releasePolicy: shared }
+      }
+    },
+    releaseEvidence: { ...f.evidence, policy: shared }
+  }
+  const owned = verifyOutputPurchaseEnvelopeWithInlineStrings(input, f.terms, txid)
+  if (owned.result.status !== 'delivered') throw new Error('Fixture delivery changed')
+  expect(owned.result.potatoes.body.releasePolicy).not.toBe(shared)
+  expect(owned.result.potatoes.body.releasePolicy).not.toBe(owned.releaseEvidence!.policy)
+  expect(owned.result.steak).not.toBe(input.result.steak)
+  expect(owned).toEqual(verifyOutputPurchaseEnvelope(input, f.terms, txid))
+  const symbol = { ...input, [Symbol('unrepresented')]: true }
+  const hidden = Object.defineProperty({ ...input }, 'hidden', { value: true })
+  const accessor = Object.defineProperty({ ...input }, 'result', {
+    enumerable: true,
+    get() {
+      throw new Error('Accessor must not run')
+    }
+  })
+  let depth: unknown = {}
+  for (let index = 0; index < 70; index++) depth = { child: depth }
+  const cycle: Record<string, unknown> = {}
+  cycle.self = cycle
+  for (const candidate of [
+    symbol,
+    hidden,
+    accessor,
+    { ...input, extra: depth },
+    { ...input, extra: cycle }
+  ]) {
+    expect(
+      purchaseCompanionOutcome(() => parseOutputPurchaseEnvelopeWithInlineStrings(candidate))
+    ).toEqual(purchaseCompanionOutcome(() => parseOutputPurchaseEnvelope(candidate)))
+    expect(() => parseOutputPurchaseEnvelopeWithInlineStrings(candidate)).toThrow()
+  }
+  expect(verifyOutputPurchaseEnvelopeWithInlineStrings(f.envelope, f.terms, txid)).toEqual(owned)
+})

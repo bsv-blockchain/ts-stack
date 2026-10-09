@@ -1,14 +1,20 @@
 import * as s from './OutputProtocolSchema.js'
 import {
   parseOutputReleasePolicy,
-  parseOutputReleasePolicyWithInlineStrings
+  parseOutputReleasePolicyWithInlineStrings,
+  validateOutputReleasePolicyOfOwnedParent
 } from './OutputCapabilities.js'
-import { parseOutputSTEAK, parseOutputSTEAKWithInlineStrings } from './OutputObservation.js'
+import {
+  parseOutputSTEAK,
+  parseOutputSTEAKWithInlineStrings,
+  validateOutputSTEAKOfOwnedParent
+} from './OutputObservation.js'
 import {
   bindOutputReleaseEvidence,
   bindOutputReleaseEvidenceWithInlineStrings,
   parseOutputReleaseEvidence,
-  parseOutputReleaseEvidenceWithInlineStrings
+  parseOutputReleaseEvidenceWithInlineStrings,
+  validateOutputReleaseEvidenceOfOwnedParent
 } from './OutputReleaseProtocol.js'
 import {
   outputPacketDigest,
@@ -584,7 +590,10 @@ function termsWithInlineStrings(): s.Schema<OutputPurchaseTerms> {
     termsDigest: s.hex,
     domainProfile: s.iri,
     domainEvidence: s.fixedObject({ schema: s.iri, bytes: s.bytes }),
-    releasePolicy: parseOutputReleasePolicyWithInlineStrings,
+    releasePolicy: s.fromOwnedParent(
+      parseOutputReleasePolicyWithInlineStrings,
+      validateOutputReleasePolicyOfOwnedParent
+    ),
     purchaseUntil: s.u64,
     recoveryUntil: s.u64
   })
@@ -614,7 +623,10 @@ function potatoesWithInlineStrings(): s.Schema<OutputSignedPotatoes> {
         txid: s.hex,
         assetId: s.hex,
         termsDigest: s.hex,
-        releasePolicy: parseOutputReleasePolicyWithInlineStrings,
+        releasePolicy: s.fromOwnedParent(
+          parseOutputReleasePolicyWithInlineStrings,
+          validateOutputReleasePolicyOfOwnedParent
+        ),
         evidenceDigest: s.hex,
         schema: s.iri,
         secret: s.bytes,
@@ -632,7 +644,7 @@ let admittedWithInlineStringsGrammar: typeof admitted | undefined
 function admittedWithInlineStrings(): typeof admitted {
   admittedWithInlineStringsGrammar ??= {
     ...reserved,
-    steak: parseOutputSTEAKWithInlineStrings
+    steak: s.fromOwnedParent(parseOutputSTEAKWithInlineStrings, validateOutputSTEAKOfOwnedParent)
   }
   return admittedWithInlineStringsGrammar
 }
@@ -641,7 +653,10 @@ let decisionWithInlineStringsGrammar: typeof decision | undefined
 function decisionWithInlineStrings(): typeof decision {
   decisionWithInlineStringsGrammar ??= s.fixedObject({
     reason: s.text,
-    policy: parseOutputReleasePolicyWithInlineStrings,
+    policy: s.fromOwnedParent(
+      parseOutputReleasePolicyWithInlineStrings,
+      validateOutputReleasePolicyOfOwnedParent
+    ),
     evidence: s.bytes,
     decidedAt: s.u64,
     globalOutcome: s.literal('unknown')
@@ -688,7 +703,10 @@ function envelopeWithInlineStrings(): s.Schema<OutputPurchaseEnvelope> {
   envelopeWithInlineStringsGrammar ??= s.fixedObject(
     { result: resultWithInlineStrings() },
     {
-      releaseEvidence: parseOutputReleaseEvidenceWithInlineStrings,
+      releaseEvidence: s.fromOwnedParent(
+        parseOutputReleaseEvidenceWithInlineStrings,
+        validateOutputReleaseEvidenceOfOwnedParent
+      ),
       currentAlias: s.fixedObject({ txid: s.hex, beef: s.bytes })
     }
   )

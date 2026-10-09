@@ -235,6 +235,8 @@ No migration is required. Hosted qualification remains separate.
 
 ### Added (3.3 source candidate)
 
+- Compose nested policy, STEAK and release grammar checks after complete fresh parent ownership; keep embedded-text parsing, every bound/refusal and intrinsic/authority check, original APIs and no input/verdict cache or new root export.
+
 - Initialize lazy fixed companion grammars in standalone statements before returning their validator configuration; retain fresh input checks, existing declarations, wire behavior and browser budgets.
 
 - Lazily instantiate fixed nested companion grammars so unused paths can be removed from browser bundles; retain no supplied input or verdict. Carry explicit fresh-ownership purchase and release parsing through fixed nested policy, STEAK and release-evidence companion grammars. Preserve ordinary schemas, nested JSON-text inputs, all bounds/refusals and signature/request bindings. Internal helpers add no root SDK export; no input or verdict is cached.

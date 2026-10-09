@@ -376,3 +376,33 @@ it('retains nested policy text, duplicate-key refusal and fresh ownership in com
     releaseCompanionOutcome(() => bindOutputReleaseEvidenceWithInlineStrings(malformed, binding))
   ).toEqual(releaseCompanionOutcome(() => bindOutputReleaseEvidence(malformed, binding)))
 })
+
+it('keeps child results independent and applies complete root bounds before release grammar checks', () => {
+  const input = mined(),
+    a = parseOutputReleaseEvidenceWithInlineStrings(input),
+    b = parseOutputReleaseEvidenceWithInlineStrings(input)
+  expect(a.policy).not.toBe(input.policy)
+  expect(a.policy).not.toBe(b.policy)
+  expect(a.blockEvidence).not.toBe(input.blockEvidence)
+  input.blockEvidence.tipHeight = '0'
+  expect(a.blockEvidence!.tipHeight).toBe('102')
+  expect(() => parseOutputReleaseEvidenceWithInlineStrings(input)).toThrow('confirmation depth')
+  for (const policy of [mined().policy, canonicalOutputJSON(mined().policy)]) {
+    const represented = { ...mined(), policy }
+    for (const value of [represented, canonicalOutputJSON(represented)])
+      expect(
+        releaseCompanionOutcome(() => parseOutputReleaseEvidenceWithInlineStrings(value))
+      ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(value)))
+  }
+  let depth: unknown = {}
+  for (let index = 0; index < 70; index++) depth = { child: depth }
+  const cycle: Record<string, unknown> = {}
+  cycle.self = cycle
+  for (const extra of [depth, cycle]) {
+    const represented = { ...local(), extra }
+    expect(
+      releaseCompanionOutcome(() => parseOutputReleaseEvidenceWithInlineStrings(represented))
+    ).toEqual(releaseCompanionOutcome(() => parseOutputReleaseEvidence(represented)))
+    expect(() => parseOutputReleaseEvidenceWithInlineStrings(represented)).toThrow()
+  }
+})

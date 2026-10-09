@@ -183,3 +183,12 @@ export function normalizedWithInlineStrings<T>(
       : ownOutputJSONWithInlineStrings(input, limits).value
   return schema(value)
 }
+
+/** @internal Compose a child grammar only after the enclosing public parser has
+ * freshly owned and bounded the complete graph. Embedded JSON text keeps its
+ * complete parser. Only fixed callbacks are retained, never supplied values,
+ * graphs, schema results, secrets or authority decisions. */
+export function fromOwnedParent<T>(parse: Schema<T>, child: Schema<T>): Schema<T> {
+  return value =>
+    typeof value === 'string' || value instanceof Uint8Array ? parse(value) : child(value)
+}

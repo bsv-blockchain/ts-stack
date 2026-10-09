@@ -207,3 +207,10 @@ export function parseOutputObservation(
  * This validates shape only; it never establishes admission or mining. */
 export const parseOutputSTEAKWithInlineStrings = (input: unknown): ReturnType<typeof steak> =>
   s.normalizedWithInlineStrings(input, steak)
+
+/** @internal Child grammar for a freshly owned, bounded enclosing packet only.
+ * Standalone STEAK input requires a complete parser. Every topic and instruction
+ * is checked afresh; this establishes neither admission nor mining. */
+export function validateOutputSTEAKOfOwnedParent(input: unknown): ReturnType<typeof steak> {
+  return steak(input)
+}
