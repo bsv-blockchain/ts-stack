@@ -859,3 +859,28 @@ test('owned-record lexical traversal accepts exactly the four JSON whitespace un
     )
   }
 })
+
+test('owned-record traversal preserves UTF-16 order for integer, builtin and astral names', () => {
+  const input: Record<string, unknown> = Object.create(null)
+  for (const [name, value] of [
+    ['\uE000', 'bmp'],
+    ['\u{1F600}', 'astral'],
+    ['2', 'two'],
+    ['10', 'ten'],
+    ['a', 'first'],
+    ['__proto__', 'builtin']
+  ])
+    Object.defineProperty(input, name, { value, enumerable: true, configurable: true })
+  const expected =
+    '{"10":"ten","2":"two","__proto__":"builtin","a":"first","\u{1F600}":"astral","\uE000":"bmp"}'
+  expect(canonicalOutputJSON(input)).toBe(expected)
+  expect(canonicalOutputJSONWithInlineRecords(input)).toBe(expected)
+  const owned = ownOutputJSONWithInlineRecords(input)
+  expect(owned.text).toBe(expected)
+  expect(Object.getPrototypeOf(owned.value)).toBe(null)
+  expect(isDeepStrictEqual(owned.value, ownOutputJSON(input).value)).toBe(true)
+  Object.defineProperty(input, 'hidden', { value: 'refuse' })
+  expect(() => canonicalOutputJSONWithInlineRecords(input)).toThrow()
+  expect(() => ownOutputJSONWithInlineRecords(input)).toThrow()
+  expect(owned.text).toBe(expected)
+})

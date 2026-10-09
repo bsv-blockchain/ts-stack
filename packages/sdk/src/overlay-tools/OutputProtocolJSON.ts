@@ -807,7 +807,7 @@ class OutputJSONOwnedParser {
   #whitespace(): void {
     const frame = this.#frame
     for (;;) {
-      const unit = frame.t.charCodeAt(frame.o)
+      const unit = frame.t.codePointAt(frame.o)
       if (unit !== 0x20 && unit !== 0x0d && unit !== 0x0a && unit !== 0x09) return
       frame.o++
       frame.e?.whitespace()
@@ -1035,15 +1035,16 @@ function visitOutputJSONOwnedObject(
   own: boolean
 ): OutputJSONObject | undefined {
   outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
-  const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
+  // Fresh primitive names use native UTF-16 ordering, as required by JCS.
+  const keys = Object.getOwnPropertyNames(node).sort()
   outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
   const result: OutputJSONObject | undefined = own ? Object.create(null) : undefined
   emitOutputJSON(frame, '{', true)
-  let index = 0
-  for (const key of keys) {
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index]
     const descriptor = Object.getOwnPropertyDescriptor(node, key)
     outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
-    if (index++ > 0) emitOutputJSON(frame, ',', true)
+    if (index > 0) emitOutputJSON(frame, ',', true)
     emitOutputJSONRecordString(frame, key, ':')
     const supplied: unknown = descriptor.value
     let value: OutputJSON | undefined
