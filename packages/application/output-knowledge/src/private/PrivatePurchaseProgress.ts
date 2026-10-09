@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import {
-  ownOutputJSON,
+  ownOutputJSONWithInlineRecords as ownOutputJSON,
   bindOutputReleaseEvidence,
-  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,

@@ -1,5 +1,5 @@
 import {
-  ownOutputJSON,
+  ownOutputJSONWithInlineRecords as ownOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
   outputAssert,

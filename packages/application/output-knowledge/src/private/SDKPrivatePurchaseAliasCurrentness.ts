@@ -9,7 +9,7 @@ import {
   parseOutputChain,
   outputU64,
   OutputProtocolError,
-  parseOutputPurchaseSubmit,
+  parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
   Utils,
   type OutputChain,
   type OutputPurchaseCurrentAlias,

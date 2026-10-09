@@ -7,10 +7,10 @@ import {
   decodeOutputBytes,
   outputAssert,
   outputHex32,
-  outputPacketDigest,
+  outputPacketDigestWithInlineStrings as outputPacketDigest,
   outputU64,
   ownOutputJSONWithInlineRecords as ownOutputJSON,
-  parseOutputJSON,
+  parseOutputJSONWithOwnedRecords as parseOutputJSON,
   parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
   type OutputJSONObject,
   type OutputPurchaseSubmit

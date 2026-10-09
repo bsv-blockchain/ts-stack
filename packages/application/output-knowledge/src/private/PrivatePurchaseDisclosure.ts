@@ -1,5 +1,5 @@
 import {
-  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   outputAssert,
   outputHex32,
   outputIdentity,

@@ -3,8 +3,8 @@ id: private-purchase-custody
 title: 'Original Covenant Purchase Custody'
 kind: guide
 version: '1.0.1'
-last_updated: '2026-10-07'
-last_verified: '2026-10-07'
+last_updated: '2026-10-09'
+last_verified: '2026-10-09'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -674,3 +674,14 @@ not qualify a miner's fee/resource policy. Altered purchase and merge outputs
 are rejected by actual Script execution; the dedicated covenant corpus separately
 re-signs negative economic vectors to distinguish covenant rejection from stale
 transaction signatures. Neither result substitutes for production review.
+
+The native purchase coordinator, original custody and cumulative evidence owners,
+progress parser, payload framing, identity, access and physical disclosure paths
+explicitly select the existing SDK owned-record and recursive inline companions.
+Each invocation validates the complete fresh representation and resource bounds,
+then constructs independent data or canonical bytes. Native state-machine and
+effect-boundary method bodies, signatures, persisted frames and original tests
+remain unchanged. These imports create no saved input, parsed graph, shape,
+secret, authority, currentness or validation verdict. Runtime and full mutation
+qualification on the published source remain required; static checks establish
+neither a speedup nor checkpoint readiness.

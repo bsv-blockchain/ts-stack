@@ -8082,3 +8082,26 @@ signing campaigns also expose real coverage gaps in their independently bound
 raw reports; those require meaningful additional contract coverage. Complete
 fresh published-source runtime, analyzers, consumers and151-target/398-row
 mutation qualification remain required. No Mac target evaluation is performed.
+
+## October 9: original purchase custody qualification follow-up
+
+Published head `358d75a` passes all 44 applicable baseline CI jobs with two governed
+scoped skips, actual zero-finding Sonar and both actual CodeQL categories, plus
+all 23 resolved review threads. Its complete 151-target/398-row mutation run
+37939263455 could not qualify: nine independently admitted terminal job logs
+report initial instrumented-property interruptions before any mutation score,
+without a reported counterexample. Coordination, cumulative evidence, disclosure
+and native-clock partitions are affected. The failed run was stopped; it supplies
+no complete campaign or checkpoint receipt. Original minimum 300 cases, seed 3242026,
+empty replay, 150-second interruption and 180-second case limits remain unchanged.
+
+The native purchase coordinator, original custody and cumulative evidence owners,
+progress parser, payload framing, identity, access and physical disclosure paths
+explicitly select the existing SDK owned-record and recursive inline companions.
+Each invocation validates the complete fresh representation and resource bounds,
+then constructs independent data or canonical bytes. Native state-machine and
+effect-boundary method bodies, signatures, persisted frames and original tests
+remain unchanged. These imports create no saved input, parsed graph, shape,
+secret, authority, currentness or validation verdict. Runtime and full mutation
+qualification on the published source remain required; static checks establish
+neither a speedup nor checkpoint readiness.

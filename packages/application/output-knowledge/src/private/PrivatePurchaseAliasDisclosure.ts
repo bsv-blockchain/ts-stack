@@ -3,7 +3,7 @@ import {
   outputAssert,
   outputHex32,
   OutputProtocolError,
-  parseOutputJSON,
+  parseOutputJSONWithOwnedRecords as parseOutputJSON,
   parseOutputPurchaseEnvelope
 } from '@bsv/sdk'
 import type { PrivatePurchaseCaller } from './PrivatePurchasePorts.js'

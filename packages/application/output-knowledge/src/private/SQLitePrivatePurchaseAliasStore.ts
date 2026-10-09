@@ -1,6 +1,6 @@
 import {
   canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
-  inspectOutputJSONEncoding,
+  inspectOutputJSONEncodingWithOwnedRecords as inspectOutputJSONEncoding,
   Hash,
   Utils,
   parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
@@ -13,7 +13,7 @@ import {
   outputString,
   outputU64,
   ownOutputJSONWithInlineRecords as ownOutputJSON,
-  parseOutputJSON,
+  parseOutputJSONWithOwnedRecords as parseOutputJSON,
   type OutputPurchaseEnvelope,
   type OutputSignedPurchaseTerms
 } from '@bsv/sdk'

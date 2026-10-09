@@ -1,14 +1,14 @@
 import {
-  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,
   outputIdentity,
-  outputPacketDigest,
+  outputPacketDigestWithInlineStrings as outputPacketDigest,
   outputString,
   OutputProtocolError,
-  parseOutputJSON,
-  parseOutputPurchasePrepare,
+  parseOutputJSONWithOwnedRecords as parseOutputJSON,
+  parseOutputPurchasePrepareWithInlineStrings as parseOutputPurchasePrepare,
   type OutputPurchasePrepare
 } from '@bsv/sdk'
 import {
