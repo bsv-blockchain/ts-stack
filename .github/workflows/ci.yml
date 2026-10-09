@@ -1192,7 +1192,7 @@ jobs:
     services:
       # The Knex storage suites also run against Postgres (RUNPOSTGRES).
       postgres:
-        image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef # 17-alpine
+        image: public.ecr.aws/docker/library/postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef # 17-alpine
         env:
           POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         ports:

@@ -87,7 +87,7 @@ jobs:
       matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     services:
       mysql:
-        image: mysql@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
+        image: public.ecr.aws/docker/library/mysql@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
         env:
           MYSQL_DATABASE: container_contract
           MYSQL_ROOT_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
@@ -99,7 +99,7 @@ jobs:
           --health-timeout 5s
           --health-retries 30
       mongo:
-        image: mongo@sha256:5351bff2b5d1563e3fa603a74b9be85ef9323e10aeb0b45cea933a93876e77fd
+        image: public.ecr.aws/docker/library/mongo@sha256:5351bff2b5d1563e3fa603a74b9be85ef9323e10aeb0b45cea933a93876e77fd
         ports:
           - 27017:27017
         options: >-

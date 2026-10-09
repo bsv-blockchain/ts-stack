@@ -3,7 +3,7 @@ import {
   inspectOutputJSONEncodingWithOwnedRecords as inspectOutputJSONEncoding,
   Hash,
   Utils,
-  parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
+  parseOutputPurchaseSubmitWithOwnedRecords as parseOutputPurchaseSubmit,
   type OutputPurchaseSubmit,
   createClosedOutputObjectValidator,
   decodeOutputBytes,

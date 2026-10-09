@@ -235,10 +235,11 @@ No migration is required. Hosted qualification remains separate.
 
 ### Added (3.3 source candidate)
 
-- Select the existing owned-record lexical JSON parser for explicitly selected
-  schema text/byte inputs. Preserve complete fresh syntax, duplicate-key, Unicode,
-  safe-integer and resource checks; ordinary/default parsers and declarations
-  remain unchanged. No input, graph or verdict is cached.
+- Add explicit `WithOwnedRecords` purchase and release parser companions for
+  server bindings. Portable `WithInlineStrings` text/byte parsing retains the
+  general parser. Preserve complete fresh syntax, decoded duplicates, Unicode,
+  safe integers, resource bounds, intrinsic packet checks and all existing APIs.
+  No input, graph or authority verdict is cached.
 
 - Compose nested policy, STEAK and release grammar checks after complete fresh parent ownership; keep embedded-text parsing, every bound/refusal and intrinsic/authority check, original APIs and no input/verdict cache or new root export.
 

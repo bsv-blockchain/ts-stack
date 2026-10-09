@@ -406,3 +406,28 @@ it('keeps child results independent and applies complete root bounds before rele
     expect(() => parseOutputReleaseEvidenceWithInlineStrings(represented)).toThrow()
   }
 })
+
+import { parseOutputReleaseEvidenceWithOwnedRecords } from '../OutputReleaseProtocol.js'
+
+test('explicit encoded-record release parsing keeps intrinsic arithmetic and fresh ownership', () => {
+  for (const value of [local(), mined(), accepted().evidence]) {
+    const text = canonicalOutputJSON(value)
+    for (const input of [value, text, new TextEncoder().encode(text)]) {
+      const first = parseOutputReleaseEvidenceWithOwnedRecords(input),
+        second = parseOutputReleaseEvidenceWithOwnedRecords(input)
+      expect(first).toStrictEqual(parseOutputReleaseEvidence(input))
+      expect(second).toStrictEqual(first)
+      expect(first.chain).not.toBe(second.chain)
+      first.chain.network = 'changed'
+      expect(second.chain.network).toBe(chain.network)
+    }
+  }
+  const insufficient = mined()
+  insufficient.blockEvidence.tipHeight = '101'
+  expect(() => parseOutputReleaseEvidenceWithOwnedRecords(JSON.stringify(insufficient))).toThrow(
+    'confirmation depth'
+  )
+  expect(() => parseOutputReleaseEvidenceWithOwnedRecords('{"chain":{},"\\u0063hain":{}}')).toThrow(
+    'Duplicate'
+  )
+})

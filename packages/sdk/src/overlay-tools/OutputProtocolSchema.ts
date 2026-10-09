@@ -176,12 +176,12 @@ export function normalizedWithInlineStrings<T>(
   schema: Schema<T>,
   maximumBytes = 4194304
 ): T {
-  // Encoded inputs select complete fresh owned-record lexical traversal.
+  // Portable text/byte inputs retain the general parser.
   const limits =
     maximumBytes === OUTPUT_JSON_LIMITS.bytes ? OUTPUT_JSON_LIMITS : { bytes: maximumBytes }
   const value =
     typeof input === 'string' || input instanceof Uint8Array
-      ? parseOutputJSONWithOwnedRecords(input, limits)
+      ? parseOutputJSON(input, limits)
       : ownOutputJSONWithInlineStrings(input, limits).value
   return schema(value)
 }
@@ -193,4 +193,22 @@ export function normalizedWithInlineStrings<T>(
 export function fromOwnedParent<T>(parse: Schema<T>, child: Schema<T>): Schema<T> {
   return value =>
     typeof value === 'string' || value instanceof Uint8Array ? parse(value) : child(value)
+}
+
+/** @internal Explicit encoded-record ownership for server packet companions.
+ * Every call traverses and bounds the complete current input. Portable schema
+ * companions keep their general text parser; object ownership is identical.
+ * This stores no input, graph, secret or validation/authority result. */
+export function normalizedWithOwnedRecords<T>(
+  input: unknown,
+  schema: Schema<T>,
+  maximumBytes = 4194304
+): T {
+  const limits =
+    maximumBytes === OUTPUT_JSON_LIMITS.bytes ? OUTPUT_JSON_LIMITS : { bytes: maximumBytes }
+  const value =
+    typeof input === 'string' || input instanceof Uint8Array
+      ? parseOutputJSONWithOwnedRecords(input, limits)
+      : ownOutputJSONWithInlineStrings(input, limits).value
+  return schema(value)
 }

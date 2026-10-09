@@ -241,3 +241,9 @@ export function validateOutputReleaseEvidenceOfOwnedParent(input: unknown): Outp
   }
   return result
 }
+
+/** Explicit complete encoded-record ownership and intrinsic release checks.
+ * This is representation evidence; signatures, custody and current authority
+ * require independent verification on every operation. */
+export const parseOutputReleaseEvidenceWithOwnedRecords = (input: unknown): OutputReleaseEvidence =>
+  s.normalizedWithOwnedRecords(input, validateOutputReleaseEvidenceOfOwnedParent)

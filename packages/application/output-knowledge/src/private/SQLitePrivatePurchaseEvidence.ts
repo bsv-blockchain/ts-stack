@@ -8,7 +8,7 @@ import {
   outputAssert,
   outputPacketDigestWithInlineStrings as outputPacketDigest,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,
-  parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
+  parseOutputPurchaseSubmitWithOwnedRecords as parseOutputPurchaseSubmit,
   Utils,
   type OutputJSONObject,
   type OutputPurchaseSubmit

@@ -974,3 +974,42 @@ it('owns opt-in encoded input directly while retaining complete ordinary parser 
   for (const suffix of ['\n', '\r', '\u2028', '\u2029'])
     expect(() => s.requestId(valid + suffix)).toThrow()
 })
+
+test('explicit encoded-record schema ownership preserves complete refusal order and fresh graphs', () => {
+  const outcome = (parse: typeof s.normalized, input: unknown, maximumBytes?: number) => {
+    try {
+      return { value: parse(input, s.json, maximumBytes) }
+    } catch (error) {
+      const e = error as Error & { code: string }
+      return { name: e.name, code: e.code, message: e.message }
+    }
+  }
+  for (const text of [
+    'null',
+    '1e3',
+    '-0',
+    '{"rows":[{"constructor":"é😀"}]}',
+    '{"a":1,"\\u0061":2}',
+    '{"x":"\\uD800"}',
+    '{"x":1} trailing',
+    '[1,]',
+    '{"x":9007199254740992}'
+  ]) {
+    for (const input of [text, new TextEncoder().encode(text)]) {
+      expect(outcome(s.normalizedWithOwnedRecords, input)).toStrictEqual(
+        outcome(s.normalizedWithInlineStrings, input)
+      )
+      expect(outcome(s.normalizedWithOwnedRecords, input, 3)).toStrictEqual(
+        outcome(s.normalizedWithInlineStrings, input, 3)
+      )
+    }
+  }
+  const source = '{"rows":[{"constructor":"unchanged"}]}'
+  const first = s.normalizedWithOwnedRecords(source, s.json) as { rows: { constructor: string }[] }
+  const second = s.normalizedWithOwnedRecords(source, s.json)
+  owned(first)
+  owned(second)
+  first.rows[0].constructor = 'changed'
+  expect(second).toStrictEqual(s.normalizedWithInlineStrings(source, s.json))
+  expect(first).not.toBe(second)
+})

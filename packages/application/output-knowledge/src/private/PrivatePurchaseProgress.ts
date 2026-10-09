@@ -9,7 +9,7 @@ import {
   outputIdentity,
   outputString,
   outputU64,
-  parseOutputPurchaseEnvelopeWithInlineStrings as parseOutputPurchaseEnvelope,
+  parseOutputPurchaseEnvelopeWithOwnedRecords as parseOutputPurchaseEnvelope,
   verifyOutputPurchaseEnvelopeWithInlineStrings as verifyOutputPurchaseEnvelope,
   type OutputPurchaseEnvelope,
   type OutputPurchaseResult,

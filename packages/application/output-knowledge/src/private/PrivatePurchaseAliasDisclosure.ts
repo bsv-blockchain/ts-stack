@@ -4,7 +4,7 @@ import {
   outputHex32,
   OutputProtocolError,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,
-  parseOutputPurchaseEnvelopeWithInlineStrings as parseOutputPurchaseEnvelope
+  parseOutputPurchaseEnvelopeWithOwnedRecords as parseOutputPurchaseEnvelope
 } from '@bsv/sdk'
 import type { PrivatePurchaseCaller } from './PrivatePurchasePorts.js'
 import type { ProtectedLedgerGuard } from './ProtectedLedgerCodec.js'

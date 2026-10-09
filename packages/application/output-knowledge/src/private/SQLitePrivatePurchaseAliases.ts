@@ -11,7 +11,7 @@ import {
   outputU64,
   ownOutputJSONWithCountedRecords as ownOutputJSON,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,
-  parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
+  parseOutputPurchaseSubmitWithOwnedRecords as parseOutputPurchaseSubmit,
   type OutputJSONObject,
   type OutputPurchaseSubmit
 } from '@bsv/sdk'

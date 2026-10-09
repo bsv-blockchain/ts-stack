@@ -98,3 +98,5 @@ export {
 } from './OutputReleaseProtocol.js'
 
 export { ownOutputJSONWithCountedRecords } from './OutputProtocolJSON.js'
+
+export { parseOutputReleaseEvidenceWithOwnedRecords } from './OutputReleaseProtocol.js'

@@ -1222,3 +1222,85 @@ it('keeps sibling policies independent and checks the complete envelope before c
   }
   expect(verifyOutputPurchaseEnvelopeWithInlineStrings(f.envelope, f.terms, txid)).toEqual(owned)
 })
+
+import * as encodedPurchase from '../OutputPurchaseProtocol.js'
+
+test('explicit encoded-record purchase parsers retain all packet checks and independent ownership', () => {
+  const f = fixture()
+  const cases: readonly [(input: unknown) => unknown, (input: unknown) => unknown, unknown][] = [
+    [
+      encodedPurchase.parseOutputPurchasePrepareWithOwnedRecords,
+      parseOutputPurchasePrepare,
+      f.request
+    ],
+    [
+      encodedPurchase.parseOutputPurchaseSubmitWithOwnedRecords,
+      parseOutputPurchaseSubmit,
+      { version: 1, acquisitionId: f.body.acquisitionId, txid, beef: 'AA==' }
+    ],
+    [encodedPurchase.parseOutputPurchaseTermsWithOwnedRecords, parseOutputPurchaseTerms, f.terms],
+    [
+      encodedPurchase.parseOutputPurchaseEnvelopeWithOwnedRecords,
+      parseOutputPurchaseEnvelope,
+      f.envelope
+    ],
+    [
+      encodedPurchase.parseOutputPotatoesWithOwnedRecords,
+      parseOutputPotatoes,
+      f.envelope.result.potatoes
+    ],
+    [
+      encodedPurchase.parseOutputPurchaseCommitmentBindingWithOwnedRecords,
+      parseOutputPurchaseCommitmentBinding,
+      {
+        profile: 'full-purchase-commitment-v1',
+        domainProfile: f.body.domainProfile,
+        purchaseCommitment: '77'.repeat(32)
+      }
+    ]
+  ]
+  const outcome = (parse: (input: unknown) => unknown, input: unknown) => {
+    try {
+      return { value: parse(input) }
+    } catch (error) {
+      const e = error as Error & { code: string }
+      return { name: e.name, code: e.code, message: e.message }
+    }
+  }
+  for (const [explicit, ordinary, supplied] of cases) {
+    const text = canonicalOutputJSON(supplied)
+    for (const input of [supplied, text, new TextEncoder().encode(text)]) {
+      const first = explicit(input),
+        second = explicit(input)
+      expect(first).toStrictEqual(ordinary(input))
+      expect(second).toStrictEqual(first)
+      expect(first).not.toBe(second)
+      expect(Object.getPrototypeOf(first)).toBeNull()
+    }
+    for (const malformed of [
+      text + ' trailing',
+      '{"version":1,"\\u0076ersion":1}',
+      '{"x":"\\uD800"}'
+    ]) {
+      expect(outcome(explicit, malformed)).toStrictEqual(outcome(ordinary, malformed))
+    }
+  }
+  expect(() =>
+    encodedPurchase.parseOutputPurchaseTermsWithOwnedRecords(
+      JSON.stringify({ ...f.terms, body: { ...f.body, recoveryUntil: '86499' } })
+    )
+  ).toThrow('recovery promise')
+  expect(() =>
+    encodedPurchase.parseOutputPurchaseEnvelopeWithOwnedRecords(
+      JSON.stringify({ ...f.envelope, releaseEvidence: { ...f.evidence, txid: 'ff'.repeat(32) } })
+    )
+  ).toThrow('release evidence differ')
+  const owned = encodedPurchase.parseOutputPurchasePrepareWithOwnedRecords(
+    JSON.stringify(f.request)
+  )
+  owned.listing.chain.network = 'changed'
+  expect(
+    encodedPurchase.parseOutputPurchasePrepareWithOwnedRecords(JSON.stringify(f.request)).listing
+      .chain.network
+  ).toBe(chain.network)
+})

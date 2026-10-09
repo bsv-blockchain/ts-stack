@@ -8,7 +8,7 @@ import {
   outputString,
   OutputProtocolError,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,
-  parseOutputPurchasePrepareWithInlineStrings as parseOutputPurchasePrepare,
+  parseOutputPurchasePrepareWithOwnedRecords as parseOutputPurchasePrepare,
   type OutputPurchasePrepare
 } from '@bsv/sdk'
 import {

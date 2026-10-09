@@ -8105,3 +8105,13 @@ remain unchanged. These imports create no saved input, parsed graph, shape,
 secret, authority, currentness or validation verdict. Runtime and full mutation
 qualification on the published source remain required; static checks establish
 neither a speedup nor checkpoint readiness.
+
+The server representation companions explicitly select complete encoded-record
+ownership through `WithOwnedRecords` purchase and release parsers. Portable
+`WithInlineStrings` schema text and UTF-8 byte inputs retain the general parser;
+object input ownership and all existing APIs remain available. The companions
+reuse the fixed packet grammar and every intrinsic check, without caching input,
+normalized graphs, secrets or authority decisions. Server import selection changes
+neither wire data nor persistence. This preserves the registered buyer and wallet
+browser dependency boundaries; hosted runtime and complete mutation qualification
+remain required before checkpoint acceptance.

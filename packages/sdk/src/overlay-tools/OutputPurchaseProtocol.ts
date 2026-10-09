@@ -712,3 +712,61 @@ function envelopeWithInlineStrings(): s.Schema<OutputPurchaseEnvelope> {
   )
   return envelopeWithInlineStringsGrammar
 }
+
+/** Explicit complete encoded-record ownership. Object inputs still receive fresh
+ * counted ownership; signatures, custody and authority remain separate. */
+export const parseOutputPurchasePrepareWithOwnedRecords = (input: unknown): OutputPurchasePrepare =>
+  s.normalizedWithOwnedRecords(input, prepare)
+export const parseOutputPurchaseSubmitWithOwnedRecords = (input: unknown): OutputPurchaseSubmit =>
+  s.normalizedWithOwnedRecords(input, submit)
+export const parseOutputPotatoesWithOwnedRecords = (input: unknown): OutputSignedPotatoes =>
+  s.normalizedWithOwnedRecords(input, potatoesWithInlineStrings())
+export const parseOutputPurchaseCommitmentBindingWithOwnedRecords = (
+  input: unknown
+): OutputPurchaseCommitmentBinding => s.normalizedWithOwnedRecords(input, commitmentBinding)
+
+/** Explicit complete encoded-record ownership with the same intrinsic packet
+ * checks. No signature, custody or authority verdict is implied or retained. */
+export function parseOutputPurchaseTermsWithOwnedRecords(
+  input: unknown
+): OutputSignedPurchaseTerms {
+  const packet = s.normalizedWithOwnedRecords(input, signedTermsWithInlineStrings())
+  outputAssert(
+    outputU64(packet.body.recoveryUntil) >= outputU64(packet.body.purchaseUntil) + 86400n,
+    'Purchase recovery promise is less than one day'
+  )
+  return packet
+}
+
+/** Explicit complete encoded-record ownership with the same intrinsic packet
+ * checks. No signature, custody or authority verdict is implied or retained. */
+export function parseOutputPurchaseEnvelopeWithOwnedRecords(
+  input: unknown
+): OutputPurchaseEnvelope {
+  const parsed = s.normalizedWithOwnedRecords(input, envelopeWithInlineStrings())
+  const response = parsed.result
+  outputAssert(
+    Object.hasOwn(parsed, 'releaseEvidence') === (response.status === 'delivered'),
+    'Release evidence belongs exactly to delivered purchases'
+  )
+  outputAssert(
+    parsed.currentAlias === undefined || 'txid' in response,
+    'A current alias requires a reserved purchase'
+  )
+  if (response.status === 'delivered') {
+    const body = response.potatoes.body,
+      evidence = parsed.releaseEvidence!
+    outputAssert(
+      body.acquisitionId === response.acquisitionId &&
+        body.txid === response.txid &&
+        body.purchaseCommitment === response.purchaseCommitment &&
+        body.recoveryUntil === response.recoveryUntil &&
+        evidence.txid === response.txid &&
+        canonicalOutputJSONWithInlineStrings(body.releasePolicy) ===
+          canonicalOutputJSONWithInlineStrings(evidence.policy) &&
+        body.evidenceDigest === outputPacketDigestWithInlineStrings('release-evidence', evidence),
+      'Private result and release evidence differ'
+    )
+  }
+  return parsed
+}

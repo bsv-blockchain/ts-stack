@@ -43,6 +43,16 @@ releases while its digest lets Scorecard verify pinning. The inventory's
 registry mirrors remain in `references` and must be resolved and compared
 during review. This avoids making routine dependency discovery depend on public
 ECR's unauthenticated rate limits without weakening multi-registry verification.
+Runtime builds use Docker's official `public.ecr.aws/docker/library/node` mirror
+at the identical governed digest. CI's Postgres, MySQL and Mongo service images
+also use the official public mirror at their existing immutable digests. Review
+must verify the index bytes and selected Linux/amd64 manifest and configuration
+against those identities; a registry route change does not authorize an image
+upgrade. Docker Hub remains the dependency-discovery source. These build and
+qualification routes avoid the observed Docker Hub pull limits and authentication
+timeouts without adding credentials or changing service health checks, budgets,
+platforms or release/deployment behavior.
+
 Repository health requires the discovery tag and digest, the registry's
 expected version and digest, and every digest-only release `FROM` instruction
 to reconcile in one change. Runtime Dockerfiles deliberately omit the tag

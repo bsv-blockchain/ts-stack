@@ -10,7 +10,7 @@ import {
   outputString,
   outputU64,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,
-  parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
+  parseOutputPurchaseSubmitWithOwnedRecords as parseOutputPurchaseSubmit,
   type OutputPurchaseEnvelope,
   type OutputSignedPurchaseTerms,
   type OutputPurchaseSubmit
