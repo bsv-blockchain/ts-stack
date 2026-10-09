@@ -10,8 +10,8 @@ import {
   outputPacketDigest,
   outputU64,
   ownOutputJSONWithInlineStrings as ownOutputJSON,
-  parseOutputJSONWithStringRecords as parseOutputJSON,
-  parseOutputPurchaseSubmit,
+  parseOutputJSON,
+  parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
   type OutputJSONObject,
   type OutputPurchaseSubmit
 } from '@bsv/sdk'

@@ -368,10 +368,4 @@ original tests, public signatures and persistence formats are unchanged. The
 bindings provide no saved shape, input, secret, authorization or currentness
 verdict; original property and complete mutation qualification remain required.
 
-Purchase-contract ownership and canonical comparisons explicitly select the same
-fresh-copy SDK JSON companions. Native alias-custody and alias-admission records
-select the bounded string-record parser already used by the protected ledger.
-Every call still validates and owns its input; retained shapes, secrets and
-authority verdicts are never cached. Public signatures, stored bytes, framing and
-original tests remain unchanged. Hosted property and mutation qualification is
-required before treating these bindings as fully qualified.
+Purchase-contract ownership and canonical comparisons select the existing fresh-copy SDK JSON companions. Native purchase contract and alias parsers explicitly select the additive SDK prepare, terms and submit companions for fresh one-pass ownership of object inputs; text and bytes retain the general bounded parser. Ordinary purchase parsing, general SDK normalization and packet digests retain their existing paths. Native alias-custody and alias-admission mixed records use the general parser. Every call independently validates and owns its input; no shape, secret or authority verdict is cached. Public signatures, wire encodings, stored bytes, framing and original tests remain unchanged. Hosted property and complete mutation qualification remain required.

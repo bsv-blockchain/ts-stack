@@ -967,3 +967,5 @@ caller graph nor a normalized value, shape or verdict is retained between calls.
 A string input remains a string value; incoming JSON text must use a parser to
 preserve duplicate-key evidence. Ordinary `ownOutputJSON` is unchanged. Schemas,
 authorization and currentness checks remain the responsibility of each operation.
+
+`parseOutputPurchasePrepareWithInlineStrings`, `parseOutputPurchaseTermsWithInlineStrings` and `parseOutputPurchaseSubmitWithInlineStrings` explicitly select the existing fresh owned-copy implementation for object inputs. Terms retain the intrinsic recovery-deadline check; authentication and domain validation remain separate. Text and bytes retain the general parser. Ordinary purchase parsers, general normalization and digests keep their existing paths. The internal schema companion is also an additive deep-module export. Existing signatures, encodings and limits remain unchanged; no input, normalized value or verdict is cached. Native contract and alias bindings opt in; browser callers retain ordinary parsing by default.

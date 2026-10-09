@@ -13,6 +13,7 @@ import {
 import {
   OUTPUT_JSON_LIMITS,
   ownOutputJSONValue,
+  ownOutputJSONWithInlineStrings,
   parseOutputJSON,
   type OutputJSON,
   type OutputJSONObject
@@ -166,4 +167,19 @@ export function sortedUnique<T>(values: readonly T[], compare: (a: T, b: T) => n
   for (let i = 1; i < values.length; i++) {
     outputAssert(compare(values[i - 1], values[i]) < 0, 'Expected sorted unique list')
   }
+}
+
+/** Purchase object ownership is fresh and bounded; text/bytes retain the general parser. */
+export function normalizedWithInlineStrings<T>(
+  input: unknown,
+  schema: Schema<T>,
+  maximumBytes = 4194304
+): T {
+  const limits =
+    maximumBytes === OUTPUT_JSON_LIMITS.bytes ? OUTPUT_JSON_LIMITS : { bytes: maximumBytes }
+  const value =
+    typeof input === 'string' || input instanceof Uint8Array
+      ? parseOutputJSON(input, limits)
+      : ownOutputJSONWithInlineStrings(input, limits).value
+  return schema(value)
 }

@@ -348,3 +348,22 @@ export function verifyOutputPurchaseCommitmentEnvelope(
     binding.purchaseCommitment
   )
 }
+
+/** Explicit fresh owned-copy parsing; ordinary purchase parsers are unchanged. */
+export const parseOutputPurchasePrepareWithInlineStrings = (
+  input: unknown
+): OutputPurchasePrepare => s.normalizedWithInlineStrings(input, prepare)
+export const parseOutputPurchaseSubmitWithInlineStrings = (input: unknown): OutputPurchaseSubmit =>
+  s.normalizedWithInlineStrings(input, submit)
+
+/** Retains the intrinsic recovery promise; authentication remains separate. */
+export function parseOutputPurchaseTermsWithInlineStrings(
+  input: unknown
+): OutputSignedPurchaseTerms {
+  const packet = s.normalizedWithInlineStrings(input, signedTerms)
+  outputAssert(
+    outputU64(packet.body.recoveryUntil) >= outputU64(packet.body.purchaseUntil) + 86400n,
+    'Purchase recovery promise is less than one day'
+  )
+  return packet
+}

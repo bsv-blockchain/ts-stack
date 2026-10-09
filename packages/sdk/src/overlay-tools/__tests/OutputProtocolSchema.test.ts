@@ -612,3 +612,48 @@ test('value-only normalization retains canonical byte fences, refusal order and 
   expect(reads).toBe(0)
   expect(() => s.normalized({ text: '\uD800' }, s.json)).toThrow('Unpaired JSON surrogate')
 })
+
+describe('Explicit fresh-owned schema normalization', () => {
+  it('owns every nested node and applies the supplied schema only after validation', () => {
+    const shared = { text: 'é😀' },
+      input = { left: shared, right: shared }
+    let calls = 0
+    const schema = (value: unknown) => {
+      calls++
+      return value as typeof input
+    }
+    const result = s.normalizedWithInlineStrings(input, schema)
+    expect(calls).toBe(1)
+    expect(result).toStrictEqual(s.normalized(input, schema))
+    expect(calls).toBe(2)
+    expect(result.left).not.toBe(result.right)
+    expect(result.left).not.toBe(shared)
+    owned(result)
+    result.left.text = 'changed'
+    expect(result.right.text).toBe('é😀')
+    expect(shared.text).toBe('é😀')
+    expect(() => s.normalizedWithInlineStrings({ text: '\uD800' }, schema)).toThrow()
+    expect(calls).toBe(2)
+  })
+  it('retains caller byte limits and text/byte duplicate-key refusal', () => {
+    const value = { a: 'x' }
+    expect(s.normalizedWithInlineStrings(value, s.json, 9)).toStrictEqual(
+      s.normalized(value, s.json, 9)
+    )
+    expect(() => s.normalizedWithInlineStrings(value, s.json, 8)).toThrow()
+    for (const encoded of ['{"a":1,"a":2}', new TextEncoder().encode('{"a":1,"a":2}')]) {
+      expect(() => s.normalizedWithInlineStrings(encoded, s.json)).toThrow()
+    }
+    expect(s.normalizedWithInlineStrings('{"a":"x"}', s.json, 9)).toStrictEqual(
+      s.normalized(value, s.json, 9)
+    )
+  })
+  it('retains the exact default byte boundary', () => {
+    const length = 4194304 - 11
+    const result = s.normalizedWithInlineStrings({ text: 'x'.repeat(length) }, s.json) as {
+      text: string
+    }
+    expect(result.text.length).toBe(length)
+    expect(() => s.normalizedWithInlineStrings({ text: 'x'.repeat(length + 1) }, s.json)).toThrow()
+  })
+})

@@ -11,9 +11,12 @@ import {
   parseOutputPotatoes,
   parseOutputPurchaseEnvelope,
   parseOutputPurchasePrepare,
+  parseOutputPurchasePrepareWithInlineStrings,
   parseOutputPurchaseRecover,
   parseOutputPurchaseSubmit,
+  parseOutputPurchaseSubmitWithInlineStrings,
   parseOutputPurchaseTerms,
+  parseOutputPurchaseTermsWithInlineStrings,
   PrivateKey,
   signOutputPacket,
   verifyOutputPurchaseEnvelope,
@@ -864,5 +867,60 @@ describe('original nested canonical ownership from noncanonical raw parent JSON'
     expect(original.indexOf('z_unknown')).toBeLessThan(original.indexOf('a_unknown'))
     expect(() => parseOutputPurchaseTerms(original)).toThrow('a_unknown')
     expect(() => parseOutputPurchaseTerms(new TextEncoder().encode(original))).toThrow('a_unknown')
+  })
+})
+
+describe('Explicit fresh-owned purchase parser companions', () => {
+  it('retains prepare values and independent ownership for object, text and byte inputs', () => {
+    const { request } = fixture(),
+      encoded = canonicalOutputJSON(request)
+    const copied = parseOutputPurchasePrepareWithInlineStrings(request)
+    expect(copied).toStrictEqual(parseOutputPurchasePrepare(request))
+    expect(Object.getPrototypeOf(copied)).toBeNull()
+    expect(Object.getPrototypeOf(copied.listing.chain)).toBeNull()
+    expect(parseOutputPurchasePrepareWithInlineStrings(encoded)).toStrictEqual(copied)
+    expect(
+      parseOutputPurchasePrepareWithInlineStrings(new TextEncoder().encode(encoded))
+    ).toStrictEqual(copied)
+    copied.listing.chain.network = 'changed-copy'
+    expect(request.listing.chain.network).toBe(chain.network)
+    expect(parseOutputPurchasePrepareWithInlineStrings(request).listing.chain.network).toBe(
+      chain.network
+    )
+  })
+  it('retains terms deadline arithmetic and refuses closed-schema additions afresh', () => {
+    const { terms } = fixture()
+    expect(parseOutputPurchaseTermsWithInlineStrings(terms)).toStrictEqual(
+      parseOutputPurchaseTerms(terms)
+    )
+    const shortened = { ...terms, body: { ...terms.body, recoveryUntil: '86499' } }
+    expect(() => parseOutputPurchaseTermsWithInlineStrings(shortened)).toThrow(
+      'Purchase recovery promise is less than one day'
+    )
+    const extended = { ...terms, body: { ...terms.body, recoveryUntil: '86501' } }
+    expect(parseOutputPurchaseTermsWithInlineStrings(extended).body.recoveryUntil).toBe('86501')
+    expect(() => parseOutputPurchaseTermsWithInlineStrings({ ...terms, extra: true })).toThrow()
+    const copy = parseOutputPurchaseTermsWithInlineStrings(terms)
+    copy.body.domainEvidence.bytes = 'AQ=='
+    expect(terms.body.domainEvidence.bytes).toBe('AA==')
+  })
+  it('retains submit bytes and refuses accessors without observing them', () => {
+    const { body } = fixture(),
+      input = { version: 1, acquisitionId: body.acquisitionId, txid, beef: 'AA==' }
+    expect(parseOutputPurchaseSubmitWithInlineStrings(input)).toStrictEqual(
+      parseOutputPurchaseSubmit(input)
+    )
+    let reads = 0
+    const supplied = Object.defineProperty({ ...input }, 'beef', {
+      enumerable: true,
+      get() {
+        reads++
+        return 'AA=='
+      }
+    })
+    expect(() => parseOutputPurchaseSubmitWithInlineStrings(supplied)).toThrow()
+    expect(reads).toBe(0)
+    expect(() => parseOutputPurchaseSubmitWithInlineStrings({ ...input, beef: 'A===' })).toThrow()
+    expect(parseOutputPurchaseSubmitWithInlineStrings(input).beef).toBe('AA==')
   })
 })
