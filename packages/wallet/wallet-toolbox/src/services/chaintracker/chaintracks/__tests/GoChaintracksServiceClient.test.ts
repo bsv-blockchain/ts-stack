@@ -126,7 +126,8 @@ describe('GoChaintracksServiceClient', () => {
 
     for (const [alias, chain] of [
       ['scalingtestnet', 'stn'],
-      ['teranodescalingtestnet', 'tstn']
+      ['teranodescalingtestnet', 'tstn'],
+      ['regtest', 'regtest']
     ] as const) {
       const aliasClient = new GoChaintracksServiceClient(chain, 'https://chaintracks.example/v2', {
         fetch: jest.fn(async () => jsonResponse(alias)) as unknown as typeof fetch

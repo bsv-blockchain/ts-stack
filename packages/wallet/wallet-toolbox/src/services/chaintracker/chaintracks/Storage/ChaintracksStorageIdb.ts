@@ -291,7 +291,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
       ...header,
       headerId: 0,
       previousHeaderId: null,
-      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits)),
+      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits, this.chain)),
       isChainTip: true,
       isActive: true
     }
@@ -457,7 +457,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
 
       // We have an acceptable new live header...and live headers has an active chain tip.
 
-      const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits))
+      const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits, this.chain))
 
       r.isActiveTip = isMoreWork(chainWork, r.priorTip.chainWork)
 

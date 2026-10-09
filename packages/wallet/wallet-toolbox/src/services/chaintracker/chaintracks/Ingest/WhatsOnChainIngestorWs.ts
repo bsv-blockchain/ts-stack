@@ -209,6 +209,7 @@ export async function WocHeadersBulkListener(
     case 'stn':
     case 'ttn':
     case 'tstn':
+    case 'regtest':
     case 'mock':
       throw new Error(`WocHeadersBulkListener does not support '${chain}' chain.`)
   }
@@ -412,6 +413,7 @@ export async function WocHeadersLiveListener(
     case 'stn':
     case 'ttn':
     case 'tstn':
+    case 'regtest':
     case 'mock':
       throw new Error(`WocHeadersLiveListener does not support '${chain}' chain.`)
   }

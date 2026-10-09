@@ -17,7 +17,8 @@ describe('ChainTracks genesis headers', () => {
     test: '000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943',
     stn: '6b38bdbcd73a19f7889d23e1fa6166a9de71affceca60ca3bb1b28af8135c594',
     ttn: '000000000499eabba0a88f5b3747231c74b9191c1a4a04b2c2ea817976b7776d',
-    tstn: '000000005d221c0e023cb56b5682cf094f32cd959958b40bc931e5797cae706c'
+    tstn: '000000005d221c0e023cb56b5682cf094f32cd959958b40bc931e5797cae706c',
+    regtest: '0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206'
   }
 
   test.each(Object.entries(expected) as Array<[Exclude<Chain, 'mock'>, string]>)(
@@ -28,7 +29,7 @@ describe('ChainTracks genesis headers', () => {
       expect(blockHash(bytes)).toBe(hash)
       expect(genesisHeader(chain).hash).toBe(hash)
       expect(() => validateGenesisHeader(Uint8Array.from(bytes), chain)).not.toThrow()
-      expect(() => validateHeaderProofOfWork(genesisHeader(chain))).not.toThrow()
+      expect(() => validateHeaderProofOfWork(genesisHeader(chain), chain)).not.toThrow()
     }
   )
 

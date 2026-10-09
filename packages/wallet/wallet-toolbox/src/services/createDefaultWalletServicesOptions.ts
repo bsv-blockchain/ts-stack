@@ -4,7 +4,15 @@ import { randomBytesHex } from '../utility/utilityHelpers'
 import { ChaintracksClientApi } from './chaintracker/chaintracks/Api/ChaintracksClientApi'
 import { ChaintracksServiceClient } from './chaintracker/chaintracks/ChaintracksServiceClient'
 import { GoChaintracksServiceClient } from './chaintracker/chaintracks/GoChaintracksServiceClient'
-import { publicArcadeUrl, stnArcadeUrl, stnChaintracksUrl, tstnArcadeUrl, tstnChaintracksUrl } from './networkConfig'
+import {
+  publicArcadeUrl,
+  regtestArcadeUrl,
+  regtestChaintracksUrl,
+  stnArcadeUrl,
+  stnChaintracksUrl,
+  tstnArcadeUrl,
+  tstnChaintracksUrl
+} from './networkConfig'
 
 function stripTrailingSlash(value: string): string {
   let end = value.length
@@ -71,6 +79,8 @@ export function createDefaultChaintracksClient(chain: Exclude<Chain, 'mock'>): C
       return configuredChaintracksClient(chain, stnChaintracksUrl())
     case 'tstn':
       return configuredChaintracksClient(chain, tstnChaintracksUrl())
+    case 'regtest':
+      return configuredChaintracksClient(chain, regtestChaintracksUrl())
   }
 }
 
@@ -203,6 +213,9 @@ export function arcadeDefaultUrl(chain: Chain): string | undefined {
     case 'tstn':
       // Private per-deployment endpoint supplied via TSTN_ARCADE_URL (undefined when unset).
       return tstnArcadeUrl()
+    case 'regtest':
+      // Private per-deployment endpoint supplied via REGTEST_ARCADE_URL (undefined when unset).
+      return regtestArcadeUrl()
     case 'mock':
       return undefined
   }
@@ -221,6 +234,9 @@ export function arcDefaultUrl(chain: Chain): string {
     case 'tstn':
       // Private per-deployment endpoint supplied via TSTN_ARCADE_URL ('' when unset).
       return tstnArcadeUrl() ?? ''
+    case 'regtest':
+      // Private per-deployment endpoint supplied via REGTEST_ARCADE_URL ('' when unset).
+      return regtestArcadeUrl() ?? ''
     case 'mock':
       return ''
   }

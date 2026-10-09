@@ -133,6 +133,12 @@ describe('BulkFileDataManager metadata boundaries', () => {
     expect(() => selectBulkHeaderFiles([short, file({ fileHash: FILE_HASH_B })], 'main', 1)).toThrow('unambiguous')
   })
 
+  test('never selects a file labelled with another chain, so regtest rules cannot reach a mainnet tracker', () => {
+    const regtestFile = file({ chain: 'regtest', fileName: 'regtestNet_0.headers' })
+    expect(selectBulkHeaderFiles([regtestFile], 'main', 1)).toEqual([])
+    expect(selectBulkHeaderFiles([regtestFile], 'regtest', 1)).toEqual([expect.objectContaining({ chain: 'regtest' })])
+  })
+
   test.each([
     ['options', null],
     ['chain', { chain: 'invalid', maxPerFile: 1 }],

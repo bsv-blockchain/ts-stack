@@ -41,7 +41,7 @@ export class BHServiceClient implements ChaintracksClientApi {
   apiKey: string
 
   constructor(chain: Chain, url: string, apiKey: string, options: ChaintracksServiceClientOptions = {}) {
-    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'mock'].includes(chain)) {
+    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'].includes(chain)) {
       throw new Error('chain must be a supported Chain value.')
     }
     if (typeof apiKey !== 'string' || apiKey.length > 8192 || /[\r\n]/.test(apiKey)) {
@@ -306,7 +306,7 @@ export class BHServiceClient implements ChaintracksClientApi {
       if (blockHash(header) !== header.hash.toLowerCase()) {
         throw new Error('computed hash does not match the supplied hash')
       }
-      validateHeaderProofOfWork(header)
+      validateHeaderProofOfWork(header, this.chain)
     } catch (error) {
       throw new Error(
         `Block Headers Service returned an invalid ${name}: ${error instanceof Error ? error.message : String(error)}`

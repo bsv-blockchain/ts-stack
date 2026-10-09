@@ -37,7 +37,12 @@ export class TaskNewHeader extends WalletMonitorTask {
   }
 
   async getHeader(): Promise<BlockHeader> {
-    return copyValidatedMonitorHeader(await this.monitor.chaintracks.findChainTipHeader(), 'chain tip header')
+    return copyValidatedMonitorHeader(
+      await this.monitor.chaintracks.findChainTipHeader(),
+      'chain tip header',
+      true,
+      this.monitor.chain
+    )
   }
 
   /**

@@ -4,7 +4,24 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.14.6
+## wallet-toolbox 2.15.0
+
+- Adds a `regtest` `Chain` for Teranode regression-network deployments
+  (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
+  canonical regtest genesis header; `ChaintracksServiceClient` and
+  `GoChaintracksServiceClient` accept a service that reports its chain as
+  `regtest`; Arcade and ChainTracks endpoints come from `REGTEST_ARCADE_URL` and
+  `REGTEST_CHAINTRACKS_URL` (`regtestArcadeUrl`, `regtestChaintracksUrl`); and,
+  like `tstn`, no WhatsOnChain provider is registered.
+- Header proof-of-work and chain-work checks take an optional `chain`, and the
+  new `proofOfWorkLimitBits(chain)` reports the limit it selects. Only
+  `regtest` raises it, to `0x207fffff`. Every other chain, and every check that
+  names no chain, keeps the mainnet limit of `0x1d00ffff`, so no existing
+  validation is relaxed. Every ChainTracks client, storage, ingestor, bulk-file
+  path and Monitor header check now passes its configured chain.
+- `tstn` is unchanged: it keeps go-chaincfg's `TeraScalingTestNetParams`
+  genesis and proof-of-work limit. A deployment that runs regtest parameters
+  should configure `regtest`, not `tstn`.
 
 - UMP support pins anchor verified update lineage. Password and token updates
   supersede the pinned predecessor, including multi-hop updates and recovery-hash

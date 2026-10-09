@@ -438,7 +438,7 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     }
     try {
       validateHeaderFormat(header)
-      validateHeaderProofOfWork(header)
+      validateHeaderProofOfWork(header, this.chain)
     } catch (error) {
       throw new Error(`ChainTracks service returned an invalid ${name}: ${safeDiagnostic(error)}`)
     }
@@ -522,6 +522,8 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
       case 'tstn':
       case 'teranodescalingtestnet':
         return 'tstn'
+      case 'regtest':
+        return 'regtest'
       case 'mock':
         return 'mock'
       default:
