@@ -1,5 +1,5 @@
 import {
-  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
   outputAssert,
   outputHex32,
   OutputProtocolError,

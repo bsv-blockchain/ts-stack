@@ -1,5 +1,5 @@
 import {
-  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
   bindOutputReleaseEvidence,
   decodeOutputBytes,
   outputAssert,

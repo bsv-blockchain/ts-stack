@@ -1517,3 +1517,11 @@ bindings change neither the public interfaces nor persisted framing, signatures,
 custody, reservations or release decisions. Ordinary SDK and portable entry paths
 remain unchanged. Static compatibility checks and prior SDK regressions do not
 establish runtime speed or complete the current hosted qualification.
+
+Alias state, release selection, selected-chain currentness, coordination and
+physical disclosure also explicitly select the existing JSON companions through
+local import aliases. These paths still validate and independently own every
+new value and recheck authority at each effect boundary. All other source bytes,
+original tests, public signatures and persistence formats are unchanged. The
+bindings provide no saved shape, input, secret, authorization or currentness
+verdict; original property and complete mutation qualification remain required.
