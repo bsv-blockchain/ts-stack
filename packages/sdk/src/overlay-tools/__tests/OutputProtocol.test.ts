@@ -1911,3 +1911,146 @@ describe('inline packet refusal and byte fences', () => {
     )
   })
 })
+
+describe('fresh schema ownership without composite text', () => {
+  const implementation = async () => await import('../OutputProtocolJSON.js')
+
+  it('matches canonical byte boundaries and independent owned values across representations', async () => {
+    const { ownOutputJSONForSchema } = await implementation()
+    const corpus = JSON.parse(
+      readFileSync(resolve(__dirname, 'fixtures/output-digests.json'), 'utf8')
+    )
+    const cases: unknown[] = [
+      null,
+      true,
+      false,
+      0,
+      -0,
+      1,
+      -9007199254740991,
+      [],
+      {},
+      corpus.body,
+      { '10': 1, '2': 2, ['__proto__']: 'data', constructor: 'data' },
+      { '😀': 'é\n\t"\\', '\uE000': '\u0000', list: [true, null, [-0, '終']] }
+    ]
+    for (const input of cases) {
+      const encoded = canonicalOutputJSON(input)
+      const bytes = Buffer.byteLength(encoded, 'utf8')
+      const owned = ownOutputJSONForSchema(input, { bytes })
+      expect(Object.keys(owned)).toEqual(['value'])
+      expect(owned.value).toEqual(parseOutputJSON(encoded))
+      expect(canonicalOutputJSON(owned.value)).toBe(encoded)
+      if (bytes > 1) {
+        expect(() => ownOutputJSONForSchema(input, { bytes: bytes - 1 })).toThrow(
+          OutputProtocolError
+        )
+      }
+    }
+    expect(() => ownOutputJSONForSchema([[[1]]], { depth: 3 })).toThrow(OutputProtocolError)
+    expect(ownOutputJSONForSchema([[[1]]], { depth: 4 }).value).toEqual([[[1]]])
+    expect(() => ownOutputJSONForSchema([1, 2, 3], { arrayElements: 2 })).toThrow(
+      OutputProtocolError
+    )
+    expect(() => ownOutputJSONForSchema({ a: 1, b: 2 }, { mapKeys: 1 })).toThrow(
+      OutputProtocolError
+    )
+    expect(() => ownOutputJSONForSchema({}, { bytes: OUTPUT_JSON_LIMITS.bytes + 1 })).toThrow(
+      OutputProtocolError
+    )
+  })
+
+  it('refuses hostile representations in the same order without reading getters', async () => {
+    const { ownOutputJSONForSchema, ownOutputJSONWithInlineRecords } = await implementation()
+    let getterReads = 0
+    const getter = Object.defineProperty({}, 'x', {
+      enumerable: true,
+      get: () => {
+        getterReads++
+        return 'secret'
+      }
+    })
+    const hidden = Object.defineProperty({}, 'x', { value: 1 })
+    const symbol = { [Symbol('hidden')]: 1 }
+    const sparse: unknown[] = []
+    sparse.length = 2
+    const decorated = Object.assign([1], { extra: true })
+    const cycle: Record<string, unknown> = {}
+    cycle.self = cycle
+    const arrayCycle: unknown[] = []
+    arrayCycle.push(arrayCycle)
+    const bad: unknown[] = [
+      undefined,
+      1n,
+      NaN,
+      Infinity,
+      1.5,
+      '\uD800',
+      new Date(0),
+      getter,
+      hidden,
+      symbol,
+      sparse,
+      decorated,
+      cycle,
+      arrayCycle
+    ]
+    const refusal = (action: () => unknown) => {
+      try {
+        action()
+        throw new Error('Expected refusal')
+      } catch (error) {
+        expect(error).toBeInstanceOf(OutputProtocolError)
+        return [(error as OutputProtocolError).code, (error as Error).message]
+      }
+    }
+    for (const input of bad) {
+      expect(refusal(() => ownOutputJSONForSchema(input))).toEqual(
+        refusal(() => ownOutputJSONWithInlineRecords(input))
+      )
+    }
+    const lateHidden = Object.defineProperty({ a: 'too large' }, 'z', { value: true })
+    expect(refusal(() => ownOutputJSONForSchema(lateHidden, { bytes: 5 }))).toEqual(
+      refusal(() => ownOutputJSONWithInlineRecords(lateHidden, { bytes: 5 }))
+    )
+    expect(getterReads).toBe(0)
+    expect(ownOutputJSONForSchema({ after: 'refusal' }).value).toEqual({ after: 'refusal' })
+  })
+
+  it('owns repeated nodes independently and isolates reentrant traversals and later mutations', async () => {
+    const { ownOutputJSONForSchema } = await implementation()
+    const shared = { value: 'before' }
+    const input = { left: shared, right: shared, array: [shared] }
+    const first = ownOutputJSONForSchema(input).value as Record<string, unknown>
+    const second = ownOutputJSONForSchema(input).value as Record<string, unknown>
+    expect(Object.getPrototypeOf(first)).toBeNull()
+    expect(first.left).not.toBe(first.right)
+    expect(first.left).not.toBe((first.array as unknown[])[0])
+    expect(first.left).not.toBe(second.left)
+    shared.value = 'after'
+    expect(first.left).toEqual({ value: 'before' })
+    expect(ownOutputJSONForSchema(input).value).toEqual({
+      left: { value: 'after' },
+      right: { value: 'after' },
+      array: [{ value: 'after' }]
+    })
+    let reentered = 0
+    const proxy = new Proxy(
+      { outer: 'valid' },
+      {
+        ownKeys(target) {
+          expect(ownOutputJSONForSchema({ inner: ['valid'] }).value).toEqual({ inner: ['valid'] })
+          reentered++
+          return Reflect.ownKeys(target)
+        }
+      }
+    )
+    expect(ownOutputJSONForSchema(proxy).value).toEqual({ outer: 'valid' })
+    expect(reentered).toBeGreaterThan(0)
+    expect(Object.getOwnPropertyDescriptor(first, 'left')).toMatchObject({
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  })
+})

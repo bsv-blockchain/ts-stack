@@ -1091,3 +1091,132 @@ export function ownOutputJSONWithInlineRecords(
   const value = visitOutputJSONInlineRecords(frame, input, 1, true) as OutputJSON
   return { text: frame.text, value }
 }
+
+// Schema ownership needs the complete canonical byte count but no composite
+// encoding. This frame exists only during one fresh traversal and never escapes.
+type OutputJSONOwnershipFrame = Omit<OutputJSONFrame, 'text'>
+
+function countOutputJSONChunk(
+  frame: OutputJSONOwnershipFrame,
+  chunk: string,
+  knownASCII = false
+): void {
+  outputJSONLimit(chunk.length <= frame.bounds.bytes)
+  frame.bytes +=
+    knownASCII || /^[\u0020-\u007E]*$/.test(chunk) ? chunk.length : encoder.encode(chunk).length
+  outputJSONLimit(frame.bytes <= frame.bounds.bytes)
+}
+
+function countOutputJSONRecordString(
+  frame: OutputJSONOwnershipFrame,
+  value: string,
+  suffix = ''
+): void {
+  outputJSONLimit(value.length <= frame.bounds.bytes)
+  if (!/[^\u0020-\u0021\u0023-\u005B\u005D-\u007E]/.test(value)) {
+    const size = value.length + 2 + suffix.length
+    outputJSONLimit(size <= frame.bounds.bytes)
+    frame.bytes += size
+    outputJSONLimit(frame.bytes <= frame.bounds.bytes)
+  } else {
+    wellFormed(value)
+    countOutputJSONChunk(frame, JSON.stringify(value) + suffix)
+  }
+}
+
+function ownCountedOutputJSON(
+  frame: OutputJSONOwnershipFrame,
+  node: unknown,
+  depth: number
+): OutputJSON {
+  outputJSONLimit(depth <= frame.bounds.depth, 1)
+  const number = typeof node === 'number'
+  if (node === null || typeof node === 'boolean' || number) {
+    outputAssert(!number || Number.isSafeInteger(node), 'Protocol numbers must be safe integers')
+    countOutputJSONChunk(frame, String(node), true)
+    return number && node === 0 ? 0 : (node as OutputJSON)
+  }
+  if (typeof node === 'string') {
+    countOutputJSONRecordString(frame, node)
+    return node
+  }
+  outputAssert(typeof node === 'object', 'Expected a JSON value')
+  outputAssert(!frame.path.has(node), 'Cyclic JSON value')
+  outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
+  frame.path.add(node)
+  return Array.isArray(node)
+    ? ownCountedOutputJSONArray(frame, node, depth)
+    : ownCountedOutputJSONObject(frame, node, depth)
+}
+
+function ownCountedOutputJSONArray(
+  frame: OutputJSONOwnershipFrame,
+  node: unknown[],
+  depth: number
+): OutputJSON[] {
+  outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
+  outputAssert(
+    Object.getOwnPropertyNames(node).length === node.length + 1 &&
+      Object.keys(node).length === node.length,
+    'Sparse or decorated JSON array'
+  )
+  const result: OutputJSON[] = []
+  countOutputJSONChunk(frame, '[', true)
+  for (let i = 0; i < node.length; i++) {
+    if (i > 0) countOutputJSONChunk(frame, ',', true)
+    const descriptor = Object.getOwnPropertyDescriptor(node, i)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
+    Object.defineProperty(result, i, {
+      value: ownCountedOutputJSON(frame, descriptor.value, depth + 1),
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  }
+  countOutputJSONChunk(frame, ']', true)
+  frame.path.delete(node)
+  return result
+}
+
+function ownCountedOutputJSONObject(
+  frame: OutputJSONOwnershipFrame,
+  node: object,
+  depth: number
+): OutputJSONObject {
+  outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
+  const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
+  outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  const result: OutputJSONObject = Object.create(null)
+  countOutputJSONChunk(frame, '{', true)
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index]
+    const descriptor = Object.getOwnPropertyDescriptor(node, key)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
+    if (index > 0) countOutputJSONChunk(frame, ',', true)
+    countOutputJSONRecordString(frame, key, ':')
+    const supplied: unknown = descriptor.value
+    if (typeof supplied === 'string') {
+      outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
+      countOutputJSONRecordString(frame, supplied)
+      result[key] = supplied
+    } else result[key] = ownCountedOutputJSON(frame, supplied, depth + 1)
+  }
+  countOutputJSONChunk(frame, '}', true)
+  frame.path.delete(node)
+  return result
+}
+
+/** @internal Complete fresh schema ownership, with the same canonical byte and
+ * refusal order as record emission. No composite text, input or verdict is retained.
+ * This returns only a fresh value; it makes no schema or authority decision. */
+export function ownOutputJSONForSchema(
+  input: unknown,
+  limits: Partial<OutputJSONLimits> = OUTPUT_JSON_LIMITS
+): { value: OutputJSON } {
+  const frame: OutputJSONOwnershipFrame = {
+    path: new Set<object>(),
+    bytes: 0,
+    bounds: limitsFor(limits)
+  }
+  return { value: ownCountedOutputJSON(frame, input, 1) }
+}

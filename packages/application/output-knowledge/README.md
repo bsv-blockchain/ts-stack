@@ -1559,3 +1559,5 @@ eligibility. Ordinary entry points, encodings, error identities and resource
 limits remain unchanged. Current private-purchase bindings select these companions
 explicitly; historical recovery still verifies and returns the original signed
 result. Source checks do not establish a performance improvement.
+
+Explicit schema ownership now counts the complete canonical encoding without constructing composite text that the schema path discards. This internal traversal still checks every current descriptor, prototype, symbol, cycle, Unicode sequence, integer, depth, item count and byte boundary in the same order, and constructs independent ordinary-data arrays and null-prototype records. The full text/value owner and ordinary normalization remain available for their callers. It retains no input, normalized graph or verdict. This internal selection changes no wire, stored format, public root export or authority rule; hosted qualification remains required.
