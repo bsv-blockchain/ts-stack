@@ -10,7 +10,7 @@ import {
   outputPacketDigest,
   outputU64,
   ownOutputJSONWithInlineStrings as ownOutputJSON,
-  parseOutputJSON,
+  parseOutputJSONWithStringRecords as parseOutputJSON,
   parseOutputPurchaseSubmit,
   type OutputJSONObject,
   type OutputPurchaseSubmit

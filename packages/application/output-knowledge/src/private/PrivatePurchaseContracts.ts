@@ -1,8 +1,8 @@
 import {
-  ownOutputJSON,
+  ownOutputJSONWithInlineStrings as ownOutputJSON,
   OUTPUT_PROFILES,
   canonicalOutputBase,
-  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineStrings as canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,

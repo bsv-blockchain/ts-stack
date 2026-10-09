@@ -13,7 +13,7 @@ import {
   outputString,
   outputU64,
   ownOutputJSONWithInlineStrings as ownOutputJSON,
-  parseOutputJSON,
+  parseOutputJSONWithStringRecords as parseOutputJSON,
   type OutputPurchaseEnvelope,
   type OutputSignedPurchaseTerms
 } from '@bsv/sdk'
