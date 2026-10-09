@@ -221,6 +221,14 @@ No migration is required. Hosted qualification remains separate.
 
 ## [Unreleased]
 
+- Add `canonicalOutputJSONWithDirectRecords`, an opt-in canonical text emitter
+  that freshly checks records and arrays with the existing canonical bytes,
+  descriptor observations, refusals and resource limits. Native private-state
+  serializers explicitly select it; existing and portable entry points retain
+  their selections. Add independent parity, refusal and property coverage.
+  No input, encoding or authority verdict is cached. Hosted qualification
+  remains required.
+
 - Reuse a lazy, private non-streaming UTF-8 decoder with fixed options; freshly
   check every input and preserve malformed UTF-8, BOM, duplicate-key and Unicode
   refusals across retries. Bounded ASCII strings establish Unicode validity and

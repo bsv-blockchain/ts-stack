@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import {
   Beef,
   Utils,
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   decodeOutputBytes,
   outputAssert,

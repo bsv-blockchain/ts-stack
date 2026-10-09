@@ -377,3 +377,47 @@ test('owned-record parser and recursive inline codec retain original contracts o
     })
   )
 })
+
+import {
+  canonicalOutputJSONWithDirectRecords,
+  canonicalOutputJSONWithInlineRecords
+} from '../OutputProtocolJSON.js'
+
+test('direct record emission preserves generated nested JCS values and exact byte fences over 300 cases', () => {
+  const scalar = fc.oneof(
+    fc.integer({ min: 0, max: 0xd7ff }),
+    fc.integer({ min: 0xe000, max: 0x10ffff })
+  )
+  const text = fc.array(scalar, { maxLength: 16 }).map(points => String.fromCodePoint(...points))
+  const data = fc.letrec<{ value: OutputJSON }>(tie => ({
+    value: fc.oneof(
+      { maxDepth: 4, depthSize: 'small' },
+      fc.constant(null),
+      fc.boolean(),
+      fc.integer({ min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
+      text,
+      fc.array(tie('value'), { maxLength: 8 }),
+      fc
+        .array(
+          fc.tuple(
+            fc.oneof(text, fc.constantFrom('0', '10', '2', '__proto__', 'constructor')),
+            tie('value')
+          ),
+          { maxLength: 8 }
+        )
+        .map(entries => Object.fromEntries(entries))
+    )
+  })).value
+  fc.assert(
+    fc.property(data, input => {
+      const original = canonicalOutputJSON(input),
+        size = new TextEncoder().encode(original).length
+      expect(canonicalOutputJSONWithDirectRecords(input)).toBe(original)
+      expect(canonicalOutputJSONWithDirectRecords(input, { bytes: size })).toBe(original)
+      expect(canonicalOutputJSONWithDirectRecords(input)).toBe(
+        canonicalOutputJSONWithInlineRecords(input)
+      )
+      expect(() => canonicalOutputJSONWithDirectRecords(input, { bytes: size - 1 })).toThrow()
+    })
+  )
+})

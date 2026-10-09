@@ -1,6 +1,6 @@
 import {
   ownOutputJSONWithCountedRecords as ownOutputJSON,
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
   outputAssert,

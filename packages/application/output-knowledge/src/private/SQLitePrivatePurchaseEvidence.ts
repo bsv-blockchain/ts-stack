@@ -1,7 +1,7 @@
 import {
   ownOutputJSONWithCountedRecords as ownOutputJSON,
   Beef,
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   closedOutputObject,
   decodeOutputBytes,
   Hash,

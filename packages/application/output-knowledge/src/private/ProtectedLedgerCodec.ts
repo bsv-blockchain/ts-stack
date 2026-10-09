@@ -1,6 +1,6 @@
 import {
   ownOutputJSONWithInlineRecords as ownOutputJSON,
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputAssert,
   outputHex32,

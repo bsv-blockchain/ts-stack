@@ -1013,3 +1013,72 @@ test('explicit encoded-record schema ownership preserves complete refusal order 
   expect(second).toStrictEqual(s.normalizedWithInlineStrings(source, s.json))
   expect(first).not.toBe(second)
 })
+
+import { canonicalOutputJSONWithDirectRecords } from '../OutputProtocolJSON.js'
+
+test('direct canonical records retain refusal order, descriptors, numeric-key order and fresh observations', () => {
+  function outcome(input: unknown, limits = {}) {
+    function attempt(write: typeof canonicalOutputJSON) {
+      try {
+        return { text: write(input, limits) }
+      } catch (error) {
+        const refusal = error as Error & { code?: string }
+        return { code: refusal.code, message: refusal.message }
+      }
+    }
+    expect(attempt(canonicalOutputJSONWithDirectRecords)).toEqual(
+      attempt(canonicalOutputJSONWithInlineRecords)
+    )
+    expect(attempt(canonicalOutputJSONWithDirectRecords)).toEqual(attempt(canonicalOutputJSON))
+  }
+  const valid = {
+    '2': false,
+    '10': null,
+    '0': -0,
+    é: ['😀', '\n', true],
+    ['__proto__']: 'ordinary own data'
+  }
+  outcome(valid)
+  expect(canonicalOutputJSONWithDirectRecords({ '2': 2, '10': 10 })).toBe('{"10":10,"2":2}')
+  outcome(runInNewContext('({ a: [0, "é"], constructor: "ordinary" })'))
+  for (const value of [
+    undefined,
+    1.5,
+    Number.NaN,
+    Infinity,
+    new Date(),
+    new Map(),
+    { a: undefined },
+    { a: '\uD800' },
+    { '\uDC00': 'bad' }
+  ])
+    outcome(value)
+  const cycle: { child?: unknown } = {}
+  cycle.child = cycle
+  outcome(cycle)
+  const sparse = [1, 2]
+  Reflect.deleteProperty(sparse, '0')
+  outcome(sparse)
+  outcome(Object.assign([1], { extra: 2 }))
+  outcome(Object.defineProperty({}, 'hidden', { value: 1 }))
+  outcome({ [Symbol('key')]: 1 })
+  let reads = 0
+  outcome(
+    Object.defineProperty({}, 'value', {
+      enumerable: true,
+      get() {
+        reads++
+        return 1
+      }
+    })
+  )
+  expect(reads).toBe(0)
+  outcome({ rows: [[1]] }, { depth: 2 })
+  outcome({ a: 1, b: 2 }, { mapKeys: 1 })
+  outcome([1, 2], { arrayElements: 1 })
+  outcome({ a: 'too long', z: undefined }, { bytes: 6 })
+  const changing = { value: 1 }
+  expect(canonicalOutputJSONWithDirectRecords(changing)).toBe('{"value":1}')
+  changing.value = 2
+  expect(canonicalOutputJSONWithDirectRecords(changing)).toBe('{"value":2}')
+})

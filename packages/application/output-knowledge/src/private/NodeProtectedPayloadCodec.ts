@@ -7,7 +7,7 @@ import {
   randomBytes
 } from 'node:crypto'
 import {
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   createClosedOutputObjectValidator,
   outputString,
   parseOutputJSONWithOwnedRecords as parseOutputJSON,

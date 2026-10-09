@@ -100,3 +100,5 @@ export {
 export { ownOutputJSONWithCountedRecords } from './OutputProtocolJSON.js'
 
 export { parseOutputReleaseEvidenceWithOwnedRecords } from './OutputReleaseProtocol.js'
+
+export { canonicalOutputJSONWithDirectRecords } from './OutputProtocolJSON.js'
