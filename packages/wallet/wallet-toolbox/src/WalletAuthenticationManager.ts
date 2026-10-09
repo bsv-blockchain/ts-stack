@@ -92,6 +92,48 @@ function transactionInputOutpoint(transaction: Transaction, inputIndex: number):
   return `${sourceTxid.toLowerCase()}.${input.sourceOutputIndex}`
 }
 
+async function proveInternalizedFaucetOutput(
+  wallet: WalletInterface,
+  redemptionTxid: string,
+  outputIndex: number,
+  satoshis: number,
+  faucetOutpoint: string,
+  label: string,
+  adminOriginator: string,
+  offset: number
+): Promise<void> {
+  const outpoint = `${redemptionTxid}.${outputIndex}`.toLowerCase()
+  const proof = await wallet.listOutputs(
+    {
+      basket: 'default', include: 'entire transactions', includeLabels: true,
+      limit: 1, offset
+    },
+    adminOriginator
+  )
+  const provenOutput = proof.outputs?.[0]
+  if (
+    proof.outputs?.length !== 1 ||
+    provenOutput?.outpoint.toLowerCase() !== outpoint ||
+    provenOutput.spendable !== true ||
+    provenOutput.satoshis !== satoshis ||
+    !provenOutput.labels?.includes(label) ||
+    !Array.isArray(proof.BEEF) ||
+    proof.BEEF.length === 0 ||
+    proof.BEEF.length > MAX_WAB_FAUCET_RECOVERY_BEEF_BYTES
+  ) {
+    throw new Error('Wallet omitted internalized faucet transaction evidence.')
+  }
+  const transaction = Beef.fromBinaryStrict(proof.BEEF).findTxid(redemptionTxid)?.tx
+  if (
+    transaction?.outputs[outputIndex]?.satoshis !== satoshis ||
+    transaction.inputs.filter((_, inputIndex) =>
+      transactionInputOutpoint(transaction, inputIndex) === faucetOutpoint
+    ).length !== 1
+  ) {
+    throw new Error('Wallet returned unrelated internalized faucet transaction evidence.')
+  }
+}
+
 async function hasInternalizedFaucetOutput(
   wallet: WalletInterface,
   redemptionTxid: string,
@@ -127,35 +169,10 @@ async function hasInternalizedFaucetOutput(
       if (output.spendable !== true || output.satoshis !== satoshis || !output.labels?.includes(label)) {
         throw new Error('Wallet returned unrelated internalized faucet output.')
       }
-      const proof = await wallet.listOutputs(
-        {
-          basket: 'default', include: 'entire transactions', includeLabels: true,
-          limit: 1, offset: offset + index
-        },
-        adminOriginator
+      await proveInternalizedFaucetOutput(
+        wallet, redemptionTxid, outputIndex, satoshis, faucetOutpoint, label,
+        adminOriginator, offset + index
       )
-      const provenOutput = proof.outputs?.[0]
-      if (
-        proof.outputs?.length !== 1 ||
-        provenOutput?.outpoint.toLowerCase() !== outpoint ||
-        provenOutput.spendable !== true ||
-        provenOutput.satoshis !== satoshis ||
-        !provenOutput.labels?.includes(label) ||
-        !Array.isArray(proof.BEEF) ||
-        proof.BEEF.length === 0 ||
-        proof.BEEF.length > MAX_WAB_FAUCET_RECOVERY_BEEF_BYTES
-      ) {
-        throw new Error('Wallet omitted internalized faucet transaction evidence.')
-      }
-      const transaction = Beef.fromBinaryStrict(proof.BEEF).findTxid(redemptionTxid)?.tx
-      if (
-        transaction?.outputs[outputIndex]?.satoshis !== satoshis ||
-        transaction.inputs.filter((_, inputIndex) =>
-          transactionInputOutpoint(transaction, inputIndex) === faucetOutpoint
-        ).length !== 1
-      ) {
-        throw new Error('Wallet returned unrelated internalized faucet transaction evidence.')
-      }
       return true
     }
     offset += page.outputs.length
