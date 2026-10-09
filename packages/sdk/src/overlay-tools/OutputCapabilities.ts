@@ -1,13 +1,19 @@
 import * as s from './OutputProtocolSchema.js'
 import {
   outputPacketDigest,
+  outputPacketDigestWithInlineStrings,
   outputU64,
   validateOutputExtensions,
   verifyOutputPacket,
+  verifyOutputPacketWithInlineStrings,
   type OutputChain,
   type OutputSignedPacket
 } from './OutputProtocol.js'
-import { canonicalOutputJSON, type OutputJSONObject } from './OutputProtocolJSON.js'
+import {
+  canonicalOutputJSON,
+  canonicalOutputJSONWithInlineStrings,
+  type OutputJSONObject
+} from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'
 import { canonicalOutputBase } from './OutputEndpoint.js'
 
@@ -300,6 +306,114 @@ export function selectOutputCapability(
       'unsupported'
     )
   const digest = outputPacketDigest('capabilities', body)
+  return {
+    manifest,
+    digest,
+    service: selectedService,
+    profile: selectedProfile,
+    headers: { 'x-bsv-overlay-capability': digest, 'x-bsv-overlay-profile': selectedProfile.id }
+  }
+}
+
+/** Explicit fresh-copy capability parsing for native integrations. This selects
+ * one-pass ownership for object inputs; wire text and bytes retain the original
+ * parser. All schema, extension, installed-rule and profile checks still run. */
+export function parseOutputCapabilitiesWithInlineStrings(
+  input: unknown,
+  allowLocalHTTP = false,
+  supportedExtensions: readonly string[] = []
+): OutputSignedPacket<OutputCapabilities> {
+  const result = s.normalizedWithInlineStrings(input, signed, 262144)
+  const body = result.body
+  validateOutputExtensions(body, supportedExtensions)
+  outputAssert(
+    canonicalOutputBase(body.baseURL, allowLocalHTTP) === body.baseURL,
+    'Manifest base URL is not canonical'
+  )
+  outputAssert(outputU64(body.issuedAt) <= outputU64(body.expiresAt), 'Invalid manifest lifetime')
+  unique(body.services.map(item => [item.kind, item.name]))
+  for (const item of body.services) {
+    outputAssert(
+      outputPacketDigestWithInlineStrings('service-rules', item.rules) === item.rulesDigest,
+      'Service rules digest mismatch'
+    )
+    unique(item.profiles.map(p => p.id))
+    for (const p of item.profiles) validateProfile(p, item)
+  }
+  return result
+}
+
+/** Equivalent selection with fresh inline canonicalization. Endpoint trust,
+ * authenticated identity, chain, freshness, signature and installed rules are
+ * independently checked; this supplies no operation or effect authorization. */
+export function selectOutputCapabilityWithInlineStrings(
+  input: unknown,
+  request: OutputCapabilityRequest
+): OutputCapabilitySelection {
+  const manifest = parseOutputCapabilitiesWithInlineStrings(
+    input,
+    request.allowLocalHTTP,
+    request.supportedExtensions
+  )
+  const body = manifest.body
+  outputAssert(
+    body.baseURL === canonicalOutputBase(request.baseURL, request.allowLocalHTTP),
+    'Capability base mismatch',
+    'unauthorized'
+  )
+  outputAssert(
+    body.identity === request.identity &&
+      (request.authenticatedPeer === undefined || request.authenticatedPeer === body.identity),
+    'Capability identity mismatch',
+    'unauthorized'
+  )
+  outputAssert(
+    canonicalOutputJSONWithInlineStrings(body.chain) ===
+      canonicalOutputJSONWithInlineStrings(request.chain),
+    'Capability chain mismatch',
+    'context-changed'
+  )
+  const now = outputU64(request.now),
+    issued = outputU64(body.issuedAt)
+  const skew = outputU64(request.clockSkewSeconds),
+    age = outputU64(request.maximumAgeSeconds)
+  outputAssert(age > 0n, 'Capability freshness must be finite and positive')
+  outputAssert(now < outputU64(body.expiresAt), 'Capability expired', 'expired')
+  outputAssert(
+    issued <= now + skew && now <= issued + age,
+    'Capability outside local freshness policy',
+    'expired'
+  )
+  outputAssert(
+    verifyOutputPacketWithInlineStrings('capabilities', manifest, request.identity),
+    'Invalid capability signature',
+    'unauthorized'
+  )
+  const selectedService = body.services.find(
+    item => item.kind === request.kind && item.name === request.service
+  )
+  outputAssert(selectedService !== undefined, 'Required service unavailable', 'unsupported')
+  const selectedProfile = selectedService.profiles.find(p => p.id === request.profile)
+  outputAssert(
+    selectedProfile !== undefined &&
+      (Object.values(OUTPUT_PROFILES) as readonly string[]).includes(request.profile),
+    'Required profile unavailable',
+    'unsupported'
+  )
+  const validateRules = request.rules.get(selectedService.rules.id)
+  outputAssert(validateRules !== undefined, 'Service rules are not installed', 'unsupported')
+  validateRules(
+    JSON.parse(
+      canonicalOutputJSONWithInlineStrings(selectedService.rules.parameters)
+    ) as OutputJSONObject
+  )
+  if (request.profile !== OUTPUT_PROFILES.lookup)
+    outputAssert(
+      body.baseURL.startsWith('https://'),
+      'Private profiles require HTTPS',
+      'unsupported'
+    )
+  const digest = outputPacketDigestWithInlineStrings('capabilities', body)
   return {
     manifest,
     digest,

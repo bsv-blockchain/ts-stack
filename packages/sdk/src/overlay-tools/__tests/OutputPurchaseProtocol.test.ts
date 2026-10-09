@@ -23,6 +23,7 @@ import {
   verifyOutputPurchaseCommitmentEnvelope,
   parseOutputPurchaseCommitmentBinding,
   verifyOutputPurchaseTerms,
+  verifyOutputPurchaseTermsWithInlineStrings,
   OutputPurchaseTermsVerifier,
   type OutputPurchasePrepare,
   type OutputPurchaseTerms,
@@ -922,5 +923,62 @@ describe('Explicit fresh-owned purchase parser companions', () => {
     expect(reads).toBe(0)
     expect(() => parseOutputPurchaseSubmitWithInlineStrings({ ...input, beef: 'A===' })).toThrow()
     expect(parseOutputPurchaseSubmitWithInlineStrings(input).beef).toBe('AA==')
+  })
+})
+
+describe('fresh inline signed purchase terms', () => {
+  it('matches object, text and byte verification while independently owning every result', () => {
+    const { request, terms } = fixture(),
+      expected = verifyOutputPurchaseTerms(terms, request, seller)
+    const text = canonicalOutputJSON(terms)
+    for (const input of [terms, text, new TextEncoder().encode(text)]) {
+      const result = verifyOutputPurchaseTermsWithInlineStrings(input, request, seller)
+      expect(result).toStrictEqual(expected)
+      expect(result.body).not.toBe(terms.body)
+      result.body.topic = 'caller mutation'
+      expect(verifyOutputPurchaseTermsWithInlineStrings(input, request, seller)).toStrictEqual(
+        expected
+      )
+    }
+  })
+  it('refuses changed request binding, seller, deadline and signatures after successful verification', () => {
+    const { request, terms } = fixture()
+    expect(verifyOutputPurchaseTermsWithInlineStrings(terms, request, seller)).toStrictEqual(
+      verifyOutputPurchaseTerms(terms, request, seller)
+    )
+    for (const change of [
+      { requestId: 'different_request_01' },
+      { recipient: seller },
+      { topic: 'other' },
+      { assetId: 'ff'.repeat(32) },
+      { termsDigest: 'ff'.repeat(32) },
+      { listing: { ...request.listing, outputIndex: 1 } }
+    ])
+      expect(() =>
+        verifyOutputPurchaseTermsWithInlineStrings(terms, { ...request, ...change }, seller)
+      ).toThrow('Purchase terms differ from selected request')
+    expect(() => verifyOutputPurchaseTermsWithInlineStrings(terms, request, recipient)).toThrow(
+      'Purchase terms differ from selected request'
+    )
+    expect(() =>
+      verifyOutputPurchaseTermsWithInlineStrings(
+        { ...terms, body: { ...terms.body, recoveryUntil: '86499' } },
+        request,
+        seller
+      )
+    ).toThrow('Purchase recovery promise is less than one day')
+    expect(() =>
+      verifyOutputPurchaseTermsWithInlineStrings({ ...terms, signature: 'AA==' }, request, seller)
+    ).toThrow()
+    expect(() =>
+      verifyOutputPurchaseTermsWithInlineStrings(
+        {
+          ...terms,
+          body: { ...terms.body, domainEvidence: { ...terms.body.domainEvidence, bytes: 'AQ==' } }
+        },
+        request,
+        seller
+      )
+    ).toThrow('Purchase terms signature failed')
   })
 })

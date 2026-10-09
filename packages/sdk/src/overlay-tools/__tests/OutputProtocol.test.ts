@@ -18,9 +18,11 @@ import {
   validateOutputExtensions,
   outputPacketPreimage,
   outputPacketDigest,
+  outputPacketDigestWithInlineStrings,
   OUTPUT_DIGEST_DOMAINS,
   signOutputPacket,
   verifyOutputPacket,
+  verifyOutputPacketWithInlineStrings,
   type OutputDigestDomain
 } from '../../../mod.js'
 import PrivateKey from '../../primitives/PrivateKey.js'
@@ -1812,5 +1814,100 @@ describe('fresh single-pass ownership compatibility', () => {
     )
     expect(ownOutputJSONWithInlineStrings(input).text).toBe('{"a":"outer","z":[true]}')
     expect(nested).toEqual(ownOutputJSON({ inner: ['independent'] }))
+  })
+})
+
+describe('explicit inline packet canonicalization', () => {
+  it('matches every independent digest vector and repeats domain and representation checks', () => {
+    const fixture = JSON.parse(
+      readFileSync(resolve(__dirname, 'fixtures/output-digests.json'), 'utf8')
+    )
+    for (const vector of fixture.vectors) {
+      expect(outputPacketDigestWithInlineStrings(vector.domain, fixture.body)).toBe(vector.sha256)
+    }
+    expect(() =>
+      outputPacketDigestWithInlineStrings('unregistered' as OutputDigestDomain, {})
+    ).toThrow('Unregistered output digest domain')
+    const repeated = { text: 'ASCII', unicode: '\u00e9\ud83d\ude00' }
+    expect(outputPacketDigestWithInlineStrings('purchase', { a: repeated, b: repeated })).toBe(
+      outputPacketDigest('purchase', { a: repeated, b: repeated })
+    )
+    const getter = jest.fn(() => 'private')
+    const invalid = Object.defineProperty({}, 'text', { enumerable: true, get: getter })
+    expect(() => outputPacketDigestWithInlineStrings('purchase', invalid)).toThrow(
+      'JSON accessor or hidden key'
+    )
+    expect(getter).not.toHaveBeenCalled()
+    expect(() => outputPacketDigestWithInlineStrings('purchase', { text: '\ud800' })).toThrow(
+      'Unpaired JSON surrogate'
+    )
+  })
+  it('rechecks mutated bodies, signers, signatures and domain separation after mathematical reuse', () => {
+    const key = new PrivateKey(91),
+      identity = key.toPublicKey().toString()
+    const packet = signOutputPacket(
+      'purchase',
+      { text: 'original', nested: [{ text: '\u00e9' }] },
+      key
+    )
+    expect(verifyOutputPacketWithInlineStrings('purchase', packet, identity)).toBe(true)
+    expect(verifyOutputPacket('purchase', packet, identity)).toBe(true)
+    packet.body.text = 'changed'
+    expect(verifyOutputPacketWithInlineStrings('purchase', packet, identity)).toBe(false)
+    packet.body.text = 'original'
+    expect(verifyOutputPacketWithInlineStrings('purchase-request', packet, identity)).toBe(false)
+    expect(() =>
+      verifyOutputPacketWithInlineStrings(
+        'purchase',
+        packet,
+        new PrivateKey(92).toPublicKey().toString()
+      )
+    ).toThrow('Unexpected packet signer')
+    expect(() =>
+      verifyOutputPacketWithInlineStrings(
+        'purchase',
+        { ...packet, extra: true } as typeof packet,
+        identity
+      )
+    ).toThrow()
+    expect(() =>
+      verifyOutputPacketWithInlineStrings('purchase', { ...packet, signature: 'AA==' }, identity)
+    ).toThrow('Output packets require the anyone verifier')
+  })
+})
+
+describe('inline packet refusal and byte fences', () => {
+  it('preserves representation errors and wraps malformed BRC-77 mathematics after framing checks', () => {
+    const key = new PrivateKey(93),
+      identity = key.toPublicKey().toString()
+    const packet = signOutputPacket('purchase', { text: 'original' }, key)
+    const shortened = toBase64(Array.from(decodeOutputBytes(packet.signature)).slice(0, 38))
+    expect(() =>
+      verifyOutputPacketWithInlineStrings('purchase', { ...packet, signature: shortened }, identity)
+    ).toThrow('Malformed BRC-77 output packet')
+    expect(() =>
+      verifyOutputPacketWithInlineStrings(
+        'purchase',
+        { ...packet, body: { text: '\ud800' } },
+        identity
+      )
+    ).toThrow('Unpaired JSON surrogate')
+    const getter = jest.fn(() => 'private')
+    const body = Object.defineProperty({}, 'text', { enumerable: true, get: getter })
+    expect(() =>
+      verifyOutputPacketWithInlineStrings('purchase', { ...packet, body }, identity)
+    ).toThrow('JSON accessor or hidden key')
+    expect(getter).not.toHaveBeenCalled()
+  })
+  it('retains the exact default canonical body byte limit before computing the independent digest', () => {
+    const input = { text: 'x'.repeat(4194304 - 11) }
+    const expected = createHash('sha256')
+      .update('BRC-OUTPUT/1/purchase\0' + JSON.stringify(input))
+      .digest('hex')
+    expect(outputPacketDigestWithInlineStrings('purchase', input)).toBe(expected)
+    input.text += 'x'
+    expect(() => outputPacketDigestWithInlineStrings('purchase', input)).toThrow(
+      'Output JSON byte limit'
+    )
   })
 })

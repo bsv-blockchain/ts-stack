@@ -2,8 +2,14 @@ import * as s from './OutputProtocolSchema.js'
 import { parseOutputReleasePolicy } from './OutputCapabilities.js'
 import { parseOutputSTEAK } from './OutputObservation.js'
 import { bindOutputReleaseEvidence, parseOutputReleaseEvidence } from './OutputReleaseProtocol.js'
-import { outputPacketDigest, outputU64, verifyOutputPacket } from './OutputProtocol.js'
-import { canonicalOutputJSON } from './OutputProtocolJSON.js'
+import {
+  outputPacketDigest,
+  outputPacketDigestWithInlineStrings,
+  outputU64,
+  verifyOutputPacket,
+  verifyOutputPacketWithInlineStrings
+} from './OutputProtocol.js'
+import { canonicalOutputJSON, canonicalOutputJSONWithInlineStrings } from './OutputProtocolJSON.js'
 import { outputAssert } from './OutputProtocolError.js'
 
 const prepare = s.fixedObject({
@@ -364,6 +370,45 @@ export function parseOutputPurchaseTermsWithInlineStrings(
   outputAssert(
     outputU64(packet.body.recoveryUntil) >= outputU64(packet.body.purchaseUntil) + 86400n,
     'Purchase recovery promise is less than one day'
+  )
+  return packet
+}
+
+/** Native fresh-copy terms verification. Every call checks the complete original
+ * request, selected seller, returned terms, domain-separated digests and BRC-77
+ * signature. It retains no parsed request, authorization or verification verdict. */
+export function verifyOutputPurchaseTermsWithInlineStrings(
+  input: unknown,
+  originalRequest: OutputPurchasePrepare,
+  selectedSeller: string
+): OutputSignedPurchaseTerms {
+  const request = parseOutputPurchasePrepareWithInlineStrings(originalRequest),
+    seller = s.identity(selectedSeller)
+  const packet = parseOutputPurchaseTermsWithInlineStrings(input),
+    body = packet.body
+  const acquisitionId = outputPacketDigestWithInlineStrings('purchase', {
+    chain: request.listing.chain,
+    seller,
+    recipient: request.recipient,
+    topic: request.topic,
+    requestId: request.requestId
+  })
+  outputAssert(
+    body.seller === seller &&
+      body.acquisitionId === acquisitionId &&
+      body.requestDigest === outputPacketDigestWithInlineStrings('purchase-request', request) &&
+      body.recipient === request.recipient &&
+      body.topic === request.topic &&
+      body.assetId === request.assetId &&
+      body.termsDigest === request.termsDigest &&
+      canonicalOutputJSONWithInlineStrings(body.listing) ===
+        canonicalOutputJSONWithInlineStrings(request.listing),
+    'Purchase terms differ from selected request'
+  )
+  outputAssert(
+    verifyOutputPacketWithInlineStrings('purchase-terms', packet, seller),
+    'Purchase terms signature failed',
+    'unauthorized'
   )
   return packet
 }

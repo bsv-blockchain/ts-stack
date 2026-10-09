@@ -3,7 +3,7 @@ import {
   inspectOutputJSONEncoding,
   Hash,
   Utils,
-  parseOutputPurchaseSubmit,
+  parseOutputPurchaseSubmitWithInlineStrings as parseOutputPurchaseSubmit,
   type OutputPurchaseSubmit,
   createClosedOutputObjectValidator,
   decodeOutputBytes,

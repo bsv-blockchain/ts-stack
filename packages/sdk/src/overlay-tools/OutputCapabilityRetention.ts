@@ -1,7 +1,9 @@
 import * as s from './OutputProtocolSchema.js'
 import {
   parseOutputCapabilities,
+  parseOutputCapabilitiesWithInlineStrings,
   selectOutputCapability,
+  selectOutputCapabilityWithInlineStrings,
   type OutputCapabilityRequest,
   type OutputCapabilitySelection
 } from './OutputCapabilities.js'
@@ -92,6 +94,83 @@ export function restoreOutputCapability(
     'context-changed'
   )
   const selection = selectOutputCapability(record.manifest, {
+    ...request,
+    now: record.selectedAt,
+    ...record.freshness
+  })
+  outputAssert(
+    selection.digest === record.digest,
+    'Retained capability digest changed',
+    'context-changed'
+  )
+  return selection
+}
+
+// Only grammar is retained. Every supplied record and nested manifest is owned
+// and independently checked on each call, including historical signature/trust.
+function retainedSchemaWithInlineStrings(
+  allowLocalHTTP = false,
+  supportedExtensions: readonly string[] = []
+) {
+  return s.fixedObject({
+    format: s.literal('output-capability-retention/1'),
+    manifest: (value: unknown) =>
+      parseOutputCapabilitiesWithInlineStrings(value, allowLocalHTTP, supportedExtensions),
+    digest: s.hex,
+    kind: s.literal('lookup', 'topic', 'coordination'),
+    service: s.text,
+    profile: s.iri,
+    selectedAt: s.u64,
+    freshness: s.fixedObject({ maximumAgeSeconds: s.u64, clockSkewSeconds: s.u64 })
+  })
+}
+
+/** Fresh-copy initiation companion; persist atomically before any effect. */
+export function retainOutputCapabilityWithInlineStrings(
+  input: unknown,
+  request: OutputCapabilityRequest
+): { record: OutputRetainedCapability; selection: OutputCapabilitySelection } {
+  const selection = selectOutputCapabilityWithInlineStrings(input, request)
+  const record = s.normalizedWithInlineStrings(
+    {
+      format: 'output-capability-retention/1',
+      manifest: selection.manifest,
+      digest: selection.digest,
+      kind: request.kind,
+      service: selection.service.name,
+      profile: selection.profile.id,
+      selectedAt: request.now,
+      freshness: {
+        maximumAgeSeconds: request.maximumAgeSeconds,
+        clockSkewSeconds: request.clockSkewSeconds
+      }
+    },
+    retainedSchemaWithInlineStrings(request.allowLocalHTTP, request.supportedExtensions),
+    maximumRetainedBytes
+  )
+  return { record, selection }
+}
+
+/** Fresh-copy historical restoration companion. Revalidate original selection
+ * time, endpoint, signer, installed rules and digest. Current authorization and
+ * actual operation deadlines remain separate; expired material starts no work. */
+export function restoreOutputCapabilityWithInlineStrings(
+  input: unknown,
+  request: OutputCapabilityRecoveryRequest
+): OutputCapabilitySelection {
+  const record = s.normalizedWithInlineStrings(
+    input,
+    retainedSchemaWithInlineStrings(request.allowLocalHTTP, request.supportedExtensions),
+    maximumRetainedBytes
+  )
+  outputAssert(
+    record.kind === request.kind &&
+      record.service === request.service &&
+      record.profile === request.profile,
+    'Retained capability selection changed',
+    'context-changed'
+  )
+  const selection = selectOutputCapabilityWithInlineStrings(record.manifest, {
     ...request,
     now: record.selectedAt,
     ...record.freshness

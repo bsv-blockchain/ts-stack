@@ -79,3 +79,8 @@ export * from './OutputRootEvictionTransport.js'
 export * from './OutputProposalTransport.js'
 export * from './OutputPaidLookupTransport.js'
 export * from './OutputPurchaseTransport.js'
+
+export {
+  parseOutputCapabilitiesWithInlineStrings,
+  selectOutputCapabilityWithInlineStrings
+} from './OutputCapabilities.js'

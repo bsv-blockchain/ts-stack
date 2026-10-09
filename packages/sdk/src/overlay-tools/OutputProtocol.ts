@@ -7,6 +7,7 @@ import { outputAssert, OutputProtocolError } from './OutputProtocolError.js'
 import {
   assertOutputJSONUnicode,
   canonicalOutputJSON,
+  canonicalOutputJSONWithInlineStrings,
   isOutputPlainObject,
   OUTPUT_JSON_LIMITS,
   type OutputJSONObject
@@ -342,6 +343,64 @@ export function verifyOutputPacket<T>(
     // repeated packet. The domain-separated preimage and complete signature
     // both participate in this key; only successful BRC77 mathematics is cached.
     const preimage = outputPacketPreimageBytes(domain, packet.body),
+      key = toHex(sha256(preimage)) + ':' + toHex(sha256(signature))
+    if (packetSignatures.has(key)) return true
+    const verified = SignedMessage.verify(Array.from(preimage), signature)
+    if (verified) rememberMathematicalFact(packetSignatures, key)
+    return verified
+  } catch (error) {
+    if (error instanceof OutputProtocolError) throw error
+    throw new OutputProtocolError('invalid', 'Malformed BRC-77 output packet')
+  }
+}
+
+/** Opt-in canonical emission for native callers. Complete domain, representation,
+ * signer and signature checks are repeated for every invocation. Only the existing
+ * bounded mathematical signature facts are shared with ordinary verification. */
+function outputPacketPreimageBytesWithInlineStrings(
+  domain: OutputDigestDomain,
+  body: unknown
+): Uint8Array {
+  outputAssert(
+    (OUTPUT_DIGEST_DOMAINS as readonly string[]).includes(domain),
+    'Unregistered output digest domain',
+    'unsupported'
+  )
+  const prefix = utf8.encode(`BRC-OUTPUT/1/${domain}\0`)
+  const payload = utf8.encode(canonicalOutputJSONWithInlineStrings(body))
+  const preimage = new Uint8Array(prefix.length + payload.length)
+  preimage.set(prefix)
+  preimage.set(payload, prefix.length)
+  return preimage
+}
+
+export function outputPacketDigestWithInlineStrings(
+  domain: OutputDigestDomain,
+  body: unknown
+): OutputHex32 {
+  // Hash the freshly validated owned bytes without a number-array round trip.
+  return toHex(sha256(outputPacketPreimageBytesWithInlineStrings(domain, body)))
+}
+
+export function verifyOutputPacketWithInlineStrings<T>(
+  domain: OutputDigestDomain,
+  packet: OutputSignedPacket<T>,
+  expectedSigner: OutputIdentity
+): boolean {
+  outputIdentity(expectedSigner)
+  closedOutputObject(packet, ['body', 'signature'])
+  const signature = decodeOutputBytes(packet.signature, 174)
+  outputAssert(signature[37] === 0, 'Output packets require the anyone verifier')
+  outputAssert(
+    toHex(signature.slice(4, 37)) === expectedSigner,
+    'Unexpected packet signer',
+    'unauthorized'
+  )
+  try {
+    // Canonicalization and every representation/signer check still run on a
+    // repeated packet. The domain-separated preimage and complete signature
+    // both participate in this key; only successful BRC77 mathematics is cached.
+    const preimage = outputPacketPreimageBytesWithInlineStrings(domain, packet.body),
       key = toHex(sha256(preimage)) + ':' + toHex(sha256(signature))
     if (packetSignatures.has(key)) return true
     const verified = SignedMessage.verify(Array.from(preimage), signature)

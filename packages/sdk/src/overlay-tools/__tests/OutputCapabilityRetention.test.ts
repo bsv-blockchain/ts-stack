@@ -4,8 +4,13 @@ import {
   outputPacketDigest,
   PrivateKey,
   retainOutputCapability,
+  retainOutputCapabilityWithInlineStrings,
   restoreOutputCapability,
+  restoreOutputCapabilityWithInlineStrings,
   selectOutputCapability,
+  selectOutputCapabilityWithInlineStrings,
+  parseOutputCapabilities,
+  parseOutputCapabilitiesWithInlineStrings,
   signOutputPacket,
   type OutputCapabilities,
   type OutputCapabilityRequest,
@@ -201,5 +206,72 @@ describe('local retained capability contracts', () => {
         allowLocalHTTP: true
       })
     ).toThrow('HTTPS')
+  })
+})
+
+describe('explicit fresh inline capability selection and retention', () => {
+  it('matches all representations and preserves independent local custody and historical recovery', () => {
+    const input = manifest(),
+      text = canonicalOutputJSON(input),
+      expected = retainOutputCapability(input, request())
+    for (const representation of [input, text, new TextEncoder().encode(text)]) {
+      expect(parseOutputCapabilitiesWithInlineStrings(representation)).toStrictEqual(
+        parseOutputCapabilities(representation)
+      )
+      expect(selectOutputCapabilityWithInlineStrings(representation, request())).toStrictEqual(
+        selectOutputCapability(representation, request())
+      )
+      const result = retainOutputCapabilityWithInlineStrings(representation, request())
+      expect(result).toStrictEqual(expected)
+      const saved = canonicalOutputJSON(result.record)
+      result.selection.service.name = 'caller mutation'
+      expect(canonicalOutputJSON(result.record)).toBe(saved)
+      const recoveryRequest = { ...request(), now: '500' }
+      for (const record of [result.record, saved, new TextEncoder().encode(saved)]) {
+        expect(restoreOutputCapabilityWithInlineStrings(record, recoveryRequest)).toStrictEqual(
+          expected.selection
+        )
+      }
+    }
+  })
+  it('repeats current trust and original historical signature, selector and digest checks', () => {
+    const input = manifest(),
+      { record } = retainOutputCapabilityWithInlineStrings(input, request())
+    expect(() =>
+      selectOutputCapabilityWithInlineStrings(input, { ...request(), now: '200' })
+    ).toThrow('Capability expired')
+    for (const change of [
+      { baseURL: 'https://redirect.example/api' },
+      { identity: new PrivateKey(72).toPublicKey().toString() },
+      { authenticatedPeer: new PrivateKey(73).toPublicKey().toString() },
+      { chain: { ...chain, genesisHash: 'ff'.repeat(32) } },
+      { rules: new Map() },
+      { kind: 'lookup' as const },
+      { service: 'other' },
+      { profile: OUTPUT_PROFILES.purchase }
+    ])
+      expect(() =>
+        restoreOutputCapabilityWithInlineStrings(record, { ...request(), ...change })
+      ).toThrow()
+    for (const invalid of [
+      { ...record, digest: 'ff'.repeat(32) },
+      { ...record, selectedAt: '200' },
+      { ...record, freshness: { ...record.freshness, maximumAgeSeconds: '0' } },
+      {
+        ...record,
+        manifest: { ...record.manifest, body: { ...record.manifest.body, expiresAt: '300' } }
+      }
+    ])
+      expect(() => restoreOutputCapabilityWithInlineStrings(invalid, request())).toThrow()
+    const getter = jest.fn(() => record.manifest)
+    const invalid = Object.defineProperty({ ...record }, 'manifest', {
+      enumerable: true,
+      get: getter
+    })
+    expect(() => restoreOutputCapabilityWithInlineStrings(invalid, request())).toThrow(
+      'JSON accessor or hidden key'
+    )
+    expect(getter).not.toHaveBeenCalled()
+    expect(() => parseOutputCapabilitiesWithInlineStrings('{"body":{},"body":{}}')).toThrow()
   })
 })
