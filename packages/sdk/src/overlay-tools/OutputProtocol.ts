@@ -433,7 +433,8 @@ export function validateOutputByteEncoding(
     value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$(?![^])/.test(value),
     'Noncanonical base64'
   )
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  let padding = 0
+  if (value.endsWith('=')) padding = value.endsWith('==') ? 2 : 1
   // Complete canonical syntax proves four-character quanta and at most two
   // trailing pads. Their exact decoded size can be bounded before allocation.
   outputAssert((value.length / 4) * 3 - padding <= maximumBytes, 'Decoded byte limit', 'limited')
