@@ -910,5 +910,6 @@ function buildOwnedPurchaseGrammar() {
   }
 }
 function ownedPurchaseSchemas() {
-  return (ownedPurchaseGrammar ??= buildOwnedPurchaseGrammar())
+  ownedPurchaseGrammar ??= buildOwnedPurchaseGrammar()
+  return ownedPurchaseGrammar
 }
