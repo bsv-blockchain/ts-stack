@@ -9,7 +9,8 @@ import {
   outputIdentity,
   outputString,
   outputU32,
-  outputU64
+  outputU64,
+  validateOutputByteEncoding
 } from './OutputProtocol.js'
 import {
   OUTPUT_JSON_LIMITS,
@@ -350,6 +351,8 @@ export function createOwnedRecordSchema() {
   ]) {
     rememberOwnedSchema<unknown>(schema, schema)
   }
+  // Representation validation retains every fresh bound without a decoded array.
+  rememberOwnedSchema(bytes, validateOutputByteEncoding)
 
   function fromOwnedParent<T>(parse: Schema<T>, child: Schema<T>): Schema<T> {
     const schema: Schema<T> = value =>

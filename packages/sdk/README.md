@@ -1017,3 +1017,17 @@ shape, key material, authorization, currentness or validation result. Portable
 parsers and buyer/wallet imports retain their existing paths. This adds no wire
 profile, stored format, root SDK export or authority rule. Hosted behavior and
 complete mutation qualification are required; static checks establish no speedup.
+
+`validateOutputByteEncoding(value, maximumBytes)` returns the current canonical
+standard Base64 string after validating its alphabet, framing, padding bits and
+exact decoded-size bound. It avoids constructing a decoded array when a caller
+only needs the encoded representation. Defaults, limit predicates and refusal
+order match `decodeOutputBytes`; decoding retains its existing implementation.
+The private fixed owned-record schema selects this validator only after fresh
+complete parent ownership. Ordinary byte callbacks and portable parser paths
+remain unchanged. This establishes representation only; endpoint schema,
+transaction validity, signature, custody and current authorization still need
+independent checks. No input or validation verdict is retained. The helper is an
+additive SDK export and requires no wire or stored-data migration. Hosted
+runtime and mutation qualification remain required; static checks establish no
+performance improvement.

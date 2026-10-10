@@ -2965,3 +2965,27 @@ assertReserveGenesisApproved()
 const genesisAuthorization = await authority.signGenesis(descriptor, genesisOutpoint)
 console.log(authority.identity, completed.id('hex'), genesisAuthorization.body.listingId)
 ```
+
+## Retaining canonical encoded bytes
+
+Use representation validation when a bounded field must remain encoded. Decode
+only when bytes are needed. A successful representation check does not validate
+the surrounding protocol object, signature or authority.
+
+```ts compile
+// example-id: retaining-canonical-output-byte-encoding
+import {
+  validateOutputByteEncoding as validateEncodedOutputField,
+  decodeOutputBytes as decodeEncodedOutputField
+} from '@bsv/sdk'
+
+function retainEncodedProof(field: unknown): string {
+  return validateEncodedOutputField(field, 1024)
+}
+
+function inspectProofBytes(field: unknown): number[] {
+  return decodeEncodedOutputField(retainEncodedProof(field), 1024)
+}
+void retainEncodedProof
+void inspectProofBytes
+```

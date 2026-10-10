@@ -1333,3 +1333,90 @@ test('server child composition independently frames embedded JSON and preserves 
   expect(o.normalized(7, custom)).toBe(7)
   expect(o.normalized('"7"', custom)).toBe(7)
 })
+
+import { decodeOutputBytes, validateOutputByteEncoding } from '../OutputProtocol.js'
+
+test('encoded-byte validation matches the decoder and an independent native Base64 oracle', () => {
+  for (let length = 0; length <= 257; length++) {
+    const bytes = Buffer.from(Array.from({ length }, (_, index) => (index * 37 + length) % 256))
+    const encoded = bytes.toString('base64')
+    expect(validateOutputByteEncoding(encoded, length)).toBe(encoded)
+    expect(decodeOutputBytes(encoded, length)).toEqual(Array.from(bytes))
+    for (const maximum of [0, Math.max(0, length - 1), length, length + 1])
+      expect(ownedSchemaOutcome(() => validateOutputByteEncoding(encoded, maximum))).toStrictEqual(
+        ownedSchemaOutcome(() => {
+          decodeOutputBytes(encoded, maximum)
+          return encoded
+        })
+      )
+  }
+})
+
+test('encoded-byte validation preserves malformed, padding, type and limit refusal precedence', () => {
+  const values: unknown[] = [
+    undefined,
+    null,
+    false,
+    0,
+    {},
+    [],
+    '!',
+    '=',
+    '====',
+    'A===',
+    'A',
+    'AA',
+    'AAA',
+    'A=AA',
+    'AA=A',
+    'AQ==\n',
+    'AQ==\r',
+    ' AQ==',
+    'AQ== ',
+    'é===',
+    'AQ-_',
+    '',
+    'AQ==',
+    'AQI=',
+    'AQID'
+  ]
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  for (const character of alphabet) values.push('A' + character + '==', 'AA' + character + '=')
+  for (const value of values) {
+    for (const maximum of [0, 1, 2, 3, 4, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 4194305])
+      expect(ownedSchemaOutcome(() => validateOutputByteEncoding(value, maximum))).toStrictEqual(
+        ownedSchemaOutcome(() => {
+          decodeOutputBytes(value, maximum)
+          return value
+        })
+      )
+  }
+})
+
+test('owned server grammar retains byte callbacks and validates each complete current representation', () => {
+  const o = s.createOwnedRecordSchema(),
+    selected = o.fixedObject({ proofs: o.array(o.bytes, 64) }),
+    ordinary = s.fixedObject({ proofs: s.array(s.bytes, 64) })
+  expect(o.bytes).toBe(s.bytes)
+  for (const proofs of [[], ['', 'AQ==', 'AQI=', 'AQID'], ['AR=='], ['AAF='], ['AQ==\n'], [7]]) {
+    const graph = { proofs },
+      encoded = JSON.stringify(graph)
+    for (const input of [graph, encoded, new TextEncoder().encode(encoded)])
+      expect(ownedSchemaOutcome(() => o.normalized(input, selected))).toStrictEqual(
+        ownedSchemaOutcome(() => s.normalizedWithOwnedRecords(input, ordinary))
+      )
+  }
+  const source = { proofs: ['AQ=='] }
+  expect(o.normalized(source, selected)).toEqual(source)
+  source.proofs[0] = 'AR=='
+  expect(() => o.normalized(source, selected)).toThrow('Nonzero base64 padding bits')
+  Object.defineProperty(source, 'later', {
+    get() {
+      throw new Error('Accessor must not run')
+    },
+    enumerable: true
+  })
+  expect(ownedSchemaOutcome(() => o.normalized(source, selected))).toStrictEqual(
+    ownedSchemaOutcome(() => s.normalizedWithOwnedRecords(source, ordinary))
+  )
+})

@@ -411,3 +411,37 @@ export function verifyOutputPacketWithInlineStrings<T>(
     throw new OutputProtocolError('invalid', 'Malformed BRC-77 output packet')
   }
 }
+
+/** Validate canonical standard Base64 without allocating decoded bytes.
+ * Returns the current encoded string; establishes representation only, never
+ * schema, transaction validity, authorization, custody or currentness. Limits
+ * and refusal order match decodeOutputBytes, which retains its existing path.
+ */
+export function validateOutputByteEncoding(
+  value: unknown,
+  maximumBytes = OUTPUT_JSON_LIMITS.bytes
+): string {
+  outputAssert(
+    Number.isSafeInteger(maximumBytes) &&
+      maximumBytes >= 0 &&
+      maximumBytes <= OUTPUT_JSON_LIMITS.bytes,
+    'Invalid byte limit'
+  )
+  outputAssert(typeof value === 'string', 'Expected base64 bytes')
+  outputAssert(value.length <= 4 * Math.ceil(maximumBytes / 3), 'Decoded byte limit', 'limited')
+  outputAssert(
+    value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$(?![^])/.test(value),
+    'Noncanonical base64'
+  )
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  // Complete canonical syntax proves four-character quanta and at most two
+  // trailing pads. Their exact decoded size can be bounded before allocation.
+  outputAssert((value.length / 4) * 3 - padding <= maximumBytes, 'Decoded byte limit', 'limited')
+  if (padding > 0) {
+    const sextet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(
+      value[value.length - padding - 1]
+    )
+    outputAssert((sextet & (padding === 2 ? 15 : 3)) === 0, 'Nonzero base64 padding bits')
+  }
+  return value
+}
