@@ -8197,3 +8197,27 @@ exact batch selection and complete successful assertions, recomputes both merged
 results and coverage from raw batches, then applies the original global coverage
 gate. Missing, skipped, repeated, relabeled or mismatched evidence fails closed.
 Hosted execution and complete exact-head mutation qualification remain required.
+### Native boundary dispatch after serial isolation
+
+Fresh serial processes do not by themselves establish completion of the two
+full native alias properties. The current implementation retains their complete
+case counts, seeds, interruption rules and assertion bodies. Failed incomplete
+property runs remain failures; they are never treated as sampled qualification.
+
+Three private components select the existing direct-record canonical serializer
+for identity bindings, purchase contracts and acquisition payload framing. It
+checks each current graph, descriptor, Unicode value, cycle and resource bound
+independently, and produces the same canonical bytes as the inline-record
+serializer. Ordinary SDK entry points and all persistence formats remain intact.
+Protected payload framing selects the existing native Base64 decoder, whose
+bounded decode and exact native re-encoding establish canonical representation.
+The separately exported validated decoder remains available. Malformed inputs
+retain the original native decoder's refusal order. Custody resolution, key
+commitment, HKDF, GCM authentication and current authorization remain fresh.
+
+This change avoids redundant JavaScript dispatch and alphabet scanning at these
+native boundaries. It retains no input, graph, encoded payload, secret,
+authorization or validation result. Existing serializer property parity and
+protected-envelope boundary/refusal/custody regressions remain applicable.
+Hosted complete property, coverage and mutation receipts are required before
+claiming either a measured performance improvement or Checkpoint 2 completion.

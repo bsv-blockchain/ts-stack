@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   ownOutputJSONWithCountedRecords as ownOutputJSON,
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,

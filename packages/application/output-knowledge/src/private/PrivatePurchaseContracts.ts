@@ -2,7 +2,7 @@ import {
   ownOutputJSONWithCountedRecords as ownOutputJSON,
   OUTPUT_PROFILES,
   canonicalOutputBase,
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   closedOutputObject,
   outputAssert,
   outputHex32,

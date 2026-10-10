@@ -1,7 +1,7 @@
 import { createHmac, KeyObject } from 'node:crypto'
 import {
   ownOutputJSONWithCountedRecords as ownOutputJSON,
-  canonicalOutputJSONWithInlineRecords as canonicalOutputJSON,
+  canonicalOutputJSONWithDirectRecords as canonicalOutputJSON,
   closedOutputObject,
   outputIdentity,
   outputString,

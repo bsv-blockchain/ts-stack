@@ -14,7 +14,7 @@ import {
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'
-import { nativeValidatedOutputBytes as nativeOutputBytes } from './NativeOutputBytes.js'
+import { nativeOutputBytes } from './NativeOutputBytes.js'
 
 // Capture only fixed field definitions; validate every supplied value afresh.
 const assertPayloadEnvelopeFields: ReturnType<typeof createClosedOutputObjectValidator> =
