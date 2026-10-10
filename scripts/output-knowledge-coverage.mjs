@@ -14,9 +14,10 @@ import {
   APPLICATION_COVERAGE_SHARDS,
   compareCoveragePaths,
   relativeTests,
-  assertCompleteResults,
   validateShardUnion,
-  enforceGlobalCoverage
+  enforceGlobalCoverage,
+  applicationCoverageBatches,
+  mergeCoverageBatchResults
 } from './output-knowledge-coverage-validation.mjs'
 export {
   assertCompleteResults,
@@ -110,22 +111,37 @@ function collect(shard, output) {
     allTests: inventory(),
     selectedTests: inventory(shard)
   }
+  manifest.batches = applicationCoverageBatches(manifest.selectedTests)
   writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest))
-  // A shard cannot meet the package-wide threshold independently. The required
-  // aggregate below applies the original config to the complete merged map.
-  jest([
-    '--coverage',
-    '--coverageThreshold={}',
-    '--coverageReporters=json',
-    `--coverageDirectory=${output}`,
-    `--shard=${shard}/${APPLICATION_COVERAGE_SHARDS}`,
-    '--json',
-    `--outputFile=${path.join(output, 'results.json')}`
-  ])
-  assertCompleteResults(
-    JSON.parse(readFileSync(path.join(output, 'results.json'))),
-    manifest.selectedTests
-  )
+  const batches = []
+  for (const batch of manifest.batches) {
+    const directory = path.join(output, 'batches', batch.id)
+    mkdirSync(directory, { recursive: true })
+    const batchManifest = { identity: manifest.identity, ...batch }
+    writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(batchManifest))
+    // Preserve full source instrumentation and defer ONLY the existing global
+    // threshold to the complete aggregate. Each fresh process remains serial.
+    jest([
+      '--coverage',
+      '--coverageThreshold={}',
+      '--coverageReporters=json',
+      `--coverageDirectory=${directory}`,
+      ...(batch.runInBand ? ['--runInBand'] : []),
+      '--json',
+      `--outputFile=${path.join(directory, 'results.json')}`,
+      '--runTestsByPath',
+      ...batch.selectedTests
+    ])
+    batches.push({
+      manifest: batchManifest,
+      results: JSON.parse(readFileSync(path.join(directory, 'results.json'))),
+      coverage: JSON.parse(readFileSync(path.join(directory, 'coverage-final.json')))
+    })
+  }
+  const results = mergeCoverageBatchResults(batches, manifest.identity, manifest.selectedTests)
+  const coverage = mergeCoverage(batches).toJSON()
+  writeFileSync(path.join(output, 'results.json'), JSON.stringify(results))
+  writeFileSync(path.join(output, 'coverage-final.json'), JSON.stringify(coverage))
   console.log(
     `Complete application coverage shard ${shard}/${APPLICATION_COVERAGE_SHARDS}: ${manifest.selectedTests.length} suites`
   )
@@ -136,11 +152,26 @@ function aggregate(input, output) {
     shard => {
       const directory = path.join(input, `shard-${shard}`)
       const read = file => JSON.parse(readFileSync(path.join(directory, file)))
-      return {
-        manifest: read('manifest.json'),
-        results: read('results.json'),
-        coverage: read('coverage-final.json')
-      }
+      const manifest = read('manifest.json')
+      const plan = applicationCoverageBatches(manifest.selectedTests)
+      assert.deepEqual(manifest.batches, plan, 'changed execution plan')
+      const batches = plan.map(batch => {
+        const base = path.join('batches', batch.id)
+        return {
+          manifest: read(path.join(base, 'manifest.json')),
+          results: read(path.join(base, 'results.json')),
+          coverage: read(path.join(base, 'coverage-final.json'))
+        }
+      })
+      const results = mergeCoverageBatchResults(batches, manifest.identity, manifest.selectedTests)
+      const coverage = mergeCoverage(batches).toJSON()
+      assert.deepEqual(read('results.json'), results, 'merged test results differ from raw batches')
+      assert.deepEqual(
+        read('coverage-final.json'),
+        coverage,
+        'merged coverage differs from raw batches'
+      )
+      return { manifest, results, coverage }
     }
   )
   const expected = inventory()

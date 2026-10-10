@@ -140,3 +140,151 @@ test('a missing or relabeled fourth shard cannot qualify a complete campaign', (
     assert.throws(() => validateShardUnion(changed, identity, expected))
   }
 })
+import {
+  applicationCoverageBatches,
+  mergeCoverageBatchResults
+} from './output-knowledge-coverage-validation.mjs'
+
+const batchSelected = [
+  'test/a.test.ts',
+  'test/private-purchase-alias-coordinator.property.test.ts',
+  'test/private-purchase-alias-disclosure.property.test.ts',
+  'test/z.test.ts'
+]
+function batchEvidence() {
+  return applicationCoverageBatches(batchSelected).map(plan => ({
+    manifest: { identity: structuredClone(identity), ...structuredClone(plan) },
+    results: {
+      ...structuredClone(evidence()[0].results),
+      numTotalTests: plan.selectedTests.length,
+      numPassedTests: plan.selectedTests.length,
+      numTotalTestSuites: plan.selectedTests.length,
+      numPassedTestSuites: plan.selectedTests.length,
+      testResults: plan.selectedTests.map(name => ({
+        name: path.join(directory, name),
+        status: 'passed',
+        assertionResults: [{ status: 'passed' }]
+      }))
+    }
+  }))
+}
+
+test('fresh serial placement preserves the exact discovered shard without mutating discovery', () => {
+  const before = [...batchSelected]
+  assert.deepEqual(applicationCoverageBatches(batchSelected), [
+    {
+      id: 'private-purchase-alias-coordinator.property',
+      selectedTests: [batchSelected[1]],
+      runInBand: true
+    },
+    {
+      id: 'private-purchase-alias-disclosure.property',
+      selectedTests: [batchSelected[2]],
+      runInBand: true
+    },
+    { id: 'ordinary', selectedTests: [batchSelected[0], batchSelected[3]], runInBand: false }
+  ])
+  assert.deepEqual(batchSelected, before)
+  assert.deepEqual(applicationCoverageBatches(['test/a.test.ts']), [
+    { id: 'ordinary', selectedTests: ['test/a.test.ts'], runInBand: false }
+  ])
+  assert.equal(applicationCoverageBatches([batchSelected[1]]).length, 1)
+  for (const selected of [
+    [],
+    ['test/a.test.ts', 'test/a.test.ts'],
+    ['test/z.test.ts', 'test/a.test.ts'],
+    ['test/../a.test.ts'],
+    ['test//a.test.ts'],
+    ['test/./a.test.ts'],
+    ['/tmp/a.test.ts'],
+    [1]
+  ]) {
+    assert.throws(() => applicationCoverageBatches(selected))
+  }
+})
+
+test('complete raw same-run batch receipts reconcile to the original successful shard result', () => {
+  const rows = batchEvidence(),
+    original = structuredClone(rows)
+  const merged = mergeCoverageBatchResults(rows.reverse(), identity, batchSelected)
+  assert.equal(merged.numTotalTests, 4)
+  assert.equal(merged.numPassedTestSuites, 4)
+  assert.deepEqual(
+    merged.testResults.map(suite => path.relative(directory, suite.name)),
+    [batchSelected[1], batchSelected[2], batchSelected[0], batchSelected[3]]
+  )
+  assert.deepEqual(rows.reverse(), original)
+  assert.doesNotThrow(() => validateShardUnion(evidence(), identity, expected))
+})
+
+test('missing, duplicate, altered-selection and other-source batch receipts are refused', () => {
+  const mutations = [
+    rows => rows.pop(),
+    rows => rows.push(structuredClone(rows[0])),
+    rows => {
+      rows[1] = structuredClone(rows[0])
+    },
+    rows => {
+      rows[0].manifest.id = 'unknown'
+    },
+    rows => {
+      rows[0].manifest.runInBand = false
+    },
+    rows => {
+      rows[0].manifest.selectedTests = ['test/a.test.ts']
+    },
+    rows => {
+      rows[0].manifest.identity.sha = 'c'.repeat(40)
+    },
+    rows => {
+      rows[0].manifest.identity.run = '2'
+    },
+    rows => {
+      rows[0].manifest.identity.attempt = '2'
+    },
+    rows => {
+      rows[0].manifest.identity.configuration = 'c'.repeat(64)
+    }
+  ]
+  for (const mutate of mutations) {
+    const rows = batchEvidence()
+    mutate(rows)
+    assert.throws(() => mergeCoverageBatchResults(rows, identity, batchSelected))
+  }
+})
+
+test('a failed, skipped, relabeled or unexecuted batch cannot qualify the merged shard', () => {
+  for (const mutate of [
+    result => {
+      result.success = false
+    },
+    result => {
+      result.numFailedTests = 1
+    },
+    result => {
+      result.numPendingTests = 1
+    },
+    result => {
+      result.numTodoTests = 1
+    },
+    result => {
+      result.numPassedTests = 0
+    },
+    result => {
+      result.numTotalTests = 2
+    },
+    result => {
+      result.testResults[0].name = path.join(directory, 'test/extra.test.ts')
+    },
+    result => {
+      result.testResults[0].assertionResults = []
+    },
+    result => {
+      result.testResults[0].assertionResults[0].status = 'pending'
+    }
+  ]) {
+    const rows = batchEvidence()
+    mutate(rows[0].results)
+    assert.throws(() => mergeCoverageBatchResults(rows, identity, batchSelected))
+  }
+})

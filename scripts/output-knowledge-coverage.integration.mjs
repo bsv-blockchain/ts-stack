@@ -47,3 +47,18 @@ test('the full merged map must pass every original global metric, including unco
   assert.throws(() => mergeCoverage([{ coverage: {} }, { coverage: {} }]))
   assert.throws(() => mergeCoverage([{ coverage: coverage([1, 0]) }, { coverage: {} }]))
 })
+test('fresh-process batches retain all instrumented files and their uncovered counters', () => {
+  const first = coverage([2, 0]),
+    second = coverage([0, 3])
+  const map = mergeCoverage([{ coverage: first }, { coverage: second }])
+  assert.deepEqual(map.toJSON()['/fixture.ts'].s, { 0: 2, 1: 3 })
+  assert.deepEqual(map.toJSON()['/fixture.ts'].f, { 0: 2, 1: 3 })
+  assert.deepEqual(map.toJSON()['/fixture.ts'].b, { 0: [2, 3] })
+  const incomplete = { '/extra.ts': first['/fixture.ts'] }
+  assert.throws(() => mergeCoverage([{ coverage: first }, { coverage: incomplete }]))
+  assert.throws(() =>
+    enforceGlobalCoverage(mergeCoverage([{ coverage: coverage([1, 0]) }]), {
+      global: { branches: 80, functions: 80, lines: 85, statements: 85 }
+    })
+  )
+})

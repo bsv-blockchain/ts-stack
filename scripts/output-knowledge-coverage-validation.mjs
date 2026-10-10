@@ -102,3 +102,76 @@ export function enforceGlobalCoverage(map, thresholds) {
   }
   return summary
 }
+
+// The two independently observed native histories run in fresh serial Jest
+// processes. This list changes execution placement only, never discovery.
+const isolatedCoverageTests = Object.freeze([
+  'test/private-purchase-alias-coordinator.property.test.ts',
+  'test/private-purchase-alias-disclosure.property.test.ts'
+])
+
+export function applicationCoverageBatches(selected) {
+  assert.ok(Array.isArray(selected) && selected.length > 0, 'empty selected test inventory')
+  for (const file of selected) {
+    assert.ok(typeof file === 'string' && file.startsWith('test/') && file.endsWith('.test.ts'))
+    assert.ok(file.split('/').every(part => part !== '' && part !== '.' && part !== '..'))
+  }
+  assert.equal(new Set(selected).size, selected.length, 'duplicate selected suite')
+  assert.deepEqual(
+    selected,
+    selected.toSorted(compareCoveragePaths),
+    'unordered selected inventory'
+  )
+  const batches = isolatedCoverageTests
+    .filter(file => selected.includes(file))
+    .map(file => ({
+      id: file.slice(5, -8),
+      selectedTests: [file],
+      runInBand: true
+    }))
+  const ordinary = selected.filter(file => !isolatedCoverageTests.includes(file))
+  if (ordinary.length > 0)
+    batches.push({ id: 'ordinary', selectedTests: ordinary, runInBand: false })
+  assert.deepEqual(
+    batches.flatMap(batch => batch.selectedTests).toSorted(compareCoveragePaths),
+    selected
+  )
+  return batches
+}
+
+/** Reconcile retained raw successful receipts; no missing, repeated, relabeled,
+ * skipped or other-source execution can supply the merged shard result. */
+export function mergeCoverageBatchResults(batches, identity, selected) {
+  const plan = applicationCoverageBatches(selected)
+  assert.ok(Array.isArray(batches))
+  assert.equal(batches.length, plan.length, 'all execution batches are required')
+  const ids = new Set()
+  for (const batch of batches) {
+    const expected = plan.find(item => item.id === batch.manifest.id)
+    assert.ok(expected && !ids.has(expected.id), 'unknown or repeated execution batch')
+    ids.add(expected.id)
+    assert.deepEqual(
+      batch.manifest,
+      { identity, ...expected },
+      'changed batch identity or selection'
+    )
+    assertCompleteResults(batch.results, expected.selectedTests)
+  }
+  const ordered = plan.map(item => batches.find(batch => batch.manifest.id === item.id))
+  const count = key => ordered.reduce((total, batch) => total + batch.results[key], 0)
+  const result = {
+    success: true,
+    numFailedTests: count('numFailedTests'),
+    numFailedTestSuites: count('numFailedTestSuites'),
+    numPendingTests: count('numPendingTests'),
+    numTodoTests: count('numTodoTests'),
+    numPendingTestSuites: count('numPendingTestSuites'),
+    numTotalTests: count('numTotalTests'),
+    numPassedTests: count('numPassedTests'),
+    numTotalTestSuites: count('numTotalTestSuites'),
+    numPassedTestSuites: count('numPassedTestSuites'),
+    testResults: ordered.flatMap(batch => batch.results.testResults)
+  }
+  assertCompleteResults(result, selected)
+  return result
+}

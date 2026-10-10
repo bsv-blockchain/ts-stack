@@ -8175,3 +8175,25 @@ checks compare every retained input field except its update timestamp. The two
 new mined recovery and optional-tag cases passed on db9c, but the failed initial
 wallet run provides no successor mutation score. Complete qualification remains
 required without any change to production behavior or policy.
+
+### Fresh serial coverage placement
+
+CI38037784982's coordinator history interrupted after213 of300 cases with no
+reported counterexample. The independently selected diagnostic completed its
+property assertion, although its overall exit was not qualification. Installed
+Jest30 honors explicit `--runInBand`; the existing idle-memory setting otherwise
+selects a child worker even with a single-worker limit. This is an execution
+hypothesis, not a proven performance improvement or correctness conclusion.
+
+Complete application coverage now places only the two observed alias disclosure
+and coordinator histories in fresh serial Jest processes. The ordinary suites
+keep their existing worker configuration. Neither Jest configuration nor any
+original test, property case, seed, replay, case/interrupt deadline, worker limit,
+job allowance or threshold changes. Original discovery determines the same four
+shards; explicit paths partition each selected shard without omissions or repeats.
+Every raw batch manifest, result and full instrumented coverage map is retained.
+The aggregate independently validates same-source/run/attempt/configuration,
+exact batch selection and complete successful assertions, recomputes both merged
+results and coverage from raw batches, then applies the original global coverage
+gate. Missing, skipped, repeated, relabeled or mismatched evidence fails closed.
+Hosted execution and complete exact-head mutation qualification remain required.
