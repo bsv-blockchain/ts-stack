@@ -1411,12 +1411,10 @@ describe('shared internalization refuses inconsistent dependencies without owner
         txid = f.tx.id('hex')
       f.tx.merklePath = new MerklePath(1500, [[{ offset: 0, hash: txid, txid: true }]])
       args.tx = f.tx.toAtomicBEEF()
-      jest
-        .spyOn(ctx.services, 'getChainTracker')
-        .mockResolvedValue({
-          currentHeight: async () => 2000,
-          isValidRootForHeight: async () => true
-        })
+      jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
+        currentHeight: async () => 2000,
+        isValidRootForHeight: async () => true
+      })
       // Deliberately broken service-port result: the runtime defense must survive
       // a provider that violates its non-null static return contract.
       jest
@@ -1505,6 +1503,15 @@ describe('internalization preserves inputs and metadata across failed publicatio
       { spendable: true, spentBy: undefined }
     )
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(f.tracker)
+    // This synthetic provider advertises a newly inserted request. The concrete
+    // provider omits optional isNew; that ordinary path does not publish here.
+    const getProvenOrReq = ctx.activeStorage.getProvenOrReq.bind(ctx.activeStorage)
+    const requests = jest
+      .spyOn(ctx.activeStorage, 'getProvenOrReq')
+      .mockImplementation(async (id, req, trx) => {
+        const retained = await getProvenOrReq(id, req, trx)
+        return req === undefined ? retained : { ...retained, isNew: true }
+      })
     const publish = jest.spyOn(internalizationPublication, 'shareReqsWithWorld').mockResolvedValue({
       swr: [{ txid, status: 'failed' }],
       ndr: [{ txid, status: 'serviceError' }]
@@ -1538,6 +1545,9 @@ describe('internalization preserves inputs and metadata across failed publicatio
       sendWithResults: [{ txid, status: 'failed' }],
       notDelayedResults: [{ txid, status: 'serviceError' }]
     })
+    expect(requests).toHaveBeenCalledTimes(1)
+    expect(requests.mock.calls[0][0]).toBe(txid)
+    expect(requests.mock.calls[0][1]).toMatchObject({ txid, status: 'unsent' })
     expect(publish).toHaveBeenCalledTimes(1)
     const call = publish.mock.calls[0]
     expect(call.slice(0, 4)).toEqual([ctx.activeStorage, ctx.userId, [], false])
@@ -1596,12 +1606,10 @@ describe('shared internalization checks late evidence and inclusion lookup ports
     f.tx.lockTime = nonce++
     const txid = f.tx.id('hex')
     f.tx.merklePath = new MerklePath(1500, [[{ offset: 0, hash: txid, txid: true }]])
-    jest
-      .spyOn(ctx.services, 'getChainTracker')
-      .mockResolvedValue({
-        currentHeight: async () => 2000,
-        isValidRootForHeight: async () => true
-      })
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
+      currentHeight: async () => 2000,
+      isValidRootForHeight: async () => true
+    })
     const header = jest
       .spyOn(ctx.services, 'getHeaderForHeight')
       .mockResolvedValue(
@@ -1705,4 +1713,167 @@ describe('shared internalization checks late evidence and inclusion lookup ports
       await unchanged(txid, lifecycle)
     }
   )
+})
+
+describe('mined recovery and optional basket metadata retain ownership facts', () => {
+  let ctx: TestWalletNoSetup
+  beforeAll(async () => {
+    ctx = await _tu.createLegacyWalletSQLiteCopy('internalization-mined-recovery-merge', 'legacy')
+  })
+  afterEach(() => jest.restoreAllMocks())
+  afterAll(async () => {
+    await ctx.wallet.destroy()
+  })
+  function mined(lockTime: number) {
+    const f = fundingFixture(ctx)
+    f.tx.lockTime = lockTime
+    const txid = f.tx.id('hex')
+    f.tx.merklePath = new MerklePath(1500, [[{ offset: 0, hash: txid, txid: true }]])
+    const header = serializeBaseBlockHeader({ ...genesisHeader(ctx.chain), merkleRoot: txid })
+    jest
+      .spyOn(ctx.services, 'getChainTracker')
+      .mockResolvedValue({
+        currentHeight: async () => 2000,
+        isValidRootForHeight: async (root, height) =>
+          (root === txid && height === 1500) || (await f.tracker.isValidRootForHeight(root, height))
+      })
+    jest.spyOn(ctx.services, 'getHeaderForHeight').mockResolvedValue(header)
+    const network = jest
+      .spyOn(ctx.services, 'postBeef')
+      .mockRejectedValue(new Error('Synthetic mined receipt only'))
+    return { f, txid, network }
+  }
+  test('merges a mined ordinary payment into an existing recovery transaction with its exact proof and balance', async () => {
+    const { f, txid, network } = mined(801),
+      now = new Date()
+    const transactionId = await ctx.activeStorage.insertTransaction({
+      created_at: now,
+      updated_at: now,
+      transactionId: 0,
+      userId: ctx.userId,
+      txid,
+      status: 'unproven',
+      reference: Utils.toBase64(Utils.toArray('recovery-merge', 'utf8')),
+      isOutgoing: false,
+      satoshis: 7,
+      description: 'Synthetic retained recovery receipt'
+    })
+    const request = EntityProvenTxReq.fromTxid(txid, f.tx.toBinary(), f.tx.toAtomicBEEF())
+    request.status = 'unsent'
+    await ctx.activeStorage.insertProvenTxReq(request.toApi())
+    const hook: FundingRecoveryCommit = {
+      protocol: 'wallet-funding-recovery-v1',
+      reject: jest.fn(),
+      commit: jest.fn(async run => await ctx.activeStorage.transaction(run))
+    }
+    const auth = await ctx.storage.getAuth(true)
+    const result = await storageInternalizationCore(
+      ctx.activeStorage,
+      auth,
+      {
+        tx: f.tx.toAtomicBEEF(),
+        description: 'Synthetic mined recovery merge',
+        labels: ['retained recovery'],
+        outputs: [
+          {
+            outputIndex: 1,
+            protocol: 'wallet payment',
+            paymentRemittance: {
+              derivationPrefix: 'cHVibGljLWZpeHR1cmU=',
+              derivationSuffix: 'cGF5bWVudA==',
+              senderIdentityKey: new PrivateKey(81).toPublicKey().toString()
+            }
+          }
+        ]
+      },
+      null,
+      hook
+    )
+    expect(result).toMatchObject({ accepted: true, isMerge: true, txid, satoshis: 100 })
+    expect(hook.commit).toHaveBeenCalledTimes(1)
+    expect(hook.reject).not.toHaveBeenCalled()
+    const transactions = await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid }
+    })
+    expect(transactions).toHaveLength(1)
+    expect(transactions[0]).toMatchObject({ transactionId, status: 'completed', satoshis: 107 })
+    const proof = await ctx.activeStorage.findProvenTxs({ partial: { txid } })
+    expect(proof).toHaveLength(1)
+    expect(proof[0]).toMatchObject({
+      height: 1500,
+      index: 0,
+      merkleRoot: txid,
+      merklePath: f.tx.merklePath!.toBinary(),
+      rawTx: f.tx.toBinary()
+    })
+    expect(transactions[0].provenTxId).toBe(proof[0].provenTxId)
+    const requests = await ctx.activeStorage.findProvenTxReqs({ partial: { txid } })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]).toMatchObject({ status: 'completed', provenTxId: proof[0].provenTxId })
+    expect(requests[0].history).toContain('fundingRecovery-proof')
+    const outputs = await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
+    expect(outputs).toHaveLength(1)
+    expect(outputs[0]).toMatchObject({
+      transactionId,
+      vout: 1,
+      satoshis: 100,
+      spendable: true,
+      type: 'P2PKH',
+      change: true,
+      providedBy: 'storage'
+    })
+    expect(isManagedChangeOutput(outputs[0])).toBe(true)
+    expect(network).not.toHaveBeenCalled()
+  })
+  test('an optional-tag validator port retains a mined custom output without creating tags', async () => {
+    const { f, txid, network } = mined(802),
+      auth = await ctx.storage.getAuth(true)
+    const tagsBefore = await ctx.activeStorage.findOutputTags({ partial: { userId: ctx.userId } })
+    const args: InternalizeActionArgs = {
+      tx: f.tx.toAtomicBEEF(),
+      description: 'Synthetic tag-free record',
+      labels: [],
+      outputs: [
+        {
+          outputIndex: 1,
+          protocol: 'basket insertion',
+          insertionRemittance: { basket: 'tag-free records' }
+        }
+      ]
+    }
+    const valid = internalizationValidation.validateInternalizeActionArgs(args)
+    delete valid.outputs[0].insertionRemittance!.tags
+    const validation = jest
+      .spyOn(internalizationValidation, 'validateInternalizeActionArgs')
+      .mockReturnValue(valid)
+    expect(await storageInternalizationCore(ctx.activeStorage, auth, args, null)).toMatchObject({
+      accepted: true,
+      isMerge: false,
+      txid,
+      satoshis: 0
+    })
+    expect(validation).toHaveBeenCalledTimes(1)
+    const basket = await ctx.activeStorage.findOutputBaskets({
+      partial: { userId: ctx.userId, name: 'tag-free records' }
+    })
+    expect(basket).toHaveLength(1)
+    const outputs = await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
+    expect(outputs).toHaveLength(1)
+    expect(outputs[0]).toMatchObject({
+      vout: 1,
+      satoshis: 100,
+      basketId: basket[0].basketId,
+      type: 'custom',
+      change: false,
+      spendable: true,
+      providedBy: 'you'
+    })
+    expect(
+      await ctx.activeStorage.findOutputTagMaps({ partial: { outputId: outputs[0].outputId } })
+    ).toHaveLength(0)
+    expect(await ctx.activeStorage.findOutputTags({ partial: { userId: ctx.userId } })).toEqual(
+      tagsBefore
+    )
+    expect(network).not.toHaveBeenCalled()
+  })
 })

@@ -1203,3 +1203,9 @@ bookkeeping preserves a different recorded spender even when a legacy row
 still says spendable. These checks do not replace chain verification or prove
 real-network broadcast. Public methods, remittances, schemas and defaults
 require no migration.
+
+The failed-publication fixture supplies the optional new-request signal through
+a disclosed synthetic storage port and uses real SQLite ownership writes and
+rollback. The ordinary concrete provider path retains its existing behavior.
+Additional mined recovery and tag-free insertion cases check retained balances,
+proof identities, transaction lifecycle and empty metadata without network I/O.
