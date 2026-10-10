@@ -668,3 +668,175 @@ test('cold-cache preparation refuses every unsafe result and cannot accept an or
     /run: node scripts\/output-knowledge-performance-diagnostic\.mjs --prepare-native-runtime/
   )
 })
+
+test('diagnostic assertions distinguish a passing suite from a nonzero coverage exit', async () => {
+  const { summarizeDiagnosticAssertions } =
+    await import('./output-knowledge-performance-diagnostic.mjs')
+  const selection = applicationDiagnosticSelection('coordinator-property')
+  const safe = {
+    processGroupGone: true,
+    timedOut: false,
+    stopReason: null,
+    signal: null,
+    exitCode: 1,
+    knownNativeFaultMarker: false,
+    boundedTriageExceeded: false,
+    testCaseTimeoutMarker: false
+  }
+  const fixture = {
+    numTotalTestSuites: 1,
+    numRuntimeErrorTestSuites: 0,
+    numPendingTestSuites: 0,
+    numTotalTests: 1,
+    numPendingTests: 0,
+    numTodoTests: 0,
+    numPassedTests: 1,
+    numFailedTests: 0,
+    success: false,
+    testResults: [
+      {
+        name: path.join(countRoot, selection.packageDirectory, selection.selector),
+        status: 'passed',
+        message: 'private fixture message',
+        assertionResults: [{ status: 'passed', failureMessages: ['private fixture value'] }]
+      }
+    ]
+  }
+  const result = summarizeDiagnosticAssertions(fixture, selection, countRoot, safe, () => {})
+  assert.deepEqual(result, {
+    outcome: 'passed',
+    passed: 1,
+    failed: 0,
+    processExitCode: 1,
+    completedPropertyCases: null,
+    rawPayloadPrinted: false,
+    fullFunctionalQualified: false,
+    fullCampaignQualified: false
+  })
+  assert.ok(!JSON.stringify(result).includes('private fixture'))
+  for (const change of [
+    { numTotalTests: 0 },
+    { numPassedTests: 0 },
+    { numPendingTests: 1 },
+    { numTodoTests: 1 },
+    { numRuntimeErrorTestSuites: 1 },
+    { testResults: [] }
+  ])
+    assert.throws(
+      () =>
+        summarizeDiagnosticAssertions(
+          { ...fixture, ...change },
+          selection,
+          countRoot,
+          safe,
+          () => {}
+        ),
+      /diagnostic-result/
+    )
+  for (const status of ['pending', 'todo', 'skipped', 'unknown']) {
+    const next = structuredClone(fixture)
+    next.testResults[0].assertionResults[0].status = status
+    assert.throws(
+      () => summarizeDiagnosticAssertions(next, selection, countRoot, safe, () => {}),
+      /diagnostic-result-status/
+    )
+  }
+  const wrong = structuredClone(fixture)
+  wrong.testResults[0].name += '.other'
+  assert.throws(
+    () => summarizeDiagnosticAssertions(wrong, selection, countRoot, safe, () => {}),
+    /diagnostic-result-selector/
+  )
+  const failed = structuredClone(fixture)
+  failed.numPassedTests = 0
+  failed.numFailedTests = 1
+  failed.testResults[0].status = 'failed'
+  failed.testResults[0].assertionResults[0].status = 'failed'
+  assert.equal(
+    summarizeDiagnosticAssertions(failed, selection, countRoot, safe, () => {}).outcome,
+    'failed'
+  )
+  for (const change of [
+    { processGroupGone: false },
+    { timedOut: true },
+    { stopReason: 'fault' },
+    { signal: 'SIGTERM' },
+    { exitCode: 2 },
+    { knownNativeFaultMarker: true },
+    { boundedTriageExceeded: true },
+    { testCaseTimeoutMarker: true }
+  ])
+    assert.throws(
+      () =>
+        summarizeDiagnosticAssertions(
+          fixture,
+          selection,
+          countRoot,
+          { ...safe, ...change },
+          () => {}
+        ),
+      /diagnostic-result-guard/
+    )
+  assert.throws(
+    () =>
+      summarizeDiagnosticAssertions(fixture, selection, countRoot, safe, () => {
+        throw new Error('fixed deadline')
+      }),
+    /fixed deadline/
+  )
+})
+
+test('native diagnostic assertion metadata requires all four fixed cases', async () => {
+  const { summarizeDiagnosticAssertions } =
+    await import('./output-knowledge-performance-diagnostic.mjs')
+  const selection = applicationDiagnosticSelection('native-http')
+  const measured = { ...safeMeasurement, exitCode: 0 }
+  const fixture = {
+    numTotalTestSuites: 1,
+    numRuntimeErrorTestSuites: 0,
+    numPendingTestSuites: 0,
+    numTotalTests: 4,
+    numPendingTests: 0,
+    numTodoTests: 0,
+    numPassedTests: 4,
+    numFailedTests: 0,
+    testResults: [
+      {
+        name: path.join(countRoot, selection.packageDirectory, selection.selector),
+        status: 'passed',
+        assertionResults: Array.from({ length: 4 }, () => ({ status: 'passed' }))
+      }
+    ]
+  }
+  assert.equal(
+    summarizeDiagnosticAssertions(fixture, selection, countRoot, measured, () => {}).passed,
+    4
+  )
+  const incomplete = structuredClone(fixture)
+  incomplete.testResults[0].assertionResults.pop()
+  assert.throws(
+    () => summarizeDiagnosticAssertions(incomplete, selection, countRoot, measured, () => {}),
+    /diagnostic-result-selector/
+  )
+  const failed = structuredClone(fixture)
+  failed.numPassedTests = 3
+  failed.numFailedTests = 1
+  failed.testResults[0].status = 'failed'
+  failed.testResults[0].assertionResults[3].status = 'failed'
+  assert.equal(
+    summarizeDiagnosticAssertions(
+      failed,
+      selection,
+      countRoot,
+      { ...measured, exitCode: 1 },
+      () => {}
+    ).failed,
+    1
+  )
+  const inconsistent = structuredClone(fixture)
+  inconsistent.testResults[0].status = 'failed'
+  assert.throws(
+    () => summarizeDiagnosticAssertions(inconsistent, selection, countRoot, measured, () => {}),
+    /diagnostic-result-suite/
+  )
+})

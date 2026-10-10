@@ -566,3 +566,23 @@ scheduled as 388 execution rows in batches of 256 and 132. Source and test
 unions, global 90% score and zero-uncovered/invalid/unexecuted requirements
 remain unchanged. This inventory proof establishes completeness; a fresh full
 campaign on the published source must establish execution and final qualification.
+
+### Diagnostic assertion metadata
+
+The optional fixed-selector application diagnostic records assertion status independently
+of its process exit. A single selected suite can pass its assertions while the unchanged
+package-wide coverage threshold makes Jest exit nonzero. That result must not be described
+as an assertion failure, a complete coverage pass or full functional qualification.
+
+After the existing source, fault, case-timeout, calendar and complete process-drain guards,
+the diagnostic reads a bounded private Jest JSON result through a no-follow descriptor.
+It verifies the exact fixed selector, one complete suite, every expected assertion and
+matching passed/failed totals; skipped, pending, todo, runtime-error and inconsistent
+results refuse the metadata. Only scalar outcomes and the original process exit enter
+the artifact. Failure messages, assertion titles and private/counterexample values remain
+in the temporary directory and are removed with it. No completed property-case count is
+inferred. The original tests, minimum 300 cases, seed 3242026, empty replay, 150-second
+interruption, 180-second case timeout, worker settings, full coverage gates and mutation
+qualification remain mandatory and unchanged. CPU clocks and native monotonic clocks
+remain separate; valid timing metadata does not establish successful assertions or a
+speedup.

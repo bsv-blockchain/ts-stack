@@ -681,6 +681,83 @@ function diagnosticEnvironment(mongoBinary, monotonicFile) {
   return env
 }
 
+/** Assertion status is independent of the process-wide coverage gate. Only fixed
+ * selector identity and scalar statuses escape; messages and private values do not. */
+export function summarizeDiagnosticAssertions(results, selection, root, measured, checkDeadline) {
+  assert.ok(diagnosticMayContinueValidation('profile-summary', measured), 'diagnostic-result-guard')
+  checkDeadline()
+  const expected = selection.nativeCases ?? 1
+  assert.ok(
+    results &&
+      typeof results === 'object' &&
+      !Array.isArray(results) &&
+      results.numTotalTestSuites === 1 &&
+      results.numRuntimeErrorTestSuites === 0 &&
+      results.numPendingTestSuites === 0 &&
+      results.numTotalTests === expected &&
+      results.numPendingTests === 0 &&
+      results.numTodoTests === 0 &&
+      Array.isArray(results.testResults) &&
+      results.testResults.length === 1,
+    'diagnostic-result-shape'
+  )
+  const suite = results.testResults[0]
+  assert.ok(
+    suite &&
+      suite.name === path.join(root, selection.packageDirectory, selection.selector) &&
+      Array.isArray(suite.assertionResults) &&
+      suite.assertionResults.length === expected,
+    'diagnostic-result-selector'
+  )
+  let passed = 0,
+    failed = 0
+  for (const assertion of suite.assertionResults) {
+    checkDeadline()
+    assert.ok(
+      assertion && ['passed', 'failed'].includes(assertion.status),
+      'diagnostic-result-status'
+    )
+    if (assertion.status === 'passed') passed++
+    else failed++
+  }
+  assert.ok(
+    results.numPassedTests === passed && results.numFailedTests === failed,
+    'diagnostic-result-counts'
+  )
+  const outcome = failed === 0 ? 'passed' : 'failed'
+  assert.ok(suite.status === outcome, 'diagnostic-result-suite')
+  return {
+    outcome,
+    passed,
+    failed,
+    processExitCode: measured.exitCode,
+    completedPropertyCases: null,
+    rawPayloadPrinted: false,
+    fullFunctionalQualified: false,
+    fullCampaignQualified: false
+  }
+}
+
+function collectDiagnosticAssertions(
+  selection,
+  directory,
+  measured,
+  report,
+  root,
+  guard,
+  checkWindow
+) {
+  report.phase = 'diagnostic-assertion-metadata'
+  const value = readBoundedProfile(
+    path.join(directory, 'test-results.json'),
+    MAX_LOG,
+    {},
+    checkWindow
+  )
+  report.assertions = summarizeDiagnosticAssertions(value, selection, root, measured, checkWindow)
+  guard()
+}
+
 function collectPropertyExecution(selection, directory, measured, report, guard, checkWindow) {
   if (selection.requiresMongo) return
   report.phase = 'property-execution-metadata'
@@ -966,7 +1043,8 @@ async function main() {
       monotonicCollected: false,
       functionEntriesCollected: false,
       functionEntryRefusal: null,
-      propertyExecution: null
+      propertyExecution: null,
+      assertions: null
     },
     env = diagnosticEnvironment(mongoBinary, path.join(directory, 'monotonic-timing.json'))
   const write = () =>
@@ -1023,6 +1101,8 @@ async function main() {
         'jest.config.js',
         ...(selection.requiresMongo ? ['--selectProjects', 'private-esm'] : []),
         '--coverage',
+        '--json',
+        `--outputFile=${path.join(directory, 'test-results.json')}`,
         `--coverageDirectory=${path.join(directory, 'coverage')}`,
         '--runTestsByPath',
         selector
@@ -1042,6 +1122,7 @@ async function main() {
     report.phase = 'post-property-source-guard'
     guard()
     collectPropertyExecution(selection, directory, measured, report, guard, checkWindow)
+    collectDiagnosticAssertions(selection, directory, measured, report, root, guard, checkWindow)
     collectEntrySummary({ directory, root, identity, output, report, measured, guard, checkWindow })
     report.phase = 'monotonic-file-bound'
     const monotonic = readBoundedProfile(
