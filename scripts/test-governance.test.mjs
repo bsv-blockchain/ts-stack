@@ -223,8 +223,8 @@ test('the real governance and health CLIs succeed with expired records', () => {
       }
     `
     )
-    const run = script =>
-      spawnSync(process.execPath, ['--import', clock, script], {
+    const run = (script, ...args) =>
+      spawnSync(process.execPath, ['--import', clock, script, ...args], {
         cwd: REPOSITORY_ROOT,
         encoding: 'utf8'
       })
@@ -241,6 +241,12 @@ test('the real governance and health CLIs succeed with expired records', () => {
     const health = run('scripts/repository-health.mjs')
     assert.equal(health.status, 0, health.stderr || health.stdout)
     assert.match(health.stdout, /MAINTENANCE .*expired on/)
+    const maintenance = run('scripts/repository-health.mjs', '--maintenance', '--strict')
+    assert.equal(maintenance.status, 0, maintenance.stderr || maintenance.stdout)
+    assert.match(maintenance.stdout, /MAINTENANCE .*expired on/)
+    const fullDocs = run('scripts/documentation-policy.mjs', '--all')
+    assert.equal(fullDocs.status, 0, fullDocs.stderr || fullDocs.stdout)
+    assert.match(fullDocs.stderr, /MAINTENANCE .*verification expired/)
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true })
   }

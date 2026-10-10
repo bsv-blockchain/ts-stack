@@ -252,10 +252,10 @@ function dispositionMatches(disposition, declaration) {
 function validateDirectInventoryPolicy(policy, errors) {
   const inventory = policy.directLatestInventory
   if (
-    !Number.isSafeInteger(inventory.minimumReleaseAgeMinutes) ||
-    inventory.minimumReleaseAgeMinutes < 1
+    !Number.isSafeInteger(inventory.releaseAgeReminderMinutes) ||
+    inventory.releaseAgeReminderMinutes < 1
   ) {
-    errors.push('directLatestInventory.minimumReleaseAgeMinutes must be positive')
+    errors.push('directLatestInventory.releaseAgeReminderMinutes must be positive')
   }
   const classifications = new Set(inventory.classifications)
   const declarations = dependencyDeclarations()
@@ -413,9 +413,9 @@ export function classifyDirectDependency(declaration, registry, policy, now = ne
     if (
       age !== undefined &&
       age >= 0 &&
-      age < policy.directLatestInventory.minimumReleaseAgeMinutes
+      age < policy.directLatestInventory.releaseAgeReminderMinutes
     ) {
-      return 'release-age-hold'
+      return 'release-age-advisory'
     }
   }
   if (declared !== undefined && latest !== undefined && declared < latest) {
