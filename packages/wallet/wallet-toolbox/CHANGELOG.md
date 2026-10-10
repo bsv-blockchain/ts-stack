@@ -4,6 +4,24 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.0 (source candidate)
+
+- Require an exact canonical compressed public-key round trip for opt-in BRC-197 fixed-child recipients before ownership. Add native lifecycle coverage that preserves pre-existing transaction accounting and uses distinct fixture references; ordinary internalization is unchanged.
+
+- Add opt-in local SQLite action recovery for atomic allocation, exact prepared
+  and signed `noSend` transactions, and durable processing reconciliation.
+- Add local BRC-29 funding recovery with unique outpoint ownership, atomic wallet
+  credit, deferred monitor work and retained receipts. Deep imports require
+  explicit installation; ordinary calls, root exports and BRC-100 RPCs are unchanged.
+- Type explicit funding-recovery capacity values as numbers, matching the existing
+  configurable limits. Add retained-record representation and native ownership
+  rejection regressions; runtime validation, defaults and journal formats remain unchanged.
+- Preserve whole wallet databases and keys for these auxiliary journals. Legacy
+  entity backup/sync, browser/mobile wrappers, IndexedDB and remote providers do
+  not transport or implement them. Reconcile pending operations before rollback.
+- The previously recorded 2.14.5 no-send ownership corrections remain included.
+  This candidate has not been published and does not complete private acquisition.
+
 ## wallet-toolbox 2.14.6
 
 - UMP support pins anchor verified update lineage. Password and token updates

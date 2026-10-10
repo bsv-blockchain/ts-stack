@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth-express-middleware",
-  "version": "2.2.9",
+  "version": "2.3.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -44,10 +44,10 @@
     "doc": "ts2md --inputFilename=mod.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/middleware/auth-express-middleware/**/*.{js,json,ts}\"",
     "lint": "oxlint mod.ts src --deny-warnings",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ExpressTransport,InMemoryCertificateApprovalStore,createAuthMiddleware && node ../../../scripts/check-auth-express-consumers.mjs @bsv/auth-express-middleware",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ExpressTransport,InMemoryCertificateApprovalStore,createAuthMiddleware,guardAuthenticatedResponse && node ../../../scripts/check-auth-express-consumers.mjs @bsv/auth-express-middleware",
     "prepublishOnly": "pnpm build",
     "test": "jest --runInBand",
-    "test:property": "jest --runInBand src/__tests/authMiddlewareHelpers.property.test.ts",
+    "test:property": "jest --runInBand src/__tests/authMiddlewareHelpers.property.test.ts src/__tests/authenticatedResponseQueue.property.test.ts",
     "test:coverage": "jest --coverage --runInBand",
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
@@ -74,6 +74,7 @@
     "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "express": "^5.2.1",
+    "express-rate-limit": "8.6.1",
     "fast-check": "^4.9.0",
     "jest": "^30.5.1",
     "oxlint": "^1.83.0",

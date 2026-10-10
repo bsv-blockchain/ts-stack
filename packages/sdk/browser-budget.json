@@ -34,5 +34,135 @@
       "gzip": 270000,
       "brotli": 215000
     }
-  }
+  },
+  "additionalEntries": [
+    {
+      "entry": "./script/templates/RevenueListing",
+      "requiredExports": [
+        "RevenueListing",
+        "parseRevenueListingDescriptor",
+        "parseRevenueListingState",
+        "revenueListingId",
+        "encodeRevenueListingState",
+        "decodeRevenueListingState",
+        "revenueListingChildPublicKey",
+        "REVENUE_LISTING_AUTHORITY_PROTOCOL",
+        "REVENUE_LISTING_AUTHORITY_KEY_ID"
+      ],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 170000,
+          "gzip": 56000,
+          "brotli": 48000
+        },
+        "esbuild": {
+          "raw": 130000,
+          "gzip": 52000,
+          "brotli": 45000
+        }
+      }
+    },
+    {
+      "entry": "./script/templates/RevenueListingProfile",
+      "requiredExports": [
+        "RevenueListingProfile",
+        "parseRevenueListingProfileDescriptor",
+        "parseRevenueListingProfileSchedule",
+        "encodeRevenueListingMetadata",
+        "encodeRevenueListingProfileSchedule",
+        "decodeRevenueListingProfileSchedule"
+      ],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 170000,
+          "gzip": 56000,
+          "brotli": 48000
+        },
+        "esbuild": {
+          "raw": 130000,
+          "gzip": 52000,
+          "brotli": 45000
+        }
+      }
+    },
+    {
+      "entry": "./script/templates/RevenueListingPlan",
+      "requiredExports": [
+        "planRevenueListingSpend",
+        "parseRevenueListingAction",
+        "parseRevenueListingPrevious",
+        "readRevenueListingPrevious"
+      ],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 400000,
+          "gzip": 115000,
+          "brotli": 94000
+        },
+        "esbuild": {
+          "raw": 310000,
+          "gzip": 104000,
+          "brotli": 88000
+        }
+      }
+    },
+    {
+      "entry": "./script/templates/RevenueListingProfilePlan",
+      "requiredExports": [
+        "planRevenueListingProfileSpend",
+        "parseRevenueListingProfileAction",
+        "parseRevenueListingProfilePrevious"
+      ],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 400000,
+          "gzip": 115000,
+          "brotli": 94000
+        },
+        "esbuild": {
+          "raw": 310000,
+          "gzip": 104000,
+          "brotli": 88000
+        }
+      }
+    },
+    {
+      "entry": "./script/templates/RevenueListingSpend",
+      "requiredExports": ["RevenueListingSpend", "revenueListingPurchaseCommitment"],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 410000,
+          "gzip": 118000,
+          "brotli": 97000
+        },
+        "esbuild": {
+          "raw": 315000,
+          "gzip": 106000,
+          "brotli": 89000
+        }
+      }
+    },
+    {
+      "entry": "./script/templates/RevenueListingProfileSpend",
+      "requiredExports": ["RevenueListingProfileSpend"],
+      "prohibitedExports": ["WalletClient", "AuthFetch"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 410000,
+          "gzip": 118000,
+          "brotli": 97000
+        },
+        "esbuild": {
+          "raw": 315000,
+          "gzip": 106000,
+          "brotli": 89000
+        }
+      }
+    }
+  ]
 }

@@ -6,6 +6,34 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Optional local transaction recovery
+
+The 2.15.0 source candidate adds explicit local SQLite recovery controllers as
+separate deep imports. Action recovery retains one fixed-layout, two-phase
+`noSend` allocation, prepared transaction and final signed bytes. Funding recovery
+binds one BRC-29 payment to its acquisition and atomically retains wallet ownership,
+monitor work and a durable receipt. Ordinary BRC-100 calls and defaults are unchanged.
+The new funding capability requires SDK 3.3.0; legacy root and existing deep
+consumers retain the declared older SDK peer compatibility.
+
+Install the auxiliary schemas explicitly in the active local wallet database.
+Reopen them after restart, and preserve a consistent whole database plus wallet
+keys. These journals are not included in ordinary entity backup/sync or BRC-38/39
+exports. Browser, mobile, IndexedDB and remote provider wrappers do not acquire
+these capabilities by upgrading. During rollback, stop new operations, reconcile
+outstanding work and retain the original journals; deleting them loses recovery.
+
+See [local action recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-action-recovery/)
+and [local funding recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-funding-recovery/)
+for construction limits, deep imports, verification and unresolved service obligations.
+A local receipt does not prove settlement, a content license or protected delivery.
+
+Internal recovery JSON ownership uses a fresh call-local context for scalar,
+array and record checks. It retains the same deterministic stored bytes, error
+identities, descriptor/prototype/cycle checks and fixed resource bounds; the
+refactor requires no caller or stored-format migration. It never retains
+ownership state or authority between calls.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users
@@ -857,6 +885,14 @@ that contain unrelated BEEF branches. The wallet restricts either form to the
 declared transaction and its recursive dependencies before independently
 validating every transaction, proof, and BRC-29 payment output.
 
+The experimental local `getBrc197InternalizationCapabilities()` and
+`internalizeBrc197Action()` extension accepts the literal fixed-child remittance
+for the optional BRC-197 exemplar through the complete wallet ownership pipeline.
+Ordinary BRC-29 validation and remote BRC-100 methods remain unchanged.
+Read the [fixed-child intake guide](../../../docs/guides/brc197-fixed-child-wallet.md)
+for explicit capability selection and the outstanding native, recipient spending
+and activation-before-funding qualification gates.
+
 ## Documentation
 
 [Full API documentation](https://bsv-blockchain.github.io/wallet-toolbox) is available on GitHub Pages.
@@ -1149,3 +1185,32 @@ for the full stack-wide policy.
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.
+
+## Internalization refusal and rollback boundaries
+
+Signer and storage boundaries independently validate the AtomicBEEF subject,
+proof verdict and requested ownership before admitting outputs. Early basket
+classification and final basket admission share the same pure policy: the
+wallet's default basket cannot be a custom insertion destination. Both checks
+retain the existing error identity and occur before a basket lookup or write.
+
+Synthetic port-fault regressions cover inconsistent verifier and validator
+results, missing inclusion information, transaction races, degenerate child
+keys and failed publication. They verify the retained storage state as well
+as the error. Failed publication restores only inputs transitioned by that
+attempt and does not admit requested outputs, labels, baskets or tags;
+bookkeeping preserves a different recorded spender even when a legacy row
+still says spendable. These checks do not replace chain verification or prove
+real-network broadcast. Public methods, remittances, schemas and defaults
+require no migration.
+
+The failed-publication fixture supplies the optional new-request signal through
+a disclosed synthetic storage port and uses real SQLite ownership writes and
+rollback. The ordinary concrete provider path retains its existing behavior.
+Additional mined recovery and tag-free insertion cases check retained balances,
+proof identities, transaction lifecycle and empty metadata without network I/O.
+
+The failed-publication regression binds both stored inputs to the transaction
+actually consumed. At the publication boundary it observes committed SQLite
+spend transitions for own and foreign rows, then checks restoration of the
+complete original rows apart from their update timestamps.

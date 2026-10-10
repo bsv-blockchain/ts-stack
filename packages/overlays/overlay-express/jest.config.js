@@ -1,29 +1,9 @@
-/** @type {import('ts-jest').JestConfigWithTsJest} */
+import { createOverlayTestProjects } from './jest-projects.config.mjs'
+
+/** Ordinary and private integrations retain their own module semantics in one complete campaign. */
 export default {
-  preset: 'ts-jest',
-  testEnvironment: 'node',
-  testPathIgnorePatterns: ['dist/', 'node_modules/', String.raw`\.live\.test\.ts$`],
-  modulePathIgnorePatterns: ['<rootDir>/dist/'],
-  testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
-    '^uuid$': '<rootDir>/node_modules/uuid/dist/index.js'
-  },
-  transformIgnorePatterns: ['node_modules/(?!(uuid)/)'],
-  transform: {
-    '^.+\\.tsx?$': [
-      'ts-jest',
-      {
-        useESM: true,
-        tsconfig: {
-          module: 'ESNext',
-          moduleResolution: 'bundler'
-        }
-      }
-    ]
-  },
-  extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  projects: createOverlayTestProjects(),
+  modulePathIgnorePatterns: ['<rootDir>/dist/', String.raw`<rootDir>/\.stryker-tmp/`],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.test.ts',

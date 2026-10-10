@@ -37,7 +37,7 @@ app.use(router)
     relativeDirectory: 'packages/middleware/auth-express-middleware',
     source: `import express, { type RequestHandler } from 'express'
 import type { WalletInterface } from '@bsv/sdk'
-import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
+import { createAuthMiddleware, guardAuthenticatedResponse, type AuthRequest } from '@bsv/auth-express-middleware'
 
 declare const wallet: WalletInterface
 const app = express()
@@ -46,6 +46,10 @@ const authentication: RequestHandler = createAuthMiddleware({ wallet })
 app.use(authentication)
 app.get('/private', (req: AuthRequest, res) => {
   res.json({ identityKey: req.auth?.identityKey })
+})
+app.post('/guarded', (_req, res) => {
+  guardAuthenticatedResponse(res, (_candidate, enqueue) => enqueue())
+  res.json({ guarded: true })
 })
 `
   },
@@ -88,7 +92,7 @@ new WalletRelayService({ app, server, wallet })
 
 const authRuntimeProbe = `import assert from 'node:assert/strict'
 import express from 'express'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
+import { createAuthMiddleware, guardAuthenticatedResponse } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import * as currentSdk from '@bsv/sdk'
 import * as oldSdk from 'sdk-legacy'
@@ -106,6 +110,24 @@ app.get('/headers', (_req, res) => {
   res.set({ 'X-BSV-Map': 'map', 'X-BSV-Number': 25, 'X-BSV-Array': ['one', 'two'] })
   res.header({ 'X-BSV-Alias': 'alias' })
   res.set('X-BSV-Single', 'single').status(418).json({ headers: 'preserved' })
+})
+app.post('/guarded', (_req, res) => {
+  guardAuthenticatedResponse(res, (candidate, enqueue) => {
+    assert.ok(candidate.headers['x-bsv-auth-signature'])
+    enqueue()
+  })
+  res.status(201).set('x-bsv-state', 'current').json({ guarded: true })
+})
+app.post('/guarded-reset', (_req, res) => {
+  guardAuthenticatedResponse(res, (candidate, enqueue) => {
+    if (candidate.attempt === 0) return {
+      statusCode: 409,
+      headers: { 'content-type': 'application/json', 'x-bsv-state': 'reset' },
+      body: Buffer.from(JSON.stringify({ error: 'reset-required' }))
+    }
+    enqueue()
+  })
+  res.json({ stale: true })
 })
 const challenges = []
 app.use('/paid', (_req, res, next) => {
@@ -132,6 +154,14 @@ try {
     for (const [name, value] of Object.entries({ map: 'map', number: '25', array: 'one, two', alias: 'alias', single: 'single' })) {
       assert.equal(headersResponse.headers.get('x-bsv-' + name), value)
     }
+    const guarded = await auth.fetch(base + '/guarded', { method: 'POST' })
+    assert.equal(guarded.status, 201)
+    assert.deepEqual(await guarded.json(), { guarded: true })
+    assert.equal(guarded.headers.get('x-bsv-state'), 'current')
+    const reset = await auth.fetch(base + '/guarded-reset', { method: 'POST' })
+    assert.equal(reset.status, 409)
+    assert.deepEqual(await reset.json(), { error: 'reset-required' })
+    assert.equal(reset.headers.get('x-bsv-state'), 'reset')
     const challengeCount = challenges.length
     let paymentAttempted = false
     wallet.createAction = async () => { paymentAttempted = true; throw new Error('TEST_PAYMENT_DISABLED') }

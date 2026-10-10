@@ -1066,7 +1066,9 @@ export abstract class TestUtilsWalletStorage {
       return fNames
     }
 
-    const notifyPerformance = (fn, performanceDetails) => {
+    type ProfilingCall = { functionName: string; args: unknown[]; startTime: number; endTime: number }
+    type ProfiledFunction = (...args: unknown[]) => unknown
+    const notifyPerformance = (fn: (details: ProfilingCall) => void, performanceDetails: ProfilingCall) => {
       setTimeout(() => {
         let { functionName, args, startTime, endTime } = performanceDetails
         let _args = args
@@ -1100,12 +1102,16 @@ export abstract class TestUtilsWalletStorage {
       s.totalMsecs += args.endTime - args.startTime
     }
 
-    const performanceWrapper = (obj: object, objectName: string, performanceNotificationCallback: any) => {
+    const performanceWrapper = (
+      obj: Record<string, ProfiledFunction>,
+      objectName: string,
+      performanceNotificationCallback: (details: ProfilingCall) => void
+    ) => {
       let _notifyPerformance = notifyPerformance.bind(null, performanceNotificationCallback)
       let fNames = getFunctionsNames(obj)
       for (let fName of fNames) {
         let originalFunction = obj[fName]
-        let wrapperFunction = (...args) => {
+        let wrapperFunction = (...args: unknown[]) => {
           let callbackFnIndex = -1
           let startTime = Date.now()
           const _callBack = args.find((arg, i) => {
@@ -1116,7 +1122,7 @@ export abstract class TestUtilsWalletStorage {
             return _isFunction
           })
           if (_callBack) {
-            let callbackWrapper = (...callbackArgs) => {
+            let callbackWrapper = (...callbackArgs: unknown[]) => {
               let endTime = Date.now()
               _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
               _callBack(...callbackArgs)
@@ -1126,16 +1132,16 @@ export abstract class TestUtilsWalletStorage {
           let originalReturnObject = originalFunction.apply(obj, args)
           let isPromiseType =
             originalReturnObject &&
-            typeof originalReturnObject.then === 'function' &&
-            typeof originalReturnObject.catch === 'function'
+            typeof (originalReturnObject as Partial<Promise<unknown>>).then === 'function' &&
+            typeof (originalReturnObject as Partial<Promise<unknown>>).catch === 'function'
           if (isPromiseType) {
-            return originalReturnObject
-              .then(resolveArgs => {
+            return (originalReturnObject as Promise<unknown>)
+              .then((resolveArgs: unknown) => {
                 let endTime = Date.now()
                 _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
                 return resolveArgs
               })
-              .catch(error => {
+              .catch((error: unknown) => {
                 let endTime = Date.now()
                 _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
                 throw error
@@ -1155,7 +1161,7 @@ export abstract class TestUtilsWalletStorage {
 
     const _functionNames = getFunctionsNames(o)
 
-    performanceWrapper(o, name, logger)
+    performanceWrapper(o as Record<string, ProfiledFunction>, name, logger)
 
     return stats
   }
@@ -1227,8 +1233,8 @@ export abstract class TestUtilsWalletStorage {
     const certifier = PrivateKey.fromRandom()
     const _verifier = PrivateKey.fromRandom()
     const cert: WalletCertificate = {
-      type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
-      serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
+      type: Utils.toBase64(Array.from<number>({ length: 32 }).fill(1)),
+      serialNumber: Utils.toBase64(Array.from<number>({ length: 32 }).fill(2)),
       revocationOutpoint: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
       subject,
       certifier: certifier.toPublicKey().toString(),
@@ -2161,7 +2167,11 @@ export const logger = (message: string, ...optionalParams: any[]): void => {
  * @param {string | number} id - The ID or unique identifier of the record to update.
  * @param {Object} testValues - An object containing key-value pairs to update.
  */
-export const updateTable = async (updateFunction, id, testValues) => {
+export const updateTable = async <Id, Value extends object>(
+  updateFunction: (id: Id, values: Record<string, unknown>) => Promise<unknown>,
+  id: Id,
+  testValues: Partial<Value>
+) => {
   for (const [key, value] of Object.entries(testValues)) {
     logger('id=', id, '[key]=', [key], 'value=', value)
     await updateFunction(id, { [key]: value })

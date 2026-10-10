@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
@@ -87,7 +88,7 @@ function largestModules(moduleBytes, limit = 50) {
 }
 
 function packageNameFromModuleId(moduleId) {
-  const normalized = moduleId.replaceAll('\\', '/')
+  const normalized = `/${moduleId.replaceAll('\\', '/')}`
   const installed = normalized.split('/node_modules/').at(-1)
   if (!installed || installed === normalized) return undefined
   const parts = installed.split('/')
@@ -205,6 +206,25 @@ export function validateBrowserBudget(budget, manifest) {
       `browser budget package ${JSON.stringify(budget?.package)} does not match ${manifest.name}`
     )
   }
+  validateBrowserEntry(budget, manifest)
+  if (budget.additionalEntries !== undefined) {
+    if (!Array.isArray(budget.additionalEntries) || budget.additionalEntries.length > 8) {
+      throw new Error('browser budget additionalEntries must contain at most eight entry contracts')
+    }
+    const entries = new Set([budget.entry])
+    for (const additional of budget.additionalEntries) {
+      if (additional === null || typeof additional !== 'object' || Array.isArray(additional)) {
+        throw new Error('browser budget additional entry must be an object')
+      }
+      validateBrowserEntry(additional, manifest)
+      if (entries.has(additional.entry))
+        throw new Error('browser budget entry contracts must be unique')
+      entries.add(additional.entry)
+    }
+  }
+}
+
+function validateBrowserEntry(budget, manifest) {
   packageSpecifier(manifest.name, budget.entry)
   validateStringArray(budget.requiredExports, 'browser budget requiredExports')
   validateStringArray(budget.prohibitedExports, 'browser budget prohibitedExports')
@@ -293,7 +313,7 @@ function consumerEntry(specifier, budget) {
 async function collectBundle(directory) {
   const entries = await fs.readdir(directory, { withFileTypes: true })
   const files = []
-  for (const entry of entries) {
+  for await (const entry of Readable.from(entries)) {
     const absolutePath = path.join(directory, entry.name)
     if (entry.isDirectory()) files.push(...(await collectBundle(absolutePath)).files)
     else files.push(absolutePath)
@@ -306,7 +326,7 @@ async function collectBundle(directory) {
   }
 
   const code = Buffer.concat(await Promise.all(javascriptFiles.map(file => fs.readFile(file))))
-  for (const file of mapFiles) {
+  for await (const file of Readable.from(mapFiles)) {
     const sourceMap = JSON.parse(await fs.readFile(file, 'utf8'))
     const sourcesWithoutContent = Array.isArray(sourceMap.sources)
       ? sourceMap.sources.filter(
@@ -553,24 +573,44 @@ export async function checkBrowserPackage(
       [...workspacePackages].map(([name, project]) => [name, project.manifest])
     )
     const dependencyTarballs = []
-    for (const name of workspaceRuntimeClosure(manifest, manifestsByName)) {
+    for await (const name of Readable.from(workspaceRuntimeClosure(manifest, manifestsByName))) {
       const dependency = workspacePackages.get(name)
       dependencyTarballs.push(
         await packPackage(dependency.directory, dependency.manifest.name, packDirectory)
       )
     }
     consumerDirectory = await installConsumer([tarballPath, ...dependencyTarballs])
-    const entryPath = path.join(consumerDirectory, 'entry.mjs')
-    await fs.writeFile(
-      entryPath,
-      consumerEntry(packageSpecifier(manifest.name, budget.entry), budget)
-    )
-    const [vite, esbuild, umd] = await Promise.all([
-      checkVite(consumerDirectory, entryPath, budget.maximumBytes.vite, enforceBudget),
-      checkEsbuild(consumerDirectory, entryPath, budget.maximumBytes.esbuild, enforceBudget),
-      checkUmd(consumerDirectory, manifest, budget, enforceBudget)
-    ])
-    return { vite, esbuild, ...(umd ? { umd } : {}) }
+    const contracts = [budget, ...(budget.additionalEntries ?? [])]
+    const measurements = []
+    for await (const contract of Readable.from(contracts)) {
+      // Reuse the same installed tarballs while producing independent entry graphs.
+      await Promise.all(
+        ['vite-dist', 'esbuild-dist'].map(directory =>
+          fs.rm(path.join(consumerDirectory, directory), { recursive: true, force: true })
+        )
+      )
+      const entryPath = path.join(consumerDirectory, 'entry.mjs')
+      await fs.writeFile(
+        entryPath,
+        consumerEntry(packageSpecifier(manifest.name, contract.entry), contract)
+      )
+      const [vite, esbuild, umd] = await Promise.all([
+        checkVite(consumerDirectory, entryPath, contract.maximumBytes.vite, enforceBudget),
+        checkEsbuild(consumerDirectory, entryPath, contract.maximumBytes.esbuild, enforceBudget),
+        checkUmd(consumerDirectory, manifest, contract, enforceBudget)
+      ])
+      measurements.push({ vite, esbuild, ...(umd ? { umd } : {}) })
+    }
+    return {
+      ...measurements[0],
+      ...(contracts.length > 1
+        ? {
+            additionalEntries: Object.fromEntries(
+              contracts.slice(1).map((contract, index) => [contract.entry, measurements[index + 1]])
+            )
+          }
+        : {})
+    }
   } finally {
     await Promise.all([
       removeTemporaryDirectory(packDirectory),

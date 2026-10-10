@@ -33,12 +33,15 @@ jobs:
       mode: ${{ steps.targets.outputs.mode }}
       mutation-matrix: ${{ steps.targets.outputs.mutation-matrix }}
       partition-targets: ${{ steps.targets.outputs.partition-targets }}
+      mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
+      mutation-matrix-digest: ${{ steps.mutation-execution.outputs.matrix-digest }}
+      mutation-execution-identity: ${{ steps.mutation-execution.outputs.identity }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.19.0
           cache: pnpm
 
       - name: Install frozen dependencies
@@ -91,6 +94,7 @@ jobs:
           } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
 
       - name: Share build outputs
+        id: mutation-build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: mutation-build-outputs-${{ github.run_id }}-${{ github.run_attempt }}
@@ -98,69 +102,37 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Pin complete immutable mutation execution batches
+        id: mutation-execution
+        env:
+          MUTATION_MATRIX: ${{ steps.targets.outputs.mutation-matrix }}
+          BUILD_ARTIFACT_ID: ${{ steps.mutation-build.outputs.artifact-id }}
+          BUILD_ARTIFACT_NAME: mutation-build-outputs-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          batches="$(node scripts/mutation-execution-batches.mjs plan)"
+          matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
+          identity="$(node scripts/mutation-execution-batches.mjs build-identity)"
+          printf 'batches=%s\nmatrix-digest=%s\nidentity=%s\n' \
+            "$batches" "$matrix_digest" "$identity" >> "$GITHUB_OUTPUT"
+
   mutation-tests:
-    name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
+    name: Mutation batch / ${{ matrix.batch }}
     needs: prepare
-    runs-on: ubuntu-latest
-    # Preserve the acknowledged wallet/overlays90-minute target union.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      # Run the whole campaign at once; the slowest single target bounds wall time.
-      max-parallel: 20
-      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.18.0
-          cache: pnpm
-
-      - name: Install frozen dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: mutation-build-outputs-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .ci-artifacts
-
-      - name: Restore build outputs
-        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-
-      - name: Enforce the governed mutation-quality ratchet
-        env:
-          MUTATION_VERBOSE: '0'
-        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}" --partition "${{ matrix.partition }}"
-
-      - name: Capture successful exact-source complete target evidence
-        if: matrix.partition == 'whole'
-        env:
-          CAMPAIGN_MODE: ${{ needs.prepare.outputs.mode }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          node scripts/mutation-final-qualification.mjs capture \
-            --mode "$CAMPAIGN_MODE" --target "$TARGET" \
-            --directory "artifacts/mutation/$TARGET"
-
-      - name: Capture complete execution-partition evidence
-        if: matrix.partition != 'whole'
-        env:
-          CAMPAIGN_MODE: ${{ needs.prepare.outputs.mode }}
-        run: |
-          node scripts/mutation-partition-evidence.mjs capture --mode "$CAMPAIGN_MODE" \
-            --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
-            --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
-      - name: Preserve the machine-readable mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ matrix.partition == 'whole' && 'mutation-receipt' || 'mutation-partition' }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.target }}-${{ matrix.partition }}
-          path: artifacts/mutation/${{ matrix.target }}
-          if-no-files-found: ignore
-          retention-days: 30
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-batches) }}
+    uses: ./.github/workflows/mutation-execution.yml
+    with:
+      execution-matrix: ${{ toJSON(matrix.executionMatrix) }}
+      execution-batch: ${{ matrix.batch }}
+      selected-targets: ${{ needs.prepare.outputs.targets }}
+      matrix-digest: ${{ needs.prepare.outputs.mutation-matrix-digest }}
+      identity: ${{ needs.prepare.outputs.mutation-execution-identity }}
+      profile: qualification
+      mode: ${{ needs.prepare.outputs.mode }}
 
   partition-aggregate:
     name: Canonical global gate / ${{ matrix.target }}
@@ -182,7 +154,7 @@ jobs:
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.19.0
           cache: pnpm
       - name: Install pinned canonical aggregate verifier
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -243,7 +215,7 @@ jobs:
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.19.0
           cache: pnpm
       - name: Install pinned inventory verifier dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -251,6 +223,12 @@ jobs:
         with:
           pattern: mutation-receipt-${{ github.run_id }}-${{ github.run_attempt }}-*
           path: .mutation-receipts
+      - name: Recheck the complete ordered execution batch union
+        env:
+          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
+          MUTATION_BATCHES: ${{ needs.prepare.outputs.mutation-batches }}
+        run: node scripts/mutation-execution-batches.mjs verify-batches
+
       - name: Independently recheck every selected canonical partition before full qualification
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:

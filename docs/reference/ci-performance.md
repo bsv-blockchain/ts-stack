@@ -2,15 +2,157 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.4.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+version: '1.8.9'
+last_updated: '2026-10-08'
+last_verified: '2026-10-08'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
 ---
 
 # CI Performance Governance
+
+The existing `CI` manual dispatch has an optional
+`application-performance-diagnostics` input, disabled by default. It measures the
+unchanged native alias-disclosure and coordinator properties and current private purchase HTTP
+composition on an isolated hosted Linux runner
+in the existing package-artifact job, before complete artifact verification.
+Its additional work does not consume either ordinary application coverage
+job's original time budget. A maintainer can also
+select it on an ordinary PR run with the explicit
+`ci:application-performance-diagnostics` label before the next source push. The
+label alone does not trigger the workflow. Remove it after the bounded
+measurement. This preserves the ordinary PR mutation policy; complete manual
+mutation qualification is still required once the functional baseline passes. Use
+`gh workflow run ci.yml --ref <branch> -f application-performance-diagnostics=true`
+for an explicitly requested measurement. Ordinary unlabelled pull-request runs, complete
+test discovery, both coverage shards, merge gates and mutation qualification
+remain unchanged.
+
+The repository-only diagnostic retains the original minimum 300 runs, seed
+3242026, replay-free profile, 150-second interruption-as-failure budget and
+180-second case deadline. It first checks the built-in SQLite driver, binds the
+complete tracked source, built SDK/wallet/application bytes and Node binary, and
+runs one serial property with coverage and CPU profiling. The diagnostic uses a
+fixed 10,000-microsecond sampling interval, recorded in its identity, to reduce
+profile size within the unchanged 64 MiB file bound. Oversized profiles are
+refused before their contents are read. This is a sampling choice for diagnosis;
+it changes no application property or qualification control. Every child has a
+finite deadline within an immutable 900-second calendar and Boolean fault, case-timeout and output triage. Cancellation
+and every exit drain the complete process group through bounded TERM/KILL.
+Timing extraction requires unchanged inputs, all guards clear and an absent
+group; otherwise only Boolean metadata is retained. A timing-file or summary
+refusal records its bounded phase and reason. Only a safe, fully drained
+measurement with unchanged source may continue into complete artifact validation
+when timing is unavailable; ordinary coverage remains independently required. A fault, case/output bound, child/calendar deadline,
+cancellation or source guard failure stops that diagnostic job. Raw logs, CPU profiles and
+application values never enter the uploaded report. Each file is opened once; its
+descriptor supplies both the size check and bounded read, without following
+symlinks.
+
+The separate `--native-http` selection measures all four original current-profile
+HTTP integration cases in the `private-esm` project with coverage. Their
+120-second case limits and the buyer's 30-second work guard are unchanged. This
+diagnostic has a 600-second child bound within its own 900-second calendar and
+uses the same log/profile bounds, source guards and complete process drainage.
+It freezes the additional built Overlay, Overlay Express and LCH inputs and the
+exact cached MongoDB 8.2.6 executable before starting the fixture. A separate
+hosted preparation step obtains that fixed executable when the cache is cold,
+without starting a database or importing application code. It binds the tracked
+source, Node executable and complete installed pnpm store, supervises only the
+fixed downloader with a 120-second child bound within a 180-second preparation
+calendar, and independently retains Boolean triage and whole-group drainage.
+Preparation records no raw output and supplies no qualification. Cancellation,
+a fault, deadline, source change or unsuccessful child refuses preparation.
+The measurement still rejects missing or ambiguous binaries; runtime downloads are disabled and
+version checking remains enabled. The complete ordinary suite still qualifies
+the integration. The three fixed selectors have distinct report directories and
+identities; none accepts arbitrary paths or test-name filters.
+
+The additive `--coordinator` selection binds the original alias-coordinator
+property, with the same minimum300, seed3242026, interruption-as-failure150s,
+case180s, child210s and calendar900s controls as the disclosure diagnostic.
+Both property reports include only a scalar outcome and completed-case count
+when a single exact failure summary supplies it. An ordinary passing exit has
+no inferred count. Ambiguous or unrelated failures supply no count. Extraction
+requires all supervisor guards clear, independently drained execution, fresh
+source guards and a descriptor-bounded log read with independent Boolean
+retriage. Native HTTP reports retain null property execution metadata. No counterexample
+body, application values or raw output is published. Comparing these counts
+with measured duration helps distinguish cost per completed case from a
+different workload; it does not qualify a property or support a speed claim by
+itself. The existing artifact-job timeout and all qualification gates remain
+unchanged.
+
+The uploaded `application-performance-diagnostic-<run>-<attempt>` artifact
+contains checked-out source and PR-head/runtime identity, exit and drain evidence, and bounded self and
+inclusive function timing. Per-call-stack timings are retained alongside complete
+function aggregates keyed by name, source URL and measured line. Recursive
+occurrences receive each inclusive sample only once. Measured positions can refer
+to instrumented/transformed code rather than original source lines. Profiling
+overhead is included. V8 encodes observation timestamps as relative deltas;
+observations can arrive out of order. Following
+[Chromium's paired-sample ordering](https://chromium.googlesource.com/devtools/devtools-frontend/+/9a696c4e723caa3c7e1f78886da353f1f06a79b0/front_end/core/sdk/CPUProfileDataModel.ts),
+the summary reconstructs finite timestamps relative to capture start, rejects
+before-start observations, sorts each timestamp together with its original
+sample, and derives nonnegative chronological durations. It retains every
+observation and reports the number of negative deltas and reordered positions;
+it neither clamps timestamps nor discards samples. Frame, file, sample, node,
+depth, source and deadline checks remain required. A valid measurement
+can describe a property-budget interruption; it never qualifies the property,
+coverage, mutation campaign or checkpoint. The complete ordinary coverage run
+must still pass independently. No performance improvement is claimed
+until comparable measurements and full unchanged qualification support it.
+
+The same hosted diagnostic also measures synchronous calls to the actual built-in
+SQLite database and statement methods, HKDF, hash creation/update/digest and
+cipher creation. A Linux-only preload delegates each call with its original
+receiver, arguments, result and thrown value, retaining only fixed method names,
+call counts and nanosecond totals from `process.hrtime.bigint`. No keys, SQL,
+application records or operation results enter this report. Counters have fixed
+method, count and total bounds; a failing or backward clock refuses the entire
+timing report without changing the wrapped operation. The supervisor admits the
+descriptor-bounded counter file only after its original execution, source and
+complete drainage guards pass. Missing or invalid counters supply no timings.
+
+These counters are synchronous inclusive durations with measurement overhead.
+Nested totals cannot be added as exclusive CPU time. Statement iterator creation
+does not measure later iteration, and asynchronous work is excluded. Counter
+admission is independent of CPU samples: negative deltas or reordered CPU samples
+remain excluded from performance conclusions, even when bounded scalar counters
+are usable. The preload is diagnostic only; complete ordinary uninstrumented
+coverage and mutation qualification remain mandatory with their unchanged tests,
+counts, seeds, replay settings, deadlines and thresholds.
+
+The unchanged diagnostic child already generates Jest/Istanbul coverage. After a
+safe, fully drained measurement and fresh source guards, the driver reads only
+its existing `coverage/coverage-final.json` within the original 64 MiB bound.
+It disables inherited extra V8 coverage instrumentation. The uploaded
+`function-entries.json` retains only fixed SDK JSON/schema and eight fixed
+private ledger, codec, coordinator and disclosure modules that appear in the
+original Jest coverage inventory. External modules that Jest does not instrument
+supply no counters. Each row retains the original function counter, numeric
+function ID, bounded name and checked original declaration starts; branch counters are never
+added to function entries. Source-map gaps in body or declaration end columns supply no invented
+positions or ranges: only declaration starts are retained and checked directly
+from the original report.
+Invalid or empty reports supply no counts. Raw
+coverage, source maps, source content, arguments and application values are deleted
+with the temporary directory and never uploaded. If a project does not write a
+JSON coverage report, its function-counter extraction records a fixed refusal.
+
+Counter refusal does not block independent native monotonic or CPU extraction
+from an otherwise safe, fully drained measurement. A separate synchronous counter-extraction helper retains all original source,
+calendar and Boolean admission guards between independent extractions. Function
+ID inventories use explicit lexical comparators and numeric ID validation; the
+final frequency ordering is performed before constructing the returned report.
+These counters may be admitted when an entire CPU trace is excluded for negative
+or reordered timestamps. They show execution frequency within the measured
+workload, not completed operations, exclusive timings or performance qualification.
+The original coverage instrumentation and diagnostic profiling have overhead;
+no comparative runtime claim follows from these measurements. Original tests,
+counts, seeds, replay settings, child/case/calendar deadlines, resource limits
+and complete ordinary qualification remain unchanged.
 
 The weekly `CI performance trend` workflow classifies successful pull-request
 CI runs as full-scope (at least 50 executed, non-skipped jobs) or targeted,
@@ -40,6 +182,22 @@ jobs follow changed build contexts. Changes to the shared CI workflow validate
 all infrastructure build lanes; unrelated documentation workflow changes do not.
 Shared image/runtime contract inputs fan out to the registered consumers.
 
+Recovery-plan mutation execution retains its complete module and seven original
+construction ranges in three parts, separated at the existing failure-handler
+function boundary. Every part keeps the original complete test selection and
+qualification controls. The pinned engine independently proves that all 131
+canonical mutants occur exactly once across the parts; even the call-only range
+without an executable mutant remains in the source union. Complete qualification
+requires their combined original global gate. Neither smaller scheduling parts
+nor a successful initial test run substitute for the finished campaign.
+
+Revenue-purchase verification separates history extension from transaction binding
+at complete private-method boundaries. Original evidence association, validation
+order, mandatory outputs, full Script/history verification and all tests remain
+required. The new complete source inventory is independently replayed; preceding
+source scores cannot qualify the refactor. Original execution deadlines and global
+score requirements remain unchanged.
+
 The main CI workflow builds the selected graph once and shares immutable
 outputs with isolated test lanes, skips empty lanes, installs through the
 setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
@@ -59,6 +217,20 @@ packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
+
+The application output-knowledge coverage suite uses four isolated serial Jest shards
+within the existing coverage matrix. Each retains the original complete discovery,
+serial native worker, property cases and per-test deadlines. Its ordinary local
+`test:coverage` command remains a single complete run with the original global
+thresholds. CI requires all four shards, then independently discovers the complete
+suite again and checks a disjoint, exact execution union. Failed, missing, pending,
+todo or skipped tests and mismatched source, run, attempt or configuration fail
+qualification. The aggregate merges the complete Istanbul maps and applies all four
+original global thresholds before contributing LCOV to the required patch gate.
+Individual shard reports cannot qualify package coverage. The coverage jobs retain
+their 35-minute deadlines; the aggregate and final merge gates remain required.
+The three reporting libraries are direct, exact-version development dependencies
+already present in the frozen graph; no runtime package dependency changes. Dependency-free inventory/result controls remain in the zero-install repository-health job. The actual reporting-library integration runs unconditionally after the frozen install and before build; its execution cannot be skipped to satisfy early health.
 
 ## Execution ledger across outcomes and attempts
 
@@ -294,9 +466,11 @@ registration. Its source specifications are grouped by file into core validation
 and Peer, AuthFetch client, and SimplifiedFetchTransport. Every range of a file
 stays in one part; a new canonical helper defaults to core, and unsupported
 wildcard/unknown partition inputs fail. Each part retains the complete original
-Jest test selection, four workers and governed property inputs. The current pinned
-inventory replays to 95 + 137 + 91 = 323 mutants, exactly matching the unpartitioned
-canonical inventory.
+Jest test selection, four workers and governed property inputs. The original
+main-derived inventory replayed to 95 + 137 + 91 = 323 mutants. This branch's
+expanded SDK sources replay to 416 + 250 + 91 = 757, including the complete finite
+HTTP helper. Each union exactly matches its own unpartitioned canonical inventory;
+the earlier count does not qualify the newer sources.
 
 A part's score is diagnostic. It still requires complete actual source/config/
 mutant evidence and zero uncovered/invalid outcomes. Only the combined original
@@ -341,3 +515,74 @@ This source proof cannot qualify a newer wallet head: its owner must compare
 the full pinned inventory/configuration on the final source before adoption.
 Registry, runtime, assertions, workers, deadlines and thresholds remain owned
 and unchanged by the partition facility.
+
+### Root-record execution partitions
+
+`root-eviction-records` remains one canonical registration and one combined
+90%/zero-uncovered/zero-invalid gate. Its complete source files are assigned to
+request handling and serving records. Future canonical helpers join the request
+part; no new source can disappear from the union. Both parts retain every original
+root test, property input, fixture, runner setting and four-worker limit. The
+pinned instrumenter reproduces exactly 218 request plus 257 serving mutants,
+matching all 475 canonical tuples and their complete configuration. This is
+static inventory evidence, not executed qualification or measured savings.
+
+The previous unpartitioned run passed all 288 dry-run tests, then exceeded its
+90-minute bound after six worker out-of-memory restarts. It was stopped without a
+final report. That attempt remains incomplete, with no inferred passing score.
+Fresh complete part reports must satisfy the canonical aggregate, including its
+independent raw-part reconstruction. PR artifact downloads explicitly include
+both parts; missing parts cannot pass the final gate. The existing 90-minute job
+bound and every mutant/test deadline remain unchanged. Dry-run duplication,
+worker memory and the slower part's wall time must be measured before claiming
+an improvement.
+
+The separate `root-eviction-codec` target receives the same bounded 90-minute job
+allowance after its full 182-site run took 50m05s. That run achieved 97.80% with
+zero uncovered/invalid outcomes and unchanged dependency bytes. This is an
+execution allowance, not a reduced test set, score gate or worker constraint.
+All earlier target allowances and the 45-minute default are retained.
+
+### Recovery-store execution partitions
+
+`wallet-recovery-store` remains one canonical target. Its original store-method
+interval is scheduled at complete method and helper boundaries; installation
+and operation-transition source intervals retain their separate original
+registrations. All nine parts run the complete original tests and property
+selection with unchanged inputs, operators, four workers and deadlines. Future
+canonical companion sources remain in the fallback part. Ordinary CI downloads
+every selected partitioned target's evidence before the mandatory canonical
+aggregate, including recovery-plan, recovery-store, private-publication
+admission and private-purchase HTTP parts. An installed
+workflow control checks this wiring against the entire current target registry.
+
+On source `9aff4d95b666103f2d3f1a209102b5f5b09fc02e`, full campaign
+`37223480110`, attempt one, passed all 237 initial store tests in 123 seconds,
+then reached the existing 90-minute job limit without a final report. That job
+is unqualified. Independent pinned-engine replay observes all 229 original
+mutants exactly once across nine nonempty parts, with inventories
+44/9/14/16/20/10/93/13/10. The complete registry remains 141 targets, now
+scheduled as 388 execution rows in batches of 256 and 132. Source and test
+unions, global 90% score and zero-uncovered/invalid/unexecuted requirements
+remain unchanged. This inventory proof establishes completeness; a fresh full
+campaign on the published source must establish execution and final qualification.
+
+### Diagnostic assertion metadata
+
+The optional fixed-selector application diagnostic records assertion status independently
+of its process exit. A single selected suite can pass its assertions while the unchanged
+package-wide coverage threshold makes Jest exit nonzero. That result must not be described
+as an assertion failure, a complete coverage pass or full functional qualification.
+
+After the existing source, fault, case-timeout, calendar and complete process-drain guards,
+the diagnostic reads a bounded private Jest JSON result through a no-follow descriptor.
+It verifies the exact fixed selector, one complete suite, every expected assertion and
+matching passed/failed totals; skipped, pending, todo, runtime-error and inconsistent
+results refuse the metadata. Only scalar outcomes and the original process exit enter
+the artifact. Failure messages, assertion titles and private/counterexample values remain
+in the temporary directory and are removed with it. No completed property-case count is
+inferred. The original tests, minimum 300 cases, seed 3242026, empty replay, 150-second
+interruption, 180-second case timeout, worker settings, full coverage gates and mutation
+qualification remain mandatory and unchanged. CPU clocks and native monotonic clocks
+remain separate; valid timing metadata does not establish successful assertions or a
+speedup.

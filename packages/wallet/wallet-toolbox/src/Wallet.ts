@@ -1,3 +1,13 @@
+import { internalizeBrc197Action } from './signer/methods/internalizeBrc197Action'
+import {
+  BRC197_INTERNALIZATION_PROFILE,
+  assertBrc197Recipient,
+  brc197ChildPublicKey,
+  ownBrc197InternalizeActionArgs,
+  validateBrc197InternalizeActionArgs,
+  type Brc197InternalizeActionArgs,
+  type Brc197InternalizationCapabilities
+} from './sdk/Brc197Internalization'
 import {
   type ValidAcquireIssuanceCertificateArgs,
   type ValidCreateActionArgs,
@@ -1254,6 +1264,51 @@ export class Wallet implements WalletInterface, ProtoWallet {
     throwIfUnsuccessfulInternalizeAction(r)
 
     return r
+  }
+
+  /** Before locking listing value, callers must obtain this explicit local capability.
+   * It verifies protected public derivation and the currently authorized writer.
+   * It does not establish target miner policy, listing lineage or chain currentness. */
+  async getBrc197InternalizationCapabilities(): Promise<Brc197InternalizationCapabilities> {
+    const capability = this.storage.getBrc197InternalizationCapabilities
+    if (typeof capability !== 'function')
+      throw new WERR_NOT_IMPLEMENTED('Local BRC-197 fixed-child internalization is unsupported.')
+    const result = await capability.call(this.storage)
+    const root = await this.getPublicKey({ identityKey: true })
+    const child = await this.getPublicKey({
+      protocolID: [2, '3241645161d8'],
+      keyID: 'brc197 authority',
+      counterparty: 'anyone',
+      forSelf: true
+    })
+    if (
+      result.profile !== BRC197_INTERNALIZATION_PROFILE ||
+      result.recipientIdentityKey !== root.publicKey ||
+      result.childPublicKey !== child.publicKey ||
+      child.publicKey !== brc197ChildPublicKey(root.publicKey)
+    ) {
+      throw new WERR_INVALID_PARAMETER('storage', 'the authenticated protected BRC-197 child owner')
+    }
+    return { ...result }
+  }
+
+  /** Separate local profile. Ordinary internalizeAction and remote wire schemas are unchanged. */
+  async internalizeBrc197Action(
+    args: Brc197InternalizeActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<StorageInternalizeActionResult> {
+    validateOriginator(originator)
+    const owned = ownBrc197InternalizeActionArgs(args)
+    const { auth, vargs } = this.validateAuthAndArgs(owned, validateBrc197InternalizeActionArgs)
+    assertBrc197Recipient(owned, auth.identityKey)
+    if (vargs.labels.includes(specOpThrowReviewActions)) throwDummyReviewActions()
+    if (hasBrc177NoSendExpiryLabel(vargs.labels)) {
+      throw new WERR_INVALID_PARAMETER('labels', 'BRC-177 noSend expiry labels only on outgoing createAction requests')
+    }
+    await this.getBrc197InternalizationCapabilities()
+    const result = await internalizeBrc197Action(this, auth, owned)
+    throwIfUnsuccessfulInternalizeAction(result)
+    return result
   }
 
   async abortAction(

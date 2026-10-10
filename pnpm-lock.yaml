@@ -6,7 +6,7 @@ settings:
 
 overrides:
   '@chainsafe/libp2p-yamux>@libp2p/utils': 7.4.1
-  brace-expansion@<5.0.11: 5.0.11
+  brace-expansion@<5.0.12: 5.0.12
   engine.io@<6.6.10: 6.6.10
   nanoid@<3.3.18: 3.3.18
   toml@<4.2.0: 4.2.0
@@ -19,7 +19,7 @@ packageExtensionsChecksum: sha256-j1ipTIriuh1r8NrHzy5rLoGNr081FjMxVoEY/IdY3mE=
 
 patchedDependencies:
   metro-file-map@0.87.1:
-    hash: 32d4c04a0bb19e2af5220b5b76523da87d73c1e129ec51aa394a749e20b2f51d
+    hash: 28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b
     path: patches/metro-file-map@0.87.1.patch
 
 importers:
@@ -41,6 +41,15 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+      istanbul-lib-coverage:
+        specifier: 3.2.2
+        version: 3.2.2
+      istanbul-lib-report:
+        specifier: 3.0.1
+        version: 3.0.1
+      istanbul-reports:
+        specifier: 3.2.0
+        version: 3.2.0
       jest-environment-node:
         specifier: 30.5.1
         version: 30.5.1
@@ -83,6 +92,64 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vite:
         specifier: ^8.3.0
+        version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@26.6.1)(@vitest/coverage-v8@5.0.1)(jsdom@26.1.0)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
+
+  apps/output-knowledge-reference:
+    dependencies:
+      '@bsv/auth-express-middleware':
+        specifier: workspace:^
+        version: link:../../packages/middleware/auth-express-middleware
+      '@bsv/lch':
+        specifier: workspace:^
+        version: link:../../packages/content/lch
+      '@bsv/output-knowledge':
+        specifier: workspace:^
+        version: link:../../packages/application/output-knowledge
+      '@bsv/overlay':
+        specifier: workspace:^
+        version: link:../../packages/overlays/overlay
+      '@bsv/overlay-express':
+        specifier: workspace:^
+        version: link:../../packages/overlays/overlay-express
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../packages/sdk
+      '@bsv/wallet-toolbox':
+        specifier: workspace:^
+        version: link:../../packages/wallet/wallet-toolbox
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      express-rate-limit:
+        specifier: ^8.6.1
+        version: 8.7.0(express@5.2.1)
+      mongodb:
+        specifier: 7.6.0
+        version: 7.6.0
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.6.1
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      oxlint:
+        specifier: ^1.76.0
+        version: 1.83.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.11.0(yauzl@3.4.0)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vite:
+        specifier: ^8.1.5
         version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
       vitest:
         specifier: ^5.0.1
@@ -223,6 +290,51 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vite:
         specifier: ^8.3.0
+        version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
+
+  packages/application/output-knowledge:
+    devDependencies:
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
+      '@bsv/wallet-toolbox':
+        specifier: workspace:^
+        version: link:../../wallet/wallet-toolbox
+      '@jest/globals':
+        specifier: ^30.4.1
+        version: 30.5.1
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.6.1
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.10.1
+      jest:
+        specifier: ^30.4.2
+        version: 30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2))
+      oxlint:
+        specifier: ^1.76.0
+        version: 1.83.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.11.0(yauzl@3.4.0)
+      ts-jest:
+        specifier: ^29.4.12
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.5.1)(@jest/types@30.5.1)(@typescript/typescript6@6.0.2)(babel-jest@30.5.1(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2)))
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vite:
+        specifier: ^8.1.5
         version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
 
   packages/content/lch:
@@ -890,6 +1002,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      express-rate-limit:
+        specifier: 8.6.1
+        version: 8.6.1(express@5.2.1)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -1327,6 +1442,9 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      express-rate-limit:
+        specifier: ^8.6.1
+        version: 8.7.0(express@5.2.1)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -5077,8 +5195,8 @@ packages:
     resolution: {integrity: sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw==}
     engines: {node: '>=18'}
 
-  brace-expansion@5.0.11:
-    resolution: {integrity: sha512-awigjhi6cLTh90bdw6+QJ9CtmJmyYhEIi70iCbc8Rozn04Fw9FeQIBjv/E22FFGuCGx1bLJyUfB64x/szUSXUg==}
+  brace-expansion@5.0.12:
+    resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
 
   browserslist@4.29.0:
@@ -5644,8 +5762,8 @@ packages:
   dom-accessibility-api@0.6.3:
     resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
 
-  dompurify@3.4.15:
-    resolution: {integrity: sha512-EUBjM+B+lkDE41iE82DDSCfkoPGfXx8IxFxPMjNzm/Uk4xDet77rTN9wqlxlVg71kK7XGuUMv6wUxJUwwv+Xyw==}
+  dompurify@3.4.16:
+    resolution: {integrity: sha512-sqo+pNp3qRhCIpbgRi1y8Tgk27Bo2Ry7w0dC1NBeNTdZChWjz9Xb/KOoZbRP/R6pQZ80Qw8YhXw13hWWBbMRnQ==}
 
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
@@ -5866,6 +5984,12 @@ packages:
 
   exponential-backoff@3.1.3:
     resolution: {integrity: sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA==}
+
+  express-rate-limit@8.6.1:
+    resolution: {integrity: sha512-0D493aP61w0TJ2A0wy27riRsO7FMQ7FK+KUHOKCSfPvYo0R55aiC6emCVgFUeShH0fq0ICPVzNcgoS+BsbXQCA==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express: '>= 4.11'
 
   express-rate-limit@8.7.0:
     resolution: {integrity: sha512-hOwV7WOxXfjRpAM1DSJWZDXx3GhplwD8IfwuwvogD8i1Qnkgosw/H45s4ZnFAUHDAhPjlY9hLBvJhKmGMyY26g==}
@@ -6094,8 +6218,8 @@ packages:
   hachure-fill@0.5.2:
     resolution: {integrity: sha512-3GKBOn+m2LX9iq+JC1064cSFprJY4jL1jCXTcpnfER5HYE2l/4EfWSGzkPa/ZDBmYI0ZOEj5VHV/eKnPGkHuOg==}
 
-  handlebars@4.7.9:
-    resolution: {integrity: sha512-4E71E0rpOaQuJR2A3xDZ+GM1HyWYv1clR58tC8emQNeQe3RH7MAzSbat+V0wG78LQBo6m6bzSG/L4pBuCsgnUQ==}
+  handlebars@4.7.10:
+    resolution: {integrity: sha512-P5VJMVM7qgBn6vjXMw8WG9uVI+ncf2pi72j4de4yz5ZULLj2RGqLYaKOYGsgyrViQ0tePOVlN1tDCCXXtFqXKg==}
     engines: {node: '>=0.4.7'}
     hasBin: true
 
@@ -12528,7 +12652,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  brace-expansion@5.0.11:
+  brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
 
@@ -13050,7 +13174,7 @@ snapshots:
 
   dom-accessibility-api@0.6.3: {}
 
-  dompurify@3.4.15:
+  dompurify@3.4.16:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -13318,6 +13442,14 @@ snapshots:
 
   exponential-backoff@3.1.3: {}
 
+  express-rate-limit@8.6.1(express@5.2.1):
+    dependencies:
+      debug: 4.4.3
+      express: 5.2.1
+      ip-address: 10.7.2
+    transitivePeerDependencies:
+      - supports-color
+
   express-rate-limit@8.7.0(express@5.2.1):
     dependencies:
       debug: 4.4.3
@@ -13574,7 +13706,7 @@ snapshots:
 
   hachure-fill@0.5.2: {}
 
-  handlebars@4.7.9:
+  handlebars@4.7.10:
     dependencies:
       minimist: 1.2.8
       neo-async: 2.6.2
@@ -14820,7 +14952,7 @@ snapshots:
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.14
       dayjs: 1.11.23
-      dompurify: 3.4.15
+      dompurify: 3.4.16
       elkjs: 0.9.3
       es-toolkit: 1.52.0
       katex: 0.16.47
@@ -14876,7 +15008,7 @@ snapshots:
       lodash.throttle: 4.1.1
       metro-resolver: 0.87.1
 
-  metro-file-map@0.87.1(patch_hash=32d4c04a0bb19e2af5220b5b76523da87d73c1e129ec51aa394a749e20b2f51d):
+  metro-file-map@0.87.1(patch_hash=28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b):
     dependencies:
       debug: 4.4.3
       fb-watchman: 2.0.2
@@ -14984,7 +15116,7 @@ snapshots:
       metro-cache-key: 0.87.1
       metro-config: 0.87.1
       metro-core: 0.87.1
-      metro-file-map: 0.87.1(patch_hash=32d4c04a0bb19e2af5220b5b76523da87d73c1e129ec51aa394a749e20b2f51d)
+      metro-file-map: 0.87.1(patch_hash=28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b)
       metro-resolver: 0.87.1
       metro-runtime: 0.87.1
       metro-source-map: 0.87.1
@@ -15298,11 +15430,11 @@ snapshots:
 
   minimatch@10.2.6:
     dependencies:
-      brace-expansion: 5.0.11
+      brace-expansion: 5.0.12
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 5.0.11
+      brace-expansion: 5.0.12
 
   minimist@1.2.8: {}
 
@@ -16659,7 +16791,7 @@ snapshots:
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
-      handlebars: 4.7.9
+      handlebars: 4.7.10
       jest: 30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2))
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -16680,7 +16812,7 @@ snapshots:
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
-      handlebars: 4.7.9
+      handlebars: 4.7.10
       jest: 30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2))
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -16781,7 +16913,7 @@ snapshots:
 
   type-is@2.1.0:
     dependencies:
-      content-type: 2.0.0
+      content-type: 2.1.0
       media-typer: 1.1.1
       mime-types: 3.0.2
 

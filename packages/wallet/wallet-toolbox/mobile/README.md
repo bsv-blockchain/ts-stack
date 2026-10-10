@@ -13,6 +13,20 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For browsers, use [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client).
 
+## Local recovery capability boundary
+
+The coordinated 2.15.0 source candidate preserves this wrapper's existing APIs
+and SDK peer range. Core's new local SQLite action/funding recovery controllers
+are separate Node deep imports; this package does not bundle or expose them.
+An upgrade does not give IndexedDB, mobile or remote storage a durable operation
+journal. Ordinary BRC-100 methods retain their existing behavior.
+
+When a host separately adopts core recovery, preserve its whole consistent
+wallet database and keys. Ordinary entity export/sync does not include those
+auxiliary journals. Reconcile outstanding core operations before rollback;
+wrapper retries or a new payment cannot substitute for retained recovery state.
+See the [local recovery guide](https://bsv-blockchain.github.io/ts-stack/guides/local-action-recovery/).
+
 ## BRC-100 result compatibility
 
 Version 2.14.1 keeps internal exact-spend accounting off public `createAction`

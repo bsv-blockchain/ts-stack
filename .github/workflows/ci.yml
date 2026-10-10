@@ -13,6 +13,11 @@ on:
         type: boolean
         default: false
         required: false
+      application-performance-diagnostics:
+        description: Measure the unchanged alias disclosure property during artifact qualification
+        type: boolean
+        default: false
+        required: false
 
 permissions: {}
 
@@ -233,6 +238,9 @@ jobs:
       mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
       mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
       partition-targets: ${{ needs.scope.outputs.partition-targets }}
+      mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
+      mutation-matrix-digest: ${{ steps.mutation-execution.outputs.matrix-digest }}
+      mutation-execution-identity: ${{ steps.mutation-execution.outputs.identity }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
@@ -256,6 +264,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Test installed mutation engine controls
+        run: node --test scripts/mutation-partitions-engine.integration.mjs
+
+      - name: Test installed application coverage reporting
+        run: node --test scripts/output-knowledge-coverage.integration.mjs
 
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
@@ -316,9 +330,14 @@ jobs:
             --projects-json .ci-direct-packages.json \
             --mode coverage-other)
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
-          COVERAGE_OTHER_MATRIX=$(jq -c \
-            'if length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
-            <<<"$COVERAGE_OTHER_PACKAGES")
+          COVERAGE_OTHER_MATRIX=$(jq -c '
+            . as $all | map(select(. != "@bsv/output-knowledge")) as $other |
+            {include: ((if ($other | length) > 1 then
+              [{id:"packages-1",shard:1,total:2,application:0},{id:"packages-2",shard:2,total:2,application:0}]
+              elif ($other | length) == 1 then [{id:"packages-1",shard:1,total:1,application:0}]
+              else [] end) + (if $all | index("@bsv/output-knowledge") then
+              [range(1;5) as $shard | {id:("application-" + ($shard | tostring)),shard:$shard,total:4,application:$shard}]
+              else [] end))}' <<<"$COVERAGE_OTHER_PACKAGES")
           echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
           BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \
             --projects-json .ci-affected-packages.json \
@@ -414,15 +433,30 @@ jobs:
           {
             find packages -type d \( -name dist -o -name out \) -prune -print0
             find packages -type f -name '*.tsbuildinfo' -print0
+            find apps -type d \( -name node_modules -o -name .stryker-tmp \) -prune -o -type d \( -name dist -o -name dist-server -o -name dist-proposals \) -print0 -prune
           } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
 
       - name: Share build outputs
+        id: mutation-build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: build-outputs
           path: build-outputs.tar.gz
           if-no-files-found: error
           retention-days: 1
+
+      - name: Pin complete immutable mutation execution batches
+        id: mutation-execution
+        env:
+          MUTATION_MATRIX: ${{ needs.scope.outputs.mutation-matrix }}
+          BUILD_ARTIFACT_ID: ${{ steps.mutation-build.outputs.artifact-id }}
+          BUILD_ARTIFACT_NAME: build-outputs
+        run: |
+          batches="$(node scripts/mutation-execution-batches.mjs plan)"
+          matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
+          identity="$(node scripts/mutation-execution-batches.mjs build-identity)"
+          printf 'batches=%s\nmatrix-digest=%s\nidentity=%s\n' \
+            "$batches" "$matrix_digest" "$identity" >> "$GITHUB_OUTPUT"
 
   package-artifacts:
     name: Package artifacts and documentation consumers
@@ -436,6 +470,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -448,6 +483,42 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Restore the fixed Mongo binary for optional native diagnostics
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/mongodb-binaries
+          key: mongodb-memory-server-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Prepare the fixed Mongo binary before optional measurement
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --prepare-native-runtime
+      - name: Measure the unchanged application property on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/output-knowledge-performance-diagnostic.mjs
+      - name: Measure the unchanged native purchase HTTP composition on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --native-http
+      - name: Measure the unchanged application coordinator property on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --coordinator
+      - name: Preserve bounded application function timing
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: application-performance-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .coverage-output/performance-diagnostic-*/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
       - name: Compile documentation examples against exact package tarballs
         if: needs.prepare.outputs.direct-projects != '[]'
         env:
@@ -482,7 +553,7 @@ jobs:
             --dry-run
 
   mutation-tests:
-    name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
+    name: Mutation batch / ${{ matrix.batch }}
     # Analyzer failures stop expensive qualification; explicit diagnostics only
     # collect evidence and never waive the required final analyzer/merge gates.
     if: >-
@@ -495,47 +566,21 @@ jobs:
     needs:
       - prepare
       - sonar-zero-findings
-    runs-on: ubuntu-latest
-    # The governed air-gap codec target currently instruments 352 mutants and
-    # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      max-parallel: 6
-      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.18.0
-          cache: pnpm
-      - name: Install frozen dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: build-outputs
-          path: .ci-artifacts
-      - name: Restore build outputs
-        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-      - name: Enforce the affected mutation-quality ratchet
-        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}" --partition "${{ matrix.partition }}"
-      - name: Capture complete execution-partition evidence
-        if: matrix.partition != 'whole'
-        run: |
-          node scripts/mutation-partition-evidence.mjs capture --mode diagnostic \
-            --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
-            --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
-      - name: Preserve the machine-readable mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: mutation-${{ matrix.target }}-${{ matrix.partition }}
-          path: artifacts/mutation/${{ matrix.target }}
-          if-no-files-found: ignore
-          retention-days: 30
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-batches) }}
+    uses: ./.github/workflows/mutation-execution.yml
+    with:
+      execution-matrix: ${{ toJSON(matrix.executionMatrix) }}
+      execution-batch: ${{ matrix.batch }}
+      selected-targets: ${{ needs.prepare.outputs.mutation-targets }}
+      matrix-digest: ${{ needs.prepare.outputs.mutation-matrix-digest }}
+      identity: ${{ needs.prepare.outputs.mutation-execution-identity }}
+      profile: ci
+      mode: diagnostic
 
   mutation-quality:
     name: Mutation quality
@@ -555,6 +600,7 @@ jobs:
           MUTATION_TARGETS: ${{ needs.prepare.outputs.mutation-targets }}
           MUTATION_CLASSIFICATION: ${{ needs.prepare.outputs.mutation-classification }}
           MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
+          MUTATION_BATCHES: ${{ needs.prepare.outputs.mutation-batches }}
           PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
@@ -564,7 +610,16 @@ jobs:
             exit 1
           fi
           "${NODE_EXECUTABLE:-node}" --input-type=module <<'NODE'
+          const batches = JSON.parse(process.env.MUTATION_BATCHES)
           const matrix = JSON.parse(process.env.MUTATION_MATRIX)
+          if (!Array.isArray(matrix.include) || matrix.include.length > 256 ** 2)
+            throw new Error('Invalid complete execution matrix')
+          const expectedBatches = { include: [] }
+          for (let offset = 0; offset < matrix.include.length; offset += 256)
+            expectedBatches.include.push({ batch: expectedBatches.include.length + 1,
+              executionMatrix: { include: matrix.include.slice(offset, offset + 256) } })
+          if (JSON.stringify(batches) !== JSON.stringify(expectedBatches))
+            throw new Error('Incomplete, unordered or malformed execution batch union')
           const actual = JSON.parse(process.env.PARTITION_TARGETS)
           if (!Array.isArray(matrix.include) || !Array.isArray(actual) ||
               actual.some(target => typeof target !== 'string') || new Set(actual).size !== actual.length)
@@ -602,6 +657,171 @@ jobs:
         with:
           pattern: mutation-wallet-retained-snapshot-*
           path: .mutation-parts/wallet-retained-snapshot
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'root-eviction-records')
+        with:
+          pattern: mutation-root-eviction-records-*
+          path: .mutation-parts/root-eviction-records
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'root-eviction-journal')
+        with:
+          pattern: mutation-root-eviction-journal-*
+          path: .mutation-parts/root-eviction-journal
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'root-eviction-storage')
+        with:
+          pattern: mutation-root-eviction-storage-*
+          path: .mutation-parts/root-eviction-storage
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'output-knowledge-proposal-core')
+        with:
+          pattern: mutation-output-knowledge-proposal-core-*
+          path: .mutation-parts/output-knowledge-proposal-core
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'proposal-journal-send')
+        with:
+          pattern: mutation-proposal-journal-send-*
+          path: .mutation-parts/proposal-journal-send
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'proposal-channel-storage')
+        with:
+          pattern: mutation-proposal-channel-storage-*
+          path: .mutation-parts/proposal-channel-storage
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-encoding')
+        with:
+          pattern: mutation-wallet-recovery-encoding-*
+          path: .mutation-parts/wallet-recovery-encoding
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'protected-ledger')
+        with:
+          pattern: mutation-protected-ledger-*
+          path: .mutation-parts/protected-ledger
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-state')
+        with:
+          pattern: mutation-private-publication-state-*
+          path: .mutation-parts/private-publication-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'revenue-lineage-graph')
+        with:
+          pattern: mutation-revenue-lineage-graph-*
+          path: .mutation-parts/revenue-lineage-graph
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-service')
+        with:
+          pattern: mutation-private-publication-service-*
+          path: .mutation-parts/private-publication-service
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-coordination')
+        with:
+          pattern: mutation-private-publication-coordination-*
+          path: .mutation-parts/private-publication-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-publication-http')
+        with:
+          pattern: mutation-private-publication-http-*
+          path: .mutation-parts/private-publication-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-foundation')
+        with:
+          pattern: mutation-private-acquisition-foundation-*
+          path: .mutation-parts/private-acquisition-foundation
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-state')
+        with:
+          pattern: mutation-private-acquisition-state-*
+          path: .mutation-parts/private-acquisition-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-coordination')
+        with:
+          pattern: mutation-private-acquisition-coordination-*
+          path: .mutation-parts/private-acquisition-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-acquisition-http')
+        with:
+          pattern: mutation-private-acquisition-http-*
+          path: .mutation-parts/private-acquisition-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'sdk-paid-lookup-http')
+        with:
+          pattern: mutation-sdk-paid-lookup-http-*
+          path: .mutation-parts/sdk-paid-lookup-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'protected-operation-state')
+        with:
+          pattern: mutation-protected-operation-state-*
+          path: .mutation-parts/protected-operation-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'protected-operation-objects')
+        with:
+          pattern: mutation-protected-operation-objects-*
+          path: .mutation-parts/protected-operation-objects
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-proposal-http')
+        with:
+          pattern: mutation-overlay-proposal-http-*
+          path: .mutation-parts/overlay-proposal-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-lookup-buyer')
+        with:
+          pattern: mutation-private-lookup-buyer-*
+          path: .mutation-parts/private-lookup-buyer
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'lch-overlay-covenant-terms')
+        with:
+          pattern: mutation-lch-overlay-covenant-terms-*
+          path: .mutation-parts/lch-overlay-covenant-terms
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-state')
+        with:
+          pattern: mutation-private-purchase-state-*
+          path: .mutation-parts/private-purchase-state
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-coordination')
+        with:
+          pattern: mutation-private-purchase-coordination-*
+          path: .mutation-parts/private-purchase-coordination
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-native-clock')
+        with:
+          pattern: mutation-private-purchase-native-clock-*
+          path: .mutation-parts/private-purchase-native-clock
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'revenue-listing-purchase')
+        with:
+          pattern: mutation-revenue-listing-purchase-*
+          path: .mutation-parts/revenue-listing-purchase
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-private-publication-admission')
+        with:
+          pattern: mutation-overlay-private-publication-admission-*
+          path: .mutation-parts/overlay-private-publication-admission
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'private-purchase-http')
+        with:
+          pattern: mutation-private-purchase-http-*
+          path: .mutation-parts/private-purchase-http
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-plan')
+        with:
+          pattern: mutation-wallet-recovery-plan-*
+          path: .mutation-parts/wallet-recovery-plan
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-store')
+        with:
+          pattern: mutation-wallet-recovery-store-*
+          path: .mutation-parts/wallet-recovery-store
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-recovery-codec')
+        with:
+          pattern: mutation-wallet-recovery-codec-*
+          path: .mutation-parts/wallet-recovery-codec
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'overlay-proposal-admission')
+        with:
+          pattern: mutation-overlay-proposal-admission-*
+          path: .mutation-parts/overlay-proposal-admission
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
@@ -972,7 +1192,7 @@ jobs:
     services:
       # The Knex storage suites also run against Postgres (RUNPOSTGRES).
       postgres:
-        image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef # 17-alpine
+        image: public.ecr.aws/docker/library/postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef # 17-alpine
         env:
           POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         ports:
@@ -1131,7 +1351,7 @@ jobs:
           retention-days: 1
 
   coverage-other:
-    name: Coverage / other affected packages (${{ matrix.shard }}/${{ matrix.total }})
+    name: Coverage / ${{ matrix.application && 'application state' || 'other affected packages' }} (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
@@ -1159,7 +1379,13 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Generate complete application coverage shard
+        if: matrix.application != 0
+        run: >-
+          node scripts/output-knowledge-coverage.mjs collect
+          "${{ matrix.application }}" ".coverage-output/shard-${{ matrix.application }}"
       - name: Generate coverage for other affected packages
+        if: matrix.application == 0
         env:
           COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
@@ -1172,7 +1398,7 @@ jobs:
               packages+=("$package")
             fi
             index=$((index + 1))
-          done < <(jq -r '.[]' <<<"$COVERAGE_OTHER_PACKAGES")
+          done < <(jq -r '.[] | select(. != "@bsv/output-knowledge")' <<<"$COVERAGE_OTHER_PACKAGES")
 
           filters=()
           echo "Coverage shard ${{ matrix.shard }}/${{ matrix.total }}:"
@@ -1209,7 +1435,7 @@ jobs:
           echo "a coverage script are tested by the non-coverage lane." > .coverage-output/partition.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-other-${{ matrix.shard }}
+          name: coverage-other-${{ matrix.id }}
           path: .coverage-output/
           if-no-files-found: error
           include-hidden-files: true
@@ -1248,15 +1474,21 @@ jobs:
       # The gate compares emitted JavaScript to distinguish declaration-only
       # edits from executable changes. LCOV intentionally has no interfaces.
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
         with:
           node-version: 24.18.0
       - name: Install the locked patch-coverage compiler
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
+        env:
+          COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
         run: |
-          pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack
+          filters=()
+          if jq -e 'index("@bsv/output-knowledge") != null' <<<"$COVERAGE_OTHER_PACKAGES" > /dev/null; then
+            filters+=(--filter @bsv/output-knowledge)
+          fi
+          pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack "${filters[@]}"
           pnpm rebuild esbuild
           node --input-type=module -e "import { runtimeComparisonAvailable } from './scripts/patch-coverage.mjs'; if (!runtimeComparisonAvailable()) throw new Error('Patch coverage requires the locked compiler.');"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1264,6 +1496,12 @@ jobs:
           pattern: coverage-*
           path: .coverage-artifacts
           merge-multiple: true
+      - name: Require the complete application test union and original global coverage thresholds
+        if: contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
+        run: |
+          node scripts/output-knowledge-coverage.mjs aggregate .coverage-artifacts .application-coverage
+          node scripts/normalize-lcov-paths.mjs .application-coverage/lcov.info packages/application/output-knowledge
+          cp .application-coverage/lcov.info .coverage-artifacts/output-knowledge.lcov.info
       - name: Compose Codecov inputs
         id: cov
         run: |

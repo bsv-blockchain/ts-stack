@@ -103,30 +103,98 @@ runtime/deployment effects, remove obsolete dependencies, and require the same
 tests, security analysis, and package checks as human-authored work. Bot noise,
 conflicting single-package bumps, and first-party version PRs are consolidated
 or closed rather than merged piecemeal. CI recognizes dependency-shaped diffs
-and requires the pull request's dependency-evidence section to record release
-notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
-audit and CodeQL results, package and consumer tests, bundle/performance
-impact, and affected public versions.
+and reports advisory evidence for release notes and necessity, runtime/build/peer
+compatibility, lockfile deduplication, audit and CodeQL results, package and
+consumer tests, bundle/performance impact, and affected public versions. Missing
+fields produce a warning; they do not waive any security or merge gate.
 
-## Temporary Metro watcher repair
+The docs-site Mermaid graph selects DOMPurify 3.4.16 instead of 3.4.13 for
+[GHSA-p98j-92pf-mc4p](https://github.com/advisories/GHSA-p98j-92pf-mc4p).
+The reviewed [3.4.16 release](https://github.com/cure53/DOMPurify/releases/tag/3.4.16)
+fits Mermaid 11.16.1's existing `^3.3.3` range and exceeds the seven-day release
+age. pnpm regenerates only that package resolution, integrity and existing graph
+reference; all importers, manifests and unrelated resolutions remain unchanged.
+The governed bundle inventory records the same version, with its license
+expression and license-file hash unchanged. This private documentation dependency does not change wallet runtime packages,
+public APIs or candidate versions. Frozen installation, root checks, docs tests
+and a built-site browser check qualify the ordinary Mermaid consumer. No service
+or package is deployed by this source change.
 
-Metro-file-map 0.87.1 consumes only `micromatch.some()`, whose matcher is already
-Picomatch 2.3.2. An exact-version paired source/distribution patch uses the same
-matcher loop directly, declares that exact dependency, and removes only the
-parent-scoped micromatch dependency and unused braces closure. The reviewed
-[braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) lists no
-patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
-has not supplied a published repair. No audit exclusion or threshold change is added.
+The October 3 independent qualification on the application-runtime branch passed the frozen
+installation and high-severity audit with no known vulnerabilities, all seven docs
+unit tests, 140 source-page frontmatter/link checks and 145 built-page link checks.
+Actual Chrome renders all 14 Mermaid diagrams across the wallet lifecycle and LCH
+production guides without page errors. The existing license inventory and root
+health checks pass; no public runtime package or version changes with this update.
 
-The mobile platform gate checks all 1,120 results independently reproduced from
-the unmodified published watcher, event/stat/path contracts, and absence of the
-removed dependencies before its existing packed Metro/Hermes compilation,
-source-map and bundle checks. All prior assertions and bounds remain.
-The dated registry owns this 27th selector, its package extension and patch as
-one repair. Remove all three together when a compatible official release removes
-the affected path and the complete compatibility, frozen-graph, audit and platform
-checks pass. This development-tool repair changes no public package API, version
-or production service startup.
+## October 6 compatible audit remediation
+
+The October 5 advisory database update identified the existing locked
+`proxy-addr` 2.0.7 and `source-map-js` 1.2.1 resolutions. The workspace now
+selects the upstream patched
+[proxy-addr 2.0.8](https://github.com/advisories/GHSA-jqcg-44mw-7w3h) and
+[source-map-js 1.2.2](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
+within their parents' existing ranges. The six affected standalone server
+locks also select proxy-addr 2.0.8; the Overlay lock already selected it.
+Package manifests, public APIs, peers, overrides and unrelated resolutions
+remain unchanged. Both patches retain their existing Node runtime floors and
+dependency graph; source-map-js still has no runtime dependencies.
+
+The proxy-addr patch was published September 15. The source-map-js patch was
+published September 30 and was about 131 hours old at review: older than the
+governed 24-hour floor, younger than the automatic seven-day delay for
+ordinary updates. Its targeted security resolution used
+`pnpm --config.minimumReleaseAge=1440 --recursive update --depth Infinity
+--lockfile-only --ignore-scripts --no-save source-map-js`. This is an explicit
+security selection, with the ordinary workspace default, provenance policy
+and lifecycle denial preserved. No permanent age exclusion, override or
+advisory dismissal was added. pnpm generated the workspace lock, and
+`npm update proxy-addr --package-lock-only --ignore-scripts --audit=false
+--fund=false --workspaces=false` generated each affected standalone lock.
+
+The coherent batch must pass frozen installs, security audits, complete root
+checks, affected consumers and the exact-head hosted gate before review.
+Lockfile remediation does not publish a package or deploy a service. Protected
+publication and normal source-owned availability, provenance and rollback
+checks remain separate requirements for any later service rollout.
+
+## Temporary Metro watcher dependency repair
+
+Metro-file-map 0.87.1 uses only micromatch.some(), whose matcher is already
+Picomatch 2.3.2. The exact-version paired source/distribution patch calls that
+same loop directly, declares the same exact Picomatch dependency and removes
+only the scoped micromatch dependency and its now-unused braces closure.
+The reviewed [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+lists no patched release; the [upstream proposal](https://github.com/micromatch/braces/pull/72)
+is still unreleased. No advisory exclusion or audit threshold change is added.
+
+The existing mobile platform gate checks 1,120 watcher results frozen from the
+unmodified published implementation, event/stat/path contracts, and absence of
+the removed matcher packages before its packed Metro/Hermes compilation,
+source-map/composition and unchanged bundle budgets. The dated override registry
+owns the patch, exact package extension and scoped removal as one repair. Remove
+all three together when an official compatible release removes the affected
+path and the full compatibility, frozen graph, audit and platform checks pass.
+This build-tool repair does not change published wallet APIs or package versions.
+
+## Temporary standalone service watcher repair
+
+The basic and cloud UHRP services and WAB use Nodemon 3.1.14 with a parent-scoped
+Chokidar 4.0.3 substitution, removing the same affected braces closure without
+an advisory exclusion. Nodemon already resolves watched globs to literal
+directories; the source-owned adapter retains the old anymatch 3 ignore
+semantics, including recursive literal directories, custom cwd, dotfiles,
+regex and function options. WAB replaces ts-node-dev with this same CLI.
+The existing Node/ts-node/telemetry execution paths remain intact, with explicit
+TypeScript and env extensions, manual `rs` and graceful shutdown regressions
+run before each service's ordinary tests. The service-copy policy keeps both
+adapter and native regression identical across all three service contexts.
+
+The three new registered substitutions bring the combined retained count to 30. Remove them and the adapter together after a compatible official Nodemon
+release resolves the dependency path natively and all watcher, frozen audit,
+service and protected Linux image gates pass. These standalone development
+tools change no public npm candidate version, service HTTP API, production
+startup or persisted schema; deployed images require separate promotion.
 
 ## Supply-chain controls
 
@@ -135,7 +203,8 @@ or production service startup.
 - dependency build scripts are denied unless explicitly listed in `allowBuilds`;
 - peer dependencies must be declared explicitly instead of being installed
   implicitly (including unused optional tooling peers);
-- ordinary releases must age for 24 hours before installation;
+- ordinary releases wait seven days before automatic installation; the governed
+  inventory floor remains 24 hours, including explicitly reviewed security updates;
 - first-party `@bsv/*` packages are exempt so coordinated releases can complete;
 - registry provenance downgrades are rejected for recent packages; and
 - `pnpm audit --audit-level=high` blocks high and critical advisories in CI and
@@ -156,17 +225,83 @@ must be a dependency or peer, and clean packed consumers must typecheck it.
 This keeps build-only advisory trees out of consumer installs without shipping
 unresolvable public declarations.
 
-The root workspace carries seven narrow audited dependency overrides:
+The September 30 audit refresh also selects compatible transitive releases within
+existing ranges: `engine.io` 6.6.10 in the workspace and Message Box server;
+`ip-address` 10.7.1 in Message Box, both UHRP servers and WAB; `fast-uri` 3.1.8 in
+Message Box; and `undici` 6.28.1 in WAB. The workspace additionally selects
+`ip-address` 10.7.2, whose reviewed change since 10.7.1 only accepts the ARPA
+suffix case-insensitively and without the root dot. Wallet rate-limit and CHIRP
+consumer tests pass with that resolution. These generated lock changes add no
+manifest ranges or overrides. All selected versions exceed the seven-day release
+age. Upstream releases preserve their module and Node contracts; service suites,
+AuthSocket coverage and frozen-install audits qualify the affected consumers.
+The relevant upstream releases are [Engine.IO](https://github.com/socketio/socket.io/releases/tag/engine.io%406.6.10),
+[ip-address](https://github.com/beaugunderson/ip-address/compare/v10.3.1...v10.7.2),
+[fast-uri](https://github.com/fastify/fast-uri/releases/tag/v3.1.8) and
+[Undici](https://github.com/nodejs/undici/releases/tag/v6.28.1).
+Source reconciliation does not release packages or deploy service images.
 
-- Jest 30.4.2 and Stryker still constrain parts of their reporting and coverage
-  graphs to minimatch releases with older `brace-expansion` ranges.
-  GHSA-rgw5-rvv9-x895 required 5.0.9. GHSA-6j4f-fj2g-mc7p requires 5.0.10 and
-  GHSA-qhr7-859c-m2p7 requires 5.0.11, so the workspace substitutes 5.0.11
-  until every supported path resolves it natively.
+The follow-up Axios audit correction selects `axios` 1.20.0 in the five existing
+Message Box, UHRP basic, UHRP cloud, notifier and WAB locks. Only Axios resolution
+and dependency metadata change; manifests, declared ranges, lock formats and all
+other resolved versions are preserved. The already-selected `form-data` 4.0.6
+satisfies the raised dependency floor. Review of the
+[1.19.0](https://github.com/axios/axios/releases/tag/v1.19.0) and
+[1.20.0](https://github.com/axios/axios/releases/tag/v1.20.0) releases includes
+configuration hardening, proxy behavior, cancellation and declaration changes.
+The services use ordinary own-property request options; their frozen installs,
+high/critical audits, builds where applicable and deterministic suites pass on
+Node 24. Public workspace manifests and browser/mobile dependency graphs are
+unchanged. Infrastructure locks are container/function build inputs, so this
+correction needs no public npm version change or consumer migration. Hosted
+Linux image and exact-head analysis gates remain required before promotion;
+these local results do not establish deployed behavior.
+
+The subsequent gRPC correction selects `@grpc/grpc-js` 1.14.5 in all seven
+standalone service locks, addressing two advisories found by the September 30 audit:
+[GHSA-m9gg-hp2v-232j](https://github.com/advisories/GHSA-m9gg-hp2v-232j) and
+[GHSA-f596-whhp-79r4](https://github.com/advisories/GHSA-f596-whhp-79r4).
+The reviewed [1.14.5 release](https://github.com/grpc/grpc-node/releases/tag/%40grpc/grpc-js%401.14.5)
+preserves the Node engine and dependency ranges; its fixes also cover stale call
+retention, status fields and completed HTTP/2 streams. Chaintracks Server and
+Wallet Infra additionally adopt the already-reviewed `ip-address` 10.7.2 within
+their existing ranges. Package-manager regeneration changes only these nine
+resolved nodes; manifests, lock formats, all other dependencies, the workspace
+lock and the earlier Axios correction are unchanged.
+
+All seven frozen installs, allowlisted native rebuilds, builds and lints pass
+on Node 24, with 658 service tests and seven zero-finding audits. Wallet Infra
+has no standalone test script; its build/lint and the shared dependency checks
+are reported separately. Each installed gRPC copy passes an ordinary loopback
+unary call and client cancellation; both changed IP consumers pass IPv4/IPv6
+parsing and invalid-syntax checks. The gRPC registry's unpacked size grows by
+49,814 bytes; no public workspace/browser/mobile graph changes. These are
+compatibility checks, not a throughput or memory benchmark. No public npm
+version or consumer migration changes; protected Linux image and exact-head
+analysis gates still qualify the eventual service artifacts before promotion.
+
+The Overlay Express authenticated root-response test fixture declares
+`express-rate-limit` 8.6.1 as a development dependency, reusing the existing
+workspace resolution. Its limiter runs before JSON parsing and authentication,
+and teardown shuts down its per-fixture memory store. The reviewed
+[8.6.1 changelog](https://github.com/express-rate-limit/express-rate-limit/blob/v8.6.1/docs/reference/changelog.mdx)
+retains the middleware API used here; Node and Express peer requirements fit the
+existing toolchain. Only that importer reference is added to the generated lock.
+No package resolution, production route, runtime dependency or wallet graph changes.
+
+The combined workspace and standalone registries carry 30 audited dependency overrides, including:
+
+- Jest 30.4.2 still constrains parts of its reporting and coverage graph to
+  minimatch releases with older `brace-expansion` ranges. The follow-up
+  advisories GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p and
+  GHSA-q2hr-2g5m-vwhr require `brace-expansion` 5.0.12, so the workspace
+  and existing standalone substitutions select 5.0.12 until every supported
+  path resolves it natively. The release preserves the existing module exports,
+  types and Node engine range.
 - `socket.io` in `@bsv/authsocket` still admits `engine.io` releases below
-  6.6.10. GHSA-2gc4-cqfq-p2gv is a protocol-revision mismatch that can crash
-  the Node process during a transport upgrade, so the workspace selects
-  6.6.10, the first patched release, without changing the public Engine.IO API.
+  6.6.10. The workspace now retains upstream's explicit first-patched-release
+  substitution, matching this branch's already-selected 6.6.10 resolution.
+  Its existing public API and tested consumer behavior remain unchanged.
 - Express/body-parser, Superagent, and Stryker's `typed-rest-client@2.3.1` can
   retain vulnerable `qs` releases. A version-bounded substitution selects
   6.16.0, the first release that also fixes the bracket/comma array-limit bypass

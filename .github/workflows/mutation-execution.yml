@@ -1,0 +1,143 @@
+name: Bounded mutation execution batch
+
+on:
+  workflow_call:
+    inputs:
+      execution-matrix:
+        description: One ordered slice of the complete canonical execution matrix
+        required: true
+        type: string
+      profile:
+        description: ci or qualification; preserves the caller's existing evidence profile
+        required: true
+        type: string
+      mode:
+        description: diagnostic or full; full requires the qualification profile
+        required: true
+        type: string
+      identity:
+        description: Original caller source, run, attempt and uploaded build archive identity
+        required: true
+        type: string
+      selected-targets:
+        description: Complete unchanged caller target selection
+        required: true
+        type: string
+      matrix-digest:
+        description: Digest of the complete ordered flat execution matrix
+        required: true
+        type: string
+      execution-batch:
+        description: Original one-based ordered batch number
+        required: true
+        type: number
+
+permissions: {}
+
+jobs:
+  execution:
+    name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
+    runs-on: ubuntu-latest
+    # Bound complete qualification work; preserve ordinary diagnostic job limits.
+    timeout-minutes: ${{ inputs.profile == 'qualification' && contains(fromJSON('["wallet-funding-controller","revenue-listing-authority","revenue-listing-profile"]'), matrix.target) && 180 || contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.profile == 'qualification' && 20 || 6 }}
+      matrix: ${{ fromJSON(inputs.execution-matrix) }}
+    steps:
+      - name: Require the original caller evidence profile
+        env:
+          PROFILE: ${{ inputs.profile }}
+          CAMPAIGN_MODE: ${{ inputs.mode }}
+          SOURCE_SHA: ${{ fromJSON(inputs.identity).sourceSha }}
+          SOURCE_RUN_ID: ${{ fromJSON(inputs.identity).runId }}
+          SOURCE_RUN_ATTEMPT: ${{ fromJSON(inputs.identity).runAttempt }}
+          NODE_VERSION: ${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}
+          ARCHIVE_DIGEST: ${{ fromJSON(inputs.identity).archiveDigest }}
+          ARTIFACT_ID: ${{ fromJSON(inputs.identity).artifactId }}
+          ARTIFACT_NAME: ${{ fromJSON(inputs.identity).artifactName }}
+        run: |
+          case "$PROFILE:$CAMPAIGN_MODE" in
+            ci:diagnostic|qualification:diagnostic|qualification:full) ;;
+            *) echo "::error::Unsupported mutation evidence profile"; exit 1 ;;
+          esac
+          if [[ "$SOURCE_SHA" != "$GITHUB_SHA" || "$SOURCE_RUN_ID" != "$GITHUB_RUN_ID" ||
+                "$SOURCE_RUN_ATTEMPT" != "$GITHUB_RUN_ATTEMPT" ||
+                ! "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ || ! "$ARCHIVE_DIGEST" =~ ^[a-f0-9]{64}$ ||
+                ! "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ||
+                ! "$NODE_VERSION" =~ ^v[1-9][0-9]*\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Stale or malformed original caller/build identity"
+            exit 1
+          fi
+          if [[ ( "$PROFILE" == "ci" && "$ARTIFACT_NAME" != "build-outputs" ) ||
+                ( "$PROFILE" == "qualification" &&
+                  "$ARTIFACT_NAME" != "mutation-build-outputs-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" ) ]]; then
+            echo "::error::Build artifact does not belong to the original caller profile"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(inputs.identity).sourceSha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Original six-field callers used this exact runtime before version capture.
+          node-version: ${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}
+          cache: pnpm
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ fromJSON(inputs.identity).artifactId }}
+          path: .ci-artifacts
+
+      - name: Verify complete immutable batch and archive before extraction
+        env:
+          EXECUTION_IDENTITY: ${{ inputs.identity }}
+          SELECTED_TARGETS: ${{ inputs.selected-targets }}
+          MUTATION_MATRIX_DIGEST: ${{ inputs.matrix-digest }}
+          EXECUTION_BATCH: ${{ inputs.execution-batch }}
+          EXECUTION_MATRIX: ${{ inputs.execution-matrix }}
+        run: node scripts/mutation-execution-batches.mjs verify-execution
+
+      - name: Restore build outputs
+        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+
+      - name: Enforce the governed mutation-quality ratchet
+        env:
+          MUTATION_VERBOSE: ${{ inputs.profile == 'qualification' && '0' || '' }}
+          TARGET: ${{ matrix.target }}
+          PARTITION: ${{ matrix.partition }}
+        run: node scripts/mutation-testing.mjs --target "$TARGET" --partition "$PARTITION"
+
+      - name: Capture successful exact-source complete target evidence
+        if: inputs.profile == 'qualification' && matrix.partition == 'whole'
+        env:
+          CAMPAIGN_MODE: ${{ inputs.mode }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          node scripts/mutation-final-qualification.mjs capture \
+            --mode "$CAMPAIGN_MODE" --target "$TARGET" \
+            --directory "artifacts/mutation/$TARGET"
+
+      - name: Capture complete execution-partition evidence
+        if: matrix.partition != 'whole'
+        env:
+          CAMPAIGN_MODE: ${{ inputs.mode }}
+        run: |
+          node scripts/mutation-partition-evidence.mjs capture --mode "$CAMPAIGN_MODE" \
+            --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
+            --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
+      - name: Preserve the machine-readable mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.profile == 'qualification' && format('{0}-{1}-{2}-{3}-{4}', matrix.partition == 'whole' && 'mutation-receipt' || 'mutation-partition', github.run_id, github.run_attempt, matrix.target, matrix.partition) || format('mutation-{0}-{1}', matrix.target, matrix.partition) }}
+          path: artifacts/mutation/${{ matrix.target }}
+          if-no-files-found: ignore
+          retention-days: 30

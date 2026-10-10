@@ -213,3 +213,185 @@ See [BRC-170](https://bsv.brc.dev/apps/0170) for the normative protocol. If this
 
 This package is licensed under the [Open BSV License Version 6](./LICENSE.txt).
 The npm artifact also carries a scoped [third-party notice](./THIRD_PARTY_NOTICES.md). The package incorporates no third-party source; its SDK and optional CHIRP peers retain their own license payloads.
+
+## Optional private-overlay representations
+
+The current implementation target is BRC PR295 at
+`1b9a75e497b5856675af1ce01fd86843c37d07f9`. The optional covenant profile is
+implemented as separate optional components: the two-stage frozen Script, immutable
+schedule, fixed-child wallet and native alias custody. Current Linux compositions
+exercise them together; complete final-source acceptance is tracked separately.
+Earlier native exemplar receipts remain historical compatibility evidence.
+See [current alignment](../../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+
+Covenant settlements now require the full `purchaseCommitment`, identically
+bound to the reserved BRC-196 result and signed POTATOES. Both independently
+installed purchase proof ports return that digest with an owned synchronous
+`checkCurrent()` guard. The buyer compares the verifier result with the signed
+settlement before recording rights; the seller signs the independently verified
+digest. A claimed digest does not replace full Bitcoin, Script or lineage checks.
+Current-alias transport evidence is excluded from the historical entitlement
+fingerprint. Adding it neither grants rights nor asserts selected-chain currentness,
+and does not add a new online requirement to already verified offline playback.
+
+The separate `@bsv/lch/overlay-acquisition` entry implements the BRC-198 wire
+representations for paid-lookup and listing-covenant acquisition. It requires
+the coordinated SDK 3.3.0 output-protocol and revenue-listing companions. Ordinary
+imports and `CORE_CAPABILITIES` retain their BRC-170 behavior and SDK2 support.
+
+`decodeLCHOverlayBinding` checks the exact seller key, chain, canonical HTTPS
+base and mode-specific anchor/policy fields. The current immutable C extension
+uses `decodeLCHCollectorRevenueProfile` and `bindLCHCollectorRevenueProfile`
+from `@bsv/lch/overlay-covenant`.
+They require the exact family, expiry height, immutable schedule, fixed-child
+derivation, permissionless payout, retained remainders and both retirement routes.
+CBOR recipient keys become lowercase hex and the complete schedule/expiry/family
+must match the descriptor. `validateLCHCollectorPreparation` requires an
+independently verified active stage and current chain height strictly below
+expiry; retained delivery obligations do not repeat this new-work check.
+
+`validateLCHOverlayCovenantProfileTerms`, selected through the covenant entry,
+authenticates the current standing Offer and individual signed License Request,
+complete immutable collector/descriptor binding, capability, policy consent and
+content commitments. It uses the same consent pipeline as the historical terms
+interface. `validateLCHOverlayCovenantProfilePromise` checks a frozen original
+promise without imposing a new expiry check; the separate
+`validateLCHOverlayCovenantProfileWindow` checks new work. Installed chain height
+is a canonical decimal U64 string. Independent authorized lineage, active stage,
+current chain view, role authority and release verification remain required.
+
+`decodeLCHOverlayCovenantProfilePurchaseEvidence` authenticates the current closed
+evidence representation and seller genesis authorization.
+`bindLCHOverlayCovenantProfileSettlement` binds its complete immutable descriptor,
+original consent and promise, settlement, purchase commitment, historical release
+and POTATOES. Both share the existing complete settlement pipeline. Decoding or
+binding provides no Bitcoin, role, unspentness, License or decryption verdict;
+install independent full verifiers before accepting delivery. Historical release
+and current-alias transport evidence remain separate.
+
+`LCHOverlayCovenantProfileDomain` is the explicit current buyer. Initialize its
+protected original and verification custody, then retain the synchronous guard
+returned by `fundingPreflight` with the complete original signed promise. Recheck
+that guard immediately before financial effects: active stage, installed height
+below expiry and accepted time window must still hold. Independently verify the
+complete original funded wallet transaction and released transaction, including
+every actual input Script, and require their identical full purchase commitment.
+The domain checks roles, License, Agreement and recipient-bound keys, then records
+positive entitlement. Historical delivery, reopen and offline playback do not
+repeat a new-funding expiry predicate. Native action/alias custody is composed
+separately; current reference fixtures exercise it with the protected buyer and
+seller, actual admission and authenticated HTTP. The current seller is described below.
+
+`decodeLCHCollectorRevenue`, `LCHOverlayCovenantDomain` and
+`LCHOverlayCovenantSeller` retain pre-replacement behavior for compatibility.
+They are historical APIs, not current-family adapters.
+The decoder/binding predicates alone do not authenticate the Offer. Neither
+terms validation nor those predicates establish activation ancestry, chain
+currentness, wallet remittance or alias recovery.
+The combined native/admission/alias layers are assembled and exercised by current
+reference compositions. Advertising C still requires the installed full verifiers
+and capabilities; final checkpoint qualification is tracked separately.
+
+`decodeUnverifiedLCHOverlayContext(bytes, mode)` preserves complete signed CBOR
+objects and exact UTF-8 JCS settlement/evidence bytes. It checks the 2 MiB
+context ceiling, 128 typed objects, 256 aggregate signatures, explicit allowed
+evidence domains, canonical ordering and duplicate body IDs. It rejects
+unknown fields and the other mode's evidence rather than normalizing them.
+`encodeLCHOverlayContext` accepts only a representation that the decoder also
+accepts. Neither method verifies signatures or grants permission to decrypt.
+An acquisition adapter must independently verify all repeated commitments,
+roles, rights, payment/release evidence, selected ciphertext and key grants
+before playback.
+
+`LCHOverlayPaidDomain` supplies a concrete fixed-render, whole-Asset,
+direct-collector buyer domain. It authenticates original Offer/Request consent,
+selected capability mechanisms and finite role authorities before funding. It
+derives the exact ODRL Agreement by removing only the paid compensation duty,
+verifies the retained settlement against locally installed Script/SPV and
+release-policy sources, and checks License rights and recipient-bound BRC-78
+keys before AES-GCM playback. Unknown policy terms and other profiles fail
+before money is allocated.
+
+Initialize protected original and verification reservations before installing
+the domain in a durable buyer. Read-only reopen retains the original terms
+after Offer expiry. Once a complete entitlement has been independently verified
+and retained, playback uses that receipt without repeating online funding,
+listing or release checks. Equivalent reissuance may change signature and
+encryption randomness or issuance time, but cannot change the rights, Agreement,
+parties, key commitments or settlement basis. Every representation still needs
+its own valid signature and decryptable, correctly bound grants; a fingerprint
+alone never authenticates it. Ciphertext must remain available in an installed
+bounded source, such as a local cache.
+
+See the [overlay acquisition guide](../../../docs/guides/lch-overlay-acquisition.md)
+for the installed proof/custody boundaries and executable tests.
+`LCHOverlayPaidSeller` composes with the protected acquisition coordinator: it
+retains original CEKs privately, independently reconciles original native credit
+and issues the exact signed settlement and recipient-bound License. The real
+authenticated native buyer/seller recovery test loses the paid reply, reopens
+buyer custody and plays actual encrypted content after expiry/catalogue withdrawal
+with one payment and one credit. The separate current native covenant reference composition installs the two-stage listing family, protected child
+authority, native wallet, per-alias admission, selected-chain currentness and LCH
+recovery/playback. Their integration selectors and final qualification gates are
+listed in the [checkpoint inventory](../../../specs/output-knowledge/CHECKPOINT2.md).
+Ordinary BRC-170 imports and `CORE_CAPABILITIES` do not advertise these optional
+profiles.
+
+The historical `validateLCHOverlayCovenantTerms` interface retains its original
+standing-Offer collector checks before wallet construction. It requires the exact topic
+capability, installed E/C/S/family mechanisms, one buyer-free standing
+requirement, an open Offer policy assignee, and the complete initial revenue
+schedule. The individual signed License Request supplies the buyer; the
+Offer and descriptor remain reusable. The derived Agreement fixes that buyer
+while retaining every accepted prohibition. `validateLCHOverlayCovenantWindow`
+checks new work; `validateLCHOverlayCovenantPromise` checks frozen original
+seller-signed purchase terms during recovery after catalogue/Offer expiry.
+These terms checks do not execute Bitcoin Script, authenticate complete
+lineage, assess release, issue a License or authorize playback. Compose the
+independent verifiers before financial work. The current reference composition
+uses the separately selected `validateLCHOverlayCovenantProfileTerms`, immutable
+collector and current buyer/seller domains described below; the historical terms
+interface does not select the replacement family.
+
+The historical `LCHOverlayCovenantDomain` remains available through
+`@bsv/lch/overlay-covenant` for its original standing-collector buyer validation
+and protected entitlement playback. Select `LCHOverlayCovenantProfileDomain`
+for the current immutable collector contract described above. Install
+independent full lineage, actual purchase Script and release-policy proof ports;
+initialize protected original/verification custody before wallet construction.
+The domain binds the signed C settlement, STEAK/POTATOES secret and original
+transaction, then validates the exact License, derived Agreement, typed role
+evidence and recipient-bound keys. Reopen and playback retain the original
+verified rights after Offer expiry without another purchase. The portable
+lineage and entitlement codecs remain representations rather than verdicts.
+Actual disclosed native tests execute the family scripts, complete synthetic
+chain evidence, encrypted SQLite restart and real ciphertext playback. The
+current native composition combines protected wallet/seller custody, topical
+admission, per-alias recovery and physical authenticated delivery. Its reproducible
+selectors and limits are in the checkpoint inventory; complete mutation and final
+published-source checks remain separate review requirements. The ordinary and
+existing paid entries stay separate.
+
+`LCHOverlayCovenantSeller` is the preserved historical C seller domain. It retains
+complete original private CEKs and independently verifies genesis/lineage,
+purchase and release before issuing collector settlement, Agreement and
+recipient License/key grants. The protected purchase coordinator supplies the
+owned complete candidate as an additive fifth issuance argument; existing
+four-argument adapters stay compatible. Advertised finite limits must reserve
+the complete future C response before preparation. Catalogue withdrawal or an
+expired new-Offer window cannot erase the retained obligation. See the
+[acquisition guide](../../../docs/guides/lch-overlay-acquisition.md) for installation,
+private custody, recovery and the remaining combined-workflow qualification.
+
+`LCHOverlayCovenantProfileSeller` selects the current immutable collector seller
+and shares the complete original seller pipeline. Install actual complete
+reserve-stage/activation lineage, purchase and release verifiers. Preparation
+returns owned active-stage/installed-height and same-view/time fences; the
+coordinator retains and rechecks them before promising private material. The
+seller retains whole-Asset CEKs and original consent, verifies the actual admitted
+subject and full purchase commitment, authenticates roles and issues exact
+settlement, Agreement and recipient-bound License/key grants. Recovery does not
+apply a new-funding expiry check. Distinct installation identity prevents reuse of
+historical custody under current semantics. Current native alias/action ownership,
+commitment-bearing coordinator packets, actual admission and the complete HTTP
+workbench remain separate qualification requirements.

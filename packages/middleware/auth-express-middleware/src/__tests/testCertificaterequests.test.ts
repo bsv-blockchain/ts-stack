@@ -18,10 +18,11 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
   const privKey = PrivateKey.fromRandom()
   let server: Server & { ready: Promise<void> }
   let sockets: any[] = []
+  let origin: string
 
   beforeAll(async () => {
     // Start the Express server
-    server = startCertServer(3001)
+    server = startCertServer(0)
     server.on('connection', socket => {
       sockets.push(socket)
       socket.on('close', () => {
@@ -38,6 +39,10 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
         server.once('error', reject)
       }
     })
+    const address = server.address()
+    if (address === null || typeof address === 'string')
+      throw new Error('Expected a local HTTP listener')
+    origin = `http://localhost:${address.port}`
     // Wait for async certificate seeding to finish before tests run
     await server.ready
   })
@@ -70,9 +75,7 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     }
     const walletWithRequests = new MockWallet(privKey)
     const authWithCerts = new AuthFetch(walletWithRequests)
-    const certRequests = [
-      authWithCerts.sendCertificateRequest('http://localhost:3001', requestedCertificates)
-    ]
+    const certRequests = [authWithCerts.sendCertificateRequest(origin, requestedCertificates)]
     const certs = await Promise.all(certRequests)
     expect(certs).toBeDefined()
     expect(certs).toHaveLength(1)
@@ -97,7 +100,7 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     )
     walletWithCerts.addMasterCertificate(masterCert)
     const authFetch = new AuthFetch(walletWithCerts)
-    const res = await authFetch.fetch('http://localhost:3001/cert-protected-endpoint', {
+    const res = await authFetch.fetch(`${origin}/cert-protected-endpoint`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json'

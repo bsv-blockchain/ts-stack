@@ -3,8 +3,8 @@ id: guides-overview
 title: 'Guides'
 kind: meta
 version: '1.0.0'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [guides, tutorials, how-to]
@@ -77,6 +77,13 @@ lookup identities, publisher choice, updates and wallet fallback expectations.
 
 **Level:** Beginner to Intermediate
 
+### 8. [Durable Progressive and Live Lookup](./durable-live-lookup.md)
+
+Compose the experimental durable lookup provider, query policies and optional
+Overlay Express adapter, including recovery, authorization and retention boundaries.
+
+**Level:** Advanced | **Status:** Unpublished implementation candidate
+
 ## Recommended Learning Path
 
 1. Start with **Wallet-Aware App** if you're new to wallets and transactions
@@ -98,7 +105,44 @@ lookup identities, publisher choice, updates and wallet fallback expectations.
 
 **Looking for infrastructure examples?** Check [Infrastructure Components](../infrastructure/).
 
+### [Authenticated Non-Final Proposals](./non-final-proposals.md)
+
+Compose the signed policy, durable journal, retained admission and native response
+disclosure layers behind explicitly selected BRC-194 endpoints.
+
 ## Identity, DIDs and credentials
 
 - [Unified integration and implementer guidance](identity-did-vc.md)
 - [Breaking API and service migration](identity-did-vc-migration.md)
+
+## Private acquisition and recovery
+
+- [Purchase commitments and public child keys](./revenue-listing-commitments.md):
+  calculate the stable purchase identity, bind historical signed release and
+  independently assess current aliases under the optional reference domain.
+- [Authenticated seller acquisition and recovery](./private-acquisition-recovery.md):
+  compose durable obligations, wallet credits, disclosure and the optional host.
+- [Explicit paid lookup clients and protected workflow state](./paid-lookup-client.md):
+  retain original requests, use finite selected-host payment/recovery calls,
+  encrypt durable control state and guard new wallet signing after delays.
+
+### Immutable protected operation objects
+
+[Retain original requests, contracts and results](./protected-operation-objects.md)
+with explicit native/browser custody, complete logical capacity reservations,
+immutable first bytes and recovery through the original operation.
+
+### [Durable Private Lookup Buyer](./durable-private-lookup-buyer.md)
+
+Compose original capability and request custody, an explicitly authorized durable
+wallet action, unpaid recovery, immutable delivered results and independent current
+material validation. Includes the complete native buyer/seller HTTP example and
+its qualification limits.
+
+### [LCH Overlay Acquisition](./lch-overlay-acquisition.md)
+
+Bind original signed consent, finite role authority, concrete compensation,
+independent funding and recipient-bound keys to a protected retained entitlement.
+Covers the optional paid domain, native recovery and authenticated offline playback.
+
+- [Recipient-authorized private lookup context](./private-publication-lookup-context.md)

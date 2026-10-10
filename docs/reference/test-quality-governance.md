@@ -2,9 +2,9 @@
 id: test-quality-governance
 title: 'Test Quality and Skip Governance'
 kind: reference
-version: '1.1.0'
-last_updated: '2026-07-26'
-last_verified: '2026-08-26'
+version: '1.2.1'
+last_updated: '2026-10-05'
+last_verified: '2026-10-05'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, testing]
@@ -70,8 +70,8 @@ pnpm --filter @bsv/sdk test:resource
 
 ## Property-based security tests
 
-Required CI uses `fast-check` to generate and shrink unexpected inputs across
-25 packages and the stack's highest-risk trust boundaries:
+Required CI uses `fast-check` to generate and shrink unexpected inputs at the
+registered packages' highest-risk trust boundaries:
 
 - binary and text codecs: SDK Base58Check, DID base64url/multibase/SD-JWT,
   Bitcoin script numbers, asset outpoints, wallet action packs, and native BDK
@@ -102,8 +102,8 @@ Every property suite and package declaration is registered under
 `propertyTesting` in the policy. The governance check rejects a removed suite,
 an unregistered `*.property.test.ts`, a missing package command, an undeclared
 library/version, a missing trust-boundary/invariant description, or a run budget
-below 300 generated cases. It also inventories all 33 package manifests: each
-must either own a registered property suite or have a dated, owned exclusion
+below 300 generated cases. It also inventories all package manifests discovered
+under `packages/`: each must either own a registered property suite or have a dated, owned exclusion
 that explains why the package is only an adapter, composition layer, example,
 or platform harness. This prevents both silent coverage gaps and low-value
 properties added solely to increase a package count.
@@ -187,6 +187,17 @@ mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
 `FAST_CHECK_SEED`, and `FAST_CHECK_PATH` remain available for an explicit replay
 or deeper local investigation.
 
+Application mutation targets may execute as complete-file parts while retaining
+one canonical qualification gate. `output-knowledge-proposal-core` separates the
+worker, Bitcoin state, knowledge store and proposal view/state; `proposal-journal-send`
+separates the native journal, journal state and shared transaction domain. Each
+part retains the entire original test/configuration input, property budget, seed,
+worker settings and timeouts. Future files join the target's default part. The
+aggregate verifies the exact canonical mutant union and original score,
+no-coverage and invalid-mutant limits; a missing or timed-out part never passes.
+PR CI downloads every selected part before that verification. A bounded local
+campaign that times out is negative evidence, regardless of passing dry-run tests.
+
 Pull-request CI applies the same dependency graph to package regressions,
 browser/mobile consumers, infrastructure, and runtime images. Empty image and
 infrastructure matrices do not allocate build runners. The standalone
@@ -217,3 +228,246 @@ Before running a governed non-PR suite, read its policy prerequisites. After the
 run, perform its cleanup and attach evidence to the tracker or release record.
 No private credential, production wallet data, or secret output belongs in CI
 logs.
+
+The `proposal-channel-storage` target qualifies the complete atomic private
+channel owner, writer, deadline inventory, privacy/representation contract and
+session bootstrap. Its factory, writer, inventory, capacity, records, privacy and policy execution parts
+split whole files only; new files fall back to factory. Every part retains the
+canonical tests, 300-case native property budget, configuration and thresholds.
+The final canonical aggregate remains mandatory. Passing an isolated draft or
+one execution part is not a completed target qualification.
+
+The wallet recovery encoder uses complete JSON and binary/bounds execution parts
+within the existing `wallet-recovery-encoding` target. The extraction preserves
+its public facade, accepted bytes and complete canonical regression/property
+selection. Both reports are required for the canonical score, uncovered and
+invalid gates; a completed part alone is not qualification. The prior hosted
+45-minute timeout remains failed evidence until fresh exact-head CI succeeds.
+
+The compound proposal-storage campaign recycles each test-runner process after
+eight executions to bound accumulation in the long-running native Jest workers.
+Its four-worker concurrency, all canonical sources/tests, generated-case budgets,
+seeds, timeouts and final score/coverage/invalid gates are unchanged. This is an
+execution-lifetime setting, not permission to omit a failing mutant or test.
+Other targets retain their existing settings. Fresh complete qualification is
+required; the preceding worker SIGABRT and missing-report timeout remain negative
+evidence.
+
+The protected-ledger target separates the complete SQLite owner from the complete
+record/payload codecs. Both parts retain the same canonical custody, process-loss,
+independent-process, authorization and 300-case restart tests, four workers,
+deadlines and final critical gates. Workers recycle after eight executions; no
+mutant or test is omitted. Both reports and the complete aggregate are required.
+
+The former four-file compound contract execution is divided by complete file
+into capacity, records, privacy and policy parts after the measured execution
+approached its 45-minute bound. Factory, writer and inventory remain unchanged.
+Every part retains the entire canonical test selection; no source, mutant,
+property case or final gate is removed. Canonical aggregation remains required.
+
+The application `revenue-lineage-graph` target also recycles a Jest worker after
+eight mutant executions. A hosted 246-mutant run lost a worker to memory
+exhaustion and reached its existing job bound without a report. Recycling does
+not change the complete canonical source range, 99-test selection, property
+budget, concurrency, deadlines or aggregate acceptance; fresh complete results
+are required. Other lineage targets keep the previous default.
+
+The private-publication-state target qualifies the entire native publication owner,
+identity/domain pair, retained-record codec and ordered progress contract in four
+disjoint whole-file execution parts. Every part retains all identity, restoration,
+process-loss, deadline/authorization and 300-case native restart tests. Four workers,
+the normal job deadlines, eight-execution worker recycling and the critical
+90%/zero-uncovered/zero-invalid aggregate remain required. No pure transition
+result or local part substitutes for actual admission/HTTP composition or final CI.
+
+The overlay-private-publication-admission target retains both complete admission
+and shared original-receipt validator modules, with private and existing proposal
+unit/property tests. The proposal target also retains the extracted validator and
+all its prior tests. Canonical property budgets, critical90%/zero-uncovered/
+zero-invalid acceptance and existing deadlines remain unchanged; workers for the
+new target recycle after eight executions. Native Engine/Mongo recovery tests run
+separately from this generated unit campaign. Neither replaces full package and
+exact-head hosted qualification.
+
+The `root-eviction-coordination` target recycles each Jest worker after eight
+executions. Its earlier hosted 97-mutant campaign passed all 296 canonical tests,
+then lost a worker to memory exhaustion and reached the existing 45-minute job
+bound without a complete report. The replacement preserves all three complete
+source files, every canonical test/property case, four workers and all existing
+score, uncovered, invalid and deadline gates. Other root targets keep their
+previous runner settings. Fresh complete qualification is required; the cancelled
+run remains failed evidence and is not accepted by this configuration change.
+
+The bounded-worker lineage graph follow-up still reached its hosted 90-minute
+limit without a report. The behavior-preserving private extraction separates the
+complete layout/ABI and genesis/transition modules from the remaining graph
+traversal module. Graph execution now has two whole-file parts, each retaining all
+99 canonical tests and the original property budgets, workers, seeds and deadline;
+the complete graph aggregate and independent traversal gate remain required.
+Source-union and selected-artifact assertions prevent either helper from being
+omitted. No public API or verification rule changes, and the cancelled hosted
+attempt remains failed evidence.
+
+The root journal, records, codec and storage targets also use the optional
+eight-execution worker recycling setting. Their earlier hosted runs passed all296
+baseline tests but reached the unchanged90-minute limit without complete reports;
+those logs do not establish memory exhaustion as the cause. The setting is a
+measured execution remedy, subject to complete qualification. Every complete
+source, canonical test, seed, property budget, four-worker bound, existing records
+partition and final critical gate remains unchanged. No cancelled report counts
+as a passing result.
+
+### Private publication composition
+
+`private-publication-coordination` covers all seven complete authority, port,
+coordinator, disclosure, work and reconciler modules. Its disjoint whole-file
+parts each retain the full state/service/availability/authority/recovery/property
+test union and actual Engine/HTTP integration cases. `private-publication-http`
+covers all four transport modules and every native HTTP, response-driver, property
+and cross-package integration test. Its routes, policy and guard parts preserve
+the complete source union. The existing state and service targets add material-loss
+availability cases without removing prior source or tests.
+
+Both additions retain the critical 90% score, zero uncovered and zero invalid
+gates, canonical property budgets and seeds, four workers and bounded runner reuse.
+Selected complete artifacts are required by the final canonical aggregate gate.
+Local report generation, a passing baseline or an incomplete/cancelled campaign
+does not qualify any target.
+
+### Paid acquisition foundations and execution follow-ups
+
+`private-acquisition-foundation` qualifies five complete modules for original
+paid lookup contracts, pinned-candidate lifecycle, exact BRC-29/Script/SPV funding,
+native seller-wide funding uniqueness and recipient projection. Each whole-file
+part retains all canonical tests, including protected-ledger compatibility,
+300 generated lifecycle schedules and the separate-process SQLite claim race.
+The critical aggregate score remains90%, with zero uncovered or invalid mutants,
+four workers, bounded reuse8 and complete selected artifacts. These helpers do
+not by themselves qualify the full paid acquisition service.
+
+The proposal journal and HTTP targets now recycle each worker after eight
+executions. Journal execution separates the complete facade and store files;
+state/domain remain separate. HTTP separates complete routes, response guard and
+policy/ports. Every part retains the original canonical test selection (209
+journal and224 HTTP tests at the recorded hosted attempt), all sources, seeds,
+budgets and45-minute bounds. Lookup sessions alone selects the same optional
+reuse8 setting; every other lookup factory default stays unchanged. Its earlier
+503-mutant/190-test attempt reached45minutes without a report. The204-mutant
+proposal channel inventory cancellation already used reuse8 and is not resolved
+by these changes. Every cancellation remains incomplete qualification until a
+complete fresh run satisfies the unchanged gates.
+
+`private-acquisition-state` qualifies all four complete payload, original-record,
+state and native-owner modules in four disjoint whole-file execution parts.
+Every part runs the complete canonical acquisition foundation and native-owner
+suites, including the 300 generated native histories, process-loss boundaries,
+private domain/identity and protected-ledger compatibility tests. The explicit
+local batch tests also remain in the protected-ledger target. Execution uses
+four workers, optional runner reuse of eight and the existing 45-minute part
+bound. Complete aggregate score 90, zero uncovered and zero invalid remain
+required; no individual part is substituted for the complete target.
+
+`private-acquisition-coordination` retains nine complete modules across eight
+whole-file parts. Each part includes all canonical acquisition state/foundation
+and protected-ledger tests, the 300 service-interruption histories, worker tests,
+release evidence and real Wallet Toolbox/SQLite receipt tests. The latter use the
+public CJS development dependency, a same-head wallet build, fresh synthetic
+storage and a trapped broadcast port. Wallet source, manifest, TypeScript build
+configuration and fixtures are affected inputs. Existing four-worker/reuse-eight,
+45-minute-part and complete aggregate 90/zero-uncovered/invalid requirements stay
+unchanged. Cross-package HTTP qualification is a separate subsequent registration.
+
+`private-acquisition-http` retains five complete modules across routes (including
+ports), policy, guard and host parts. Every part keeps the full acquisition and
+private-host suites, seeded 300-case authenticated signing/recovery schedules and
+all private-publication HTTP/engine compatibility suites. Native wallet,
+application, SDK, authentication and host inputs remain dependencies; the build
+uses the same-head wallet and application packages. Existing four workers,
+reuse eight, 45-minute parts and complete aggregate 90/zero-uncovered/invalid gates
+remain unchanged. Independent legacy host and packed SDK-floor checks remain
+required; this registration does not imply their success.
+
+`sdk-paid-lookup-http` mutates the complete transport and shared finite HTTP owner
+in disjoint whole-file parts, retaining all new transport/funding tests and all
+existing proposal, root-eviction and lookup compatibility suites in every part.
+The same new complete test union is added to `sdk-auth-http`,
+`sdk-root-eviction-http` and `output-proposal-http`. `protected-operation-state`
+mutates all three complete modules in wallet/interface and state parts, retaining
+all protected/native/property/process and original operation-state tests. Both
+new targets keep four workers, reuse eight, 300 cases/seed3242026/replay and
+45-minute parts with aggregate90/zero uncovered/invalid. Explicit native-worker,
+SDK and original store inputs select the same-head prerequisite builds.
+
+The existing `wallet-recovery-controller` retains its complete controller plus
+the complete managed signer, every original recovery test, added deadline
+histories and shared signing/template compatibility tests. Its existing deadline
+and target/property count remain unchanged. These inventories describe required
+qualification, not an assertion that a particular head has passed it.
+
+`protected-operation-objects` qualifies five complete native/browser operation
+object modules in four disjoint whole-file parts. Every part retains all new
+object/control/state tests and protected-ledger/payload compatibility suites,
+both native child workers, backing storage/custody and SDK inputs, and the
+same-head build. The protected-control target also retains the new dependencies
+selected by its existing broad test union. Both generated backend histories run
+at least 300 cases with the governed seed/replay. Four workers, the new target's
+runner reuse of eight, 45-minute parts, complete aggregate 90% and zero uncovered
+or invalid mutants remain mandatory. No prior source/test selection, threshold,
+budget or deadline is narrowed.
+
+`private-lookup-buyer` qualifies the complete buyer, payment adapter, interfaces
+and entry in disjoint buyer/payment parts. Both retain the same complete buyer
+and native payment test union, original encrypted custody fixtures, SDK transport
+and actual wallet source inputs, with same-head wallet/application builds. Its
+separate 300-case seeded property suite explores original-obligation interruption,
+expiry, validation and reopen histories. Four workers, reuse eight, 45-minute
+parts and complete aggregate 90%/zero uncovered/invalid remain required. Existing
+targets and ordinary PR mutation deferral are preserved; deferred CI is not
+complete-campaign evidence.
+
+`lch-overlay-acquisition` qualifies every complete optional acquisition module
+and the complete `overlay-acquisition*.test.ts` union, including actual signatures,
+funding verification, native encrypted custody and licensed playback. Ordinary LCH
+and SDK/application prerequisites remain registered inputs. Its separate 300-case
+seeded codec/property entry covers both modes and original-byte evidence histories.
+The new critical target retains a complete aggregate 90% minimum and zero uncovered
+or invalid mutants. Existing wallet targets, source/test unions, thresholds,
+deadlines and complete-campaign policy remain unchanged. Registration alone is not
+passing campaign evidence.
+
+`revenue-listing-purchase` qualifies the complete prepared-purchase verifier with
+both full unit/property suites and the disclosed lineage/authority/funding fixture
+closure. Its 300 seeded generated cases distinguish Script-valid receipts from
+association with the original seller/request/recipient. The complete critical
+source retains score90, zero uncovered/invalid/unexecuted, four workers and the
+existing deadline/seed policy. It has no source partition; a named feedback run
+is diagnostic, while the final complete campaign remains mandatory. Existing
+wallet, application, LCH and administrative-route target unions remain intact.
+
+`private-purchase-contract` qualifies the complete original-preparation contract
+module with its full unit suite, disclosed fixture and separate 300-case seeded
+property suite. `private-purchase-state` qualifies both complete progress and
+SQLite custody modules with their full unit/fixture union and 300 actual native
+interruption/reopen histories. Both critical targets require score90 and zero
+uncovered, invalid or unexecuted mutants, preserving existing seeds, workers,
+deadlines and complete-campaign-only qualification. Neither has a source partition
+or an excluded source region. Their registrations are additional obligations;
+passing component tests does not establish admission, release or full campaign
+completion.
+
+## Complete alias initial suites and qualification jobs
+
+The approved private-purchase/alias composition keeps every original test and
+mutation target. Its complete initial-suite allowance is 15 minutes for thirteen
+profiles and 30 minutes for private-purchase-buyer; the registry regression tests
+enumerate all fourteen, including five derived alias profiles. This is an outer
+suite allowance, separate from each property's original 300-case minimum,
+150-second interruption and 180-second case timeout.
+
+Only the qualification profile grants 180-minute whole jobs to
+wallet-funding-controller, revenue-listing-authority and revenue-listing-profile.
+Ordinary diagnostic 45/90-minute limits and all other job limits are unchanged.
+The complete 151-target/398-row campaign, unchanged source partitions, worker
+limits and score gates still require successful final reports and independent
+reconciliation on the exact published commit. A timeout or missing report remains
+a failed run; prior failures cannot be reclassified by the larger allowance.

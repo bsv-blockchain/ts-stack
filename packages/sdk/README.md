@@ -405,6 +405,292 @@ wallet-derived locking key, and field signature before reading or spending it.
 
 - **Overlay Tools**: Advanced tools for overlay network management and optimization.
 
+  The proposed BRC-192–194 extensions add explicitly selected output observations,
+  progressive lookup representations, canonical protocol JSON, signed capability
+  validation and endpoint construction. `parseOutputProposalPut`,
+  `parseOutputProposalGet` and `parseOutputProposalFinalize`, with their respective
+  response parsers, enforce BRC-194's closed endpoint envelopes. Provider lifecycle
+  state remains separate from the author's unchanged signed proposal. Parsing a packet checks its representation;
+  it does not by itself authorize a source, validate a transaction or establish
+  unspentness. Stateful orchestration and durable storage are implemented in the
+  separate [`@bsv/output-knowledge` package](../application/output-knowledge/README.md).
+  Existing lookup and submission interfaces keep their current behavior.
+
+  BRC-195/196 release helpers preserve that distinction for private acquisitions.
+  `parseOutputReleaseEvidence` checks bounded representation and exact height
+  arithmetic; `bindOutputReleaseEvidence` matches independently selected chain,
+  transaction and policy. `verifyOutputProcessorAcceptance` verifies the registered
+  processor's exact BRC-77 statement. None proves mined inclusion, secret delivery
+  or usability. See the [release-evidence guide](../../docs/guides/private-overlay-release.md).
+  `OutputPurchaseProtocol` adds closed preparation, submission, recovery and
+  STEAK/POTATOES envelopes, seller-signed original-request terms and separately
+  authenticated private-result bindings. Persist the verified original contract
+  and exact transaction before dispatch; these codecs do not reserve, pay or
+  durably admit an acquisition.
+  `OutputPurchaseTransport` performs one explicitly selected authenticated
+  preparation, submission or recovery exchange, preserving the original signed
+  terms, recipient, topic, domain and transaction binding. It rejects HTTP payment
+  challenges. Restore the original durable owner before retrying; this finite
+  transport does not allocate, sign, broadcast or persist a purchase, validate
+  Script, or make delivered keys usable. See the
+  [purchase custody guide](../../docs/guides/private-purchase-custody.md).
+  `OutputPrivatePublicationProtocol` adds bounded protected-publication requests
+  and semantic digests that exclude only alternate BEEF proof bytes.
+  `OutputPaidLookupProtocol` adds frozen quote and recovery-state representations,
+  exact amount/deadline checks and bindings to the original request, selected
+  seller/rules and purchased output. Its unsigned quote and full response require
+  authenticated transport; parsing does not internalize a payment or release a key.
+
+  Protocol JSON maps have a null prototype and ordinary writable, configurable,
+  enumerable own data fields, including keys that resemble object builtins.
+  Parsing and canonical encoding enforce the same explicit byte and structural
+  bounds; callers still validate each endpoint's closed schema.
+  Canonical serialization creates a new private frame for each call, sharing
+  closed module functions over an explicit per-call record. No frame is exposed
+  to caller callbacks or retained after a call. Reentrant
+  descriptor inspection and failed calls cannot reuse another frame's text,
+  byte counter, bounds or ancestor set. Resource assertions retain their exact
+  predicates and refusal messages. Validated safe integers use the same decimal
+  text, including conversion of negative zero to zero. Program-value ownership
+  completes this bounded canonical traversal before constructing a fresh graph
+  from its generated text with native JSON parsing. A bounded private traversal
+  selects null prototypes only on freshly created, unexposed records. Native
+  parsing defines ordinary own data fields, including `__proto__`, without
+  invoking inherited setters. Caller objects never enter that traversal. Text-only
+  serialization performs the same checks without constructing a graph. No input
+  or verdict is retained between calls.
+
+  Incoming JSON is lexically validated before native graph construction. Each
+  object retains fresh decoded-key membership in a private Set; arrays retain
+  an independent successful-value count. Duplicate keys are rejected before
+  the map-size fence and before parsing their value. Collection sizes advance
+  only after successful children. Every syntax, Unicode, safe-integer, resource
+  and trailing-data check completes before native JSON parsing constructs the
+  independently owned graph. A bounded private traversal selects null prototypes
+  only on those newly created records. Dense arrays use direct iteration;
+  records receive null prototypes before their own fields are traversed. This
+  avoids intermediate values arrays without touching caller objects or inherited
+  fields. Keys such as `__proto__` remain ordinary
+  writable, configurable, enumerable own data; inherited setters are not called.
+  Caller objects never enter that traversal. The encoding inspector retains its
+  independent canonical-byte check and flag. Canonical property ordering sorts
+  each fresh primitive-name array with one captured UTF-16 comparator,
+  including numeric-looking and supplementary keys. The bounded serializer
+  checks every caller descriptor in canonical order before ownership construction.
+  No input, shape, schema or validation result is retained between calls.
+
+  `createClosedOutputObjectValidator(required, optional)` captures its field
+  names once and validates each supplied object independently. Mutating the
+  original field lists does not change that validator. `closedOutputObject`
+  continues reading mutable field lists afresh on each call. Internal fixed
+  protocol schemas likewise own their field names and callback references;
+  every field callback and complete input check still runs on each call.
+  Mutable user-defined schema behavior is preserved. Only grammar is retained,
+  never values, validation results, authorization or chain-currentness.
+  Shared normalization selects the fixed immutable default limits only by exact
+  primitive equality; different bounds remain freshly validated. Every supplied
+  value still receives full normalization and schema checks.
+  For program values, the schema layer constructs the same fresh data-only graph
+  after every canonical byte fence, then discards the temporary generated text.
+  Full-text ownership and canonical serialization retain their original outputs.
+  Sorting fresh primitive names uses the fixed locale-independent UTF-16
+  comparator, including numeric-looking and supplementary keys
+  ([ECMAScript CompareArrayElements](https://tc39.es/ecma262/multipage/indexed-collections.html#sec-comparearrayelements)).
+
+  String tokens are bounded before decoding. Escaped strings and raw controls
+  receive native JSON syntax validation; unescaped strings are copied directly
+  after token recognition. Both paths retain Unicode validation, duplicate-key
+  rejection and the same errors, limits and encoding inspection.
+
+  `parseOutputJSONWithStringRecords(input, limits)` explicitly selects a fresh
+  string-record path with the same complete parsing and ownership contract.
+  Ordinary `parseOutputJSON` retains its original path. The opt-in path proves
+  flat unescaped string framing, controls, duplicate decoded names, map size,
+  depth, Unicode and bytes before native construction. A local cursor follows
+  grammar-proven quote boundaries, including when punctuation occurs inside
+  names or values. Other shapes and refusals use the original parser/error order.
+  Only fixed grammar is retained. Each graph is newly owned; endpoint schemas,
+  bindings, authentication and currentness checks remain independent. The owned-record companion below preserves this shallow fast path; current
+  native bindings select that companion. Existing consumers may retain this entry.
+
+  `outputString` retains its nonempty primitive, 1,024-code-unit and 1,024-byte
+  UTF-8 limits. Fresh ASCII evidence establishes well-formed Unicode and one
+  UTF-8 byte per code unit within the original primitive bound. Non-ASCII strings
+  retain the same fresh surrogate refusal before native UTF-8 encoding and the
+  byte check. A bounded scalar cannot reach the serializer's structural or 4 MiB
+  limits. Complete packets still receive every recursive representation and
+  schema check; no string or validation result is cached.
+
+  Byte inputs reuse only a lazy, private UTF-8 decoder with fixed fatal and
+  ignore-BOM options. Each complete, non-streaming decode resets decoder state,
+  including after malformed UTF-8 ([Encoding Standard](https://encoding.spec.whatwg.org/#dom-textdecoder-decode)).
+  Lexical, duplicate-key, Unicode and resource checks still inspect every input;
+  results remain independently owned. The parser still rejects a decoded BOM.
+
+  `decodeOutputBytes` retains canonical alphabet and padding syntax, the encoded
+  allocation bound and decoded-byte limit. After those checks it validates the
+  final sextet's unused bits directly: four zero bits with two padding characters,
+  two with one. Decoded bytes and refusal order are unchanged; this avoids a
+  complete re-encoding solely to verify padding. No byte value or verdict is cached.
+  A strict absolute end-of-input assertion rejects trailing line terminators
+  before decoding, after the original encoded allocation bound.
+
+  Purchase and release parsers retain fresh complete normalization at both
+  public and nested packet boundaries. Nested ownership also preserves canonical
+  property order and zero representation when the original parent is raw JSON.
+  Every closed-field, scalar and intrinsic arithmetic check runs on each call;
+  signatures, caller-selected bindings, release acceptance and current
+  authorization remain separate fresh checks. No normalization or validation
+  result is cached.
+
+  `ownOutputJSON(value, limits)` validates a program value and returns its
+  bounded canonical `text` and an independent `value` with those same data
+  properties and null-prototype records. Nested arrays and records belong to
+  the new copy. It applies every canonical representation and resource check
+  before copying. Use `parseOutputJSON` for incoming JSON text or bytes, where
+  duplicate decoded keys must still be detected; passing a string to
+  `ownOutputJSON` copies that string value. Ownership supplies neither a schema
+  decision nor authorization. Endpoint schemas and current capability checks
+  still apply to each operation.
+
+  `inspectOutputJSONEncoding(input, limits)` parses incoming text or UTF-8 bytes
+  with the same duplicate-key, Unicode and structural checks and returns
+  `{ value, canonical }`. It checks the original and canonical byte sizes while
+  parsing, without serializing the parsed value again. The flag describes the
+  original encoding; the independently owned value remains mutable. This is
+  useful when an authenticated record must already have canonical encoding.
+  It supplies no schema, signature, custody or authorization decision, and
+  ordinary `parseOutputJSON` continues accepting noncanonical valid JSON.
+
+  `inspectOutputJSONEncodingWithScalarRecords(input, limits)` is an explicit
+  companion with the same complete inspection and independent-ownership contract.
+  Compact flat records of unescaped strings, safe decimal integers, booleans and
+  null receive fresh whole-text grammar, controls, Unicode, duplicate-name,
+  key-order, map/depth and byte checks. Each call constructs a new null-prototype
+  graph. Other shapes, number spellings, escapes and all refusals retain the
+  original lexical observer and error order with the already captured input and
+  limits. Caller limits and byteLength are observed once. The owned-record inspector below preserves this shallow path and is selected by
+  current native ledger bindings. Ordinary SDK inspection retains its existing path. No input,
+  shape, secret, currentness, authorization or validation verdict is cached. This
+  addition requires no existing consumer, wire or stored-data migration.
+
+  `canonicalOutputJSONWithInlineStrings(value, limits)` is an explicit serialization
+  companion with the original canonical bytes, fresh validation and refusal order.
+  Its per-call record walker emits unescaped ASCII string fields directly; Unicode,
+  escaping, arrays and other scalar values retain the original checks. Descriptors
+  are captured once in the same order, including proxies; cycles, plain prototypes,
+  hidden/accessor/symbol fields, UTF-16 key order and all resource bounds remain
+  enforced. The recursive record companion below is selected by current native serialization
+  bindings; this earlier opt-in companion remains available. Ordinary `canonicalOutputJSON` stays unchanged. No input, shape,
+  graph, secret or verdict is cached, and no stored-data or consumer migration is
+  required. Runtime qualification remains separate from this implementation choice.
+
+  `retainOutputCapability(manifest, request)` validates a new selection and returns
+  `{ record, selection }` as independent owned copies. Atomically persist `record`
+  with the operation before any effect. `restoreOutputCapability(record, trust)`
+  verifies the saved signed manifest at its original selection time, with the
+  original freshness policy and caller-supplied endpoint, provider identity, chain,
+  service, profile and installed rule validators. Manifest expiry alone therefore
+  does not abandon an existing recovery obligation. It never substitutes today's
+  discovery contract or grants permission to start a new operation.
+
+  The `output-capability-retention/1` record is bounded local replay material, not
+  a network request or authorization token. Storage integrity protects its local
+  time and policy; the provider signature covers the manifest itself. Never accept
+  a caller-supplied record as saved host state. Recheck current caller access and
+  the operation's recovery/session deadline before disclosing data or performing
+  work. Endpoint/key migration needs separately verified authority. Neither helper
+  makes network requests, runs remote code, persists data or calls a wallet.
+
+  `OutputLookupTransport` executes BRC-193 `open`, `read` and `close` against one
+  retained contract. Construct it with `{ contract, trust, wallet }`; `trust` is
+  the same recovery binding used by `restoreOutputCapability`. A wallet is
+  required only for the selected `brc103` authentication mode. The transport owns
+  its contract and each request before asynchronous work. It appends endpoint
+  suffixes to the complete base path, refuses redirects and cookie credentials,
+  sets `Cache-Control: no-store`, pins the selected authentication identity and
+  verifies the signed capability/profile echoes. It never invokes BRC-105 payment
+  or downgrades authentication. Explicit public `none` profiles use ordinary HTTPS
+  and bind source scope to its origin. Local HTTP needs trusted development opt-in.
+
+  Capture a fresh capability and persist a randomly generated opening request ID
+  with the complete opening request before calling `open`. A retained contract
+  can retry that opening or continue its existing session after manifest expiry;
+  it does not authorize a new opening under an expired contract. For `read`, supply
+  the previous **durably committed** batch and requested limits. The transport
+  validates session, scope, fixed deadlines, negotiated limits and snapshot/live
+  continuity, but cannot inspect your checkpoint store. Commit every returned
+  observation group and its cursor together before issuing the next read. It
+  neither saves nor advances cursors automatically, and never converts a reset,
+  expiry, malformed response or service failure into empty successful data.
+
+  `outputLookupCheckpoint(batch)` creates an owned compact continuity boundary
+  containing the scope, phase, watermarks, session/cursor and fixed deadlines.
+  Store that boundary in the same transaction as the complete groups; it does
+  not replace their durable receipt. `parseOutputLookupCheckpoint` validates
+  restored metadata, and `readCheckpoint` resumes directly from it. This avoids
+  storing evidence twice or fabricating a previous wire response during recovery.
+  A valid checkpoint representation alone proves neither authentication nor a
+  storage commit. Extensions requiring additional local state must retain it too.
+
+  Complete transmitted UTF-8 bytes, including whitespace, count against response
+  limits before decoding. The separate 4 KiB error budget still applies to tiny
+  page requests. `OutputLookupServiceError.packet` preserves validated retry and
+  capacity hints. BRC-104 authenticates the body, not its MIME label: strict JSON
+  decoding also supports the existing middleware's `application/octet-stream`
+  response label. Content encoding must be absent or identity. The transport
+  checks 16 KiB of HTTP header fields exposed by Fetch; browsers can hide fields
+  and add their own, so the server/proxy must also enforce the complete wire-header
+  bound and expose the required authentication and selection headers through CORS.
+
+  Calls accept an `AbortSignal`. The total deadline covers authentication, HTTP
+  and body consumption (default 30 seconds, configurable up to 30 seconds).
+  One request is active per instance. Cancellation returns promptly, but a
+  non-cancellable wallet or injected Fetch operation keeps its capacity until it
+  settles; later work cannot silently accumulate or dispatch after cancellation.
+  Each authenticated call uses an isolated AuthFetch session. This trades another
+  handshake for independent cancellation and avoids changing existing AuthFetch
+  defaults. `close` remains available after session expiry once pending I/O ends.
+  This transport is a component, not a durable live service or checkpoint store;
+  their complete integration and application demonstration remain in progress.
+
+  `parseOutputServiceError` validates the common packet-service error envelope and
+  its separate 4,096-byte budget; `outputServiceErrorHTTPStatus` supplies the exact
+  BRC-193 status mapping. Capacity details are accepted only for `limited`, with
+  positive minimums bounded by the profile's hard maxima. Errors contain no
+  successful cursor. Verify selected response authentication before acting on an
+  error, and never interpret an unknown response or HTTP 402 as empty data or an
+  instruction to pay. Local cancellation and local `revision-unavailable` remain
+  local failures; a service reports lost replay continuity as `reset-required`.
+
+  For an unpaid authenticated request, pass `allowPayments: false` to
+  `AuthFetch.fetch`. It returns an authenticated 402 without creating a payment,
+  and retains the explicit opt-out across authentication recovery even if the
+  caller later changes its options. The default remains automatic BRC-105 payment
+  under the configured wallet's authorization policy. Ordinary HTTP fallback
+  failures retain their existing error behavior. This option controls payment;
+  it does not itself establish the required provider identity or profile selection.
+
+  For private requests, set `requireMutualAuth: true` to disable ordinary HTTP
+  fallback. When the provider is known, set `expectedIdentityKey` to its canonical
+  compressed public key; this implies required authentication, pins the handshake
+  before application data is sent, and checks the authenticated response sender.
+  A conflicting cached identity is rejected without silently rebinding the origin.
+  These restrictions survive session recovery and later caller option changes.
+  Omitted options preserve existing behavior. Mutual authentication does not
+  encrypt application data: use HTTPS in production. Pinning authenticates the
+  peer, not the application capability/profile; verify those bindings separately.
+
+  ```ts
+  const response = await authFetch.fetch(serviceUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(query),
+    expectedIdentityKey: selectedProviderIdentity,
+    allowPayments: false
+  })
+  ```
+
 - **Distributed Protocol and Certificate Registration**: Efficient systems for registering and managing distributed protocols and certificates.
 
 ## Documentation
@@ -569,6 +855,72 @@ they do not encrypt the transport. Applications must use a confidential
 transport such as correctly verified TLS and must separately authorize the
 authenticated identity for every protected operation.
 
+## Revenue listing script codec
+
+The optional BRC-197 exemplar is under pre-adoption replacement by BRC PR295.
+`@bsv/sdk/script/templates/RevenueListingProfile` supplies its portable two-stage
+codec: both literal programs are pinned, stage choice is explicit, and the shared
+717-byte metadata binds the immutable schedule, public children and mandatory
+expiry. See the [profile guide](../../docs/guides/revenue-listing-profile.md).
+`RevenueListingProfilePlan` and `RevenueListingProfileSpend` separately plan
+exact outputs and construct funded 114/15-value witnesses, requesting a protected
+seller-child signature only for split or early retirement. Complete positive
+transactions, all eight recipients and original property controls exercise these
+components. Separately installed application and wallet companions compose fixed-child
+native remittance, signed activation lineage, selected-chain expiry finality and
+durable alias recovery. The current authenticated native fixtures exercise these
+boundaries together. Earlier six-route codec and native receipts remain historical
+compatibility evidence and do not qualify the current profile. See
+[specification alignment](../../specs/output-knowledge/SPEC-ALIGNMENT.md).
+
+The unpublished SDK3.3 source candidate preserves the superseded `RevenueListing`,
+`RevenueListingPlan` and `RevenueListingSpend` interfaces for existing consumers. Their earlier single-program/revision/six-route behavior is historical
+and must not be used to construct or qualify the PR295 exemplar. A portable codec
+recognizes bytes; it does not establish lineage, currentness, valid spending or
+fulfillment. Checkpoint two remains open until the complete replacement is qualified.
+Lineage, wallet integration and fulfillment are separate. Existing root imports remain unchanged.
+
+The optional overlay funding helpers parse bounded BRC-195 payment headers and inspect
+the exact single BRC-29 payment output against a retained quote and independently
+derived seller key. They return a proof-independent wallet operation identifier;
+chain acceptance, acquisition reservation and durable wallet credit remain separate.
+See the [private overlay release guide](../../docs/guides/private-overlay-release.md).
+
+The optional `OutputRootEvictionProtocol` helpers parse and authenticate BRC-199
+root requests/results, exact advertisement targets and independent restoration
+bases. Their new-request clock check is separate from retained-outcome recovery.
+They do not authorize suppression, verify BEEF, persist tombstones or guard
+serving paths. See the [root coordination guide](../../docs/guides/root-eviction-coordination.md).
+Existing SHIP/SLAP, lookup and GASP behavior remains unchanged.
+
+`OutputRootEvictionTransport` composes those contracts with bounded BRC-103/104
+HTTP. Supply an integrity-protected original capability/request record, separately
+retained policy digest, trusted root configuration and wallet. `submit()` retries
+only that signed operation and `status()` derives its original key. Both require
+the expected root identity, prohibit payment and validate results against the
+original selection. Cancellation retains physical capacity until pending I/O
+settles. Durable storage, polling, current server authority and serving decisions
+remain separate; existing lookup transport APIs and defaults are unchanged.
+
+The SDK3 candidate also adds `OutputProposalTransport` for one durably saved
+BRC-194 put/get/finalize operation. Retries retain the original selected capability
+and request, with mutual authentication, bounded delivery and no automatic payment.
+Finalization reports whether a returned reservation matches that saved operation
+and transaction. See the [proposal guide](../../docs/guides/non-final-proposals.md)
+before adopting it; storage, current authority, domain acceptance and Bitcoin
+verification remain separate responsibilities.
+
+### Explicit paid lookup operations
+
+`OutputPaidLookupTransport` performs one selected-host BRC-195 quote, explicit
+payment or original-acquisition recovery. It owns the original request and
+retained contract, disables automatic AuthFetch payments, checks authenticated
+challenge/result binding, and never constructs or persists a wallet action.
+`OutputPaidLookupServiceError` preserves a validated service error packet.
+Existing AuthFetch defaults are unchanged. See
+[paid lookup clients](../../docs/guides/paid-lookup-client.md) for response bounds,
+recovery, private custody and the separate durable buyer responsibilities.
+
 ## Locally authorized outputs in completed actions
 
 `completeBoundAction` continues to reject an unrequested output funded by a
@@ -592,6 +944,90 @@ await completeBoundAction(wallet, args, {
 The new `BOUND_ACTION_OUTPUT_AUTHORIZATION_VERSION` export is `1`. The existing function also exposes `completeBoundAction.outputAuthorizationVersion=1`.
 Consumers supporting older SDK peers should detect that function property before supplying the new
 option; older SDKs retain their existing strict behavior. This additive API is
-included in the SDK 3.1 source candidate. The separate SDK3 identity migration
+included in the unpublished SDK 3.3 source candidate. The separate SDK3 identity migration
 still applies; SDK2 applications need an additive backport or a coordinated SDK3
 upgrade. No BRC-100 wire or wallet-data changes are introduced by this option.
+
+The bounded parser owns a fresh private cursor frame for each input. Complete
+syntax, duplicate, Unicode, integer and resource checks precede exposure. Proven
+ASCII text has one UTF-8 byte per code unit; non-ASCII text retains native encoding.
+Byte-view inspection counts decoded bytes independently of an overridable
+byteLength property. These per-call calculations retain no input or validation
+result between operations.
+
+`ownOutputJSONWithInlineStrings(value, limits)` is the explicit native ownership
+companion to `canonicalOutputJSONWithInlineStrings`. It returns bounded canonical
+`text` and an independent `value`, with null-prototype records and ordinary arrays.
+Each call freshly checks descriptors, cycles, Unicode, safe integers, canonical
+order and resource limits while assembling a private graph beside its canonical
+text. Both results are exposed only after every check succeeds. Neither the
+caller graph nor a normalized value, shape or verdict is retained between calls.
+A string input remains a string value; incoming JSON text must use a parser to
+preserve duplicate-key evidence. Ordinary `ownOutputJSON` is unchanged. Schemas,
+authorization and currentness checks remain the responsibility of each operation.
+
+`parseOutputPurchasePrepareWithInlineStrings`, `parseOutputPurchaseTermsWithInlineStrings` and `parseOutputPurchaseSubmitWithInlineStrings` explicitly select the existing fresh owned-copy implementation for object inputs. Terms retain the intrinsic recovery-deadline check; authentication and domain validation remain separate. Text and bytes retain the general parser. Ordinary purchase parsers, general normalization and digests keep their existing paths. The internal schema companion is also an additive deep-module export. Existing signatures, encodings and limits remain unchanged; no input, normalized value or verdict is cached. Native contract and alias bindings opt in; browser callers retain ordinary parsing by default.
+
+Native purchase contracts explicitly select additive inline companions for historical capability restoration, packet digests and verification, and signed purchase terms. Capability parsing, selection and retention companions are available separately in the SDK; the native initiation method retains its existing binding. Each invocation owns and validates its complete input afresh. Historical capability restoration still checks the recorded selection time, original signature, selected endpoint, identity, chain, selector, installed rules and digest. Current caller authorization and actual operation deadlines remain separate checks. Ordinary SDK entry points, wire text and bytes, canonical encodings, resource limits, error identities and custody formats retain their existing behavior. No input, parsed packet, shape, secret, currentness or authority verdict is cached; only the existing bounded mathematical signature facts and fixed grammar are shared. This is an implementation choice with identical protocol semantics, not a new advertised protocol profile. Hosted property and full mutation qualification remain required.
+
+The additive `parseOutputJSONWithOwnedRecords` and `inspectOutputJSONEncodingWithOwnedRecords` preserve the existing shallow string/scalar paths and construct independently owned records during complete lexical traversal of complex JSON. Duplicate decoded names, escaped Unicode, safe integers, framing, depth, item limits and refusal order retain the ordinary parser's rules. Each complete input is captured once. Arrays have ordinary own data fields and records have null prototypes. No partial graph escapes if a later syntax or resource check fails. Parsing preserves lexical negative zero; canonical ownership normalizes it exactly as the ordinary owner does. Encoding inspection describes this input only and supplies no schema, trust or operation authorization.
+
+`canonicalOutputJSONWithInlineRecords` and `ownOutputJSONWithInlineRecords` extend fresh inline key/string emission through nested records and arrays. They preserve canonical bytes, descriptor observation order, prototype/symbol/cycle checks, Unicode, integers and exact resource bounds. The owner returns `{ text, value }`; repeated input references become independent owned nodes. Frames are private to one complete call and failures expose no partial state. The earlier ordinary and opt-in entry points remain available. Current native bindings select counted value-only ownership where they consume only `.value`; callers requiring canonical text retain the full owner and serializer. Explicit schema companions use internal value-only ownership with the same byte bounds; verification still requests canonical bytes independently. Existing default entry points retain their paths. This changes neither a protocol profile nor a wire, custody or public interface contract. No input, parsed graph, shape, secret, authorization or currentness verdict is cached. Hosted qualification remains required; no performance improvement is claimed from source checks.
+
+The explicit `parseOutputPurchaseEnvelopeWithInlineStrings`,
+`verifyOutputPurchaseEnvelopeWithInlineStrings` and
+`verifyOutputPurchaseCommitmentEnvelopeWithInlineStrings` companions extend fresh
+owned-copy normalization through response and original-contract checking.
+`parseOutputPotatoesWithInlineStrings` and
+`parseOutputPurchaseCommitmentBindingWithInlineStrings` provide the corresponding
+bounded representation boundaries. Release representations and caller-selected
+bindings have `parseOutputReleaseEvidenceWithInlineStrings` and
+`bindOutputReleaseEvidenceWithInlineStrings`. Each call checks the entire current
+input, original signatures, policy and transaction association as applicable.
+These functions retain no parsed graph, secret, authorization, currentness or
+validation result between calls. They confer neither Bitcoin validity nor domain
+eligibility. Ordinary entry points, encodings, error identities and resource
+limits remain unchanged. Current private-purchase bindings select these companions
+explicitly; historical recovery still verifies and returns the original signed
+result. Source checks do not establish a performance improvement.
+
+Explicit schema ownership now counts the complete canonical encoding without constructing composite text that the schema path discards. This internal traversal still checks every current descriptor, prototype, symbol, cycle, Unicode sequence, integer, depth, item count and byte boundary in the same order, and constructs independent ordinary-data arrays and null-prototype records. The full text/value owner and ordinary normalization remain available for their callers. It retains no input, normalized graph or verdict. This internal selection changes no wire, stored format, public root export or authority rule; hosted qualification remains required.
+
+`ownOutputJSONWithCountedRecords` is an opt-in fresh owner returning `{ value }`. It counts every canonical byte and preserves the full inline-record owner's descriptor/prototype/symbol/cycle/Unicode/integer checks, limits and refusal order, without constructing composite text. Arrays have ordinary own data fields and records have null prototypes; repeated nodes and later calls remain independent. Native private-state modules that consume only `.value` select this companion through imports. The protected-record codec and other callers that need canonical text retain the full owner and serializer. No input, graph, shape, secret, authorization or currentness verdict is cached. Existing APIs and defaults remain available; this changes no wire, persistence or authority rule. Hosted qualification remains required and no performance improvement is claimed.
+
+The explicit purchase and release companions select fixed nested companion grammars for release policies, STEAK results and release evidence. They preserve nested JSON-text representations, duplicate-name refusals, complete fresh ownership and byte/depth limits, and every signature and original-request binding. The ordinary schemas and default entry points remain intact. Internal policy and STEAK helpers are deep-module exports only; no SDK root export is added. Fixed grammar reuse retains no supplied input, secret, authorization or validation result. Hosted qualification remains required; source checks establish no performance improvement.
+
+Fixed nested companion grammars are instantiated lazily and retained as immutable validator configuration. Unused companion paths can be removed from browser bundles. This retains neither supplied input nor normalized data, secret or verdict; every call still owns and validates the complete current representation independently.
+
+The explicit purchase/release parser owns and bounds the complete enclosing packet on every call. Fixed child grammars then validate that newly owned graph without repeating ownership of object subtrees. Embedded JSON text keeps its complete parser, including duplicate-name and resource checks. Intrinsic release arithmetic, signatures, digests, original-request bindings, custody and current authority remain separate fresh checks. Internal child validators require an already owned and bounded parent and are not standalone public packet parsers or SDK root exports. No input, partial graph, secret or validation/authority result is retained between calls. Existing default and standalone parsers retain their paths. Hosted property/mutation qualification remains required and no speedup is claimed from source checks.
+
+Portable `WithInlineStrings` schema companions retain the general text/byte parser. Server callers can explicitly choose `parseOutputPurchasePrepareWithOwnedRecords`, `parseOutputPurchaseSubmitWithOwnedRecords`, `parseOutputPurchaseTermsWithOwnedRecords`, `parseOutputPurchaseEnvelopeWithOwnedRecords`, `parseOutputPotatoesWithOwnedRecords`, `parseOutputPurchaseCommitmentBindingWithOwnedRecords` and `parseOutputReleaseEvidenceWithOwnedRecords`. These additive parsers construct independently owned records during complete lexical traversal of text or UTF-8 bytes and use the same fixed packet grammars and intrinsic checks. Object inputs retain fresh counted ownership. Native server bindings select them through imports; the portable buyer and wallet entries retain their existing dependency paths. This selection adds no wire profile, persisted format, signature verdict or authority rule. Complete fresh syntax, decoded-name duplicates, Unicode, safe integers, depth and input-byte fences remain mandatory; ordinary parser entry points are unchanged. Canonical U64, Hex32, compressed identities, standard base64 and request IDs use strict end-of-input assertions so line terminators cannot be accepted as part of a canonical primitive. Valid canonical representations, defaults, wire bytes and signature/authority checks remain unchanged. No input, graph or verdict is cached. Hosted qualification is still required; source checks establish no speedup.
+
+The additive `canonicalOutputJSONWithDirectRecords` emits canonical text directly from freshly inspected records and arrays. It validates the complete input on every call, observes each descriptor in canonical key order, and preserves ordinary canonical bytes, safe integers, Unicode rules, prototype and symbol refusals, cycle detection, and exact resource limits. It returns text only and retains no input graph, encoding, shape, secret or authority verdict. Native private-state serializers explicitly select it through import aliases; portable browser and wallet entry points retain their existing selections. Representation validation supplies no schema, signature, custody, authorization or currentness decision. Existing serializers remain available with their previous behavior. The new SDK property and refusal tests compare the selected emitter with those existing paths; hosted runtime and complete mutation qualification remain required before acceptance.
+
+The explicit server purchase companions build their fixed grammar lazily with
+`createOwnedRecordSchema`, an internal deep-module helper. Its complete normalizer
+freshly owns and bounds the entire input before selecting private grammar
+callbacks. Required and unknown fields and every scalar/domain predicate are
+checked on every call. Fresh private data-only records need no second caller
+prototype, symbol or descriptor inspection. Returned schema callbacks remain
+ordinary standalone validators; custom callbacks retain their ordinary behavior.
+Grammar metadata contains callbacks only. It holds no supplied input, graph,
+shape, key material, authorization, currentness or validation result. Portable
+parsers and buyer/wallet imports retain their existing paths. This adds no wire
+profile, stored format, root SDK export or authority rule. Hosted behavior and
+complete mutation qualification are required; static checks establish no speedup.
+
+`validateOutputByteEncoding(value, maximumBytes)` returns the current canonical
+standard Base64 string after validating its alphabet, framing, padding bits and
+exact decoded-size bound. It avoids constructing a decoded array when a caller
+only needs the encoded representation. Defaults, limit predicates and refusal
+order match `decodeOutputBytes`; decoding retains its existing implementation.
+The private fixed owned-record schema selects this validator only after fresh
+complete parent ownership. Ordinary byte callbacks and portable parser paths
+remain unchanged. This establishes representation only; endpoint schema,
+transaction validity, signature, custody and current authorization still need
+independent checks. No input or validation verdict is retained. The helper is an
+additive SDK export and requires no wire or stored-data migration. Hosted
+runtime and mutation qualification remain required; static checks establish no
+performance improvement.

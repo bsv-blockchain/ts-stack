@@ -8,6 +8,6 @@
     "outDir": "./dist/cjs",
     "declaration": true,
     "declarationMap": true,
-    "tsBuildInfoFile": "./node_modules/.cache/overlay-express-cjs.tsbuildinfo"
+    "tsBuildInfoFile": "./.cache/overlay-express-cjs.tsbuildinfo"
   }
 }
