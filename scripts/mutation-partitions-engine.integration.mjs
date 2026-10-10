@@ -71,7 +71,10 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
   for await (const { index, id, original, directory, canonical } of inventories) {
     const parts = partitionMutationTarget(id, original),
       observed = []
-    assert.equal(canonical.length, expectedCounts[index])
+    // Preserve all twenty original golden totals and explicitly include every
+    // new protected-envelope framing site in the same complete partitions.
+    const addedFramingSites = id === 'protected-ledger' ? 29 : 0
+    assert.equal(canonical.length, expectedCounts[index] + addedFramingSites)
     assert.ok(parts.length > 1)
     assert.equal(new Set(parts.map(part => part.id)).size, parts.length)
     const partInventories = serialResults(parts, async part => {

@@ -1185,3 +1185,21 @@ for the full stack-wide policy.
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.
+
+## Internalization refusal and rollback boundaries
+
+Signer and storage boundaries independently validate the AtomicBEEF subject,
+proof verdict and requested ownership before admitting outputs. Early basket
+classification and final basket admission share the same pure policy: the
+wallet's default basket cannot be a custom insertion destination. Both checks
+retain the existing error identity and occur before a basket lookup or write.
+
+Synthetic port-fault regressions cover inconsistent verifier and validator
+results, missing inclusion information, transaction races, degenerate child
+keys and failed publication. They verify the retained storage state as well
+as the error. Failed publication restores only inputs transitioned by that
+attempt and does not admit requested outputs, labels, baskets or tags;
+bookkeeping preserves a different recorded spender even when a legacy row
+still says spendable. These checks do not replace chain verification or prove
+real-network broadcast. Public methods, remittances, schemas and defaults
+require no migration.

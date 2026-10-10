@@ -381,3 +381,44 @@ describe('spent-input atomic failure and iterator lifetime', () => {
     expect((await read({ partial: { outputId: output.outputId } }))[0].spentBy).toBeUndefined()
   })
 })
+describe('spent-input bookkeeping retains competing ownership even on inconsistent spendable rows', () => {
+  let storage: StorageProvider
+  beforeEach(async () => {
+    storage = await _tu.createFreshSQLiteStorage({
+      databasePrefix: 'internalizeCompetingSpend',
+      migrationName: 'internalizeCompetingSpend'
+    })
+  })
+  afterEach(async () => {
+    await storage.destroy()
+  })
+  test('does not overwrite another spender or include that row in rollback transitions', async () => {
+    const user = await _tu.insertTestUser(storage),
+      basket = await _tu.insertTestOutputBasket(storage, user)
+    const { tx: owner } = await _tu.insertTestTransaction(storage, user)
+    const { tx: earlier } = await _tu.insertTestTransaction(storage, user, false, {
+      txid: 'd5'.repeat(32)
+    })
+    const { tx: later } = await _tu.insertTestTransaction(storage, user, false, {
+      txid: 'd6'.repeat(32)
+    })
+    const output = await _tu.insertTestOutput(storage, owner, 0, 600, basket, false, {
+      spendable: true,
+      spentBy: earlier.transactionId
+    })
+    const before = (await storage.findOutputs({ partial: { outputId: output.outputId } }))[0]
+    const transitioned = await markUserInputsSpent(
+      storage,
+      user.userId,
+      buildTxConsuming([{ txid: output.txid!, vout: 0 }]),
+      later.transactionId
+    )
+    expect(transitioned).toEqual([])
+    await restoreInputsToSpendable(storage, transitioned)
+    expect((await storage.findOutputs({ partial: { outputId: output.outputId } }))[0]).toEqual(
+      before
+    )
+    expect(before.spendable).toBe(true)
+    expect(before.spentBy).toBe(earlier.transactionId)
+  })
+})
