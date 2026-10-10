@@ -301,3 +301,83 @@ describe('internalizeAction spent-input bookkeeping', () => {
     expect(transitioned).toEqual([])
   })
 })
+
+describe('spent-input atomic failure and iterator lifetime', () => {
+  let storage: StorageProvider
+  beforeEach(async () => {
+    storage = await _tu.createFreshSQLiteStorage({
+      databasePrefix: 'internalizeAtomicFailure',
+      migrationName: 'spentInputAtomicFailure'
+    })
+  })
+  afterEach(async () => {
+    jest.restoreAllMocks()
+    await storage.destroy()
+  })
+  test('rolls back the earlier same-user transition when a later cross-user write fails and keeps the original error', async () => {
+    const owner = await _tu.insertTestUser(storage),
+      other = await _tu.insertTestUser(storage)
+    const ownerBasket = await _tu.insertTestOutputBasket(storage, owner),
+      otherBasket = await _tu.insertTestOutputBasket(storage, other)
+    const { tx: firstTx } = await _tu.insertTestTransaction(storage, owner)
+    const { tx: secondTx } = await _tu.insertTestTransaction(storage, other, false, { txid: 'd1'.repeat(32) })
+    const first = await _tu.insertTestOutput(storage, firstTx, 0, 101, ownerBasket, false, { spendable: true })
+    const second = await _tu.insertTestOutput(storage, secondTx, 0, 202, otherBasket, false, { spendable: true })
+    const { tx: consumer } = await _tu.insertTestTransaction(storage, owner, false, { txid: 'd2'.repeat(32) })
+    const beforeFirst = (await storage.findOutputs({ partial: { outputId: first.outputId } }))[0]
+    const beforeSecond = (await storage.findOutputs({ partial: { outputId: second.outputId } }))[0]
+    const update = storage.updateOutput.bind(storage),
+      writes: number[] = [],
+      fault = new Error('Public second ownership-write interruption')
+    jest.spyOn(storage, 'updateOutput').mockImplementation(async (id, value, trx) => {
+      writes.push(id)
+      if (id === second.outputId) throw fault
+      return await update(id, value, trx)
+    })
+    const tx = buildTxConsuming([
+      { txid: first.txid!, vout: first.vout },
+      { txid: second.txid!, vout: second.vout }
+    ])
+    await expect(markUserInputsSpent(storage, owner.userId, tx, consumer.transactionId)).rejects.toBe(fault)
+    expect(writes).toEqual([first.outputId, second.outputId])
+    expect((await storage.findOutputs({ partial: { outputId: first.outputId } }))[0]).toEqual(beforeFirst)
+    expect((await storage.findOutputs({ partial: { outputId: second.outputId } }))[0]).toEqual(beforeSecond)
+  })
+  test('closes a failed row iterator once and preserves the write error when closing also fails', async () => {
+    const owner = await _tu.insertTestUser(storage),
+      basket = await _tu.insertTestOutputBasket(storage, owner)
+    const { tx: original } = await _tu.insertTestTransaction(storage, owner)
+    const output = await _tu.insertTestOutput(storage, original, 0, 303, basket, false, { spendable: true })
+    const { tx: consumer } = await _tu.insertTestTransaction(storage, owner, false, { txid: 'd3'.repeat(32) })
+    const rows = [output],
+      close = jest.fn(() => {
+        throw new Error('Public iterator-close interruption')
+      })
+    Object.defineProperty(rows, Symbol.iterator, {
+      value: () => {
+        let index = 0
+        return {
+          next: () => (index < rows.length ? { done: false, value: rows[index++] } : { done: true, value: undefined }),
+          return: close
+        }
+      }
+    })
+    const read = storage.findOutputs.bind(storage),
+      fault = new Error('Public ownership-write interruption')
+    jest
+      .spyOn(storage, 'findOutputs')
+      .mockImplementation(async args => (args.partial?.txid === output.txid ? rows : await read(args)))
+    jest.spyOn(storage, 'updateOutput').mockRejectedValueOnce(fault)
+    await expect(
+      markUserInputsSpent(
+        storage,
+        owner.userId,
+        buildTxConsuming([{ txid: output.txid!, vout: output.vout }]),
+        consumer.transactionId
+      )
+    ).rejects.toBe(fault)
+    expect(close).toHaveBeenCalledTimes(1)
+    expect((await read({ partial: { outputId: output.outputId } }))[0].spendable).toBe(true)
+    expect((await read({ partial: { outputId: output.outputId } }))[0].spentBy).toBeUndefined()
+  })
+})

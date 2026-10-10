@@ -1082,3 +1082,254 @@ test('direct canonical records retain refusal order, descriptors, numeric-key or
   changing.value = 2
   expect(canonicalOutputJSONWithDirectRecords(changing)).toBe('{"value":2}')
 })
+
+function ownedSchemaOutcome(call: () => unknown): unknown {
+  try {
+    return { value: call() }
+  } catch (error) {
+    const refusal = error as Error & { code?: string }
+    return { name: refusal.name, code: refusal.code, message: refusal.message }
+  }
+}
+
+test('server grammar owns the complete representation before invoking any custom predicate', () => {
+  const o = s.createOwnedRecordSchema()
+  let calls = 0,
+    reads = 0
+  const schema = o.fixedObject({
+    value: value => {
+      calls++
+      return s.u32(value)
+    }
+  })
+  const accessor = Object.defineProperty({}, 'value', {
+    enumerable: true,
+    get() {
+      reads++
+      return 1
+    }
+  })
+  const cyclic: { self?: unknown } = {}
+  cyclic.self = cyclic
+  for (const input of [
+    accessor,
+    cyclic,
+    { value: 1, later: undefined },
+    { value: 1, later: '\uD800' },
+    { value: 1, [Symbol('later')]: true },
+    Object.defineProperty({ value: 1 }, 'hidden', { value: true }),
+    '{"value":1,"\\u0076alue":2}',
+    new TextEncoder().encode('{"value":1} trailing'),
+    Uint8Array.from([255])
+  ]) {
+    expect(() => o.normalized(input, schema)).toThrow()
+  }
+  expect(() => o.normalized({ value: 1 }, schema, 1)).toThrow('byte limit')
+  expect(calls).toBe(0)
+  expect(reads).toBe(0)
+  expect(o.normalized({ value: 1 }, schema)).toEqual({ value: 1 })
+  expect(calls).toBe(1)
+})
+
+test('server grammar preserves nested field, scalar, tag and array outcomes for all representations', () => {
+  const o = s.createOwnedRecordSchema()
+  function grammar(tools: typeof o) {
+    return tools.fixedObject(
+      {
+        rows: tools.array(
+          tools.fixedObject({
+            count: tools.u32,
+            total: tools.u64,
+            kind: tools.literal('item'),
+            enabled: tools.bool,
+            note: tools.nullable(tools.text)
+          }),
+          2,
+          1
+        ),
+        chain: tools.chain
+      },
+      { metadata: tools.jsonMap }
+    )
+  }
+  const ordinary = s.fixedObject(
+    {
+      rows: s.array(
+        s.fixedObject({
+          count: s.u32,
+          total: s.u64,
+          kind: s.literal('item'),
+          enabled: s.bool,
+          note: s.nullable(s.text)
+        }),
+        2,
+        1
+      ),
+      chain: s.chain
+    },
+    { metadata: s.jsonMap }
+  )
+  const selected = grammar(o)
+  const valid = {
+    rows: [
+      { count: 4294967295, total: '18446744073709551615', kind: 'item', enabled: true, note: null }
+    ],
+    chain,
+    metadata: { constructor: 'é😀' }
+  }
+  const inputs = [
+    valid,
+    { ...valid, extra: true },
+    { ...valid, rows: [] },
+    { ...valid, rows: Array.from({ length: 3 }, () => valid.rows[0]) },
+    ...[
+      { count: -1 },
+      { total: '01' },
+      { kind: 'other' },
+      { enabled: 1 },
+      { note: 1 },
+      { extra: true }
+    ].map(change => ({ ...valid, rows: [{ ...valid.rows[0], ...change }] })),
+    { rows: valid.rows },
+    { ...valid, chain: { ...chain, genesisHash: 'AA'.repeat(32) } }
+  ]
+  for (const input of inputs) {
+    const text = JSON.stringify(input)
+    for (const value of [input, text, new TextEncoder().encode(text)]) {
+      expect(ownedSchemaOutcome(() => o.normalized(value, selected))).toStrictEqual(
+        ownedSchemaOutcome(() => s.normalizedWithOwnedRecords(value, ordinary))
+      )
+    }
+  }
+  owned(o.normalized(valid, selected))
+})
+
+test('server grammar never reuses supplied graphs or predicate results across calls', () => {
+  const o = s.createOwnedRecordSchema()
+  let allowed = true,
+    calls = 0
+  const schema = o.fixedObject({
+    child: o.fixedObject({ count: o.u32 }),
+    authorized: value => {
+      calls++
+      if (!allowed) throw new Error('Current policy refused')
+      return s.bool(value)
+    }
+  })
+  const supplied = { child: { count: 1 }, authorized: true }
+  const first = o.normalized(supplied, schema),
+    second = o.normalized(supplied, schema)
+  first.child.count = 9
+  expect(second.child.count).toBe(1)
+  expect(supplied.child.count).toBe(1)
+  supplied.child.count = 2
+  expect(o.normalized(supplied, schema).child.count).toBe(2)
+  allowed = false
+  expect(() => o.normalized(supplied, schema)).toThrow('Current policy refused')
+  expect(calls).toBe(4)
+  expect(first).not.toBe(second)
+  owned(second)
+})
+
+test('server fixed callbacks still reject unsafe standalone objects after successful normalization', () => {
+  const o = s.createOwnedRecordSchema(),
+    schema = o.fixedObject({ value: o.u32 })
+  expect(o.normalized({ value: 1 }, schema)).toEqual({ value: 1 })
+  for (const input of [
+    Object.create({ value: 1 }),
+    Object.defineProperty({}, 'value', { value: 1 }),
+    { value: 1, [Symbol('other')]: true },
+    Object.defineProperty({ value: 1 }, 'extra', { value: true }),
+    null,
+    [],
+    1
+  ]) {
+    expect(ownedSchemaOutcome(() => schema(input))).toStrictEqual(
+      ownedSchemaOutcome(() => s.fixedObject({ value: s.u32 })(input))
+    )
+  }
+  expect(() => schema({ value: 1, extra: true })).toThrow('Unknown extra')
+  expect(() => schema({})).toThrow('Missing value')
+})
+
+test('server fixed grammar snapshots names and callbacks without changing dynamic ordinary builders', () => {
+  const o = s.createOwnedRecordSchema()
+  const required: Record<string, s.Schema<unknown>> = { value: o.text }
+  const optional: Record<string, s.Schema<unknown>> = { count: o.u32 }
+  const fixed = o.fixedObject(required, optional),
+    dynamic = s.object(required, optional)
+  required.value = s.u32
+  required.extra = s.bool
+  optional.count = s.text
+  expect(o.normalized({ value: 'original', count: 1 }, fixed)).toEqual({
+    value: 'original',
+    count: 1
+  })
+  expect(() => o.normalized({ value: 'original', extra: true }, fixed)).toThrow('Unknown extra')
+  expect(dynamic({ value: 2, extra: true, count: 'current' })).toEqual({
+    value: 2,
+    extra: true,
+    count: 'current'
+  })
+})
+
+test('server array preserves custom map callback arguments and fresh later-item validation', () => {
+  const o = s.createOwnedRecordSchema(),
+    seen: unknown[] = []
+  const custom: s.Schema<string> = (value: unknown, index?: number, values?: unknown[]) => {
+    seen.push(index, values)
+    if (index === 0) values![1] = 7
+    return s.text(value)
+  }
+  const input = ['first', 'second']
+  expect(() => o.normalized(input, o.array(custom, 2, 2))).toThrow('Expected bounded string')
+  expect(seen[0]).toBe(0)
+  expect(seen[2]).toBe(1)
+  expect(seen[1]).toBe(seen[3])
+  expect(seen[1]).not.toBe(input)
+  expect(input).toEqual(['first', 'second'])
+  for (const value of [null, [], ['one'], ['one', 'two', 'three']])
+    expect(() => o.normalized(value, o.array(o.text, 2, 2))).toThrow()
+})
+
+test('server tagged alternatives retain mutable-table and custom-callback behavior on every call', () => {
+  const o = s.createOwnedRecordSchema()
+  const alternatives: Record<string, s.Schema<unknown>> = {
+    a: o.fixedObject({ kind: o.literal('a'), value: o.text })
+  }
+  const schema = o.tagged('kind', alternatives)
+  expect(o.normalized({ kind: 'a', value: 'first' }, schema)).toEqual({ kind: 'a', value: 'first' })
+  let calls = 0
+  alternatives.a = value => {
+    calls++
+    return s.fixedObject({ kind: s.literal('a'), value: s.u32 })(value)
+  }
+  expect(o.normalized({ kind: 'a', value: 2 }, schema)).toEqual({ kind: 'a', value: 2 })
+  expect(() => o.normalized({ kind: 'a', value: 'old' }, schema)).toThrow()
+  expect(calls).toBe(2)
+  for (const value of [null, [], { kind: 'constructor' }, { kind: 1 }, { kind: 'missing' }])
+    expect(() => o.normalized(value, schema)).toThrow()
+})
+
+test('server child composition independently frames embedded JSON and preserves ordinary custom children', () => {
+  const o = s.createOwnedRecordSchema(),
+    grammar = o.fixedObject({ count: o.u32 })
+  const child = o.fromOwnedParent(value => s.normalizedWithOwnedRecords(value, grammar), grammar)
+  const parent = o.fixedObject({ left: child, right: child }),
+    supplied = { count: 7 }
+  const value = o.normalized({ left: supplied, right: supplied }, parent)
+  expect(value.left).not.toBe(value.right)
+  expect(value.left).not.toBe(supplied)
+  value.left.count = 9
+  expect(value.right.count).toBe(7)
+  expect(o.normalized({ left: '{"count":7}', right: supplied }, parent).left.count).toBe(7)
+  for (const source of ['{"count":7,"\\u0063ount":8}', '{"count":7} trailing'])
+    expect(() => o.normalized({ left: source, right: supplied }, parent)).toThrow()
+  expect(child(new TextEncoder().encode('{"count":7}'))).toEqual({ count: 7 })
+  const custom = o.fromOwnedParent(
+    value => s.u32(Number(s.text(value))),
+    value => s.u32(value)
+  )
+  expect(o.normalized(7, custom)).toBe(7)
+  expect(o.normalized('"7"', custom)).toBe(7)
+})

@@ -9,6 +9,12 @@ companions. Original public entry points, signature/request binding, refusals,
 encodings and limits remain compatible; every invocation validates fresh input.
 No migration is required. Hosted qualification remains separate.
 
+The explicit server purchase companions use lazy fixed-grammar metadata after
+complete fresh input ownership. Ordinary standalone schema validation, portable
+parsers, all field/domain checks and custom callbacks retain their behavior.
+No input or verdict is cached; no wire, storage, default or root-export migration
+is introduced. Complete hosted qualification remains required.
+
 ## Table of Contents
 
 - [Unreleased](#unreleased)

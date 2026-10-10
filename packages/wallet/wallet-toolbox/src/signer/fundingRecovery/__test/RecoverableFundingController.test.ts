@@ -348,3 +348,49 @@ describe('durable local acquisition funding', () => {
     expect(post).toHaveBeenCalledTimes(1)
   })
 })
+
+import { PrivateKey } from '@bsv/sdk'
+
+describe('funding controller pre-retention authorization', () => {
+  let context: TestWalletNoSetup
+  beforeEach(async () => {
+    context = await _tu.createLegacyWalletSQLiteCopy(expect.getState().currentTestName!, 'legacy')
+  })
+  afterEach(async () => {
+    jest.restoreAllMocks()
+    await context.wallet.destroy()
+  })
+  test('requires the active provider chain itself to match even when the retained operation and store agree', async () => {
+    const fixture = fundingFixture(context)
+    jest.spyOn(context.services, 'getChainTracker').mockResolvedValue(fixture.tracker)
+    const store = await SQLiteFundingRecoveryStore.install(context.activeStorage, fixture.chain),
+      controller = new RecoverableFundingController(context.wallet, store)
+    const settings = context.activeStorage.getSettings(),
+      retain = jest.spyOn(store, 'retain')
+    jest
+      .spyOn(context.activeStorage, 'getSettings')
+      .mockReturnValue({ ...settings, chain: settings.chain === 'main' ? 'test' : 'main' })
+    await expect(controller.internalizeOnce(fixture.operation())).rejects.toThrow(
+      'Funding recovery storage is not the active wallet provider'
+    )
+    expect(retain).not.toHaveBeenCalled()
+  })
+  test('refuses a well-formed operation addressed to a different seller before retaining any intent', async () => {
+    const fixture = fundingFixture(context)
+    const store = await SQLiteFundingRecoveryStore.install(context.activeStorage, fixture.chain),
+      controller = new RecoverableFundingController(context.wallet, store)
+    const input = fixture.operation(),
+      retain = jest.spyOn(store, 'retain')
+    input.seller = new PrivateKey(93).toPublicKey().toString()
+    input.id = outputPacketDigest('wallet-funding', {
+      seller: input.seller,
+      acquisitionId: input.acquisitionId,
+      funding: input.funding
+    })
+    await expect(controller.internalizeOnce(input)).rejects.toThrow(
+      'Funding operation seller or selected chain differs'
+    )
+    expect(retain).not.toHaveBeenCalled()
+    expect(await controller.getInternalization(input.id)).toEqual({ state: 'absent' })
+  })
+})

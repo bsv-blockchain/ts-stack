@@ -8117,3 +8117,16 @@ browser dependency boundaries; hosted runtime and complete mutation qualificatio
 remain required before checkpoint acceptance.
 
 The additive `canonicalOutputJSONWithDirectRecords` emits canonical text directly from freshly inspected records and arrays. It validates the complete input on every call, observes each descriptor in canonical key order, and preserves ordinary canonical bytes, safe integers, Unicode rules, prototype and symbol refusals, cycle detection, and exact resource limits. It returns text only and retains no input graph, encoding, shape, secret or authority verdict. Native private-state serializers explicitly select it through import aliases; portable browser and wallet entry points retain their existing selections. Representation validation supplies no schema, signature, custody, authorization or currentness decision. Existing serializers remain available with their previous behavior. The new SDK property and refusal tests compare the selected emitter with those existing paths; hosted runtime and complete mutation qualification remain required before acceptance.
+
+The explicit server purchase companions build their fixed grammar lazily with
+`createOwnedRecordSchema`, an internal deep-module helper. Its complete normalizer
+freshly owns and bounds the entire input before selecting private grammar
+callbacks. Required and unknown fields and every scalar/domain predicate are
+checked on every call. Fresh private data-only records need no second caller
+prototype, symbol or descriptor inspection. Returned schema callbacks remain
+ordinary standalone validators; custom callbacks retain their ordinary behavior.
+Grammar metadata contains callbacks only. It holds no supplied input, graph,
+shape, key material, authorization, currentness or validation result. Portable
+parsers and buyer/wallet imports retain their existing paths. This adds no wire
+profile, stored format, root SDK export or authority rule. Hosted behavior and
+complete mutation qualification are required; static checks establish no speedup.

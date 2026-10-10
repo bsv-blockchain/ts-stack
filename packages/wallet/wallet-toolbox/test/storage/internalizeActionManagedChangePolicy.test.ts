@@ -996,3 +996,178 @@ describe('shared internalization lifecycle and persisted metadata', () => {
     expect(broadcast).not.toHaveBeenCalled()
   })
 })
+
+import { specOpThrowReviewActions } from '../../src/sdk/types'
+import type { FundingRecoveryCommit } from '../../src/storage/fundingRecovery/FundingRecoveryCommit'
+
+describe('fixed-child ownership refusal ordering', () => {
+  let ctx: TestWalletNoSetup
+  beforeAll(async () => {
+    ctx = await _tu.createLegacyWalletSQLiteCopy('fixed-child-refusal-ordering', 'legacy')
+  })
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+  afterAll(async () => {
+    await ctx.wallet.destroy()
+  })
+  function payment() {
+    const f = fundingFixture(ctx)
+    f.tx.outputs[1].lockingScript = new P2PKH().lock(
+      PublicKey.fromString(brc197ChildPublicKey(ctx.identityKey)).toAddress()
+    )
+    const args: Brc197InternalizeActionArgs = {
+      profile: BRC197_INTERNALIZATION_PROFILE,
+      recipientIdentityKey: ctx.identityKey,
+      tx: f.tx.toAtomicBEEF(),
+      description: 'Public ownership refusal fixture',
+      outputs: [
+        {
+          outputIndex: 1,
+          protocol: 'wallet payment',
+          paymentRemittance: {
+            derivationPrefix: 'brc197',
+            derivationSuffix: 'authority',
+            senderIdentityKey: BRC197_COUNTERPARTY
+          }
+        }
+      ]
+    }
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(f.tracker)
+    return { f, args }
+  }
+  async function untouched(txid: string) {
+    expect(await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })).toHaveLength(0)
+    expect(await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })).toHaveLength(0)
+  }
+  test.each([undefined, null, 1, 'fixed-child'])(
+    'refuses a missing or non-record invocation (%s) with the profile parameter',
+    value => {
+      expect(() => validateBrc197InternalizeActionArgs(value as unknown as Brc197InternalizeActionArgs)).toThrow(
+        new WERR_INVALID_PARAMETER('profile', BRC197_INTERNALIZATION_PROFILE)
+      )
+    }
+  )
+  test.each(['absent', 'null', 'null output', 'null remittance'] as const)(
+    'refuses %s remittance as a fixed-child contract error',
+    async kind => {
+      const { f, args } = payment()
+      const invalid = structuredClone(args)
+      if (kind === 'absent') delete invalid.outputs[0].paymentRemittance
+      else if (kind === 'null') invalid.outputs = null as unknown as Brc197InternalizeActionArgs['outputs']
+      else if (kind === 'null output')
+        invalid.outputs[0] = null as unknown as Brc197InternalizeActionArgs['outputs'][number]
+      else
+        invalid.outputs[0].paymentRemittance = null as unknown as NonNullable<
+          Brc197InternalizeActionArgs['outputs'][number]['paymentRemittance']
+        >
+      await expect(ctx.wallet.internalizeBrc197Action(invalid)).rejects.toMatchObject({
+        name: 'WERR_INVALID_PARAMETER',
+        parameter: 'outputs',
+        message:
+          kind === 'null'
+            ? 'The outputs parameter must be an array'
+            : 'The outputs parameter must be unique BRC-197 fixed-child wallet payments'
+      })
+      await untouched(f.tx.id('hex'))
+    }
+  )
+  test('rejects uppercase identity encoding with the public identity error before capability lookup', async () => {
+    const { f, args } = payment(),
+      capability = jest.spyOn(ctx.wallet, 'getBrc197InternalizationCapabilities')
+    expect(args.recipientIdentityKey.toUpperCase()).not.toBe(args.recipientIdentityKey)
+    await expect(
+      ctx.wallet.internalizeBrc197Action({ ...args, recipientIdentityKey: args.recipientIdentityKey.toUpperCase() })
+    ).rejects.toMatchObject({
+      name: 'WERR_INVALID_PARAMETER',
+      parameter: 'recipientIdentityKey',
+      message: 'The recipientIdentityKey parameter must be a canonical compressed secp256k1 public key'
+    })
+    expect(capability).not.toHaveBeenCalled()
+    await untouched(f.tx.id('hex'))
+  })
+  test.each(['p nosend expiry seconds 60', specOpThrowReviewActions])(
+    'retains the reserved-label refusal before provider discovery (%s)',
+    async label => {
+      const { f, args } = payment(),
+        capability = jest.spyOn(ctx.wallet, 'getBrc197InternalizationCapabilities')
+      const pending = ctx.wallet.internalizeBrc197Action({ ...args, labels: [label] })
+      if (label === specOpThrowReviewActions)
+        await expect(pending).rejects.toMatchObject({ name: 'WERR_REVIEW_ACTIONS' })
+      else
+        await expect(pending).rejects.toMatchObject({
+          name: 'WERR_INVALID_PARAMETER',
+          parameter: 'labels',
+          message: 'The labels parameter must be BRC-177 noSend expiry labels only on outgoing createAction requests'
+        })
+      expect(capability).not.toHaveBeenCalled()
+      await untouched(f.tx.id('hex'))
+    }
+  )
+  test('refuses an injected storage recovery hook for the fixed profile before evidence or commit', async () => {
+    const { f, args } = payment(),
+      auth = await ctx.storage.getAuth(true),
+      commit = jest.fn(),
+      evidence = jest.spyOn(ctx.services, 'getChainTracker')
+    const hook = { protocol: 'wallet-funding-recovery-v1', commit } as unknown as FundingRecoveryCommit
+    await expect(
+      storageInternalizationCore(ctx.activeStorage, auth, args, BRC197_INTERNALIZATION_PROFILE, hook)
+    ).rejects.toMatchObject({
+      name: 'WERR_INVALID_PARAMETER',
+      parameter: 'recovery',
+      message: 'The recovery parameter must be the installed fixed-profile storage pipeline'
+    })
+    expect(commit).not.toHaveBeenCalled()
+    expect(evidence).not.toHaveBeenCalled()
+    await untouched(f.tx.id('hex'))
+  })
+  test('refuses a missing selected storage method without falling back to the ordinary route', async () => {
+    const { f, args } = payment(),
+      auth = await ctx.storage.getAuth(true),
+      ordinary = jest.spyOn(ctx.storage, 'internalizeAction')
+    const restore = unavailableMethod(ctx.storage, 'internalizeBrc197Action')
+    try {
+      await expect(
+        signerInternalizationCore(ctx.wallet, auth, args, BRC197_INTERNALIZATION_PROFILE)
+      ).rejects.toMatchObject({
+        name: 'WERR_INVALID_PARAMETER',
+        parameter: 'storage',
+        message: 'The storage parameter must be local BRC-197 internalization capability'
+      })
+      expect(ordinary).not.toHaveBeenCalled()
+      await untouched(f.tx.id('hex'))
+    } finally {
+      restore()
+    }
+  })
+  test('rejects a substituted derived child even when the transaction pays the correct recipient script', async () => {
+    const { f, args } = payment(),
+      auth = await ctx.storage.getAuth(true)
+    jest.spyOn(ctx.keyDeriver, 'derivePublicKey').mockReturnValue(new PrivateKey(92).toPublicKey())
+    await expect(
+      signerInternalizationCore(ctx.wallet, auth, args, BRC197_INTERNALIZATION_PROFILE)
+    ).rejects.toMatchObject({
+      name: 'WERR_INVALID_PARAMETER',
+      parameter: 'paymentRemittance',
+      message: 'The paymentRemittance parameter must be the authenticated BRC-197 fixed-child P2PKH'
+    })
+    await untouched(f.tx.id('hex'))
+  })
+  test('refuses an in-range integer that addresses no output at both signer and storage boundaries', async () => {
+    const { f, args } = payment(),
+      auth = await ctx.storage.getAuth(true)
+    args.outputs[0].outputIndex = f.tx.outputs.length
+    const refusal = {
+      name: 'WERR_INVALID_PARAMETER',
+      parameter: 'outputIndex',
+      message: `The outputIndex parameter must be a valid output index in range 0 to ${f.tx.outputs.length - 1}`
+    }
+    await expect(
+      signerInternalizationCore(ctx.wallet, auth, args, BRC197_INTERNALIZATION_PROFILE)
+    ).rejects.toMatchObject(refusal)
+    await expect(
+      storageInternalizationCore(ctx.activeStorage, auth, args, BRC197_INTERNALIZATION_PROFILE)
+    ).rejects.toMatchObject(refusal)
+    await untouched(f.tx.id('hex'))
+  })
+})

@@ -6,6 +6,7 @@ import {
   createClosedOutputObjectValidator,
   decodeOutputBytes,
   outputHex32,
+  outputIdentity,
   outputString,
   outputU32,
   outputU64
@@ -211,4 +212,188 @@ export function normalizedWithOwnedRecords<T>(
       ? parseOutputJSONWithOwnedRecords(input, limits)
       : ownOutputJSONWithInlineStrings(input, limits).value
   return schema(value)
+}
+
+/** @internal Server-only fixed grammar composition. The caller must use this
+ * factory's complete normalizer; its ordinary returned callbacks remain safe
+ * standalone schemas. Metadata holds grammar callbacks only, never input or
+ * validation results. Portable schema builders keep their original paths. */
+export function createOwnedRecordSchema() {
+  const ownedSchemaParsers = new WeakMap<Schema<unknown>, Schema<unknown>>()
+
+  function rememberOwnedSchema<T>(schema: Schema<T>, owned: Schema<T>): Schema<T> {
+    ownedSchemaParsers.set(schema, owned)
+    return schema
+  }
+
+  function applyOwnedSchema<T>(schema: Schema<T>, value: unknown): T {
+    const owned = ownedSchemaParsers.get(schema)
+    return owned === undefined ? schema(value) : (owned(value) as T)
+  }
+
+  function fixedOwnedObject<R extends Shape, O extends Shape>(
+    schema: Schema<Fields<R> & Partial<Fields<O>>>,
+    fields: [string, Schema<unknown>][],
+    extras: [string, Schema<unknown>][]
+  ): Schema<Fields<R> & Partial<Fields<O>>> {
+    const required = fields.map(([key]) => key),
+      allowed = new Set([...required, ...extras.map(([key]) => key)])
+    return rememberOwnedSchema(schema, value => {
+      outputAssert(
+        value !== null && typeof value === 'object' && !Array.isArray(value),
+        'Expected object'
+      )
+      // This factory's complete normalizer constructed fresh private data-only records,
+      // rejected symbols, hidden/accessor fields, cycles and resource excess,
+      // and split repeated references into independent owned subtrees.
+      // Required/unknown fields and every nested domain predicate remain fresh.
+      const input = value as Record<string, unknown>
+      for (const key of required) {
+        if (!Object.hasOwn(input, key)) outputAssert(false, `Missing ${key}`)
+      }
+      for (const key of Object.getOwnPropertyNames(input)) {
+        if (!allowed.has(key)) outputAssert(false, `Unknown ${key}`)
+      }
+      const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>
+      for (const [key, child] of fields) result[key] = applyOwnedSchema(child, input[key])
+      for (const [key, child] of extras) {
+        if (Object.hasOwn(input, key)) result[key] = applyOwnedSchema(child, input[key])
+      }
+      return result as Fields<R> & Partial<Fields<O>>
+    })
+  }
+
+  function fixedObject<R extends Shape, O extends Shape = Record<never, never>>(
+    required: R,
+    optional = {} as O
+  ): Schema<Fields<R> & Partial<Fields<O>>> {
+    const fields = Object.entries(required),
+      extras = Object.entries(optional)
+    return fixedOwnedObject<R, O>(object(required, optional, true), fields, extras)
+  }
+
+  function array<T>(element: Schema<T>, maximum = 4096, minimum = 0): Schema<T[]> {
+    const schema: Schema<T[]> = value => {
+      outputAssert(Array.isArray(value), 'Expected protocol array')
+      outputAssert(value.length >= minimum && value.length <= maximum, 'Protocol array bounds')
+      return value.map(element)
+    }
+    if (!ownedSchemaParsers.has(element)) return schema
+    return rememberOwnedSchema(schema, value => {
+      outputAssert(Array.isArray(value), 'Expected protocol array')
+      outputAssert(value.length >= minimum && value.length <= maximum, 'Protocol array bounds')
+      return value.map(item => applyOwnedSchema(element, item))
+    })
+  }
+
+  function ownedLiteral<const T extends readonly (string | number | boolean | null)[]>(
+    ...values: T
+  ): Schema<T[number]> {
+    const schema = literal(...values)
+    return rememberOwnedSchema(schema, schema)
+  }
+
+  function nullable<T>(schema: Schema<T>): Schema<T | null> {
+    const ordinary: Schema<T | null> = value => (value === null ? null : schema(value))
+    return ownedSchemaParsers.has(schema)
+      ? rememberOwnedSchema(ordinary, value =>
+          value === null ? null : applyOwnedSchema(schema, value)
+        )
+      : ordinary
+  }
+
+  function tagged<K extends string, S extends Shape>(
+    key: K,
+    variants: S
+  ): Schema<ReturnType<S[keyof S]>> {
+    const schema: Schema<ReturnType<S[keyof S]>> = value => {
+      outputAssert(
+        value !== null && typeof value === 'object' && !Array.isArray(value),
+        'Expected tagged object'
+      )
+      const tag: unknown = (value as Record<string, unknown>)[key]
+      outputAssert(
+        typeof tag === 'string' && Object.hasOwn(variants, tag),
+        'Unknown protocol variant'
+      )
+      return variants[tag](value) as ReturnType<S[keyof S]>
+    }
+    return rememberOwnedSchema(schema, value => {
+      outputAssert(
+        value !== null && typeof value === 'object' && !Array.isArray(value),
+        'Expected tagged object'
+      )
+      const tag: unknown = (value as Record<string, unknown>)[key]
+      outputAssert(
+        typeof tag === 'string' && Object.hasOwn(variants, tag),
+        'Unknown protocol variant'
+      )
+      return applyOwnedSchema(variants[tag], value) as ReturnType<S[keyof S]>
+    })
+  }
+
+  const identity: Schema<string> = value => outputIdentity(value)
+  // These callbacks read only their supplied private value and return a checked
+  // scalar or owned JSON subtree; they neither mutate nor retain that value.
+  for (const schema of [
+    json,
+    jsonMap,
+    text,
+    hex,
+    identity,
+    u32,
+    u64,
+    bytes,
+    bool,
+    iri,
+    requestId
+  ]) {
+    rememberOwnedSchema<unknown>(schema, schema)
+  }
+
+  function fromOwnedParent<T>(parse: Schema<T>, child: Schema<T>): Schema<T> {
+    const schema: Schema<T> = value =>
+      typeof value === 'string' || value instanceof Uint8Array ? parse(value) : child(value)
+    return ownedSchemaParsers.has(child)
+      ? rememberOwnedSchema(schema, value =>
+          typeof value === 'string' || value instanceof Uint8Array
+            ? parse(value)
+            : applyOwnedSchema(child, value)
+        )
+      : schema
+  }
+
+  const chain = fixedObject({ network: text, genesisHash: hex })
+  const outpoint = fixedObject({ chain, txid: hex, outputIndex: u32 })
+  function normalized<T>(input: unknown, schema: Schema<T>, maximumBytes = 4194304): T {
+    const limits =
+      maximumBytes === OUTPUT_JSON_LIMITS.bytes ? OUTPUT_JSON_LIMITS : { bytes: maximumBytes }
+    const value =
+      typeof input === 'string' || input instanceof Uint8Array
+        ? parseOutputJSONWithOwnedRecords(input, limits)
+        : ownOutputJSONWithInlineStrings(input, limits).value
+    return applyOwnedSchema(schema, value)
+  }
+  return {
+    fixedObject,
+    array,
+    literal: ownedLiteral,
+    nullable,
+    tagged,
+    fromOwnedParent,
+    json,
+    jsonMap,
+    text,
+    hex,
+    identity,
+    u32,
+    u64,
+    bytes,
+    bool,
+    iri,
+    requestId,
+    chain,
+    outpoint,
+    normalized
+  }
 }

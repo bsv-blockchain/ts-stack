@@ -2,9 +2,9 @@
 id: private-purchase-alias-custody
 title: 'Purchase Commitment and Transaction Alias Custody'
 kind: guide
-version: '0.1.7'
-last_updated: '2026-10-08'
-last_verified: '2026-10-08'
+version: '0.1.8'
+last_updated: '2026-10-09'
+last_verified: '2026-10-09'
 review_cadence_days: 30
 status: experimental
 tags: [utxo, private-overlays, purchase, custody, recovery]
@@ -373,3 +373,16 @@ Purchase-contract ownership and canonical comparisons select the existing fresh-
 Native purchase contracts explicitly select additive inline companions for historical capability restoration, packet digests and verification, and signed purchase terms. Capability parsing, selection and retention companions are available separately in the SDK; the native initiation method retains its existing binding. Each invocation owns and validates its complete input afresh. Historical capability restoration still checks the recorded selection time, original signature, selected endpoint, identity, chain, selector, installed rules and digest. Current caller authorization and actual operation deadlines remain separate checks. Ordinary SDK entry points, wire text and bytes, canonical encodings, resource limits, error identities and custody formats retain their existing behavior. No input, parsed packet, shape, secret, currentness or authority verdict is cached; only the existing bounded mathematical signature facts and fixed grammar are shared. This is an implementation choice with identical protocol semantics, not a new advertised protocol profile. Hosted property and full mutation qualification remain required.
 
 Native protected and alias-state readers explicitly select `parseOutputJSONWithOwnedRecords`; the ledger inspector selects `inspectOutputJSONEncodingWithOwnedRecords`. Shallow grammar-proven records retain their existing paths. Complex text is lexically validated while its private independent graph is constructed, with every original duplicate-key, Unicode, syntax, framing and resource check. Failed partial graphs never escape. Recursive canonical/ownership bindings also use fresh record-key and array/string emission with identical bytes and descriptor observations. Other production statements, persistence, cryptographic framing, revisions, operation ordering and authority boundaries remain unchanged. These bindings supply representation ownership only: schema, signature, custody, caller authority and currentness still require independent checks on every operation. Original SDK entry points and existing opt-in APIs remain available. Qualification must complete on the published head; these source changes establish no speedup or checkpoint acceptance.
+
+The explicit server purchase companions build their fixed grammar lazily with
+`createOwnedRecordSchema`, an internal deep-module helper. Its complete normalizer
+freshly owns and bounds the entire input before selecting private grammar
+callbacks. Required and unknown fields and every scalar/domain predicate are
+checked on every call. Fresh private data-only records need no second caller
+prototype, symbol or descriptor inspection. Returned schema callbacks remain
+ordinary standalone validators; custom callbacks retain their ordinary behavior.
+Grammar metadata contains callbacks only. It holds no supplied input, graph,
+shape, key material, authorization, currentness or validation result. Portable
+parsers and buyer/wallet imports retain their existing paths. This adds no wire
+profile, stored format, root SDK export or authority rule. Hosted behavior and
+complete mutation qualification are required; static checks establish no speedup.

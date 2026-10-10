@@ -1,4 +1,5 @@
 import * as s from './OutputProtocolSchema.js'
+import { createOwnedRecordSchema } from './OutputProtocolSchema.js'
 import {
   parseOutputReleasePolicy,
   parseOutputReleasePolicyWithInlineStrings,
@@ -716,21 +717,22 @@ function envelopeWithInlineStrings(): s.Schema<OutputPurchaseEnvelope> {
 /** Explicit complete encoded-record ownership. Object inputs still receive fresh
  * counted ownership; signatures, custody and authority remain separate. */
 export const parseOutputPurchasePrepareWithOwnedRecords = (input: unknown): OutputPurchasePrepare =>
-  s.normalizedWithOwnedRecords(input, prepare)
+  ownedPurchaseSchemas().normalized(input, ownedPurchaseSchemas().prepare)
 export const parseOutputPurchaseSubmitWithOwnedRecords = (input: unknown): OutputPurchaseSubmit =>
-  s.normalizedWithOwnedRecords(input, submit)
+  ownedPurchaseSchemas().normalized(input, ownedPurchaseSchemas().submit)
 export const parseOutputPotatoesWithOwnedRecords = (input: unknown): OutputSignedPotatoes =>
-  s.normalizedWithOwnedRecords(input, potatoesWithInlineStrings())
+  ownedPurchaseSchemas().normalized(input, ownedPurchaseSchemas().potatoes)
 export const parseOutputPurchaseCommitmentBindingWithOwnedRecords = (
   input: unknown
-): OutputPurchaseCommitmentBinding => s.normalizedWithOwnedRecords(input, commitmentBinding)
+): OutputPurchaseCommitmentBinding =>
+  ownedPurchaseSchemas().normalized(input, ownedPurchaseSchemas().commitmentBinding)
 
 /** Explicit complete encoded-record ownership with the same intrinsic packet
  * checks. No signature, custody or authority verdict is implied or retained. */
 export function parseOutputPurchaseTermsWithOwnedRecords(
   input: unknown
 ): OutputSignedPurchaseTerms {
-  const packet = s.normalizedWithOwnedRecords(input, signedTermsWithInlineStrings())
+  const packet = ownedPurchaseSchemas().normalized(input, ownedPurchaseSchemas().signedTerms)
   outputAssert(
     outputU64(packet.body.recoveryUntil) >= outputU64(packet.body.purchaseUntil) + 86400n,
     'Purchase recovery promise is less than one day'
@@ -743,7 +745,7 @@ export function parseOutputPurchaseTermsWithOwnedRecords(
 export function parseOutputPurchaseEnvelopeWithOwnedRecords(
   input: unknown
 ): OutputPurchaseEnvelope {
-  const parsed = s.normalizedWithOwnedRecords(input, envelopeWithInlineStrings())
+  const parsed = ownedPurchaseSchemas().normalized(input, ownedPurchaseSchemas().envelope)
   const response = parsed.result
   outputAssert(
     Object.hasOwn(parsed, 'releaseEvidence') === (response.status === 'delivered'),
@@ -769,4 +771,144 @@ export function parseOutputPurchaseEnvelopeWithOwnedRecords(
     )
   }
   return parsed
+}
+
+let ownedPurchaseGrammar: ReturnType<typeof buildOwnedPurchaseGrammar> | undefined
+function buildOwnedPurchaseGrammar() {
+  const s = createOwnedRecordSchema()
+  const prepare = s.fixedObject({
+    version: s.literal(1),
+    requestId: s.requestId,
+    topic: s.text,
+    listing: s.outpoint,
+    assetId: s.hex,
+    termsDigest: s.hex,
+    recipient: s.identity,
+    request: s.bytes
+  })
+  const terms = s.fixedObject({
+    version: s.literal(1),
+    acquisitionId: s.hex,
+    requestDigest: s.hex,
+    seller: s.identity,
+    recipient: s.identity,
+    topic: s.text,
+    listing: s.outpoint,
+    assetId: s.hex,
+    termsDigest: s.hex,
+    domainProfile: s.iri,
+    domainEvidence: s.fixedObject({ schema: s.iri, bytes: s.bytes }),
+    releasePolicy: s.fromOwnedParent(
+      parseOutputReleasePolicyWithInlineStrings,
+      validateOutputReleasePolicyOfOwnedParent
+    ),
+    purchaseUntil: s.u64,
+    recoveryUntil: s.u64
+  })
+  const signedTerms = s.fixedObject({ body: terms, signature: s.bytes })
+  const submit = s.fixedObject({
+    version: s.literal(1),
+    acquisitionId: s.hex,
+    txid: s.hex,
+    beef: s.bytes
+  })
+  const commitmentBinding = s.fixedObject({
+    profile: s.literal('full-purchase-commitment-v1'),
+    domainProfile: s.iri,
+    purchaseCommitment: s.hex
+  })
+  const potatoes = s.fixedObject({
+    body: s.fixedObject(
+      {
+        version: s.literal(1),
+        acquisitionId: s.hex,
+        requestDigest: s.hex,
+        seller: s.identity,
+        recipient: s.identity,
+        topic: s.text,
+        txid: s.hex,
+        assetId: s.hex,
+        termsDigest: s.hex,
+        releasePolicy: s.fromOwnedParent(
+          parseOutputReleasePolicyWithInlineStrings,
+          validateOutputReleasePolicyOfOwnedParent
+        ),
+        evidenceDigest: s.hex,
+        schema: s.iri,
+        secret: s.bytes,
+        issuedAt: s.u64,
+        recoveryUntil: s.u64
+      },
+      { purchaseCommitment: s.hex }
+    ),
+    signature: s.bytes
+  })
+  const common = { version: s.literal(1), acquisitionId: s.hex, recoveryUntil: s.u64 }
+  const reserved = { ...common, txid: s.hex }
+  const candidateIdentity = { purchaseCommitment: s.hex }
+  const admitted = {
+    ...reserved,
+    steak: s.fromOwnedParent(parseOutputSTEAKWithInlineStrings, validateOutputSTEAKOfOwnedParent)
+  }
+  const decision = s.fixedObject({
+    reason: s.text,
+    policy: s.fromOwnedParent(
+      parseOutputReleasePolicyWithInlineStrings,
+      validateOutputReleasePolicyOfOwnedParent
+    ),
+    evidence: s.bytes,
+    decidedAt: s.u64,
+    globalOutcome: s.literal('unknown')
+  })
+  type Shape = Record<string, import('./OutputProtocolSchema.js').Schema<unknown>>
+  function purchaseState<
+    T extends string,
+    R extends Shape,
+    E extends Shape = Record<never, never>,
+    O extends Shape = Record<never, never>
+  >(status: T, base: R, extra = {} as E, optional?: O) {
+    return s.fixedObject({ ...base, status: s.literal(status), ...extra }, optional)
+  }
+  const result = s.tagged('status', {
+    prepared: purchaseState('prepared', common),
+    expired: purchaseState('expired', common),
+    'admission-pending': purchaseState('admission-pending', reserved, {}, candidateIdentity),
+    'admission-rejected': purchaseState(
+      'admission-rejected',
+      reserved,
+      { decision },
+      candidateIdentity
+    ),
+    'admitted-delivery-pending': purchaseState(
+      'admitted-delivery-pending',
+      admitted,
+      {},
+      candidateIdentity
+    ),
+    'delivery-failed': purchaseState('delivery-failed', admitted, { decision }, candidateIdentity),
+    delivered: purchaseState('delivered', admitted, { potatoes }, candidateIdentity)
+  })
+
+  const envelope = s.fixedObject(
+    { result },
+    {
+      releaseEvidence: s.fromOwnedParent(
+        parseOutputReleaseEvidenceWithInlineStrings,
+        validateOutputReleaseEvidenceOfOwnedParent
+      ),
+      currentAlias: s.fixedObject({ txid: s.hex, beef: s.bytes })
+    }
+  )
+  return {
+    prepare,
+    signedTerms,
+    submit,
+    commitmentBinding,
+    potatoes,
+    envelope,
+    normalized: s.normalized
+  }
+}
+function ownedPurchaseSchemas() {
+  return (ownedPurchaseGrammar ??= buildOwnedPurchaseGrammar())
 }
