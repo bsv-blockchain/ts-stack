@@ -8166,3 +8166,12 @@ output/label/tag effects remain asserted. Added positive mined recovery merging
 and optional-tag insertion cases retain exact proof, balance and lifecycle
 identities. No production behavior or qualification policy changes. Hosted
 runtime and complete raw mutation qualification remain required.
+
+The db9c hosted rollback case exposed a fixture outpoint mismatch: the output
+helper generates its own transaction ID unless one is supplied explicitly.
+Both input rows now name the consumed source transaction. The publication port
+observes their committed spent state before returning failure, and the final
+checks compare every retained input field except its update timestamp. The two
+new mined recovery and optional-tag cases passed on db9c, but the failed initial
+wallet run provides no successor mutation score. Complete qualification remains
+required without any change to production behavior or policy.

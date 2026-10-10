@@ -1209,3 +1209,8 @@ a disclosed synthetic storage port and uses real SQLite ownership writes and
 rollback. The ordinary concrete provider path retains its existing behavior.
 Additional mined recovery and tag-free insertion cases check retained balances,
 proof identities, transaction lifecycle and empty metadata without network I/O.
+
+The failed-publication regression binds both stored inputs to the transaction
+actually consumed. At the publication boundary it observes committed SQLite
+spend transitions for own and foreign rows, then checks restoration of the
+complete original rows apart from their update timestamps.

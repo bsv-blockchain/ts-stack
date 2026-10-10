@@ -1490,6 +1490,7 @@ describe('internalization preserves inputs and metadata across failed publicatio
       { txid: sourceTxid }
     )
     const own = await _tu.insertTestOutput(ctx.activeStorage, owner, 0, 1000, basket, false, {
+      txid: sourceTxid,
       spendable: true,
       spentBy: undefined
     })
@@ -1500,7 +1501,7 @@ describe('internalization preserves inputs and metadata across failed publicatio
       1000,
       foreignBasket,
       false,
-      { spendable: true, spentBy: undefined }
+      { txid: sourceTxid, spendable: true, spentBy: undefined }
     )
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(f.tracker)
     // This synthetic provider advertises a newly inserted request. The concrete
@@ -1512,10 +1513,33 @@ describe('internalization preserves inputs and metadata across failed publicatio
         const retained = await getProvenOrReq(id, req, trx)
         return req === undefined ? retained : { ...retained, isNew: true }
       })
-    const publish = jest.spyOn(internalizationPublication, 'shareReqsWithWorld').mockResolvedValue({
-      swr: [{ txid, status: 'failed' }],
-      ndr: [{ txid, status: 'serviceError' }]
-    })
+    const originalInputs = await Promise.all(
+      [own, other].map(
+        async output =>
+          (await ctx.activeStorage.findOutputs({ partial: { outputId: output.outputId } }))[0]
+      )
+    )
+    const publish = jest
+      .spyOn(internalizationPublication, 'shareReqsWithWorld')
+      .mockImplementation(async () => {
+        const target = (
+          await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid } })
+        )[0]
+        expect(target).toBeDefined()
+        const spentOwn = (
+          await ctx.activeStorage.findOutputs({ partial: { outputId: own.outputId } })
+        )[0]
+        const spentForeign = (
+          await ctx.activeStorage.findOutputs({ partial: { outputId: other.outputId } })
+        )[0]
+        expect(spentOwn).toMatchObject({ spendable: false, spentBy: target.transactionId })
+        expect(spentForeign.spendable).toBe(false)
+        expect(spentForeign.spentBy).toBeUndefined()
+        return {
+          swr: [{ txid, status: 'failed' }],
+          ndr: [{ txid, status: 'serviceError' }]
+        }
+      })
     const network = jest
       .spyOn(ctx.services, 'postBeef')
       .mockRejectedValue(new Error('Synthetic publication port only'))
@@ -1553,7 +1577,7 @@ describe('internalization preserves inputs and metadata across failed publicatio
     expect(call.slice(0, 4)).toEqual([ctx.activeStorage, ctx.userId, [], false])
     expect(call[4]?.details).toMatchObject([{ txid, status: 'readyToSend' }])
     expect(call[4]?.beef.atomicTxid).toBe(txid)
-    for (const output of [own, other]) {
+    for (const [index, output] of [own, other].entries()) {
       const retained = (
         await ctx.activeStorage.findOutputs({ partial: { outputId: output.outputId } })
       )[0]
@@ -1565,6 +1589,9 @@ describe('internalization preserves inputs and metadata across failed publicatio
         spendable: true
       })
       expect(retained.spentBy).toBeUndefined()
+      expect({ ...retained, updated_at: originalInputs[index].updated_at }).toEqual(
+        originalInputs[index]
+      )
     }
     expect(
       await ctx.activeStorage.findOutputs({ partial: { userId: ctx.userId, txid } })
@@ -1730,13 +1757,11 @@ describe('mined recovery and optional basket metadata retain ownership facts', (
     const txid = f.tx.id('hex')
     f.tx.merklePath = new MerklePath(1500, [[{ offset: 0, hash: txid, txid: true }]])
     const header = serializeBaseBlockHeader({ ...genesisHeader(ctx.chain), merkleRoot: txid })
-    jest
-      .spyOn(ctx.services, 'getChainTracker')
-      .mockResolvedValue({
-        currentHeight: async () => 2000,
-        isValidRootForHeight: async (root, height) =>
-          (root === txid && height === 1500) || (await f.tracker.isValidRootForHeight(root, height))
-      })
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
+      currentHeight: async () => 2000,
+      isValidRootForHeight: async (root, height) =>
+        (root === txid && height === 1500) || (await f.tracker.isValidRootForHeight(root, height))
+    })
     jest.spyOn(ctx.services, 'getHeaderForHeight').mockResolvedValue(header)
     const network = jest
       .spyOn(ctx.services, 'postBeef')
