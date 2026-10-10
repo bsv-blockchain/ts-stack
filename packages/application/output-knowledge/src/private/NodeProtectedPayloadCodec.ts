@@ -14,7 +14,7 @@ import {
   OutputProtocolError,
   type OutputJSONObject
 } from '@bsv/sdk'
-import { nativeOutputBytes } from './NativeOutputBytes.js'
+import { nativeValidatedOutputBytes as nativeOutputBytes } from './NativeOutputBytes.js'
 
 // Capture only fixed field definitions; validate every supplied value afresh.
 const assertPayloadEnvelopeFields: ReturnType<typeof createClosedOutputObjectValidator> =
@@ -132,7 +132,7 @@ export class NodeProtectedPayloadCodec {
     // Preserve the ledger's existing virtual reader, including one getter capture
     // before text parsing. A custom reader receives the same owned envelope.
     const reader = this.open
-    const owned = parseOutputJSON(input, { bytes: maximumEnvelopeBytes })
+    const owned = parseSerializedEnvelope(input, maximumEnvelopeBytes)
     if (reader !== defaultObjectReader) return Reflect.apply(reader, this, [binding, owned])
     const fields = payloadEnvelopeFields
     const stringsOnly =
@@ -243,4 +243,34 @@ function envelopeScalarFields(value: Record<string, unknown>): ProtectedPayloadE
       typeof value.ciphertext === 'string' ? value.ciphertext : outputString(value.ciphertext),
     tag: outputString(value.tag)
   }
+}
+
+// Fixed canonical six-field grammar only. Captures contain unescaped ASCII,
+// so duplicate names, Unicode errors, nesting and hidden fields are impossible.
+// Every text, bound and capture is checked afresh; other representations retain
+// the original duplicate-aware bounded parser and its complete refusal order.
+const serializedProtectedEnvelope =
+  /^\{"ciphertext":"([A-Za-z0-9+/=]*)","format":"output-protected-payload\/1","keyId":"([A-Za-z0-9_.-]{1,128})","nonce":"([A-Za-z0-9+/=]*)","salt":"([A-Za-z0-9+/=]*)","tag":"([A-Za-z0-9+/=]*)"\}$(?![^])/
+
+function parseSerializedEnvelope(
+  input: string,
+  maximumBytes: number
+): ReturnType<typeof parseOutputJSON> {
+  if (input.length <= maximumBytes) {
+    const match = serializedProtectedEnvelope.exec(input)
+    if (match !== null) {
+      // ASCII code units equal UTF-8 bytes. This exact record has six keys,
+      // depth two and no arrays, within the parser's unchanged fixed limits.
+      // Construct the same fresh null-prototype own-data graph in source order.
+      return Object.assign(Object.create(null), {
+        ciphertext: match[1],
+        format: FORMAT,
+        keyId: match[2],
+        nonce: match[3],
+        salt: match[4],
+        tag: match[5]
+      })
+    }
+  }
+  return parseOutputJSON(input, { bytes: maximumBytes })
 }

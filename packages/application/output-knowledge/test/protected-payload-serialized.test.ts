@@ -252,3 +252,127 @@ it('refuses string-only framing impostors before consulting custody', () => {
   expect(codec.openSerialized(binding, JSON.stringify(envelope), bound)).toEqual(Uint8Array.of(5))
   expect(resolve).toHaveBeenCalledTimes(1)
 })
+const canonicalSerializedEnvelope = (value: object) =>
+  JSON.stringify(
+    Object.fromEntries(
+      Object.entries(value).sort(([a], [b]) => {
+        if (a === b) return 0
+        return a < b ? -1 : 1
+      })
+    )
+  )
+
+it('authenticates canonical six-field text at exact byte boundaries without retaining custody', () => {
+  let available = true
+  const resolve = jest.fn(() => {
+    if (!available) throw new Error('synthetic unavailable key')
+    return key
+  })
+  const codec = new NodeProtectedPayloadCodec({ resolve }, 'key-a', 128)
+  for (const bytes of [
+    new Uint8Array(),
+    Uint8Array.of(0),
+    Uint8Array.of(0, 255),
+    new Uint8Array(128)
+  ]) {
+    const envelope = codec.seal(binding, bytes),
+      source = canonicalSerializedEnvelope(envelope)
+    expect(codec.openSerialized(binding, source, source.length)).toEqual(bytes)
+    expect(codec.openSerialized(binding, source, source.length)).toEqual(
+      codec.open(binding, parseOutputJSON(source))
+    )
+    expect(failure(() => codec.openSerialized(binding, source, source.length - 1)).code).toBe(
+      'limited'
+    )
+  }
+  const envelope = codec.seal(binding, Uint8Array.of(7)),
+    source = canonicalSerializedEnvelope(envelope)
+  resolve.mockClear()
+  expect(codec.openSerialized(binding, source, source.length)).toEqual(Uint8Array.of(7))
+  expect(resolve).toHaveBeenCalledTimes(1)
+  available = false
+  expect(failure(() => codec.openSerialized(binding, source, source.length))).toEqual({
+    code: 'unavailable',
+    message: 'Protected payload custody is unavailable'
+  })
+  available = true
+  const changed = Buffer.from(envelope.tag, 'base64')
+  changed[0] ^= 1
+  expect(
+    failure(() =>
+      codec.openSerialized(
+        binding,
+        canonicalSerializedEnvelope({ ...envelope, tag: changed.toString('base64') }),
+        bound
+      )
+    )
+  ).toEqual({ code: 'unavailable', message: 'Protected payload authentication failed' })
+  expect(codec.openSerialized(binding, source, source.length)).toEqual(Uint8Array.of(7))
+})
+
+it('retains duplicate-aware parser and scalar refusal precedence around canonical text', () => {
+  const codec = make(),
+    envelope = codec.seal(binding, Uint8Array.of(7))
+  const source = canonicalSerializedEnvelope(envelope)
+  for (const text of [
+    source + '\n',
+    source + '\r\n',
+    ' ' + source,
+    source.replace('key-a', '\\u006bey-a'),
+    source.replace('"format":', '"format":"output-protected-payload/1","format":'),
+    source.replace('"keyId":', '"\\u006beyId":"key-a","keyId":'),
+    source.replace('"keyId":"key-a"', '"keyId":"bad label"'),
+    source.replace('"keyId":"key-a"', '"keyId":"\\ud800"'),
+    source.replace('"format":"output-protected-payload/1"', '"format":"future"'),
+    source.slice(0, -1) + ',"extra":"x"}',
+    source + '{}',
+    '\ufeff' + source,
+    ...['salt', 'nonce', 'ciphertext', 'tag'].flatMap(field =>
+      ['=', '====', 'AB==', 'AAB=', 'AA==\n'].map(value =>
+        canonicalSerializedEnvelope({ ...envelope, [field]: value })
+      )
+    )
+  ]) {
+    const oracle = () => codec.open(binding, parseOutputJSON(text, { bytes: bound }))
+    try {
+      const expected = oracle()
+      expect(codec.openSerialized(binding, text, bound)).toEqual(expected)
+    } catch {
+      expect(failure(() => codec.openSerialized(binding, text, bound))).toEqual(failure(oracle))
+    }
+  }
+})
+
+it('delivers a fresh null-prototype canonical envelope to the current captured reader', () => {
+  const codec = make(),
+    envelope = codec.seal(binding, Uint8Array.of(7))
+  const source = canonicalSerializedEnvelope(envelope)
+  const received: unknown[] = []
+  let captures = 0
+  const reader = jest.fn((scope: OutputJSONObject, owned: unknown) => {
+    received.push(owned)
+    expect(Object.getPrototypeOf(owned)).toBeNull()
+    expect(Object.keys(owned as object)).toEqual([
+      'ciphertext',
+      'format',
+      'keyId',
+      'nonce',
+      'salt',
+      'tag'
+    ])
+    return NodeProtectedPayloadCodec.prototype.open.call(codec, scope, owned)
+  })
+  Object.defineProperty(codec, 'open', {
+    get: () => {
+      captures++
+      return reader
+    }
+  })
+  expect(codec.openSerialized(binding, source, bound)).toEqual(Uint8Array.of(7))
+  expect(codec.openSerialized(binding, source, bound)).toEqual(Uint8Array.of(7))
+  expect(captures).toBe(2)
+  expect(received[0]).not.toBe(received[1])
+  expect(() => codec.openSerialized(binding, source + '{}', bound)).toThrow()
+  expect(captures).toBe(3)
+  expect(reader).toHaveBeenCalledTimes(2)
+})

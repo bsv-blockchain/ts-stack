@@ -439,3 +439,64 @@ it.each([
     )
   }
 )
+it('owns canonical native bytes with independent oracle parity across all padding lengths', async () => {
+  const { nativeValidatedOutputBytes } = await import('../src/private/NativeOutputBytes.js')
+  for (let length = 0; length <= 257; length++) {
+    const original = Buffer.from(Array.from({ length }, (_, i) => (i * 29 + length) & 255))
+    const encoded = original.toString('base64')
+    const owned = nativeValidatedOutputBytes(encoded, length)
+    expect(owned).toEqual(original)
+    expect(Array.from(owned)).toEqual(decodeOutputBytes(encoded, length))
+    expect(owned).not.toBe(original)
+    if (length !== 0) {
+      owned[0] ^= 255
+      expect(nativeValidatedOutputBytes(encoded, length)).toEqual(original)
+    }
+  }
+})
+
+it('retains native refusal identity for every padding sextet and malformed bound', async () => {
+  const { nativeValidatedOutputBytes } = await import('../src/private/NativeOutputBytes.js')
+  const outcome = (work: () => Buffer) => {
+    try {
+      return { bytes: Array.from(work()) }
+    } catch (error) {
+      const failure = error as { name: string; code: string; message: string }
+      return { name: failure.name, code: failure.code, message: failure.message }
+    }
+  }
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const cases: [unknown, number][] = []
+  for (const sextet of alphabet)
+    for (const [encoded, maximum] of [
+      ['A' + sextet + '==', 1],
+      ['AA' + sextet + '=', 2],
+      ['A' + sextet + '==', 0],
+      ['AA' + sextet + '=', 1]
+    ] as const)
+      cases.push([encoded, maximum])
+  for (const encoded of [
+    'A',
+    'AA',
+    'AAA',
+    '====',
+    'AA===',
+    'AA-_',
+    '=AAA',
+    'AAAA====',
+    'AA==\n',
+    'AAA=\n\n',
+    'AA==\r\n',
+    ' A==',
+    'AAAA\t',
+    '😀',
+    '\ud800'
+  ])
+    for (const maximum of [0, 1, 2, 4]) cases.push([encoded, maximum])
+  for (const maximum of [-1, 1.5, NaN, Infinity, 4194305]) cases.push(['', maximum])
+  for (const value of [null, undefined, 0, {}, [], Object('')]) cases.push([value, 0])
+  for (const [input, maximum] of cases)
+    expect(outcome(() => nativeValidatedOutputBytes(input, maximum))).toEqual(
+      outcome(() => nativeOutputBytes(input, maximum))
+    )
+})

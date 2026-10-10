@@ -1,4 +1,4 @@
-import { OUTPUT_JSON_LIMITS, outputAssert } from '@bsv/sdk'
+import { OUTPUT_JSON_LIMITS, outputAssert, validateOutputByteEncoding } from '@bsv/sdk'
 
 /** Node storage boundary: own canonical standard Base64 without a number-array copy.
  * Keep the SDK decoder's allocation limits, acceptance and refusal order exactly.
@@ -25,4 +25,22 @@ export function nativeOutputBytes(
   outputAssert(result.byteLength <= maximumBytes, 'Decoded byte limit', 'limited')
   outputAssert(canonical === input, 'Nonzero base64 padding bits')
   return result
+}
+
+/** Explicit Node framing companion. Check the complete current standard Base64
+ * representation before native allocation. Noncanonical input retains the
+ * original native decoder's exact refusal path; no input or verdict is retained.
+ * This validates representation only, never custody or authentication. */
+export function nativeValidatedOutputBytes(
+  input: unknown,
+  maximumBytes: number = OUTPUT_JSON_LIMITS.bytes
+): Buffer {
+  try {
+    validateOutputByteEncoding(input, maximumBytes)
+  } catch {
+    // The original native entry remains the refusal oracle for every malformed
+    // representation, including its native round-trip and error precedence.
+    return nativeOutputBytes(input, maximumBytes)
+  }
+  return Buffer.from(input as string, 'base64')
 }
