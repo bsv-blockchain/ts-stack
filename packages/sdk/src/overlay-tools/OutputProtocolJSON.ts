@@ -1266,52 +1266,52 @@ function visitOutputJSONDirectRecord(frame: OutputJSONFrame, node: unknown, dept
   outputAssert(!frame.path.has(node), 'Cyclic JSON value')
   outputAssert(Object.getOwnPropertySymbols(node).length === 0, 'Symbol JSON key')
   frame.path.add(node)
-  if (Array.isArray(node)) {
-    outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
-    outputAssert(
-      Object.getOwnPropertyNames(node).length === node.length + 1 &&
-        Object.keys(node).length === node.length,
-      'Sparse or decorated JSON array'
-    )
-    emitOutputJSON(frame, '[', true)
-    for (let index = 0; index < node.length; index++) {
-      if (index > 0) emitOutputJSON(frame, ',', true)
-      const descriptor = Object.getOwnPropertyDescriptor(node, index)
-      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
-      visitOutputJSONDirectRecord(frame, descriptor.value, depth + 1)
-    }
-    emitOutputJSON(frame, ']', true)
-  } else {
-    outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
-    // Own-property names are primitive strings. The built-in default ordering
-    // is the same UTF-16 ordering required by JCS, including numeric-looking keys.
-    const keys = Object.getOwnPropertyNames(node).sort()
-    outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
-    emitOutputJSON(frame, '{', true)
-    for (let index = 0; index < keys.length; index++) {
-      const key = keys[index]
-      const descriptor = Object.getOwnPropertyDescriptor(node, key)
-      outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
-      if (index > 0) emitOutputJSON(frame, ',', true)
-      emitOutputJSONRecordString(frame, key, ':')
-      const supplied: unknown = descriptor.value
-      if (typeof supplied === 'string') {
-        outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
-        emitOutputJSONRecordString(frame, supplied)
-      } else if (
-        supplied === null ||
-        typeof supplied === 'boolean' ||
-        typeof supplied === 'number'
-      ) {
-        outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
-        outputAssert(
-          typeof supplied !== 'number' || Number.isSafeInteger(supplied),
-          'Protocol numbers must be safe integers'
-        )
-        emitOutputJSON(frame, String(supplied), true)
-      } else visitOutputJSONDirectRecord(frame, supplied, depth + 1)
-    }
-    emitOutputJSON(frame, '}', true)
-  }
+  if (Array.isArray(node)) emitOutputJSONDirectArray(frame, node, depth)
+  else emitOutputJSONDirectObject(frame, node, depth)
   frame.path.delete(node)
+}
+
+function emitOutputJSONDirectArray(frame: OutputJSONFrame, node: unknown[], depth: number): void {
+  outputJSONLimit(node.length <= frame.bounds.arrayElements, 3)
+  outputAssert(
+    Object.getOwnPropertyNames(node).length === node.length + 1 &&
+      Object.keys(node).length === node.length,
+    'Sparse or decorated JSON array'
+  )
+  emitOutputJSON(frame, '[', true)
+  for (let index = 0; index < node.length; index++) {
+    if (index > 0) emitOutputJSON(frame, ',', true)
+    const descriptor = Object.getOwnPropertyDescriptor(node, index)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON array accessor or hole')
+    visitOutputJSONDirectRecord(frame, descriptor.value, depth + 1)
+  }
+  emitOutputJSON(frame, ']', true)
+}
+
+function emitOutputJSONDirectObject(frame: OutputJSONFrame, node: object, depth: number): void {
+  outputAssert(isOutputPlainObject(node), 'Expected plain JSON object')
+  // Canonical JSON requires unsigned UTF-16 ordering, independent of locale.
+  const keys = Object.getOwnPropertyNames(node).sort(compareOutputJSONKeys)
+  outputJSONLimit(keys.length <= frame.bounds.mapKeys, 2)
+  emitOutputJSON(frame, '{', true)
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index]
+    const descriptor = Object.getOwnPropertyDescriptor(node, key)
+    outputAssert(descriptor?.enumerable && 'value' in descriptor, 'JSON accessor or hidden key')
+    if (index > 0) emitOutputJSON(frame, ',', true)
+    emitOutputJSONRecordString(frame, key, ':')
+    const supplied: unknown = descriptor.value
+    if (typeof supplied === 'string') {
+      outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
+      emitOutputJSONRecordString(frame, supplied)
+    } else if (supplied === null || typeof supplied === 'boolean' || typeof supplied === 'number') {
+      outputJSONLimit(depth + 1 <= frame.bounds.depth, 1)
+      outputAssert(
+        typeof supplied !== 'number' || Number.isSafeInteger(supplied),
+        'Protocol numbers must be safe integers'
+      )
+      emitOutputJSON(frame, String(supplied), true)
+    } else visitOutputJSONDirectRecord(frame, supplied, depth + 1)
+  }
+  emitOutputJSON(frame, '}', true)
 }
