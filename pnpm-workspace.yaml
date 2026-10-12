@@ -8,9 +8,9 @@ packages:
 
 # Supply-chain policy belongs in pnpm-workspace.yaml (pnpm 10 does not read
 # these settings from package.json). Keep native lifecycle scripts deny-by-
-# default, delay ordinary new releases for seven days, and reject provenance
-# downgrades. First-party @bsv/* releases are exempt from the delay so a
-# coordinated stack release can consume freshly published siblings.
+# default and reject provenance downgrades. Release age never blocks resolving
+# a dependency; vulnerability audits, provenance and lifecycle controls remain
+# required for every release, including newly published security fixes.
 allowBuilds:
   '@parcel/watcher': true
   '@scarf/scarf': false
@@ -25,9 +25,6 @@ blockExoticSubdeps: true
 # Require manifests to declare their runtime and build peers explicitly. This
 # keeps unused optional tooling peers out of the frozen dependency graph.
 autoInstallPeers: false
-minimumReleaseAge: 10080
-minimumReleaseAgeExclude:
-  - '@bsv/*'
 
 # Jest 30's current coverage/reporting graph still constrains minimatch to
 # brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest

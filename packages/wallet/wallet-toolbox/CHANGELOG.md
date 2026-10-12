@@ -4,7 +4,7 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.14.6
+## wallet-toolbox 2.14.7
 
 - `WalletPermissionsManager.internalizeAction` stores basket `customInstructions`
   with one metadata encryption when `encryptWalletMetadata` is enabled.
@@ -13,6 +13,28 @@ attention to changes that materially alter behavior or extend functionality.
   `listOutputs` (which decrypts once) returned ciphertext. The after-module
   pass now encrypts only permission-module baskets, matching `createAction`'s
   once-only rule.
+
+- Internalization broadcasts unproven transactions new to the receiving user,
+  including shared-storage no-send payments. A rejected broadcast stores no
+  recipient outputs; proven transactions are not rebroadcast. Upgrade active
+  storage; no API, wire or schema migration is required.
+
+- IndexedDB empty certificate certifier/type, transaction status and output-tag
+  ID arrays mean no optional filter, matching Knex. Nonempty arrays, partial
+  predicates and user ownership remain enforced; no schema migration is required.
+
+- BEEF requests and schema-declared storage response bytes use the existing
+  negotiated compact binary JSON codec. Legacy peers retain numeric-array
+  JSON and identical transaction/proof bytes. Existing authentication and
+  payload ceilings remain unchanged; no API or database migration is required.
+
+- BRC-177 anchors cover both the protected action and an economic reclaim.
+  Protected actions keep their only managed input bound to the named anchor,
+  create no wallet change, and pay the bounded reclaim surplus as miner fee.
+  Ordinary actions retain their existing change planning. No API, wire or
+  database migration is required.
+
+## wallet-toolbox 2.14.6
 
 - UMP support pins anchor verified update lineage. Password and token updates
   supersede the pinned predecessor, including multi-hop updates and recovery-hash

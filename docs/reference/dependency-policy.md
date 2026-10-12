@@ -13,7 +13,9 @@ tags: [reference, dependencies, security, releases]
 # Dependency and Release Policy
 
 This workspace keeps application code, published npm packages, and infrastructure
-images on one reviewed dependency baseline.
+images on one reviewed dependency baseline. Dependency release age is advisory
+and never delays installation or blocks a merge. Vulnerability audits, provenance
+checks, denied dependency lifecycle scripts, and compatibility checks remain required.
 
 ## Supported toolchain
 
@@ -230,7 +232,7 @@ npm or infrastructure release workflows, the read-only verification workflow:
 
 - generates a direct-versus-latest inventory and separates compatible updates
   from major migration projects, versions younger than the repository's
-  24-hour release-age floor, supported peer ranges, coordinated runtime/tool
+  24-hour advisory release-age reminder, supported peer ranges, coordinated runtime/tool
   migrations, the TypeScript compiler-API bridge, and forward vendor builds;
 - reconciles all public source manifests, recorded published baselines, and npm
   `latest`, explicitly reporting source candidates held by an operator's
@@ -279,7 +281,7 @@ The upstream [proxy-addr advisory](https://github.com/advisories/GHSA-jqcg-44mw-
 and [source-map-js advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
 identify those patched versions. Their existing Node engine floors and
 transitive dependency contracts remain compatible. The targeted lock refresh
-uses the existing 24-hour release-age floor, introduces no new dependency
+introduces no new dependency
 override or exception, and retains the blocking high-severity audit. Requalify
 the frozen root, documentation and standalone service graphs before release.
 
@@ -298,9 +300,10 @@ Node 24 runtime contracts remain required.
 
 ## Update and release flow
 
-1. Refresh mature direct dependencies within their declared semver ranges.
-   Never bypass the 24-hour release-age floor merely to make the inventory
-   report `current`.
+1. Refresh direct dependencies within their declared semver ranges after
+   compatibility and security review. Release age is advisory, never an install
+   or merge blocker. The dependency inventory may flag a newly published release
+   for attention; it cannot impose a hold.
 2. Remove obsolete or unused packages before considering overrides.
 3. Run the frozen install, version checks, audit, lint, build, tests,
    conformance, and documentation build.

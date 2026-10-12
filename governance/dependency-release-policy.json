@@ -29,11 +29,11 @@
   "directLatestInventory": {
     "cadence": "monthly-and-after-release",
     "command": "node scripts/dependency-release-governance.mjs inventory",
-    "minimumReleaseAgeMinutes": 1440,
+    "releaseAgeReminderMinutes": 1440,
     "classifications": [
       "current",
       "compatible-update",
-      "release-age-hold",
+      "release-age-advisory",
       "security-urgent",
       "major-migration",
       "coordinated-major-hold",
