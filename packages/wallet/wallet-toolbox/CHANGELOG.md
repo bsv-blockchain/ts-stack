@@ -4,7 +4,7 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.14.7 (unpublished candidate)
+## wallet-toolbox 2.14.7
 
 - Preserve bounded pre-construction double-spend reviews from remote storage.
   An empty attempted TXID is accepted only with one doubleSpend result, empty
@@ -12,6 +12,35 @@ attention to changes that materially alter behavior or extend functionality.
   Consumers must validate the evidence and synchronize the winning transaction
   before rebuilding a save. The existing JSON transport carries this evidence;
   binary wire framing is unchanged. No database or call migration is required.
+
+
+- Confirmed `internalizeAction` resolves the block header before the storage
+  writer opens. IndexedDB otherwise finished that transaction during the
+  asynchronous lookup and rejected a valid mined payment before storing the
+  proven transaction, transaction, or requested output. A missing or malformed
+  header, or an invalid proof, still rejects with no partial records. Upgrade
+  the active storage implementation, including the browser client; no API, wire,
+  or schema migration is required.
+
+- Internalization broadcasts unproven transactions new to the receiving user,
+  including shared-storage no-send payments. A rejected broadcast stores no
+  recipient outputs; proven transactions are not rebroadcast. Upgrade active
+  storage; no API, wire or schema migration is required.
+
+- IndexedDB empty certificate certifier/type, transaction status and output-tag
+  ID arrays mean no optional filter, matching Knex. Nonempty arrays, partial
+  predicates and user ownership remain enforced; no schema migration is required.
+
+- BEEF requests and schema-declared storage response bytes use the existing
+  negotiated compact binary JSON codec. Legacy peers retain numeric-array
+  JSON and identical transaction/proof bytes. Existing authentication and
+  payload ceilings remain unchanged; no API or database migration is required.
+
+- BRC-177 anchors cover both the protected action and an economic reclaim.
+  Protected actions keep their only managed input bound to the named anchor,
+  create no wallet change, and pay the bounded reclaim surplus as miner fee.
+  Ordinary actions retain their existing change planning. No API, wire or
+  database migration is required.
 
 ## wallet-toolbox 2.14.6
 
