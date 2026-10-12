@@ -14,6 +14,14 @@ attention to changes that materially alter behavior or extend functionality.
   both live-sync loops throw that error and stop. First-party providers still
   throw. No API or schema migration is required.
 
+- Confirmed `internalizeAction` resolves the block header before the storage
+  writer opens. IndexedDB otherwise finished that transaction during the
+  asynchronous lookup and rejected a valid mined payment before storing the
+  proven transaction, transaction, or requested output. A missing or malformed
+  header, or an invalid proof, still rejects with no partial records. Upgrade
+  the active storage implementation, including the browser client; no API, wire,
+  or schema migration is required.
+
 - Internalization broadcasts unproven transactions new to the receiving user,
   including shared-storage no-send payments. A rejected broadcast stores no
   recipient outputs; proven transactions are not rebroadcast. Upgrade active
