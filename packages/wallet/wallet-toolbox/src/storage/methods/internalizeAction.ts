@@ -509,7 +509,17 @@ class InternalizeActionContext {
     return tr.tx
   }
 
-  private async findOrInsertProvenTxFromBump(bump: MerklePath, btx: BeefTx, trx?: TrxToken): Promise<TableProvenTx> {
+  /**
+   * Resolve mined-transaction evidence before a storage writer starts.
+   *
+   * IndexedDB commits a transaction when the event loop turns without a
+   * pending request on that transaction. Awaiting a header lookup while the
+   * writer is open finishes the transaction, and the next object-store call
+   * fails with InvalidStateError before any proven tx, transaction, or output
+   * is stored. Header validation still runs to completion here, so a missing
+   * or malformed header rejects with no database writes.
+   */
+  private async resolveProvenTxForBump(bump: MerklePath, btx: BeefTx): Promise<TableProvenTx> {
     const now = new Date()
     const merkleRoot = bump.computeRoot(this.txid)
     const indexEntry = bump.path[0].find(p => p.hash === this.txid)
@@ -518,28 +528,27 @@ class InternalizeActionContext {
         `Could not determine transaction index for txid ${this.txid} in bump path. Expected to find txid in bump.path[0]: ${JSON.stringify(bump.path[0])}`
       )
     }
-    const index = indexEntry.offset
     const header = await this.storage.getServices().getHeaderForHeight(bump.blockHeight)
     if (!header) {
       throw new WERR_INTERNAL(`Block header not found for height ${bump.blockHeight}`)
     }
-    const hash = blockHash(header)
-    const provenTxR = await this.storage.findOrInsertProvenTx(
-      {
-        created_at: now,
-        updated_at: now,
-        provenTxId: 0,
-        txid: this.txid,
-        height: bump.blockHeight,
-        index,
-        merklePath: bump.toBinary(),
-        rawTx: btx.rawTx!,
-        blockHash: hash,
-        merkleRoot
-      },
-      trx
-    )
-    return provenTxR.proven
+    return {
+      created_at: now,
+      updated_at: now,
+      provenTxId: 0,
+      txid: this.txid,
+      height: bump.blockHeight,
+      index: indexEntry.offset,
+      merklePath: bump.toBinary(),
+      rawTx: btx.rawTx!,
+      blockHash: blockHash(header),
+      merkleRoot
+    }
+  }
+
+  private async storeResolvedProvenTx(proven: TableProvenTx, trx?: TrxToken): Promise<TableProvenTx> {
+    const stored = await this.storage.findOrInsertProvenTx(proven, trx)
+    return stored.proven
   }
 
   private async mergeWalletPayments(transactionId: number, trx?: TrxToken): Promise<void> {
@@ -563,16 +572,22 @@ class InternalizeActionContext {
     }
   }
 
-  private async retireNoSendWithProof(transactionId: number, bump: MerklePath, trx?: TrxToken): Promise<void> {
+  private async prepareNoSendProof(): Promise<TableProvenTx | undefined> {
+    const bump = this.ab.findBump(this.txid)
+    if (bump == null) return undefined
     const beefTx = this.ab.findTxid(this.txid)
     if (beefTx == null) {
       throw new WERR_INTERNAL(`Could not find transaction ${this.txid} in AtomicBEEF`)
     }
-    const proven = await this.findOrInsertProvenTxFromBump(bump, beefTx, trx)
+    return await this.resolveProvenTxForBump(bump, beefTx)
+  }
+
+  private async retireNoSendWithProof(transactionId: number, proven: TableProvenTx, trx?: TrxToken): Promise<void> {
+    const stored = await this.storeResolvedProvenTx(proven, trx)
     await this.storage.updateTransaction(
       transactionId,
       {
-        provenTxId: proven.provenTxId,
+        provenTxId: stored.provenTxId,
         status: 'completed'
       },
       trx
@@ -580,7 +595,7 @@ class InternalizeActionContext {
     const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid, trx)
     if (req?.status !== 'nosend') return
     req.addHistoryNote({ what: 'internalizeAction-bumpRetire', userId: this.userId })
-    req.provenTxId = proven.provenTxId
+    req.provenTxId = stored.provenTxId
     req.status = 'completed'
     await req.updateStorageDynamicProperties(this.storage, trx)
   }
@@ -594,10 +609,13 @@ class InternalizeActionContext {
     await req.updateStorageDynamicProperties(this.storage, trx)
   }
 
-  private async retireNoSendTransaction(transactionId: number, trx?: TrxToken): Promise<void> {
-    const bump = this.ab.findBump(this.txid)
-    if (bump != null) {
-      await this.retireNoSendWithProof(transactionId, bump, trx)
+  private async retireNoSendTransaction(
+    transactionId: number,
+    preparedProven: TableProvenTx | undefined,
+    trx?: TrxToken
+  ): Promise<void> {
+    if (preparedProven != null) {
+      await this.retireNoSendWithProof(transactionId, preparedProven, trx)
     } else {
       await this.retireNoSendWithoutProof(transactionId, trx)
     }
@@ -606,6 +624,10 @@ class InternalizeActionContext {
   async mergedInternalize() {
     const transactionId = this.etx!.transactionId
     const wasNoSend = this.etx!.status === 'nosend'
+    // Fetch any mining header before the writer. A no-send merge with a BUMP
+    // otherwise awaits that lookup after labels and outputs have already been
+    // queued on the same IndexedDB transaction.
+    const preparedProven = wasNoSend ? await this.prepareNoSendProof() : undefined
 
     await this.storage.transaction(async trx => {
       await this.addLabels(transactionId, trx)
@@ -645,8 +667,20 @@ class InternalizeActionContext {
       // immediately) and transition the proven_tx_req to 'unmined' so
       // TaskCheckForProofs picks it up on its next nudge cycle. This
       // hands off to Monitor's standard proof-fetching flow.
-      if (wasNoSend) await this.retireNoSendTransaction(transactionId, trx)
+      if (wasNoSend) await this.retireNoSendTransaction(transactionId, preparedProven, trx)
     })
+  }
+
+  private async persistNewOwnership(transactionId: number, trx?: TrxToken): Promise<void> {
+    await this.addLabels(transactionId, trx)
+
+    for (const payment of this.walletPayments) {
+      await this.storeNewWalletPaymentForOutput(transactionId, payment, trx)
+    }
+
+    for (const basket of this.basketInsertions) {
+      await this.storeNewBasketInsertionForOutput(transactionId, basket, trx)
+    }
   }
 
   /**
@@ -657,15 +691,16 @@ class InternalizeActionContext {
     const btx = this.ab.findTxid(this.txid)
     if (btx == null) throw new WERR_INTERNAL(`Could not find transaction ${this.txid} in AtomicBEEF`)
     const bump = this.ab.findBump(this.txid)
+    // A bump means the transaction is already mined. Resolve and validate its
+    // header before opening the writer so the proven tx, transaction, and
+    // requested outputs commit together or not at all.
+    const preparedProven = bump != null ? await this.resolveProvenTxForBump(bump, btx) : undefined
 
     let pr: StorageProvenOrReq = { proven: undefined, req: undefined }
 
     await this.storage.transaction(async trx => {
-      if (bump != null) {
-        // The presence bump indicates the transaction has already been mined.
-        // Verify a provenTx record exist before creating a new transaction with completed status...
-        // Which normally means creating a new provenTx record.
-        pr.proven = await this.findOrInsertProvenTxFromBump(bump, btx, trx)
+      if (preparedProven != null) {
+        pr.proven = await this.storeResolvedProvenTx(preparedProven, trx)
       }
 
       this.etx = await this.findOrInsertTargetTransaction(this.satoshis, pr.proven, trx)
@@ -689,6 +724,8 @@ class InternalizeActionContext {
         newReq.addHistoryNote({ what: 'internalizeAction', userId: this.userId })
         newReq.addNotifyTransactionId(transactionId)
         pr = await this.storage.getProvenOrReq(this.txid, newReq.toApi(), trx)
+      } else {
+        await this.persistNewOwnership(transactionId, trx)
       }
     })
 
@@ -718,23 +755,14 @@ class InternalizeActionContext {
         // abort the internalize action, WERR_REVIEW_ACTIONS exception will be thrown
         return
       }
+
+      // Network publication cannot safely run while a database transaction is
+      // held open. Persist recipient ownership only after broadcast succeeds.
+      // Mined transactions already stored that ownership in the proof writer.
+      await this.storage.transaction(async trx => {
+        await this.persistNewOwnership(transactionId, trx)
+      })
     }
-
-    // Network publication cannot safely run while a database transaction is
-    // held open. Persist all post-broadcast wallet ownership state as one
-    // atomic phase after publication succeeds (or when no publication was
-    // necessary).
-    await this.storage.transaction(async trx => {
-      await this.addLabels(transactionId, trx)
-
-      for (const payment of this.walletPayments) {
-        await this.storeNewWalletPaymentForOutput(transactionId, payment, trx)
-      }
-
-      for (const basket of this.basketInsertions) {
-        await this.storeNewBasketInsertionForOutput(transactionId, basket, trx)
-      }
-    })
   }
 
   async addLabels(transactionId: number, trx?: TrxToken) {

@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
 version: '2.14.7'
-last_updated: '2026-10-10'
-last_verified: '2026-10-10'
+last_updated: '2026-10-12'
+last_verified: '2026-10-12'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -82,6 +82,12 @@ storing recipient outputs, including a sender's no-send transaction already
 known to shared storage. Rejected broadcasts return a review-actions error
 and store no recipient outputs. Transactions backed by a mining proof are
 not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
+
+Confirmed internalization resolves and checks the block header before the
+storage writer opens, including a no-send merge that carries a mining proof.
+A missing or malformed header, or an invalid proof, still rejects and leaves
+no partial proven transaction, transaction, or output. Upgrade the active
+storage implementation; no API, wire or schema migration is required.
 
 ## Backup and recovery
 

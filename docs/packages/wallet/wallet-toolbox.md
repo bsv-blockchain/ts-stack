@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '2.14.7'
-last_updated: '2026-10-10'
-last_verified: '2026-10-10'
+last_updated: '2026-10-12'
+last_verified: '2026-10-12'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -34,6 +34,14 @@ storing recipient outputs, including a sender's no-send transaction already
 known to shared storage. Rejected broadcasts return a review-actions error
 and store no recipient outputs. Transactions backed by a mining proof are
 not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
+
+Confirmed internalization resolves and checks the block header before the
+storage writer opens. IndexedDB commits a transaction when the event loop
+turns during an asynchronous header lookup, so the proven transaction,
+transaction, and requested outputs are stored together only after that lookup
+finishes. A missing or malformed header, or an invalid proof, still rejects
+and leaves none of those records. Upgrade the active storage implementation,
+including the browser client.
 
 ## Optional registry descriptions
 
