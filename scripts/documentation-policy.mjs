@@ -154,14 +154,7 @@ for (const docPath of await walkMarkdown(join(ROOT, 'docs'))) {
   )
   const affected = documentationIsAffected(relativePath, sources, changedFiles)
   if (affected) affectedDocCount += 1
-  const report = documentationDateReport(
-    updated,
-    verified,
-    cadence,
-    today,
-    affected,
-    changedFiles === null
-  )
+  const report = documentationDateReport(updated, verified, cadence, today, affected)
   failures.push(...report.errors.map(finding => `${relativePath}: ${finding}`))
   warnings.push(...report.warnings.map(finding => `${relativePath}: ${finding}`))
 }

@@ -2,6 +2,8 @@ import { _tu, TestSetup1 } from '../../utils/TestUtilsWalletStorage'
 import { sdk, StorageProvider, StorageProviderOptions } from '../../../src/index.client'
 
 import { StorageIdb } from '../../../src/storage/StorageIdb'
+import { StorageKnex } from '../../../src/storage/StorageKnex'
+import { knex } from 'knex'
 
 import 'fake-indexeddb/auto'
 
@@ -14,12 +16,26 @@ describe('idb find tests', () => {
 
   beforeEach(async () => {
     const options: StorageProviderOptions = StorageProvider.createStorageBaseOptions(chain)
-    const storage = new StorageIdb(options)
-    await storage.dropAllData()
-    await storage.migrate('idb find tests', '1'.repeat(64))
-    await storage.makeAvailable()
-    const setup = await _tu.createTestSetup1(storage)
-    setups = [{ setup, storage }]
+    const stores = [
+      new StorageIdb(options),
+      new StorageKnex({
+        ...options,
+        knex: knex({
+          client: 'better-sqlite3',
+          connection: { filename: ':memory:' },
+          useNullAsDefault: true,
+          pool: { min: 1, max: 1 }
+        })
+      })
+    ]
+    setups = []
+    for (const storage of stores) {
+      await storage.dropAllData()
+      await storage.migrate('idb find tests', '1'.repeat(64))
+      await storage.makeAvailable()
+      const setup = await _tu.createTestSetup1(storage)
+      setups.push({ setup, storage })
+    }
   })
 
   afterEach(async () => {
@@ -63,6 +79,24 @@ describe('idb find tests', () => {
         })
       ).toHaveLength(1)
       expect(await storage.findCertificates({ partial: {}, types: ['oblongata'] })).toHaveLength(0)
+      // Empty arrays mean "no filter", as in StorageKnex and as every listCertificates caller relies on.
+      expect(await storage.findCertificates({ partial: {}, certifiers: [], types: [] })).toHaveLength(3)
+      expect(
+        await storage.findCertificates({
+          partial: {},
+          certifiers: [],
+          types: [setup.u1cert2.type]
+        })
+      ).toHaveLength(1)
+      expect(
+        await storage.findCertificates({ partial: {}, certifiers: [setup.u1cert1.certifier], types: [] })
+      ).toHaveLength(1)
+      expect(
+        await storage.findCertificates({ partial: { userId: setup.u1.userId }, certifiers: [], types: [] })
+      ).toHaveLength(3)
+      expect(
+        await storage.findCertificates({ partial: { userId: setup.u2.userId }, certifiers: [], types: [] })
+      ).toEqual([])
     }
   })
 
@@ -108,8 +142,24 @@ describe('idb find tests', () => {
   })
 
   test('6 find Transaction', async () => {
-    for (const { storage, setup: _setup } of setups) {
-      expect(await storage.findTransactions({ partial: {} })).toHaveLength(3)
+    for (const { storage, setup } of setups) {
+      const rows = await storage.findTransactions({ partial: {} })
+      expect(rows).toHaveLength(3)
+      expect(await storage.findTransactions({ partial: {}, status: [] })).toEqual(rows)
+      const status = rows[0].status
+      expect(await storage.findTransactions({ partial: {}, status: [status] })).toEqual(
+        rows.filter(row => row.status === status)
+      )
+      // A nonempty status filter must still reject rows that do not match.
+      expect(rows.every(row => row.status !== 'failed')).toBe(true)
+      expect(await storage.findTransactions({ partial: {}, status: ['failed'] })).toEqual([])
+      expect(await storage.findTransactions({ partial: { userId: setup.u1.userId }, status: [] })).toEqual(
+        rows.filter(row => row.userId === setup.u1.userId)
+      )
+      expect(await storage.findTransactions({ partial: { userId: setup.u2.userId }, status: [] })).toEqual(
+        rows.filter(row => row.userId === setup.u2.userId)
+      )
+      expect(await storage.findTransactions({ partial: { userId: 99 }, status: [] })).toEqual([])
     }
   })
 
@@ -132,8 +182,37 @@ describe('idb find tests', () => {
   })
 
   test('10 find OutputTagMap', async () => {
-    for (const { storage, setup: _setup } of setups) {
-      expect(await storage.findOutputTagMaps({ partial: {} })).toHaveLength(3)
+    for (const { storage, setup } of setups) {
+      const rows = await storage.findOutputTagMaps({ partial: {} })
+      expect(rows).toHaveLength(3)
+      expect(await storage.findOutputTagMaps({ partial: {}, tagIds: [] })).toEqual(rows)
+      expect(await storage.findOutputTagMaps({ partial: {}, tagIds: [setup.u1tag1.outputTagId] })).toEqual(
+        rows.filter(row => row.outputTagId === setup.u1tag1.outputTagId)
+      )
+      expect(await storage.findOutputTagMaps({ partial: {}, tagIds: [Number.MAX_SAFE_INTEGER] })).toEqual([])
+      expect(await storage.findOutputTagMaps({ partial: { outputId: setup.u1tx1o0.outputId }, tagIds: [] })).toEqual(
+        rows.filter(row => row.outputId === setup.u1tx1o0.outputId)
+      )
+      if (storage instanceof StorageIdb) {
+        const owned: typeof rows = []
+        await storage.filterOutputTagMaps(
+          { partial: {}, tagIds: [] },
+          row => {
+            owned.push(row)
+          },
+          setup.u1.userId
+        )
+        expect(owned).toEqual(rows)
+        const foreign: typeof rows = []
+        await storage.filterOutputTagMaps(
+          { partial: {}, tagIds: [] },
+          row => {
+            foreign.push(row)
+          },
+          setup.u2.userId
+        )
+        expect(foreign).toEqual([])
+      }
     }
   })
 

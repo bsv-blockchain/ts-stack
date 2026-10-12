@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.14.6'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+version: '2.14.7'
+last_updated: '2026-10-12'
+last_verified: '2026-10-12'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,30 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+BEEF requests and schema-declared storage response bytes use the existing
+negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
+and identical transaction/proof bytes. Authentication and payload ceilings
+remain unchanged; upgrade both clients and active storage for the savings.
+
+IndexedDB treats empty certificate certifier/type, transaction status and
+output-tag ID arrays like omitted optional filters, matching Knex. Nonempty
+arrays, partial predicates and user ownership remain enforced. No API, wire
+or database migration is required.
+
+Internalizing an unproven transaction new to a user attempts broadcast before
+storing recipient outputs, including a sender's no-send transaction already
+known to shared storage. Rejected broadcasts return a review-actions error
+and store no recipient outputs. Transactions backed by a mining proof are
+not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
+
+Confirmed internalization resolves and checks the block header before the
+storage writer opens. IndexedDB commits a transaction when the event loop
+turns during an asynchronous header lookup, so the proven transaction,
+transaction, and requested outputs are stored together only after that lookup
+finishes. A missing or malformed header, or an invalid proof, still rejects
+and leaves none of those records. Upgrade the active storage implementation,
+including the browser client.
 
 ## Optional registry descriptions
 
@@ -43,6 +67,11 @@ then use [BRC-38/39 integration](../../guides/wallet-data-portability.md), the
 [agent implementation brief](../../guides/wallet-recovery-agent-brief.md).
 The integration guide documents concrete-provider requirements, explicit
 restore/merge modes and the limits of the current in-memory export helpers.
+
+BRC-177 anchors cover both the delivery and an economic reclaim. When the
+reclaim floor is larger, the protected action pays the bounded surplus as
+miner fee while retaining no wallet change. Upgrade the active storage
+implementation to receive this funding fix; no wire or database migration is required.
 
 ## Current capabilities
 

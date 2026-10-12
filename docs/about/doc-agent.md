@@ -64,7 +64,7 @@ tags: [protocol, reference]
 - `last_updated` changes when prose or structure changes.
 - `last_verified` changes only after checking the page against its current
   source and applicable commands.
-- `review_cadence_days` is enforced for pages edited in the change and pages
+- `review_cadence_days` supplies advisory reminders for pages edited in the change and pages
   documenting directly changed sources. Use 30 days for active package,
   protocol, operational, and security pages; use a longer cadence only for
   truly stable conceptual material. An unrelated page's review deadline does
@@ -119,10 +119,11 @@ revision expressions outside that syntax.
 Release, scheduled, and manual GitHub runs have no change scope unless one is
 provided explicitly. All invocations still enforce package documentation,
 generated-content consistency through `docs:facts:check`, and date consistency
-(verification cannot predate an update or be in the future). Only review-expiry reminders
-are scoped; they are warnings in ordinary source checks. The full audit is an opt-in maintenance command, not an unrelated
+(verification cannot predate an update). Clock-relative dates, including future
+verification timestamps, are advisory reminders. Review-expiry reminders
+are scoped; they are always advisory warnings, including `--all`. The full audit is an opt-in maintenance command, not an unrelated
 PR's merge requirement. The weekly Maintenance review deadlines workflow
-runs this audit independently and fails on overdue reviews. Re-verify an affected expired page against its source
+runs this audit independently and reports overdue reviews without failing. Re-verify an affected expired page against its source
 before updating its date; do not bulk-advance unrelated verification dates.
 
 The package README contract covers every public package and requires registry

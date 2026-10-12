@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.14.6'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+version: '2.14.7'
+last_updated: '2026-10-12'
+last_verified: '2026-10-12'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -24,6 +24,11 @@ expiry monitoring, synchronized lifecycle state, and pre-signed reclaim
 submission.
 IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
 count across short final and out-of-range pages.
+BRC-177 anchors cover both the delivery and an economic reclaim. When the
+reclaim floor is larger, the protected action pays the bounded surplus as
+miner fee while retaining no wallet change. Upgrade the active storage
+implementation to receive this funding fix; no wire or database migration is required.
+
 Prepared BEEF persistence remains a server-side Knex capability. Browser
 IndexedDB uses the canonical path, and compatible remote servers can enable
 the optimization without a browser configuration or wire change.
@@ -66,6 +71,28 @@ endpoint.
 The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
+
+BEEF requests and schema-declared storage response bytes use the existing
+negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
+and identical transaction/proof bytes. Authentication and payload ceilings
+remain unchanged; upgrade both clients and active storage for the savings.
+
+IndexedDB treats empty certificate certifier/type, transaction status and
+output-tag ID arrays like omitted optional filters, matching Knex. Nonempty
+arrays, partial predicates and user ownership remain enforced. No API, wire
+or database migration is required.
+
+Internalizing an unproven transaction new to a user attempts broadcast before
+storing recipient outputs, including a sender's no-send transaction already
+known to shared storage. Rejected broadcasts return a review-actions error
+and store no recipient outputs. Transactions backed by a mining proof are
+not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
+
+Confirmed internalization resolves and checks the block header before the
+IndexedDB writer opens. A valid mined AtomicBEEF is stored after an
+asynchronous header lookup. A missing or malformed header, or an invalid
+proof, still rejects and leaves no proven transaction, transaction, or
+requested output. Upgrade this client; no API, wire or schema migration is required.
 
 ## Backup and recovery
 
