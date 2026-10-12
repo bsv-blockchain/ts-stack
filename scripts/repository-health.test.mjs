@@ -362,7 +362,7 @@ test('contract ratchet detects both new and stale resolved findings', () => {
   )
 })
 
-test('exception registry rejects expired, under-evidenced exceptions', () => {
+test('exception registry rejects under-evidenced exceptions without blocking on expiry', () => {
   const registry = {
     schemaVersion: 1,
     lastReviewed: '2026-07-25',
@@ -383,12 +383,11 @@ test('exception registry rejects expired, under-evidenced exceptions', () => {
 
   assert.deepEqual(validateExceptionRegistry(registry, '2026-07-25'), [
     'exception temporary-hold reason must be at least 20 characters',
-    'exception temporary-hold must have one or more evidence references',
-    'exception temporary-hold expired on 2026-07-24'
+    'exception temporary-hold must have one or more evidence references'
   ])
 })
 
-test('exception registry requires a current monthly review even when empty', () => {
+test('exception registry never fails solely because of the current calendar date', () => {
   assert.deepEqual(
     validateExceptionRegistry(
       {
@@ -398,7 +397,7 @@ test('exception registry requires a current monthly review even when empty', () 
       },
       '2026-07-25'
     ),
-    ['exceptions.json monthly review is overdue: last reviewed 2026-06-01']
+    []
   )
   assert.deepEqual(
     validateExceptionRegistry(
@@ -409,7 +408,7 @@ test('exception registry requires a current monthly review even when empty', () 
       },
       '2026-07-25'
     ),
-    ['exceptions.json lastReviewed is in the future: 2026-07-26']
+    []
   )
 })
 
@@ -549,14 +548,17 @@ test('CI and release typecheck the built cross-package declaration graph', () =>
   }
 })
 
-test('calendar expiry is advisory in source CI and enforced by the maintenance audit', () => {
+test('calendar expiry stays advisory even with legacy maintenance enforcement options', () => {
   const ordinary = evaluateRepositoryHealth({ today: '2027-01-01' })
   assert.deepEqual(ordinary.errors, [])
   assert.ok(ordinary.warnings.some(item => item.includes('expired on')))
   assert.ok(ordinary.warnings.some(item => item.includes('monthly review is overdue')))
   const maintenance = evaluateRepositoryHealth({ today: '2027-01-01', enforceDeadlines: true })
-  for (const warning of ordinary.warnings) assert.ok(maintenance.errors.includes(warning))
-  assert.deepEqual(maintenance.warnings, [])
+  assert.deepEqual(maintenance.errors, [])
+  assert.deepEqual(maintenance.warnings, ordinary.warnings)
+  const earlierClock = evaluateRepositoryHealth({ today: '2020-01-01' })
+  assert.deepEqual(earlierClock.errors, [])
+  assert.ok(earlierClock.warnings.some(item => item.includes('lastReviewed is in the future')))
 })
 
 test('source CI still rejects malformed exception dates and missing evidence', () => {

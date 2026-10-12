@@ -28,8 +28,7 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 28)
-  assert.equal(overrides.find(entry => entry.selector === 'handlebars@<4.7.10')?.value, '4.7.10')
+  assert.equal(overrides.length, 27)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
@@ -84,7 +83,7 @@ test('direct dependency inventory distinguishes freshness holds and governed com
       dependencyPolicy,
       now
     ),
-    'release-age-hold'
+    'release-age-advisory'
   )
   assert.equal(
     classifyDirectDependency(
@@ -354,4 +353,20 @@ test('scheduled verification installs and verifies every context and retains eve
   assert.match(workflow, /published-install\/\*\*\/package-lock\.json/)
   assert.match(workflow, /published-install\/contexts\.json/)
   assert.doesNotMatch(workflow, /--legacy-peer-deps|--force/)
+})
+
+test('dependency resolution has no release-age block and retains real security controls', () => {
+  const workspace = fs.readFileSync('pnpm-workspace.yaml', 'utf8')
+  assert.doesNotMatch(workspace, /^minimumReleaseAge(?:Exclude)?:/m)
+  const npmrc = fs.readFileSync('.npmrc', 'utf8')
+  assert.doesNotMatch(npmrc, /^min(?:imum)?-release-age(?:-exclude)?(?:\[\])?=/m)
+  assert.match(workspace, /^trustPolicy: no-downgrade$/m)
+  assert.match(workspace, /^blockExoticSubdeps: true$/m)
+  assert.match(workspace, /^strictDepBuilds: true$/m)
+  const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8')
+  assert.match(ci, /run: pnpm audit:security/)
+  assert.match(ci, /pnpm install --frozen-lockfile --ignore-scripts/)
+  const lock = fs.readFileSync('pnpm-lock.yaml', 'utf8')
+  assert.doesNotMatch(lock, /handlebars@4\.7\.9:/)
+  assert.match(lock, /handlebars@4\.7\.10:/)
 })

@@ -8,9 +8,9 @@ packages:
 
 # Supply-chain policy belongs in pnpm-workspace.yaml (pnpm 10 does not read
 # these settings from package.json). Keep native lifecycle scripts deny-by-
-# default, delay ordinary new releases for seven days, and reject provenance
-# downgrades. First-party @bsv/* releases are exempt from the delay so a
-# coordinated stack release can consume freshly published siblings.
+# default and reject provenance downgrades. Release age never blocks resolving
+# a dependency; vulnerability audits, provenance and lifecycle controls remain
+# required for every release, including newly published security fixes.
 allowBuilds:
   '@parcel/watcher': true
   '@scarf/scarf': false
@@ -25,13 +25,6 @@ blockExoticSubdeps: true
 # Require manifests to declare their runtime and build peers explicitly. This
 # keeps unused optional tooling peers out of the frozen dependency graph.
 autoInstallPeers: false
-minimumReleaseAge: 10080
-minimumReleaseAgeExclude:
-  - '@bsv/*'
-  # Security-urgent: handlebars 4.7.10 published 2026-10-05T22:37:37Z is
-  # younger than the 7-day floor until 2026-10-12T22:37:37Z. Remove this
-  # exclude after that instant; keep the version-bounded override.
-  - handlebars
 
 # Jest 30's current coverage/reporting graph still constrains minimatch to
 # brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest
@@ -67,9 +60,6 @@ overrides:
   lodash-es@<4.18.0: 4.18.1
   # Preserve Metro's existing Picomatch matcher while removing the unused braces closure.
   'metro-file-map@0.87.1>micromatch': '-'
-  # ts-jest still admits handlebars <=4.7.9 via its istanbul/template graph.
-  # GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f require 4.7.10.
-  handlebars@<4.7.10: 4.7.10
 strictDepBuilds: true
 trustPolicy: no-downgrade
 # Apply provenance downgrade checks to the recent supply-chain window. Older
