@@ -204,6 +204,107 @@ describe('CWIStyleWalletManager Tests', () => {
   // ----------------------------------------------------------------------------------------
 
   describe('New user flow: presentation + password', () => {
+    test.each([
+      ['empty bytes', []],
+      ['oversized bytes', Array(64 * 1024 + 1).fill(0)],
+      ['negative byte', [-1]],
+      ['overflowing byte', [256]],
+      ['fractional byte', [1.5]],
+      ['non-finite byte', [NaN]]
+    ])('rejects a checkpoint with %s without starting authentication', (_name, bytes) => {
+      expect(() => manager.loadPendingRegistrationToken(bytes)).toThrow('Pending registration token is invalid')
+      expect(manager.hasPendingRegistrationToken()).toBe(false)
+      expect(manager.authenticated).toBe(false)
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(mockUMPTokenInteractor.buildAndSend).not.toHaveBeenCalled()
+    })
+
+    test.each<[string, Partial<UMPToken>]>([
+      ['a published outpoint', { currentOutpoint: `${'a'.repeat(64)}.0` }],
+      ['legacy token encoding', { umpVersion: undefined, passwordKdf: undefined }],
+      ['encrypted profiles', { profilesEncrypted: [1] }],
+      ['short password salt', { passwordSalt: Array(31).fill(1) }],
+      ['short presentation hash', { presentationHash: Array(31).fill(1) }],
+      ['short recovery hash', { recoveryHash: Array(31).fill(1) }]
+    ])('rejects an unpublished checkpoint containing %s', async (_name, invalid) => {
+      const token: UMPToken = {
+        ...(await createMockUMPToken()),
+        currentOutpoint: undefined,
+        umpVersion: 3,
+        passwordKdf: { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        ...invalid
+      }
+      const codec = manager as unknown as {
+        serializeUMPToken: (token: UMPToken, allowUnpublished: boolean) => number[]
+      }
+
+      expect(() => manager.loadPendingRegistrationToken(codec.serializeUMPToken(token, true))).toThrow(
+        'Pending registration token is invalid'
+      )
+      expect(manager.hasPendingRegistrationToken()).toBe(false)
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(mockUMPTokenInteractor.buildAndSend).not.toHaveBeenCalled()
+    })
+
+    test('refuses to replace wallet state with a checkpoint after authentication has started', async () => {
+      await manager.providePresentationKey(presentationKey)
+      expect(() => manager.loadPendingRegistrationToken([3])).toThrow('must be loaded before authentication')
+      await manager.providePassword('test-password')
+      expect(() => manager.loadPendingRegistrationToken([3])).toThrow('must be loaded before authentication')
+      expect(manager.authenticated).toBe(true)
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(mockWalletBuilder).toHaveBeenCalledTimes(1)
+    })
+
+    test('refuses a decryptable checkpoint whose wallet root has the wrong length', async () => {
+      const token: UMPToken = {
+        ...(await createMockUMPToken()),
+        currentOutpoint: undefined,
+        umpVersion: 3,
+        passwordKdf: { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(Array(31).fill(1))
+      }
+      const codec = manager as unknown as {
+        serializeUMPToken: (token: UMPToken, allowUnpublished: boolean) => number[]
+      }
+      manager.loadPendingRegistrationToken(codec.serializeUMPToken(token, true))
+      await manager.providePresentationKey(presentationKey)
+
+      await expect(manager.providePassword('test-password')).rejects.toThrow('could not be unlocked')
+      expect(manager.authenticated).toBe(false)
+      expect(manager.hasPendingRegistrationToken()).toBe(true)
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(mockRecoveryKeySaver).not.toHaveBeenCalled()
+      expect(mockUMPTokenInteractor.buildAndSend).not.toHaveBeenCalled()
+    })
+
+    test('keeps the same pending wallet when UMP publication fails after successful funding', async () => {
+      const funder = jest.fn(async () => {})
+      const retryManager = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        funder
+      )
+      jest.mocked(mockUMPTokenInteractor.buildAndSend).mockRejectedValueOnce(new Error('UMP publication unavailable'))
+      await retryManager.providePresentationKey(presentationKey)
+
+      await expect(retryManager.providePassword('test-password')).rejects.toThrow('UMP publication unavailable')
+      expect(retryManager.authenticated).toBe(false)
+      expect(retryManager.hasPendingRegistrationToken()).toBe(true)
+      await expect(retryManager.switchProfile(Array(16).fill(0))).rejects.toThrow('Wallet not authenticated')
+      await retryManager.providePassword('test-password')
+
+      expect(retryManager.authenticated).toBe(true)
+      expect(retryManager.hasPendingRegistrationToken()).toBe(false)
+      expect(mockWalletBuilder.mock.calls[1][0]).toEqual(mockWalletBuilder.mock.calls[0][0])
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(funder).toHaveBeenCalledTimes(2)
+      expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(2)
+    })
+
     test('restores the same root after a restart between faucet broadcast and UMP publication', async () => {
       const events: string[] = []
       let savedToken: number[] | undefined
