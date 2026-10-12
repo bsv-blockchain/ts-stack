@@ -440,21 +440,35 @@ empty wallet. Main currently carries the separate SDK3.1 candidate; SDK2 hosts
 need an additive backport or the documented SDK3 migration.
 
 The signed action is staged locally, labeled, and recorded in a recovery basket
-before broadcast. This fee fix does not change signup persistence or retry
-recovery. Internalization clears the output's custom instructions, and standard
-`listActions` does not return them; a later retry can therefore require manual
-reconciliation. Preserve the existing wallet and reconcile its faucet action
-before restarting a failed signup. Missing, substituted, ambiguous, or
-result-only recovery evidence fails closed.
+before broadcast. Internalization clears the output's custom instructions, and
+standard `listActions` does not return them. A retry with the same wallet root
+can recover the prior faucet action; missing, substituted, ambiguous, or
+result-only recovery evidence fails closed. Preserve the wallet's storage when
+reconciling an interrupted signup.
 
-New WAB registrations are interruption-safe across the off-chain/on-chain
-boundary. A WAB that advertises `registrationStatus: "pending"` lets a verified
-retry reuse the stored presentation key when a clean UMP lookup confirms that
-publication has not happened. After publishing the UMP token, the manager
-finalizes WAB idempotently. A lost finalization response is non-fatal: the next
-verified login finds the published token and repairs the pending state. Missing
-or invalid lifecycle metadata remains fail-closed for established accounts, and
-older WAB servers and clients retain their existing wire behavior.
+For restart-safe WAB registrations, store an unpublished UMP token checkpoint
+before faucet redemption. Pass `pendingRegistrationTokenSaver` in
+`WalletAuthenticationManagerOptions` and synchronously verify that the token
+bytes are stored before the callback resolves. On app restart, call
+`loadPendingRegistrationToken(bytes)` before starting authentication. The token
+contains encrypted UMP fields and no plaintext wallet root, snapshot key, or on-chain
+outpoint. Keep it through failed funding and logout; clear it only after a
+successful authenticated snapshot has been stored and
+`hasPendingRegistrationToken()` returns false. If an older pending WAB
+registration has no checkpoint, the manager refuses to redeem its faucet output
+again. Recover that registration using its original wallet state instead of
+creating a new root. A checkpoint for another presentation key does not block
+login to an already published wallet; retain that checkpoint until its own
+registration is reconciled.
+
+A WAB that advertises `registrationStatus: "pending"` lets a verified retry
+reuse the stored presentation key when a clean UMP lookup confirms that
+publication has not happened. The loaded checkpoint reconstructs the original
+root, so the wallet can recover its prior faucet action. After publishing the
+UMP token, the manager finalizes WAB idempotently. A lost finalization response
+is non-fatal: the next verified login finds the published token and repairs the
+pending state. Missing or invalid lifecycle metadata remains fail-closed for
+established accounts; WAB wire behavior is unchanged.
 
 Authenticated applications can verify a phone number and roll the presentation
 key, including when the user enters the same phone number:
