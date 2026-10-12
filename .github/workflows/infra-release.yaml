@@ -217,7 +217,9 @@ jobs:
   release:
     name: Release ${{ matrix.component.name }}@${{ matrix.component.tag }}
     needs: [discover, qualification]
-    if: needs.discover.outputs.count != '0' && needs.qualification.result == 'success' && needs.qualification.outputs.qualified-sha == github.sha
+    # always(): a release.yaml call deliberately skips full-mutation, and the
+    # implicit success() would treat that skipped ancestor as a failure.
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0' && needs.qualification.result == 'success' && needs.qualification.outputs.qualified-sha == github.sha
     runs-on: ubuntu-latest
     permissions:
       artifact-metadata: write

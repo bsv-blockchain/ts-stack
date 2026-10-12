@@ -8,12 +8,14 @@ import test from 'node:test'
 import {
   canonicalizePackedManifest,
   createLicenseInventory,
+  dependencyWaves,
   deterministicUuid,
   loadGovernedProjects,
   mergeCycloneDxDocuments,
   prepareSbomManifest,
   removeInjectedRootDependencies,
   removeLocalFileReferences,
+  settleWithConcurrency,
   topologicallyOrderProjects,
   validateBuildRuntime,
   validateRelativeArtifactPath,
@@ -494,4 +496,62 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   ]) {
     assert.match(openSyncPrStep, new RegExp(`- ${field}: \\S`))
   }
+})
+
+test('publication waves never expose a dependent before its first-party dependencies', () => {
+  const project = (name, dependencies = {}, peerDependencies = {}) => ({
+    name,
+    manifest: { name, dependencies, peerDependencies }
+  })
+  const waves = dependencyWaves([
+    project('@bsv/app', { '@bsv/wallet': '^1' }),
+    project('@bsv/wallet', { '@bsv/auth': '^1' }, { '@bsv/sdk': '^2' }),
+    project('@bsv/auth', {}, { '@bsv/sdk': '^2' }),
+    project('@bsv/templates', {}, { '@bsv/sdk': '^2' }),
+    project('@bsv/sdk', { external: '^1' })
+  ])
+  assert.deepEqual(
+    waves.map(wave => wave.map(entry => entry.name)),
+    [['@bsv/sdk'], ['@bsv/auth', '@bsv/templates'], ['@bsv/wallet'], ['@bsv/app']]
+  )
+  assert.deepEqual(
+    topologicallyOrderProjects(waves.flat().toReversed()).map(entry => entry.name),
+    waves.flat().map(entry => entry.name)
+  )
+})
+
+test('concurrent publication is bounded and settles every package before failing', async () => {
+  let active = 0
+  let peak = 0
+  const finished = []
+  const items = Array.from({ length: 7 }, (_, index) => index)
+  await assert.rejects(
+    settleWithConcurrency(items, 3, async item => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      active -= 1
+      finished.push(item)
+      if (item === 1 || item === 4) throw new Error(`package ${item} failed`)
+    }),
+    error =>
+      error instanceof AggregateError &&
+      error.errors.length === 2 &&
+      /package 1 failed/.test(error.message) &&
+      /package 4 failed/.test(error.message)
+  )
+  assert.equal(peak, 3)
+  assert.deepEqual(
+    finished.toSorted((left, right) => left - right),
+    items
+  )
+  await assert.rejects(
+    settleWithConcurrency([0], 2, async () => {
+      throw new Error('only failure')
+    }),
+    /only failure/
+  )
+  await settleWithConcurrency([], 2, async () => {
+    throw new Error('never called')
+  })
 })

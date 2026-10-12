@@ -6,10 +6,55 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 |                                                                       |
 | --------------------------------------------------------------------- |
+| [ContactResolutionOptions](#interface-contactresolutionoptions)       |
 | [DisplayableIdentity](#interface-displayableidentity)                 |
 | [IdentityClientOptions](#interface-identityclientoptions)             |
 | [ResolveByAttributesOptions](#interface-resolvebyattributesoptions)   |
 | [ResolveByIdentityKeyOptions](#interface-resolvebyidentitykeyoptions) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+
+### Interface: ContactResolutionOptions
+
+Optional recovery policy for personal contact enrichment, never for public discovery.
+
+```ts
+export interface ContactResolutionOptions {
+  contactErrorMode?: 'throw' | 'fallback'
+  contactTimeoutMs?: number
+  onContactError?: (error: unknown) => void
+}
+```
+
+#### Property contactErrorMode
+
+Default `throw` preserves contact failures. Opt into `fallback` to continue public
+discovery without contact overrides after a contact failure or timeout.
+
+```ts
+contactErrorMode?: "throw" | "fallback"
+```
+
+#### Property contactTimeoutMs
+
+Contact-only deadline, an integer from 1 to 60000 milliseconds. Default: 2000 in
+fallback mode, otherwise no deadline. This bounds the caller's wait; it cannot
+cancel an underlying wallet request or dismiss a pending wallet permission prompt.
+
+```ts
+contactTimeoutMs?: number
+```
+
+#### Property onContactError
+
+Receives the original contact failure (or a timeout Error) when fallback is used.
+Use it to display a partial-result warning. Callback exceptions propagate.
+
+```ts
+onContactError?: (error: unknown) => void
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -66,12 +111,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Interface: ResolveByAttributesOptions
 
 ```ts
-export interface ResolveByAttributesOptions {
+export interface ResolveByAttributesOptions extends ContactResolutionOptions {
   useContacts?: boolean
   overrideWithContacts?: boolean
   parallel?: boolean
 }
 ```
+
+See also: [ContactResolutionOptions](./identity.md#interface-contactresolutionoptions)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -80,12 +127,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Interface: ResolveByIdentityKeyOptions
 
 ```ts
-export interface ResolveByIdentityKeyOptions {
+export interface ResolveByIdentityKeyOptions extends ContactResolutionOptions {
   useContacts?: boolean
   overrideWithContacts?: boolean
   parallel?: boolean
 }
 ```
+
+See also: [ContactResolutionOptions](./identity.md#interface-contactresolutionoptions)
 
 #### Property useContacts
 
@@ -408,6 +457,10 @@ export class IdentityClient {
     options: Partial<IdentityClientOptions> = {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   )
+  async #getResolutionContacts(
+    options: NormalizedResolutionOptions,
+    identityKey?: PubKeyHex
+  ): Promise<Contact[]>
   async publiclyRevealAttributes(
     certificate: WalletCertificate,
     fieldsToReveal: CertificateFieldNameUnder50Bytes[]

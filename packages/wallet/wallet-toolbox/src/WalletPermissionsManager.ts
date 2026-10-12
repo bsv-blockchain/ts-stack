@@ -42,6 +42,7 @@ import {
   setExactActionSpend,
   type ExactActionSpendCarrier
 } from './utility/exactActionSpend'
+import { copyActionOutputAuthorizations } from './utility/actionOutputAuthorizations'
 import { WERR_REVIEW_ACTIONS, WERR_UNAUTHORIZED } from './sdk/WERR_errors'
 // Imported from the leaf module directly (not generateChange.ts, which
 // transitively imports StorageProvider.ts and the full signer/create-action
@@ -4512,6 +4513,7 @@ export class WalletPermissionsManager implements WalletInterface {
       transformedArgs = transformed.args
     }
     let createResult = await this.underlying.createAction(transformedArgs as CreateActionArgs, originator)
+    const locallyAuthorizedResult = createResult
     const exactWalletSpend = getExactActionSpend(createResult)
     for (let i = pModules.length - 1; i >= 0; i--) {
       createResult = await pModules[i].onResponse(createResult, { method: 'createAction', originator: originator! })
@@ -4523,6 +4525,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (exactWalletSpend !== undefined) {
       setExactActionSpend(publicResult, exactWalletSpend)
     }
+    copyActionOutputAuthorizations(locallyAuthorizedResult, publicResult)
     return publicResult
   }
 

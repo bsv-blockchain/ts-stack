@@ -445,10 +445,11 @@ async function buildSdkInputFromOutput(
   unlockLen: number | undefined
 ): Promise<StorageCreateTransactionSdkInput> {
   if (i == null && !unlockLen) throw new WERR_INTERNAL(`vin ${vin} non-fixedInput without unlockLen`)
-  const sourceTransaction =
+  const sourceRawTx =
     vargs.includeAllSourceTransactions && vargs.isSignAction
       ? await storage.getRawTxOfKnownValidTransaction(o.txid)
       : undefined
+  const sourceTransaction = sourceRawTx == null ? undefined : Uint8Array.from(sourceRawTx)
   return {
     vin,
     sourceTxid: o.txid!,
@@ -1178,9 +1179,13 @@ function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
     targetNetCount: changeBasket.numberOfDesiredUTXOs - healthyChangeCount,
-    // The planner requires a positive cap. The exact anchor leaves no surplus,
-    // and validateBrc177FundingPlan below independently rejects any change.
+    // The planner requires a positive cap; surplusToFee below keeps the
+    // protected action change-free regardless.
     maxChangeOutputs: brc177?.kind === 'protected' ? 1 : storage.managedChangePolicy.maxOutputsPerAction,
+    // The anchor is sized to cover the reclaim (BRC-177 Prefunding §2); the
+    // protected action carries no change, so any surplus is fee.
+    // validateBrc177FundingPlan below independently rejects any change.
+    surplusToFee: brc177?.kind === 'protected',
     surplusPoolShaping: !compatibilityFallback,
     maxMigrationInputs: compatibilityFallback ? 0 : storage.managedChangePolicy.migrationInputsPerAction,
     randomVals: vargs.randomVals

@@ -8,9 +8,9 @@ packages:
 
 # Supply-chain policy belongs in pnpm-workspace.yaml (pnpm 10 does not read
 # these settings from package.json). Keep native lifecycle scripts deny-by-
-# default, delay ordinary new releases for seven days, and reject provenance
-# downgrades. First-party @bsv/* releases are exempt from the delay so a
-# coordinated stack release can consume freshly published siblings.
+# default and reject provenance downgrades. Release age never blocks resolving
+# a dependency; vulnerability audits, provenance and lifecycle controls remain
+# required for every release, including newly published security fixes.
 allowBuilds:
   '@parcel/watcher': true
   '@scarf/scarf': false
@@ -25,9 +25,6 @@ blockExoticSubdeps: true
 # Require manifests to declare their runtime and build peers explicitly. This
 # keeps unused optional tooling peers out of the frozen dependency graph.
 autoInstallPeers: false
-minimumReleaseAge: 10080
-minimumReleaseAgeExclude:
-  - '@bsv/*'
 
 # Jest 30's current coverage/reporting graph still constrains minimatch to
 # brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest
@@ -61,9 +58,19 @@ overrides:
   # by GHSA-r5fr-rjxr-66jc (_.template imports key-name code injection). Select
   # the patched release already used elsewhere in the graph; the API is unchanged.
   lodash-es@<4.18.0: 4.18.1
+  # Preserve Metro's existing Picomatch matcher while removing the unused braces closure.
+  'metro-file-map@0.87.1>micromatch': '-'
 strictDepBuilds: true
 trustPolicy: no-downgrade
 # Apply provenance downgrade checks to the recent supply-chain window. Older
 # packages predate consistent registry attestations and otherwise create known
 # false positives (for example chokidar 4.0.3 in pnpm's own documentation).
 trustPolicyIgnoreAfter: 525600
+
+# Temporary exact-version repair; retire patch, extension and removal together.
+packageExtensions:
+  'metro-file-map@0.87.1':
+    dependencies:
+      picomatch: 2.3.2
+patchedDependencies:
+  'metro-file-map@0.87.1': patches/metro-file-map@0.87.1.patch

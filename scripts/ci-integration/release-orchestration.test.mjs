@@ -43,6 +43,31 @@ test('one up-front approval gates npm and image publication without a late human
   assert.match(infraRelease.jobs['post-release-verification'].if, /called == 'false'/)
 })
 
+test('jobs downstream of a deliberately skipped campaign opt out of implicit success()', async () => {
+  // GitHub's implicit success() treats any skipped upstream job as blocking.
+  // A release.yaml call skips infra-release's own full-mutation campaign, so
+  // every job below it must use always() and check its direct needs itself.
+  const infraRelease = await workflow('infra-release.yaml')
+  const needs = job => [infraRelease.jobs[job].needs ?? []].flat()
+  const downstream = new Set()
+  const visit = job => {
+    for (const [name] of Object.entries(infraRelease.jobs)) {
+      if (needs(name).includes(job) && !downstream.has(name)) {
+        downstream.add(name)
+        visit(name)
+      }
+    }
+  }
+  visit('full-mutation')
+  assert.ok(downstream.has('release'))
+  for (const job of downstream) {
+    const condition = String(infraRelease.jobs[job].if ?? '')
+    assert.match(condition, /always\(\)/, `${job} must not inherit implicit success()`)
+  }
+  assert.match(infraRelease.jobs.release.if, /needs\.discover\.result == 'success'/)
+  assert.match(infraRelease.jobs.release.if, /needs\.qualification\.result == 'success'/)
+})
+
 function git(cwd, ...arguments_) {
   return execFileSync('git', arguments_, { cwd, encoding: 'utf8' }).trim()
 }

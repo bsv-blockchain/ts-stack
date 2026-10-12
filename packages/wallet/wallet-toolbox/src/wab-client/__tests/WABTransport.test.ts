@@ -413,7 +413,7 @@ describe('WAB transport hardening', () => {
     expect(manager.authenticationFlow).toBe('unknown')
   })
 
-  it('resumes only an explicitly pending WAB registration when no UMP token exists', async () => {
+  it('refuses to resume a pending WAB registration without its original token checkpoint', async () => {
     const existingPresentationKey = 'b'.repeat(64)
     const wabClient = {
       startAuthMethod: jest.fn(async () => ({ success: true })),
@@ -447,9 +447,9 @@ describe('WAB transport hardening', () => {
     expect(wabClient.finalizeRegistration).not.toHaveBeenCalled()
 
     const basePassword = jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValueOnce()
-    await expect(manager.providePassword('password')).resolves.toBeUndefined()
-    expect(basePassword).toHaveBeenCalledWith('password')
-    expect(wabClient.finalizeRegistration).toHaveBeenCalledWith(existingPresentationKey)
+    await expect(manager.providePassword('password')).rejects.toThrow(WABAccountContinuityError)
+    expect(basePassword).not.toHaveBeenCalled()
+    expect(wabClient.finalizeRegistration).not.toHaveBeenCalled()
   })
 
   it('repairs pending WAB state after finding an already-published UMP token', async () => {

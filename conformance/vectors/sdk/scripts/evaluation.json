@@ -5,7 +5,7 @@
   "brc": [
     "BRC-14"
   ],
-  "version": "3.0.1",
+  "version": "3.0.2",
   "reference_impl": "packages/sdk/src/script/Script.ts, packages/sdk/src/script/Spend.ts, packages/sdk/src/primitives/TransactionSignature.ts",
   "parity_class": "required",
   "vectors": [
@@ -158655,6 +158655,120 @@
         "teranode",
         "shared-fixture",
         "invalid"
+      ]
+    },
+    {
+      "id": "script-034",
+      "description": "OP_LEFT with a nine-byte count whose final byte carries magnitude bits (2^64) is a script number overflow",
+      "input": {
+        "script_sig_hex": "",
+        "script_pubkey_hex": "02000109000000000000000001b40087"
+      },
+      "expected": {
+        "valid": false,
+        "note": "Node v1.2.3 rejects the operand with SCRIPT_ERR_SCRIPTNUM_OVERFLOW. Node v1.2.2 read the first eight bytes as count 0, left an empty element, and the trailing OP_0 OP_EQUAL made that spend valid; the vector therefore passes on the old decoder and fails on the new one. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+      },
+      "tags": [
+        "evaluation",
+        "chronicle",
+        "splice",
+        "node-v1.2.3",
+        "invalid"
+      ]
+    },
+    {
+      "id": "script-035",
+      "description": "OP_RIGHT with a ten-byte count (2^72) is a script number overflow",
+      "input": {
+        "script_sig_hex": "",
+        "script_pubkey_hex": "0200010a00000000000000000001b50087"
+      },
+      "expected": {
+        "valid": false,
+        "note": "Node v1.2.3 rejects any splice operand longer than nine bytes. Node v1.2.2 read the first eight bytes as count 0, left an empty element, and the trailing OP_0 OP_EQUAL made that spend valid. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+      },
+      "tags": [
+        "evaluation",
+        "chronicle",
+        "splice",
+        "node-v1.2.3",
+        "invalid"
+      ]
+    },
+    {
+      "id": "script-036",
+      "description": "OP_SUBSTR with a nine-byte length of 2^64+1 is a script number overflow",
+      "input": {
+        "script_sig_hex": "",
+        "script_pubkey_hex": "030001020009010000000000000001b382775187"
+      },
+      "expected": {
+        "valid": false,
+        "note": "Operand 01 00 00 00 00 00 00 00 01: node v1.2.3 rejects it because the ninth byte carries magnitude bits. Node v1.2.2 read the first eight bytes as length 1, extracted one byte, and the trailing OP_SIZE OP_NIP OP_1 OP_EQUAL made that spend valid. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+      },
+      "tags": [
+        "evaluation",
+        "chronicle",
+        "splice",
+        "node-v1.2.3",
+        "invalid"
+      ]
+    },
+    {
+      "id": "script-037",
+      "description": "OP_SUBSTR with a nine-byte offset of 2^64 is a script number overflow",
+      "input": {
+        "script_sig_hex": "",
+        "script_pubkey_hex": "030001020900000000000000000151b382775187"
+      },
+      "expected": {
+        "valid": false,
+        "note": "Node v1.2.3 decodes the offset through the checked int64 path and rejects it. Node v1.2.2 read offset 0, extracted one byte, and the trailing OP_SIZE OP_NIP OP_1 OP_EQUAL made that spend valid. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+      },
+      "tags": [
+        "evaluation",
+        "chronicle",
+        "splice",
+        "node-v1.2.3",
+        "invalid"
+      ]
+    },
+    {
+      "id": "script-038",
+      "description": "OP_LEFT with the nine-byte INT64_MIN encoding decodes to a negative count and fails the range check",
+      "input": {
+        "script_sig_hex": "",
+        "script_pubkey_hex": "02000109000000000000008080b4"
+      },
+      "expected": {
+        "valid": false,
+        "note": "int_serialization_tests.cpp: 00*7 80 80 deserializes to INT64_MIN and is not an overflow; the count is then negative -> SCRIPT_ERR_INVALID_NUMBER_RANGE. Node v1.2.2 read the first eight bytes as INT64_MIN too, so the verdict is unchanged; this vector pins the boundary, not the behaviour change. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+      },
+      "tags": [
+        "evaluation",
+        "chronicle",
+        "splice",
+        "node-v1.2.3",
+        "invalid"
+      ]
+    },
+    {
+      "id": "script-039",
+      "description": "OP_RIGHT with count 1 on a two-byte element returns the last byte (control vector)",
+      "input": {
+        "script_sig_hex": "",
+        "script_pubkey_hex": "02000151b55187"
+      },
+      "expected": {
+        "valid": true,
+        "note": "Small operands are unaffected by the v1.2.3 checked decoding. Reference: SV Node v1.2.3 int_serialization.h deserialize<int64_t> / opcode_tests.cpp."
+      },
+      "tags": [
+        "evaluation",
+        "chronicle",
+        "splice",
+        "node-v1.2.3",
+        "valid"
       ]
     }
   ],

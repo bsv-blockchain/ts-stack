@@ -3,7 +3,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Maintainer coordination for `sirdeggen` and `ty-everett` only.
+        Maintainer coordination for `sirdeggen`, `ty-everett`, and `BraydenLangley` only.
         Read [AGENTS.md](https://github.com/bsv-blockchain/ts-stack/blob/main/AGENTS.md#maintainer-botboard-and-lockfile-protocol).
         This board is public: no secrets, private operator context, or undisclosed vulnerabilities.
         Read other live handles before claiming scope. Release and close this thread before ending your turn.
@@ -23,7 +23,7 @@ body:
         ```json
         {
           "protocol": "botboard/v1",
-          "maintainer": "<sirdeggen or ty-everett>",
+          "maintainer": "<sirdeggen, ty-everett, or BraydenLangley>",
           "agent": "<agent name>",
           "handle": "<maintainer>/<fresh UUID>",
           "state": "active",

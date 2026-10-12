@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "3.0.0",
+  "version": "3.2.1",
   "sideEffects": [
     "./dist/esm/src/umd.js",
     "./dist/cjs/src/umd.js",

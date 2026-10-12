@@ -426,7 +426,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     expect(identityStore.confirm).toHaveBeenCalledWith(`${txid}.2`)
     await expect(
       service.lookup({ service: 'ls_users', query: { presentationHash: '11'.repeat(32) } } as any)
-    ).resolves.toEqual([{ txid, outputIndex: 2 }])
+    ).resolves.toEqual([{ txid, outputIndex: 2, history: expect.any(Function) }])
     await expect(
       service.lookup({ service: 'ls_users', query: { recoveryHash: '22'.repeat(32) } } as any)
     ).resolves.toHaveLength(1)
@@ -520,7 +520,9 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
       query: { presentationHash: 'aa'.repeat(32) }
     } as any)
     expect(results).toHaveLength(100)
-    expect(results[0]).toEqual({ txid: 'tx-104', outputIndex: 0 })
-    expect(results).not.toContainEqual({ txid: 'tx-0', outputIndex: 0 })
+    expect(results[0]).toEqual({ txid: 'tx-104', outputIndex: 0, history: expect.any(Function) })
+    expect(results).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ txid: 'tx-0', outputIndex: 0 })])
+    )
   })
 })

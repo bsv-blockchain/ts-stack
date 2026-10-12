@@ -1,5 +1,5 @@
 import { parseJsonRpc } from '../BinaryJson'
-import { validateSyncChunkEntities } from '../entityValidationHelpers'
+import { validateEntities, validateSyncChunkEntities } from '../entityValidationHelpers'
 import { type Request, type Response } from 'express'
 import { TelemetryEvent, WalletLoggerInterface, Transaction, Script, MerklePath } from '@bsv/sdk'
 import { toBinaryBaseBlockHeader } from '../../../services/Services'
@@ -177,6 +177,69 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(validateSyncChunkEntities(parseJsonRpc(wire, binary).result)).toEqual(chunk)
     expect(chunk.provenTxs[0].rawTx).toBe(bytes)
   })
+
+  test.each([false, true])('encodes only declared row bytes when binary is negotiated: %s', async binary => {
+    const bytes = Array.from({ length: 2048 }, (_, i) => i % 256)
+    const time = { created_at: new Date(), updated_at: new Date() }
+    const outputs = [{ ...time, outputId: 1, lockingScript: bytes, extraNumbers: bytes }]
+    const reqs = [{ ...time, provenTxReqId: 1, rawTx: bytes, inputBEEF: bytes, extraNumbers: bytes }]
+    const server = makeServer({ findOutputsAuth: async () => outputs, findProvenTxReqsAuth: async () => reqs })
+    for (const { method, params, rows, fields } of [
+      {
+        method: 'findOutputsAuth',
+        params: [{ identityKey: 'alice' }, { partial: {} }],
+        rows: outputs,
+        fields: ['lockingScript']
+      },
+      { method: 'findProvenTxReqs', params: [{ partial: {} }], rows: reqs, fields: ['rawTx', 'inputBEEF'] }
+    ]) {
+      const captured = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest(
+          { jsonrpc: '2.0', method, params, id: 1 },
+          binary ? { [BINARY_ENCODING_HEADER]: BINARY_ENCODING } : {}
+        ),
+        captured.response
+      )
+      expect(captured.statusCode).toBe(200)
+      for (const field of fields) {
+        if (binary) expect(captured.body.result[0][field].$bsvBinary).toBe('base64')
+        else expect(captured.body.result[0][field]).toEqual(bytes)
+      }
+      expect(captured.body.result[0].extraNumbers).toEqual(bytes)
+      expect(validateEntities(parseJsonRpc(JSON.stringify(captured.body), binary).result)).toEqual(rows)
+    }
+    expect(outputs[0].lockingScript).toBe(bytes)
+    expect(reqs[0].rawTx).toBe(bytes)
+  })
+
+  test.each([false, true])(
+    'retains the response ceiling for large row bytes with binary negotiation %s',
+    async binary => {
+      const bytes = Array.from({ length: 150_000 }, (_, i) => i % 256)
+      const now = new Date()
+      const rows = [{ provenTxReqId: 1, rawTx: bytes, created_at: now, updated_at: now }]
+      const server = makeServer({ findProvenTxReqsAuth: async () => rows }, { maxRpcResponseBytes: 300_000 })
+      const captured = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest(
+          { jsonrpc: '2.0', method: 'findProvenTxReqs', params: [{ partial: {} }], id: 1 },
+          binary ? { [BINARY_ENCODING_HEADER]: BINARY_ENCODING } : {}
+        ),
+        captured.response
+      )
+      expect(captured.statusCode).toBe(binary ? 200 : 413)
+      if (binary) {
+        expect(validateEntities(parseJsonRpc(JSON.stringify(captured.body), true).result)).toEqual(rows)
+        expect(Buffer.byteLength(JSON.stringify(captured.body))).toBeLessThan(300_000)
+      }
+      expect(rows[0].rawTx).toBe(bytes)
+    }
+  )
 
   test('accounts for HTML escaping when enforcing the response-size ceiling', async () => {
     const server = makeServer({ getSettings: () => ({ value: '<'.repeat(25) }) }, { maxRpcResponseBytes: 100 })

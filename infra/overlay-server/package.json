@@ -1,7 +1,7 @@
 {
   "name": "@bsv/overlay-express-examples",
   "private": true,
-  "version": "2.1.45",
+  "version": "2.1.47",
   "overrides": {
     "gaxios": "7.3.0"
   },
@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "oxlint src --deny-warnings",
-    "test": "node --import tsx --test src/lifecycle.test.ts src/mandalaStateStore.test.ts src/securityConfig.test.ts src/discoveryConfig.test.ts",
+    "test": "node --import tsx --test src/lifecycle.test.ts src/mandalaEngineOutputs.test.ts src/mandalaStateStore.test.ts src/securityConfig.test.ts src/discoveryConfig.test.ts",
     "start": "node --import ./dist/telemetry.js dist/index.js",
     "dev": "tsx src/index.ts"
   },
@@ -38,11 +38,11 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.6.2",
-    "@bsv/overlay-discovery-services": "^2.2.6",
-    "@bsv/overlay-express": "^2.7.3",
-    "@bsv/overlay-topics": "^1.9.1",
-    "@bsv/sdk": "^2.8.11",
+    "@bsv/overlay": "^2.6.4",
+    "@bsv/overlay-discovery-services": "^2.2.7",
+    "@bsv/overlay-express": "^2.7.4",
+    "@bsv/overlay-topics": "^2.0.1",
+    "@bsv/sdk": "^3.1.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.222.0",
     "@opentelemetry/auto-instrumentations-node": "^0.80.0",

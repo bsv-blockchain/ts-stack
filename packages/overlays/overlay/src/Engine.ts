@@ -5,6 +5,8 @@ import { Storage } from './storage/Storage.js'
 import type { Output } from './Output.js'
 import {
   Transaction,
+  Beef,
+  Utils,
   ChainTracker,
   MerklePath,
   Broadcaster,
@@ -285,6 +287,7 @@ type UTXOHistoryHydrationContext = {
 type HydratedUTXOHistoryNode = {
   output: Output
   transaction: Transaction
+  children: HydratedUTXOHistoryNode[]
 }
 
 type TopicValidation = {
@@ -2186,7 +2189,7 @@ export class Engine {
       targetInput.sourceTransaction = child.transaction
     }
 
-    return { output, transaction: tx }
+    return { output, transaction: tx, children: childNodes }
   }
 
   /**
@@ -3796,9 +3799,34 @@ export class Engine {
         return undefined
       }
 
+      // Ordinary SPV serialization stops at a confirmed transaction. Keep
+      // explicitly selected topical history beyond those proof boundaries.
+      const beef = Beef.fromBinary(Transaction.fromBEEF(output.beef).toBEEF())
+      const pending = [...hydratedNode.children]
+      const merged = new Set<string>()
+      while (pending.length > 0) {
+        const child = pending.pop() as HydratedUTXOHistoryNode
+        for (const descendant of child.children) pending.push(descendant)
+        const childKey = this.toOutputCacheKey(child.output.txid, child.output.outputIndex)
+        if (merged.has(childKey)) continue
+        merged.add(childKey)
+        // Merge each original, budgeted SPV copy once. Re-serializing every
+        // expanded subtree would make a long unmined lineage quadratic.
+        beef.mergeBeef(Transaction.fromBEEF(child.output.beef as number[]).toBEEF())
+      }
+      beef.sortTxs()
+      const subject = beef.findTxid(hydratedNode.output.txid)
+      if (subject == null) throw new Error('Lookup history omitted its subject transaction')
+      // A confirmed subject may sort before proven parents. Preserve the
+      // existing BRC-62 convention that an unspecified subject is last.
+      beef.txs = beef.txs.filter(tx => tx.txid !== subject.txid)
+      beef.txs.push(subject)
+      const writer = new Utils.Writer()
+      beef.toWriter(writer)
+
       return {
         ...hydratedNode.output,
-        beef: hydratedNode.transaction.toBEEF()
+        beef: writer.toArray()
       }
     } catch (e) {
       // Handle any errors that occurred

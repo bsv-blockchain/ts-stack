@@ -90,7 +90,140 @@ function createArgs(): CreateActionArgs {
   }
 }
 
+const sparseAuthorizations: unknown[] = []
+sparseAuthorizations.length = 1
+
 describe('completeBoundAction', () => {
+  it('binds an explicitly authorized additional output without relaxing other extra outputs', async () => {
+    const wallet = new TestWallet()
+    wallet.mutatePartial = tx =>
+      tx.addOutput({ satoshis: 50, lockingScript: Script.fromASM('OP_4') })
+    const tx = await completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+      inputSigners: { [requestedOutpoint]: async () => Script.fromASM('OP_1') },
+      authorizeAdditionalOutputs: () => [{ outputIndex: 1, lockingScript: '54', satoshis: 50 }]
+    })
+    expect(tx.outputs[1].satoshis).toBe(50)
+    expect(wallet.signAction).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [{ outputIndex: 1, lockingScript: '55', satoshis: 50 }],
+    [{ outputIndex: 1, lockingScript: '54', satoshis: 49 }],
+    [{ outputIndex: 2, lockingScript: '54', satoshis: 50 }],
+    [{ outputIndex: 0, lockingScript: '59', satoshis: 1 }],
+    [
+      { outputIndex: 1, lockingScript: '54', satoshis: 50 },
+      { outputIndex: 1, lockingScript: '54', satoshis: 50 }
+    ]
+  ])(
+    'rejects substituted, missing, requested or duplicate additional authorizations: %j',
+    async (...outputs) => {
+      const wallet = new TestWallet()
+      wallet.mutatePartial = tx =>
+        tx.addOutput({ satoshis: 50, lockingScript: Script.fromASM('OP_4') })
+      const signer = jest.fn(async () => Script.fromASM('OP_1'))
+      await expect(
+        completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+          inputSigners: { [requestedOutpoint]: signer },
+          authorizeAdditionalOutputs: () => outputs
+        })
+      ).rejects.toThrow('authorized additional output')
+      expect(signer).not.toHaveBeenCalled()
+      expect(wallet.signAction).not.toHaveBeenCalled()
+      expect(wallet.abortAction).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('does not authorize another injected output along with an approved fee', async () => {
+    const wallet = new TestWallet()
+    wallet.mutatePartial = tx => {
+      tx.addOutput({ satoshis: 50, lockingScript: Script.fromASM('OP_4') })
+      tx.addOutput({ satoshis: 20, lockingScript: Script.fromASM('OP_5') })
+    }
+    await expect(
+      completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+        inputSigners: { [requestedOutpoint]: async () => Script.fromASM('OP_1') },
+        authorizeAdditionalOutputs: () => [{ outputIndex: 1, lockingScript: '54', satoshis: 50 }]
+      })
+    ).rejects.toThrow('requested input to fund an unrequested output')
+    expect(wallet.signAction).not.toHaveBeenCalled()
+  })
+
+  it('aborts if local output policy rejects the result', async () => {
+    const wallet = new TestWallet()
+    await expect(
+      completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+        authorizeAdditionalOutputs: () => {
+          throw new Error('Policy refused')
+        }
+      })
+    ).rejects.toThrow('Policy refused')
+    expect(wallet.abortAction).toHaveBeenCalledTimes(1)
+    expect(wallet.signAction).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    null,
+    sparseAuthorizations,
+    [{ outputIndex: -1, lockingScript: '54', satoshis: 50 }],
+    [{ outputIndex: 1, lockingScript: '5', satoshis: 50 }],
+    [{ outputIndex: 1, lockingScript: '54', satoshis: Number.NaN }],
+    [{ outputIndex: 1, lockingScript: '54', satoshis: 50, ignored: true }]
+  ])('rejects malformed local policy output: %j', async outputs => {
+    const wallet = new TestWallet()
+    const signer = jest.fn(async () => Script.fromASM('OP_1'))
+    await expect(
+      completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+        inputSigners: { [requestedOutpoint]: signer },
+        authorizeAdditionalOutputs: () => outputs as never
+      })
+    ).rejects.toThrow()
+    expect(signer).not.toHaveBeenCalled()
+    expect(wallet.abortAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not invoke accessors on local output authorizations', async () => {
+    const wallet = new TestWallet()
+    const getter = jest.fn(() => 50)
+    const output = { outputIndex: 1, lockingScript: '54' }
+    Object.defineProperty(output, 'satoshis', { enumerable: true, get: getter })
+    await expect(
+      completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+        authorizeAdditionalOutputs: () => [output as never]
+      })
+    ).rejects.toThrow()
+    expect(getter).not.toHaveBeenCalled()
+    expect(wallet.abortAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('still conserves input value with an explicitly authorized fee', async () => {
+    const wallet = new TestWallet()
+    wallet.mutatePartial = tx =>
+      tx.addOutput({ satoshis: 110, lockingScript: Script.fromASM('OP_4') })
+    await expect(
+      completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+        authorizeAdditionalOutputs: () => [{ outputIndex: 1, lockingScript: '54', satoshis: 110 }]
+      })
+    ).rejects.toThrow('spends more than its inputs')
+    expect(wallet.signAction).not.toHaveBeenCalled()
+  })
+
+  it('rejects a fee substitution in the signed response', async () => {
+    const wallet = new TestWallet()
+    wallet.mutatePartial = tx =>
+      tx.addOutput({ satoshis: 50, lockingScript: Script.fromASM('OP_4') })
+    wallet.mutateSigned = tx => {
+      tx.outputs[1].lockingScript = Script.fromASM('OP_5')
+    }
+    await expect(
+      completeBoundAction(wallet as unknown as WalletInterface, createArgs(), {
+        inputSigners: { [requestedOutpoint]: async () => Script.fromASM('OP_1') },
+        authorizeAdditionalOutputs: () => [{ outputIndex: 1, lockingScript: '54', satoshis: 50 }]
+      })
+    ).rejects.toThrow('substituted an authorized output')
+    expect(wallet.abortAction).toHaveBeenCalledTimes(1)
+  })
+
   it('signs the unique requested outpoint at its actual partial-transaction index', async () => {
     const wallet = new TestWallet()
     const signer = jest.fn(async (_transaction: Transaction, inputIndex: number) => {

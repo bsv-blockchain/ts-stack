@@ -18,6 +18,9 @@ function conjunctionPasses(expression, context) {
       ? value.slice(1, -1)
       : value.split('.').reduce((current, key) => current?.[key], context)
   return expression.split(' && ').every(clause => {
+    // always() only lifts GitHub's implicit success(); the remaining clauses
+    // must still pass on their own.
+    if (clause === 'always()') return true
     const match = /^(\S+) (==|!=) (\S+)$/.exec(clause)
     assert.ok(match, `Unexpected release guard syntax: ${clause}`)
     return match[2] === '=='
@@ -45,7 +48,7 @@ test('every publisher requires complete exact-source qualification before publis
           needs: {
             approve: { result: 'success' },
             prepare: { outputs: { count: '1' } },
-            discover: { outputs: { count: '1' } },
+            discover: { result: 'success', outputs: { count: '1' } },
             source: { result: 'success' },
             [gate]: { result, outputs: { 'qualified-sha': qualified } }
           }
@@ -68,7 +71,7 @@ test('every publisher requires complete exact-source qualification before publis
         github: { sha: 'a'.repeat(40) },
         needs: {
           approve: { result: 'success' },
-          [prerequisite]: { outputs: { count: '0', called: 'false' } },
+          [prerequisite]: { result: 'success', outputs: { count: '0', called: 'false' } },
           [gate]: { result: 'success', outputs: { 'qualified-sha': 'a'.repeat(40) } }
         }
       }

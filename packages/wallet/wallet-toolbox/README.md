@@ -372,6 +372,22 @@ retained privately, outside this repository.
 page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.
 
+### Profile update failures
+
+`CWIStyleWalletManager.addProfile` and `deleteProfile` commit the local profile
+list when the replacement UMP token is published. A factor-decryption or
+publication failure preserves the previous list, so a failed creation can be
+retried with the same name. Concurrent creations reserve names without regard
+to case until each attempt settles. A failed deletion of the active profile
+attempts to restore that profile and preserves the original update error if
+restoration also fails.
+
+Restoring the active wallet can fail after publication has succeeded. In that
+case, the token and profile list already contain the change, and the default
+profile may remain active. Inspect `listProfiles()` before retrying and switch
+to an available profile as needed. This bookkeeping fix does not correct the
+underlying factor-decryption error; diagnose that error separately.
+
 ### UMP account continuity and phone changes
 
 Argon2id password derivation uses a proven-ready host backend when one is
@@ -395,11 +411,24 @@ WebAssembly global is absent. Native and JavaScript results both pass the same
 byte-type and exact-length validation.
 
 `WalletAuthenticationManager` accepts an optional `umpTokenOutpoint` in the
-backward-compatible WAB authentication response. Normal verified lookup and
-lineage resolution always run first. The WAB pin is considered only when those
-checks leave multiple valid UMP tokens, and only when the pinned outpoint is
-present in the verified candidates. A pin cannot introduce an outpoint that the
-wallet did not independently retrieve and validate.
+backward-compatible WAB authentication response. When verified lookup returns
+competing records, the pin anchors its own update lineage. A password or token
+update that consumes the pinned outpoint supersedes it, including a multi-hop
+update whose old pin is available only in authenticated token ancestry.
+Each token input must prove spend authorization, including across confirmation;
+ordinary funding inputs do not establish token lineage. Unmined updates also
+require complete funding ancestry. A truncated input reference cannot override
+the verified pin. An unrelated historical continuation
+cannot override that lineage. A pin cannot
+introduce an unverified token or resolve competing descendants of a spent pin.
+Clients link explicit overlay history past confirmed Merkle anchors. UMP hosts
+must request retained token lineage with a history decider and preserve it in
+lookup BEEF (`@bsv/overlay` 2.6.4 and `@bsv/overlay-topics` 2.0.1, or equivalent
+custom hosting). If an older host names an absent pin but omits its authenticated
+source, lookup remains indeterminate instead of choosing an unrelated continuation.
+Ordinary lineage resolution still applies when no pin relationship is present.
+Operators should clear redundant pins after unpinned lookup independently returns
+the correct current token; pinning is a recovery measure for remaining forks.
 
 UMP renewal consumes only the exact canonical predecessor returned for its
 outpoint. Its signed fields, presentation/recovery hashes, and locally derived
@@ -413,21 +442,49 @@ response must contain the exact declared Atomic BEEF target and output zero must
 commit to the supplied nonzero R-puzzle scalar. The manager signs that outpoint
 at its actual wallet input index and sends the fee-adjusted balance only to an
 explicit BRC-29 output derived for the authenticated wallet. That output's exact
-script and bounded amount are authorized before signing; an unrequested wallet
-output cannot consume the faucet input. The signed action is staged locally,
-labeled, and recorded in a recovery basket before broadcast. A retry recovers
-and internalizes that exact transaction, or recognizes its already-internalized
-managed output, instead of authorizing a second destination. Missing, reordered,
-substituted, ambiguous, or result-only transactions fail closed.
+script and bounded amount are authorized before signing. With a compatible SDK,
+its local signer also authorizes independently validated storage commission and
+locally derived change, bound to exact output indices, scripts and amounts. The
+permissions wrapper preserves this private decision; serialized results or
+unknown wallet adapters do not gain this authority. Other unrequested outputs
+cannot consume the faucet input.
 
-New WAB registrations are interruption-safe across the off-chain/on-chain
-boundary. A WAB that advertises `registrationStatus: "pending"` lets a verified
-retry reuse the stored presentation key when a clean UMP lookup confirms that
-publication has not happened. After publishing the UMP token, the manager
-finalizes WAB idempotently. A lost finalization response is non-fatal: the next
-verified login finds the published token and repairs the pending state. Missing
-or invalid lifecycle metadata remains fail-closed for established accounts, and
-older WAB servers and clients retain their existing wire behavior.
+Upgrade wallet-toolbox to 2.14.6 and the SDK to a release exposing
+`completeBoundAction.outputAuthorizationVersion=1` together. Older SDK peers retain
+the existing strict behavior and cannot redeem a fee-bearing faucet input for an
+empty wallet. Main currently carries the separate SDK3.1 candidate; SDK2 hosts
+need an additive backport or the documented SDK3 migration.
+
+The signed action is staged locally, labeled, and recorded in a recovery basket
+before broadcast. Internalization clears the output's custom instructions, and
+standard `listActions` does not return them. A retry with the same wallet root
+can recover the prior faucet action; missing, substituted, ambiguous, or
+result-only recovery evidence fails closed. Preserve the wallet's storage when
+reconciling an interrupted signup.
+
+For restart-safe WAB registrations, store an unpublished UMP token checkpoint
+before faucet redemption. Pass `pendingRegistrationTokenSaver` in
+`WalletAuthenticationManagerOptions` and synchronously verify that the token
+bytes are stored before the callback resolves. On app restart, call
+`loadPendingRegistrationToken(bytes)` before starting authentication. The token
+contains encrypted UMP fields and no plaintext wallet root, snapshot key, or on-chain
+outpoint. Keep it through failed funding and logout; clear it only after a
+successful authenticated snapshot has been stored and
+`hasPendingRegistrationToken()` returns false. If an older pending WAB
+registration has no checkpoint, the manager refuses to redeem its faucet output
+again. Recover that registration using its original wallet state instead of
+creating a new root. A checkpoint for another presentation key does not block
+login to an already published wallet; retain that checkpoint until its own
+registration is reconciled.
+
+A WAB that advertises `registrationStatus: "pending"` lets a verified retry
+reuse the stored presentation key when a clean UMP lookup confirms that
+publication has not happened. The loaded checkpoint reconstructs the original
+root, so the wallet can recover its prior faucet action. After publishing the
+UMP token, the manager finalizes WAB idempotently. A lost finalization response
+is non-fatal: the next verified login finds the published token and repairs the
+pending state. Missing or invalid lifecycle metadata remains fail-closed for
+established accounts; WAB wire behavior is unchanged.
 
 Authenticated applications can verify a phone number and roll the presentation
 key, including when the user enters the same phone number:
@@ -1122,3 +1179,13 @@ for the full stack-wide policy.
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.
+
+## Pre-construction conflict recovery
+
+The 2.14.7 candidate preserves remote storage's empty attempted-TXID sentinel
+only for a bounded double-spend review before transaction construction. It does
+not authorize a retry. Applications must verify complete competing transactions
+against the requested explicit inputs, synchronize the accepted winner, then
+read fresh state before rebuilding. Upgrade the application SDK alongside the
+wallet parser. Use the existing JSON wallet API for structured review errors;
+the binary wire format is unchanged. No database or call migration is required.

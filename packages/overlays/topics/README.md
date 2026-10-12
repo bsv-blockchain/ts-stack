@@ -7,6 +7,12 @@ Canonical topic managers and lookup services for the BSV overlay network. Bundle
 
 UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
 
+UMP lookup requests the full retained token-update lineage for presentation,
+recovery and outpoint queries. The engine owns traversal and byte limits.
+Use `@bsv/overlay` 2.6.4 or later to preserve explicitly selected history past
+confirmation. Wallet Toolbox 2.14.6 links that history so an older WAB support
+pin can remain a lineage anchor while a password or token update takes precedence.
+
 ## DID overlay retirement (2.0 candidate)
 
 The proposed 2.0 release removes `DIDTopicManager`, `createDIDLookupService`,

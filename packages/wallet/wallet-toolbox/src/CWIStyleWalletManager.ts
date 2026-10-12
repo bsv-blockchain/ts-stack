@@ -58,6 +58,8 @@ import {
   LookupResolver,
   LookupAnswer,
   LookupResolution,
+  Beef,
+  Spend,
   Transaction,
   PushDrop,
   LockingScript,
@@ -93,6 +95,21 @@ export const ARGON2ID_MAX_PARALLELISM = 16
 export const KDF_MAX_HASH_LENGTH = 64
 export const PBKDF2_MAX_ITERATIONS = 10_000_000
 export const MAX_STATE_SNAPSHOT_BYTES = 16 * 1024 * 1024
+const MAX_PENDING_REGISTRATION_TOKEN_BYTES = 64 * 1024
+
+function readSerializedOutpoint(reader: Reader, allowUnpublished: boolean): string {
+  const outpointLen = reader.readVarIntNumStrict(false)
+  const currentOutpoint = toUTF8(reader.read(outpointLen))
+  if (
+    (currentOutpoint.length === 0 && !allowUnpublished) ||
+    currentOutpoint.length > 128 ||
+    (currentOutpoint.length > 0 && !/^[^\s.:]+[.:]\d+$/.test(currentOutpoint)) ||
+    (allowUnpublished && !reader.eof())
+  ) {
+    throw new Error('Serialized UMP token contains an invalid outpoint.')
+  }
+  return currentOutpoint
+}
 
 function isPositiveIntegerInRange(value: unknown, maximum: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= maximum
@@ -568,9 +585,9 @@ export interface UMPTokenInteractor {
 
 export interface UMPTokenLookupOptions {
   /**
-   * WAB-administered fallback used only when normal lineage resolution leaves
-   * more than one verified matching token. The outpoint must be one of the
-   * verified lookup candidates or it has no effect.
+   * WAB-administered lineage anchor for competing verified matching tokens.
+   * A proven update that consumes the pin supersedes it. An absent pin has
+   * no effect unless its authenticated same-identity ancestry is available.
    */
   pinnedOutpoint?: OutpointString
 }
@@ -734,16 +751,22 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     // spent by another candidate's transaction history. Only unrelated (forked)
     // tokens remain indeterminate.
     if (matchingTokens.length > 1) {
-      const newest = this.resolveNewestToken(matchingTokens, resolution.answer.outputs)
+      const pinnedLineage = await this.findPinnedLineage(
+        matchingTokens,
+        resolution.answer.outputs,
+        options?.pinnedOutpoint
+      )
+      const newest = this.resolveNewestToken(pinnedLineage ?? matchingTokens, resolution.answer.outputs)
       if (newest != null) {
         this.lookupDone(lookupKind, 'found', diagnostics, startedAt, {
           supersededTokens: matchingTokens.length - 1
         })
         return newest
       }
-      const pinned = options?.pinnedOutpoint
-        ? matchingTokens.find(token => token.currentOutpoint === options.pinnedOutpoint)
-        : undefined
+      const pinned =
+        pinnedLineage == null && options?.pinnedOutpoint
+          ? matchingTokens.find(token => token.currentOutpoint === options.pinnedOutpoint)
+          : undefined
       if (pinned != null) {
         this.lookupDone(lookupKind, 'found', diagnostics, startedAt)
         return pinned
@@ -768,6 +791,172 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const reason = resolution.answer.outputs.length > 0 ? 'token-malformed' : 'lookup-incomplete'
     this.lookupFailed(lookupKind, reason, diagnostics, startedAt)
     throw new UMPTokenLookupError(reason, diagnostics)
+  }
+
+  /** Keep a verified pin and its proven descendants together, excluding unrelated forks. */
+  private async findPinnedLineage(
+    tokens: UMPToken[],
+    outputs: LookupAnswer['outputs'],
+    pinnedOutpoint?: OutpointString
+  ): Promise<UMPToken[] | undefined> {
+    if (pinnedOutpoint == null) return undefined
+    const candidates = new Map(tokens.map(token => [token.currentOutpoint, token]))
+    const pinSource = candidates.has(pinnedOutpoint) ? this.findLookupTransaction(outputs, pinnedOutpoint) : undefined
+    const relationships = await Promise.all(
+      outputs.map(output => this.pinRelationship(output, candidates, pinnedOutpoint, pinSource))
+    )
+    const related = new Set<string>()
+    let anchorSeen = false
+    for (const relationship of relationships) {
+      if (relationship == null) continue
+      anchorSeen = true
+      if (relationship.selected) related.add(relationship.outpoint)
+    }
+    return anchorSeen ? tokens.filter(token => related.has(token.currentOutpoint as string)) : undefined
+  }
+
+  private async pinRelationship(
+    output: LookupAnswer['outputs'][number],
+    candidates: ReadonlyMap<string | undefined, UMPToken>,
+    pin: string,
+    pinSource?: Transaction
+  ): Promise<{ outpoint: string; selected: boolean } | undefined> {
+    try {
+      const tx = this.readTokenHistory(output.beef)
+      const outpoint = `${tx.id('hex')}.${output.outputIndex}`
+      if (!candidates.has(outpoint)) return undefined
+      if (outpoint === pin) return { outpoint, selected: true }
+      const descent = this.descendsFromPin(tx, pin, pinSource)
+      if (descent == null) return undefined
+      return { outpoint, selected: descent === 'verified' && (await this.hasCompleteUpdateEvidence(tx)) }
+    } catch {
+      // A malformed copy cannot establish an anchor or hide a deeper copy.
+      return undefined
+    }
+  }
+
+  /** Preserve unmined funding-ancestry checks without adding a network dependency. */
+  private async hasCompleteUpdateEvidence(tx: Transaction): Promise<boolean> {
+    try {
+      return await tx.verify('scripts only')
+    } catch {
+      // An input reference alone does not establish a usable token update.
+      return false
+    }
+  }
+
+  private descendsFromPin(
+    tx: Transaction,
+    pin: string,
+    pinSource?: Transaction
+  ): 'verified' | 'incomplete' | undefined {
+    const pending = [tx]
+    const visited = new Set<string>()
+    let incomplete = false
+    while (pending.length > 0) {
+      const current = pending.pop() as Transaction
+      const txid = current.id('hex')
+      if (visited.has(txid)) continue
+      visited.add(txid)
+      for (const [inputIndex] of current.inputs.entries()) {
+        const step = this.pinInputDescent(current, inputIndex, pin, pinSource)
+        if (step.descent === 'verified') return step.descent
+        incomplete = incomplete || step.descent === 'incomplete'
+        if (step.predecessor != null) pending.push(step.predecessor)
+      }
+    }
+    return incomplete ? 'incomplete' : undefined
+  }
+
+  private pinInputDescent(
+    tx: Transaction,
+    inputIndex: number,
+    pin: string,
+    pinSource?: Transaction
+  ): { descent?: 'verified' | 'incomplete'; predecessor?: Transaction } {
+    const input = tx.inputs[inputIndex]
+    const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+    const isPin = sourceTxid != null && `${sourceTxid}.${input.sourceOutputIndex}` === pin
+    const source = input.sourceTransaction ?? (isPin ? pinSource : undefined)
+    const refused = { descent: isPin ? ('incomplete' as const) : undefined }
+    if (source == null || !this.isAuthenticatedUMPOutput(source.outputs[input.sourceOutputIndex])) return refused
+    if (!this.verifyUMPSpend(tx, inputIndex, source)) return refused
+    return isPin ? { descent: 'verified' } : { predecessor: source }
+  }
+
+  private isAuthenticatedUMPOutput(output: Transaction['outputs'][number] | undefined): boolean {
+    if (output?.satoshis !== 1) return false
+    try {
+      const { fields } = decodeAuthenticatedUMPFields(output.lockingScript)
+      return (
+        fields.length >= 11 &&
+        fields[6]?.length === 32 &&
+        fields[7]?.length === 32 &&
+        fields.slice(0, 11).every(field => field.length > 0 && field.length <= MAX_STATE_SNAPSHOT_BYTES)
+      )
+    } catch {
+      // A funding input or unauthenticated predecessor is not a UMP anchor.
+      return false
+    }
+  }
+
+  /** Check token-control continuity at every edge, including confirmed transactions. */
+  private verifyUMPSpend(tx: Transaction, inputIndex: number, source: Transaction): boolean {
+    try {
+      const input = tx.inputs[inputIndex]
+      const sourceTxid = source.id('hex')
+      if (input.unlockingScript == null || (input.sourceTXID != null && input.sourceTXID !== sourceTxid)) return false
+      const output = source.outputs[input.sourceOutputIndex]
+      return new Spend({
+        sourceTXID: sourceTxid,
+        sourceOutputIndex: input.sourceOutputIndex,
+        sourceSatoshis: output.satoshis ?? 0,
+        lockingScript: output.lockingScript,
+        transactionVersion: tx.version,
+        otherInputs: tx.inputs.filter((_, index) => index !== inputIndex),
+        unlockingScript: input.unlockingScript,
+        inputSequence: input.sequence ?? 0xffffffff,
+        inputIndex,
+        outputs: tx.outputs,
+        lockTime: tx.lockTime
+      }).validate()
+    } catch {
+      return false
+    }
+  }
+
+  private findLookupTransaction(outputs: LookupAnswer['outputs'], outpoint: string): Transaction | undefined {
+    for (const output of outputs) {
+      try {
+        const tx = this.readTokenHistory(output.beef)
+        if (`${tx.id('hex')}.${output.outputIndex}` === outpoint) return tx
+      } catch {
+        // A malformed copy does not hide another host's usable anchor.
+      }
+    }
+    return undefined
+  }
+
+  /** Link explicit overlay history even when an ancestor already has a Merkle proof. */
+  private readTokenHistory(bytes: number[]): Transaction {
+    const tx = Transaction.fromBEEF(bytes)
+    const beef = Beef.fromBinary(bytes)
+    const pending = [tx]
+    const visited = new Set<string>()
+    while (pending.length > 0) {
+      const current = pending.pop() as Transaction
+      const txid = current.id('hex')
+      if (visited.has(txid)) continue
+      visited.add(txid)
+      for (const input of current.inputs) {
+        const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+        if (input.sourceTransaction == null && sourceTxid != null) {
+          input.sourceTransaction = beef.findAtomicTransaction(sourceTxid)
+        }
+        if (input.sourceTransaction != null) pending.push(input.sourceTransaction)
+      }
+    }
+    return tx
   }
 
   /**
@@ -795,7 +984,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const evidenceByCandidate = new Map<string, { txs: Transaction[]; spent: Set<string> }>()
     for (const output of outputs) {
       try {
-        const tx = Transaction.fromBEEF(output.beef)
+        const tx = this.readTokenHistory(output.beef)
         const outpoint = `${tx.id('hex')}.${output.outputIndex}`
         if (!candidates.has(outpoint)) continue
         const evidence = evidenceByCandidate.get(outpoint) ?? { txs: [], spent: new Set<string>() }
@@ -1378,6 +1567,9 @@ export class CWIStyleWalletManager implements WalletInterface {
     adminOriginator: OriginatorDomainNameStringUnder250Bytes
   ) => Promise<void>
 
+  /** Persists only encrypted UMP fields before an irreversible funding attempt. */
+  private readonly pendingRegistrationTokenSaver?: (token: number[]) => Promise<void>
+
   /**
    * Builds the underlying wallet for a specific profile.
    */
@@ -1404,6 +1596,9 @@ export class CWIStyleWalletManager implements WalletInterface {
    */
   private currentUMPToken?: UMPToken
 
+  /** Unpublished token retained through an interrupted new-user registration. */
+  private pendingRegistrationToken?: UMPToken
+
   /**
    * Temporarily retained presentation key.
    */
@@ -1428,6 +1623,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * List of loaded non-default profiles.
    */
   private profiles: Profile[] = []
+  private readonly pendingProfileNames = new Set<string>()
 
   /**
    * The underlying wallet instance for the *active* profile.
@@ -1455,6 +1651,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param newWalletFunder   Optional function to fund a new wallet.
    * @param stateSnapshot     Optional previously saved state snapshot.
    * @param kdfConfig         Optional KDF configuration for new UMP tokens.
+   * @param pendingRegistrationTokenSaver Optional durable store for an unpublished UMP token.
    */
   constructor(
     ...[
@@ -1466,7 +1663,8 @@ export class CWIStyleWalletManager implements WalletInterface {
       newWalletFunder,
       stateSnapshot,
       kdfConfig,
-      telemetry
+      telemetry,
+      pendingRegistrationTokenSaver
     ]: [
       adminOriginator: OriginatorDomainNameStringUnder250Bytes,
       walletBuilder: (
@@ -1487,7 +1685,8 @@ export class CWIStyleWalletManager implements WalletInterface {
       ) => Promise<void>,
       stateSnapshot?: number[],
       kdfConfig?: KdfConfig,
-      telemetry?: TelemetryConfig
+      telemetry?: TelemetryConfig,
+      pendingRegistrationTokenSaver?: (token: number[]) => Promise<void>
     ]
   ) {
     this.adminOriginator = adminOriginator
@@ -1498,6 +1697,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     this.passwordRetriever = passwordRetriever
     this.authenticated = false
     this.newWalletFunder = newWalletFunder
+    this.pendingRegistrationTokenSaver = pendingRegistrationTokenSaver
 
     // Initialize KDF config with Argon2id defaults for v3 tokens
     const kdfAlgorithm = kdfConfig?.algorithm ?? 'argon2id'
@@ -1546,6 +1746,45 @@ export class CWIStyleWalletManager implements WalletInterface {
   // --- Authentication Methods ---
 
   /**
+   * Restores an unpublished UMP token before authentication. The token contains
+   * an encrypted wallet root, but no plaintext root, snapshot key, or on-chain outpoint.
+   */
+  loadPendingRegistrationToken(bytes: number[]): void {
+    if (this.authenticated || this.authenticationFlow !== 'unknown' || this.currentUMPToken != null) {
+      throw new Error('Pending registration token must be loaded before authentication.')
+    }
+    if (
+      !Array.isArray(bytes) ||
+      bytes.length === 0 ||
+      bytes.length > MAX_PENDING_REGISTRATION_TOKEN_BYTES ||
+      bytes.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)
+    ) {
+      throw new Error('Pending registration token is invalid.')
+    }
+    try {
+      const token = this.deserializeUMPToken(bytes, true)
+      if (
+        token.currentOutpoint != null ||
+        token.umpVersion !== 3 ||
+        !isValidKdfConfig(token.passwordKdf) ||
+        token.profilesEncrypted != null ||
+        token.passwordSalt.length !== 32 ||
+        token.presentationHash.length !== 32 ||
+        token.recoveryHash.length !== 32
+      ) {
+        throw new Error('Invalid unpublished token fields.')
+      }
+      this.pendingRegistrationToken = token
+    } catch {
+      throw new Error('Pending registration token is invalid.')
+    }
+  }
+
+  public hasPendingRegistrationToken(): boolean {
+    return this.pendingRegistrationToken != null
+  }
+
+  /**
    * Provides the presentation key. A WAB operator pin may be supplied by the
    * authentication manager; normal lookup and lineage resolution always run
    * before this ambiguity-only fallback.
@@ -1563,6 +1802,8 @@ export class CWIStyleWalletManager implements WalletInterface {
 
     this.authenticationFlow = 'unknown'
     const hash = sha256(key)
+    const pendingTokenMatches =
+      this.pendingRegistrationToken == null || toHex(this.pendingRegistrationToken.presentationHash) === toHex(hash)
     const startedAt = Date.now()
     this.telemetry.capture({
       name: 'wallet-toolbox.authentication.account-lookup.started',
@@ -1589,13 +1830,18 @@ export class CWIStyleWalletManager implements WalletInterface {
 
     if (token == null) {
       // No token found -> New user
+      if (!pendingTokenMatches) {
+        throw new Error('Pending registration token belongs to another presentation key.')
+      }
       this.authenticationFlow = 'new-user'
       this.presentationKey = key
+      this.currentUMPToken = this.pendingRegistrationToken
     } else {
       // Found token -> existing user
       this.authenticationFlow = 'existing-user'
       this.presentationKey = key
       this.currentUMPToken = token
+      this.clearPublishedPendingRegistration(token)
     }
     this.telemetry.capture({
       name: 'wallet-toolbox.authentication.account-lookup.completed',
@@ -1661,49 +1907,28 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
     if (this.presentationKey == null) throw new Error('No presentation key provided for new-user flow.')
 
-    // Generate new keys/salt
-    const recoveryKey = Random(32)
-    await this.recoveryKeySaver(recoveryKey)
-    const passwordSalt = Random(32)
-    const passwordKey = await derivePasswordKey(
-      { passwordSalt, passwordKdf: this.kdfConfig },
-      toArray(password, 'utf8')
-    )
-    const rootPrimaryKey = Random(32)
-    const rootPrivilegedKey = Random(32)
-
-    // Build XOR-combined symmetric keys
-    const presentationPassword = new SymmetricKey(this.XOR(this.presentationKey, passwordKey))
-    const presentationRecovery = new SymmetricKey(this.XOR(this.presentationKey, recoveryKey))
-    const recoveryPassword = new SymmetricKey(this.XOR(recoveryKey, passwordKey))
-    const primaryPassword = new SymmetricKey(this.XOR(rootPrimaryKey, passwordKey))
-
-    const tempPrivilegedKeyManager = new PrivilegedKeyManager(async () => new PrivateKey(rootPrivilegedKey))
-    const wrapKey = async (plaintext: number[]): Promise<number[]> =>
-      (await tempPrivilegedKeyManager.encrypt({ plaintext, protocolID: [2, 'admin key wrapping'], keyID: '1' }))
-        .ciphertext
-
-    // Build new UMP token (v3 with KDF metadata, no profiles initially)
-    const newToken: UMPToken = {
-      passwordSalt,
-      passwordPresentationPrimary: presentationPassword.encrypt(rootPrimaryKey) as number[],
-      passwordRecoveryPrimary: recoveryPassword.encrypt(rootPrimaryKey) as number[],
-      presentationRecoveryPrimary: presentationRecovery.encrypt(rootPrimaryKey) as number[],
-      passwordPrimaryPrivileged: primaryPassword.encrypt(rootPrivilegedKey) as number[],
-      presentationRecoveryPrivileged: presentationRecovery.encrypt(rootPrivilegedKey) as number[],
-      presentationHash: sha256(this.presentationKey),
-      recoveryHash: sha256(recoveryKey),
-      presentationKeyEncrypted: await wrapKey(this.presentationKey),
-      passwordKeyEncrypted: await wrapKey(passwordKey),
-      recoveryKeyEncrypted: await wrapKey(recoveryKey),
-      profilesEncrypted: undefined,
-      umpVersion: 3,
-      passwordKdf: this.kdfConfig
+    let newToken: UMPToken
+    let rootPrimaryKey: number[]
+    if (this.pendingRegistrationToken != null) {
+      newToken = this.pendingRegistrationToken
+      rootPrimaryKey = await this.unlockPendingRegistrationToken(newToken, this.presentationKey, password)
+    } else {
+      const generated = await this.buildPendingRegistrationToken(password, this.presentationKey)
+      newToken = generated.token
+      rootPrimaryKey = generated.rootPrimaryKey
+      this.pendingRegistrationToken = newToken
     }
     this.currentUMPToken = newToken
 
-    await this.setupRoot(rootPrimaryKey)
-    await this.switchProfile(DEFAULT_PROFILE_ID)
+    // The caller must durably store the same encrypted token before a faucet
+    // output can be redeemed. Repeating the write also repairs a prior failed
+    // persistence attempt before any retry reaches the funder.
+    if (this.pendingRegistrationTokenSaver != null) {
+      await this.pendingRegistrationTokenSaver(this.serializeUMPToken(newToken, true))
+    }
+
+    await this.setupRoot(rootPrimaryKey, undefined, false)
+    await this.activateProfile(DEFAULT_PROFILE_ID)
 
     // Fund the *default* wallet if funder provided
     if (this.newWalletFunder != null && this.underlying != null) {
@@ -1723,11 +1948,76 @@ export class CWIStyleWalletManager implements WalletInterface {
 
     if (this.underlying == null)
       throw new Error('Default profile wallet not built before attempting to publish UMP token.')
-    this.currentUMPToken.currentOutpoint = await this.UMPTokenInteractor.buildAndSend(
+    newToken.currentOutpoint = await this.UMPTokenInteractor.buildAndSend(
       this.underlying,
       this.adminOriginator,
       newToken
     )
+    this.pendingRegistrationToken = undefined
+    this.authenticated = true
+  }
+
+  private async unlockPendingRegistrationToken(
+    token: UMPToken,
+    presentationKey: number[],
+    password: string
+  ): Promise<number[]> {
+    try {
+      const passwordKey = await derivePasswordKey(token, toArray(password, 'utf8'))
+      const rootPrimaryKey = new SymmetricKey(this.XOR(presentationKey, passwordKey)).decrypt(
+        token.passwordPresentationPrimary
+      ) as number[]
+      if (rootPrimaryKey.length !== 32) throw new Error('Invalid root key length.')
+      return rootPrimaryKey
+    } catch {
+      throw new Error('Pending registration token could not be unlocked with this password.')
+    }
+  }
+
+  private async buildPendingRegistrationToken(
+    password: string,
+    presentationKey: number[]
+  ): Promise<{ token: UMPToken; rootPrimaryKey: number[] }> {
+    // Generate new keys/salt
+    const recoveryKey = Random(32)
+    await this.recoveryKeySaver(recoveryKey)
+    const passwordSalt = Random(32)
+    const passwordKey = await derivePasswordKey(
+      { passwordSalt, passwordKdf: this.kdfConfig },
+      toArray(password, 'utf8')
+    )
+    const rootPrimaryKey = Random(32)
+    const rootPrivilegedKey = Random(32)
+
+    // Build XOR-combined symmetric keys
+    const presentationPassword = new SymmetricKey(this.XOR(presentationKey, passwordKey))
+    const presentationRecovery = new SymmetricKey(this.XOR(presentationKey, recoveryKey))
+    const recoveryPassword = new SymmetricKey(this.XOR(recoveryKey, passwordKey))
+    const primaryPassword = new SymmetricKey(this.XOR(rootPrimaryKey, passwordKey))
+
+    const tempPrivilegedKeyManager = new PrivilegedKeyManager(async () => new PrivateKey(rootPrivilegedKey))
+    const wrapKey = async (plaintext: number[]): Promise<number[]> =>
+      (await tempPrivilegedKeyManager.encrypt({ plaintext, protocolID: [2, 'admin key wrapping'], keyID: '1' }))
+        .ciphertext
+
+    // Build new UMP token (v3 with KDF metadata, no profiles initially)
+    const token: UMPToken = {
+      passwordSalt,
+      passwordPresentationPrimary: presentationPassword.encrypt(rootPrimaryKey) as number[],
+      passwordRecoveryPrimary: recoveryPassword.encrypt(rootPrimaryKey) as number[],
+      presentationRecoveryPrimary: presentationRecovery.encrypt(rootPrimaryKey) as number[],
+      passwordPrimaryPrivileged: primaryPassword.encrypt(rootPrivilegedKey) as number[],
+      presentationRecoveryPrivileged: presentationRecovery.encrypt(rootPrivilegedKey) as number[],
+      presentationHash: sha256(presentationKey),
+      recoveryHash: sha256(recoveryKey),
+      presentationKeyEncrypted: await wrapKey(presentationKey),
+      passwordKeyEncrypted: await wrapKey(passwordKey),
+      recoveryKeyEncrypted: await wrapKey(recoveryKey),
+      profilesEncrypted: undefined,
+      umpVersion: 3,
+      passwordKdf: this.kdfConfig
+    }
+    return { token, rootPrimaryKey }
   }
 
   /**
@@ -1881,6 +2171,8 @@ export class CWIStyleWalletManager implements WalletInterface {
       await this.setupRoot(rootPrimaryKey) // Will automatically load profiles
       await this.switchProfile(activeProfileId) // Switch to the profile saved in the snapshot
 
+      this.clearPublishedPendingRegistration(token)
+
       this.authenticationFlow = 'existing-user' // Loading implies existing user
       this.telemetry.capture({
         name: 'wallet-toolbox.snapshot.loaded',
@@ -1938,6 +2230,18 @@ export class CWIStyleWalletManager implements WalletInterface {
     return true
   }
 
+  private clearPublishedPendingRegistration(token: UMPToken): void {
+    // A conflicting wallet root can share the same presentation key; match the
+    // encrypted root field before discarding the unpublished token.
+    if (
+      this.pendingRegistrationToken != null &&
+      toHex(this.pendingRegistrationToken.presentationHash) === toHex(token.presentationHash) &&
+      toHex(this.pendingRegistrationToken.passwordPresentationPrimary) === toHex(token.passwordPresentationPrimary)
+    ) {
+      this.pendingRegistrationToken = undefined
+    }
+  }
+
   /**
    * Destroys the wallet state, clearing keys, tokens, and profiles.
    */
@@ -1947,6 +2251,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     this.authenticated = false
     this.rootPrimaryKey = undefined
     this.currentUMPToken = undefined
+    this.pendingRegistrationToken = undefined
     this.presentationKey = undefined
     this.recoveryKey = undefined
     this.profiles = []
@@ -2011,7 +2316,12 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     // Ensure name is unique (including 'default')
-    if (name === 'default' || this.profiles.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    const normalizedName = name.toLowerCase()
+    if (
+      name === 'default' ||
+      this.pendingProfileNames.has(normalizedName) ||
+      this.profiles.some(p => p.name.toLowerCase() === normalizedName)
+    ) {
       throw new Error(`Profile name "${name}" is already in use.`)
     }
 
@@ -2023,25 +2333,32 @@ export class CWIStyleWalletManager implements WalletInterface {
       createdAt: Math.floor(Date.now() / 1000)
     }
 
-    // Only keep the new profile once the UMP token holds it, so a failed update
-    // leaves the list as it was and a retry is not rejected as a duplicate.
-    // Update the UMP token with the new profile list
-    await this.updateFactors(
-      this.currentUMPToken.passwordSalt,
-      // Need to re-derive/decrypt factors needed for re-encryption
-      await this.getFactor('passwordKey'),
-      await this.getFactor('presentationKey'),
-      await this.getFactor('recoveryKey'),
-      this.rootPrimaryKey,
-      await this.getFactor('privilegedKey'), // Get ROOT privileged key
-      // Built last, after the awaits above: arguments are evaluated left to
-      // right, and updateFactors captures the token it consumes before its first
-      // await, so this list and that token are one consistent snapshot. Built
-      // earlier, a profile added by an overlapping call would be dropped.
-      [...this.profiles, newProfile]
-    )
+    // Reserve the case-insensitive name before the first await. The profile
+    // itself remains unpublished until updateFactors accepts the new token.
+    this.pendingProfileNames.add(normalizedName)
+    try {
+      // Only keep the new profile once the UMP token holds it, so a failed update
+      // leaves the list as it was and a retry is not rejected as a duplicate.
+      // Update the UMP token with the new profile list
+      await this.updateFactors(
+        this.currentUMPToken.passwordSalt,
+        // Need to re-derive/decrypt factors needed for re-encryption
+        await this.getFactor('passwordKey'),
+        await this.getFactor('presentationKey'),
+        await this.getFactor('recoveryKey'),
+        this.rootPrimaryKey,
+        await this.getFactor('privilegedKey'), // Get ROOT privileged key
+        // Built last, after the awaits above: arguments are evaluated left to
+        // right, and updateFactors captures the token it consumes before its first
+        // await, so this list and that token are one consistent snapshot. Built
+        // earlier, a profile added by an overlapping call would be dropped.
+        [...this.profiles, newProfile]
+      )
 
-    return newProfile.id
+      return newProfile.id
+    } finally {
+      this.pendingProfileNames.delete(normalizedName)
+    }
   }
 
   /**
@@ -2108,6 +2425,15 @@ export class CWIStyleWalletManager implements WalletInterface {
   async switchProfile(profileId: number[]): Promise<void> {
     if (!this.authenticated || this.rootPrimaryKey == null || this.rootPrivilegedKeyManager == null) {
       throw new Error('Cannot switch profile: Wallet not authenticated or root keys missing.')
+    }
+
+    await this.activateProfile(profileId)
+  }
+
+  /** Build an internal profile wallet while an unpublished registration is not yet authenticated. */
+  private async activateProfile(profileId: number[]): Promise<void> {
+    if (this.rootPrimaryKey == null || this.rootPrivilegedKeyManager == null) {
+      throw new Error('Cannot activate profile: root keys are missing.')
     }
 
     let profilePrimaryKey: number[]
@@ -2491,8 +2817,8 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Serializes a UMP token to binary format (Version 3 with KDF metadata, Version 2 with profiles).
    * V3 Layout: [1 byte version=3] + [11 * (varint len + bytes) for standard fields] + [1 byte profile_flag] + [IF flag=1 THEN varint len + profile bytes] + [1 byte kdf_flag] + [IF flag=1 THEN kdf metadata] + [varint len + outpoint bytes]
    */
-  private serializeUMPToken(token: UMPToken): number[] {
-    if (!token.currentOutpoint) {
+  private serializeUMPToken(token: UMPToken, allowUnpublished = false): number[] {
+    if (!token.currentOutpoint && !allowUnpublished) {
       throw new Error('Token must have outpoint for serialization')
     }
 
@@ -2554,7 +2880,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     // Write outpoint string
-    const outpointBytes = toArray(token.currentOutpoint, 'utf8')
+    const outpointBytes = toArray(token.currentOutpoint ?? '', 'utf8')
     writer.writeVarIntNum(outpointBytes.length)
     writer.write(outpointBytes)
 
@@ -2564,7 +2890,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Deserializes a UMP token from binary format (Handles Version 1, 2, and 3).
    */
-  private deserializeUMPToken(bin: number[]): UMPToken {
+  private deserializeUMPToken(bin: number[], allowUnpublished = false): UMPToken {
     const reader = new Reader(bin)
     const version = reader.readUInt8()
 
@@ -2630,12 +2956,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     // Read outpoint string
-    const outpointLen = reader.readVarIntNumStrict(false)
-    const outpointBytes = reader.read(outpointLen)
-    const currentOutpoint = toUTF8(outpointBytes)
-    if (currentOutpoint.length > 128 || !/^[^\s.:]+[.:]\d+$/.test(currentOutpoint)) {
-      throw new Error('Serialized UMP token contains an invalid outpoint.')
-    }
+    const currentOutpoint = readSerializedOutpoint(reader, allowUnpublished)
 
     const token: UMPToken = {
       passwordSalt,
@@ -2650,7 +2971,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       passwordKeyEncrypted,
       recoveryKeyEncrypted,
       profilesEncrypted,
-      currentOutpoint,
+      ...(currentOutpoint.length > 0 ? { currentOutpoint } : {}),
       umpVersion,
       passwordKdf
     }
@@ -2666,7 +2987,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param rootPrimaryKey      The user's root primary key (32 bytes).
    * @param ephemeralRootPrivilegedKey Optional root privileged key (e.g., during recovery flows).
    */
-  private async setupRoot(rootKey: number[], ephemeralRootPrivilegedKey?: number[]): Promise<void> {
+  private setupRoot(rootKey: number[], ephemeralRootPrivilegedKey?: number[], authenticated = true): Promise<void> {
     if (this.currentUMPToken == null) {
       throw new Error('A UMP token must exist before setting up root infrastructure!')
     }
@@ -2738,9 +3059,10 @@ export class CWIStyleWalletManager implements WalletInterface {
       }
     }
 
-    this.authenticated = true
+    this.authenticated = authenticated
     // Note: We don't call switchProfile here anymore.
     // It's called by the auth methods (providePassword/provideRecoveryKey) or loadSnapshot after this.
+    return Promise.resolve()
   }
 
   /*

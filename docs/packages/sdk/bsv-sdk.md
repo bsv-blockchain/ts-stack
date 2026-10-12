@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '3.0.0'
+version: '3.2.1'
 npm: '@bsv/sdk'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+last_updated: '2026-10-07'
+last_verified: '2026-10-07'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -20,6 +20,27 @@ validation module. Native identity, certificate and authentication APIs remain.
 Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
 qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+The 3.2.0 source candidate fixes saved-contact `any` searches and retains
+contact-only matches in parallel public searches. Both identity-resolution
+methods accept opt-in bounded contact recovery through `contactErrorMode`,
+`contactTimeoutMs` and `onContactError`. Legacy defaults and contact failures
+are preserved; public-discovery errors, certificate checks and wallet
+permission gates remain intact. See the [SDK README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
+for integration details. Consumers must adopt recovery explicitly and render
+lookup errors separately from successful empty results. A contact deadline
+does not cancel an underlying wallet request or permission prompt. This
+candidate is not publication or a deployed search-component update.
+
+The 3.2.1 source candidate aligns the Script interpreter with
+[SV Node v1.2.3](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.2.3).
+`OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operands are decoded through the node's
+checked int64 script-number path: an operand longer than nine bytes, or whose
+value lies outside the signed 64-bit range, is a script number overflow instead
+of being read from its first eight bytes, and `OP_SPLIT` also rejects a
+position above `INT32_MAX`. Operands of eight bytes or fewer are unchanged and
+no API, wire or wallet-data migration is required. This candidate is not
+publication.
 
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact
@@ -516,3 +537,14 @@ Explicitly configured substrate `responseTimeout` values remain enforced, and
 response validation and origin checks are unchanged. No API or wire migration
 is needed. Applications affected by the timeout defect can update their bundled
 SDK; a wallet release alone cannot replace code served by a web application.
+
+## Faucet output authorization
+
+The source candidate adds exact completed-action binding for independently
+validated local storage fees and change. The SDK capability marker is
+`completeBoundAction.outputAuthorizationVersion=1`; upgrade the wallet and SDK together.
+Existing SDK2 peers retain strict behavior. The separate SDK3 migration still
+applies; SDK2 consumers need an additive backport or that migration. Serialized
+wallet results do not carry local authority. The fee fix does not change signup
+persistence or interrupted-funding reconciliation. See the package README and
+[release and migration ledger](../../reference/package-api-migrations.md).

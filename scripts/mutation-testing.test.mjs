@@ -6,6 +6,7 @@ import {
   evaluateMutationReport,
   parseArguments,
   selectAffectedMutationTargets,
+  strykerEnvironment,
   targetsForUnresolvedMutationRange
 } from './mutation-testing.mjs'
 
@@ -160,4 +161,14 @@ test('mutation report evaluation ratchets score, coverage, and invalid outcomes'
       'one has 1 invalid mutants; maximum is 0'
     ]
   )
+})
+
+test('Stryker runs cannot append per-mutant test reports to the job summary', () => {
+  const environment = strykerEnvironment(
+    { GITHUB_ACTIONS: 'true', GITHUB_STEP_SUMMARY: '/tmp/summary', PATH: '/bin' },
+    { TS_STACK_MUTATION_TARGET: 'one' }
+  )
+  assert.equal(environment.GITHUB_STEP_SUMMARY, undefined)
+  assert.equal(environment.PATH, '/bin')
+  assert.equal(environment.TS_STACK_MUTATION_TARGET, 'one')
 })
