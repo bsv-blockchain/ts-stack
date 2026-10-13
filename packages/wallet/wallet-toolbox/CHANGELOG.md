@@ -22,6 +22,11 @@ attention to changes that materially alter behavior or extend functionality.
 - `tstn` is unchanged: it keeps go-chaincfg's `TeraScalingTestNetParams`
   genesis and proof-of-work limit. A deployment that runs regtest parameters
   should configure `regtest`, not `tstn`.
+- A WhatsOnChain instance for a network with no WhatsOnChain service (`tstn`,
+  `regtest`) now refuses every request (`isAvailable` is `false`) instead of
+  sending it to a relative URL, which a browser resolves against the page's
+  origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
+  networks, so their headers come only from ChainTracks.
 
 ## wallet-toolbox 2.14.8
 

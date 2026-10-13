@@ -816,7 +816,9 @@ export class Services implements WalletServices {
       return header
     }
     let header = await this.invokeChaintracksWithRetry(method, 'find_header_for_hash')
-    header ??= await this.whatsonchain.getBlockHeaderByHash(normalizedHash)
+    if (header == null && this.whatsonchain.isAvailable) {
+      header = await this.whatsonchain.getBlockHeaderByHash(normalizedHash)
+    }
     if (header == null)
       throw new WERR_INVALID_PARAMETER('hash', `valid blockhash '${normalizedHash}' on mined chain ${this.chain}`)
     const validated = copyValidatedBlockHeader(header, true, true, this.chain)

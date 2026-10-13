@@ -6,6 +6,9 @@ import {
 } from '../createDefaultWalletServicesOptions'
 import { regtestChaintracksUrl } from '../networkConfig'
 import SdkWhatsOnChain from '../providers/SdkWhatsOnChain'
+import { WhatsOnChainNoServices } from '../providers/WhatsOnChain'
+import { ChaintracksClientApi } from '../chaintracker/chaintracks/Api/ChaintracksClientApi'
+import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
 /**
  * regtest wiring.
@@ -87,5 +90,45 @@ describe('regtest network wiring', () => {
     expect(woc.network).toBe('regtest')
     expect((woc as unknown as { URL: string }).URL).toBe('')
     expect(() => new SdkWhatsOnChain('regnet' as never)).toThrow('WhatsOnChain network is invalid.')
+  })
+
+  test.each(['regtest', 'tstn'] as const)('WhatsOnChain for %s refuses to send any request', async network => {
+    const request = jest.fn()
+    const woc = new WhatsOnChainNoServices(network, { httpClient: { request } })
+    expect(woc.isAvailable).toBe(false)
+    expect(new WhatsOnChainNoServices('test', { httpClient: { request } }).isAvailable).toBe(true)
+
+    const refusal = `WhatsOnChain has no service for network '${network}'.`
+    const hash = '00'.repeat(32)
+    await expect(woc.getBlockHeaderByHash(hash)).rejects.toThrow(refusal)
+    await expect(woc.getChainInfo()).rejects.toThrow(refusal)
+    await expect(woc.updateBsvExchangeRate()).rejects.toThrow(refusal)
+    await expect(woc.isValidRootForHeight(hash, 1)).rejects.toThrow(refusal)
+    await expect(woc.currentHeight()).rejects.toThrow('Failed to get current height from WhatsOnChain.')
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  test('hashToHeader does not fall back to WhatsOnChain for regtest', async () => {
+    process.env.REGTEST_CHAINTRACKS_URL = 'https://regtest-chaintracks.example.internal/v1'
+    const chaintracks = {
+      findHeaderForBlockHash: jest.fn(async () => undefined)
+    } as unknown as ChaintracksClientApi
+    const options = createDefaultWalletServicesOptions(
+      'regtest',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      chaintracks
+    )
+    expect(options.chaintracks).toBe(chaintracks)
+    const services = new Services(options)
+    const fallback = jest.spyOn(services.whatsonchain, 'getBlockHeaderByHash')
+
+    await expect(services.hashToHeader('11'.repeat(32))).rejects.toBeInstanceOf(WERR_INVALID_PARAMETER)
+    expect(chaintracks.findHeaderForBlockHash).toHaveBeenCalled()
+    expect(fallback).not.toHaveBeenCalled()
   })
 })
