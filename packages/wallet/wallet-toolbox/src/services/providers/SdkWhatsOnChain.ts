@@ -69,8 +69,9 @@ export default class SdkWhatsOnChain implements ChainTracker {
 
   /**
    * Constructs an instance of the WhatsOnChain ChainTracker.
+   * `tstn` and `regtest` have no WhatsOnChain service, so every request made for them is refused.
    *
-   * @param {'main' | 'test' | 'stn'} network - The BSV network to use when calling the WhatsOnChain API.
+   * @param {'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'regtest'} network - The BSV network to use when calling the WhatsOnChain API.
    * @param {WhatsOnChainConfig} config - Configuration options for the WhatsOnChain ChainTracker.
    */
   constructor(
