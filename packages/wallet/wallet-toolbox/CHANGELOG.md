@@ -27,6 +27,9 @@ attention to changes that materially alter behavior or extend functionality.
   sending it to a relative URL, which a browser resolves against the page's
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
+
+## wallet-toolbox 2.14.9
+
 - Complete per-transaction broadcast results when the refreshed request is
   already `unmined` or `completed`, preserving that durable state. Successful
   first receipt without a mining proof no longer throws an internal unknown

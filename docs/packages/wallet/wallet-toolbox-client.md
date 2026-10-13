@@ -94,7 +94,7 @@ asynchronous header lookup. A missing or malformed header, or an invalid
 proof, still rejects and leaves no proven transaction, transaction, or
 requested output. Upgrade this client; no API, wire or schema migration is required.
 
-Broadcast result completion in the 2.15.0 source candidate preserves an already
+Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.
 A successful first receipt without a mining proof therefore no longer fails
 with an internal unknown-status error on shared storage or after concurrent

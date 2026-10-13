@@ -8,7 +8,7 @@ A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) confo
 
 ## Receiving already-broadcast payments
 
-The 2.15.0 source candidate completes broadcast results even when storage
+The 2.14.9 source candidate completes broadcast results even when storage
 already marks the request `unmined` or `completed`. This fixes first receipt
 without a mining proof on shared storage, and the same result path when another
 storage worker advances the request before the broadcast result refresh. The
