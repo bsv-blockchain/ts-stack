@@ -12,6 +12,10 @@ import {
   validateHeaderDifficulty,
   validateHeaderProofOfWork
 } from '../blockHeaderUtilities'
+import { InlineBulkFileDataValidator } from '../InlineBulkFileDataValidator'
+import { TaskNewHeader } from '../../../../../monitor/tasks/TaskNewHeader'
+import { Monitor } from '../../../../../monitor/Monitor'
+import { copyValidatedBlockHeader } from '../../../../validateMerklePathResult'
 
 /**
  * The first four headers of a Teranode regtest chain (heights 0 through 3), as
@@ -107,5 +111,38 @@ describe('regtest proof of work', () => {
       )
     }
     expect(() => convertBitsToWork(REGTEST_BITS)).toThrow('Block target exceeds the proof-of-work limit.')
+  })
+})
+
+describe('regtest chain selection at consumers', () => {
+  test('the inline bulk-file validator accepts regtest data only when told the chain', async () => {
+    const validator = new InlineBulkFileDataValidator()
+    const request = {
+      fileName: 'regtestNet_0.headers',
+      data: regtestBuffer(),
+      count: 4,
+      firstHeight: 0,
+      prevHash: ZERO_HASH,
+      prevChainWork: ZERO_HASH
+    }
+
+    const result = await validator.validate({ ...request, chain: 'regtest' })
+    expect(result.lastHeaderHash).toBe(regtestHeader(3).hash)
+
+    await expect(validator.validate(request)).rejects.toThrow('Block target exceeds the proof-of-work limit.')
+  })
+
+  test('the new-header monitor task validates the chain tip under its monitor chain', async () => {
+    const tip = regtestHeader(3)
+    const monitorFor = (chain: Chain): Monitor =>
+      ({ chain, storage: {}, chaintracks: { findChainTipHeader: async () => tip } }) as unknown as Monitor
+
+    await expect(new TaskNewHeader(monitorFor('regtest')).getHeader()).resolves.toEqual(tip)
+    await expect(new TaskNewHeader(monitorFor('main')).getHeader()).rejects.toThrow('proof-of-work-valid')
+  })
+
+  test('a header copy without proof-of-work checks is chain independent', () => {
+    const header = regtestHeader(2)
+    expect(copyValidatedBlockHeader(header)).toEqual(header)
   })
 })
