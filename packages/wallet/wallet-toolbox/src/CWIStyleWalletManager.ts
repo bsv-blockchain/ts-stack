@@ -1623,6 +1623,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * List of loaded non-default profiles.
    */
   private profiles: Profile[] = []
+  private readonly pendingProfileNames = new Set<string>()
 
   /**
    * The underlying wallet instance for the *active* profile.
@@ -2315,7 +2316,12 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     // Ensure name is unique (including 'default')
-    if (name === 'default' || this.profiles.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    const normalizedName = name.toLowerCase()
+    if (
+      name === 'default' ||
+      this.pendingProfileNames.has(normalizedName) ||
+      this.profiles.some(p => p.name.toLowerCase() === normalizedName)
+    ) {
       throw new Error(`Profile name "${name}" is already in use.`)
     }
 
@@ -2327,21 +2333,32 @@ export class CWIStyleWalletManager implements WalletInterface {
       createdAt: Math.floor(Date.now() / 1000)
     }
 
-    this.profiles.push(newProfile)
+    // Reserve the case-insensitive name before the first await. The profile
+    // itself remains unpublished until updateFactors accepts the new token.
+    this.pendingProfileNames.add(normalizedName)
+    try {
+      // Only keep the new profile once the UMP token holds it, so a failed update
+      // leaves the list as it was and a retry is not rejected as a duplicate.
+      // Update the UMP token with the new profile list
+      await this.updateFactors(
+        this.currentUMPToken.passwordSalt,
+        // Need to re-derive/decrypt factors needed for re-encryption
+        await this.getFactor('passwordKey'),
+        await this.getFactor('presentationKey'),
+        await this.getFactor('recoveryKey'),
+        this.rootPrimaryKey,
+        await this.getFactor('privilegedKey'), // Get ROOT privileged key
+        // Built last, after the awaits above: arguments are evaluated left to
+        // right, and updateFactors captures the token it consumes before its first
+        // await, so this list and that token are one consistent snapshot. Built
+        // earlier, a profile added by an overlapping call would be dropped.
+        [...this.profiles, newProfile]
+      )
 
-    // Update the UMP token with the new profile list
-    await this.updateFactors(
-      this.currentUMPToken.passwordSalt,
-      // Need to re-derive/decrypt factors needed for re-encryption
-      await this.getFactor('passwordKey'),
-      await this.getFactor('presentationKey'),
-      await this.getFactor('recoveryKey'),
-      this.rootPrimaryKey,
-      await this.getFactor('privilegedKey'), // Get ROOT privileged key
-      this.profiles // Pass the updated profile list
-    )
-
-    return newProfile.id
+      return newProfile.id
+    } finally {
+      this.pendingProfileNames.delete(normalizedName)
+    }
   }
 
   /**
@@ -2369,24 +2386,35 @@ export class CWIStyleWalletManager implements WalletInterface {
       throw new Error('Profile not found.')
     }
 
-    // Remove the profile
-    this.profiles.splice(profileIndex, 1)
+    // Remove the profile only once the UMP token no longer holds it, so a
+    // failed update leaves the profile (and the active wallet) in place.
+    const wasActive = this.activeProfileId.every((x, i) => x === profileId[i])
 
     // If the deleted profile was active, switch to default
-    if (this.activeProfileId.every((x, i) => x === profileId[i])) {
+    if (wasActive) {
       await this.switchProfile(DEFAULT_PROFILE_ID) // This rebuilds the wallet
     }
 
     // Update the UMP token
-    await this.updateFactors(
-      this.currentUMPToken.passwordSalt,
-      await this.getFactor('passwordKey'),
-      await this.getFactor('presentationKey'),
-      await this.getFactor('recoveryKey'),
-      this.rootPrimaryKey,
-      await this.getFactor('privilegedKey'), // Get ROOT privileged key
-      this.profiles // Pass updated list
-    )
+    try {
+      await this.updateFactors(
+        this.currentUMPToken.passwordSalt,
+        await this.getFactor('passwordKey'),
+        await this.getFactor('presentationKey'),
+        await this.getFactor('recoveryKey'),
+        this.rootPrimaryKey,
+        await this.getFactor('privilegedKey'), // Get ROOT privileged key
+        // Built last, after the awaits, for the same reason as in addProfile.
+        this.profiles.filter(p => !p.id.every((x, i) => x === profileId[i]))
+      )
+    } catch (error) {
+      // Back to the profile we left, unless the token was published before the
+      // failure. A failed switch back must not hide the original error.
+      if (wasActive && this.profiles.some(p => p.id.every((x, i) => x === profileId[i]))) {
+        await this.switchProfile(profileId).catch(() => {})
+      }
+      throw error
+    }
   }
 
   /**
@@ -2765,7 +2793,12 @@ export class CWIStyleWalletManager implements WalletInterface {
       )
       // Update the manager's state
       this.currentUMPToken = newTokenData
-      // Profiles are already updated in this.profiles if they were passed in
+      // Keep the profiles in step with the token that now holds them. Callers
+      // pass a new list rather than changing this.profiles up front, so a
+      // failed update leaves it untouched.
+      if (profiles != null) {
+        this.profiles = profiles
+      }
     } finally {
       // Switch back if we temporarily switched
       if (!currentActiveId.every(x => x === 0)) {
@@ -2954,11 +2987,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param rootPrimaryKey      The user's root primary key (32 bytes).
    * @param ephemeralRootPrivilegedKey Optional root privileged key (e.g., during recovery flows).
    */
-  private setupRoot(
-    rootKey: number[],
-    ephemeralRootPrivilegedKey?: number[],
-    authenticated = true
-  ): Promise<void> {
+  private setupRoot(rootKey: number[], ephemeralRootPrivilegedKey?: number[], authenticated = true): Promise<void> {
     if (this.currentUMPToken == null) {
       throw new Error('A UMP token must exist before setting up root infrastructure!')
     }
