@@ -4,9 +4,9 @@ import { bsvImport } from '../scaffold/base-app.js'
 
 const AUTH_UTIL = `// Shared, framework-agnostic auth-proof helpers built on @bsv/auth (BRC-103).
 // One primitive: sign a proof bound to { action, body? }, verify it on the server.
-import { AuthProofClient, AuthProofServer, type AuthProof, type ProofSignerWallet, type RequestBody } from '@bsv/auth'
+import { AuthProofClient, AuthProofServer, type AuthProof, type ProofSignerWallet, type ProofVerifierWallet, type RequestBody } from '@bsv/auth'
 
-export type { AuthProof, RequestBody }
+export type { AuthProof, ProofVerifierWallet, RequestBody }
 
 export async function createAuthProof (
   wallet: ProofSignerWallet,
@@ -17,7 +17,7 @@ export async function createAuthProof (
 }
 
 export async function verifyAuthProof (
-  serverWallet: { verifySignature: (args: any) => Promise<{ valid: boolean }> },
+  serverWallet: ProofVerifierWallet,
   proof: AuthProof,
   opts: { action: string, body?: RequestBody },
   consumeNonce: (nonce: string, expiresAt: Date) => boolean | Promise<boolean>
@@ -93,7 +93,7 @@ function contentLength (response: Response): number | undefined {
   return length
 }
 
-async function readBoundedBody (response: Response): Promise<Uint8Array> {
+async function readBoundedBody (response: Response): Promise<Uint8Array<ArrayBuffer>> {
   const declared = contentLength(response)
   if (declared !== undefined && declared > MAX_API_RESPONSE_BYTES) {
     throw new Error('API response exceeds the byte limit')

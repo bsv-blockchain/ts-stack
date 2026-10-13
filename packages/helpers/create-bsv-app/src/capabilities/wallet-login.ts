@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { ConnectWallet } from './ConnectWallet.js'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
-import { getServerIdentity, readIdentityKeyResponse, requireIdentityKey } from './serverIdentity.js'
+import { getServerIdentity, readIdentityKeyResponse } from './serverIdentity.js'
 import { apiFetch } from './apiClient.js'
 
 export function WalletLogin () {
@@ -61,7 +61,7 @@ const HOOK = `// Wallet login: prove identity with the connected wallet, then PO
 import { useCallback } from 'react'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
-import { getServerIdentity, readIdentityKeyResponse } from './serverIdentity.js'
+import { getServerIdentity, readIdentityKeyResponse, requireIdentityKey } from './serverIdentity.js'
 import { apiFetch } from './apiClient.js'
 
 // serverIdentityKey is optional: when omitted it's fetched from GET /api/identity.
@@ -80,17 +80,17 @@ export function useWalletLogin (opts: UseWalletLoginOptions = {}) {
     const loggedInIdentity = await readIdentityKeyResponse(res)
     if (identityKey !== null && loggedInIdentity !== identityKey) throw new Error('server returned another wallet identity')
     return { identityKey: loggedInIdentity }
-  }, [wallet, opts.serverIdentityKey, opts.loginEndpoint])
+  }, [wallet, identityKey, opts.serverIdentityKey, opts.loginEndpoint])
   return { login, identityKey, connected: wallet !== null }
 }
 `
 
 const ROUTE = `// Express login route. Mount: app.post('/api/login', loginRoute(serverWallet))
 import type { Request, Response } from 'express'
-import { verifyAuthProof } from './auth.js'
+import { verifyAuthProof, type ProofVerifierWallet } from './auth.js'
 import { consumeNonce } from './nonceStore.js'
 
-export function loginRoute (serverWallet: { verifySignature: (args: any) => Promise<{ valid: boolean }> }) {
+export function loginRoute (serverWallet: ProofVerifierWallet) {
   return async (req: Request, res: Response): Promise<void> => {
     const result = await verifyAuthProof(serverWallet, req.body, { action: 'login' }, consumeNonce)
     if (!result.valid) { res.status(401).json({ error: 'invalid proof' }); return }

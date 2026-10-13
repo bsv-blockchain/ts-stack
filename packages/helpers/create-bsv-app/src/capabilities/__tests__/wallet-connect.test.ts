@@ -89,6 +89,37 @@ describe('wallet-connect', () => {
       expect(messages).toEqual([])
     }
   })
+  test('apiClient type-checks under the strict DOM lib the Vite client uses', () => {
+    const apiClient = (walletConnect.files(ctx).client ?? []).find(f => f.path === 'apiClient.ts')
+    const sources: Record<string, string> = {
+      'apiClient.ts': apiClient?.content ?? '',
+      'config.ts':
+        "export const API_BASE_URL = 'http://localhost:3000'\nexport const API_ORIGIN = 'http://localhost:3000'\n"
+    }
+    const options: ts.CompilerOptions = {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+      lib: ['lib.es2023.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
+      strict: true,
+      noEmit: true,
+      types: []
+    }
+    const host = ts.createCompilerHost(options)
+    const readFile = host.readFile.bind(host)
+    host.fileExists = fileName => fileName in sources || ts.sys.fileExists(fileName)
+    host.readFile = fileName => sources[fileName] ?? readFile(fileName)
+    host.getSourceFile = (fileName, languageVersion) => {
+      const text = host.readFile(fileName)
+      return text === undefined ? undefined : ts.createSourceFile(fileName, text, languageVersion)
+    }
+    host.resolveModuleNames = names =>
+      names.map(name => ({ resolvedFileName: name.replace(/^\.\/(.*)\.js$/, '$1.ts') }))
+    const program = ts.createProgram(['apiClient.ts'], options, host)
+    const messages = ts
+      .getPreEmitDiagnostics(program)
+      .map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+    expect(messages).toEqual([])
+  })
   test('server ships bounded nonce replay protection shared by auth routes', () => {
     const nonceStore = (walletConnect.files(ctx).server ?? []).find(f => f.path === 'nonceStore.ts')
     expect(nonceStore?.content).toContain('MAX_NONCES = 10_000')
