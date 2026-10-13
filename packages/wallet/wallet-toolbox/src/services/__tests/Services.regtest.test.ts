@@ -5,6 +5,7 @@ import {
   createDefaultWalletServicesOptions
 } from '../createDefaultWalletServicesOptions'
 import { regtestChaintracksUrl } from '../networkConfig'
+import SdkWhatsOnChain from '../providers/SdkWhatsOnChain'
 
 /**
  * regtest wiring.
@@ -49,6 +50,7 @@ describe('regtest network wiring', () => {
   test('requires a ChainTracks endpoint when neither variable is set', () => {
     delete process.env.REGTEST_ARCADE_URL
     expect(arcadeDefaultUrl('regtest')).toBeUndefined()
+    expect(arcDefaultUrl('regtest')).toBe('')
     expect(() => regtestChaintracksUrl()).toThrow('regtest chain requires a ChainTracks URL')
   })
 
@@ -77,5 +79,13 @@ describe('regtest network wiring', () => {
     expect(services.getRawTxServices.services).toHaveLength(0)
     expect(services.getUtxoStatusServices.services).toHaveLength(0)
     expect(services.getScriptHashHistoryServices.services).toHaveLength(0)
+  })
+
+  test('WhatsOnChain accepts regtest but has no explorer endpoint for it', () => {
+    expect(new SdkWhatsOnChain().network).toBe('main')
+    const woc = new SdkWhatsOnChain('regtest')
+    expect(woc.network).toBe('regtest')
+    expect((woc as unknown as { URL: string }).URL).toBe('')
+    expect(() => new SdkWhatsOnChain('regnet' as never)).toThrow('WhatsOnChain network is invalid.')
   })
 })
