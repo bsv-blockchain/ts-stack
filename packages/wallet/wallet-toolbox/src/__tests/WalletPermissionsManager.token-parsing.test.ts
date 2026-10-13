@@ -265,6 +265,13 @@ describe('WalletPermissionsManager permission-token parsing', () => {
         {
           protocol: 'basket insertion',
           insertionRemittance: {
+            basket: 'savings',
+            customInstructions: 'already-encrypted'
+          }
+        },
+        {
+          protocol: 'basket insertion',
+          insertionRemittance: {
             basket: 'p module'
           }
         },
@@ -282,6 +289,7 @@ describe('WalletPermissionsManager permission-token parsing', () => {
     await (manager as any).encryptInternalizeActionModuleMetadata(requestArgs)
 
     expect(requestArgs.outputs[0].insertionRemittance?.customInstructions).toBe('encrypted')
+    expect(requestArgs.outputs[1].insertionRemittance?.customInstructions).toBe('already-encrypted')
     expect((manager as any).maybeEncryptMetadata).toHaveBeenCalledTimes(1)
   })
 })

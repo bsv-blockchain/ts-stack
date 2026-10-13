@@ -372,6 +372,22 @@ retained privately, outside this repository.
 page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.
 
+### Profile update failures
+
+`CWIStyleWalletManager.addProfile` and `deleteProfile` commit the local profile
+list when the replacement UMP token is published. A factor-decryption or
+publication failure preserves the previous list, so a failed creation can be
+retried with the same name. Concurrent creations reserve names without regard
+to case until each attempt settles. A failed deletion of the active profile
+attempts to restore that profile and preserves the original update error if
+restoration also fails.
+
+Restoring the active wallet can fail after publication has succeeded. In that
+case, the token and profile list already contain the change, and the default
+profile may remain active. Inspect `listProfiles()` before retrying and switch
+to an available profile as needed. This bookkeeping fix does not correct the
+underlying factor-decryption error; diagnose that error separately.
+
 ### UMP account continuity and phone changes
 
 Argon2id password derivation uses a proven-ready host backend when one is
@@ -440,21 +456,35 @@ empty wallet. Main currently carries the separate SDK3.1 candidate; SDK2 hosts
 need an additive backport or the documented SDK3 migration.
 
 The signed action is staged locally, labeled, and recorded in a recovery basket
-before broadcast. This fee fix does not change signup persistence or retry
-recovery. Internalization clears the output's custom instructions, and standard
-`listActions` does not return them; a later retry can therefore require manual
-reconciliation. Preserve the existing wallet and reconcile its faucet action
-before restarting a failed signup. Missing, substituted, ambiguous, or
-result-only recovery evidence fails closed.
+before broadcast. Internalization clears the output's custom instructions, and
+standard `listActions` does not return them. A retry with the same wallet root
+can recover the prior faucet action; missing, substituted, ambiguous, or
+result-only recovery evidence fails closed. Preserve the wallet's storage when
+reconciling an interrupted signup.
 
-New WAB registrations are interruption-safe across the off-chain/on-chain
-boundary. A WAB that advertises `registrationStatus: "pending"` lets a verified
-retry reuse the stored presentation key when a clean UMP lookup confirms that
-publication has not happened. After publishing the UMP token, the manager
-finalizes WAB idempotently. A lost finalization response is non-fatal: the next
-verified login finds the published token and repairs the pending state. Missing
-or invalid lifecycle metadata remains fail-closed for established accounts, and
-older WAB servers and clients retain their existing wire behavior.
+For restart-safe WAB registrations, store an unpublished UMP token checkpoint
+before faucet redemption. Pass `pendingRegistrationTokenSaver` in
+`WalletAuthenticationManagerOptions` and synchronously verify that the token
+bytes are stored before the callback resolves. On app restart, call
+`loadPendingRegistrationToken(bytes)` before starting authentication. The token
+contains encrypted UMP fields and no plaintext wallet root, snapshot key, or on-chain
+outpoint. Keep it through failed funding and logout; clear it only after a
+successful authenticated snapshot has been stored and
+`hasPendingRegistrationToken()` returns false. If an older pending WAB
+registration has no checkpoint, the manager refuses to redeem its faucet output
+again. Recover that registration using its original wallet state instead of
+creating a new root. A checkpoint for another presentation key does not block
+login to an already published wallet; retain that checkpoint until its own
+registration is reconciled.
+
+A WAB that advertises `registrationStatus: "pending"` lets a verified retry
+reuse the stored presentation key when a clean UMP lookup confirms that
+publication has not happened. The loaded checkpoint reconstructs the original
+root, so the wallet can recover its prior faucet action. After publishing the
+UMP token, the manager finalizes WAB idempotently. A lost finalization response
+is non-fatal: the next verified login finds the published token and repairs the
+pending state. Missing or invalid lifecycle metadata remains fail-closed for
+established accounts; WAB wire behavior is unchanged.
 
 Authenticated applications can verify a phone number and roll the presentation
 key, including when the user enters the same phone number:
@@ -1149,3 +1179,13 @@ for the full stack-wide policy.
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.
+
+## Pre-construction conflict recovery
+
+The 2.14.7 candidate preserves remote storage's empty attempted-TXID sentinel
+only for a bounded double-spend review before transaction construction. It does
+not authorize a retry. Applications must verify complete competing transactions
+against the requested explicit inputs, synchronize the accepted winner, then
+read fresh state before rebuilding. Upgrade the application SDK alongside the
+wallet parser. Use the existing JSON wallet API for structured review errors;
+the binary wire format is unchanged. No database or call migration is required.

@@ -325,6 +325,9 @@ export interface SendWithResult {
 export type ReviewActionResultStatus = 'success' | 'doubleSpend' | 'serviceError' | 'invalidTx'
 
 export interface ReviewActionResult {
+  /** Empty only when storage detects an explicit-input double spend before construction.
+   * Structured JSON consumers must bind the competing evidence to the request.
+   */
   txid: TXIDHexString
   status: ReviewActionResultStatus
   /**
