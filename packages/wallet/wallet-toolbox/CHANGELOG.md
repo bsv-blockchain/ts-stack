@@ -27,6 +27,20 @@ attention to changes that materially alter behavior or extend functionality.
   sending it to a relative URL, which a browser resolves against the page's
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
+- Complete per-transaction broadcast results when the refreshed request is
+  already `unmined` or `completed`, preserving that durable state. Successful
+  first receipt without a mining proof no longer throws an internal unknown
+  status error on shared storage or when another worker advances the request.
+  Negative broadcast results and competing-transaction evidence remain negative;
+  they do not authorize recipient output credit. Repeated successful receipt
+  remains idempotent, and valid mined payments retain the proof path.
+- SQL storage uses a durable, leased user/TXID receipt claim to keep a second
+  pod from crediting a pending first receipt. Completed claims remain as
+  coordination keys; expired claims can be recovered, and an old owner cannot
+  finalize after its claim is replaced. The migration preserves historical
+  transactions and outputs, including duplicates. No API or wire migration.
+  Back up and preflight SQL storage, then coordinate all storage instances in
+  the protected rollout; this source candidate does not deploy hosted storage.
 
 ## wallet-toolbox 2.14.8
 

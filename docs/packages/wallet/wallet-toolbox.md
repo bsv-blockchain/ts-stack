@@ -43,6 +43,20 @@ finishes. A missing or malformed header, or an invalid proof, still rejects
 and leaves none of those records. Upgrade the active storage implementation,
 including the browser client.
 
+Broadcast result completion in the 2.15.0 source candidate preserves an already
+`unmined` or `completed` request while returning the actual provider outcome.
+A successful first receipt without a mining proof therefore no longer fails
+with an internal unknown-status error on shared storage or after concurrent
+storage-worker progress. Negative provider outcomes still reject that receipt;
+repeat successful receipt remains idempotent. Upgrade the implementation
+performing broadcast/internalization after protected publication. No public
+API or wire migration is required. SQL storage adds a durable user/TXID receipt
+claim table while preserving historical transaction and output rows. Back up
+and preflight the database, then coordinate the rollout across every serving storage instance;
+older instances do not honor the claim. Local IndexedDB does not use the SQL
+claim. This candidate does not deploy hosted storage or repair older partial
+receipts automatically.
+
 ## Optional registry descriptions
 
 ProtoMap, BasketMap and CertMap supply descriptive metadata, not permission grants.

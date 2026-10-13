@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { knex as makeKnex, type Knex } from 'knex'
 import { StorageKnex } from '../StorageKnex'
-import { KnexMigrations } from '../schema/KnexMigrations'
+import { INTERNALIZE_RECEIPT_MIGRATION, KnexMigrations } from '../schema/KnexMigrations'
 
 const initial = '2026-09-23-001 atomicity fixture'
 const altered = '2026-09-23-002 populated alter fixture'
@@ -210,6 +210,66 @@ describe('SQLite migration atomicity through StorageKnex', () => {
     } finally {
       await storage.destroy()
       await rm(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('wallet receipt coordination migration', () => {
+  test('preserves legacy duplicate rows while enforcing one durable receipt key per user and txid', async () => {
+    const db = makeKnex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+      pool: { min: 1, max: 1 }
+    })
+    try {
+      await db.schema.createTable('users', table => table.integer('userId').primary())
+      await db.schema.createTable('transactions', table => {
+        table.integer('transactionId').primary()
+        table.integer('userId').notNullable()
+        table.string('txid', 64).nullable()
+      })
+      await db.schema.createTable('outputs', table => {
+        table.integer('outputId').primary()
+        table.integer('userId').notNullable()
+        table.string('txid', 64).nullable()
+        table.integer('vout').notNullable()
+      })
+      await db('users').insert({ userId: 1 })
+      const migration = await new KnexMigrations('test', 'fixture', '1'.repeat(64), 1024).getMigration(
+        INTERNALIZE_RECEIPT_MIGRATION
+      )
+      await db('transactions').insert([
+        { transactionId: 1, userId: 1, txid: 'a'.repeat(64) },
+        { transactionId: 2, userId: 1, txid: 'a'.repeat(64) }
+      ])
+      await db('outputs').insert([
+        { outputId: 1, userId: 1, txid: 'a'.repeat(64), vout: 0 },
+        { outputId: 2, userId: 1, txid: 'a'.repeat(64), vout: 0 }
+      ])
+      await migration.up(db)
+      await migration.up(db) // MySQL DDL can be committed before its migration journal entry.
+      expect(await db.schema.hasTable('internalize_receipts')).toBe(true)
+      expect(await db('transactions').count({ n: '*' }).first()).toMatchObject({ n: 2 })
+      expect(await db('outputs').count({ n: '*' }).first()).toMatchObject({ n: 2 })
+      await db('internalize_receipts').insert({
+        userId: 1,
+        txid: 'a'.repeat(64),
+        ownerToken: 'first',
+        state: 'complete',
+        leaseUntil: 0
+      })
+      await expect(
+        db('internalize_receipts').insert({
+          userId: 1,
+          txid: 'a'.repeat(64),
+          ownerToken: 'second',
+          state: 'pending',
+          leaseUntil: 1
+        })
+      ).rejects.toThrow(/UNIQUE constraint failed/)
+    } finally {
+      await db.destroy()
     }
   })
 })

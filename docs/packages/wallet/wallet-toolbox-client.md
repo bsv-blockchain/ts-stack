@@ -94,6 +94,19 @@ asynchronous header lookup. A missing or malformed header, or an invalid
 proof, still rejects and leaves no proven transaction, transaction, or
 requested output. Upgrade this client; no API, wire or schema migration is required.
 
+Broadcast result completion in the 2.15.0 source candidate preserves an already
+`unmined` or `completed` request while returning the actual provider outcome.
+A successful first receipt without a mining proof therefore no longer fails
+with an internal unknown-status error on shared storage or after concurrent
+storage-worker progress. Negative provider outcomes still reject that receipt;
+repeat successful receipt remains idempotent. Upgrade the implementation
+performing broadcast/internalization after protected publication. No public
+API or wire migration is required. Remote SQL storage adds a durable user/TXID
+receipt claim while preserving historical rows; back up and preflight before
+coordinating all serving storage instances in the
+rollout. Browser IndexedDB does not use the SQL claim. This candidate does not
+deploy hosted storage or repair older partial receipts automatically.
+
 ## Backup and recovery
 
 Recover both key material and wallet records; a manager snapshot or device
