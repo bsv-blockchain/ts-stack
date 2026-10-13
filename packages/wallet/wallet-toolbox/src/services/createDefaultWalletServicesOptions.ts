@@ -14,6 +14,9 @@ import {
   tstnChaintracksUrl
 } from './networkConfig'
 
+// Package entry points export this module, not networkConfig: re-export the public regtest helpers.
+export { regtestArcadeUrl, regtestChaintracksUrl }
+
 function stripTrailingSlash(value: string): string {
   let end = value.length
   while (end > 0 && value[end - 1] === '/') end--

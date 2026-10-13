@@ -5,6 +5,9 @@ import {
   createDefaultWalletServicesOptions
 } from '../createDefaultWalletServicesOptions'
 import { regtestChaintracksUrl } from '../networkConfig'
+import * as clientEntry from '../../index.client'
+import * as mobileEntry from '../../index.mobile'
+import * as allEntry from '../../index.all'
 import SdkWhatsOnChain from '../providers/SdkWhatsOnChain'
 import { WhatsOnChainNoServices } from '../providers/WhatsOnChain'
 import { ChaintracksClientApi } from '../chaintracker/chaintracks/Api/ChaintracksClientApi'
@@ -48,6 +51,15 @@ describe('regtest network wiring', () => {
     process.env.REGTEST_CHAINTRACKS_URL = 'https://regtest-chaintracks.example.internal/v1'
     expect(regtestChaintracksUrl()).toBe('https://regtest-chaintracks.example.internal/v1')
     expect(createDefaultWalletServicesOptions('regtest').chain).toBe('regtest')
+  })
+
+  test.each([
+    ['index.all', allEntry],
+    ['index.client', clientEntry],
+    ['index.mobile', mobileEntry]
+  ])('%s exports the regtest endpoint helpers', (_name, entry) => {
+    expect(entry.regtestArcadeUrl()).toBe(ARCADE)
+    expect(entry.regtestChaintracksUrl()).toBe(`${ARCADE}/chaintracks/v1`)
   })
 
   test('requires a ChainTracks endpoint when neither variable is set', () => {
