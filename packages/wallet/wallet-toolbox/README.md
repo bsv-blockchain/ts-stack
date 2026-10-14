@@ -6,6 +6,30 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Receiving already-broadcast payments
+
+The 2.14.9 source candidate completes broadcast results even when storage
+already marks the request `unmined` or `completed`. This fixes first receipt
+without a mining proof on shared storage, and the same result path when another
+storage worker advances the request before the broadcast result refresh. The
+stored advanced state remains intact; unsuccessful provider results still
+reject receipt and do not credit new recipient outputs. Repeated successful
+receipt remains idempotent. A payment carrying its valid mining proof follows
+the existing proof path without rebroadcast.
+
+SQL storage now serializes receipt ownership across independent processes
+through a durable user/TXID claim. The migration preserves legacy transaction
+and output rows, including historical duplicates, while adding the claim table.
+Ambiguous historical receipts still require separate reconciliation; this
+change prevents a new same-recipient overlap from creating another local credit.
+Back up and preflight the database before rollout, then upgrade all storage
+instances together; an older instance can bypass the new receipt claim.
+Pending claims recover after their database-timed lease expires. No
+public API or wire migration is required. Browser IndexedDB does not use the
+SQL receipt claim. Source versions are candidates until published through the
+protected release workflow; upgrading an app alone does not upgrade its remote
+storage server.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users
