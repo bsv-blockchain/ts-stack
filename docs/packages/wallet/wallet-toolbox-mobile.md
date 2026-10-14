@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.14.9'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+version: '2.14.10'
+last_updated: '2026-10-14'
+last_verified: '2026-10-14'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -88,6 +88,14 @@ storage writer opens, including a no-send merge that carries a mining proof.
 A missing or malformed header, or an invalid proof, still rejects and leaves
 no partial proven transaction, transaction, or output. Upgrade the active
 storage implementation; no API, wire or schema migration is required.
+
+Provided unlocking-script sizing in the 2.14.10 source candidate: `createAction`
+hands storage a caller-provided `unlockingScript` by its byte length. It used the
+hex string's length, twice the bytes, so storage funded and priced the
+transaction as if that script appeared twice and overpaid the fee by the
+script's size at the fee rate. Inputs given only an `unlockingScriptLength` are
+unchanged. No API, wire, or schema migration is required; upgrade the signer
+package.
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.

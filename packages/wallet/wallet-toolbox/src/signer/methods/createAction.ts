@@ -293,7 +293,8 @@ function removeUnlockScripts(args: ValidCreateActionArgs) {
     for (const i of args.inputs) {
       const di: ValidCreateActionInput = {
         ...i,
-        unlockingScriptLength: i.unlockingScript !== undefined ? i.unlockingScript.length : i.unlockingScriptLength
+        // unlockingScript is a hex string; storage sizes and prices the input in bytes.
+        unlockingScriptLength: i.unlockingScript !== undefined ? i.unlockingScript.length / 2 : i.unlockingScriptLength
       }
       delete di.unlockingScript
       storageArgs.inputs.push(di)

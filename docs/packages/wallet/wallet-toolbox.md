@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.14.9'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+version: '2.14.10'
+last_updated: '2026-10-14'
+last_verified: '2026-10-14'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -42,6 +42,14 @@ transaction, and requested outputs are stored together only after that lookup
 finishes. A missing or malformed header, or an invalid proof, still rejects
 and leaves none of those records. Upgrade the active storage implementation,
 including the browser client.
+
+Provided unlocking-script sizing in the 2.14.10 source candidate: `createAction`
+hands storage a caller-provided `unlockingScript` by its byte length. It used the
+hex string's length, twice the bytes, so storage funded and priced the
+transaction as if that script appeared twice and overpaid the fee by the
+script's size at the fee rate. Inputs given only an `unlockingScriptLength` are
+unchanged. No API, wire, or schema migration is required; upgrade the signer
+package.
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.

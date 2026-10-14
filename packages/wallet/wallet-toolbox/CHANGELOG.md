@@ -4,6 +4,17 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.14.10
+
+- `createAction` sizes a caller-provided `unlockingScript` by its byte length
+  when it hands the input to storage. It used the hex string's length, twice
+  the bytes, so storage funded and priced the transaction as if that script
+  appeared twice: a 78,369 byte transaction with a 36,401 byte provided unlock
+  paid for 114,780 bytes. Inputs given only an `unlockingScriptLength` are
+  unchanged.
+- No API, wire, or schema migration; `unlockingScriptLength` already meant
+  bytes. Upgrade the signer package; storage is unchanged.
+
 ## wallet-toolbox 2.14.9
 
 - Complete per-transaction broadcast results when the refreshed request is

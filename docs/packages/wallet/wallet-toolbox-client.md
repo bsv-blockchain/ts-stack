@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.14.9'
-last_updated: '2026-10-13'
-last_verified: '2026-10-13'
+version: '2.14.10'
+last_updated: '2026-10-14'
+last_verified: '2026-10-14'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -93,6 +93,14 @@ IndexedDB writer opens. A valid mined AtomicBEEF is stored after an
 asynchronous header lookup. A missing or malformed header, or an invalid
 proof, still rejects and leaves no proven transaction, transaction, or
 requested output. Upgrade this client; no API, wire or schema migration is required.
+
+Provided unlocking-script sizing in the 2.14.10 source candidate: `createAction`
+hands storage a caller-provided `unlockingScript` by its byte length. It used the
+hex string's length, twice the bytes, so storage funded and priced the
+transaction as if that script appeared twice and overpaid the fee by the
+script's size at the fee rate. Inputs given only an `unlockingScriptLength` are
+unchanged. No API, wire, or schema migration is required; upgrade the signer
+package.
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.
