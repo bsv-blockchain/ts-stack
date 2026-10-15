@@ -149,23 +149,29 @@ export function validateDependabotExclusions(source) {
   return errors
 }
 
+// Trimmed lines nested under one top-level multi-ecosystem group.
+function multiEcosystemGroupLines(dependabot, group) {
+  const lines = dependabot.split(/^updates:/m)[0].split('\n')
+  const start = lines.indexOf(`  ${group}:`)
+  if (start < 0) return undefined
+  const end = lines.findIndex((line, index) => index > start && /^ {0,2}\S/.test(line))
+  return lines.slice(start + 1, end < 0 ? undefined : end).map(line => line.trim())
+}
+
 // The grouped schedule and the lockfile refresh that joins its pull request
 // must agree, or the refresh silently stops finding the pull request.
 export function validateRoutineSchedule(routine, dependabot, refreshWorkflow) {
   const errors = []
   const group = routine.multiEcosystemGroup
-  const groups = dependabot.split(/^updates:/m)[0]
-  const block = groups.split(new RegExp(`^  ${group}:$`, 'm'))[1]?.split(/^ {2}\S/m)[0]
+  const block = multiEcosystemGroupLines(dependabot, group)
   if (block === undefined) {
     errors.push(`Dependabot does not define multi-ecosystem group ${group}`)
   } else {
     for (const [key, value] of Object.entries(routine.schedule)) {
-      const expected = new RegExp(
-        `^ {6}${key}:\\s*['"]?${value.replace(/[*.]/g, '\\$&')}['"]?$`,
-        'm'
-      )
-      if (!expected.test(block))
+      const accepted = [`${key}: ${value}`, `${key}: '${value}'`, `${key}: "${value}"`]
+      if (!block.some(line => accepted.includes(line))) {
         errors.push(`Dependabot ${group} schedule must set ${key}: ${value}`)
+      }
     }
   }
   for (const [, referenced] of dependabot.matchAll(/multi-ecosystem-group:\s*(\S+)/g)) {
@@ -178,7 +184,7 @@ export function validateRoutineSchedule(routine, dependabot, refreshWorkflow) {
     refresh.command,
     refresh.commitSubject,
     `dependabot-${group.replaceAll('-', '_')}-`,
-    `the \\"${group}\\" group`,
+    String.raw`the \"${group}\" group`,
     'permissions: {}',
     'persist-credentials: false'
   ]) {
@@ -197,8 +203,8 @@ function validateRoutinePolicy(policy, errors) {
     path.join(ROOT, policy.routineUpdates.dependabotConfig),
     'utf8'
   )
-  errors.push(...validateDependabotExclusions(dependabot))
   errors.push(
+    ...validateDependabotExclusions(dependabot),
     ...validateRoutineSchedule(
       policy.routineUpdates,
       dependabot,

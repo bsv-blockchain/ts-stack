@@ -15,7 +15,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const POLICY_PATH = path.join(ROOT, 'governance/dependency-release-policy.json')
-const FIRST_PARTY = /^@bsv\//
+const GIT_EXECUTABLE =
+  process.platform === 'win32' ? String.raw`C:\Program Files\Git\cmd\git.exe` : '/usr/bin/git'
+const isFirstParty = name => name.startsWith('@bsv/')
 const LOCKFILES = new Set(['pnpm-lock.yaml', 'package-lock.json'])
 
 const packageNameFromLockKey = key => key.split('node_modules/').pop()
@@ -27,7 +29,7 @@ export function npmRefreshNames(lock) {
   for (const [key, entry] of Object.entries(lock.packages ?? {})) {
     if (!key.includes('node_modules/') || entry.link) continue
     const name = packageNameFromLockKey(key)
-    if (!FIRST_PARTY.test(name)) names.add(name)
+    if (!isFirstParty(name)) names.add(name)
   }
   return [...names].sort((left, right) => left.localeCompare(right))
 }
@@ -39,7 +41,7 @@ export function firstPartyResolutionChanges(before, after) {
   ])
   const changes = []
   for (const key of [...keys].sort((left, right) => left.localeCompare(right))) {
-    if (!FIRST_PARTY.test(packageNameFromLockKey(key)) || !key.includes('node_modules/')) continue
+    if (!isFirstParty(packageNameFromLockKey(key)) || !key.includes('node_modules/')) continue
     const previous = before.packages?.[key]?.version
     const next = after.packages?.[key]?.version
     if (previous !== next) changes.push(`${key} ${previous ?? 'absent'} -> ${next ?? 'absent'}`)
@@ -52,7 +54,7 @@ export function nonLockfileChanges(files) {
 }
 
 function git(args) {
-  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' })
+  return execFileSync(GIT_EXECUTABLE, args, { cwd: ROOT, encoding: 'utf8' })
 }
 
 function changedFiles(pathspec = []) {
@@ -131,15 +133,14 @@ function refreshNpm(directory, before) {
 function summary(results) {
   const lines = ['## Lockfile refresh', '', '| Target | Result |', '| --- | --- |']
   for (const { target, error } of results) {
-    lines.push(`| \`${target}\` | ${error ? `failed: ${error.split('\n')[0]}` : 'refreshed'} |`)
+    const firstLine = error?.split('\n')[0]
+    const result = error ? `failed: ${firstLine}` : 'refreshed'
+    lines.push(`| \`${target}\` | ${result} |`)
   }
   const changed = changedFiles()
-  lines.push(
-    '',
-    changed.length > 0
-      ? `Changed: ${changed.map(file => `\`${file}\``).join(', ')}`
-      : 'No lockfile changes.'
-  )
+    .map(file => `\`${file}\``)
+    .join(', ')
+  lines.push('', changed ? `Changed: ${changed}` : 'No lockfile changes.')
   return `${lines.join('\n')}\n`
 }
 
