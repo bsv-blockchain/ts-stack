@@ -6,6 +6,9 @@ version: 2
 # behind it. The Dependency lockfile refresh workflow then adds one commit
 # re-resolving transitive dependencies within declared ranges; Dependabot stops
 # rebasing after that commit, so merge or close the PR before the next run.
+# Automated security-update PRs are disabled for the repository: Dependabot
+# alerts stay on, and advisory fixes arrive through this grouped PR and its
+# refresh (governance/dependency-release-policy.json#routineUpdates).
 multi-ecosystem-groups:
   stack-maintenance:
     schedule:
@@ -44,13 +47,6 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
-    groups:
-      root-security:
-        applies-to: security-updates
-        patterns:
-          - '*'
-        exclude-patterns:
-          - '@bsv/*'
 
   # Infra services live outside the pnpm workspace and maintain package-lock
   # files. Dependabot can update them in the same grouped PR; release-time
@@ -90,13 +86,6 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
-    groups:
-      infra-security:
-        applies-to: security-updates
-        patterns:
-          - '*'
-        exclude-patterns:
-          - '@bsv/*'
 
   # Keep deployment manifests current. Runtime Dockerfiles are digest-only, so
   # exclude them from this scan: Dependabot treats their bare `node` dependency

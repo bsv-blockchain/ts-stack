@@ -198,6 +198,20 @@ export function validateRoutineSchedule(routine, dependabot, refreshWorkflow) {
   return errors
 }
 
+// Security-update groups only take effect while the repository's automated
+// security-update pull requests are enabled; keep the config matching that.
+export function validateSecurityUpdateGroups(securityUpdates, dependabot) {
+  const groups = (dependabot.match(/applies-to:\s*security-updates/g) ?? []).length
+  if (securityUpdates.automatedPullRequests === false) {
+    return groups > 0
+      ? ['Dependabot security-update groups are inert while automated security PRs are disabled']
+      : []
+  }
+  return groups < 2
+    ? ['Dependabot must group immediate root and infrastructure npm security updates']
+    : []
+}
+
 function validateRoutinePolicy(policy, errors) {
   const dependabot = fs.readFileSync(
     path.join(ROOT, policy.routineUpdates.dependabotConfig),
@@ -214,9 +228,7 @@ function validateRoutinePolicy(policy, errors) {
   if (!/open-pull-requests-limit:\s*1/.test(dependabot)) {
     errors.push('Dependabot routine version PR concurrency must be one')
   }
-  if ((dependabot.match(/applies-to:\s*security-updates/g) ?? []).length < 2) {
-    errors.push('Dependabot must group immediate root and infrastructure npm security updates')
-  }
+  errors.push(...validateSecurityUpdateGroups(policy.routineUpdates.securityUpdates, dependabot))
   if ((dependabot.match(/dependency-name:\s*['"]?@bsv\/\*/g) ?? []).length < 2) {
     errors.push('Dependabot must leave first-party @bsv/* updates to release synchronization')
   }

@@ -2,7 +2,7 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.4.0'
+version: '1.5.0'
 last_updated: '2026-10-15'
 last_verified: '2026-10-15'
 review_cadence_days: 30
@@ -58,11 +58,19 @@ Dependabot proposes one coordinated multi-ecosystem maintenance PR on the 1st
 and 15th of each month (`stack-maintenance`, cron `0 6 1,15 * *`
 America/Los_Angeles). Patch and minor updates remain automated across the root
 workspace, standalone infrastructure lockfiles, deployment images, code
-generators, and GitHub Actions. The single open version-maintenance slot does
-not apply to security updates, so an old grouped PR cannot block immediate
-advisory remediation. Security updates are grouped only within a
-package-manager ecosystem and are never delayed into the cross-ecosystem
-version update. First-party `@bsv/*` versions remain owned by the release graph.
+generators, and GitHub Actions. First-party `@bsv/*` versions remain owned by
+the release graph.
+
+Automated Dependabot security-update pull requests are disabled for the
+repository; Dependabot alerts remain enabled. Advisory fixes that a compatible
+release resolves arrive through the grouped PR and its lockfile refresh below,
+so they can wait up to one cycle plus the seven-day release-age delay.
+Maintainers remediate high and critical alerts manually without waiting for the
+cycle, as well as any advisory that an in-range refresh cannot resolve (a fixed
+release outside the declared range, or a lockfile whose refresh failed). The
+dependency policy check rejects `applies-to: security-updates` groups while
+`routineUpdates.securityUpdates.automatedPullRequests` is `false`, because such
+groups would have no effect.
 
 Dependabot version updates move direct dependencies only. The
 [Dependency lockfile refresh](https://github.com/bsv-blockchain/ts-stack/blob/main/.github/workflows/dependency-refresh.yml)
@@ -86,8 +94,9 @@ the new head. The App needs only repository Contents read/write; the workflow
 reads `vars.DEPENDENCY_REFRESH_APP_CLIENT_ID` and
 `secrets.DEPENDENCY_REFRESH_APP_PRIVATE_KEY`. Once the refresh commit lands,
 Dependabot stops rebasing that PR, so merge or close it before the next grouped
-run. Security-update PRs share the group's branch prefix, so the workflow
-selects only the PR whose title names the `stack-maintenance` group. To refresh
+run. The workflow selects only the PR whose title names the `stack-maintenance`
+group, so single-package Dependabot PRs on the same branch prefix (for example
+security updates, if they are re-enabled) are never refreshed. To refresh
 an already refreshed PR again before merge, run the workflow manually with
 `force` enabled.
 

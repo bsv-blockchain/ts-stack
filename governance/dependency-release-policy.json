@@ -19,9 +19,10 @@
       "commitSubject": "chore(deps): refresh lockfiles within declared ranges"
     },
     "securityUpdates": {
-      "response": "immediate",
-      "groupedWithinEcosystem": true,
-      "independentOfVersionPullRequestLimit": true
+      "automatedPullRequests": false,
+      "alerts": "enabled",
+      "remediation": "grouped stack-maintenance pull request and its lockfile refresh",
+      "manualRemediation": "high and critical alerts, and any advisory the in-range refresh cannot resolve"
     }
   },
   "dependencyPullRequestEvidence": {

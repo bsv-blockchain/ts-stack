@@ -18,7 +18,8 @@ import {
   validateDependabotExclusions,
   validateDependencyReleaseGovernance,
   validatePullRequestEvidence,
-  validateRoutineSchedule
+  validateRoutineSchedule,
+  validateSecurityUpdateGroups
 } from './dependency-release-governance.mjs'
 
 const dependencyPolicy = JSON.parse(
@@ -219,6 +220,27 @@ test('grouped Dependabot schedule and lockfile refresh stay aligned', () => {
       `${routine.lockfileRefresh.workflow} must not run on pull_request_target`
     ]
   )
+})
+
+test('security-update groups follow the repository security-update setting', () => {
+  const group = `    groups:
+      root-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+`
+  const twoGroups = `${group}${group.replace('root-security', 'infra-security')}`
+  const disabled = { automatedPullRequests: false }
+  const enabled = { automatedPullRequests: true }
+
+  assert.deepEqual(validateSecurityUpdateGroups(disabled, ''), [])
+  assert.deepEqual(validateSecurityUpdateGroups(disabled, group), [
+    'Dependabot security-update groups are inert while automated security PRs are disabled'
+  ])
+  assert.deepEqual(validateSecurityUpdateGroups(enabled, twoGroups), [])
+  assert.deepEqual(validateSecurityUpdateGroups(enabled, group), [
+    'Dependabot must group immediate root and infrastructure npm security updates'
+  ])
 })
 
 function installReport(names) {
