@@ -168,8 +168,8 @@ export function validateRoutineSchedule(routine, dependabot, refreshWorkflow) {
     errors.push(`Dependabot does not define multi-ecosystem group ${group}`)
   } else {
     for (const [key, value] of Object.entries(routine.schedule)) {
-      const accepted = [`${key}: ${value}`, `${key}: '${value}'`, `${key}: "${value}"`]
-      if (!block.some(line => accepted.includes(line))) {
+      const accepted = new Set([`${key}: ${value}`, `${key}: '${value}'`, `${key}: "${value}"`])
+      if (!block.some(line => accepted.has(line))) {
         errors.push(`Dependabot ${group} schedule must set ${key}: ${value}`)
       }
     }
