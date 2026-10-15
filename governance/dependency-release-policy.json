@@ -4,9 +4,20 @@
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
-    "multiEcosystemGroup": "monthly-stack-maintenance",
-    "cadence": "monthly",
+    "multiEcosystemGroup": "stack-maintenance",
+    "cadence": "twice-monthly",
+    "schedule": {
+      "interval": "cron",
+      "cronjob": "0 6 1,15 * *",
+      "timezone": "America/Los_Angeles"
+    },
     "versionPullRequestLimit": 1,
+    "lockfileRefresh": {
+      "workflow": ".github/workflows/dependency-refresh.yml",
+      "command": "node scripts/dependency-lockfile-refresh.mjs",
+      "releaseAgeDays": 7,
+      "commitSubject": "chore(deps): refresh lockfiles within declared ranges"
+    },
     "securityUpdates": {
       "response": "immediate",
       "groupedWithinEcosystem": true,

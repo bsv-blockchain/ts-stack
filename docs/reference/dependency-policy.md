@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.4'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+version: '1.4.0'
+last_updated: '2026-10-15'
+last_verified: '2026-10-15'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -54,14 +54,42 @@ commands are documented in
 
 ## Automation boundaries
 
-Dependabot proposes one coordinated multi-ecosystem maintenance PR each month.
-Patch and minor updates remain automated across the root workspace, standalone
-infrastructure lockfiles, deployment images, code generators, and GitHub
-Actions. The single open version-maintenance slot does not apply to security
-updates, so an old monthly PR cannot block immediate advisory remediation.
-Security updates are grouped only within a package-manager ecosystem and are
-never delayed into the monthly cross-ecosystem version update. First-party
-`@bsv/*` versions remain owned by the release graph.
+Dependabot proposes one coordinated multi-ecosystem maintenance PR on the 1st
+and 15th of each month (`stack-maintenance`, cron `0 6 1,15 * *`
+America/Los_Angeles). Patch and minor updates remain automated across the root
+workspace, standalone infrastructure lockfiles, deployment images, code
+generators, and GitHub Actions. The single open version-maintenance slot does
+not apply to security updates, so an old grouped PR cannot block immediate
+advisory remediation. Security updates are grouped only within a
+package-manager ecosystem and are never delayed into the cross-ecosystem
+version update. First-party `@bsv/*` versions remain owned by the release graph.
+
+Dependabot version updates move direct dependencies only. The
+[Dependency lockfile refresh](https://github.com/bsv-blockchain/ts-stack/blob/main/.github/workflows/dependency-refresh.yml)
+workflow therefore adds one commit to the open grouped PR that re-resolves the
+root `pnpm-lock.yaml` and every `infra/**/package-lock.json` to the newest
+releases the committed manifests already allow, so transitive patch and
+advisory fixes are reviewed in the same CI run. It runs
+`node scripts/dependency-lockfile-refresh.mjs`, which:
+
+- leaves every `package.json` unchanged and fails if anything other than a
+  lockfile changes;
+- never moves a first-party `@bsv/*` resolution;
+- disables lifecycle scripts and runs package managers without a token;
+- keeps the seven-day release-age delay (`minimumReleaseAge` for pnpm,
+  `--before` for npm) and pnpm's trust-downgrade protection; and
+- refreshes each lockfile independently, committing the ones that succeed and
+  failing the workflow with a per-lockfile summary for the rest.
+
+The refresh pushes with a GitHub App installation token so the PR's CI runs on
+the new head. The App needs only repository Contents read/write; the workflow
+reads `vars.DEPENDENCY_REFRESH_APP_CLIENT_ID` and
+`secrets.DEPENDENCY_REFRESH_APP_PRIVATE_KEY`. Once the refresh commit lands,
+Dependabot stops rebasing that PR, so merge or close it before the next grouped
+run. Security-update PRs share the group's branch prefix, so the workflow
+selects only the PR whose title names the `stack-maintenance` group. To refresh
+an already refreshed PR again before merge, run the workflow manually with
+`force` enabled.
 
 Standalone infrastructure uses npm `package-lock.json` files outside the pnpm
 workspace. Its Dependabot entry excludes only the unrelated ancestor
@@ -81,11 +109,11 @@ byte-for-byte generated-output verification. A resolver proposal does not
 silently change the CI toolchain or authorize different generated types.
 
 Major changes that alter a runtime, compiler, or persisted-data contract are
-held from the routine monthly PR until their focused migration is ready:
+held from the routine grouped PR until their focused migration is ready:
 
 - Future TypeScript compiler majors are held in both root and standalone
   infrastructure npm scopes; TypeScript 7 patch and minor maintenance remains
-  eligible for the monthly update.
+  eligible for the grouped update.
 - Node majors are held in the governed container-base manifest so CI, release,
   and every runtime image move together.
 - MySQL and MongoDB majors are held until backup/restore, supported upgrade

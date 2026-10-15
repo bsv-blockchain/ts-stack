@@ -149,17 +149,62 @@ export function validateDependabotExclusions(source) {
   return errors
 }
 
+// The grouped schedule and the lockfile refresh that joins its pull request
+// must agree, or the refresh silently stops finding the pull request.
+export function validateRoutineSchedule(routine, dependabot, refreshWorkflow) {
+  const errors = []
+  const group = routine.multiEcosystemGroup
+  const groups = dependabot.split(/^updates:/m)[0]
+  const block = groups.split(new RegExp(`^  ${group}:$`, 'm'))[1]?.split(/^ {2}\S/m)[0]
+  if (block === undefined) {
+    errors.push(`Dependabot does not define multi-ecosystem group ${group}`)
+  } else {
+    for (const [key, value] of Object.entries(routine.schedule)) {
+      const expected = new RegExp(
+        `^ {6}${key}:\\s*['"]?${value.replace(/[*.]/g, '\\$&')}['"]?$`,
+        'm'
+      )
+      if (!expected.test(block))
+        errors.push(`Dependabot ${group} schedule must set ${key}: ${value}`)
+    }
+  }
+  for (const [, referenced] of dependabot.matchAll(/multi-ecosystem-group:\s*(\S+)/g)) {
+    if (referenced !== group)
+      errors.push(`Dependabot update references unknown group ${referenced}`)
+  }
+
+  const refresh = routine.lockfileRefresh
+  for (const fragment of [
+    refresh.command,
+    refresh.commitSubject,
+    `dependabot-${group.replaceAll('-', '_')}-`,
+    `the \\"${group}\\" group`,
+    'permissions: {}',
+    'persist-credentials: false'
+  ]) {
+    if (!refreshWorkflow.includes(fragment)) {
+      errors.push(`${refresh.workflow} must contain ${JSON.stringify(fragment)}`)
+    }
+  }
+  if (/pull_request_target/.test(refreshWorkflow)) {
+    errors.push(`${refresh.workflow} must not run on pull_request_target`)
+  }
+  return errors
+}
+
 function validateRoutinePolicy(policy, errors) {
   const dependabot = fs.readFileSync(
     path.join(ROOT, policy.routineUpdates.dependabotConfig),
     'utf8'
   )
   errors.push(...validateDependabotExclusions(dependabot))
-  const group = policy.routineUpdates.multiEcosystemGroup
-  if (!dependabot.includes(`${group}:`)) errors.push(`Dependabot does not define ${group}`)
-  if (!/interval:\s*monthly/.test(dependabot)) {
-    errors.push('Dependabot routine maintenance must run monthly')
-  }
+  errors.push(
+    ...validateRoutineSchedule(
+      policy.routineUpdates,
+      dependabot,
+      fs.readFileSync(path.join(ROOT, policy.routineUpdates.lockfileRefresh.workflow), 'utf8')
+    )
+  )
   if (!/open-pull-requests-limit:\s*1/.test(dependabot)) {
     errors.push('Dependabot routine version PR concurrency must be one')
   }

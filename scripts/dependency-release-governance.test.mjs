@@ -17,7 +17,8 @@ import {
   publishedInstallContexts,
   validateDependabotExclusions,
   validateDependencyReleaseGovernance,
-  validatePullRequestEvidence
+  validatePullRequestEvidence,
+  validateRoutineSchedule
 } from './dependency-release-governance.mjs'
 
 const dependencyPolicy = JSON.parse(
@@ -181,6 +182,42 @@ test('Dependabot rejects parent paths before GitHub disables every update job', 
         .replace('../../../pnpm-workspace.yaml', '**/pnpm-workspace.yaml')
     ),
     []
+  )
+})
+
+test('grouped Dependabot schedule and lockfile refresh stay aligned', () => {
+  const routine = dependencyPolicy.routineUpdates
+  const dependabot = fs.readFileSync(path.join(process.cwd(), routine.dependabotConfig), 'utf8')
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), routine.lockfileRefresh.workflow),
+    'utf8'
+  )
+  assert.deepEqual(validateRoutineSchedule(routine, dependabot, workflow), [])
+
+  const monthly = dependabot
+    .replace("interval: cron\n      cronjob: '0 6 1,15 * *'", 'interval: monthly')
+    .replace(
+      'multi-ecosystem-group: stack-maintenance',
+      'multi-ecosystem-group: monthly-stack-maintenance'
+    )
+  assert.deepEqual(validateRoutineSchedule(routine, monthly, workflow), [
+    'Dependabot stack-maintenance schedule must set interval: cron',
+    'Dependabot stack-maintenance schedule must set cronjob: 0 6 1,15 * *',
+    'Dependabot update references unknown group monthly-stack-maintenance'
+  ])
+
+  // Security updates share the branch prefix, so the group title must be
+  // required independently.
+  const renamed = workflow
+    .replaceAll('dependabot-stack_maintenance-', 'dependabot-other-')
+    .replaceAll('the \\"stack-maintenance\\" group', 'the \\"other\\" group')
+  assert.deepEqual(
+    validateRoutineSchedule(routine, dependabot, `${renamed}\non: pull_request_target`),
+    [
+      `${routine.lockfileRefresh.workflow} must contain "dependabot-stack_maintenance-"`,
+      `${routine.lockfileRefresh.workflow} must contain ${JSON.stringify('the \\"stack-maintenance\\" group')}`,
+      `${routine.lockfileRefresh.workflow} must not run on pull_request_target`
+    ]
   )
 })
 

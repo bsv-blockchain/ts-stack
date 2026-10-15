@@ -128,7 +128,7 @@ browser, mobile, infrastructure, CodeQL, audit, and documentation gates pass.
 Do not add a peer override, invoke the compatibility `tsc6` from a build script,
 or suppress a TypeScript 7 diagnostic.
 
-Routine TypeScript 7 patch and minor updates may flow through the monthly
+Routine TypeScript 7 patch and minor updates may flow through the grouped
 dependency process. Future compiler majors remain coordinated migrations.
 Review the compatibility boundary at least monthly and when TypeScript 7.1 or a
 later stable API becomes available. Remove `@typescript/typescript6` only after
