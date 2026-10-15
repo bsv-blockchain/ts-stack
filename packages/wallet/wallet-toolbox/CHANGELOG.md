@@ -28,6 +28,16 @@ attention to changes that materially alter behavior or extend functionality.
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
 
+## wallet-toolbox 2.14.10
+
+- Live `syncToWriter` / `syncFromReader` compare reader and writer
+  `TableSettings.chain` before any chunk moves and throw `WERR_NETWORK_CHAIN`
+  on mismatch. The class remains a public sdk export with its deserializer and
+  JSON round-trip. Portable BRC-38 import still throws a generic `Error`.
+  Custom `processSyncChunk` writers may set `ProcessSyncChunkResult.error`;
+  both live-sync loops throw that error and stop. First-party providers still
+  throw. No API or schema migration is required.
+
 ## wallet-toolbox 2.14.9
 
 - Complete per-transaction broadcast results when the refreshed request is
