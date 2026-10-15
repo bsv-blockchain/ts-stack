@@ -110,9 +110,10 @@ export function createDefaultWalletServicesOptions(
     deploymentId?: string,
     chaintracks?: ChaintracksClientApi,
     /**
-     * Optional Arcade endpoint. TTN uses its public Arcade endpoint by default; other
-     * chains remain opt-in. Arcade is registered as the primary broadcaster ahead of ARC.
-     * Pass an empty string to explicitly disable the TTN default.
+     * Optional Arcade endpoint. TTN uses its public Arcade endpoint by default and regtest
+     * uses REGTEST_ARCADE_URL; other chains remain opt-in. Arcade is registered as the
+     * primary broadcaster ahead of ARC. Pass an empty string to explicitly disable the
+     * TTN or regtest default.
      */
     arcadeUrl?: string,
     /** Server-level API key (Bearer) for the Arcade endpoint, if it requires auth. */
@@ -165,8 +166,8 @@ export function createDefaultWalletServicesOptions(
     chaintracksFiatExchangeRatesUrl,
     chaintracks,
     // Arcade uses EF at /tx. Legacy ARC uses BEEF at /v1/tx and has no
-    // compatible public TTN endpoint, so do not install it as a TTN fallback.
-    arcUrl: chain === 'ttn' ? '' : arcDefaultUrl(chain),
+    // compatible TTN or regtest endpoint, so do not install it as their fallback.
+    arcUrl: arcDefaultUrl(chain),
     arcConfig: {
       apiKey: taalArcApiKey ?? undefined,
       deploymentId,
@@ -183,10 +184,12 @@ export function createDefaultWalletServicesOptions(
     bitailsApiKey
   }
 
-  // Arcade (bsv-blockchain/arcade) primary broadcaster. TTN has no compatible
-  // public ARC fallback, so it defaults to the known TTN Arcade endpoint. Existing
-  // mainnet/testnet provider sets remain opt-in and therefore unchanged.
-  const resolvedArcadeUrl = arcadeUrl ?? (chain === 'ttn' ? arcadeDefaultUrl(chain) : undefined)
+  // Arcade (bsv-blockchain/arcade) primary broadcaster. TTN and regtest have no
+  // compatible ARC fallback, so they default to their Arcade endpoint (TTN's public
+  // one, regtest's from REGTEST_ARCADE_URL). Existing mainnet/testnet provider sets
+  // remain opt-in and therefore unchanged.
+  const resolvedArcadeUrl =
+    arcadeUrl ?? (chain === 'ttn' || chain === 'regtest' ? arcadeDefaultUrl(chain) : undefined)
   if (resolvedArcadeUrl != null && resolvedArcadeUrl !== '') {
     o.arcadeUrl = resolvedArcadeUrl
     o.arcadeConfig = {
@@ -238,8 +241,8 @@ export function arcDefaultUrl(chain: Chain): string {
       // Private per-deployment endpoint supplied via TSTN_ARCADE_URL ('' when unset).
       return tstnArcadeUrl() ?? ''
     case 'regtest':
-      // Private per-deployment endpoint supplied via REGTEST_ARCADE_URL ('' when unset).
-      return regtestArcadeUrl() ?? ''
+      // Regtest deployments run Arcade (EF at /tx), not legacy ARC (BEEF at /v1/tx).
+      return ''
     case 'mock':
       return ''
   }

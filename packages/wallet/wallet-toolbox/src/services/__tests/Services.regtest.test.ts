@@ -43,10 +43,12 @@ describe('regtest network wiring', () => {
 
   test('service URLs come from the environment', () => {
     expect(arcadeDefaultUrl('regtest')).toBe(ARCADE)
-    expect(arcDefaultUrl('regtest')).toBe(ARCADE)
+    // Regtest runs Arcade (EF at /tx), never legacy ARC (BEEF at /v1/tx).
+    expect(arcDefaultUrl('regtest')).toBe('')
     // ChainTracks falls back to the Arcade host when REGTEST_CHAINTRACKS_URL is unset.
     expect(regtestChaintracksUrl()).toBe(`${ARCADE}/chaintracks/v1`)
-    expect(createDefaultWalletServicesOptions('regtest').arcUrl).toBe(ARCADE)
+    expect(createDefaultWalletServicesOptions('regtest').arcUrl).toBe('')
+    expect(createDefaultWalletServicesOptions('regtest').arcadeUrl).toBe(ARCADE)
 
     process.env.REGTEST_CHAINTRACKS_URL = 'https://regtest-chaintracks.example.internal/v1'
     expect(regtestChaintracksUrl()).toBe('https://regtest-chaintracks.example.internal/v1')
@@ -67,6 +69,29 @@ describe('regtest network wiring', () => {
     expect(arcadeDefaultUrl('regtest')).toBeUndefined()
     expect(arcDefaultUrl('regtest')).toBe('')
     expect(() => regtestChaintracksUrl()).toThrow('regtest chain requires a ChainTracks URL')
+  })
+
+  test('the default factory wires Arcade from the environment and no legacy ARC', () => {
+    // No explicit arcadeUrl: this is what `new Services('regtest')` builds.
+    const services = new Services('regtest')
+
+    expect(services.postBeefServices.services.map(s => s.name)).toEqual(['ArcadeBeef'])
+    expect(services.getMerklePathServices.services.map(s => s.name)).toEqual(['Arcade'])
+
+    // An explicit empty arcadeUrl still disables the default, leaving no broadcaster.
+    const disabled = createDefaultWalletServicesOptions(
+      'regtest',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '' // arcadeUrl
+    )
+    expect(disabled.arcadeUrl).toBeUndefined()
+    expect(disabled.arcUrl).toBe('')
   })
 
   test('Arcade is wired and WhatsOnChain is not registered', () => {

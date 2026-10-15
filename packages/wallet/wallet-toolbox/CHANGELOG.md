@@ -11,8 +11,10 @@ attention to changes that materially alter behavior or extend functionality.
   canonical regtest genesis header; `ChaintracksServiceClient` and
   `GoChaintracksServiceClient` accept a service that reports its chain as
   `regtest`; Arcade and ChainTracks endpoints come from `REGTEST_ARCADE_URL` and
-  `REGTEST_CHAINTRACKS_URL` (`regtestArcadeUrl`, `regtestChaintracksUrl`); and,
-  like `tstn`, no WhatsOnChain provider is registered.
+  `REGTEST_CHAINTRACKS_URL` (`regtestArcadeUrl`, `regtestChaintracksUrl`). Like
+  TTN, the default regtest services use Arcade as broadcaster and Merkle-path
+  provider and register no legacy ARC fallback; like `tstn`, no WhatsOnChain
+  provider is registered.
 - Header proof-of-work and chain-work checks take an optional `chain`, and the
   new `proofOfWorkLimitBits(chain)` reports the limit it selects. Only
   `regtest` raises it, to `0x207fffff`. Every other chain, and every check that

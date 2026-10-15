@@ -592,7 +592,9 @@ The supported chain identifiers are `main`, `test`, `stn`, `ttn`, `tstn`, and
 TestNet, and regtest do not have operator-independent public endpoints: set
 `STN_CHAINTRACKS_URL`, `TSTN_CHAINTRACKS_URL`, or `REGTEST_CHAINTRACKS_URL`, use
 the matching Arcade environment variable, or inject an explicit
-`ChaintracksClientApi`.
+`ChaintracksClientApi`. Like TTN, the default regtest services use Arcade
+(`REGTEST_ARCADE_URL`) as broadcaster and Merkle-path provider and register no
+legacy ARC fallback.
 
 `regtest` is Teranode's regression network (go-chaincfg `RegressionNetParams`):
 the canonical regtest genesis header and a proof-of-work limit of `0x207fffff`.
