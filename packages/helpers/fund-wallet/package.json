@@ -39,18 +39,18 @@
   },
   "dependencies": {
     "@bsv/wallet-toolbox": "workspace:^",
-    "chalk": "^6.0.0"
+    "chalk": "^6.0.1"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.4",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "4.1.11",
-    "fast-check": "^4.9.0",
-    "oxlint": "^1.83.0",
+    "@vitest/coverage-v8": "5.0.3",
+    "fast-check": "^4.10.2",
+    "oxlint": "^1.87.0",
     "tsdown": "0.23.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.3"
   },
   "files": [
     "dist",
