@@ -214,6 +214,34 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Fixed (3.2.2 candidate)
+
+- Certificates issued before 2.8.0 whose `type` decodes to fewer than 32
+  bytes are usable again
+  ([#1085](https://github.com/bsv-blockchain/ts-stack/issues/1085)). 2.8.0
+  began requiring exactly 32 bytes on every wallet certificate call without
+  recording it as a breaking change: one such certificate made an unfiltered
+  `listCertificates` fail as a whole, and the certificate could not be listed,
+  proven, verified or relinquished, so there was no migration path.
+  `listCertificates` type filters, `proveCertificate`, `relinquishCertificate`,
+  wallet result validation (including discovery results) and
+  `Certificate.verify()` now accept a 1–32-byte canonical-base64 type.
+  `verify()` rebuilds the historical signed serialization, which wrote the
+  decoded type bytes unpadded; the certifier signing key is derived from the
+  exact `type` and `serialNumber`, so a shorter type cannot be confused with a
+  canonical one.
+- New issuance stays canonical: `acquireCertificate` (issuance and direct),
+  `MasterCertificate.issueCertificateForSubject`, `Certificate.sign()`,
+  `toBinary()` and `fromBinary()` still require exactly 32 bytes. The
+  validation error now says `exactly 32 bytes` instead of `at least 32 bytes`.
+- The binary wallet wire has no type length prefix and cannot carry a legacy
+  type. `WalletWireTransceiver` now rejects one before writing the request and
+  `WalletWireProcessor` rejects one in a list, discovery or acquisition result,
+  each with an explicit error, instead of misaligning the frame. JSON
+  substrates (`HTTPWalletJSON`, `window.CWI`, in-process wallets) carry legacy
+  certificates. Legacy acceptance is a deprecation window; its removal would be
+  a major release.
+
 ### Fixed (3.2.1 candidate)
 
 - Align `OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operand decoding with

@@ -1963,6 +1963,7 @@ export default class WalletWireProcessor implements WalletWire {
             )
 
             // Serialize the certificate (assuming Certificate class is available)
+            this.#requireWireCertificateType(acquireResult.type, 'acquireCertificate result type')
             const cert = new Certificate(
               acquireResult.type,
               acquireResult.serialNumber,
@@ -2055,6 +2056,10 @@ export default class WalletWireProcessor implements WalletWire {
             // certificates
             for (const cert of certificatesPage.records as typeof listResult.certificates) {
               ;(() => {
+                this.#requireWireCertificateType(
+                  cert.type,
+                  'listCertificates result certificate type'
+                )
                 const certificate = new Certificate(
                   cert.type,
                   cert.serialNumber,
@@ -2475,6 +2480,22 @@ export default class WalletWireProcessor implements WalletWire {
     return { privileged, privilegedReason }
   }
 
+  /**
+   * Certificate binaries on the wire have no type length prefix, so a
+   * pre-2.8.0 certificate whose type decodes to fewer than 32 bytes cannot be
+   * returned over the binary wire. Fail with a clear reason instead of a
+   * misaligned certificate the client cannot parse.
+   */
+  #requireWireCertificateType(type: string, context: string): void {
+    const typeBytes = UtilsToUint8Array(type, 'base64')
+    if (typeBytes.length !== 32) {
+      throw new Error(
+        `The binary wallet wire carries only 32-byte certificate types; ${context} decodes to ${typeBytes.length} bytes. ` +
+          'Use a JSON wallet substrate for a legacy certificate.'
+      )
+    }
+  }
+
   #serializeDiscoveryResult(discoverResult: any): Uint8Array {
     const resultWriter = new WriterUint8Array()
     const certificatesPage = this.#requirePageTotal(
@@ -2489,6 +2510,7 @@ export default class WalletWireProcessor implements WalletWire {
     // certificates
     for (const cert of certificatesPage.records) {
       // Serialize certificate binary
+      this.#requireWireCertificateType(cert.type, 'discovery result certificate type')
       const certificate = new Certificate(
         cert.type,
         cert.serialNumber,

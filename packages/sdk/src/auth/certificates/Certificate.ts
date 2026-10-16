@@ -42,6 +42,26 @@ function assertCanonicalBase64Length(
   return decoded
 }
 
+/**
+ * Certificates issued before SDK 2.8.0 may carry a type shorter than 32 bytes.
+ * Their signatures cover the historical serialization, which wrote the decoded
+ * type bytes as-is, so signature verification accepts 1–32 bytes.
+ */
+function assertHistoricalCertificateType(value: string): number[] {
+  let decoded: number[]
+  try {
+    decoded = base64ToBytes(value)
+  } catch {
+    throw new Error('Invalid certificate type: expected canonical base64')
+  }
+  if (decoded.length < 1 || decoded.length > 32) {
+    throw new Error(
+      `Invalid certificate type length: expected 1 to 32 bytes, received ${decoded.length}`
+    )
+  }
+  return decoded
+}
+
 function snapshotCertificateFields(
   value: unknown
 ): Record<CertificateFieldNameUnder50Bytes, string> {
@@ -150,6 +170,10 @@ function assertCompressedPublicKey(value: number[], fieldName: string): void {
 export default class Certificate {
   /**
    * Type identifier for the certificate, base64 encoded string, 32 bytes.
+   *
+   * Certificates issued before SDK 2.8.0 may carry a shorter type. `verify()`
+   * still accepts their signatures, but `toBinary()`, `fromBinary()`, `sign()`
+   * and the binary wallet wire require the canonical 32 bytes.
    */
   type: Base64String
 
@@ -227,10 +251,22 @@ export default class Certificate {
    * @returns {number[]} - The serialized certificate in binary format.
    */
   toBinary(includeSignature: boolean = true): number[] {
+    return this.#serialize(includeSignature, false)
+  }
+
+  /**
+   * Shared serializer for `toBinary()` and signature verification. The layout
+   * has no type length prefix, so the canonical encoding requires a 32-byte
+   * type; verification also reproduces the historical serialization of a
+   * pre-2.8.0 certificate whose type is shorter.
+   */
+  #serialize(includeSignature: boolean, historicalType: boolean): number[] {
     const writer = new Writer()
 
-    // Write type (Base64String, 32 bytes)
-    const typeBytes = assertCanonicalBase64Length(this.type, 'type', 32)
+    // Write type (Base64String, 32 bytes; 1–32 bytes for a historical certificate)
+    const typeBytes = historicalType
+      ? assertHistoricalCertificateType(this.type)
+      : assertCanonicalBase64Length(this.type, 'type', 32)
     writer.write(typeBytes)
 
     // Write serialNumber (Base64String, 32 bytes)
@@ -424,7 +460,11 @@ export default class Certificate {
    */
   async verify(): Promise<boolean> {
     try {
-      const verificationData = this.toBinary(false) // Exclude the signature from the verification data
+      // Exclude the signature from the verification data. A certificate issued
+      // before SDK 2.8.0 may carry a sub-32-byte type; its signature covers the
+      // historical serialization, which the signing key derivation below also
+      // binds to the exact type and serial number.
+      const verificationData = this.#serialize(false, true)
       const certifierKey = PublicKey.fromString(this.certifier).deriveChild(
         new BigNumber(1) as PrivateKey,
         `2-certificate signature-${this.type} ${this.serialNumber}`

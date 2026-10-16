@@ -1383,7 +1383,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     validateWalletArgs('acquireCertificate', args)
     const bindingRequest = snapshotWalletResultRequest('acquireCertificate', args)
     const paramWriter = new WriterUint8Array()
-    paramWriter.write(UtilsToUint8Array(args.type, 'base64'))
+    paramWriter.write(this.#encodeWireCertificateType(args.type, 'acquireCertificate type'))
     paramWriter.write(UtilsToUint8Array(args.certifier, 'hex'))
 
     const fieldEntries = Object.entries(args.fields)
@@ -1462,6 +1462,22 @@ export default class WalletWireTransceiver implements WalletInterface {
     return paramWriter.toUint8Array()
   }
 
+  /**
+   * The wire writes certificate types as fixed 32-byte fields with no length
+   * prefix, so a pre-2.8.0 certificate type that decodes to fewer bytes cannot
+   * be carried. Reject it explicitly instead of misaligning every later field.
+   */
+  #encodeWireCertificateType(type: Base64String | undefined, context: string): Uint8Array {
+    const typeBytes = type === undefined ? new Uint8Array(0) : UtilsToUint8Array(type, 'base64')
+    if (typeBytes.length !== 32) {
+      throw new Error(
+        `The binary wallet wire carries only 32-byte certificate types; ${context} decodes to ${typeBytes.length} bytes. ` +
+          'Use a JSON wallet substrate for a legacy certificate.'
+      )
+    }
+    return typeBytes
+  }
+
   async listCertificates(
     args: {
       certifiers: PubKeyHex[]
@@ -1483,7 +1499,7 @@ export default class WalletWireTransceiver implements WalletInterface {
 
     paramWriter.writeVarIntNum(args.types.length)
     for (const type of args.types) {
-      paramWriter.write(UtilsToUint8Array(type, 'base64'))
+      paramWriter.write(this.#encodeWireCertificateType(type, 'listCertificates types'))
     }
     if (typeof args.limit === 'number') {
       paramWriter.writeVarIntNum(args.limit)
@@ -1565,7 +1581,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     validateWalletArgs('proveCertificate', args)
     const bindingRequest = snapshotWalletResultRequest('proveCertificate', args)
     const paramWriter = new WriterUint8Array()
-    const typeAsArray = UtilsToUint8Array(args.certificate.type, 'base64')
+    const typeAsArray = this.#encodeWireCertificateType(
+      args.certificate.type,
+      'proveCertificate certificate.type'
+    )
     paramWriter.write(typeAsArray)
     const subjectAsArray = UtilsToUint8Array(args.certificate.subject, 'hex')
     paramWriter.write(subjectAsArray)
@@ -1634,7 +1653,7 @@ export default class WalletWireTransceiver implements WalletInterface {
   ): Promise<{ relinquished: true }> {
     validateWalletArgs('relinquishCertificate', args)
     const paramWriter = new WriterUint8Array()
-    const typeAsArray = UtilsToUint8Array(args.type, 'base64')
+    const typeAsArray = this.#encodeWireCertificateType(args.type, 'relinquishCertificate type')
     paramWriter.write(typeAsArray)
     const serialNumberAsArray = UtilsToUint8Array(args.serialNumber, 'base64')
     paramWriter.write(serialNumberAsArray)

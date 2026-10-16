@@ -436,6 +436,23 @@ function validateOptionalBase64String(
   return validateBase64String(s, name, min, max)
 }
 
+/**
+ * A canonical certificate type decodes to exactly 32 bytes, which the binary
+ * certificate format and wallet wire depend on. Certificates issued before
+ * SDK 2.8.0 may carry a shorter type and still exist in wallet storage, so the
+ * methods that operate on certificates a wallet already holds (list, prove,
+ * relinquish) accept 1–32 bytes during the deprecation window. New issuance
+ * through `acquireCertificate` keeps the exact 32-byte requirement.
+ */
+function validateCertificateType(s: string, name: string): string {
+  return validateBase64String(s, name, 1, 32)
+}
+
+function validateOptionalCertificateType(s: string | undefined, name: string): string | undefined {
+  if (s === undefined) return undefined
+  return validateCertificateType(s, name)
+}
+
 function invalidBase64(name: string): never {
   throw new WERR_INVALID_PARAMETER(name, 'valid base64 string')
 }
@@ -467,6 +484,9 @@ function validateDecodedBase64Length(
   min?: number,
   max?: number
 ): void {
+  if (min !== undefined && min === max && bytes !== min) {
+    throw new WERR_INVALID_PARAMETER(name, `exactly ${min} bytes`)
+  }
   if (min !== undefined && bytes < min) {
     throw new WERR_INVALID_PARAMETER(name, `at least ${min} bytes`)
   }
@@ -1155,7 +1175,7 @@ export function validateRelinquishCertificateArgs(
 ): ValidRelinquishCertificateArgs {
   validateRecord(args, 'args')
   const vargs: ValidRelinquishCertificateArgs = {
-    type: validateBase64String(args.type, 'type', 32, 32),
+    type: validateCertificateType(args.type, 'type'),
     serialNumber: validateBase64String(args.serialNumber, 'serialNumber', 32, 32),
     certifier: validatePublicKey(args.certifier, 'certifier')
   }
@@ -1195,7 +1215,7 @@ export function validateListCertificatesArgs(
     certifiers: validateArray(args.certifiers, 'certifiers').map(c =>
       validatePublicKey(c, 'certifiers')
     ),
-    types: validateArray(args.types, 'types').map(t => validateBase64String(t, 'types', 32, 32)),
+    types: validateArray(args.types, 'types').map(t => validateCertificateType(t, 'types')),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
     offset: validateInteger(args.offset, 'offset', 0, 0),
     privileged: defaultFalse(args.privileged, 'privileged'),
@@ -1480,7 +1500,7 @@ export function validateProveCertificateArgs(
   }
 
   const vargs: ValidProveCertificateArgs = {
-    type: validateOptionalBase64String(args.certificate.type, 'certificate.type', 32, 32),
+    type: validateOptionalCertificateType(args.certificate.type, 'certificate.type'),
     serialNumber: validateOptionalBase64String(
       args.certificate.serialNumber,
       'certificate.serialNumber',

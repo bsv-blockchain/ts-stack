@@ -1474,18 +1474,34 @@ function stringRecord(
   return values as Record<string, string>
 }
 
+/**
+ * Decoded byte count of a canonical-base64 certificate field whose length lies
+ * within `minimumLength`–32 bytes. Throws otherwise; `validateCertificate`
+ * turns that into its single "canonical signed wallet certificate" rejection.
+ */
+function canonicalEncodedByteLength(
+  certificate: UnknownRecord,
+  name: 'type' | 'serialNumber',
+  minimumLength: number,
+  call: string,
+  field: string
+): number {
+  const encoded = base64(certificate[name], call, `${field}.${name}`)
+  const decoded = base64ToBytes(encoded)
+  if (decoded.length < minimumLength || decoded.length > 32 || bytesToBase64(decoded) !== encoded) {
+    throw new Error(`${field}.${name} must be canonical base64 of ${minimumLength}-32 bytes`)
+  }
+  return decoded.length
+}
+
 function validateCertificate(value: unknown, call: string, field: string): UnknownRecord {
   const certificate = record(value, call, field)
   try {
-    let encodedLength = 0
-    const encodedFieldNames = ['type', 'serialNumber'] as const
-    for (let index = 0; index < encodedFieldNames.length; index++) {
-      const name = encodedFieldNames[index]
-      const encoded = base64(certificate[name], call, `${field}.${name}`)
-      const decoded = base64ToBytes(encoded)
-      if (decoded.length !== 32 || bytesToBase64(decoded) !== encoded) throw new Error()
-      encodedLength += decoded.length
-    }
+    // A canonical type is 32 bytes, but certificates issued before SDK 2.8.0
+    // may hold a shorter one; a wallet must still be able to return those so
+    // the application can migrate them. Serial numbers were always 32 bytes.
+    let encodedLength = canonicalEncodedByteLength(certificate, 'type', 1, call, field)
+    encodedLength += canonicalEncodedByteLength(certificate, 'serialNumber', 32, call, field)
     const publicKeyFieldNames = ['subject', 'certifier'] as const
     for (let index = 0; index < publicKeyFieldNames.length; index++) {
       const name = publicKeyFieldNames[index]
