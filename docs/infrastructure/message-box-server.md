@@ -3,8 +3,8 @@ id: infra-message-box-server
 title: 'Message-box Server'
 kind: infra
 version: '1.1.43'
-last_updated: '2026-09-21'
-last_verified: '2026-09-21'
+last_updated: '2026-10-16'
+last_verified: '2026-10-16'
 review_cadence_days: 30
 status: stable
 tags: [messaging, overlay, store-and-forward, authentication]
@@ -13,6 +13,14 @@ tags: [messaging, overlay, store-and-forward, authentication]
 # Message Box Server
 
 > A secure peer-to-peer message routing server for the Bitcoin SV ecosystem. Provides identity-based message delivery, real-time WebSocket communication, and full mutual authentication using BRC-103 signatures.
+
+## Privacy Notice
+
+Message Box encrypts message content end to end between sender and recipient, so the host operator cannot read what you send. Private keys never leave your wallet, and the server returns messages only after it authenticates the recipient's identity key.
+
+To deliver messages, the operator can still see some metadata: when messages are sent and received, message size, and which identity keys (pseudonyms) exchange messages with each other, and the IP addresses that connect. Identity keys are not names, but repeated use can link activity over time.
+
+This balance keeps delivery simple and reliable while keeping content private. If unlinkability matters to you, use separate identity keys for each context or run your own Message Box server.
 
 ## What it does
 
