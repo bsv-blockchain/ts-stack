@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Added `registerRouter(path, factory)`. Registered routers mount during `start()` after the BRC-103 authentication middleware and before the admin routes and 404 handler, inheriting CORS, body parsing, response limits, and `req.auth`. Additive; no consumer migration is required.
 - Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
 
 ### 2.7.2 candidate — outbound and deployment hardening
