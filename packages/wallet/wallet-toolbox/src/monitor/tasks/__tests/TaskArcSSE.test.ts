@@ -79,6 +79,8 @@ function makeStorageWithReqs(reqApis: any[]): any {
       }
     }),
     transaction: jest.fn(async (fn: any) => await fn(undefined)),
+    // No other pending request spends the failed one: nothing to cascade.
+    findProvenTxReqs: jest.fn().mockResolvedValue([]),
     updateProvenTxReqWithNewProvenTx: jest.fn().mockResolvedValue({
       status: 'completed',
       history: '{}',
