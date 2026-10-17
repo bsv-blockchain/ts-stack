@@ -30,6 +30,16 @@ attention to changes that materially alter behavior or extend functionality.
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
 
+- `WalletPermissionsManager` keeps a grant for the session when its
+  permission token cannot be minted because the wallet has no coins to fund it
+  (`WERR_INSUFFICIENT_FUNDS`). The user is not asked again for the same
+  permission while the manager lives, and a grouped or counterparty grant
+  resumes the call waiting on it instead of rejecting it. The grant call still
+  throws the funding error, since no token was written; the next session asks
+  again and, once funded, mints the token as before. Spending authorizations
+  are never kept without their token, and every other mint failure still
+  re-opens the prompt.
+
 ## wallet-toolbox 2.14.10
 
 - Live `syncToWriter` / `syncFromReader` compare reader and writer
