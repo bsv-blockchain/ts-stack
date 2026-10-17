@@ -11,6 +11,8 @@ export interface GoChaintracksServiceClientOptions {
    * Arcade exposes this at `/chaintracks/v2`.
    */
   apiPrefix?: string
+  /** Receives single-line stream diagnostics of at most 512 characters; observer failures are isolated. */
+  onStreamError?: (message: string) => void
   fetch?: typeof fetch
   /** Timeout for HTTP requests and the initial SSE handshake. */
   requestTimeoutMsecs?: number
@@ -60,6 +62,22 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
   private readonly streamIdleTimeoutMsecs: number
   private readonly subscriptions = new Map<string, SseSubscription>()
   private nextSubscriptionId = 1
+  private streamErrors = 0
+  private readonly onStreamError?: (message: string) => void
+
+  /** Malformed events and stream failures, saturated at Number.MAX_SAFE_INTEGER. */
+  get streamErrorCount(): number {
+    return this.streamErrors
+  }
+
+  private reportStreamError(error: unknown): void {
+    this.streamErrors = Math.min(Number.MAX_SAFE_INTEGER, this.streamErrors + 1)
+    try {
+      this.onStreamError?.(safeDiagnostic(error, 512))
+    } catch {
+      // An observer must not prevent delivery of subsequent events.
+    }
+  }
 
   constructor(
     public chain: Chain,
@@ -77,6 +95,10 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
       throw new Error('options must contain accessor-free data properties.')
     }
     options = Object.freeze({ ...options })
+    if (options.onStreamError !== undefined && typeof options.onStreamError !== 'function') {
+      throw new Error('onStreamError must be a function.')
+    }
+    this.onStreamError = options.onStreamError
     const parsedServiceUrl = this.parseServiceUrl(serviceUrl)
     let base = parsedServiceUrl.toString()
     while (base.endsWith('/')) base = base.slice(0, -1)
@@ -265,7 +287,8 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
 
   async subscribeReorgs(listener: ReorgListener): Promise<string> {
     this.validateListener(listener)
-    return this.subscribe('reorg', '/reorg/stream', payload => {
+    return this.subscribe('reorg', '/reorg/stream', async (payload, signal) => {
+      payload = await this.normalizeReorg(payload, signal)
       const event = this.readExactRecord(
         payload,
         ['depth', 'oldTip', 'newTip', 'deactivatedHeaders'],
@@ -307,6 +330,56 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     })
   }
 
+  private async normalizeReorg(payload: unknown, signal: AbortSignal): Promise<unknown> {
+    if (!this.isPlainRecord(payload) || !Object.hasOwn(payload, 'orphanedHashes')) return payload
+    const event = this.readExactRecord(
+      payload,
+      ['depth', 'commonAncestor', 'newTip', 'orphanedHashes'],
+      'Go reorg stream event'
+    )
+    const hashes = event.orphanedHashes
+    if (
+      !Number.isSafeInteger(event.depth) ||
+      (event.depth as number) < 0 ||
+      (event.depth as number) > this.maxReorgHeaders ||
+      !Array.isArray(hashes) ||
+      hashes.length !== event.depth ||
+      hashes.some(hash => typeof hash !== 'string' || !/^[0-9a-fA-F]{64}$/.test(hash)) ||
+      new Set(hashes.map(hash => hash.toLowerCase())).size !== hashes.length
+    ) {
+      throw new Error('ChainTracks upstream returned an invalid Go reorg hash list or depth.')
+    }
+    const ancestor = this.validateRemoteHeader(event.commonAncestor, 'reorg common ancestor')
+    const newTip = this.validateRemoteHeader(event.newTip, 'reorg new tip')
+    const controller = new AbortController()
+    const onAbort = () => controller.abort()
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) controller.abort()
+    const timeout = setTimeout(onAbort, this.requestTimeoutMsecs)
+    const deactivatedHeaders: BlockHeader[] = []
+    try {
+      for (const hash of hashes) {
+        if (controller.signal.aborted) throw this.abortError()
+        const value = await this.getJsonOrUndefined(`/header/hash/${hash}`, controller.signal)
+        const header = this.validateRemoteHeader(value, 'reorg orphan header')
+        if (header.hash.toLowerCase() !== hash.toLowerCase()) {
+          throw new Error('ChainTracks upstream returned a header for the wrong hash.')
+        }
+        deactivatedHeaders.push(header)
+      }
+      if (controller.signal.aborted) throw this.abortError()
+      const oldest = deactivatedHeaders.at(-1)
+      if (oldest != null && (oldest.height !== ancestor.height + 1 || oldest.previousHash !== ancestor.hash)) {
+        throw new Error('ChainTracks upstream returned orphan headers unlinked to the common ancestor.')
+      }
+      return { depth: event.depth, oldTip: deactivatedHeaders[0] ?? ancestor, newTip, deactivatedHeaders }
+    } finally {
+      clearTimeout(timeout)
+      controller.abort()
+      signal.removeEventListener('abort', onAbort)
+    }
+  }
+
   async unsubscribe(subscriptionId: string): Promise<boolean> {
     if (typeof subscriptionId !== 'string' || subscriptionId.length === 0 || subscriptionId.length > 128) {
       throw new Error('subscriptionId must be a non-empty bounded string.')
@@ -322,7 +395,7 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
   private async subscribe(
     type: SseSubscription['type'],
     path: string,
-    onPayload: (payload: unknown) => void
+    onPayload: (payload: unknown, signal: AbortSignal) => void | Promise<void>
   ): Promise<string> {
     if (this.subscriptions.size >= GoChaintracksServiceClient.MAX_SUBSCRIPTIONS) {
       throw new Error('ChainTracks subscription capacity has been reached.')
@@ -346,15 +419,16 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
   private async runSseWithReconnect(
     path: string,
     signal: AbortSignal,
-    onPayload: (payload: unknown) => void
+    onPayload: (payload: unknown, signal: AbortSignal) => void | Promise<void>
   ): Promise<void> {
     let failures = 0
     while (!signal.aborted) {
       try {
         const receivedEvent = await this.runSse(path, signal, onPayload)
         failures = receivedEvent ? 0 : failures + 1
-      } catch {
+      } catch (error) {
         if (signal.aborted) return
+        this.reportStreamError(error)
         failures++
       }
       const multiplier = Math.min(2 ** Math.max(0, failures - 1), 64)
@@ -378,15 +452,19 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     })
   }
 
-  private async runSse(path: string, signal: AbortSignal, onPayload: (payload: unknown) => void): Promise<boolean> {
+  private async runSse(
+    path: string,
+    signal: AbortSignal,
+    onPayload: (payload: unknown, signal: AbortSignal) => void | Promise<void>
+  ): Promise<boolean> {
     const controller = new AbortController()
     const onAbort = () => controller.abort()
     signal.addEventListener('abort', onAbort, { once: true })
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMsecs)
     let receivedEvent = false
-    const observePayload = (payload: unknown) => {
+    const observePayload = async (payload: unknown) => {
       receivedEvent = true
-      onPayload(payload)
+      await onPayload(payload, controller.signal)
     }
     try {
       const response = await this.fetcher(this.url(path), {
@@ -414,10 +492,10 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
             throw new Error('ChainTracks upstream SSE chunk exceeds the configured byte limit.')
           }
           buffer += decoder.decode(value, { stream: true })
-          buffer = this.processSseBuffer(buffer, observePayload)
+          buffer = await this.processSseBuffer(buffer, observePayload, controller.signal)
         }
         buffer += decoder.decode()
-        this.processSseBuffer(`${buffer}\n\n`, observePayload)
+        await this.processSseBuffer(`${buffer}\n\n`, observePayload, controller.signal)
       } finally {
         await reader.cancel().catch(() => {})
         reader.releaseLock()
@@ -430,7 +508,11 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     return receivedEvent
   }
 
-  private processSseBuffer(buffer: string, onPayload: (payload: unknown) => void): string {
+  private async processSseBuffer(
+    buffer: string,
+    onPayload: (payload: unknown, signal: AbortSignal) => void | Promise<void>,
+    signal: AbortSignal
+  ): Promise<string> {
     buffer = buffer.replaceAll('\r\n', '\n')
     for (;;) {
       const boundary = buffer.indexOf('\n\n')
@@ -447,14 +529,15 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
         .map(line => line.slice(5).trimStart())
         .join('\n')
       if (data === '') continue
+      if (signal.aborted) throw this.abortError()
       let payload: unknown
       try {
         payload = JSON.parse(data)
-      } catch {
-        // Ignore malformed events; the next SSE event can still be valid.
+      } catch (error) {
+        this.reportStreamError(error)
         continue
       }
-      onPayload(payload)
+      await onPayload(payload, signal)
     }
   }
 
@@ -464,7 +547,7 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     return r
   }
 
-  private async getJsonOrUndefined(path: string): Promise<unknown | undefined> {
+  private async getJsonOrUndefined(path: string, parentSignal?: AbortSignal): Promise<unknown | undefined> {
     return await this.consumeWithTimeout(
       this.url(path),
       { headers: { Accept: 'application/json' } },
@@ -505,7 +588,8 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
           throw new Error('ChainTracks upstream returned an invalid legacy envelope.')
         }
         return value
-      }
+      },
+      parentSignal
     )
   }
 
@@ -527,11 +611,16 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
   private async consumeWithTimeout<T>(
     url: string,
     init: RequestInit,
-    consume: (response: Response, signal: AbortSignal) => Promise<T>
+    consume: (response: Response, signal: AbortSignal) => Promise<T>,
+    parentSignal?: AbortSignal
   ): Promise<T> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMsecs)
+    const onAbort = () => controller.abort()
+    parentSignal?.addEventListener('abort', onAbort, { once: true })
+    if (parentSignal?.aborted === true) controller.abort()
+    const timeout = setTimeout(onAbort, this.requestTimeoutMsecs)
     try {
+      if (controller.signal.aborted) throw this.abortError()
       const response = await this.fetcher(url, {
         ...init,
         redirect: 'error',
@@ -541,6 +630,7 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
     } finally {
       clearTimeout(timeout)
       controller.abort()
+      parentSignal?.removeEventListener('abort', onAbort)
     }
   }
 
