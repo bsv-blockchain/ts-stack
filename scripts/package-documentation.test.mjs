@@ -8,7 +8,7 @@ import { loadPackageDocumentation, renderPackageDocumentation } from './package-
 test('package API and migration ledger covers every public package', async () => {
   const model = await loadPackageDocumentation()
   assert.deepEqual(model.errors, [])
-  assert.equal(model.packages.length, 33)
+  assert.equal(model.packages.length, 34)
   for (const pkg of model.packages) {
     assert.equal(pkg.releaseType === 'none', pkg.publishedVersion === pkg.sourceVersion)
   }
@@ -64,6 +64,52 @@ test('publication reconciliation preserves migration notes and rejects a stale r
     assert.ok(rendered.includes('| `1.0.1` | `1.0.1` | none |'))
     assert.ok(rendered.includes(entry.summary))
     assert.ok(rendered.includes(entry.migration))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('initial candidates require an explicit null baseline and never fabricate a published version', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ts-stack-initial-ledger-'))
+  const name = '@example/initial-ledger'
+  const write = async (relative, value) => {
+    const file = join(root, relative)
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, typeof value === 'string' ? value : JSON.stringify(value))
+  }
+  const entry = {
+    name,
+    publishedVersion: null,
+    releaseType: 'initial',
+    summary: 'Adds a new opt-in initial library with its first public interfaces.',
+    migration: 'No existing application changes until it explicitly adopts this library.'
+  }
+  const notes = { schemaVersion: 1, lastReviewed: '2026-09-29', entries: [entry] }
+  try {
+    await write('governance/repository-health/projects.json', {
+      projects: [{ name, path: 'packages/example', release: 'npm-oidc' }]
+    })
+    await write('packages/example/package.json', { name, version: '0.1.0' })
+    await write('packages/example/README.md', '# Initial package\n')
+    await write('docs/packages/example.md', `---\ntitle: '${name}'\n---\n`)
+    await write('governance/package-release-notes.json', notes)
+    const initial = await loadPackageDocumentation(root)
+    assert.deepEqual(initial.errors, [])
+    assert.match(renderPackageDocumentation(initial), /Unpublished \| `0\.1\.0` \| initial/)
+    entry.releaseType = 'patch'
+    await write('governance/package-release-notes.json', notes)
+    assert.match((await loadPackageDocumentation(root)).errors.join('\n'), /disagrees.*initial/)
+    entry.releaseType = 'initial'
+    entry.publishedVersion = '0.1.0'
+    await write('governance/package-release-notes.json', notes)
+    assert.match((await loadPackageDocumentation(root)).errors.join('\n'), /disagrees.*none/)
+    entry.publishedVersion = null
+    await write('governance/package-release-notes.json', notes)
+    await write('packages/example/package.json', { name, version: 'latest' })
+    assert.match(
+      (await loadPackageDocumentation(root)).errors.join('\n'),
+      /exact MAJOR.MINOR.PATCH/
+    )
   } finally {
     await rm(root, { recursive: true, force: true })
   }

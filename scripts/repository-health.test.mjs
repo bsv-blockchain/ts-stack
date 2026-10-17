@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
@@ -40,11 +41,43 @@ test('lint exclusion parsing rejects authored tests and benchmarks without backt
   )
 })
 
-test('workspace discovery exactly matches the 41-project registry', () => {
+test('workspace inventory ignores generated mutation sandboxes while retaining neighboring packages', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-inventory-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const authored = [
+    '.',
+    'packages/application/example',
+    'packages/application/example/.stryker-tmp-lookalike',
+    'packages/application/example/nested'
+  ]
+  const generated = [
+    'packages/application/example/.stryker-tmp/sandbox-fixture',
+    'tools/example/.stryker-tmp/sandbox-fixture'
+  ]
+  for (const directory of [...authored, ...generated]) {
+    fs.mkdirSync(path.join(root, directory), { recursive: true })
+    fs.writeFileSync(
+      path.join(root, directory, 'package.json'),
+      JSON.stringify({ name: directory, private: true })
+    )
+  }
+  assert.deepEqual(
+    discoverWorkspaceProjects(root).map(project => project.path),
+    authored
+  )
+  assert.deepEqual(
+    discoverPackageManifests(root).map(project => project.path),
+    authored
+      .map(directory => (directory === '.' ? 'package.json' : directory + '/package.json'))
+      .sort((a, b) => a.localeCompare(b))
+  )
+})
+
+test('workspace discovery exactly matches the 43-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 41)
-  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 33)
+  assert.equal(discovered.length, 43)
+  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 34)
   assert.deepEqual(
     discovered.map(project => project.path),
     [...projects.projects].map(project => project.path).sort()
@@ -67,7 +100,7 @@ test('workspace discovery exactly matches the 41-project registry', () => {
 test('every checked-in first-party package manifest uses the current Association name', () => {
   const manifests = discoverPackageManifests()
 
-  assert.equal(manifests.length, 50)
+  assert.equal(manifests.length, 52)
   assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
   assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
 
@@ -80,8 +113,8 @@ test('current repository health controls and ratchet are internally consistent',
   const result = evaluateRepositoryHealth({ today: '2026-09-04' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 41)
-  assert.equal(result.publicPackages, 33)
+  assert.equal(result.projects.length, 43)
+  assert.equal(result.publicPackages, 34)
   assert.equal(result.findings.length, 0)
 })
 
@@ -228,7 +261,7 @@ test('every public package declares supported runtime and canonical support meta
     project => project.manifest.private !== true
   )
 
-  assert.equal(publicPackages.length, 33)
+  assert.equal(publicPackages.length, 34)
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
@@ -282,7 +315,7 @@ test('every public package declares supported runtime and canonical support meta
 
 test('every public package has canonical, machine-verified consumer profiles', () => {
   const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
-  assert.equal(publicProjects.length, 33)
+  assert.equal(publicProjects.length, 34)
   assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
   assert.deepEqual(
     [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),

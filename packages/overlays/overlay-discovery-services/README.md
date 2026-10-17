@@ -13,6 +13,8 @@ This package ships:
 
 Discovery pagination orders equal creation timestamps by MongoDB `_id`, preserving stable bounded pages for engine overflow probes.
 
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This package keeps its existing behavior and does not enable history retention automatically. No consumer or database migration is required.
+
 ## Install
 
 ```bash

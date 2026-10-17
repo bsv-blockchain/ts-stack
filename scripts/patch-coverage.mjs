@@ -27,7 +27,7 @@ export function runtimeComparisonAvailable() {
 }
 
 const EXCLUDED_SOURCE_PATTERNS = [
-  /(?:^|\/)__tests(?:__)?(?:\/|$)/,
+  /(?:^|\/)__tests?(?:__)?(?:\/|$)/,
   /(?:^|\/)tests?(?:\/|$)/,
   /(?:^|\/)bench(?:marks?)?(?:\/|$)/,
   /\.(?:spec|test)\.[cm]?[jt]sx?$/,
@@ -141,6 +141,68 @@ export function hasRuntimeChange(before, after) {
     return transformSync(before, options).code !== transformSync(after, options).code
   } catch {
     return true
+  }
+}
+
+// Istanbul does not emit LCOV rows for erased declarations or pure re-export
+// bindings. Inspect the locked compiler's complete output rather than granting
+// an exemption by filename: adding any executable statement keeps a module in
+// the coverage boundary. These modules still undergo type/artifact/API checks.
+// Intentionally fail closed on other module forms and unavailable compilers.
+export function isUninstrumentedModule(source) {
+  const transformSync = loadEsbuildTransform()
+  if (transformSync === null) return false
+  try {
+    const { code } = transformSync(source, {
+      loader: 'ts',
+      format: 'esm',
+      target: 'esnext',
+      legalComments: 'none'
+    })
+    return onlyReexportBindings(code)
+  } catch {
+    return false
+  }
+}
+
+// Inspect only the locked compiler's normalized ESM, never arbitrary source
+// text. Named re-exports are emitted as named imports followed by an export
+// list. Accept those exact binding forms; a side-effect import, declaration,
+// initializer, namespace import or any other statement stays in the gate.
+function retainBindingNames(match, names, index) {
+  if (match === null) return
+  for (const item of match[1].split(',').filter(Boolean))
+    names.add(item.trim().split(' as ').at(index))
+}
+
+function onlyReexportBindings(code) {
+  const name = String.raw`[$A-Z_a-z][$\w]*`
+  const binding = `${name}(?: as ${name})?`
+  const list = String.raw`(${binding}(?:,\s*${binding})*,?)`
+  const moduleName = String.raw`"(?:[^"\\]|\\.)*"`
+  const imported = new RegExp(String.raw`^import \{\s*${list}\s*\} from ${moduleName};`)
+  const exported = new RegExp(String.raw`^export \{\s*${list}\s*\};`)
+  const star = new RegExp(String.raw`^export \* from ${moduleName};`)
+  const imports = new Set()
+  const exports = new Set()
+  let remaining = code.trim()
+  while (remaining !== '') {
+    const simple = /^(?:;|export \{\};)/.exec(remaining) ?? star.exec(remaining)
+    const input = simple === null ? imported.exec(remaining) : null
+    const output = simple === null && input === null ? exported.exec(remaining) : null
+    const match = simple ?? input ?? output
+    if (match === null) return false
+    retainBindingNames(input, imports, -1)
+    retainBindingNames(output, exports, 0)
+    remaining = remaining.slice(match[0].length).trimStart()
+  }
+  return imports.size === exports.size && [...exports].every(name => imports.has(name))
+}
+
+export function omitUninstrumentedModules(changed, readSource) {
+  for (const file of changed.keys()) {
+    if (!/\.[cm]?ts$/.test(file)) continue
+    if (isUninstrumentedModule(readSource(file))) changed.delete(file)
   }
 }
 
@@ -336,6 +398,13 @@ async function main(arguments_) {
     })
   )
   omitTypeOnlyChanges(changed, base)
+  omitUninstrumentedModules(changed, file =>
+    execFileSync('/usr/bin/git', ['show', `HEAD:${file}`], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024
+    })
+  )
   const directoryPath = path.resolve(directory)
   const files = fs.existsSync(directoryPath) ? lcovFiles(directoryPath) : []
   if (changed.size > 0 && files.length === 0) {

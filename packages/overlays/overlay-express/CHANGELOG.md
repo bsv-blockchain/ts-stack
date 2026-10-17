@@ -11,6 +11,22 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.8.0 candidate — optional durable live lookup
+
+- Add `configureOutputLookup` and `@bsv/overlay-express/output-lookup` for explicitly
+  negotiated BRC-193 companions. Authenticate raw requests before strict framing,
+  retain capability/profile binding, apply current disclosure checks, and bound
+  request/response bytes, long polls and physical work.
+- Share host authentication and request capacity, require matching wallet identity,
+  and mount private routes before generic parsers and payload logging. Existing
+  finite routes and default startup behavior remain unchanged.
+- Preserve legacy ESM/CJS root loading and strict consumer declarations with SDK
+  2.8.9 by loading the optional adapter lazily. The new feature requires SDK 3.3.0.
+- Document SQLite provider composition, explicit recovery, retention and ownership;
+  include packed public-interface examples and actual authenticated HTTP tests.
+
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
+
 - Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
 
 ### 2.7.2 candidate — outbound and deployment hardening

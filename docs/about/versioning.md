@@ -107,6 +107,15 @@ disagreement, missing API pages, and stale generated output. After an authorized
 publication, the release-sync change advances the recorded published baseline;
 merging a candidate record never publishes it.
 
+A new, unpublished package uses `publishedVersion: null` and
+`releaseType: initial`, with an exact source version and substantive API and
+migration documentation. Registry verification must confirm an explicit npm
+not-found response; authentication, network and server failures are not proof of
+absence. If the package already exists, reconcile its actual published baseline
+before the release gate can pass. Never invent a `0.0.0` publication to register a
+new package. An initial candidate still requires the protected publication workflow
+and explicit publication authorization.
+
 Do not promise a GitHub Release, npm dist-tag, changelog format, cadence, or
 support window that the workflow does not actually enforce.
 

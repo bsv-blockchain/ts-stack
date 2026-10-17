@@ -19,7 +19,7 @@ const tuple = mutant =>
     mutant.statusReason
   ])
 const targets = buildMutationTargets(root)
-for (const id of ['sdk-auth-http', 'wallet-retained-snapshot'].filter(id =>
+for (const id of ['sdk-auth-http', 'wallet-retained-snapshot', 'root-eviction-records'].filter(id =>
   Object.hasOwn(targets, id)
 ))
   test(`actual pinned ${id} partitions exhaust the original canonical mutant inventory and complete test configuration`, async () => {

@@ -1,0 +1,43 @@
+{
+  "name": "output-knowledge-reference-app",
+  "version": "0.1.0",
+  "private": true,
+  "author": "BSV Association",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && vite build --ssr src/nodeServer.ts --outDir dist-server && vite build --ssr src/proposalNodeServer.ts --outDir dist-proposals && node scripts/copy-notices.mjs",
+    "serve": "node dist-server/nodeServer.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src test --deny-warnings",
+    "format:check": "pnpm --workspace-root exec prettier --check \"apps/output-knowledge-reference/**/*.{css,html,json,md,mjs,ts}\"",
+    "test": "vitest run",
+    "test:browser": "pnpm build && node scripts/check-browser.mjs && node scripts/check-admission-browser.mjs && node scripts/check-proposal-browser.mjs",
+    "test:browser:admission": "pnpm build && node scripts/check-admission-browser.mjs",
+    "serve:proposals": "node dist-proposals/proposalNodeServer.js",
+    "test:browser:proposals": "pnpm build && node scripts/check-proposal-browser.mjs"
+  },
+  "dependencies": {
+    "@bsv/auth-express-middleware": "workspace:^",
+    "@bsv/lch": "workspace:^",
+    "@bsv/output-knowledge": "workspace:^",
+    "@bsv/overlay": "workspace:^",
+    "@bsv/overlay-express": "workspace:^",
+    "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox": "workspace:^",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.1",
+    "mongodb": "7.6.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "oxlint": "^1.76.0",
+    "puppeteer-core": "^25.4.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "^8.1.5",
+    "vitest": "^5.0.1"
+  }
+}

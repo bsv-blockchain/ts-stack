@@ -3,14 +3,26 @@ id: container-supply-chain
 title: 'Container Supply Chain'
 kind: reference
 version: '1.3.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+last_updated: '2026-10-16'
+last_verified: '2026-10-16'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, containers, security, releases]
 ---
 
 # Container Supply Chain
+
+CI obtains its database fixtures from their canonical registry references with
+the same immutable digests. Its Node builds use
+`scripts/ci-container-base-contexts.mjs` to select the registered discovery
+reference for each governed alias. Both sides retain the identical digest.
+Dockerfile defaults and release builds keep their existing references. This
+separates CI transport from image identity when a mirror refuses anonymous pulls.
+It does not change versions, platform, vulnerability gates or runtime assertions.
+The helper emits BuildKit named contexts for the shell, or an Actions output with
+`--github-output`. [Docker documents this override mechanism](https://docs.docker.com/reference/cli/docker/buildx/build/#build-context).
+Base updates still require resolving every governed reference to the same
+multi-platform digest before merge.
 
 The infrastructure images are deployable artifacts, so their build inputs,
 review gates, provenance, and rollback identity are part of the public release
@@ -43,6 +55,16 @@ releases while its digest lets Scorecard verify pinning. The inventory's
 registry mirrors remain in `references` and must be resolved and compared
 during review. This avoids making routine dependency discovery depend on public
 ECR's unauthenticated rate limits without weakening multi-registry verification.
+Runtime builds use Docker's official `public.ecr.aws/docker/library/node` mirror
+at the identical governed digest. CI's Postgres, MySQL and Mongo service images
+also use the official public mirror at their existing immutable digests. Review
+must verify the index bytes and selected Linux/amd64 manifest and configuration
+against those identities; a registry route change does not authorize an image
+upgrade. Docker Hub remains the dependency-discovery source. These build and
+qualification routes avoid the observed Docker Hub pull limits and authentication
+timeouts without adding credentials or changing service health checks, budgets,
+platforms or release/deployment behavior.
+
 Repository health requires the discovery tag and digest, the registry's
 expected version and digest, and every digest-only release `FROM` instruction
 to reconcile in one change. Runtime Dockerfiles deliberately omit the tag
@@ -60,6 +82,21 @@ When a governed immutable base still contains a fixed vulnerability,
 Repository health requires every final runtime stage to install every active
 pin. A base refresh that incorporates the fix must remove the obsolete runtime
 pins and their Dockerfile installs together.
+
+The September 30, 2026 source refresh advances `libcrypto3` and `libssl3` to
+`3.5.9-r0` across all seven images. Alpine replaced the previously pinned
+`3.5.8-r0` packages in its rolling stable repository, causing exact-version
+installs to fail. The reviewed [OpenSSL 3.5.9 security release](https://openssl-library.org/news/openssl-3.5-notes/)
+retains the earlier CVE-2026-14456 fix and adds the September security fixes,
+including CVE-2026-84782. The official [Alpine v3.24 x86_64 package index](https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz)
+retrieved at review names both packages at `3.5.9-r0` from aports commit
+`29b9ec24b1b5b39aeef51fa2a044210e2ec5258e`; `libssl3` requires that exact
+`libcrypto3` version. Both retain their `.so.3` ABI. This patch changes neither
+the immutable Node base nor service APIs, configuration or persistence.
+All seven Linux/amd64 build, scan and runtime gates must validate the source
+candidate; this record does not claim a publication or deployment. A deployed
+rollback uses a previously verified complete image digest; it must not restore
+the vulnerable base libraries by removing the pins.
 
 Package locks under `infra/**/package-lock.json` are committed release inputs.
 Release workflows never rewrite them. A stale or inconsistent lock therefore

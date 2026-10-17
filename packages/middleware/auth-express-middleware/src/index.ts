@@ -32,6 +32,13 @@ import {
   makeDebugLogger
 } from './authMiddlewareHelpers.js'
 
+import {
+  authenticatedResponseQueue,
+  bindAuthenticatedResponseQueue,
+  type AuthenticatedResponseQueue,
+  type AuthenticatedResponseReplacement
+} from './authenticatedResponseQueue.js'
+
 export type { LogLevel } from './authMiddlewareHelpers.js'
 export { isLogLevelEnabled, getLogMethod } from './authMiddlewareHelpers.js'
 export { writeBodyToWriter } from './authMiddlewareHelpers.js'
@@ -690,7 +697,15 @@ export class ExpressTransport implements Transport {
   peer?: Peer
   allowUnauthenticated: boolean
   openNonGeneralHandles = new Map<string, PendingHandle[]>()
-  openGeneralHandles = new Map<string, { next: Function; res: Response }>()
+  openGeneralHandles = new Map<
+    string,
+    {
+      next: Function
+      res: Response
+      queue?: AuthenticatedResponseQueue
+      replacement?: AuthenticatedResponseReplacement
+    }
+  >()
   openNextHandlers = new Map<string, NextFunction>()
   openNextHandlerTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly activeGeneralRequests = new Map<string, ActiveGeneralRequest>()
@@ -926,10 +941,7 @@ export class ExpressTransport implements Transport {
       throw new Error('No response handle for this requestId!')
     }
     let { res, next } = handle
-    this.clearOpenGeneralHandle(requestId)
-
     const statusCode = reader.readVarIntNumStrict(false)
-    ;(res as any).__status(statusCode)
 
     const responseHeaders = this.readResponseHeaders(reader)
     responseHeaders['x-bsv-auth-version'] = message.version
@@ -945,14 +957,26 @@ export class ExpressTransport implements Transport {
       )
     }
 
-    for (const [k, v] of Object.entries(responseHeaders)) {
-      ;(res as any).__set(k, v)
-    }
-
     let responseBody: number[] | undefined
     const responseBodyBytes = reader.readVarIntNumStrict()
-    if (responseBodyBytes > 0) {
-      responseBody = reader.read(responseBodyBytes)
+    if (responseBodyBytes > 0) responseBody = reader.read(responseBodyBytes)
+
+    if (handle.queue !== undefined) {
+      handle.replacement = await handle.queue.deliver(
+        statusCode,
+        responseHeaders,
+        new Uint8Array(responseBody ?? []),
+        () => {
+          this.resetRes(res, next)
+        }
+      )
+      return
+    }
+
+    this.clearOpenGeneralHandle(requestId)
+    ;(res as any).__status(statusCode)
+    for (const [k, v] of Object.entries(responseHeaders)) {
+      ;(res as any).__set(k, v)
     }
 
     res = this.resetRes(res, next)
@@ -1417,8 +1441,22 @@ export class ExpressTransport implements Transport {
     const buildAndSendResponse = async (): Promise<void> => {
       if (responseSent) return
       responseSent = true
+      const queue = authenticatedResponseQueue(res)
       try {
         this.captureNativeResponseState(res, wrapper)
+        if (queue !== undefined) {
+          try {
+            await this.sendGuardedResponse(queue, res, next, requestId, sessionNonce, wrapper)
+          } catch (error) {
+            queue.close()
+            this.log(
+              'error',
+              'Unable to queue guarded authenticated response',
+              safeErrorDetails(error)
+            )
+          }
+          return
+        }
         const responsePayload = buildResponsePayload(
           requestId,
           wrapper.getStatusCode(),
@@ -1446,6 +1484,15 @@ export class ExpressTransport implements Transport {
         // on.
         await this.peer.toPeer(responsePayload, sessionNonce)
       } catch (err) {
+        if (queue !== undefined) {
+          queue.close()
+          this.log(
+            'error',
+            'Failed to prepare guarded authenticated response',
+            safeErrorDetails(err)
+          )
+          return
+        }
         this.clearOpenGeneralHandle(requestId)
         this.log('error', 'Failed to build and send authenticated response', safeErrorDetails(err))
         try {
@@ -1466,6 +1513,7 @@ export class ExpressTransport implements Transport {
     }
 
     this.hijackResponse(res, next, wrapper, buildAndSendResponse)
+    bindAuthenticatedResponseQueue(res, senderPublicKey, requestId, this.limits.maxResponseBytes)
     void this.scheduleNextOrCertificateWait(
       next,
       senderPublicKey,
@@ -1474,6 +1522,57 @@ export class ExpressTransport implements Transport {
       requestId,
       sessionNonce
     ).catch(next)
+  }
+
+  private async sendGuardedResponse(
+    queue: AuthenticatedResponseQueue,
+    res: Response,
+    next: NextFunction,
+    requestId: string,
+    sessionNonce: string,
+    wrapper: ResponseWriterWrapper
+  ): Promise<void> {
+    // One deadline bounds both signatures and both final admission attempts.
+    const timeout = setTimeout(() => {
+      this.clearOpenGeneralHandle(requestId)
+      queue.close()
+    }, this.limits.requestTimeoutMs)
+    timeout.unref?.()
+    let response: AuthenticatedResponseReplacement = {
+      statusCode: wrapper.getStatusCode(),
+      headers: wrapper.getHeaders(),
+      body: new Uint8Array(wrapper.getBody())
+    }
+    try {
+      for (const attempt of [0, 1] as const) {
+        const owned = queue.prepare(response, attempt)
+        const payload = buildResponsePayload(
+          requestId,
+          owned.statusCode,
+          owned.headers,
+          Array.from(owned.body),
+          this.logger,
+          this.logLevel
+        )
+        const handle: {
+          res: Response
+          next: NextFunction
+          queue: AuthenticatedResponseQueue
+          replacement?: AuthenticatedResponseReplacement
+        } = { res, next, queue }
+        this.openGeneralHandles.set(requestId, handle)
+        if (this.peer === undefined) throw new Error('Authentication peer is unavailable.')
+        await queue.wait(this.peer.toPeer(payload, sessionNonce))
+        if (queue.queued) return
+        if (handle.replacement === undefined)
+          throw new Error('The response guard did not complete admission.')
+        response = handle.replacement
+      }
+      throw new Error('The response guard exhausted its replacement attempt.')
+    } finally {
+      clearTimeout(timeout)
+      this.clearOpenGeneralHandle(requestId)
+    }
   }
 
   private captureNativeResponseState(res: Response, wrapper: ResponseWriterWrapper): void {

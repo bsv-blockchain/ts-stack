@@ -16,6 +16,22 @@ import {
   validatePackageLicenses
 } from './package-license-policy.mjs'
 
+test('license discovery excludes generated mutation copies but retains authored neighbors', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'license-inventory-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const authored = ['.', 'packages/example', 'packages/example/.stryker-tmp-lookalike']
+  for (const directory of [...authored, 'packages/example/.stryker-tmp/sandbox-fixture']) {
+    fs.mkdirSync(path.join(root, directory), { recursive: true })
+    fs.writeFileSync(path.join(root, directory, 'package.json'), '{}')
+  }
+  assert.deepEqual(
+    discoverPackageManifests(root),
+    authored
+      .map(directory => path.join(root, directory, 'package.json'))
+      .sort((a, b) => a.localeCompare(b))
+  )
+})
+
 test('all package projects use the exact current Open BSV license', () => {
   assert.equal(LICENSE_VERSION, 6)
   assert.equal(
@@ -25,7 +41,7 @@ test('all package projects use the exact current Open BSV license', () => {
   assert.equal(LICENSE_FILE, 'LICENSE.txt')
   assert.equal(LICENSE_DECLARATION, 'SEE LICENSE IN LICENSE.txt')
   assert.equal(OCI_LICENSE_REFERENCE, 'LicenseRef-Open-BSV-License-6')
-  assert.equal(discoverPackageManifests().length, 50)
+  assert.equal(discoverPackageManifests().length, 52)
   assert.deepEqual(validatePackageLicenses(), [])
 })
 

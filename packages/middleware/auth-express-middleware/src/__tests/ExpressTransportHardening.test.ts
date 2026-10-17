@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { PrivateKey, Utils } from '@bsv/sdk'
 import { createAuthMiddleware, ExpressTransport, InMemoryCertificateApprovalStore } from '../index'
 import { MockWallet } from './MockWallet'
+import { observeAuthenticatedResponseCompletion } from './authenticatedResponseCompletion.fixture.js'
 
 const IDENTITY_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const REQUEST_ID = Utils.toBase64(Array(32).fill(0))
@@ -1003,6 +1004,7 @@ describe('ExpressTransport hardening', () => {
   it('retains invalid-header rejection independently of header capacity', async () => {
     const peer = peerMock()
     const transport = new ExpressTransport()
+    const completed = observeAuthenticatedResponseCompletion(transport)
     transport.peer = peer
     const res = Object.assign(responseMock(), {
       getHeaders: jest.fn(() => ({ 'x-bsv-invalid': 'injected\r\nheader' }))
@@ -1017,6 +1019,7 @@ describe('ExpressTransport hardening', () => {
     )
     res.send('capacity')
     await flushPromises()
+    await completed()
     expect(peer.toPeer).not.toHaveBeenCalled()
     expect(originalJson).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'ERR_RESPONSE_SIGNING_FAILED' })
@@ -1470,6 +1473,7 @@ describe('ExpressTransport hardening', () => {
 
   it('reports response-signing failures without exposing internal details', async () => {
     const transport = new ExpressTransport()
+    const completed = observeAuthenticatedResponseCompletion(transport)
     const peer = peerMock({
       toPeer: jest.fn().mockRejectedValue(new Error('wallet signing secret'))
     })
@@ -1489,6 +1493,7 @@ describe('ExpressTransport hardening', () => {
     await flushPromises()
     res.send('response')
     await flushPromises()
+    await completed()
 
     expect(originalStatus).toHaveBeenCalledWith(500)
     expect(originalJson).toHaveBeenCalledWith({

@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Add an explicit Mongo retained-admission history option and trusted scoped reader. Preserve default receipt bytes, existing public receipt shape, legacy retry behavior and database validators; old receipts without provenance remain unresolved. Bound the complete opt-in record before effects.
+
 - Normalize unconfirmed SQL NULL output heights to absent metadata; retain strict validation of every non-null height.
 
 - Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.

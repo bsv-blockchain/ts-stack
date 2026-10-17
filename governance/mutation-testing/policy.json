@@ -348,6 +348,626 @@
       "maximumInvalid": 0
     },
     {
+      "id": "output-knowledge-journal",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/journal.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable receipt identities and compare-and-swap ordering across duplicate and stale commit attempts",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-knowledge-live",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-state.test.ts",
+      "risk": "critical",
+      "boundary": "Original live lookup identity, durable state and orchestration across restart, concurrent workers and continuity reset",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-knowledge-live-boundaries",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-framing.test.ts",
+      "risk": "critical",
+      "boundary": "Whole lookup response framing, exact durable core receipt guards and physical work capacity through cancellation and deadlines",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-codecs",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-index-codec.test.ts",
+      "risk": "critical",
+      "boundary": "Whole-domain lookup version predicates, original mutation identity, encrypted cursor binding and fresh storage-epoch selection",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-query",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-query.test.ts",
+      "risk": "critical",
+      "boundary": "Installed query identity and coherent observations across immutable access scopes",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-batches",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-batch.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded progressive snapshot framing and atomic transition to live history",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-service",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-provider-work.test.ts",
+      "risk": "critical",
+      "boundary": "Physical provider capacity and cancellation ownership across authenticated callers",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-session-codec",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-session.test.ts",
+      "risk": "critical",
+      "boundary": "Private retained session framing and original capability restoration",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-index",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-sqlite-index.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic lookup row predicates and exact commit acknowledgement recovery",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-index-records",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-retention.test.ts",
+      "risk": "critical",
+      "boundary": "Pinned historical lookup baselines and bounded compaction continuity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-session-records",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-provider.property.test.ts",
+      "risk": "critical",
+      "boundary": "Retained snapshot/live session history, whole query groups, original request fences and final current disclosure authorization",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-sessions",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable disclosure guard ordering across external policy changes and exact operation retries",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-output-lookup-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/OutputLookupRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated lookup HTTP selection, bounded framing and non-disclosing error/CORS policy",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-lookup-session-payloads",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-session-records.property.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic original lookup payload identity, bounded record framing and whole-record rollback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListing.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 legacy and replacement descriptor, frozen executable and immutable public-child metadata encoding",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing-plan",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingPlan.property.test.ts",
+      "risk": "critical",
+      "boundary": "Legacy revenue planning and immutable two-stage profile conservation, fixed-child outputs and exact retirement",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing-funding",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingFunding.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing-unlock",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingUnlock.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing-spend",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingSpend.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 funded layout, transaction signature authority and unlocking ABI",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-output-json",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputProtocolJSON.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-192 bounded canonical JSON and explicit own-data map construction",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-package",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage-package.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-graph",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage-graph.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-verifier",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-197 bounded lineage, authorized genesis and both merge histories",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-codec",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryDescriptors.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet local action recovery exact retained transaction descriptors and funding roots",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-encoding",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryCodec.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet local action recovery bounded canonical JSON and binary ownership",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-store",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryStore.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet atomic local action allocation identity, record capacity and exact retained signing state",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-plan",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/ActionRecoveryPlan.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet fixed-layout noSend recovery profile and atomic construction hooks",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-controller",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/signer/actionRecovery/__test/RecoverableActionController.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet exact-action preparation, final Script verification and no-resign processing recovery",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-output-release",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputReleaseProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-196 exact release-policy binding and attributable processor acceptance",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-output-purchase",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-196 closed purchase statuses and exact retained request, recipient, transaction and secret-envelope binding",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-private-publication",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPrivatePublicationProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-195 bounded protected publication and semantic request fences",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-paid-lookup",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-195 frozen quote, exact amounts and status-dependent recovery bindings",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-listing-authority",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-authority.property.test.ts",
+      "risk": "critical",
+      "boundary": "Dedicated listing authority signing and asynchronous port boundaries",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-paid-lookup-funding",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupFunding.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-195 bounded payment headers and exact single-output BRC-29 funding identity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-funding-protocol",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/FundingRecoveryProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "Closed BRC-195 wallet operation identity, bounded bytes and exact funding amount",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-funding-store",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/fundingRecovery/__test/SQLiteFundingRecoveryStore.property.test.ts",
+      "risk": "critical",
+      "boundary": "Same-database durable funding reservation and no-effect rejection fences",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-funding-controller",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/signer/fundingRecovery/__test/RecoverableFundingController.property.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic BRC-29 ownership receipts and exact retry reconciliation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-installation",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryInstallation.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet explicit local recovery installation, immutable owned capacity and operation identity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-recovery-transitions",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/storage/actionRecovery/__test/SQLiteActionRecoveryTransitions.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet exact retained preparation, final signing result and processed transition recovery",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-root-eviction",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionProtocol.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-199 root-local signed request/result attribution, exact targets, bounded lifetimes and independent restoration bases",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-journal",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable root request fences, independent suppression bases, policy-bound action history and final transport queue ordering",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-evidence",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-advertisement-evidence.property.test.ts",
+      "risk": "critical",
+      "boundary": "Current SHIP/SLAP advertisement authentication, original transaction binding and exact consuming evidence under an immutable chain view",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-records",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-records.property.test.ts",
+      "risk": "critical",
+      "boundary": "Retained root partial-batch action history, request identity and expiry under restart",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-storage",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-storage.property.test.ts",
+      "risk": "critical",
+      "boundary": "Root full-width durable revision encoding, atomic capacity reservation and projection acknowledgement",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "auth-express-queue",
+      "manifest": "packages/middleware/auth-express-middleware/package.json",
+      "propertyTest": "packages/middleware/auth-express-middleware/src/__tests/authenticatedResponseQueue.property.test.ts",
+      "risk": "critical",
+      "boundary": "Final authenticated HTTP queue ownership, cancellation and bounded replacement after signing",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-root-response-guard",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/RootEvictionResponseGuard.property.test.ts",
+      "risk": "critical",
+      "boundary": "Actual authenticated root response enqueue under durable serving and current access fences",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-commit",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-commit.property.test.ts",
+      "risk": "critical",
+      "boundary": "Current clock, access, installed policy and immutable-context selection inside the shared root commit gate",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-contracts",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-contract.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact retained root capability selection and fixed versus narrower advertised profile bounds",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-coordination",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-coordination.property.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic original root capability/request retention, bounded selected obligations and explicit storage migration",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-maintenance",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-maintenance.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded pending discovery, expiry, restart and immutable completion under root maintenance authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-codec",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-codec.property.test.ts",
+      "risk": "critical",
+      "boundary": "Sealed root configuration, finite capacities, canonical byte accounting and full-width revision representation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-lineage-traversal",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-lineage-traversal.property.test.ts",
+      "risk": "critical",
+      "boundary": "Complete listing ancestry traversal, both merge parents and exact missing-history frontier",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-service",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-service.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable root intake, exact observed-result signing and current final delivery authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-root-eviction-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/RootEvictionRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated root HTTP delivery through the actual durable SQLite decision/send gate",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-root-eviction-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputRootEvictionTransport.property.test.ts",
+      "risk": "critical",
+      "boundary": "Finite authenticated root coordination client with immutable original operation/selection and physically bounded HTTP exchange",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-scheduler",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-scheduler.property.test.ts",
+      "risk": "critical",
+      "boundary": "Recoverable root scheduling with independent expiry, installed policy and retained physical capacity through cancellation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "root-eviction-local-rules",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/root-eviction-local-rules.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable root-local rule administration, complete coverage fences and independent peer blockers",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-proposal-admission",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/ProposalAdmission.property.test.ts",
+      "risk": "critical",
+      "boundary": "Proposal admission recovery from original durable topic receipts with exact transaction, installation and selected-topic disclosure binding",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-private-publication-admission",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/PrivatePublicationAdmission.property.test.ts",
+      "risk": "critical",
+      "boundary": "Private publication admission with exact original context, explicit public history reuse, selected-output membership and bounded recoverable Engine effects",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-journal-send",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-send.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable proposal record, authorization and actual native response enqueue under one cross-process writer gate",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-response-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact original proposal response binding, current caller authority, retained capability and exclusive expiry at native enqueue",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-proposal-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/ProposalRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit authenticated proposal endpoints and exact retained-state/current-access native response enqueue",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "brc202-resolution",
       "manifest": "packages/helpers/did/package.json",
       "propertyTest": "packages/helpers/did/tests/brc202.property.test.ts",
@@ -383,6 +1003,526 @@
       "propertyTest": "packages/helpers/did/tests/brc52-disclosure.property.test.ts",
       "risk": "critical",
       "boundary": "Consent, exact authenticated payload, recipient binding, replay and field decryption",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-proposal-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputProposalTransport.property.test.ts",
+      "risk": "critical",
+      "boundary": "Retained proposal operation, signed author and original capability binding, exact acknowledgement and explicit prior-finalization identity",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-maintenance",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-maintenance.property.test.ts",
+      "risk": "critical",
+      "boundary": "Private bounded retained-proposal inventory, explicit existing-state startup, expiry and physically owned recovery scheduling",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lookup-response-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/lookup-send.property.test.ts",
+      "risk": "critical",
+      "boundary": "Post-signing lookup disclosure under shared durable native-enqueue serialization",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-knowledge-runtime",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/runtime-publication.property.test.ts",
+      "risk": "critical",
+      "boundary": "Application runtime publication deadlines and bounded source lifecycle",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-client-verification",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-client-verification.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit source-policy permission, exact signed-envelope receipt qualification and sealed local proposal replay",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "output-knowledge-proposal-core",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-core.property.test.ts",
+      "risk": "critical",
+      "boundary": "Opt-in whole-group proposal acceptance, isolated Bitcoin evidence and durable exclusive expiry across local storage and runtime publication",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-current-query",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-channel.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-current-projection",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-current.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated current-channel whole-group grammar, source-generation order and exclusive intent eligibility without effect authority",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "proposal-channel-storage",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/proposal-storage-channel.property.test.ts",
+      "risk": "critical",
+      "boundary": "Atomic private proposal/current-feed/session storage, reserved future events, truthful timer coverage and guarded visibility",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "protected-ledger",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/protected-ledger.property.test.ts",
+      "risk": "critical",
+      "boundary": "Protected private-service custody, authenticated inventory, atomic multi-record reservation, monotonic observation and current disclosure guards",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-publication-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-publication.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bound native private-service identity, protected publication bindings, permanent request fences and durable admission/readiness transitions",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-publication-service",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-verified-publication.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact Bitcoin private publication evidence, original signed contracts, owned service policy and atomic native lookup binding",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-publication-coordination",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-publication-coordination.property.test.ts",
+      "boundary": "Current private publication authority, bounded physical admission, durable original recovery, truthful availability and final native disclosure",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-publication-lookup",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-publication-lookup.property.test.ts",
+      "boundary": "Native protected lookup context, current recipient entitlement and original publication binding through physical disclosure",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-publication-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/PrivatePublicationRoutes.property.test.ts",
+      "boundary": "Authenticated private publication HTTP intake, exact signed selection, bounded work and current guarded native response",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-acquisition-foundation",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-acquisition.property.test.ts",
+      "boundary": "Original paid lookup contracts, pinned payment recovery, exact BRC-29 Script/SPV evidence, globally unique native funding reservations and private result projection",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-acquisition-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-acquisition-state.property.test.ts",
+      "boundary": "Atomic private acquisition quote/material/result reservations, original contract custody, permanent invoice prefixes, native funding association and guarded recovery disclosure",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-acquisition-coordination",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-acquisition-coordination.property.test.ts",
+      "boundary": "Private paid acquisition coordination, current authorization, retained funding operations, actual native wallet receipt ownership, release evidence, final disclosure and local recovery workers",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-acquisition-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/PrivateAcquisitionRoutes.property.test.ts",
+      "boundary": "Authenticated private paid acquisition and recovery HTTP, original seller/buyer/quote binding, native final response ownership, bounded BRC-105 headers and opt-in shared host composition",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-paid-lookup-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPaidLookupTransport.property.test.ts",
+      "boundary": "Explicit authenticated selected-host paid lookup, original request/challenge/payment ownership and recovery without automatic payment",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "protected-operation-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/protected-operation.property.test.ts",
+      "boundary": "Wallet-protected durable workflow state, exact original binding, ciphertext capacity and lost-ack native/browser CAS recovery",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "protected-operation-objects",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/protected-operation-object.property.test.ts",
+      "boundary": "Immutable protected original-operation requests, contracts and results with complete native/browser reservation and exact-first-object recovery",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-lookup-buyer",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-lookup-buyer.property.test.ts",
+      "boundary": "Durable original private acquisition, one payment and immutable protected result custody under interruption, expiry, conflict and reopen",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-acquisition",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-codec.property.test.ts",
+      "risk": "critical",
+      "boundary": "Optional BRC-198 original consent, role authority, exact settlement, recipient-bound key delivery and protected retained entitlement before playback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-listing-purchase",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-purchase.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact original BRC-196 preparation and recipient-bound purchase receipt composed with full Bitcoin/genesis/Script lineage",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-contract",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-contract.property.test.ts",
+      "risk": "critical",
+      "boundary": "Immutable selected-host BRC-196 preparation, original signed request/domain/release terms and reserved recovery intervals",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-state.property.test.ts",
+      "risk": "critical",
+      "boundary": "Native BRC-196 original preparation, one admission intent, immutable STEAK/POTATOES custody and guarded disclosure across interruption/reopen",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-coordination",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-coordination.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable BRC-196 original intent, independent validation, retained admission and separately authorized secret issuance",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Recipient authorization and exact native BRC-196 response bytes at the physical private enqueue boundary",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-private-purchase-admission",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/PurchaseAdmission.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact selected-host purchase admission with original retained receipt/time and no GASP-triggered release",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-http",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests__/PrivatePurchaseRoutes.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit authenticated BRC-196 endpoints and bounded physical response disclosure with no HTTP payment",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-terms",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-terms.property.test.ts",
+      "risk": "critical",
+      "boundary": "Reusable standing Offer, exact collector economics, individual authenticated consent and frozen covenant recovery promise before wallet construction",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-settlement",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-settlement.property.test.ts",
+      "risk": "critical",
+      "boundary": "Original consent, portable genesis and complete covenant settlement/evidence commitments before independent Script, release and License verification",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-license",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-license.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact paid or covenant License, Agreement, typed original authority evidence, persistent rights and recipient key grants before authenticated playback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant.property.test.ts",
+      "risk": "critical",
+      "boundary": "Independent complete purchase and release verification, protected original consent and immutable locally verified entitlement before recoverable covenant playback",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-seller",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-seller.property.test.ts",
+      "risk": "critical",
+      "boundary": "Original covenant preparation, complete independent purchase and selected release checks before authorized collector settlement, License and protected recipient key issuance",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-purchase-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/overlay-tools/__tests/OutputPurchaseTransport.property.test.ts",
+      "boundary": "Original authenticated covenant preparation, immutable recipient and transaction binding with bounded uncharged submission and read-only recovery",
+      "risk": "critical",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-buyer",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-buyer.property.test.ts",
+      "risk": "critical",
+      "boundary": "Durable original covenant purchase with bounded protected custody, one original native action and separately verified usable rights",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-purchase-payment",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-wallet-native.property.test.ts",
+      "risk": "critical",
+      "boundary": "Original full lineage, actual native noSend covenant funding/signing and exact transaction recovery under immutable capacity and selected context",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-evidence",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-evidence.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded native cumulative same-transaction proof custody with original financial intent, reserved completion capacity and exact selected-context writer guards",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-native-clock",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-native-clock.property.test.ts",
+      "risk": "critical",
+      "boundary": "Native purchase progress derived from the authorizing monotonic transaction observation with original profile, CAS, cutoff, capacity and recipient authority preserved",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-retained-beef",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/RetainedTransactionBEEF.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded original raw subject and available dependency history under plain and Atomic BEEF plus separate current leaf evidence",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "sdk-revenue-listing-profile-spend",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/script/templates/__tests/RevenueListingProfileSpend.property.test.ts",
+      "risk": "critical",
+      "boundary": "Immutable active profile funded outputs, protected child authority and complete 15-value Script witnesses",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "revenue-listing-profile",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/revenue-profile.property.test.ts",
+      "risk": "critical",
+      "boundary": "Current immutable BRC-197 reserve-stage ancestry, complete-source economics and actual protected-child Script transitions",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-state",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-state.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded custody metadata for one full purchase identity, separately retained original/historical/selected aliases and exact unfinished jobs",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-custody",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/sqlite-private-purchase-aliases.property.test.ts",
+      "risk": "critical",
+      "boundary": "Encrypted native alias payloads, exact per-txid admission outcomes and immutable original/historical custody across independent owner reopen",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-owner",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-owner.property.test.ts",
+      "risk": "critical",
+      "boundary": "Same-physical-ledger full-commitment core3 identity, native observation and immutable terminal result custody",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-currentness",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-currentness.property.test.ts",
+      "risk": "critical",
+      "boundary": "Exact-subject Script/SPV in independently selected authenticated ancestry with ephemeral placement guards",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-coordinator",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-coordinator.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bounded exact-job admission, selected first release and historical entitlement separation",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-alias-disclosure",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-alias-disclosure.property.test.ts",
+      "risk": "critical",
+      "boundary": "Fresh optional chain report inside the same native physical HTTP disclosure view",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "private-purchase-buyer-alias",
+      "manifest": "packages/application/output-knowledge/package.json",
+      "propertyTest": "packages/application/output-knowledge/test/private-purchase-buyer-alias.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit uncharged buyer currentness recovery, independently verified domain identity and buyer chain placement",
+      "minimumScore": 90,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "lch-overlay-covenant-candidate",
+      "manifest": "packages/content/lch/package.json",
+      "propertyTest": "packages/content/lch/test/overlay-acquisition-covenant-profile-candidate.property.test.ts",
+      "risk": "critical",
+      "boundary": "Explicit complete-candidate LCH verifier and historical recovery guard",
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0

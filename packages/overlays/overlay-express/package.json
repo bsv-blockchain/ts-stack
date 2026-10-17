@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-express",
-  "version": "2.7.4",
+  "version": "2.8.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -41,19 +41,89 @@
         "types": "./dist/cjs/src/*.d.ts",
         "default": "./dist/cjs/src/*.js"
       }
+    },
+    "./output-lookup": {
+      "import": {
+        "types": "./dist/types/src/OutputLookupRoutes.d.ts",
+        "default": "./dist/esm/src/OutputLookupRoutes.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/OutputLookupRoutes.d.ts",
+        "default": "./dist/cjs/src/OutputLookupRoutes.js"
+      }
+    },
+    "./root-eviction-response": {
+      "import": {
+        "types": "./dist/types/src/RootEvictionResponseGuard.d.ts",
+        "default": "./dist/esm/src/RootEvictionResponseGuard.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/RootEvictionResponseGuard.d.ts",
+        "default": "./dist/cjs/src/RootEvictionResponseGuard.js"
+      }
+    },
+    "./root-eviction": {
+      "import": {
+        "types": "./dist/types/src/RootEvictionRoutes.d.ts",
+        "default": "./dist/esm/src/RootEvictionRoutes.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/RootEvictionRoutes.d.ts",
+        "default": "./dist/cjs/src/RootEvictionRoutes.js"
+      }
+    },
+    "./proposals": {
+      "import": {
+        "types": "./dist/types/src/ProposalRoutes.d.ts",
+        "default": "./dist/esm/src/ProposalRoutes.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/ProposalRoutes.d.ts",
+        "default": "./dist/cjs/src/ProposalRoutes.js"
+      }
+    },
+    "./private-publication": {
+      "import": {
+        "types": "./dist/types/src/PrivatePublicationRoutes.d.ts",
+        "default": "./dist/esm/src/PrivatePublicationRoutes.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/PrivatePublicationRoutes.d.ts",
+        "default": "./dist/cjs/src/PrivatePublicationRoutes.js"
+      }
+    },
+    "./private-acquisition": {
+      "import": {
+        "types": "./dist/types/src/PrivateAcquisitionRoutes.d.ts",
+        "default": "./dist/esm/src/PrivateAcquisitionRoutes.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/PrivateAcquisitionRoutes.d.ts",
+        "default": "./dist/cjs/src/PrivateAcquisitionRoutes.js"
+      }
+    },
+    "./private-purchase": {
+      "import": {
+        "types": "./dist/types/src/PrivatePurchaseRoutes.d.ts",
+        "default": "./dist/esm/src/PrivatePurchaseRoutes.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/PrivatePurchaseRoutes.d.ts",
+        "default": "./dist/cjs/src/PrivatePurchaseRoutes.js"
+      }
     }
   },
   "scripts": {
-    "test": "jest --watchman=false",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/ReorgStream.property.test.ts",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watchman=false",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false --runTestsByPath src/__tests/ReorgStream.property.test.ts src/__tests__/OutputLookupRoutes.property.test.ts src/__tests__/RootEvictionResponseGuard.property.test.ts src/__tests__/RootEvictionRoutes.property.test.ts src/__tests__/ProposalRoutes.property.test.ts src/__tests__/PrivatePublicationRoutes.property.test.ts src/__tests__/PrivateAcquisitionRoutes.property.test.ts src/__tests__/PrivatePurchaseRoutes.property.test.ts",
     "test:live": "pnpm build && node ../../../scripts/run-governed-test.mjs live src/__tests__/OverlayProviders.live.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay-express/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus",
-    "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
+    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus --entry-exports \"./output-lookup=createOutputLookupRouter;./root-eviction-response=guardRootAdvertisementResponse;./root-eviction=createRootEvictionRouter;./proposals=createProposalRouter;./private-publication=createPrivatePublicationRouter;./private-acquisition=createPrivateAcquisitionRouter;./private-purchase=createPrivatePurchaseRouter\" && node ../../../scripts/check-legacy-overlay-sdk.mjs",
+    "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false && tsc --project tsconfig.proposal-tests.json",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
     "prepublishOnly": "pnpm build",
@@ -85,6 +155,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",
+    "express-rate-limit": "^8.6.1",
     "fast-check": "^4.9.0",
     "jest": "^30.5.1",
     "oxlint": "^1.83.0",
@@ -112,6 +183,31 @@
   "peerDependenciesMeta": {
     "@bsv/sdk": {
       "optional": false
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "output-lookup": [
+        "dist/types/src/OutputLookupRoutes.d.ts"
+      ],
+      "root-eviction-response": [
+        "dist/types/src/RootEvictionResponseGuard.d.ts"
+      ],
+      "root-eviction": [
+        "dist/types/src/RootEvictionRoutes.d.ts"
+      ],
+      "proposals": [
+        "dist/types/src/ProposalRoutes.d.ts"
+      ],
+      "private-publication": [
+        "dist/types/src/PrivatePublicationRoutes.d.ts"
+      ],
+      "private-acquisition": [
+        "dist/types/src/PrivateAcquisitionRoutes.d.ts"
+      ],
+      "private-purchase": [
+        "dist/types/src/PrivatePurchaseRoutes.d.ts"
+      ]
     }
   }
 }

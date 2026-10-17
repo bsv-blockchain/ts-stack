@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/output-knowledge",
+  "entry": "./private/purchase-buyer",
+  "requiredExports": [
+    "PrivatePurchaseBuyer",
+    "privatePurchaseBuyerBinding",
+    "PRIVATE_PURCHASE_BUYER_INITIAL"
+  ],
+  "prohibitedExports": [
+    "PrivateAcquisitionCoordinator",
+    "SQLitePrivateAcquisitionStore",
+    "SQLiteOperationStateStore",
+    "NodeProtectedPayloadCodec",
+    "OutputKnowledge",
+    "PrivateLookupBuyer",
+    "WalletToolboxBuyerPayment",
+    "WalletToolboxPurchasePayment"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 590000,
+      "gzip": 155000,
+      "brotli": 130000
+    },
+    "esbuild": {
+      "raw": 460000,
+      "gzip": 142000,
+      "brotli": 122000
+    }
+  },
+  "additionalEntries": [
+    {
+      "entry": "./private/purchase-wallet",
+      "requiredExports": ["WalletToolboxPurchasePayment"],
+      "prohibitedExports": [
+        "PrivatePurchaseBuyer",
+        "PrivateLookupBuyer",
+        "WalletToolboxBuyerPayment",
+        "PrivatePurchaseCoordinator",
+        "SQLitePrivatePurchaseStore",
+        "NodeProtectedPayloadCodec"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 590000,
+          "gzip": 155000,
+          "brotli": 130000
+        },
+        "esbuild": {
+          "raw": 460000,
+          "gzip": 142000,
+          "brotli": 122000
+        }
+      }
+    }
+  ]
+}

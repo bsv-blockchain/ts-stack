@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { parseArguments, selectCiPackageNames } from './run-ci-tests.mjs'
+
+test('the reference application participates in both integration and browser lanes', () => {
+  const application = JSON.parse(
+    readFileSync(
+      new URL('../apps/output-knowledge-reference/package.json', import.meta.url),
+      'utf8'
+    )
+  )
+  for (const mode of ['standard', 'browser']) {
+    assert.deepEqual(selectCiPackageNames([application], mode), [application.name])
+  }
+})
 
 const projects = [
   { name: '@bsv/ts-stack', scripts: { test: 'node --test' } },
