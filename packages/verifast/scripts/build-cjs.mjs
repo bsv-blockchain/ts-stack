@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { emitCommonJsDeclarations } from './commonjs-declarations.mjs'
 
 const output = new URL('../dist/cjs/mod.cjs', import.meta.url)
 const source = `'use strict'
@@ -182,9 +183,4 @@ module.exports = {
 
 await mkdir(new URL('../dist/cjs/', import.meta.url), { recursive: true })
 await writeFile(output, source)
-await Promise.all(
-  ['mod', 'umd'].map(async entry => {
-    const declaration = await readFile(new URL(`../dist/${entry}.d.ts`, import.meta.url), 'utf8')
-    await writeFile(new URL(`../dist/${entry}.d.cts`, import.meta.url), declaration)
-  })
-)
+await emitCommonJsDeclarations(new URL('../dist/', import.meta.url))

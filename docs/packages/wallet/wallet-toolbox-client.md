@@ -15,6 +15,8 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 
 # @bsv/wallet-toolbox-client
 
+The unpublished 2.15 candidate exposes resumable sync with atomic IndexedDB page commits and foreground work between pages. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md), including cancellation, inclusive timestamp boundaries and measured native-browser behavior.
+
 `@bsv/wallet-toolbox-client` is the browser-safe Wallet Toolbox distribution.
 It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.

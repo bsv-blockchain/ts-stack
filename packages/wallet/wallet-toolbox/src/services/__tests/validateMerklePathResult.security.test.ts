@@ -143,7 +143,8 @@ describe('Merkle proof trust-boundary validation', () => {
       { name: 'valid', service: valid }
     ])
     jest.spyOn(services, 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async (root: string, height: number) => root === GENESIS_TXID && height === 0
+      isValidRootForHeight: async (root: string, height: number) => root === GENESIS_TXID && height === 0,
+      currentHeight: async () => 1_000_000
     })
 
     const response = await services.getMerklePath(GENESIS_TXID)

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
@@ -69,7 +69,7 @@
   },
   "scripts": {
     "build": "node scripts/check-artifacts.mjs && node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs && node scripts/build-cjs.mjs && rspack --config rspack.config.js && node scripts/copy-umd.mjs && node scripts/check-bundle-size.mjs",
-    "test": "pnpm build && NODE_OPTIONS=--experimental-vm-modules jest && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs",
+    "test": "pnpm build && node --test scripts/commonjs-declarations.test.mjs && NODE_OPTIONS=--experimental-vm-modules jest && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs",
     "test:coverage": "pnpm build && NODE_OPTIONS=--experimental-vm-modules jest --coverage --watchman=false",
     "test:property": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand --watchman=false --runTestsByPath src/__tests/BdkBatch.property.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/verifast/README.md\" \"packages/verifast/*.{js,json,mjs,ts}\" \"packages/verifast/{bench,browser,scripts}/**/*.{js,json,md,mjs,ts}\" \"packages/verifast/src/{*.ts,__tests/**/*.ts,workers/**/*.ts}\"",
@@ -81,9 +81,10 @@
     "bench:crypto": "node --import tsx bench/crypto-benchmark.ts",
     "bench:warmup": "node --import tsx bench/warmup-benchmark.ts",
     "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs . && node browser/test.mjs",
-    "test:consumers": "pnpm build && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs && node ../../scripts/check-browser-package.mjs . && node browser/test.mjs",
+    "test:consumers": "pnpm build && node --test scripts/commonjs-declarations.test.mjs && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs && node ../../scripts/check-browser-package.mjs . && node browser/test.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "test:declarations": "node --test scripts/commonjs-declarations.test.mjs"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

@@ -13,7 +13,18 @@ const requiredExports = [
   'WalletStorageManager',
   'registerArgon2idBackend',
   'unregisterArgon2idBackend',
-  'sdk'
+  'sdk',
+  'DeviceBackupController',
+  'migrateDeviceBackupPreferences',
+  'BrowserArgon2idWorkerBackend',
+  'installBrowserArgon2idWorker',
+  'openBrc38IdbSource',
+  'createBrc38Stream',
+  'previewAuthenticatedBrc39BrowserImport',
+  'restoreAuthenticatedBrc39BrowserInactive',
+  'publishAuthenticatedBrc39BrowserProfile',
+  'retireExpiredBrc38BrowserProfile',
+  'encryptBrc39BrowserStreamToQuarantine'
 ] as const
 
 const nodeOnlyExports = ['Setup', 'StorageKnex', 'ShamirWalletManager'] as const

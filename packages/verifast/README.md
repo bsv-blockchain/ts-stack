@@ -127,6 +127,11 @@ and output arrays serialize that transaction once before packing. The soft byte
 target then prevents a multi-input, multi-megabyte transaction from being
 duplicated into one unbounded packed allocation.
 
+CommonJS declarations are generated in a CommonJS module context, keeping SDK
+transaction and Spend types aligned with the SDK’s `require` declarations. ESM
+and browser consumers retain their original declaration tree. This declaration
+correction requires no consumer migration and changes no runtime exports.
+
 ## Generic cryptography and SDK integration
 
 The same compact module exposes generic, direct-byte secp256k1 operations:

@@ -27,7 +27,7 @@ describe('exchangeRates tests', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(success), { status: 503 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(success), { status: 200 }))
-    options.fiatExchangeRatesFetch = fetchMock
+    options.fiatExchangeRatesFetch = globalThis.fetch
 
     await expect(updateChaintracksFiatExchangeRates(['EUR'], options)).rejects.toThrow('returned status 503')
     await expect(updateChaintracksFiatExchangeRates(['EUR'], options)).rejects.toThrow('returned a failure status')
@@ -48,7 +48,7 @@ describe('exchangeRates tests', () => {
   })
 
   test('rejects insecure provider URLs and malformed financial values', async () => {
-    const fetchMock = jest.fn<typeof fetch>()
+    const fetchMock = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>()
     const options = {
       chaintracksFiatExchangeRatesUrl: 'http://127.0.0.1/rates',
       fiatExchangeRatesFetch: fetchMock
@@ -105,7 +105,7 @@ describe('exchangeRates tests', () => {
     const timestamp = Math.floor(Date.now() / 1000)
     const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
     const fetchMock = jest
-      .fn<typeof fetch>()
+      .fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>()
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -155,7 +155,7 @@ describe('exchangeRates tests', () => {
         writable: true
       })
       const fetchMock = jest
-        .fn<typeof fetch>()
+        .fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>()
         .mockResolvedValue(new Response(JSON.stringify({ timestamp, base: 'USD', date, rates: {} }), { status: 200 }))
       try {
         await getExchangeRatesIo('secret', [], fetchMock)
@@ -172,7 +172,7 @@ describe('exchangeRates tests', () => {
   })
 
   test('rejects oversized response declarations before reading JSON', async () => {
-    const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    const fetchMock = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>().mockResolvedValue(
       new Response('{}', {
         status: 200,
         headers: { 'Content-Length': String(256 * 1024 + 1) }

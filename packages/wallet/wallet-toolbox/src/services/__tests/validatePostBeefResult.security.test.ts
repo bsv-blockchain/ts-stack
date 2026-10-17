@@ -13,7 +13,7 @@ import {
 
 function transactionBeef(): { beef: Beef; txid: string } {
   const tx = new Transaction()
-  tx.addOutput({ satoshis: 1, lockingScript: new LockingScript([0x51]) })
+  tx.addOutput({ satoshis: 1, lockingScript: LockingScript.fromBinary([0x51]) })
   const beef = new Beef()
   beef.mergeTransaction(tx)
   return { beef, txid: tx.id('hex') }

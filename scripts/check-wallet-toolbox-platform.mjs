@@ -45,7 +45,18 @@ const requiredExports =
         'WalletPermissionsManager',
         'WalletSettingsManager',
         'WalletSigner',
-        'WalletStorageManager'
+        'WalletStorageManager',
+        'DeviceBackupController',
+        'migrateDeviceBackupPreferences',
+        'BrowserArgon2idWorkerBackend',
+        'installBrowserArgon2idWorker',
+        'openBrc38IdbSource',
+        'createBrc38Stream',
+        'previewAuthenticatedBrc39BrowserImport',
+        'restoreAuthenticatedBrc39BrowserInactive',
+        'publishAuthenticatedBrc39BrowserProfile',
+        'retireExpiredBrc38BrowserProfile',
+        'encryptBrc39BrowserStreamToQuarantine'
       ]
     : [
         'ArcSSEClient',
@@ -57,7 +68,11 @@ const requiredExports =
         'WalletPermissionsManager',
         'WalletSettingsManager',
         'WalletSigner',
-        'WalletStorageManager'
+        'WalletStorageManager',
+        'DeviceBackupController',
+        'migrateDeviceBackupPreferences',
+        'BrowserArgon2idWorkerBackend',
+        'installBrowserArgon2idWorker'
       ]
 
 const prohibitedExports =
@@ -271,7 +286,8 @@ function validateBudget(actual, maximum, label) {
     }
     if (!measureOnly && actual[dimension] > maximum[dimension]) {
       throw new Error(
-        `${label} ${dimension} size ${actual[dimension]} exceeds budget ${maximum[dimension]}`
+        `${label} ${dimension} size ${actual[dimension]} exceeds budget ${maximum[dimension]}; ` +
+          `all measured bytes ${JSON.stringify(actual)}, ceilings ${JSON.stringify(maximum)}`
       )
     }
   }
@@ -300,6 +316,25 @@ function consumerEntry(packageName) {
 }
 
 async function checkBrowser(consumerDirectory, budget) {
+  const packedWorker = path.join(
+    consumerDirectory,
+    'node_modules/@bsv/wallet-toolbox-client/out/argon2id-worker.mjs'
+  )
+  const worker = await fs.readFile(packedWorker)
+  if (worker.length === 0) throw new Error('Packed dedicated worker asset is empty')
+  assertRuntimeComposition(worker.toString('utf8'), 'Packed dedicated worker')
+  const workerManifest = JSON.parse(
+    await fs.readFile(
+      path.join(consumerDirectory, 'node_modules/@bsv/wallet-toolbox-client/package.json'),
+      'utf8'
+    )
+  )
+  if (
+    workerManifest.exports?.['./argon2id-worker'] !== './out/argon2id-worker.mjs' ||
+    !Array.isArray(workerManifest.sideEffects) ||
+    !workerManifest.sideEffects.includes('./out/argon2id-worker.mjs')
+  )
+    throw new Error('Packed dedicated worker asset contract differs')
   const entryPath = path.join(consumerDirectory, 'entry.js')
   await fs.writeFile(entryPath, consumerEntry(expectedPackage))
 
@@ -492,9 +527,24 @@ async function checkMobile(consumerDirectory, budget) {
 
   const hermesPath = hermesCompilerPath()
   const bytecodePath = path.join(consumerDirectory, 'wallet-toolbox-mobile.hbc')
-  await run(hermesPath, ['-O', '-emit-binary', '-out', bytecodePath, bundlePath])
-  const hermesBytecode = await fs.readFile(bytecodePath)
+  // Hermes retains its input filename in bytecode. A random absolute temporary
+  // path makes identical bundles cross compression budgets nondeterministically.
+  // Keep source/debug data and compile from a stable relative filename instead.
+  const compile = async directory => {
+    await run(
+      hermesPath,
+      ['-O', '-emit-binary', '-out', path.basename(bytecodePath), path.basename(bundlePath)],
+      { cwd: directory }
+    )
+    return fs.readFile(path.join(directory, path.basename(bytecodePath)))
+  }
+  const hermesBytecode = await compile(consumerDirectory)
   if (hermesBytecode.length === 0) throw new Error('Hermes compiler emitted empty bytecode')
+  const repeatDirectory = await fs.mkdtemp(path.join(consumerDirectory, 'hermes-repro-'))
+  await fs.copyFile(bundlePath, path.join(repeatDirectory, path.basename(bundlePath)))
+  if (!hermesBytecode.equals(await compile(repeatDirectory))) {
+    throw new Error('Hermes bytecode must reproduce across independent build directories')
+  }
   const hermesSizes = sizes(hermesBytecode)
   validateBudget(hermesSizes, budget.hermes, 'Hermes mobile bytecode')
 

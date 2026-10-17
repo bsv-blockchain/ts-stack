@@ -52,8 +52,8 @@ authorized release action.
 | messaging | `@bsv/paymail` | `2.4.10` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/messaging/ts-paymail](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail) |
 | middleware | `@bsv/402-pay` | `0.3.3` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/middleware/402-pay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/402-pay) |
 | middleware | `@bsv/auth` | `0.1.6` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth) |
-| middleware | `@bsv/auth-express-middleware` | `2.2.9` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware) |
-| middleware | `@bsv/payment-express-middleware` | `2.1.9` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/payment-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware) |
+| middleware | `@bsv/auth-express-middleware` | `2.3.0` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware) |
+| middleware | `@bsv/payment-express-middleware` | `2.2.0` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/payment-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware) |
 | network | `@bsv/chirp` | `0.1.4` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/network/chirp](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp) |
 | network | `@bsv/teranode-listener` | `1.1.7` | node-library | node-esm | node | `>=22` | [packages/network/ts-p2p](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p) |
 | overlays | `@bsv/gasp` | `1.3.8` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/overlays/gasp-core](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/gasp-core) |
@@ -62,7 +62,7 @@ authorized release action.
 | overlays | `@bsv/overlay-express` | `2.7.4` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-express](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express) |
 | overlays | `@bsv/overlay-topics` | `2.0.1` | node-library | node-esm | node | `>=22` | [packages/overlays/topics](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics) |
 | sdk | `@bsv/sdk` | `3.2.1` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
-| sdk | `@bsv/verifast` | `0.3.7` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
+| sdk | `@bsv/verifast` | `0.3.8` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
 | wallet | `@bsv/btms` | `1.2.4` | node-library | node-cjs, node-esm | node | `>=22` | [packages/wallet/btms](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms) |
 | wallet | `@bsv/btms-permission-module` | `1.2.2` | node-library | node-esm | node | `>=22` | [packages/wallet/btms-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module) |
 | wallet | `@bsv/ecpm-permission-module` | `0.1.2` | browser-library | browser-bundler, browser-esm, node-esm | browser, node | `>=22` | [packages/wallet/ecpm-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ecpm-permission-module) |
@@ -105,11 +105,11 @@ recorded container release route; they are not published by the public-package j
 
 | Metric | Current value |
 | --- | --- |
-| Vector files | 77 |
-| Vectors | 6706 |
+| Vector files | 78 |
+| Vectors | 6712 |
 | Structurally passed | 6495 |
 | Governed skips | 211 |
-| Required parity vectors | 6502 |
+| Required parity vectors | 6508 |
 | Intended parity vectors | 204 |
 | Explicitly skipped vector entries | 7 |
 | Corpus metadata revision | 2026-10-07 |

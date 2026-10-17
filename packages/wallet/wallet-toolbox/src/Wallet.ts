@@ -1,3 +1,4 @@
+export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
 import {
   type ValidAcquireIssuanceCertificateArgs,
   type ValidCreateActionArgs,
@@ -43,7 +44,6 @@ import {
   GetPublicKeyResult,
   GetVersionResult,
   InternalizeActionArgs,
-  InternalizeActionResult,
   ListActionsArgs,
   ListActionsResult,
   ListCertificatesArgs,
@@ -93,7 +93,7 @@ import {
   TelemetryConfig,
   createPublicHTTPSFetch
 } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import { fromBase58, toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { acquireDirectCertificate } from './signer/methods/acquireDirectCertificate'
 import { proveCertificate } from './signer/methods/proveCertificate'
@@ -305,7 +305,7 @@ export interface WalletArgs {
    * internal transaction checks. This is an implementation extension and does
    * not change the BRC-100 wallet interface.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /**
    * Optional provider-neutral tracing shared by wallet, lookup, storage, and
    * permission layers. Disabled unless an enabled sink is supplied.
@@ -363,7 +363,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   pendingSignActions: Record<string, PendingSignAction>
   readonly actionBatch: ActionBatchController
-  readonly scriptVerifier?: SpendVerifierInterface
+  readonly scriptVerifier?: WalletScriptVerifier
   readonly telemetry: Telemetry
 
   /**
@@ -1240,7 +1240,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   async internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<InternalizeActionResult> {
+  ): Promise<StorageInternalizeActionResult> {
     validateOriginator(originator)
     const { auth, vargs } = this.validateAuthAndArgs(args, validateInternalizeActionArgs)
 

@@ -12,6 +12,9 @@ import { calculateMutationMetrics, evaluateMutationReport } from './mutation-tes
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const INPUTS = [
   'governance/mutation-testing/targets.mjs',
+  'governance/mutation-testing/wallet-component-tests.json',
+  'scripts/provision-wallet-native-browser.mjs',
+  'scripts/wallet-native-browser.json',
   'governance/mutation-testing/policy.json',
   'governance/mutation-testing/stryker.config.mjs',
   'scripts/mutation-testing.mjs',

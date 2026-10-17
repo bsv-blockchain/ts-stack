@@ -27,7 +27,7 @@ export * from './WalletPermissionsManager'
 export * from './WalletSettingsManager'
 
 // Additive, for parity with index.mobile.ts: @bsv/wallet-toolbox-client is
-// also published as a single bundle with no deep-import subpaths (see
+// also publishes its API as a single bundle (see
 // client/package.json `exports`), so browser hosts hit the same gap mobile
 // hosts do for custom Monitor.addTask tasks, posting signed requests to the
 // network directly, the storage remoting wire format, and unlock-script

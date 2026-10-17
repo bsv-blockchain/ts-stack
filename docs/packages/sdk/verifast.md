@@ -3,7 +3,7 @@ id: pkg-verifast
 title: '@bsv/verifast'
 kind: package
 domain: sdk
-version: '0.3.7'
+version: '0.3.8'
 last_updated: '2026-08-26'
 last_verified: '2026-08-26'
 review_cadence_days: 30

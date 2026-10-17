@@ -11,7 +11,7 @@ const mockSockets: Array<{
 jest.mock('ws', () => ({
   __esModule: true,
   default: jest.fn().mockImplementation((url: string, options?: Record<string, unknown>) => {
-    const socket = {
+    const socket: (typeof mockSockets)[number] = {
       url,
       options,
       send: jest.fn(),

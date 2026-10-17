@@ -22,6 +22,12 @@ import { safeDiagnostic } from '../../../services/chaintracker/chaintracks/util/
 import { copyRawTransactionBytes, validateRawTxResult } from '../../../services/validateRawTxResult'
 import { getCanonicalMerklePath } from '../../../services/getCanonicalMerklePath'
 
+/** Existing provider extension, shared by full-row and bounded-field merges. */
+export async function invalidatePreparedSyncProofs(storage: EntityStorage, trx?: TrxToken): Promise<void> {
+  const extension = storage as EntityStorage & { invalidatePreparedBeefs?: (trx?: TrxToken) => Promise<number> }
+  if (typeof extension.invalidatePreparedBeefs === 'function') await extension.invalidatePreparedBeefs(trx)
+}
+
 export class EntityProvenTx extends EntityBase<TableProvenTx> {
   private sameProof(candidate: TableProvenTx): boolean {
     return (
@@ -36,12 +42,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
   }
 
   private static async invalidatePreparedProofs(storage: EntityStorage, trx?: TrxToken): Promise<void> {
-    const extension = storage as EntityStorage & {
-      invalidatePreparedBeefs?: (trx?: TrxToken) => Promise<number>
-    }
-    if (typeof extension.invalidatePreparedBeefs === 'function') {
-      await extension.invalidatePreparedBeefs(trx)
-    }
+    await invalidatePreparedSyncProofs(storage, trx)
   }
 
   /**

@@ -18,7 +18,7 @@ describe('ChaintracksFetch tests', () => {
       if (response == null) throw new Error('No scripted fetch response')
       return response
     })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch
 
     const fetch = new ChaintracksFetch()
     const json = await fetch.fetchJson<{ ok: boolean }>('https://example.test/headers')
@@ -36,7 +36,7 @@ describe('ChaintracksFetch tests', () => {
           headers: { 'retry-after': '0' }
         })
     )
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch
 
     const fetch = new ChaintracksFetch()
     await expect(fetch.fetchJson('https://example.test/headers')).rejects.toMatchObject({
@@ -56,7 +56,7 @@ describe('ChaintracksFetch tests', () => {
           init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
         })
     )
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch
 
     const fetch = new ChaintracksFetch({ timeoutMsecs: 5, maxRetries: 0 })
     await expect(fetch.download('https://example.test/stalled.headers')).rejects.toMatchObject({
@@ -94,7 +94,7 @@ describe('ChaintracksFetch tests', () => {
           headers: { 'content-length': '9' }
         })
     )
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch
 
     const fetch = new ChaintracksFetch({ maxResponseBytes: 8, maxRetries: 0 })
     await expect(fetch.download('https://example.test/large.headers')).rejects.toMatchObject({
@@ -106,7 +106,9 @@ describe('ChaintracksFetch tests', () => {
   })
 
   test('enforces a stricter per-download response limit', async () => {
-    globalThis.fetch = jest.fn(async () => new Response(new Uint8Array(9), { status: 200 })) as unknown as typeof fetch
+    globalThis.fetch = jest.fn(
+      async () => new Response(new Uint8Array(9), { status: 200 })
+    ) as unknown as typeof globalThis.fetch
 
     const fetch = new ChaintracksFetch({ maxResponseBytes: 1024, maxRetries: 0 })
     await expect(fetch.download('https://example.test/exact.headers', 8)).rejects.toMatchObject({
@@ -133,7 +135,9 @@ describe('ChaintracksFetch tests', () => {
 
   test('uses the DNS-pinned public fetch only for service-discovered resources', async () => {
     const operatorFetch = jest.fn(async () => new Response(new Uint8Array([1]), { status: 200 }))
-    const publicNetworkFetch = jest.fn(async () => new Response(new Uint8Array([2]), { status: 200 }))
+    const publicNetworkFetch = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
+      async () => new Response(new Uint8Array([2]), { status: 200 })
+    )
     const fetch = new ChaintracksFetch({ fetch: operatorFetch, publicNetworkFetch, maxRetries: 0 })
 
     await expect(fetch.download('http://127.0.0.1/operator')).resolves.toEqual(new Uint8Array([1]))
@@ -151,7 +155,7 @@ describe('ChaintracksFetch tests', () => {
       new Response(null, { status: 503 }),
       new Response(new Uint8Array([1, 2, 3]), { status: 200 })
     ]
-    globalThis.fetch = jest.fn(async () => responses.shift()!) as unknown as typeof fetch
+    globalThis.fetch = jest.fn(async () => responses.shift()!) as unknown as typeof globalThis.fetch
     const beforeRetry = jest.fn(async () => undefined)
     const fetch = new ChaintracksFetch({ maxRetries: 2, retryMsecs: 1, random: () => 0 })
 

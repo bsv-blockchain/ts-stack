@@ -69,7 +69,14 @@ creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
 
 **Time:** ~45 minutes | **Level:** Advanced
 
-### 7. [Understand and Contribute Registry Metadata](./registry-metadata.md)
+### 7. [BRC-118 Authenticated Multipart Payments](./brc118-payments.md)
+
+Carry larger BRC-105 payments with exact-byte authentication, bounded parsing,
+receiver-first negotiation and preparation before broadcast.
+
+**Time:** ~25 minutes | **Level:** Advanced
+
+### 8. [Understand and Contribute Registry Metadata](./registry-metadata.md)
 
 Document protocols through the BRC process, request accurate optional descriptions,
 and keep registry stewardship separate from wallet permissions. Includes exact
@@ -97,6 +104,12 @@ lookup identities, publisher choice, updates and wallet fallback expectations.
 **Want to implement a protocol?** See [Conformance Testing](../conformance/).
 
 **Looking for infrastructure examples?** Check [Infrastructure Components](../infrastructure/).
+
+## Resumable wallet synchronization
+
+[Sync reliability and proof recovery](wallet-sync-reliability.md) describes the
+Toolbox 2.14 candidate API, cancellation, atomic checkpoints, foreground fairness,
+proof recovery, benchmark scope and the next coherent-snapshot milestone.
 
 ## Identity, DIDs and credentials
 

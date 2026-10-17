@@ -5,8 +5,8 @@ kind: package
 domain: messaging
 version: '2.6.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-25'
-last_verified: '2026-09-25'
+last_updated: '2026-09-28'
+last_verified: '2026-09-28'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'
@@ -15,6 +15,8 @@ tags: [messaging, message-box, brc-103, brc-29]
 ---
 
 # @bsv/message-box-client
+
+The unpublished 2.6 candidate accepts strict bounded base64 transaction bytes at the PeerPay receive boundary, alongside deployed array/byte representations. Outgoing encoding stays unchanged. This does not remove encrypted relay message limits or provide a durable settlement journal.
 
 This source candidate declares SDK peer `^2.8.6 || ^3.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)

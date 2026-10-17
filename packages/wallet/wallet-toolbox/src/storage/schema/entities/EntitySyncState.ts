@@ -1,3 +1,4 @@
+import { mergeSyncChunkEntities } from './mergeSyncChunkEntities'
 import {
   RequestSyncChunkArgs,
   SyncChunk,
@@ -7,24 +8,10 @@ import {
   WalletStorageSync
 } from '../../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
-import { maxDate, verifyId, verifyTruthy } from '../../../utility/utilityHelpers'
+import { verifyId, verifyTruthy } from '../../../utility/utilityHelpers'
 import { TableSettings } from '../tables/TableSettings'
 import { TableSyncState } from '../tables/TableSyncState'
 import { createSyncMap, EntityBase, EntityStorage, SyncError, SyncMap } from './EntityBase'
-import { EntityCertificate } from './EntityCertificate'
-import { EntityCertificateField } from './EntityCertificateField'
-import { EntityCommission } from './EntityCommission'
-import { EntityOutput } from './EntityOutput'
-import { EntityOutputBasket } from './EntityOutputBasket'
-import { EntityOutputTag } from './EntityOutputTag'
-import { EntityOutputTagMap } from './EntityOutputTagMap'
-import { EntityProvenTx } from './EntityProvenTx'
-import { EntityProvenTxReq } from './EntityProvenTxReq'
-import { EntityTransaction } from './EntityTransaction'
-import { EntityTxLabel } from './EntityTxLabel'
-import { EntityTxLabelMap } from './EntityTxLabelMap'
-import { EntityUser } from './EntityUser'
-import { MergeEntity } from './MergeEntity'
 
 function formatSyncSection<T>(
   heading: string,
@@ -312,7 +299,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
       maxRoughSize: maxRoughSize || 10000000,
       maxItems: maxItems || 1000,
       offsets: [],
-      since: this.when,
+      since: this.when == null ? undefined : new Date(this.when),
       fromStorageIdentityKey: this.storageIdentityKey,
       toStorageIdentityKey: forStorageIdentityKey
     }
@@ -338,7 +325,11 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
   /** Return progress without the potentially large writer-local ID maps. */
   makeSyncCheckpoint(): SyncCheckpoint {
     const request = this.makeRequestSyncChunkArgs('', '')
-    return { syncStateId: this.id, since: this.when == null ? undefined : new Date(this.when), offsets: request.offsets }
+    return {
+      syncStateId: this.id,
+      since: this.when == null ? undefined : new Date(this.when),
+      offsets: request.offsets
+    }
   }
 
   static syncChunkSummary(c: SyncChunk): string {
@@ -378,54 +369,16 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     updates: number
     inserts: number
   }> {
-    const mes = [
-      new MergeEntity(chunk.provenTxs, EntityProvenTx.mergeFind, this.syncMap.provenTx),
-      new MergeEntity(chunk.outputBaskets, EntityOutputBasket.mergeFind, this.syncMap.outputBasket),
-      new MergeEntity(chunk.outputTags, EntityOutputTag.mergeFind, this.syncMap.outputTag),
-      new MergeEntity(chunk.txLabels, EntityTxLabel.mergeFind, this.syncMap.txLabel),
-      new MergeEntity(chunk.transactions, EntityTransaction.mergeFind, this.syncMap.transaction),
-      new MergeEntity(chunk.outputs, EntityOutput.mergeFind, this.syncMap.output),
-      new MergeEntity(chunk.txLabelMaps, EntityTxLabelMap.mergeFind, this.syncMap.txLabelMap),
-      new MergeEntity(chunk.outputTagMaps, EntityOutputTagMap.mergeFind, this.syncMap.outputTagMap),
-      new MergeEntity(chunk.certificates, EntityCertificate.mergeFind, this.syncMap.certificate),
-      new MergeEntity(chunk.certificateFields, EntityCertificateField.mergeFind, this.syncMap.certificateField),
-      new MergeEntity(chunk.commissions, EntityCommission.mergeFind, this.syncMap.commission),
-      new MergeEntity(chunk.provenTxReqs, EntityProvenTxReq.mergeFind, this.syncMap.provenTxReq)
-    ]
-
-    let updates = 0
-    let inserts = 0
-    let maxUpdated_at: Date | undefined
-    let done = true
-
-    // Merge User
-    if (chunk.user != null) {
-      const ei = chunk.user
-      const { found, eo } = await EntityUser.mergeFind(writer, this.userId, ei, trx)
-      if (found) {
-        if (await eo.mergeExisting(writer, args.since, ei, undefined, trx)) {
-          maxUpdated_at = maxDate(maxUpdated_at, ei.updated_at)
-          updates++
-        }
-      }
-    }
-
-    // Merge everything else...
-    for (const me of mes) {
-      const r = await me.merge(args.since, writer, this.userId, this.syncMap, trx)
-      // The counts become the offsets for the next chunk.
-      me.esm.count += me.stateArray?.length || 0
-      updates += r.updates
-      inserts += r.inserts
-      maxUpdated_at = maxDate(maxUpdated_at, me.esm.maxUpdated_at)
-      // If any entity type either did not report results or if there were at least one, then we aren't done.
-      if (me.stateArray === undefined || me.stateArray.length > 0) done = false
-    }
-
+    const { done, maxUpdated_at, updates, inserts } = await mergeSyncChunkEntities(
+      writer,
+      this.userId,
+      args.since,
+      chunk,
+      this.syncMap,
+      trx
+    )
     if (done) {
-      // Next batch starts further in the future with offsets of zero.
       this.when = maxUpdated_at
-      for (const me of mes) me.esm.count = 0
     }
 
     await this.updateStorage(writer, false, trx)

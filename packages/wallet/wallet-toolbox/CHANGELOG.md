@@ -1,10 +1,216 @@
+## Held #569 implementation candidate — unreleased
+
+Private current structured indexes retain actual owner, original expiry/cancellation and complete physical filesystem checks around every temporary-index operation. Fresh native source/schema/seal/binding checks remain around each native range read, index issuance and final callback completion. The originally validated physical ceiling is retained as numeric resource DATA; no schema verdict or source grant is cached. This removes redundant native SQL around derived filesystem metadata while retaining source-change rejection before a callback result can escape. Genuine native regressions cover independent index bytes/entries, actual source mutation/readback, cancellation and cleanup. Complete performance and system qualification remain required.
+
+Private derived TEXT comparisons now retain two fresh complete schema boundaries per original 16 KiB read transaction. Nested metadata and extent reads use the same private query-only DATA primitives; both versions still read and hash to EOF, with unchanged byte comparison, ownership, cancellation and erasure checks. A genuine native regression reproduces eighteen schema traversals on the previous implementation and requires six across three bounded windows. Full-system and performance qualification remain open.
+
+Private current structured reads now perform their complete fresh schema, authenticated source, binding, physical-budget and lifetime checks at both operation boundaries. Nested packed TEXT descriptor/extent reads use identical DATA primitives restricted to the actual private query-only transaction, avoiding four redundant full schema traversals per range. Default, mutable, published and retired-source helpers retain their original fresh checks. Actual row/version metadata, chunk hashes, geometry, cancellation, erasure and actor checks are unchanged; no schema verdict or transferable grant is cached. A real native regression checks exact bytes, two boundary comparisons and forged/writer/expired-lease refusal; the unchanged implementation reproduces six comparisons. Full programme performance and system qualification remain required.
+
+Native whole-program measurement supplies the low-level portable exporter with its own actual query-only reader, keeping the serving pool available for foreground reads and writes. The fixture owns reader cleanup before setup and source cleanup before streaming; query observation includes both original one-connection pools. Native pins, exporter contracts, pool sizes, timeouts and performance/negative limits are unchanged. The failed shared-pool measurement remains evidence; complete performance and system qualification are still required.
+
+Native prepared-field, import-journal family and snapshot-destination schema verification now compare complete exact SQL in fresh batches of at most 32 definitions and 32 KiB of bindings. A single longer definition retains its original individual query. NULL implicit indexes, attached-table membership, full-family counts, actual owner checks and original refusal errors remain enforced; no schema verdict is cached. Genuine SQLite and native regressions cover bounded packets, altered or missing definitions, extra objects and rollback. This is an implementation correction; complete native performance and full-system qualification remain required.
+
+Candidate-journal admission also preserves the exact optional prior-import point guard. Installation and verification share its existing SQL bytes, type, name and attached table; same-name replacements and unrelated objects still refuse. Genuine native composition, rollback and altered-guard regressions cover the integration correction. Base definitions, three bounded catalog queries, native pins, resource limits and durable checkpoints remain unchanged.
+
+- Current-source facade operations read and validate the generation clock on every call within their original retained query-only snapshot. The issuer-only factory verifies the complete schema before issuing that private, non-escaping view. Each new view, mutable transaction and retired-source read retains full schema verification; no global verdict cache or copyable authority flag is introduced. Native regressions cover actual repeated-read query counts, escaped facades after closure, changed later schemas and restoration. Private candidate-journal admission also counts every object attached to its two tables while preserving its exact definitions, implicit index and three bounded catalog queries. All original lifetimes, physical/working/IPC limits, source/primary fences, checkpoints and negative controls remain.
+
+- Native baseline generation verification uses the existing packed-schema dispatch envelope of at most 32 definitions and 32 KiB of fixed source bindings per query. Candidate-journal verification compares its nine original definitions in one fresh bounded scalar query. Both retain complete exact SQL/type/name comparisons, unique-name counts, family and implicit-index checks, and actual transaction admission on every call. The original 65,537-byte native frame floor, DDL, executable pins, production defaults, row checkpoints, expiry and negative controls are unchanged; query packing retains no reusable schema verdict. Genuine query-packet and missing/changed-trigger, extra-index and rollback regressions cover the change. Full original native programme performance remains subject to qualification.
+
+- Consume the existing prior-import row/operation allowance with original per-row checkpoints and field drainage. Amortize native prior-import schema comparisons while retaining complete fresh exact-definition, family/index and owner checks; preserve original limits and error behavior.
+
+- Use the admitted native COPY row budget across top-level and parent rows, with finite empty-family traversal and original per-record journal commits, source coherence, lifetime and resource guards. Add a genuine stored-row batching and physical-reopen regression while retaining all original native cases. No schema, wire, production limit or API migration; whole-programme validation remains pending.
+
+- Retain bounded catalog-only read checks for both simple counts and fresh aggregate field-schema verification, including the complete five-field aggregate inventory and one-row limit. Data-row counts remain forbidden by the original authenticated reader test.
+
+- Apply measured provisional Metro15percent and Hermes25percent artifact allowances with retained baselines, exact job/source, owner and post-goal review/removal metadata. Preserve namespace, source maps/licenses, compiler settings and native/production/runtime/negative limits; no platform or physical-device proof is inferred. Give the compiler image a non-root fallback while retaining its existing explicit caller UID/GID.
+
+- State canonical key/name ordering explicitly as UTF-16 code units, preserving prior bytes and relationships. Keep correlated action table/value types explicit and avoid forwarding unrelated array callback arguments to fixture DDL generation. No API, schema, wire or production default migration.
+
+- Pack archive table fragments within the existing chunk ceiling, preserve header backpressure/emitted-buffer ownership and raw-byte quotas, and enroll the factored SQL comparator/regression in its existing mutation target. Retain portable benchmark reservations before assertions. Use measured fixed positive fixture admissions (portable import 240 seconds; native full-programme setup/phases 540 seconds, case 570), preserving original export/native phase, memory, foreground and negative controls. Failed samples remain evidence; no production default, wire or schema migration. Full qualification remains pending.
+
+- Private binary, structured JSON, canonical JSON and text field schemas now compare their complete original tables, primary indexes, prefix guards and optional authenticated seals in one fresh bounded scalar query per family. This replaces repeated catalog dispatches without caching a verdict, changing DDL or relaxing any caller ownership, expiry, quota or tampering check. The original 10000-label import independently exhausted its 120-second owner on the previous implementation; complete performance and native qualification of this correction remain required.
+
+- The complete native candidate-schema success fixtures admit 5 MiB after the ordinary 4 MiB fixture reproduced native SQLITE_FULL during trigger installation. Both ordinary and local variants retain real 4 MiB exhaustion tests, all schema/policy/generation/re-entry checks and their original 30-second case guards. Production quota defaults and native enforcement are unchanged.
+
+- On Ubuntu with restricted user namespaces, pinned Chrome for Testing delivery installs a temporary AppArmor attachment for that exact verified executable path. Chrome retains its original sandbox flags and the global user-namespace restriction is unchanged. An always-run CI cleanup step removes and verifies absence of its own attachment, including setup and environment-handoff failure cleanup. Delivery and blank-page startup evidence do not qualify the full native browser program. The complete HTTP benchmark owns serving sockets before the first authenticated client request, preserving the real post-commit disconnect and independent durable recovery oracles.
+
+- Post-import native recovery includes all34 retained local families after main added internalize_receipts, keeping every existing family comparison. Nested history spelling reuses the original projection scratch after its selection banks drain: the retained output plus two note-spelling banks stay inside its existing six-bank byte ceiling. The outer source keeps its original two grammar indexes; no index-count, temporary-byte, owner, deadline or production default is enlarged. Complete original occupied-customer, cleanup/retry and history oracles remain required.
+
+- SQLite journal bootstrap now preserves the existing signed sync-state key domain, including negative and zero physical/profile keys and resumed page cursors, matching the installed observers. Other entity keys remain positive and MySQL retains unsigned keys. No DDL, ABI, wire format, production quota or default changes. Full native metadata and independent cross-page signed-key regressions remain required qualification evidence.
+
+- Populated private-native journal initialization now completes the existing 1,000-record allowance across all seventeen streams: each nonempty page consumes admitted records and each stream needs a terminal empty page. The finite progress guard preserves the original record quota, native expiry and generation checks, and rejects invalidated bootstrap state. Fresh packed-schema comparisons group at most 32 definitions within 32 KiB of source bindings; an existing longer definition retains its individual query. Exact SQL bytes, family/layout checks and original native frame limits remain, with no cached verdict. Whole-system performance and supported-platform qualification remain open. Native source-copy qualification preserves all eight original Linux installer cases in a mandatory privileged partition, with full report validation and merged coverage. Fixture and benchmark corrections retain original datasets, quota refusals, independent byte checks and genuine foreground roles.
+
+- Qualification test guards preserve the existing inner budgets: the three private Knex staging properties retain fast-check's 150-second failure limit, all 300 schedules and their fixed seed, with a 180-second Jest guard for completion and cleanup. The native legacy-spelling case uses the same 180-second outer guard as checkpoint-delta, while its original 120-second native and 180-second staging lifetimes, both complete passes and two-index drainage remain unchanged. Occupied packed-journal wrappers explicitly assert successful completion of their full independent oracles. These changes do not alter production limits or establish whole-system qualification.
+
+- Route original authenticated native structured-source completion through its verified read mode, preserving every owner/seal/archive/slot/expiry check. Cover original structured bytes and closed-owner refusal, and observe the allocation-regression source refusal at its original boundary.
+
+- Select finite per-scenario native candidate test fixture lifetimes with measured setup/copy headroom and separate cleanup allowance. Preserve all original cases, real expiry checks, read choices, operation counts and production defaults; complete system qualification remains required.
+
+- Align genuine native qualification scalar/closed-installer fixtures and measured finite SQL observation bounds; select a bounded local-schema physical allowance while retaining the real smaller-quota refusal and every production default.
+
+- Align native streamed integration test outer guards with the existing 180-second fixture lifetime plus bounded physical-owner cleanup; retain all data, assertions, operation deadlines and production defaults.
+
+- Private publication and profile-mode regressions match the current filesystem guard error while independently checking the actual restricted mode and unchanged exact device/inode. Copied-root and physical-lease regressions match the current ownership guard. All original refusal, descriptor-close, payload, copy and retirement assertions remain; production guards and defaults are unchanged.
+
+- Integration test fixtures retain exact binary descriptors while keeping read observations outside descriptor data. Authorization query fixtures exercise the coherent read and packed-text query seams with the original authenticated ownership predicate and pagination. Schema-definition tests verify bounded name/SQL projections, exact ordered type/name pairs and each page limit. Complete native allocation/resume workflows explicitly select the existing 16 KiB read option; 1 KiB defaults, original finite owners and all independent data/rollback/custody assertions remain. The occupied IndexedDB request component uses its existing 120-second verifier window with 30 seconds of outer cleanup allowance. No production behavior, default, wire/schema, API or resource limit changes; full-system qualification remains pending.
+
+- Authenticated import regression tests retain the physical oversized-row extent refusal before payload loading using a genuine owned provisional store, and separately prove sealed-row mutation rejection with unchanged authenticated reads. Indexed data reads still prohibit OFFSET and data aggregates; only bounded SQLite catalog seal checks are admitted. The complete native checkpoint-delta regression uses the existing 180-second fixture lifetime as its outer test guard, preserving the original residual native and staging deadlines, all fields, maps, unknown members, bytes and allocation checks. No production behavior, default or limit changes; full-system qualification remains pending.
+
+- Compile and launch the original staging ownership and crash-resume child fixtures
+  from the wallet build, preserving real kernel-lock and crash-prefix checks.
+  Align the full allocation refusal test guard with the existing fixture lifetime;
+  original memory limits, ownership expiry and production defaults remain unchanged.
+
+- Preserve all native field-window positive and negative contracts while isolating
+  fatal physical-length probes in fresh retained views under the original deadline.
+  Verify original read/closed/close error identity and physical cleanup; production
+  snapshot retirement and every original fixture/case/resource limit are unchanged.
+
+- Streamed scalar TEXT checks its following row delimiter before finishing a provisional field. Reader-only snapshot peers refuse destination operations through the existing negotiation error even with absent source/session DATA; valid source/page DATA remain detached before asynchronous work. The field-policy success fixture uses a valid sync-state status and retains independent invalid-status rejection. No consumer migration, archive-format, resource-default or capability expansion.
+
+- Preserve PostgreSQL journal migration no-ops during explicit data deletion by retaining the existing dialect guard on both rollback callbacks; SQLite/MySQL cleanup and normal downgrade refusals remain. Add a real callback regression rejecting snapshot SQL/connection acquisition on PostgreSQL. Complete native restore success setup explicitly admits 8 MiB while small defaults/negative controls remain; the schema batching oracle selects the actual settings UPDATE observer and retains exact byte/order/rollback/resource assertions. No public API, data-format, schema or production resource migration is introduced. Full system qualification remains open.
+
+- Give the complete native MySQL certificate qualification group a bounded 90-second allowance, based on its 34.4-second local duration and approximately twofold hosted slowdown in the preceding groups. Other eight groups retain 60 seconds; all cases, assertions, deterministic property seed, readiness/CLI/output bounds and resource caps remain. Correct the launcher regression to expect the already-existing 2 GiB fixture memory cap. No production algorithm, timeout, protocol or sizing change is introduced; full system qualification remains open.
+
+- The browser Argon2id installer and qualification bootstrap admit only native dedicated-worker channel events (empty origin, null source and trusted browser dispatch). Rejected channel metadata closes the owned worker before request derivation or bootstrap installation. Rejection regressions and real worker metadata assertions preserve the existing KDF, NFC, cancellation, transfer protocol and deadlines. No hosting-domain allowlist, consumer migration, cryptographic parameter or resource-limit change is introduced. Complete system qualification remains open.
+
+- The complete canonical migration regression fixture explicitly admits 8 MiB of aggregate physical storage, preserving 64 KiB row and working-allocation ceilings. Its measured empty main database is 1,503,232 bytes; the actual small 4 MiB fixture limits the main database to 336 pages (1,376,256 bytes) after its unchanged three-image recovery reservation. An independent control compares both real page ceilings and verifies the complete schema fits the larger bounded allowance with recovery headroom. Original migration algorithms, exact DDL/names/callbacks/configs, selected rollback/replacement retry and case deadlines remain unchanged. The small default and exhaustion controls remain 4 MiB. This is an empty-schema test allowance; production data, concurrency and recovery peaks still require qualification. No production default or native resource formula is changed.
+
+- PushDrop infers the actual getPublicKey/createSignature wallet capability through a generic parameter while defaulting to WalletInterface for existing full-wallet annotations and public wallet access. Constructor and method runtime bodies/defaults are unchanged, and emitted JavaScript remains byte-identical. Actual ProtoWallet and full-wallet declaration checks cover both forms without casts or invented wallet methods; the original six script tests remain intact alongside two appended regressions. SDK output propagation and release ownership are coordinated separately; full program qualification remains pending.
+
+- Native local-baseline generation checks now compare every selected definition in fresh SQLite queries containing at most eight definitions and 8KiB of definition bindings, plus the fixed scalar LIMIT; an existing longer definition retains its individual query. Exact SQL bytes, complete family counts and primary-index checks remain. Both total and distinct-name counts prevent a duplicate from masking a missing object, and the actual current native actor is rechecked while assembling and executing each batch. No schema verdict is cached, no definition or limit changes, and the original error identity is retained. Full composed bootstrap and system qualification remain pending.
+
+- Small snapshot-journal schema rows now transfer their exact type, name, table and SQL bytes together with their lengths in one at-most-16KiB BLOB response. Larger rows retain the original individual bounded chunks and strict UTF-8 decoding. Every invocation reads the actual retained schema view; original per-definition, name, complete source JSON and object-count bounds, NULL SQL and ordering remain unchanged. This reduces measured repeated metadata round trips without caching schema verdicts or raising resource limits. Full native bootstrap and system qualification remain pending.
+
+- Keep an actual supplied published-wallet transaction for journal verification; native and ordinary roots retain their original transaction creation path. Nested children never inherit copy/native membership. Full system qualification remains pending.
+
+- Verify occupied compact import metadata in actual read-only published copies while retaining native-only fresh creation, exact complete schemas and current actor checks. Ordinary transactions and altered/extra/temporary families refuse. Full system qualification remains pending.
+
+- Persist structured resource limits without serializing live allocation owners; retain the original ceiling and use one actual owner throughout each finite publication inventory. Reject serialized owners and widened bounds. Full system qualification remains pending.
+
+- Preserve inert signed syncStateId coordinates when inspecting native packed TEXT instead of requiring a remapped entity ID.
+
+- Require the exact ISO-text timestamps written by the SQLite restore provider when inspecting complete private and copied native inventories.
+
+- Reduce fresh native identity witness helper definitions by omitting primary-key self-assignments already implied by the BINARY non-NULL conflict key. Retain all nonkey change checks, nested UPSERT behavior and complete occupied observer families. Native capacity and full #544 qualification remain pending.
+
+- Declare the concrete wallet internalization result already returned, retaining SDK compatibility and runtime behavior. Fresh empty private local-packed profiles reuse the canonical composite spentBy cleanup index after exact in-transaction inspection; ordinary/occupied indexes and original physical rowids remain unchanged. Full native capacity and #544 qualification remain pending.
+
+- Complete the wallet script-verifier capability contract for SDK whole-transaction-only backends and retain JavaScript per-input fallback and diagnostics without requiring an unavailable `verifySpend` method. Existing per-input and hybrid backends remain compatible; no wire or storage migration is required. Full #544 qualification remains pending.
+
 # wallet-toolbox Significant Changes History
 
 This document captures the history of significant changes to the wallet-toolbox repository.
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.15.0
+## 2.15.0 candidate — bounded sync and portable recovery
+
+- Integrate current main892 interrupted WAB registration continuity. An optional durable checkpoint saver retains the encrypted unpublished UMP token before funding; retries keep the same root and verify an already internalized faucet payment. Existing published tokens and backup identity/network contracts remain. No required consumer migration; use the new callback for cross-process pending registration recovery. Full combined system qualification remains pending.
+
+- Retain recipient output and basket credit when valid AtomicBEEF omits the recipient BUMP but storage already has its proof. The actual lookup and ownership writes share a writer; no header lookup, broadcast or new proof request is needed. Preserve pre-writer header resolution for incoming proofs and the original five confirmed-IDB cases. No schema or API migration. Full system qualification remains pending.
+
+This unpublished source candidate passes core/client/mobile source compilation
+and core/client/worker/mobile assembly and warning-free source lint checks;
+functional qualification remains pending. The
+[current implementation map](./docs/implementation-544.md) and
+[candidate delivery guide](./docs/delivery-544.md) describe current source,
+qualification, compatibility and forward rollback. PR569 remains unmerged.
+
+- Add bounded resumable push, pull, backup and primary reconciliation. Durable
+  destination ACKs own progress; lost replies recover from stored checkpoints.
+  Original manager/provider/identity/generation fences remain under short atomic
+  ownership. Foreground requests run between pages, and explicit reentrancy and
+  cancellation retain and drain the actual in-flight commit.
+- Retain coherent SQLite WAL and MySQL read views, stable keysets, indexed profile
+  and relationship predicates, tombstones, high-water marks, monotonic journal
+  floors and bounded resumable migration/retirement. Complete BRC-38 source rows
+  and original sync-state provenance remain separate from replica checkpoints.
+  Postgres keeps standard wallet storage and legacy sync; the candidate auxiliary
+  snapshot migrations are no-ops there.
+- Add authenticated single-user snapshot/archive RPC and remote durable
+  destinations. Bind handles to current identity, network, storage/schema,
+  original quotas and expiry. Negotiate raw bytes and bounded multipart transfers
+  only with capable peers; retain old serialized/base64 behavior.
+- Add versioned packed-IDB v7 storage and bounded binary, scalar TEXT and structured
+  field paths. Keep the original v6 namespace for rollback; no in-place conversion
+  or existing-data reset is introduced. Verify content before reuse, and retain
+  atomic ID maps, primary fences and durable transfer/checkpoint commits.
+- Add streamed canonical BRC-38 and bounded BRC-39 processing with original wire
+  format, NFC password handling, Argon2id strength and authenticated final-tag
+  validation. Preserve meaningful nullable histories and array entries in a
+  detached non-mutating export. Native source normalization preserves both
+  `notified` and `wasBroadcast` booleans.
+- Add first-party owned Node and browser Argon2 workers, an explicit dedicated
+  browser asset/installer and optional qualified host-native backend. Retain
+  cancellation, transferable buffers, input erasure and actual owner cleanup.
+- Add authenticated preview, isolated restore and occupied repeat merge. Native
+  composition preserves all47 local families; the portable archive contains its
+  original13-table single-profile closure. Full metadata/payload comparisons,
+  proof validation, ID remapping and atomic import journals precede publication.
+- Reserve incoming native IDs on the current source primary before import.
+  Durable AUTOINCREMENT holes prevent foreground collisions and survive
+  cancellation; resume retains immutable ranges, consumed IDs and original
+  limits. Expired-ledger cleanup cannot lower counter floors.
+- Add explicit native/browser inactive publication and profile selection, current
+  native observation, named restart/expired-pending recovery and bounded physical
+  retirement. A data recovery receipt cannot authorize a primary or recover keys.
+  Failed physical cleanup retains its concrete retry owner and resource charge.
+- Add Unix/native and Windows HANDLE/DACL/image/job source implementations and
+  candidate build recipes. Runtime pins require exact actual-host qualification;
+  unqualified platforms refuse native admission. Build receipts are input data.
+- Add `DeviceBackupController` to Node/client/mobile entry points. Device backup
+  preferences can be shared; each profile authenticates, synchronizes and recovers
+  independently. Hosts explicitly persist preferences and call foreground cadence,
+  suspend, resume and close. Include the consumer lifecycle example.
+- Separate fixed latency from marginal row/byte costs in adaptive page sizing,
+  smoothing, hysteresis and bounded upward probes. Preserve queue/in-flight
+  budgets, the eight-worker proof limit, deterministic ordering and serialized
+  provider fallback. Benchmark read-ahead before enabling extra readers.
+- Propagate #542 returned provider errors before advancing counters or checkpoints.
+  Validate #543 non-null basket mappings and repair existing output associations.
+  Preserve terminal unchanged offset resets and returned/thrown failure precedence.
+- Preserve queued primary reselection and persisted-selection reload after a
+  partial switch failure. Repair stale selected/input/broadcast proofs only from
+  canonical evidence; proof replacement and prepared-BEEF invalidation stay atomic.
+  Bound fresh SQLite metadata grouping without a stale schema cache or changed
+  MySQL validation/error behavior.
+- Retain all original property, mutation, compatibility and recovery controls;
+  add current genuine native/browser/HTTP cases, installed-package compatibility
+  cohorts and fixed small/large/large-record measurement commands. They require
+  complete current-system execution before any performance or readiness claim.
+  Keep the previously reviewed mobile Hermes Brotli ceiling and other bundle
+  limits unchanged.
+
+Operational rollback retains schema/data and sets `snapshotSync: false` to use
+serialized behavior. Explicitly refusing migrations cannot be downgraded in place.
+Publication, provider rollout, physical-device qualification and a funded recovery
+require their operational authorization after complete artifact validation.
+
+- Keeps the public-main `regtest` chain usable by live/resumable sync, device
+  backup profiles and reconciliation journal receipts/windows. Cross-network
+  requests still reject; BRC-38 v1 archives retain their main/test restriction.
+
+- Re-enter the irreversible native comparison phase after reopening a completed
+  private composition, through the actual idle owner. Persisted receipts do not
+  replace current kernel state; full source, image and row checks still run.
+
+- Preserve main's durable SQL receipt claims in native local composition and
+  recovery. Append the family after all 47 existing table coordinates; observe
+  actual inserts, updates, deletes and rollback without adding it to BRC-38's
+  thirteen-table archive. Independent native fixtures retain actual receipt
+  keys, owner token, completed state and lease metadata.
+- Fresh private native enrollments require the current complete source/schema
+  fingerprint. Pre-change unpublished candidate journals are not silently
+  rewritten: finish pending work with their original pinned artifact, retain
+  the old profile for rollback and verify a fresh current enrollment. Ordinary
+  released SQL wallets retain main's standard receipt migration and rows.
+
+- Order the original durable receipt migration before fresh private local-layout
+  checks. Preserve its migration name, callback and config; ordinary wallet
+  migration chronology and occupied databases are unchanged.
+
+### Additional public-main 2.15.0 changes
 
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
@@ -1595,3 +1801,42 @@ Implications:
 - These outputs WILL be returned by `listActions` with the includeOutputs option set to true.
 - Your wallet will mark any output you include as inputs in your own transactions as spent at the time of transaction creation.
 - If a created transaction subsequently fails to be broadcast (abandoned or invalid), the outputs are reset to spendable. This may not happen immediately.
+
+- Preserve the original config-bearing migration return type on the private
+  native adapter, with a strict Knex-compatible declaration consumer. Runtime
+  migration, owner and transaction behavior remain unchanged.
+
+- Fresh private native baseline schema shares fixed packed-pointer observers
+  per binary/text event, preserving current-parent physical rowids and occupied
+  legacy/per-ID families. Complete SQL/C/native resource and capacity validation
+  is pending; no native cap, archive format or operational table changes.
+
+Fresh native baseline generations use fixed inventory coordinates in the 141 internal source observer names. The event bodies, all 47 physical source tables, clocks and pointer observers are unchanged. Occupied full-name generations retain their complete family; mixed or altered families fail exact validation. The fixed names remove 3,027 SQL definition bytes plus 3,027 separately stored schema-name bytes; page savings remain unmeasured. Actual Linux ARM candidate14 passes the original runtime contract and all twelve C components, including an independent 47-source/423-transition/2,784-check compact-name component. The native authorizer admits the fresh positional spelling only and refuses case-insensitive temporary shadows, altered coordinates, direct events and retired/comparison actors. Actual component feedback: all 48 independent SQL cases pass with zero skips. The genuine cold baseline installs at 326/336 pages, accepts complete old and new observer-name families, rejects mixed/altered families, and restores the exact schema and geometry through real savepoint rollback. The source-owned delivery CLI passes all 13 records and delivers exact candidate14 bytes, with all preparation/component/CLI groups and fixture contents drained. The full packed-plus-baseline installation still fails SQLITE_FULL before journal installation; packed geometry is 319/336 pages. The 6,054 metadata-byte saving is measured, but no packed-plus-baseline page saving or full-system qualification is claimed. Native limits and the original whole-case/property controls remain unchanged; this component does not establish complete #544 qualification.
+
+Fresh authenticated private native migrations create auxiliary archive pages and requests with one clustered composite primary tree each. Both original keys are already non-null; columns, affinities, payloads, request expiry indexing and logical key operations remain unchanged. Ordinary SQLite/MySQL creation and occupied tables retain their existing definitions. The original nullable archive header key, private staging/payload tables, operational source rowids and ten physical identity witnesses are unchanged. Complete fixed DDL, actual private writer, pre-generation state and case-insensitive temporary shadow checks gate creation in the original migration transaction. Actual Linux feedback passes all seven new independent SQL cases and genuine fresh/occupied archive families, temporary shadows, late creation, bad source binding, persisted restore admission, absent/extra index removal and exact savepoint rollback. Cold allocation is 307 pages, packed is 317, and packed plus baseline installs at 336/336. Complete snapshot source binding now validates after compaction. The subsequent journal CREATE TABLE snapshot_journal_generation fails SQLITE_FULL, so complete journal capacity and full #544 qualification remain open. Native candidate14, pin8, limits and all original case/property controls are unchanged.
+
+The fresh native local-packed installer now reconciles its snapshot source binding around the fixed spent-by index compaction. It validates the original complete generation and empty unpublished source, verifies that only the redundant nonunique index disappeared while all observers and identities remain exact, conditionally updates the original binding and validates the complete new generation. The existing layout savepoint owns the index and binding together. The preserved allocation37 sample shows the archive change allows packed plus baseline installation at 336 pages, then exposes the old binding mismatch; The later native39 run validates the complete repaired binding and all four negative controls, then retains the first journal-table SQLITE_FULL failure. Full journal capacity and system qualification remain open.
+
+Fresh private native journal generations group the complete 24 original packed-pointer emitters into four family/event observers. The original positional factory and occupied generation families remain supported. Fixed coordinates and actual unique/physical parent lookups preserve pointer replacement, missing-parent deletion and original event selection. Complete mixed, partial or altered families refuse. Actual feedback passes all 14 independent SQL cases and both genuine native fresh grouped and occupied original positional families. Altered SQL, missing or mixed observers, temporary shadows and a partial group refuse; real savepoints restore the exact schema, generation and geometry. The grouped plan removes 20 trigger definitions and 3,198 SQL bytes while retaining every other definition. Cold fresh journal allocation is 329/336 pages, compared with 330/336 for the original family. Complete packed plus baseline remains 336/336 and the first journal table still fails SQLITE_FULL. The original 32 whole native system cases remain pending; this is component proof, not full-system qualification. A disposable ordinary SQLite copy rebuild saved only six pages and did not fit the complete graph; native VACUUM is not implemented or claimed.
+
+Fresh empty native local packed layouts consolidate parent-admission and key-move guards by fixed coordinate and original error identity. Every original marker, actual-parent check and unrelated quota/content/lifetime definition remains in force; occupied layouts retain their original complete guard families. Mixed, missing or altered definitions refuse. The change is internal schema definition data and introduces no archive or public API migration. Complete combined packed, baseline and journal capacity and full native system qualification remain required before release.
+
+Fresh empty private native local packed layouts now use stable compact internal observer names. Table and index names, preparation/source anchors, every event body, predicate, error and source coordinate remain exact. Complete occupied original and parent-grouped families keep their original names. Complete mixed, missing or altered families and temporary shadows refuse. This internal definition-data change does not change the archive vocabulary or relax native resource limits; combined native capacity and full-system qualification remain pending.
+
+Actual native snapshot schema reads now select at most eight length records per response and transfer groups whose complete BLOB bytes fit the existing 16KiB response allowance. SQL rechecks the aggregate before transfer; longer rows retain their original individually bounded chunks. Temporary row coordinates and lengths remain data in the actual retained transaction. Exact ordering, all original JSON/SQL/name/object bounds, strict UTF-8 and NULL handling remain; there is no cached verdict or changed production quota. Full composed and system qualification remain pending.
+
+Current native all47 baseline installation now uses the existing atomic journal source-addition migration. It validates the complete old/new plans in the actual writer, refuses installation while live capture receipts remain, preserves events, retained floor and bootstrap progress, and rotates the journal epoch so old source bindings cannot resume. Idempotent retries with an already-installed baseline do not repeat the migration. Existing native actor/profile/primary checks, definitions, quotas, deadlines and the source-addition protocol remain unchanged. Full composed and system qualification remain pending.
+
+Whole-feature native test fixtures explicitly admit 16 MiB, matching the existing composed integration allowance. The independent default preview admission remains 4 MiB. The complete schema has a measured minimum above the old 336-page private-stage allowance, so successful full-feature fixtures use the unchanged native formula at their explicit admission (1,360 pages). Five capacity assertions follow that deliberate fixture migration; all original test names, counts, semantic assertions and deadlines remain. Independent four-MiB controls retain the original 336-page ceiling and exercise actual quota exhaustion and rollback; the full-feature fixture verifies genuine packed/baseline/journal sealing after its real native writer completes. No product default, native quota formula, VFS/C implementation or original property control is relaxed. Supported data, copy/WAL/recovery and concurrent-owner peaks still require measurement before a production recommendation; this test admission is not that qualification.
+
+Whole-native full-feature fixture admission separately selects 16 MiB for authenticated decoded/working allocation and 16 MiB for aggregate physical storage, preserving the 64 KiB serialized-row limit. The original derived-TEXT contract requires an 8 MiB working allocator and a 16 MiB decoding budget; admitting only 64 KiB for allocation cannot exercise it. The preview helper retains its original coupled allocation default and adds an explicit optional allocation selection. Small 4 MiB exhaustion controls retain 64 KiB allocation. All native quota/heap/address/FD derivation formulas, production defaults, C candidate and original semantic tests remain unchanged. The full selection derives a 49 MiB SQLite heap and 128 MiB address-space allowance under the existing formula; this is a fixture envelope, not a production recommendation. Current full native and new admission-case validation remains required.
+
+Private content staging captures an owned byte copy before queued I/O, including Node Buffer inputs. Buffer.slice() shares caller memory; staging uses the existing detached-copy helper so caller mutation cannot change a pending append and cleanup cannot erase caller bytes. Finite chunk bounds, working/lifetime charges, replay-prefix comparison, independent stored-byte hashes and cleanup remain unchanged. The original derived-TEXT byte-preservation contract is the regression control.
+
+Fresh private native local schemas retain individual literal field guards and original observer names, and fresh journals retain complete individual positional pointer emitters. This preserves independent historical-emitter conversion and damaged-definition rollback contracts. Complete occupied grouped/named families remain recognizable under their existing exact validators; no occupied database is rewritten. Compact physical tables and source-owned quota, generation, ownership, mixed/missing/altered/TEMP refusal and rollback safeguards remain.
+
+Qualification filesystem readers bind metadata and bytes to the same opened descriptor, preserve the original physical inode checks and close handles on refusal. Worker-asset manifests and compatibility cohort inputs retain their existing finite bounds; qualification fixtures retain every original assertion, case and deadline. The Worker-module transfer oracle uses an independent arbitrary 32-byte mock key rather than hashing password inputs; physical Argon2/KDF execution remains separately required. No public API, archive/database format, production KDF or runtime/resource/default migration is introduced. Full system and exact-head analyzer qualification remain pending.
+
+Packed IndexedDB operational synchronization accepts all supported wallet chains, including regtest, and retains exact source/destination network binding before user registration. Persisted operational checkpoints use that same chain set across reopen; this does not expand the BRC-38 archive main/test format. Authenticated remote destination admission uses the same operational chain validation; real Node/mobile HTTP regtest copies retain committed progress across server replacement. BRC-38 archive negotiation remains main/test. Regression cases cover actual packed manager push/pull and committed reopen on every supported chain, plus regtest atomic rollback, lost-ack progress, namespace isolation and stale-primary refusal. Native migration qualification compares completed source schemas with the current registered migration version while separately proving the required journal stamp; historical process-loss fixtures retain an exact pre-migration cutoff. No public API, archive format, production default or resource limit changes. Full-system and exact-head CI qualification remain required.
+
+Signed sync-state provenance now follows the same admitted key domain through fresh bootstrap, bounded metadata/cursor/frame reads and durable source-provenance storage. The provenance reader starts at the first actual key when no cursor is supplied; an explicit zero cursor still means keys greater than zero. Other entity identifiers stay positive, MySQL source bootstrap stays unsigned, and provenance never writes destination sync-state rows or primary selection. Schema, field encodings, quotas and native ABI are unchanged.

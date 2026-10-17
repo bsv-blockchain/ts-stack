@@ -1,6 +1,8 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  // Avoid slow VM global lookups while retaining the original full suite and deadlines.
+  sandboxInjectedGlobals: ['Math'],
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests/**/*.test.js', '**/*.test.ts'],
   transform: {

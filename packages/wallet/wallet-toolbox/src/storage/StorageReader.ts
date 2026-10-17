@@ -116,8 +116,8 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
     return undefined
   }
 
-  async findUserByIdentityKey(key: string): Promise<TableUser | undefined> {
-    return verifyOneOrNone(await this.findUsers({ partial: { identityKey: key } }))
+  async findUserByIdentityKey(key: string, trx?: sdk.TrxToken): Promise<TableUser | undefined> {
+    return verifyOneOrNone(await this.findUsers({ partial: { identityKey: key }, trx }))
   }
 
   async getSyncChunk(args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> {

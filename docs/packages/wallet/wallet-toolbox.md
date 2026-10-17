@@ -15,6 +15,8 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 
 # @bsv/wallet-toolbox
 
+The unpublished 2.15 candidate adds `syncFromReaderResumable`, fair foreground scheduling, network/error preflight and canonical proof recovery. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md). Existing sync methods and BRC-38/39/40 formats remain supported.
+
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.

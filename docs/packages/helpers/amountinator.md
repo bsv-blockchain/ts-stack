@@ -5,8 +5,8 @@ kind: package
 domain: helpers
 version: '2.1.7'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-26'
-last_verified: '2026-08-26'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/amountinator'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator'
@@ -15,6 +15,10 @@ tags: [helpers, amounts, satoshis]
 ---
 
 # @bsv/amountinator
+
+The unpublished 2.1.7 candidate refreshes the packed first-party dependency
+ranges for the next wallet interoperability release; no independent API or wire
+format changes are introduced. Adopt after the dependency graph is published.
 
 This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)

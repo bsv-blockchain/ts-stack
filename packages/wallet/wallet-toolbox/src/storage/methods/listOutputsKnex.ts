@@ -1,3 +1,9 @@
+import { applyBrc38NativeManagedChangeText } from '../portable/Brc38NativeManagedChangeTextNode'
+import { hasBrc38NativePackedTextSchema } from '../portable/Brc38NativePackedTextSchemaNode'
+import {
+  prechargeBrc38NativePackedTextWalletRows,
+  hydrateBrc38NativePackedTextWalletRows
+} from '../portable/Brc38NativePackedTextWalletNode'
 import { type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput } from '@bsv/sdk'
 import type { StorageKnex } from '../StorageKnex'
@@ -10,6 +16,10 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { managedChangeOutputFields } from './managedChange'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import {
+  withBrc38NativePackedWalletTransaction,
+  hydrateBrc38NativePackedWalletRows
+} from '../portable/Brc38NativePackedWalletNode'
 
 interface ResolvedKnexListTags {
   tags: string[]
@@ -107,15 +117,9 @@ function applyKnexBaseFilters(
   if (!managedChangeOnly) return
   query
     .where({
-      'o.type': managedChangeOutputFields.type,
       'o.change': managedChangeOutputFields.change,
-      'o.providedBy': managedChangeOutputFields.providedBy,
-      'o.purpose': managedChangeOutputFields.purpose
+      'o.providedBy': managedChangeOutputFields.providedBy
     })
-    .whereNotNull('o.derivationPrefix')
-    .whereNot('o.derivationPrefix', '')
-    .whereNotNull('o.derivationSuffix')
-    .whereNot('o.derivationSuffix', '')
     .whereNull('o.spentBy')
 }
 
@@ -216,7 +220,8 @@ async function hydrateKnexWalletOutput(
   labelsByTransactionId: Record<number, string[]>,
   tagsByOutputId: Record<number, string[]>,
   beef: Beef,
-  trx?: TrxToken
+  trx?: TrxToken,
+  scriptsReadInView = false
 ): Promise<WalletOutput> {
   const walletOutput: WalletOutput = {
     satoshis: Number(output.satoshis),
@@ -233,7 +238,7 @@ async function hydrateKnexWalletOutput(
     walletOutput.tags = tagsByOutputId[output.outputId] ?? []
   }
   if (vargs.includeLockingScripts) {
-    await storage.validateOutputScript(output, trx)
+    if (!scriptsReadInView) await storage.validateOutputScript(output, trx)
     if (output.lockingScript != null) {
       walletOutput.lockingScript = asString(output.lockingScript)
     }
@@ -294,7 +299,11 @@ export async function listOutputs(
   )
   if (specOp?.totalOutputsIsSumOfSatoshis) {
     baseQuery.sum('o.satoshis as totalSatoshis')
-    const sum = await baseQuery.first()
+    const sum = await withBrc38NativePackedWalletTransaction(k, async db => {
+      const query = db === k ? baseQuery : baseQuery.clone().transacting(db as Knex.Transaction)
+      if (specOp?.managedChangeOnly === true) await applyBrc38NativeManagedChangeText(db, query)
+      return await query.first()
+    })
     result.totalOutputs = Number(sum?.totalSatoshis ?? 0)
     return result
   }
@@ -303,7 +312,25 @@ export async function listOutputs(
   if (!specOp?.ignoreLimit) baseQuery.limit(limit).offset(offset)
   else if (specOp.maximumCandidateCount != null) baseQuery.limit(specOp.maximumCandidateCount + 1)
   baseQuery.orderBy('o.outputId', orderBy)
-  let outputs: TableOutput[] = await baseQuery
+  let scriptsReadInView = false
+  let outputs: TableOutput[] = await withBrc38NativePackedWalletTransaction(k, async (db, packed) => {
+    const query = db === k ? baseQuery : baseQuery.clone().transacting(db as Knex.Transaction)
+    if (specOp?.managedChangeOnly === true) await applyBrc38NativeManagedChangeText(db, query)
+    const rows: TableOutput[] = await query
+    if (!packed) return rows
+    if (specOp?.maximumCandidateCount != null && rows.length > specOp.maximumCandidateCount)
+      throw new WERR_INVALID_OPERATION(
+        `${specOp.name} is limited to ${specOp.maximumCandidateCount} candidates; use a bounded paged review.`
+      )
+    const scripts = vargs.includeLockingScripts || specOp?.includeOutputScripts === true
+    const text = await hasBrc38NativePackedTextSchema(db as Knex.Transaction)
+    if (text) await prechargeBrc38NativePackedTextWalletRows(db, 'outputs', rows)
+    await hydrateBrc38NativePackedWalletRows(db, 'outputs', rows, scripts)
+    if (text) await hydrateBrc38NativePackedTextWalletRows(db, 'outputs', rows)
+    if (scripts) for (const output of rows) await dsk.validateOutputScript(output, db)
+    scriptsReadInView = scripts
+    return rows
+  })
   if (specOp?.maximumCandidateCount != null && outputs.length > specOp.maximumCandidateCount) {
     throw new WERR_INVALID_OPERATION(
       `${specOp.name} is limited to ${specOp.maximumCandidateCount} candidates; use a bounded paged review.`
@@ -319,7 +346,12 @@ export async function listOutputs(
   }
   const skipped = specOp?.ignoreLimit ? 0 : offset
   result.totalOutputs = await resolveKnexListTotal(outputs.length, limit, skipped, async () => {
-    const total = verifyOne((await qcount) as Array<{ total: number | string }>).total
+    const totals = await withBrc38NativePackedWalletTransaction(k, async db => {
+      const query = db === k ? qcount : qcount.clone().transacting(db as Knex.Transaction)
+      if (specOp?.managedChangeOnly === true) await applyBrc38NativeManagedChangeText(db, query)
+      return await query
+    })
+    const total = verifyOne(totals as Array<{ total: number | string }>).total
     return Number(total)
   })
   const { labelsByTransactionId, tagsByOutputId } = await loadKnexOutputAssociations(
@@ -331,7 +363,16 @@ export async function listOutputs(
   const beef = new Beef()
   for (const output of outputs) {
     result.outputs.push(
-      await hydrateKnexWalletOutput(dsk, output, vargs, labelsByTransactionId, tagsByOutputId, beef, trx)
+      await hydrateKnexWalletOutput(
+        dsk,
+        output,
+        vargs,
+        labelsByTransactionId,
+        tagsByOutputId,
+        beef,
+        trx,
+        scriptsReadInView
+      )
     )
   }
   if (vargs.includeTransactions) result.BEEF = beef.toUint8Array()

@@ -238,7 +238,7 @@ describe('ChaintracksStorageNoDb insertHeader compatibility', () => {
       ['batchInsertLimit', Number.NaN],
       ['batchInsertLimit', 100_001]
     ] as const) {
-      const options = ChaintracksStorageBase.createStorageBaseOptions('main') as Record<string, unknown>
+      const options: Record<string, unknown> = { ...ChaintracksStorageBase.createStorageBaseOptions('main') }
       options[field] = value
       expect(() => new ChaintracksStorageNoDb(options as never)).toThrow(field)
     }

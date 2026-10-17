@@ -1,3 +1,4 @@
+import { recoveredProofUpdate, sameSyncProof } from './methods/validateSyncProof'
 import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { deleteDB, IDBPDatabase, IDBPObjectStore, IDBPTransaction, openDB } from 'idb'
 import {
@@ -71,7 +72,13 @@ import {
   TrxToken,
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
-import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
+import {
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER,
+  WERR_NOT_IMPLEMENTED,
+  WERR_UNAUTHORIZED
+} from '../sdk/WERR_errors'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { isAutoSpendableChangeOutput, managedChangeOutputFields } from './methods/managedChange'
 import { selectCanonicalChange } from './methods/actionPlanning'
@@ -80,8 +87,39 @@ import {
   isLegacyManagedChangeBasketDefault
 } from './methods/managedChangePolicy'
 import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
+import { readIdbPackedPage, type IdbPackedCursor, type IdbPackedPage, type IdbPackedPageOptions } from './idbPackedPage'
+import type { WalletSnapshotTable } from './snapshot/WalletReadSnapshot'
+import type { WalletReadSnapshotOptions } from './snapshot/WalletReadSnapshot'
+import type { SnapshotSyncStorage } from './snapshot/SnapshotSync'
+import { openPackedIdbSyncSource } from './snapshot/openPackedIdbSyncSource'
+import {
+  PackedIdbConnection,
+  getPackedIdbConnection,
+  requirePackedIdbTransaction,
+  capturePackedIdbRetainedFields,
+  type PackedIdbRetainedFields
+} from './idbPackedConnection'
+import { upgradePackedIdb, type PackedIdbDatabase, type PackedIdbTransaction } from './idbPackedFields'
+import {
+  collectPackedIdb,
+  openPackedIdbSnapshot,
+  readCurrentPackedIdbPage,
+  type PackedIdbReadSnapshot
+} from './idbPackedSnapshot'
+import { PackedIdbStagedField, type PackedIdbStageOptions } from './idbPackedStaging'
+import { upgradeIdbImportJournal } from './idbImportJournalSchema'
+import { IdbSnapshotSyncDestination } from './snapshot/IdbSnapshotSyncDestination'
+import { readBrc38IdbProfileSelection, type Brc38IdbProfileSelectionOptions } from './portable/Brc38IdbProfileSelection'
 
-export interface StorageIdbOptions extends StorageProviderOptions {}
+export interface StorageIdbOptions extends StorageProviderOptions {
+  /** Explicit new namespace/layout. Existing v6 array wallets are never
+   * upgraded in place. Quotas measure retained logical data, not browser disk. */
+  packed?: { maximumLogicalBytes?: number; maximumRecords?: number }
+  /** Explicit isolated candidate. The caller supplies a fresh 128-bit profile
+   * identifier; this never selects or upgrades the default wallet namespace.
+   * Creating/opening a provider is not authentication or activation proof. */
+  isolatedRestore?: { profileId: string }
+}
 
 /**
  * Shared cursor-scan loop used by all `filterXxx` methods of StorageIdb.
@@ -129,13 +167,39 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   dbName: string
   db?: IDBPDatabase<StorageIdbSchema>
   private managedChangeDefaultsMigrated = false
+  private readonly packedOptions?: Readonly<{ maximumLogicalBytes: number; maximumRecords: number }>
+  private readonly restoreProfileId?: string
 
   constructor(options: StorageIdbOptions) {
     super(options)
-    this.dbName = `wallet-toolbox-${this.chain}net`
+    const restoreProfileId = options.isolatedRestore?.profileId
+    if (
+      restoreProfileId !== undefined &&
+      (options.packed === undefined || typeof restoreProfileId !== 'string' || !/^[0-9a-f]{32}$/.test(restoreProfileId))
+    )
+      throw new WERR_INVALID_PARAMETER('isolatedRestore', 'a new packed profile with a 128-bit identifier')
+    this.restoreProfileId = restoreProfileId
+    this.packedOptions =
+      options.packed === undefined
+        ? undefined
+        : Object.freeze({
+            maximumLogicalBytes: options.packed.maximumLogicalBytes ?? 17179869184,
+            maximumRecords: options.packed.maximumRecords ?? 2000000000
+          })
+    this.dbName = `wallet-toolbox-${this.chain}net${
+      restoreProfileId === undefined
+        ? this.packedOptions === undefined
+          ? ''
+          : '-packed-v1'
+        : '-restore-v1-' + restoreProfileId
+    }`
   }
 
   protected override supportsActionBatchPersistence(): boolean {
+    return true
+  }
+
+  protected override supportsStorageAccessScheduling(): boolean {
     return true
   }
 
@@ -161,6 +225,127 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
     const db = await this.verifyDB(storageName, storageIdentityKey)
     return db.version.toString()
+  }
+
+  /** Additive version-one native packed page adapter. Every call freshly binds
+   * the actual profile/settings in a readonly transaction; it does not claim a
+   * retained immutable snapshot across pages. Legacy find methods keep their
+   * number-array declarations and behavior. */
+  async readPackedStoragePage<T extends WalletSnapshotTable>(
+    identityKey: string,
+    table: T,
+    cursor?: IdbPackedCursor,
+    options?: IdbPackedPageOptions
+  ): Promise<IdbPackedPage<T>> {
+    const db = await this.verifyDB()
+    if (getPackedIdbConnection(db) !== undefined)
+      return await readCurrentPackedIdbPage(db, identityKey, this.chain, table, cursor, options)
+    return await readIdbPackedPage(db, identityKey, this.chain, table, cursor, options)
+  }
+
+  override supportsWalletReadSnapshot(): boolean {
+    return this.packedOptions !== undefined
+  }
+
+  /** Discoverable retained packed source for manager copy scheduling. Destination
+   * support must independently negotiate its actual durable merge schema. */
+  override getSnapshotSync(): SnapshotSyncStorage | undefined {
+    if (this.packedOptions === undefined) return undefined
+    const destination = new IdbSnapshotSyncDestination(this, chunk => this.prepareSyncProofs(chunk))
+    return {
+      fallbackOnResourceError: false,
+      supportsDestination: () => destination.supportsDestination(),
+      openSource: (identityKey, options) => openPackedIdbSyncSource(this, identityKey, options),
+      begin: (source, activeStorage) => destination.begin(source, activeStorage),
+      checkpoint: (identityKey, sourceIdentity) => destination.checkpoint(identityKey, sourceIdentity),
+      prepare: (checkpoint, page) => destination.prepare(checkpoint, page),
+      prepareFields: (checkpoint, page, source, signal) => destination.prepareFields(checkpoint, page, source, signal),
+      fieldPageLimits: destination.fieldPageLimits
+    }
+  }
+
+  /** Durable MVCC ceiling with short page/extent transactions. The returned
+   * genuine snapshot owns its finite lease; cursors are positions only. */
+  override async openWalletReadSnapshot(
+    identityKey: string,
+    options: WalletReadSnapshotOptions = {}
+  ): Promise<PackedIdbReadSnapshot> {
+    if (this.packedOptions === undefined)
+      throw new WERR_NOT_IMPLEMENTED('Wallet read snapshot pages are not supported by this provider')
+    return await openPackedIdbSnapshot(await this.verifyDB(), identityKey, this.chain, options)
+  }
+
+  async collectPackedStorage(
+    maximumVersions = 128,
+    maximumChunks = 256
+  ): Promise<{ versions: number; chunks: number }> {
+    return await collectPackedIdb(await this.verifyDB(), maximumVersions, maximumChunks)
+  }
+
+  /** Explicit finite native selection read for this durable restored namespace.
+   * It does not authenticate/replay an archive, renew its import admission or
+   * qualify current wallet data. PUBLISHED candidates remain inactive. */
+  async readRestoredProfileSelection(
+    options: Brc38IdbProfileSelectionOptions
+  ): Promise<Awaited<ReturnType<typeof readBrc38IdbProfileSelection>>> {
+    const captured = Object.freeze({
+        workingAllocation: options.workingAllocation,
+        expiresAt: options.expiresAt,
+        signal: options.signal
+      }),
+      name = this.dbName,
+      profileId = this.restoreProfileId,
+      chain = this.chain
+    if (profileId === undefined || name !== `wallet-toolbox-${chain}net-restore-v1-${profileId}`)
+      throw new WERR_INVALID_OPERATION('Restored profile selection requires its actual isolated namespace')
+    const owner = getPackedIdbConnection(await this.verifyDB())
+    if (owner === undefined || owner.database.name !== name || this.dbName !== name || this.chain !== chain)
+      throw new WERR_INVALID_OPERATION('Restored profile provider changed during selection')
+    const current = await readBrc38IdbProfileSelection(owner, captured)
+    if (
+      current.publication.databaseName !== name ||
+      current.publication.chain !== chain ||
+      this.dbName !== name ||
+      this.chain !== chain
+    )
+      throw new WERR_INVALID_OPERATION('Restored profile native selection differs from this provider')
+    return current
+  }
+
+  async beginPackedStorageField(options: PackedIdbStageOptions): Promise<PackedIdbStagedField> {
+    const captured = Object.freeze({ ...options })
+    const owner = getPackedIdbConnection(await this.verifyDB())
+    if (owner === undefined)
+      throw new WERR_INVALID_OPERATION('Packed storage fields require the explicit packed IndexedDB layout')
+    return await PackedIdbStagedField.open(owner, captured)
+  }
+
+  /** Complete replacement metadata plus actual staged fields. Original table
+   * indexes/unique constraints still decide native IDs and conflicts. */
+  async writeStagedStorageRow(
+    store: string,
+    fields: Readonly<Record<string, unknown>>,
+    staged: Readonly<Record<string, PackedIdbStagedField>>,
+    mode: 'put' | 'add' = 'put',
+    trx?: TrxToken,
+    retained?: PackedIdbRetainedFields
+  ): Promise<IDBValidKey> {
+    const retainedFields = capturePackedIdbRetainedFields(retained)
+    const owner = getPackedIdbConnection(await this.verifyDB())
+    if (owner === undefined || !this.allStores.includes(store) || (mode !== 'put' && mode !== 'add'))
+      throw new WERR_INVALID_OPERATION(
+        'Staged storage row requires the current packed IndexedDB provider and a wallet table'
+      )
+    if (trx !== undefined)
+      return await owner.writeStagedInTransaction(
+        trx as PackedIdbTransaction,
+        store,
+        fields,
+        staged,
+        mode === 'add',
+        retainedFields
+      )
+    return await owner.writeStaged(store, fields, staged, mode === 'add', retainedFields)
   }
 
   /**
@@ -192,6 +377,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     trx?: TrxToken
   ): IDBPTransaction<StorageIdbSchema, string[], 'readwrite' | 'readonly'> {
     if (trx != null) {
+      if (this.db !== undefined && getPackedIdbConnection(this.db) !== undefined)
+        requirePackedIdbTransaction(this.db, trx as object)
       const t = trx as IDBPTransaction<StorageIdbSchema, string[], 'readwrite' | 'readonly'>
       return t
     } else {
@@ -212,16 +399,35 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    *
    * @param trx
    */
-  async readSettings(_trx?: TrxToken): Promise<TableSettings> {
+  async readSettings(trx?: TrxToken): Promise<TableSettings> {
     await this.verifyDB()
+    if (trx != null || (this.db !== undefined && getPackedIdbConnection(this.db) !== undefined)) {
+      const tx = this.toDbTrx(['settings'], 'readonly', trx),
+        rows = await tx.objectStore('settings').getAll()
+      if (trx == null) await tx.done
+      if (rows.length !== 1) throw new WERR_INTERNAL('Wallet snapshot requires exactly one settings row')
+      return this.validateEntity(rows[0])
+    }
     return this._settings as TableSettings
   }
 
   async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 6, {
+    const packed = this.packedOptions
+    const restoreProfileId = this.restoreProfileId
+    if (restoreProfileId !== undefined && this.dbName !== `wallet-toolbox-${chain}net-restore-v1-${restoreProfileId}`)
+      throw new WERR_INVALID_OPERATION('Isolated restore database namespace changed')
+    if (
+      packed !== undefined &&
+      ((storageName !== undefined && (storageName.length < 1 || storageName.length > 4096)) ||
+        (storageIdentityKey !== undefined && (storageIdentityKey.length < 1 || storageIdentityKey.length > 256)))
+    )
+      throw new WERR_INVALID_PARAMETER('storageName/storageIdentityKey', 'bounded packed-profile metadata')
+    const db = await openDB<StorageIdbSchema>(this.dbName, packed === undefined ? 6 : 7, {
       upgrade(db, _oldVersion, _newVersion, transaction) {
+        if (packed !== undefined && _oldVersion !== 0)
+          throw new WERR_INVALID_OPERATION('Packed IndexedDB requires a new database namespace')
         upgradeAllStoresV1(db)
         upgradeActionBatchStoresV2(db)
         const transactions = transaction.objectStore('transactions')
@@ -257,13 +463,35 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           }
           void settings.put(s)
         }
+        if (packed !== undefined) {
+          // Fresh, unpublished packed namespaces only. Replica certificate
+          // identity follows the entity policy and deliberately excludes type.
+          transaction
+            .objectStore('certificates')
+            .createIndex('userId_certifier_serialNumber', ['userId', 'certifier', 'serialNumber'])
+          upgradePackedIdb(db as unknown as PackedIdbDatabase, packed.maximumLogicalBytes, packed.maximumRecords)
+        }
+        if (restoreProfileId !== undefined) upgradeIdbImportJournal(db as unknown as PackedIdbDatabase)
       }
     })
-    return db
+    return packed === undefined
+      ? db
+      : PackedIdbConnection.create(
+          db as unknown as PackedIdbDatabase,
+          packed.maximumLogicalBytes,
+          packed.maximumRecords
+        ).database
   }
 
   private async migrateManagedChangeDefaults(db: IDBPDatabase<StorageIdbSchema>): Promise<void> {
     if (this.managedChangeDefaultsMigrated) return
+    // Isolated restore preserves historical source policy across process loss
+    // and reopen. A later explicit operator/application policy migration is a
+    // separate action; merely opening a restore candidate cannot rewrite it.
+    if (this.restoreProfileId !== undefined) {
+      this.managedChangeDefaultsMigrated = true
+      return
+    }
     const trx = db.transaction('output_baskets', 'readwrite')
     let cursor = await trx.store.openCursor()
     while (cursor != null) {
@@ -1236,6 +1464,25 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return await this.updateIdb(id, update, 'provenTxId', 'proven_txs', trx)
   }
 
+  override async compareAndSetProvenTxProof(
+    expected: TableProvenTx,
+    replacement: TableProvenTx,
+    trx?: TrxToken
+  ): Promise<boolean> {
+    const update = recoveredProofUpdate(expected, replacement)
+    const dbTrx = this.toDbTrx(['proven_txs'], 'readwrite', trx)
+    const store = dbTrx.objectStore('proven_txs')
+    try {
+      const current = await store.get(expected.provenTxId)
+      if (current == null || !sameSyncProof(current, expected)) return false
+      await (store.put as (value: TableProvenTx) => Promise<IDBValidKey>)({ ...current, ...update })
+      this.isDirty = true
+      return true
+    } finally {
+      if (trx == null) await dbTrx.done
+    }
+  }
+
   async updateProvenTxReq(id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> {
     return await this.updateIdb(id, update, 'provenTxReqId', 'proven_tx_reqs', trx)
   }
@@ -1308,7 +1555,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
 
   async destroy(): Promise<void> {
     if (this.db != null) {
-      this.db.close()
+      const packed = getPackedIdbConnection(this.db)
+      if (packed === undefined) this.db.close()
+      else await packed.close()
     }
     this.db = undefined
     this._settings = undefined
@@ -1522,11 +1771,33 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (trx == null) await tx.done
   }
 
-  /**
-   * @param scope
-   * @param trx
-   * @returns
-   */
+  override supportsReadSnapshot(): boolean {
+    return true
+  }
+
+  /** Capture settings and wallet tables in one local readonly view. */
+  override async readSnapshot<T>(read: (trx: TrxToken) => Promise<T>): Promise<T> {
+    const db = await this.verifyDB()
+    // One readonly transaction gives all wallet tables the same view. This
+    // permits other reads; IndexedDB serializes overlapping writers until
+    // capture ends. No peer I/O or consumer callback belongs in this scope.
+    const tx = db.transaction(['settings', ...this.allStores], 'readonly')
+    try {
+      const result = await read(tx as TrxToken)
+      await tx.done
+      return result
+    } catch (error) {
+      try {
+        tx.abort()
+        await tx.done
+      } catch {
+        // An already-aborted/finished transaction needs no further cleanup;
+        // preserve the original capture error rather than its abort result.
+      }
+      throw error
+    }
+  }
+
   async transaction<T>(scope: (trx: TrxToken) => Promise<T>, trx?: TrxToken): Promise<T> {
     if (trx != null) return await scope(trx)
 
@@ -1614,7 +1885,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.offset ?? 0,
       args.paged?.limit,
       r => {
-        if (args.certifiers != null && args.certifiers.length > 0 && !args.certifiers.includes(r.certifier)) return false
+        if (args.certifiers != null && args.certifiers.length > 0 && !args.certifiers.includes(r.certifier))
+          return false
         if (args.types != null && args.types.length > 0 && !args.types.includes(r.type)) return false
         return matchesCertificatePartial(r, args.partial)
       },
@@ -2091,10 +2363,21 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
+    let offset = args.paged?.offset ?? 0
+    // A full user-label index scan already enforces its entire predicate. Skip
+    // prior pages in IndexedDB rather than cloning and filtering every prior
+    // row for every source query. Keep the filtered/since path unchanged.
+    const indexedOnly =
+      args.since == null &&
+      Object.entries(args.partial ?? {}).every(([key, value]) => value === undefined || key === 'userId')
+    if (cursor != null && indexedOnly && Number.isSafeInteger(offset) && offset > 0) {
+      cursor = await cursor.advance(offset)
+      offset = 0
+    }
     await scanCursor<TableTxLabel>(
       cursor,
       args.since,
-      args.paged?.offset ?? 0,
+      offset,
       args.paged?.limit,
       r => matchesTxLabelPartial(r, args.partial),
       filtered

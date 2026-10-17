@@ -1024,6 +1024,16 @@ export class WalletPermissionsManager implements WalletInterface {
    * @param handler   A function that handles the event
    * @returns         A numeric ID you can use to unbind later
    */
+  public bindCallback<Event extends keyof WalletPermissionsManagerCallbacks>(
+    eventName: Event,
+    handler: NonNullable<WalletPermissionsManagerCallbacks[Event]>[number]
+  ): number
+  // Retain the existing broad signature for callers with dynamic events or
+  // explicitly supplied legacy handler unions. Runtime dispatch is unchanged.
+  public bindCallback(
+    eventName: keyof WalletPermissionsManagerCallbacks,
+    handler: PermissionEventHandler | GroupedPermissionEventHandler | CounterpartyPermissionEventHandler
+  ): number
   public bindCallback(
     eventName: keyof WalletPermissionsManagerCallbacks,
     handler: PermissionEventHandler | GroupedPermissionEventHandler | CounterpartyPermissionEventHandler

@@ -184,6 +184,12 @@ no privileged trigger or additional write/OIDC permission is granted. The upload
 processing check and final notifications run for every nonempty report, so the
 advisory `codecov/patch` report is available for contributors as well as maintainers.
 The repository-owned 90% patch-coverage check is mandatory on the exact diff.
+TypeScript classification compares JavaScript emitted by the locked compiler.
+A new declaration-only file is compared with empty source only after Git's base
+tree proves the path was absent. Runtime code, enums and side-effect imports
+remain governed; unsupported syntax remains governed, and Git/read errors fail
+the gate. This avoids an impossible LCOV obligation for erased declarations
+without adding path exclusions or reducing the coverage floor.
 The repository ruleset must require `merge-gate` and must not require the duplicate
 external `codecov/patch` status. Uploading, processing and notification run in a
 separate reporting job after the local gate, so an external service outage cannot
@@ -341,3 +347,50 @@ This source proof cannot qualify a newer wallet head: its owner must compare
 the full pinned inventory/configuration on the final source before adoption.
 Registry, runtime, assertions, workers, deadlines and thresholds remain owned
 and unchanged by the partition facility.
+
+The SQLite conflict-repair extension retains all eight canonical helper files in
+five whole-file groups: identity, membership, generation/legacy ownership,
+bootstrap/state and retirement/migration. Identity and membership originally
+shared a part. On source `18748e2f4`, that part passed all 759 baseline tests and
+instrumented 465 mutants, but reached its 90-minute limit without a complete
+report; three native worker crashes remain in the failed-run evidence. Separating
+the two complete files preserves every canonical source, test and fixture, four
+workers, runner reuse of eight, the 90-minute per-part limit, and each critical
+score/uncovered/invalid gate. Complete fresh qualification is required; splitting
+does not establish a runtime improvement or turn the timed-out run into a pass.
+
+### Remote reader execution allowance
+
+The complete `wallet-snapshot-remote-reader` campaign at wallet source
+`de75e1d5150f5f0dda4e81e6631e55c17d5f8a30` passed in 2,691.70 seconds:
+1,248 mutants, 943 killed, 235 timed out and 70 survived, with zero uncovered
+or invalid outcomes and a 94.39% global score. All 785 source/test files and
+13 configuration inputs stayed fixed. Worker exits were recovered by the
+runner and remain in the raw log; their native cause is unconfirmed.
+
+That local execution leaves only 8.30 seconds of the former 45-minute hosted
+job allowance for installation, build restoration and reporting. The reader
+therefore joins the existing bounded 90-minute allowance in both workflows.
+All prior allowances and the 45-minute default remain; source/test unions,
+property settings, workers and the original global gates are unchanged. Record
+actual hosted setup/execution overhead before drawing performance conclusions.
+This is an execution allowance, not a measured speedup or full #544 acceptance.
+
+### Complete native merge coverage lanes
+
+The six original `Brc38NativeMergeContractsNode.test.ts` cases run in six
+mandatory wallet coverage lanes. Three complete runner/refold/committed-ACK-loss
+cases measured 49.9 minutes together on isolated Linux before native delivery,
+proof cases and coverage, exceeding a single ordinary 40-minute file shard.
+Each full one-hour case now has a bounded 90-minute job allowance, including its
+original 3,630-second Jest bound, two existing 600-second native delivery steps
+and installation/reporting/cleanup headroom. Proof lanes retain 40 minutes.
+Existing ordinary, HTTP, monitor, 21 composed and 18 native-pair cases, their
+145/265/40-minute bounds and three wallet parallel slots are unchanged.
+
+Each lane retains all six original names in its raw Jest report. The required
+aggregate gate verifies their complete union and exact source/plan/head identity,
+including raw report hashes; missing, duplicate, skipped, failed or stale cases
+cannot satisfy it. This is complete scheduling with finite containment, not a
+measured speedup, production latency promise or permission to omit local checks.
+Whole-system and exact-head hosted qualification remain required.

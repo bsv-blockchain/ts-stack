@@ -1,3 +1,4 @@
+import type { CreateActionResult } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 import { verifyOne } from '../../../src/utility/utilityHelpers'
 
@@ -19,27 +20,32 @@ import { verifyOne } from '../../../src/utility/utilityHelpers'
 
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
-function noSendArgs (i: number, prior?: { txid?: string, tx?: number[] }) {
+function noSendArgs(i: number, prior?: Pick<CreateActionResult, 'txid' | 'tx'>) {
   return {
-    inputs: prior?.txid == null
-      ? undefined
-      : [{
-          outpoint: `${prior.txid}.0`,
-          unlockingScript: '00',
-          inputDescription: 'spend prior action-batch chain link'
-        }],
+    inputs:
+      prior?.txid == null
+        ? undefined
+        : [
+            {
+              outpoint: `${prior.txid}.0`,
+              unlockingScript: '00',
+              inputDescription: 'spend prior action-batch chain link'
+            }
+          ],
     inputBEEF: prior?.tx,
     description: `fragmented batch action ${i}`,
-    outputs: [{
-      satoshis: 1,
-      lockingScript: '7551',
-      outputDescription: 'workload output'
-    }],
+    outputs: [
+      {
+        satoshis: 1,
+        lockingScript: '7551',
+        outputDescription: 'workload output'
+      }
+    ],
     options: { noSend: true, randomizeOutputs: false }
   }
 }
 
-async function mockChain (ctx: TestWalletNoSetup, feeRate = 100): Promise<void> {
+async function mockChain(ctx: TestWalletNoSetup, feeRate = 100): Promise<void> {
   _tu.mockPostServicesAsSuccess([ctx])
   jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight: async () => true } as any)
   jest.spyOn(ctx.activeStorage, 'getServices').mockReturnValue(ctx.services)
@@ -53,14 +59,16 @@ async function mockChain (ctx: TestWalletNoSetup, feeRate = 100): Promise<void> 
  * then let the wallet's own change generator fragment the pool via ordinary,
  * immediately-processed actions. Returns the resulting spendable change set.
  */
-async function fragmentWallet (
+async function fragmentWallet(
   ctx: TestWalletNoSetup,
   numberOfDesiredUTXOs = 144,
   churnActions = 20
 ): Promise<number[]> {
-  const basket = verifyOne(await ctx.activeStorage.findOutputBaskets({
-    partial: { userId: 1, name: 'default' }
-  }))
+  const basket = verifyOne(
+    await ctx.activeStorage.findOutputBaskets({
+      partial: { userId: 1, name: 'default' }
+    })
+  )
   await ctx.activeStorage.updateOutputBasket(basket.basketId, {
     numberOfDesiredUTXOs,
     minimumDesiredUTXOValue: 40
@@ -118,7 +126,7 @@ describe('action batch funding on a fragmented wallet', () => {
       })
 
       const txids: string[] = []
-      let prior: { txid?: string, tx?: number[] } | undefined
+      let prior: Pick<CreateActionResult, 'txid' | 'tx'> | undefined
       for (let i = 0; i < 16; i++) {
         const result = await ctx.wallet.createAction(noSendArgs(i, prior))
         txids.push(result.txid!)
@@ -147,7 +155,7 @@ describe('action batch funding on a fragmented wallet', () => {
       expect(sats.filter(s => s < 100).length).toBeGreaterThanOrEqual(50)
 
       const txids: string[] = []
-      let prior: { txid?: string, tx?: number[] } | undefined
+      let prior: Pick<CreateActionResult, 'txid' | 'tx'> | undefined
       for (let i = 0; i < 16; i++) {
         const result = await ctx.wallet.createAction(noSendArgs(i, prior))
         txids.push(result.txid!)
@@ -183,15 +191,16 @@ describe('action batch funding on a fragmented wallet', () => {
       })
 
       const txids: string[] = []
-      let prior: { txid?: string, tx?: number[] } | undefined
+      let prior: Pick<CreateActionResult, 'txid' | 'tx'> | undefined
       for (let i = 0; i < 80; i++) {
         const result = await ctx.wallet.createAction(noSendArgs(i, prior))
         txids.push(result.txid!)
         prior = result
       }
       const begun = await begin.mock.results[0].value
-      expect(begun.reservedOutputs.length + extendedOutputCounts.reduce((sum, count) => sum + count, 0))
-        .toBeGreaterThan(64)
+      expect(
+        begun.reservedOutputs.length + extendedOutputCounts.reduce((sum, count) => sum + count, 0)
+      ).toBeGreaterThan(64)
 
       const commit = await ctx.wallet.createAction({
         description: 'commit workspace beyond 64 confirmed inputs',
@@ -216,7 +225,7 @@ describe('action batch funding on a fragmented wallet', () => {
       const staged = await ctx.wallet.createAction(noSendArgs(0))
       const begun = await begin.mock.results[0].value
       expect(begun.reservedOutputs).not.toHaveLength(0)
-      expect(begun.reservedOutputs.every(output => output.satoshis >= 100)).toBe(true)
+      expect(begun.reservedOutputs.every((output: { satoshis: number }) => output.satoshis >= 100)).toBe(true)
       if (staged.txid == null) throw new Error('staged batch action is missing its txid')
 
       const commit = await ctx.wallet.createAction({

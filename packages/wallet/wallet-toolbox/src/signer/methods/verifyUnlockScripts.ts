@@ -12,6 +12,7 @@ import {
 } from '@bsv/sdk'
 import { hash160, hash256 } from '@bsv/sdk/primitives/Hash'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import type { WalletDigestBatchVerifier, WalletScriptVerifier } from '../../sdk/WalletScriptVerifier'
 
 export interface UnlockScriptVerificationResult {
   verifiedInputs: number
@@ -31,12 +32,6 @@ type PendingTransactionVerification = readonly [
 ]
 
 type PendingDigestVerification = readonly [resultIndex: number, items: DigestVerification[]]
-
-interface DigestBatchVerifier {
-  isReady?: () => boolean
-  supportsCrypto?: (operation: 'verifyDigestBatch') => boolean
-  verifyDigestBatch: (items: readonly DigestVerification[]) => Promise<boolean[]>
-}
 
 const postChronicleHeightFallback = 943816
 const canonicalP2PKHScope = TransactionSignature.SIGHASH_ALL + TransactionSignature.SIGHASH_FORKID
@@ -100,21 +95,34 @@ async function verifyPendingSpends(
   })
 }
 
-function wholeTransactionVerifier(
-  verifier?: SpendVerifierInterface
-): (SpendVerifierInterface & BdkVerifierInterface) | undefined {
-  const candidate = verifier as (SpendVerifierInterface & Partial<BdkVerifierInterface>) | undefined
-  return typeof candidate?.verifyScripts === 'function'
-    ? (candidate as SpendVerifierInterface & BdkVerifierInterface)
-    : undefined
+function hasWholeTransactionVerifier(
+  verifier: WalletScriptVerifier | undefined
+): verifier is WalletScriptVerifier & BdkVerifierInterface {
+  return typeof verifier?.verifyScripts === 'function'
 }
 
-function digestBatchVerifier(verifier?: SpendVerifierInterface): DigestBatchVerifier | undefined {
-  const candidate = verifier as (SpendVerifierInterface & Partial<DigestBatchVerifier>) | undefined
-  if (typeof candidate?.verifyDigestBatch !== 'function') return undefined
-  if (candidate.isReady?.() === false) return undefined
-  if (candidate.supportsCrypto?.('verifyDigestBatch') === false) return undefined
-  return candidate as SpendVerifierInterface & DigestBatchVerifier
+function hasWalletDigestBatchVerifier(
+  verifier: WalletScriptVerifier | undefined
+): verifier is WalletScriptVerifier & WalletDigestBatchVerifier {
+  return typeof verifier?.verifyDigestBatch === 'function'
+}
+
+function digestBatchVerifier(verifier?: WalletScriptVerifier): WalletDigestBatchVerifier | undefined {
+  if (!hasWalletDigestBatchVerifier(verifier)) return undefined
+  if (verifier.isReady?.() === false) return undefined
+  if (verifier.supportsCrypto?.('verifyDigestBatch') === false) return undefined
+  return verifier
+}
+
+function hasSpendVerifier(
+  verifier: WalletScriptVerifier | undefined
+): verifier is WalletScriptVerifier & SpendVerifierInterface {
+  return typeof verifier?.verifySpend === 'function'
+}
+
+function fallbackSpendVerifier(verifier?: WalletScriptVerifier): SpendVerifierInterface | undefined {
+  if (verifier === undefined) return undefined
+  return hasSpendVerifier(verifier) ? verifier : javaScriptOnlyVerifier
 }
 
 function equalBytes(left: ArrayLike<number>, right: ArrayLike<number>): boolean {
@@ -216,7 +224,7 @@ function standardP2PKHDigests(tx: Transaction): DigestVerification[] | undefined
 
 async function verifyStandardP2PKHDigests(
   pending: PendingDigestVerification[],
-  verifier: DigestBatchVerifier
+  verifier: WalletDigestBatchVerifier
 ): Promise<Set<number>> {
   if (pending.length === 0) return new Set()
   const items = pending.flatMap(entry => entry[1])
@@ -355,7 +363,7 @@ function collectTransactionSpends(
 function collectAcceleratedTransactions(
   txids: readonly string[],
   transactions: ReadonlyMap<string, Transaction | undefined>,
-  digestVerifier: DigestBatchVerifier | undefined,
+  digestVerifier: WalletDigestBatchVerifier | undefined,
   enabled: boolean
 ): readonly [Map<number, Transaction>, PendingDigestVerification[]] {
   const hydrated = new Map<number, Transaction>()
@@ -375,7 +383,7 @@ function collectAcceleratedTransactions(
 function collectWholeTransactionVerifications(
   hydrated: ReadonlyMap<number, Transaction>,
   digestAttempted: ReadonlySet<number>,
-  verifier: (SpendVerifierInterface & BdkVerifierInterface) | undefined
+  verifier: BdkVerifierInterface | undefined
 ): PendingTransactionVerification[] {
   if (verifier === undefined) return []
   const pending: PendingTransactionVerification[] = []
@@ -414,12 +422,12 @@ function collectFallbackSpends(
 export async function verifyUnlockScriptsBatch(
   txids: readonly string[],
   beef: Beef,
-  verifier?: SpendVerifierInterface
+  verifier?: WalletScriptVerifier
 ): Promise<UnlockScriptVerificationResult[]> {
   const results = txids.map(() => ({ verifiedInputs: 0, skippedInputs: 0 }))
   const transactions = transactionIndex(txids, beef)
   const digestVerifier = digestBatchVerifier(verifier)
-  const wholeVerifier = wholeTransactionVerifier(verifier)
+  const wholeVerifier = hasWholeTransactionVerifier(verifier) ? verifier : undefined
   const [hydrated, digestPending] = collectAcceleratedTransactions(
     txids,
     transactions,
@@ -434,7 +442,7 @@ export async function verifyUnlockScriptsBatch(
     wholeVerifier === undefined ? new Set<number>() : await verifyWholeTransactions(wholePending, wholeVerifier)
   const accelerated = new Set([...digestVerified, ...wholeVerified])
   const pending = collectFallbackSpends(txids, transactions, accelerated, results)
-  await verifyPendingSpends(pending, verifier)
+  await verifyPendingSpends(pending, fallbackSpendVerifier(verifier))
   for (const item of pending) results[item[1]].verifiedInputs++
   return results
 }
@@ -447,7 +455,7 @@ export async function verifyUnlockScriptsBatch(
 export async function verifyUnlockScripts(
   txid: string,
   beef: Beef,
-  verifier?: SpendVerifierInterface
+  verifier?: WalletScriptVerifier
 ): Promise<UnlockScriptVerificationResult> {
   return (await verifyUnlockScriptsBatch([txid], beef, verifier))[0]
 }

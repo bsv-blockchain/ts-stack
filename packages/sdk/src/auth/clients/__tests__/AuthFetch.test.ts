@@ -1,6 +1,8 @@
 import { jest } from '@jest/globals'
 import { AuthFetch } from '../AuthFetch.js'
 import { Utils, PrivateKey } from '../../../primitives/index.js'
+import { paymentActionResult, legacyPaymentBase64 } from '../__tests/paymentFixtures.js'
+import { Beef } from '../../../transaction/Beef.js'
 
 jest.mock('../../utils/createNonce.js', () => ({
   createNonce: jest.fn()
@@ -49,9 +51,8 @@ function createWalletStub(): any {
       }
       return { publicKey: derivedKey }
     }),
-    createAction: jest.fn(async () => ({
-      tx: Utils.toArray('mock-transaction', 'utf8')
-    })),
+    createAction: jest.fn(paymentActionResult),
+    abortAction: jest.fn(async () => ({ aborted: true })),
     createHmac: jest.fn(async () => ({
       hmac: Array.from({ length: 32 }).fill(7)
     }))
@@ -99,9 +100,9 @@ describe('AuthFetch payment handling', () => {
     expect(context.serverIdentityKey).toBe('remote-identity-key')
     expect(context.derivationPrefix).toBe('test-prefix')
     expect(context.derivationSuffix).toBe('suffix-from-test')
-    expect(context.transactionBase64).toBe(
-      Utils.toBase64(Utils.toArray('mock-transaction', 'utf8'))
-    )
+    expect(
+      Beef.fromBinaryStrict(Utils.toArray(context.transactionBase64, 'base64')).atomicTxid
+    ).toEqual(expect.any(String))
     expect(context.clientIdentityKey).toEqual(expect.any(String))
     expect(context.attempts).toBe(0)
     expect(context.maxAttempts).toBe(3)
@@ -121,7 +122,7 @@ describe('AuthFetch payment handling', () => {
 
     expect(wallet.createAction).toHaveBeenCalledWith(
       expect.objectContaining({
-        description: expect.stringContaining('https://api.example.com'),
+        description: 'BRC-105 HTTP request payment',
         labels: [`brc105 ${prefixHex} ${suffixHex}`],
         outputs: [
           expect.objectContaining({
@@ -177,7 +178,7 @@ describe('AuthFetch payment handling', () => {
         'remote-identity-key',
         'test-prefix'
       )
-    ).rejects.toThrow('dense byte array')
+    ).rejects.toMatchObject({ code: 'ERR_PAYMENT_TRANSPORT' })
   })
 
   test('brc105 payment label hex survives lowercasing and round-trips to base64', () => {
@@ -201,7 +202,7 @@ describe('AuthFetch payment handling', () => {
 
     const paymentContext: TestPaymentContext = {
       satoshisRequired: 5,
-      transactionBase64: Utils.toBase64([1, 2, 3]),
+      transactionBase64: legacyPaymentBase64,
       derivationPrefix: 'prefix',
       derivationSuffix: 'suffix',
       serverIdentityKey: 'server-key',
@@ -248,7 +249,7 @@ describe('AuthFetch payment handling', () => {
     expect(paymentHeader).toEqual({
       derivationPrefix: 'prefix',
       derivationSuffix: 'suffix',
-      transaction: Utils.toBase64([1, 2, 3])
+      transaction: legacyPaymentBase64
     })
 
     expect(createPaymentContextSpy).not.toHaveBeenCalled()
@@ -269,7 +270,7 @@ describe('AuthFetch payment handling', () => {
 
     const paymentContext: TestPaymentContext = {
       satoshisRequired: 5,
-      transactionBase64: Utils.toBase64([9, 9, 9]),
+      transactionBase64: legacyPaymentBase64,
       derivationPrefix: 'prefix',
       derivationSuffix: 'suffix',
       serverIdentityKey: 'server-key',
@@ -314,13 +315,13 @@ describe('AuthFetch payment handling', () => {
           expect(err.details.errors[0]).toEqual(
             expect.objectContaining({
               attempt: 1,
-              message: 'payment attempt 1 failed'
+              message: 'Payment delivery failed.'
             })
           )
           expect(err.details.errors[1]).toEqual(
             expect.objectContaining({
               attempt: 2,
-              message: 'payment attempt 2 failed'
+              message: 'Payment delivery failed.'
             })
           )
           expect(typeof err.details.errors[0].timestamp).toBe('string')

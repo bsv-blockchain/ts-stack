@@ -4,6 +4,8 @@ import { WalletServices } from '../../sdk/WalletServices.interfaces'
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
+import { StaleSyncProofError } from './SyncProofErrors'
+export { StaleSyncProofError } from './SyncProofErrors'
 
 export interface SyncProofValidationStorage {
   getServices: () => WalletServices
@@ -15,13 +17,6 @@ const reconciled = new WeakSet<TableProvenTx>()
 
 function equalBytes(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index])
-}
-
-/** Identifies a structurally valid proof which needs current-chain reconciliation. */
-export class StaleSyncProofError extends WERR_INVALID_PARAMETER {
-  constructor() {
-    super('provenTx', 'a server-verified proof. Merkle root is not active at the recorded height')
-  }
 }
 
 function invalidSyncProof(message: string): never {
@@ -85,6 +80,22 @@ export function assertSyncProofReplacementAuthorized(candidate: TableProvenTx): 
   invalidSyncProof('replacement requires active-chain validation')
 }
 
+/** Restrict recovery updates to validated proof authority and a discoverable timestamp. */
+export function recoveredProofUpdate(expected: TableProvenTx, replacement: TableProvenTx): Partial<TableProvenTx> {
+  assertSyncProofReplacementAuthorized(replacement)
+  if (expected.txid !== replacement.txid || !equalBytes(expected.rawTx, replacement.rawTx)) {
+    invalidSyncProof('recovery cannot change transaction identity or bytes')
+  }
+  return {
+    height: replacement.height,
+    index: replacement.index,
+    merklePath: replacement.merklePath,
+    merkleRoot: replacement.merkleRoot,
+    blockHash: replacement.blockHash,
+    updated_at: new Date(Math.max(Date.now(), expected.updated_at.getTime() + 1))
+  }
+}
+
 /**
  * Validate proof authority before an RPC proof is admitted or an in-process
  * backup/conflict proof replaces an existing global row. Network-backed checks
@@ -98,10 +109,13 @@ export async function validateSyncProof(storage: SyncProofValidationStorage, can
   if (!Number.isSafeInteger(candidate.index) || candidate.index < 0) {
     invalidSyncProof('index must be a non-negative safe integer')
   }
-  if (!Array.isArray(candidate.rawTx) || candidate.rawTx.length === 0) {
+  if (!(candidate.rawTx instanceof Uint8Array || Array.isArray(candidate.rawTx)) || candidate.rawTx.length === 0) {
     invalidSyncProof('raw transaction is required')
   }
-  if (!Array.isArray(candidate.merklePath) || candidate.merklePath.length === 0) {
+  if (
+    !(candidate.merklePath instanceof Uint8Array || Array.isArray(candidate.merklePath)) ||
+    candidate.merklePath.length === 0
+  ) {
     invalidSyncProof('Merkle path is required')
   }
 

@@ -13,6 +13,23 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For React Native / mobile, use [`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile).
 
+## Resumable synchronization (2.15 candidate)
+
+`WalletStorageManager.syncFromReaderResumable(identityKey, source, options)` adds
+cancellation, durable checkpoints and per-page progress. IndexedDB and Knex local
+destinations yield the manager queue during source/proof I/O and between atomic
+page commits. Negotiated remote snapshot destinations release the manager queue
+while the authenticated server owns its atomic transaction; legacy providers
+retain serialized execution. Use
+`maxRoughSize: 262144` as a measured starting point for constrained clients;
+one oversized record may still exceed this rough page target and is subject to
+the provider's separate transfer bound. Resume by invoking the API again: the
+destination checkpoint is authoritative, including after a lost acknowledgement.
+See the [sync contract and next-stage design](../../../../docs/guides/wallet-sync-reliability.md).
+Ordinary replica merge and coherent archive capture are separate APIs. A
+replica checkpoint is never substituted for the source archive's original
+sync-state rows. Existing BRC-38/39 formats remain unchanged.
+
 ## Receiving already-broadcast payments
 
 The 2.14.9 source candidate completes broadcast results even when storage
@@ -51,9 +68,39 @@ data copy and test recovery on a clean profile.
 Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
 [BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
 [recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
-Portable helpers require a concrete local `StorageProvider`; a remote client
-is not one. Qualify the local-copy path and device memory limits before adding
-export/import UI.
+The unpublished 2.15 candidate implements coherent retained SQL views and
+packed IndexedDB snapshot sources, plus capability-negotiated authenticated
+remote archives. `openBrc38IdbSource` and `createBrc38Stream` capture one
+identity/network/profile, including all thirteen closure tables and original
+sync-state provenance. Packed IDB schema v7 is explicit opt-in; ordinary v6
+storage remains available. The packed provider requires a new namespace and
+refuses in-place conversion of an existing v6 database. Copy existing data through
+the negotiated snapshot/sync path; retain the original v6 database for rollback.
+Old binaries must continue using that original namespace.
+
+`previewAuthenticatedBrc39BrowserImport` authenticates a private stream before
+returning a data-only preview. `restoreAuthenticatedBrc39BrowserInactive`
+performs semantic validation and durable recovery in an isolated packed IDB
+profile. `publishAuthenticatedBrc39BrowserProfile` leaves primary selection
+explicit; successful decryption or a preview never activates storage.
+
+`encryptBrc39BrowserStreamToQuarantine` writes bounded chunks and withholds the
+final authentication tag until the source completes coherently. Install the
+fixed trusted worker entry with `installBrowserArgon2idWorker`, await
+`BrowserArgon2idWorkerBackend.preload()` and register that exact ready backend.
+The streaming export refuses a cold/missing asynchronous backend. The client build emits the self-contained ESM asset
+`@bsv/wallet-toolbox-client/argon2id-worker`. Resolve and serve it through the
+host bundler as a fixed dedicated-worker asset, or bundle the matching example.
+Create a fresh `new Worker(fixedUrl, { type: 'module' })` per backend operation;
+never import this side-effecting entry in the main document or choose a worker
+URL from archive metadata. The package root remains inert on import.
+Native browser execution, memory limits and recovery are still unqualified.
+See the [implementation map](../docs/implementation-544.md) and
+[worker export example](../examples/browserBackup.ts).
+
+A remote `StorageClient` remains distinct from a local `StorageProvider`.
+Request its negotiated authenticated archive API or clearly identify a local
+replica source; never label a partial remote replica as a complete archive.
 
 ## Large wallet records
 
@@ -78,7 +125,8 @@ The package publishes:
 - an ESM browser/import target with source maps;
 - a CommonJS require target with source maps;
 - matching declarations for ESM and CommonJS;
-- explicit `browser`, `import`, and `require` export conditions.
+- explicit `browser`, `import`, and `require` export conditions;
+- a separate ESM dedicated Argon2id worker asset with its implementation bundled.
 
 Use a current browser bundler such as Vite or esbuild. Node.js 22 or newer is required for the published tooling and contributor workflow; browser runtime support is determined by your application's target configuration.
 
@@ -210,6 +258,15 @@ pnpm --filter @bsv/wallet-toolbox-client test:browser
 
 The gate installs the packed packages in a clean project, bundles them with Vite and esbuild, checks the public export and browser-only module contracts, validates source maps, and enforces compressed and uncompressed size budgets.
 
+For held PR569, the operator authorized exactly 30% higher browser ceilings on
+October 8, 2026: Vite 3,269,500 raw / 780,000 gzip / 598,000 Brotli bytes and
+esbuild 2,554,500 / 708,500 / 559,000 bytes. The original values were Vite
+2,515,000 / 600,000 / 460,000 and esbuild 1,965,000 / 545,000 / 430,000.
+Composition and runtime/test controls remain unchanged. Review these ceilings
+after full implementation, validation and feature completion of #544; record
+measured opportunities to retain or reduce them. This allowance does not establish
+artifact, functional or production readiness.
+
 ## License
 
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
@@ -226,6 +283,65 @@ scans during restores. Legacy duplicate transaction IDs remain intact. Clients
 that request an older IndexedDB schema version cannot reopen this database;
 retain a compatible client when using the local backup.
 
+The unpublished candidate exports version-one retained snapshot, packed row,
+field reader and durable sync checkpoint contracts. Provider capabilities are
+negotiated independently; importing their types does not enable a backend.
+`syncToWriterResumable` and `syncFromReaderResumable` yield between bounded
+commits when both adapters support the operation and preserve the exclusive
+fallback for older providers.
+
+The browser `StorageIdb` has an explicit packed version-one adapter. Passing
+`packed` in `StorageIdbOptions` selects a separate schema-version-7 namespace;
+it never converts or replaces the default version-6 wallet. Packed providers
+implement retained MVCC snapshots, bounded field extents and durable local
+merge/checkpoint commits. `readPackedStoragePage` also reads bounded pages from
+legacy databases, but those pages alone do not form a retained snapshot.
+Logical retention quotas bound records and bytes; they are not browser disk or
+process-memory measurements. Keep identity and network explicit for each
+profile and preserve the legacy database until a separately qualified migration
+has succeeded.
+
+`StorageClient` negotiates the authenticated single-user archive reader through
+`getSnapshotArchiveTransport(identityKey)`. Its `getSnapshotSync()` source
+adapter opens immutable, expiring remote views for ordinary resumable copies to
+compatible local destinations. Each view retains the original source settings,
+user and all thirteen standard tables, including original sync-state rows.
+Those original sync states are archive provenance; a replica's destination
+checkpoint is separate. `snapshotArchives: false`, old peers and unsupported
+server configurations decline the source capability. A migrated server separately
+advertises `snapshotSyncDestination` for bounded, authenticated full-row merge
+pages. The manager releases its queue after dispatch; the server atomically
+commits entity effects, ID mappings and the durable checkpoint under fresh
+session and primary fences. Replies are limited to 16 KiB. Pages admit at most 128 rows and 10,000,000
+charged allocation bytes, intersected with caller limits. Frames above the
+512 KiB inline ceiling use the existing durable transfer store with 256 KiB
+parts and a 16 MiB total frame ceiling. The staged result, entity effects, maps
+and checkpoint commit in one original SQL transaction. One page remains in
+flight under one 30-second I/O deadline across its upload and commit. A timeout does not establish whether the server committed: observe its
+durable checkpoint before recovery. Old or disabled destination peers retain
+the exclusive compatibility path. Rows that exceed the negotiated page/frame budget refuse; remote field
+extents are not advertised by this protocol. Staging retains the original source
+expiry, and authenticated cleanup remains available after expiry. A failed
+release retains its concrete original transfer cleanup for retry.
+Raw archive frames use storage-key ordering and must not be presented directly
+as canonical BRC-38 output.
+
+Portable exports include `createBrc38Stream`, `openBrc38IdbSource` and bounded
+BRC-39 browser processing. The browser import entrypoints
+`previewAuthenticatedBrc39BrowserImport`, `restoreAuthenticatedBrc39BrowserInactive`
+and `publishAuthenticatedBrc39BrowserProfile` authenticate the complete original
+envelope, verify semantic/proof closure and use isolated staging with durable
+recovery state. Preview is data, not an activation grant; publication preserves
+original primary and sync values as provenance. The IDB implementation requires
+an actual IndexedDB host and explicit resource policies. The Node native SQLite
+controller has a separate entrypoint and runtime contract.
+
+These are working-source implementation contracts, not release or physical
+platform acceptance claims. Browser/native/mobile suspension, disk pressure,
+packed-consumer compatibility, independent format vectors and performance
+qualification remain required before downstream adoption. See the
+[wallet sync and migration guide](../../../../docs/guides/wallet-sync-reliability.md).
+
 ## WAB faucet fee compatibility
 
 Version 2.14.6 carries the local signer's independently validated fee/change
@@ -238,7 +354,7 @@ SDK3 migration and the unchanged signup retry/reconciliation limitations.
 
 ## Pre-construction conflict recovery
 
-The 2.14.7 candidate preserves remote storage's empty attempted-TXID sentinel
+The held 2.15.0 candidate preserves remote storage's empty attempted-TXID sentinel
 only for a bounded double-spend review before transaction construction. It does
 not authorize a retry. Applications must verify complete competing transactions
 against the requested explicit inputs, synchronize the accepted winner, then

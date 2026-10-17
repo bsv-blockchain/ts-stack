@@ -38,7 +38,10 @@ function makeMonitor(
       services: {
         getStatusForTxids: jest.fn(async (txids: string[]) => ({
           status: providerStatus,
-          results: txids.map(txid => ({ txid, status: statusByTxid[txid] ?? 'unknown' }))
+          results: txids.map((txid): { txid: string; status: string; depth?: number } => ({
+            txid,
+            status: statusByTxid[txid] ?? 'unknown'
+          }))
         }))
       },
       logEvent

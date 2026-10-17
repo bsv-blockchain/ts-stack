@@ -308,7 +308,7 @@ describe('BulkFileDataManager tests', () => {
 
     const missingLastHashManager = createEmptyManager()
     const incompleteFile = makeBulkFile(0, 99, 'incremental')
-    incompleteFile.lastHash = undefined
+    Reflect.set(incompleteFile, 'lastHash', undefined)
     missingLastHashManager['bfds'] = [incompleteFile] as any
     await expect(missingLastHashManager.mergeIncrementalBlockHeaders(headers0_99.slice(99))).rejects.toThrow(
       'lastHash is not defined for the last bulk file incremental'

@@ -1,3 +1,4 @@
+import type { WalletScriptVerifier } from '../../src/sdk/WalletScriptVerifier'
 import * as dotenv from 'dotenv'
 import path from 'node:path'
 import { promises as fsp } from 'node:fs'
@@ -5,6 +6,7 @@ import { Knex, knex as makeKnex } from 'knex'
 import {
   Beef,
   CachedKeyDeriver,
+  type ChainTracker,
   CreateActionArgs,
   CreateActionOutput,
   CreateActionResult,
@@ -18,7 +20,6 @@ import {
   SignActionResult,
   Transaction,
   type TelemetryConfig,
-  type SpendVerifierInterface,
   Utils,
   WalletAction,
   WalletActionInput,
@@ -316,7 +317,7 @@ export abstract class TestUtilsWalletStorage {
     privKeyHex?: string
     actionBatchMode?: ActionBatchMode
     telemetry?: TelemetryConfig
-    scriptVerifier?: SpendVerifierInterface
+    scriptVerifier?: WalletScriptVerifier
   }): Promise<TestWalletOnly> {
     args.chain ||= 'test'
     args.rootKeyHex ||= '1'.repeat(64)
@@ -415,7 +416,7 @@ export abstract class TestUtilsWalletStorage {
     chain?: Chain
     actionBatchMode?: ActionBatchMode
     telemetry?: TelemetryConfig
-    scriptVerifier?: SpendVerifierInterface
+    scriptVerifier?: WalletScriptVerifier
   }): Promise<TestWalletOnly> {
     args.chain ||= 'test'
     const wo = await _tu.createWalletOnly({
@@ -1066,7 +1067,10 @@ export abstract class TestUtilsWalletStorage {
       return fNames
     }
 
-    const notifyPerformance = (fn, performanceDetails) => {
+    const notifyPerformance = (
+      fn: (details: Parameters<typeof logger>[0]) => void,
+      performanceDetails: Parameters<typeof logger>[0]
+    ) => {
       setTimeout(() => {
         let { functionName, args, startTime, endTime } = performanceDetails
         let _args = args
@@ -1104,11 +1108,11 @@ export abstract class TestUtilsWalletStorage {
       let _notifyPerformance = notifyPerformance.bind(null, performanceNotificationCallback)
       let fNames = getFunctionsNames(obj)
       for (let fName of fNames) {
-        let originalFunction = obj[fName]
-        let wrapperFunction = (...args) => {
+        let originalFunction = (obj as Record<string, unknown>)[fName] as (...args: unknown[]) => unknown
+        let wrapperFunction = (...args: unknown[]) => {
           let callbackFnIndex = -1
           let startTime = Date.now()
-          const _callBack = args.find((arg, i) => {
+          const _callBack = args.find((arg, i): arg is (...values: unknown[]) => unknown => {
             const _isFunction = typeof arg === 'function'
             if (_isFunction) {
               callbackFnIndex = i
@@ -1116,9 +1120,14 @@ export abstract class TestUtilsWalletStorage {
             return _isFunction
           })
           if (_callBack) {
-            let callbackWrapper = (...callbackArgs) => {
+            let callbackWrapper = (...callbackArgs: unknown[]) => {
               let endTime = Date.now()
-              _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
+              _notifyPerformance({
+                functionName: `${objectName}.${fName}`,
+                args,
+                startTime,
+                endTime
+              })
               _callBack(...callbackArgs)
             }
             args[callbackFnIndex] = callbackWrapper
@@ -1126,18 +1135,28 @@ export abstract class TestUtilsWalletStorage {
           let originalReturnObject = originalFunction.apply(obj, args)
           let isPromiseType =
             originalReturnObject &&
-            typeof originalReturnObject.then === 'function' &&
-            typeof originalReturnObject.catch === 'function'
+            typeof (originalReturnObject as Promise<unknown>).then === 'function' &&
+            typeof (originalReturnObject as Promise<unknown>).catch === 'function'
           if (isPromiseType) {
-            return originalReturnObject
+            return (originalReturnObject as Promise<unknown>)
               .then(resolveArgs => {
                 let endTime = Date.now()
-                _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
+                _notifyPerformance({
+                  functionName: `${objectName}.${fName}`,
+                  args,
+                  startTime,
+                  endTime
+                })
                 return resolveArgs
               })
               .catch(error => {
                 let endTime = Date.now()
-                _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
+                _notifyPerformance({
+                  functionName: `${objectName}.${fName}`,
+                  args,
+                  startTime,
+                  endTime
+                })
                 throw error
               })
           }
@@ -1147,7 +1166,7 @@ export abstract class TestUtilsWalletStorage {
           }
           return originalReturnObject
         }
-        obj[fName] = wrapperFunction
+        ;(obj as Record<string, unknown>)[fName] = wrapperFunction
       }
 
       return obj
@@ -1227,8 +1246,8 @@ export abstract class TestUtilsWalletStorage {
     const certifier = PrivateKey.fromRandom()
     const _verifier = PrivateKey.fromRandom()
     const cert: WalletCertificate = {
-      type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
-      serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
+      type: Utils.toBase64(Array.from<number>({ length: 32 }).fill(1)),
+      serialNumber: Utils.toBase64(Array.from<number>({ length: 32 }).fill(2)),
       revocationOutpoint: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
       subject,
       certifier: certifier.toPublicKey().toString(),
@@ -1647,6 +1666,58 @@ export abstract class TestUtilsWalletStorage {
     }
 
     return mockData
+  }
+
+  /** Explicit offline authority for the pinned legacy test wallet only. It
+   * accepts exact fixture height/root pairs, never arbitrary supplied proofs.
+   * Callers separately supply any authored monitor block headers. */
+  static async installOfflineLegacyChainTracker(
+    ctx: TestWalletNoSetup,
+    headers: ReadonlyArray<{ height: number; merkleRoot: string }> = []
+  ): Promise<ChainTracker> {
+    if (
+      ctx.chain !== 'test' ||
+      ctx.identityKey !== '03ac2d10bdb0023f4145cc2eba2fcd2ad3070cb2107b0b48170c46a9440e4cc3fe'
+    )
+      throw new Error('Offline legacy authority requires its exact pinned test profile')
+    const stored: Array<{ height: number; merkleRoot: string }> = await ctx.activeStorage
+      .knex('proven_txs')
+      .select('height', 'merkleRoot')
+      .limit(4097)
+    if (stored.length === 0 || stored.length > 4096 || headers.length > 64)
+      throw new Error('Offline legacy authority exceeds its fixture inventory')
+    const roots = new Set<string>()
+    let currentHeight = 0
+    for (const { height, merkleRoot } of [...stored, ...headers]) {
+      if (!Number.isSafeInteger(height) || height < 1 || !/^[0-9a-fA-F]{64}$/.test(merkleRoot))
+        throw new Error('Invalid offline legacy chain fixture')
+      roots.add(`${String(height)}:${merkleRoot.toLowerCase()}`)
+      currentHeight = Math.max(currentHeight, height)
+    }
+    const tracker: ChainTracker = {
+      async isValidRootForHeight(root, height, signal) {
+        signal?.throwIfAborted()
+        return roots.has(`${String(height)}:${root.toLowerCase()}`)
+      },
+      async currentHeight(signal) {
+        signal?.throwIfAborted()
+        return currentHeight
+      }
+    }
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue(tracker)
+    jest.spyOn(ctx.services, 'getHeight').mockResolvedValue(currentHeight)
+    // Monitor proof processing receives its configured Chaintracks directly,
+    // independently of Services.getChainTracker. Bind both authority paths.
+    for (const authority of new Set([ctx.monitor.chaintracks, ctx.monitor.chaintracksWithEvents])) {
+      if (authority === undefined) continue
+      jest
+        .spyOn(authority, 'isValidRootForHeight')
+        .mockImplementation((root, height) => tracker.isValidRootForHeight(root, height))
+      jest.spyOn(authority, 'currentHeight').mockResolvedValue(currentHeight)
+    }
+
+    jest.spyOn(ctx.activeStorage, 'getServices').mockReturnValue(ctx.services)
+    return tracker
   }
 
   static mockPostServicesAsSuccess(ctxs: TestWalletOnly[]): void {
@@ -2126,7 +2197,11 @@ function mockPostServices(
       const r: PostBeefResult = {
         name: 'mock',
         status: 'success',
-        txidResults: txids.map(txid => ({ txid, status, ...(status === 'error' ? { serviceError: true } : {}) }))
+        txidResults: txids.map(txid => ({
+          txid,
+          status,
+          ...(status === 'error' ? { serviceError: true } : {})
+        }))
       }
       return Promise.resolve([r])
     })
@@ -2161,7 +2236,11 @@ export const logger = (message: string, ...optionalParams: any[]): void => {
  * @param {string | number} id - The ID or unique identifier of the record to update.
  * @param {Object} testValues - An object containing key-value pairs to update.
  */
-export const updateTable = async (updateFunction, id, testValues) => {
+export const updateTable = async <TId extends string | number>(
+  updateFunction: (id: TId, values: Record<string, unknown>) => Promise<unknown>,
+  id: TId,
+  testValues: object
+) => {
   for (const [key, value] of Object.entries(testValues)) {
     logger('id=', id, '[key]=', [key], 'value=', value)
     await updateFunction(id, { [key]: value })

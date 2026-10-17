@@ -15,6 +15,8 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 
 # @bsv/wallet-toolbox-mobile
 
+The unpublished 2.15 candidate exports the portable resumable sync API. Remote destinations retain exclusive execution unless a future capability explicitly guarantees safe concurrency; this package does not acquire a local native database. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md).
+
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.

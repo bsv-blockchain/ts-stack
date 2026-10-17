@@ -1,0 +1,75 @@
+import { Brc38PrivateChunkPipe, detachBrc38PrivateChunk } from './Brc38PrivateChunkPipe'
+
+test('one detached chunk owns its producer until the reader advances', async () => {
+  const pipe = new Brc38PrivateChunkPipe(8),
+    input = Buffer.from([1, 2, 3, 4]),
+    reader = pipe[Symbol.asyncIterator]()
+  const write = pipe.append(input.subarray(1, 3))
+  input.fill(9)
+  const first = await reader.next()
+  expect(first.value).toEqual(new Uint8Array([2, 3]))
+  await expect(pipe.append(new Uint8Array([7]))).rejects.toThrow('already owns a write')
+  expect(() => pipe.end()).toThrow('settlement')
+  const next = reader.next()
+  await write
+  expect(first.value).toEqual(new Uint8Array([0, 0]))
+  pipe.end()
+  expect(await next).toEqual({ value: undefined, done: true })
+  await expect(pipe.append(new Uint8Array())).rejects.toThrow('ended')
+  expect(() => pipe[Symbol.asyncIterator]()).toThrow('already owned')
+})
+test('failure erases an owned yielded plaintext chunk without changing producer input', async () => {
+  const input = new Uint8Array([11, 12]),
+    pipe = new Brc38PrivateChunkPipe(8),
+    reader = pipe[Symbol.asyncIterator](),
+    write = pipe.append(input),
+    cause = new Error('private authentication rejected')
+  // Observe the producer before revoking it; this is the actual owned write.
+  const rejected = expect(write).rejects.toBe(cause),
+    result = await reader.next()
+  pipe.fail(cause)
+  await rejected
+  expect(result.value).toEqual(new Uint8Array([0, 0]))
+  expect(input).toEqual(new Uint8Array([11, 12]))
+  await expect(reader.next()).rejects.toBe(cause)
+})
+test('early private reader return rejects the pending producer and prevents later plaintext admission', async () => {
+  const pipe = new Brc38PrivateChunkPipe(8),
+    reader = pipe[Symbol.asyncIterator](),
+    write = pipe.append(new Uint8Array([1]))
+  await reader.next()
+  await reader.return?.()
+  await expect(write).rejects.toThrow('stopped before authentication')
+  await expect(pipe.append(new Uint8Array([2]))).rejects.toThrow('stopped before authentication')
+})
+test('failed pending read and write retain the first exact reason, including undefined', async () => {
+  const pipe = new Brc38PrivateChunkPipe(8),
+    reader = pipe[Symbol.asyncIterator](),
+    read = reader.next()
+  pipe.fail(undefined)
+  pipe.fail(new Error('later failure'))
+  await expect(read).rejects.toBeUndefined()
+  await expect(pipe.append(new Uint8Array([1]))).rejects.toBeUndefined()
+})
+test.each([0, -1, 1.5, 65537, NaN])('invalid fixed chunk bound %s refuses', maximum => {
+  expect(() => new Brc38PrivateChunkPipe(maximum)).toThrow('limit')
+})
+test('native extent preflight ignores overridden extent, buffer and copy properties', () => {
+  const value = new Uint8Array(9),
+    read = jest.fn(() => {
+      throw new Error('caller property read')
+    })
+  Object.defineProperties(value, {
+    byteLength: { get: read },
+    buffer: { get: read },
+    slice: { get: read }
+  })
+  expect(() => detachBrc38PrivateChunk(value, 8)).toThrow('chunk policy')
+  expect(read).not.toHaveBeenCalled()
+})
+test.each([new Uint16Array(1), new Uint8Array(new SharedArrayBuffer(1)), new Proxy(new Uint8Array(1), {})])(
+  'nonordinary native byte backing refuses before allocation',
+  value => {
+    expect(() => detachBrc38PrivateChunk(value as Uint8Array, 8)).toThrow()
+  }
+)

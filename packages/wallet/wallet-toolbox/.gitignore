@@ -46,3 +46,9 @@ src/services/chaintracker/chaintracks/__tests/data/export*
 file:memdb_*
 walletLiveTestData.sqlite
 .zed
+
+# Owned, disposable compiled siblings for physical Worker tests.
+test/.jest-worker-assets/
+src/storage/portable/Brc39Argon2Worker.js
+src/utility/hashWasm.js
+src/utility/Argon2idBackend.js

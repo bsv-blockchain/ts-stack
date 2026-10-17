@@ -81,8 +81,12 @@ export function encodeActionBatchPack(items: ActionBatchPackItem[], maxBytes: nu
   return bytes
 }
 
-/** Decode a transport frame without copying its individual blob payloads. */
-export function decodeActionBatchPack(bytes: Uint8Array, maxBytes: number, maxItems: number): ActionBatchPackItem[] {
+/** Decode a transport frame into Uint8Array views without copying its individual blob payloads. */
+export function decodeActionBatchPack(
+  bytes: Uint8Array,
+  maxBytes: number,
+  maxItems: number
+): Array<ActionBatchPackItem & { bytes: Uint8Array }> {
   if (
     bytes.length < PACK_HEADER_BYTES ||
     bytes.length > maxBytes ||
@@ -95,7 +99,7 @@ export function decodeActionBatchPack(bytes: Uint8Array, maxBytes: number, maxIt
   if (itemCount < 1 || itemCount > maxItems) {
     throw new WERR_INVALID_PARAMETER('pack', `between 1 and ${String(maxItems)} blobs`)
   }
-  const items: ActionBatchPackItem[] = []
+  const items: Array<ActionBatchPackItem & { bytes: Uint8Array }> = []
   let offset = PACK_HEADER_BYTES
   for (let index = 0; index < itemCount; index++) {
     if (offset + ITEM_HEADER_BYTES > bytes.length) {

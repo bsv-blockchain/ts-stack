@@ -2,10 +2,11 @@ import { TrxToken } from '../../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
 import { verifyId, verifyOneOrNone } from '../../../utility/utilityHelpers'
 import { TableOutputTagMap } from '../tables/TableOutputTagMap'
+import { mergeSimpleMetadata } from './mergeSimpleMetadata'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 
 export class EntityOutputTagMap extends EntityBase<TableOutputTagMap> {
-  constructor (api?: TableOutputTagMap) {
+  constructor(api?: TableOutputTagMap) {
     const now = new Date()
     super(
       api || {
@@ -18,79 +19,79 @@ export class EntityOutputTagMap extends EntityBase<TableOutputTagMap> {
     )
   }
 
-  override updateApi (): void {
+  override updateApi(): void {
     /* nothing needed yet... */
   }
 
-  get outputTagId () {
+  get outputTagId() {
     return this.api.outputTagId
   }
 
-  set outputTagId (v: number) {
+  set outputTagId(v: number) {
     this.api.outputTagId = v
   }
 
-  get outputId () {
+  get outputId() {
     return this.api.outputId
   }
 
-  set outputId (v: number) {
+  set outputId(v: number) {
     this.api.outputId = v
   }
 
-  get created_at () {
+  get created_at() {
     return this.api.created_at
   }
 
-  set created_at (v: Date) {
+  set created_at(v: Date) {
     this.api.created_at = v
   }
 
-  get updated_at () {
+  get updated_at() {
     return this.api.updated_at
   }
 
-  set updated_at (v: Date) {
+  set updated_at(v: Date) {
     this.api.updated_at = v
   }
 
-  get isDeleted () {
+  get isDeleted() {
     return this.api.isDeleted
   }
 
-  set isDeleted (v: boolean) {
+  set isDeleted(v: boolean) {
     this.api.isDeleted = v
   }
 
-  override get id (): number {
+  override get id(): number {
     throw new WERR_INVALID_OPERATION('entity has no "id" value')
   }
 
-  override get entityName (): string {
+  override get entityName(): string {
     return 'outputTagMap'
   }
 
-  override get entityTable (): string {
+  override get entityTable(): string {
     return 'output_tags_map'
   }
 
-  override equals (ei: TableOutputTagMap, syncMap?: SyncMap | undefined): boolean {
+  override equals(ei: TableOutputTagMap, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
 
     return (
-      eo.outputId === ((syncMap != null) ? syncMap.output.idMap[verifyId(ei.outputId)] : ei.outputId) &&
-      eo.outputTagId === ((syncMap != null) ? syncMap.outputTag.idMap[verifyId(ei.outputTagId)] : ei.outputTagId) &&
+      eo.outputId === (syncMap != null ? syncMap.output.idMap[verifyId(ei.outputId)] : ei.outputId) &&
+      eo.outputTagId === (syncMap != null ? syncMap.outputTag.idMap[verifyId(ei.outputTagId)] : ei.outputTagId) &&
       eo.isDeleted === ei.isDeleted
     )
   }
 
-  static async mergeFind (
+  static async mergeFind(
     storage: EntityStorage,
     userId: number,
     ei: TableOutputTagMap,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean, eo: EntityOutputTagMap, eiId: number }> {
+  ): Promise<{ found: boolean; eo: EntityOutputTagMap; eiId: number }> {
     const outputId = syncMap.output.idMap[ei.outputId]
     const outputTagId = syncMap.outputTag.idMap[ei.outputTagId]
     const ef = verifyOneOrNone(
@@ -106,13 +107,13 @@ export class EntityOutputTagMap extends EntityBase<TableOutputTagMap> {
     }
   }
 
-  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.outputId = syncMap.output.idMap[this.outputId]
     this.outputTagId = syncMap.outputTag.idMap[this.outputTagId]
     await storage.insertOutputTagMap(this.toApi(), trx)
   }
 
-  override async mergeExisting (
+  override async mergeExisting(
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableOutputTagMap,
@@ -120,9 +121,9 @@ export class EntityOutputTagMap extends EntityBase<TableOutputTagMap> {
     trx?: TrxToken
   ): Promise<boolean> {
     let wasMerged = false
-    if (ei.updated_at > this.updated_at) {
-      this.isDeleted = ei.isDeleted
-      this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
+    const selected = mergeSimpleMetadata(this.api, ei)
+    if (selected !== undefined) {
+      Object.assign(this.api, selected)
       await storage.updateOutputTagMap(this.outputId, this.outputTagId, this.toApi(), trx)
       wasMerged = true
     }

@@ -101,9 +101,11 @@ jobs:
   mutation-tests:
     name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.wallet_native && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     # Preserve the acknowledged wallet/overlays90-minute target union.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
+    # Complete snapshot source-guard service qualification took 58m35s locally,
+    # before hosted checkout/install. Preserve the 45-minute default elsewhere.
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-journal","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -129,6 +131,25 @@ jobs:
 
       - name: Restore build outputs
         run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+
+      - name: Deliver the pinned native browser for selected wallet component tests
+        if: matrix.wallet_native
+        run: node scripts/provision-wallet-native-browser.mjs --target "${{ matrix.target }}"
+
+      - name: Provision the qualified native wallet test executable
+        if: matrix.wallet_native
+        run: bash scripts/provision-wallet-native-tests.sh
+
+      - name: Preserve native component delivery evidence
+        if: always() && matrix.wallet_native
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-native-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.target }}-${{ matrix.partition }}
+          path: |
+            ${{ runner.temp }}/ts-wallet-native-tests.*/component-delivery.json
+            ${{ runner.temp }}/ts-wallet-native-tests.*/brc38-qualification-*/component-delivery-failure.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Enforce the governed mutation-quality ratchet
         env:

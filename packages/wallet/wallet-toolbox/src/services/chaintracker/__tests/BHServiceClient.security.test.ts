@@ -127,12 +127,17 @@ describe('BHServiceClient security boundary', () => {
     const sparse = Array(1)
     expect(() => client.validateHeaderArray(sparse, 0, 1)).toThrow('sparse header array')
 
-    jest.spyOn(client, 'validateRemoteHeader').mockImplementation((value: { hash: string }, height: number) => ({
-      ...genesisHeader('main'),
-      height,
-      hash: value.hash,
-      previousHash: 'ff'.repeat(32)
-    }))
+    jest.spyOn(client, 'validateRemoteHeader').mockImplementation((value: unknown, height: unknown) => {
+      if (
+        typeof value !== 'object' ||
+        value === null ||
+        !('hash' in value) ||
+        typeof value.hash !== 'string' ||
+        typeof height !== 'number'
+      )
+        throw new Error('fixture header callback arguments differ')
+      return { ...genesisHeader('main'), height, hash: value.hash, previousHash: 'ff'.repeat(32) }
+    })
     expect(() => client.validateHeaderArray([{ hash: '11'.repeat(32) }, { hash: '22'.repeat(32) }], 0, 2)).toThrow(
       'unlinked header array'
     )
