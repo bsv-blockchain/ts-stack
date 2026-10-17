@@ -4720,14 +4720,49 @@ export class WalletPermissionsManager implements WalletInterface {
     return `${txid}.${input.sourceOutputIndex}`
   }
 
+  /**
+   * Checks the caller's spends against the authorized template before the wallet
+   * signs and sends, and returns the sequence each spend sets (BRC-100's
+   * `spends[vin].sequenceNumber`). A spend may set the sequence of its own input;
+   * it cannot add, drop or swap an input.
+   */
+  private authorizedSpendSequences(
+    reference: string,
+    spends: Parameters<WalletInterface['signAction']>[0]['spends']
+  ): { authorized: Transaction; sequences: Map<number, number> } {
+    const authorized = this.pendingActionTemplates.get(reference)
+    if (authorized == null) throw new Error('The authorized action template is unavailable.')
+    const sequences = new Map<number, number>()
+    for (const [indexText, spend] of Object.entries(spends ?? {})) {
+      if (!/^(0|[1-9]\d*)$/.test(indexText)) throw new Error('Signed input index is invalid.')
+      const index = Number(indexText)
+      if (!Number.isSafeInteger(index) || authorized.inputs[index] == null) {
+        throw new Error('Signed input index is invalid.')
+      }
+      if (typeof spend?.unlockingScript !== 'string' || !/^(?:[0-9a-f]{2})*$/i.test(spend.unlockingScript)) {
+        throw new Error('Wallet finalization substituted an authorized unlocking script.')
+      }
+      if (spend.sequenceNumber !== undefined) {
+        if (
+          !Number.isSafeInteger(spend.sequenceNumber) ||
+          spend.sequenceNumber < 0 ||
+          spend.sequenceNumber > 0xffffffff
+        ) {
+          throw new Error('Signed input sequence number is invalid.')
+        }
+        sequences.set(index, spend.sequenceNumber)
+      }
+    }
+    return { authorized, sequences }
+  }
+
   /** Binds a wallet's final result to the exact template that passed authorization. */
   private assertAuthorizedSignResult(
     reference: string,
     spends: Parameters<WalletInterface['signAction']>[0]['spends'],
     result: Awaited<ReturnType<WalletInterface['signAction']>>
   ): void {
-    const authorized = this.pendingActionTemplates.get(reference)
-    if (authorized == null) throw new Error('The authorized action template is unavailable.')
+    const { authorized, sequences } = this.authorizedSpendSequences(reference, spends)
     if (result.tx == null) throw new Error('Wallet finalization omitted transaction data required for binding.')
     const finalized = Transaction.fromAtomicBEEF(result.tx)
     if (
@@ -4742,7 +4777,8 @@ export class WalletPermissionsManager implements WalletInterface {
       if (
         this.inputOutpointForBinding(finalized.inputs[index]) !==
           this.inputOutpointForBinding(authorized.inputs[index]) ||
-        (finalized.inputs[index].sequence ?? 0xffffffff) !== (authorized.inputs[index].sequence ?? 0xffffffff)
+        (finalized.inputs[index].sequence ?? 0xffffffff) !==
+          (sequences.get(index) ?? authorized.inputs[index].sequence ?? 0xffffffff)
       ) {
         throw new Error('Wallet finalization substituted an authorized transaction input.')
       }
@@ -4760,15 +4796,9 @@ export class WalletPermissionsManager implements WalletInterface {
       }
     }
     for (const [indexText, spend] of Object.entries(spends ?? {})) {
-      if (!/^(0|[1-9]\d*)$/.test(indexText)) throw new Error('Signed input index is invalid.')
-      const index = Number(indexText)
-      if (!Number.isSafeInteger(index) || finalized.inputs[index] == null) {
-        throw new Error('Signed input index is invalid.')
-      }
       if (
-        typeof spend?.unlockingScript !== 'string' ||
-        !/^(?:[0-9a-f]{2})*$/i.test(spend.unlockingScript) ||
-        finalized.inputs[index].unlockingScript?.toHex().toLowerCase() !== spend.unlockingScript.toLowerCase()
+        finalized.inputs[Number(indexText)].unlockingScript?.toHex().toLowerCase() !==
+        spend.unlockingScript.toLowerCase()
       ) {
         throw new Error('Wallet finalization substituted an authorized unlocking script.')
       }
@@ -4779,10 +4809,19 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
+  /**
+   * Blocks the reference and asks the wallet to abort it. Never throws: callers
+   * rethrow their own error, which must reach the caller. The wallet refuses to
+   * abort an action it has already signed and sent; the reference stays blocked.
+   */
   private async blockAndAbortAction(reference: string): Promise<void> {
     this.blockedActionReferences.add(reference)
-    const result = await this.underlying.abortAction({ reference })
-    if (result.aborted === true) this.clearPendingAction(reference)
+    try {
+      const result = await this.underlying.abortAction({ reference })
+      if (result.aborted === true) this.clearPendingAction(reference)
+    } catch {
+      // Not aborted: the reference stays blocked and pending.
+    }
   }
 
   private assertPendingActionOriginator(
@@ -4862,6 +4901,8 @@ export class WalletPermissionsManager implements WalletInterface {
     // The wallet takes noSend from signAction's options, else from createAction's.
     const noSend = (requestArgs.options?.noSend ?? this.pendingNoSendReferences.has(requestArgs.reference)) === true
     try {
+      // Refuse what the binding would refuse before the wallet can sign and send it.
+      this.authorizedSpendSequences(requestArgs.reference, requestArgs.spends)
       const result = await this.underlying.signAction(
         {
           ...requestArgs,
