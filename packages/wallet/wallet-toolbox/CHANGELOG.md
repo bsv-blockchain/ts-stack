@@ -29,6 +29,15 @@ attention to changes that materially alter behavior or extend functionality.
   sending it to a relative URL, which a browser resolves against the page's
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
+- `TaskReorg` re-checks recent proofs without reorg events. Once per new block
+  header processed by `TaskNewHeader`, it compares the stored `proven_txs`
+  merkleRoots of the last `recentDepth` heights (default 12, `0` disables) with
+  the ChainTracks header at each height and reproves the transactions under a
+  stale root. Previously only a pushed reorg event could re-prove a recent
+  proof, so with a polling client such as `ChaintracksServiceClient` a proof
+  taken from an orphaned block stayed in storage, and a later spend that also
+  carried a proof from the winning block at that height produced a BEEF with
+  two roots at one height. No consumer migration is required.
 
 ## wallet-toolbox 2.14.10
 

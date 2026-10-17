@@ -7,6 +7,7 @@ import {
   optionalMonitorInteger,
   requireMonitorInteger
 } from '../monitorValidation'
+import { reviewProvenTxHeights } from '../reviewProvenTxHeights'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 export interface ReviewHeightRangeResult {
@@ -154,57 +155,10 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
   }
 
   async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult> {
-    const result: ReviewHeightRangeResult = {
-      log: '',
-      reviewedHeights: 0,
-      mismatchedHeights: 0,
-      affectedTransactions: 0,
-      updatedTransactions: 0,
-      unresolvedHeights: []
-    }
-
-    if (range.isEmpty) {
-      this.triggerNextMsecs = this.triggerMsecs
-      return result
-    }
-
     // If there is work to do, trigger a quick follow-up to continue processing the next range.
-    this.triggerNextMsecs = this.triggerQuickMsecs
+    this.triggerNextMsecs = range.isEmpty ? this.triggerMsecs : this.triggerQuickMsecs
 
-    const chaintracks = this.monitor.chaintracksWithEvents || this.monitor.chaintracks
-
-    for (let height = range.minHeight; height <= range.maxHeight; height++) {
-      result.reviewedHeights++
-
-      const header = await chaintracks.findHeaderForHeight(height)
-      if (header == null) {
-        result.log += `  height ${height} canonical header unavailable\n`
-        result.unresolvedHeights.push(height)
-        continue
-      }
-
-      let staleRoots: string[] = []
-      await this.storage.runAsStorageProvider(async sp => {
-        staleRoots = await sp.findStaleMerkleRoots({ height, merkleRoot: header.merkleRoot })
-      })
-
-      if (staleRoots.length === 0) continue
-
-      result.mismatchedHeights++
-      result.log += `  height ${height} canonical ${header.merkleRoot} stale ${staleRoots.join(',')}\n`
-      let unresolved = false
-
-      for (const staleRoot of staleRoots) {
-        const reprove = await this.storage.reproveHeightMerkleRoot(height, staleRoot)
-        result.affectedTransactions += reprove.updated.length + reprove.unchanged.length + reprove.unavailable.length
-        result.updatedTransactions += reprove.updated.length
-        if (reprove.unchanged.length > 0 || reprove.unavailable.length > 0) unresolved = true
-        result.log += reprove.log
-      }
-      if (unresolved) result.unresolvedHeights.push(height)
-    }
-
-    return result
+    return await reviewProvenTxHeights(this.monitor, range)
   }
 
   async getLastReviewedHeight(): Promise<number | undefined> {

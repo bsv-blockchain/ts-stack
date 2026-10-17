@@ -965,11 +965,19 @@ It is very disruptive to update a proven_txs record because:
 Proper reorg handling also requires repairing invalid beefs for new transactions when
 createAction fails to verify a generated beef against the chaintracker.
 
+Deactivated headers arrive only from chaintracks reorg events, which polling clients
+(`supportsReorgEvents === false`) never raise and which any client can miss while the
+monitor is not running. So once per new block header processed by TaskNewHeader, this task
+also compares the stored merkleRoots of the most recent `recentDepth` heights with the
+chaintracks header at each height, and reproves the transactions under any stale root.
+A proof that cannot be replaced yet is retried at the next block while its height remains
+within `recentDepth`. Older heights are left to TaskReviewProvenTxs.
+
 ```ts
 export class TaskReorg extends WalletMonitorTask {
     static readonly taskName = "Reorg";
     process: DeactivedHeader[] = [];
-    constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3)
+    constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3, public recentDepth = 12)
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
     }
@@ -991,7 +999,8 @@ trigger(nowMsecsSinceEpoch: number): {
 
 Returns
 
-`run` true iff there are aged deactivated headers to process.
+`run` true iff there are aged deactivated headers to process,
+or a new block header has been processed since the last recent-height review.
 
 Argument Details
 
