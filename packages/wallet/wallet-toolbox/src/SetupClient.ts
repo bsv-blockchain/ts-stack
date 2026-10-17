@@ -63,7 +63,8 @@ export abstract class SetupClient {
       services,
       monitor,
       privilegedKeyManager,
-      scriptVerifier: args.scriptVerifier
+      scriptVerifier: args.scriptVerifier,
+      actionBatchMode: args.actionBatchMode
     })
     const r: SetupWallet = {
       rootKey,
