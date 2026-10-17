@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.15.0
 
+- Adds bounded foreground BEEF failure diagnostics identifying the last root
+  check or the structural stage. Provider exceptions retain their original
+  identity; no proof check or public wallet contract is relaxed. Reconcile
+  retained signed actions after ambiguous responses before issuing another spend.
+
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
   canonical regtest genesis header; `ChaintracksServiceClient` and

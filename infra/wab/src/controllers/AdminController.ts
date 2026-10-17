@@ -15,8 +15,38 @@ import {
   registrationRecoveryService
 } from '../services/RegistrationRecoveryService'
 import { UserService } from '../services/UserService'
+import { FaucetRecoveryError, faucetRecoveryService } from '../services/FaucetRecoveryService'
 
 export class AdminController {
+  static async reconcileFaucetPayment(req: Request, res: Response): Promise<Response> {
+    try {
+      const body = snapshotRequestBody(req.body)
+      if (
+        body == null ||
+        !isPositiveSafeInteger(body.paymentId) ||
+        typeof body.txid !== 'string' ||
+        !/^[0-9a-f]{64}$/i.test(body.txid)
+      ) {
+        return res
+          .status(400)
+          .json({ message: 'A positive paymentId and transaction ID are required.' })
+      }
+      const txid = body.txid.toLowerCase()
+      await faucetRecoveryService.reconcile(body.paymentId, txid)
+      log.warn(
+        { operation: 'admin.faucet.reconcile', paymentId: body.paymentId, txid },
+        'Existing confirmed faucet payment recovered'
+      )
+      return res.json({ success: true, status: 'ready' })
+    } catch (error) {
+      if (error instanceof FaucetRecoveryError) {
+        return res.status(error.status).json({ message: error.message })
+      }
+      log.error({ operation: 'admin.faucet.reconcile', err: error }, 'Faucet recovery failed')
+      return res.status(500).json({ message: 'An internal error occurred.' })
+    }
+  }
+
   static async reopenRegistration(req: Request, res: Response): Promise<Response> {
     try {
       const body = snapshotRequestBody(req.body)

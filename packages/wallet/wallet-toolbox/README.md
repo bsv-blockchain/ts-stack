@@ -6,6 +6,20 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Diagnosing foreground BEEF verification failures
+
+Foreground Storage processing retains its signed transaction before proof
+verification and submission. An error response therefore does not prove that
+no transaction exists or that a replacement spend is safe. Reconcile the
+existing action before creating another payment. With a WalletLogger enabled,
+failed verification now records the last root's height, expected root and
+accepted/declined/pending result, or the structural stage when no root was
+checked. Provider exceptions remain exceptions rather than invalid-proof
+verdicts; public error identities and all verification checks are preserved.
+This diagnostic distinction does not identify a historical missing-header or
+wrong-root cause when that provider response was never retained. Publication
+of these source changes and upgrading remote Storage are separate operations.
+
 ## Receiving already-broadcast payments
 
 The 2.14.9 source candidate completes broadcast results even when storage
