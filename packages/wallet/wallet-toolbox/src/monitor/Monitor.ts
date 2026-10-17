@@ -211,10 +211,10 @@ export class Monitor {
       // Method presence is not capability (see ChaintracksClientApi's own doc
       // comment on `supportsReorgEvents`): `false` means subscribeHeaders /
       // subscribeReorgs are unsupported stubs that must not be called, e.g.
-      // ChaintracksServiceClient, an HTTP-polling client. Regular scheduled
-      // tasks (TaskNewHeader, TaskReorg, ...) already poll the configured
-      // `chaintracks` every tick regardless of push events, so there is
-      // nothing to set up here; skip without touching the network.
+      // ChaintracksServiceClient, an HTTP-polling client. TaskNewHeader polls
+      // height, but TaskReorg only drains deactivated-header notifications.
+      // TaskReviewProvenTxs supplies a separate lagged proof audit; there is
+      // no reorg polling fallback here. Skip without touching the network.
       if (eventSource.supportsReorgEvents === false) return
       const actualChain = await eventSource.getChain()
       if (actualChain !== this.chain) {
@@ -421,10 +421,9 @@ export class Monitor {
    * Best-effort attempt to (re)register the optional Chaintracks header/reorg
    * push subscriptions ahead of this scheduler tick.
    *
-   * Header and reorg events are a latency optimization, not a requirement:
-   * every task that cares about chain height or reorgs (TaskNewHeader,
-   * TaskReorg, ...) already polls the configured `chaintracks` on its own
-   * schedule regardless of whether push events are flowing. An offline,
+   * TaskNewHeader polls height; TaskReorg only drains deactivated-header
+   * notifications. TaskReviewProvenTxs supplies a separate lagged proof
+   * audit. An offline,
    * unimplemented (see the `supportsReorgEvents` skip in `_init`), or
    * otherwise misconfigured event source must not stop the scheduler that
    * runs every other maintenance task.
