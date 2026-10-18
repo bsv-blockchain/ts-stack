@@ -148,13 +148,21 @@ function coturnRestIssuer(p: CoturnRestTurnProvider, ttlSeconds: number): TurnIs
   return {
     kind: 'coturn-rest',
     ttlSeconds,
-    async issue(identityKey) {
-      const { username, credential, expiresAt } = turnCredentials({
-        secret,
-        identityKey,
-        ttlSeconds
-      })
-      return { iceServers: [{ urls: [...urls], username, credential }], expiresAt }
+    issue(identityKey) {
+      // The relay chains `.then` on this, so a failure must reject, never throw.
+      try {
+        const { username, credential, expiresAt } = turnCredentials({
+          secret,
+          identityKey,
+          ttlSeconds
+        })
+        return Promise.resolve({
+          iceServers: [{ urls: [...urls], username, credential }],
+          expiresAt
+        })
+      } catch (error) {
+        return Promise.reject(error)
+      }
     }
   }
 }

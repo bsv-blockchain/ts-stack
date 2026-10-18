@@ -15,7 +15,7 @@ export const MAX_SIGNAL_SID_CHARS = 64
  */
 export const MAX_SIGNAL_CIPHERTEXT_CHARS = 24576
 
-const KINDS: readonly SignalKind[] = ['offer', 'answer', 'reject']
+const KINDS: ReadonlySet<SignalKind> = new Set<SignalKind>(['offer', 'answer', 'reject'])
 
 /** A network name a signal may carry: 1 to 16 characters from `a-z` and `0-9`. */
 const CHAIN = /^[a-z0-9]{1,16}$/
@@ -198,7 +198,7 @@ function toPlaintext(x: unknown): SignalPlaintext | undefined {
   const r = x as Record<string, unknown>
   if (
     r.v !== 1 ||
-    !KINDS.includes(r.kind as SignalKind) ||
+    !KINDS.has(r.kind as SignalKind) ||
     typeof r.sid !== 'string' ||
     typeof r.from !== 'string' ||
     typeof r.to !== 'string' ||

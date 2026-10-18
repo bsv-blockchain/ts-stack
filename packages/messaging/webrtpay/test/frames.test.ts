@@ -63,13 +63,13 @@ describe('encodeMessage', () => {
   it('splits a 1 MiB message into ceil(len / 16378) frames and decodes it back', () => {
     const message = { data: 'x'.repeat(1024 * 1024 - '{"data":""}'.length) }
     const json = utf8Encode(JSON.stringify(message))
-    expect(json.length).toBe(1024 * 1024)
+    expect(json).toHaveLength(1024 * 1024)
 
     const frames = encodeMessage(7, message)
     expect(frames).toHaveLength(Math.ceil(json.length / (16384 - 6)))
     frames.forEach((f, i) => {
       expect(f.length).toBeLessThanOrEqual(16384)
-      if (i < frames.length - 1) expect(f.length).toBe(16384)
+      if (i < frames.length - 1) expect(f).toHaveLength(16384)
       expect(f[0]).toBe(1)
       expect(f[1]).toBe(i === frames.length - 1 ? 1 : 0)
       expect(new DataView(f.buffer, f.byteOffset, f.byteLength).getUint32(2, false)).toBe(7)
@@ -82,11 +82,11 @@ describe('encodeMessage', () => {
   it('does not add a trailing empty frame when the payload is an exact multiple', () => {
     const per = 16384 - 6
     const one = { s: 'a'.repeat(per - '{"s":""}'.length) }
-    expect(utf8Encode(JSON.stringify(one)).length).toBe(per)
+    expect(utf8Encode(JSON.stringify(one))).toHaveLength(per)
     expect(encodeMessage(0, one)).toHaveLength(1)
 
     const two = { s: 'a'.repeat(2 * per - '{"s":""}'.length) }
-    expect(utf8Encode(JSON.stringify(two)).length).toBe(2 * per)
+    expect(utf8Encode(JSON.stringify(two))).toHaveLength(2 * per)
     const frames = encodeMessage(0, two)
     expect(frames).toHaveLength(2)
     expect(frames.map(f => f[1])).toEqual([0, 1])
@@ -244,7 +244,7 @@ describe('FrameDecoder', () => {
 
   it('throws too_large on the frame that crosses the cap', () => {
     const message = { s: 'a'.repeat(2000 - '{"s":""}'.length) }
-    expect(utf8Encode(JSON.stringify(message)).length).toBe(2000)
+    expect(utf8Encode(JSON.stringify(message))).toHaveLength(2000)
     // 500-byte payloads: 500, 1000 are within the 1000-byte cap, 1500 is not.
     const frames = encodeMessage(0, message, FRAME_HEADER_BYTES + 500)
     expect(frames).toHaveLength(4)
@@ -257,7 +257,7 @@ describe('FrameDecoder', () => {
 
   it('accepts a message of exactly the cap', () => {
     const message = { s: 'a'.repeat(1000 - '{"s":""}'.length) }
-    expect(utf8Encode(JSON.stringify(message)).length).toBe(1000)
+    expect(utf8Encode(JSON.stringify(message))).toHaveLength(1000)
     const d = decoder(1000)
     expect(feed(d, encodeMessage(0, message, FRAME_HEADER_BYTES + 500))).toEqual([message])
   })

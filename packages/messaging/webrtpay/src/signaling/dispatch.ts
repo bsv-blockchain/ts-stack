@@ -31,4 +31,6 @@ function isThenable(v: unknown): v is PromiseLike<unknown> {
   return typeof v === 'object' && v !== null && typeof (v as { then?: unknown }).then === 'function'
 }
 
-function ignore(): void {}
+function ignore(): void {
+  // A handler's own rejection is its business; it must not surface as unhandled here.
+}

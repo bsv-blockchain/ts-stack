@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals'
+import fc from 'fast-check'
 import { PrivateKey } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
 import * as barrel from '../src/index.js'
@@ -35,6 +36,7 @@ import {
   utf8Decode,
   utf8Encode
 } from '../src/util/bytes.js'
+import { compareCodeUnits } from '../src/util/compare.js'
 import { Emitter } from '../src/util/emitter.js'
 import { WebRTPayError } from '../src/util/errors.js'
 import type { WebRTPayErrorCode } from '../src/util/errors.js'
@@ -174,12 +176,273 @@ describe('bytes: base64url', () => {
   })
 })
 
+// The hex and base64 decoders as they were at bd8b26a36, the oracle for the ones in
+// src/util/bytes.ts: `codeUnitAt` reads one UTF-16 code unit, as `String#charCodeAt` does
+// (NaN past the end), and the padding strip is a function of its own.
+const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+const B64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+
+function codeUnitAt(s: string, i: number): number {
+  return s.slice(i, i + 1).codePointAt(0) ?? Number.NaN
+}
+
+function oracleHexValue(c: number): number {
+  if (c >= 48 && c <= 57) return c - 48
+  if (c >= 97 && c <= 102) return c - 87
+  if (c >= 65 && c <= 70) return c - 55
+  return -1
+}
+
+function oracleFromHex(s: string): Uint8Array {
+  if (s.length % 2 !== 0) throw new WebRTPayError('protocol', 'Invalid hex: odd length')
+  const out = new Uint8Array(s.length / 2)
+  for (let i = 0; i < out.length; i++) {
+    const hi = oracleHexValue(codeUnitAt(s, 2 * i))
+    const lo = oracleHexValue(codeUnitAt(s, 2 * i + 1))
+    if (hi < 0 || lo < 0) throw new WebRTPayError('protocol', 'Invalid hex character')
+    out[i] = (hi << 4) | lo
+  }
+  return out
+}
+
+function oracleReverseTable(alphabet: string): Int8Array {
+  const table = new Int8Array(128).fill(-1)
+  for (let i = 0; i < alphabet.length; i++) table[codeUnitAt(alphabet, i)] = i
+  return table
+}
+
+function oracleUnpaddedEnd(s: string, what: string): number {
+  if (s.length % 4 !== 0) throw new WebRTPayError('protocol', `Invalid ${what}: bad length`)
+  let end = s.length
+  if (end > 0 && codeUnitAt(s, end - 1) === 61) end--
+  if (end > 0 && codeUnitAt(s, end - 1) === 61) end--
+  return end
+}
+
+function oracleDecode(s: string, rev: Int8Array, padded: boolean, what: string): Uint8Array {
+  const end = padded ? oracleUnpaddedEnd(s, what) : s.length
+  const full = end >> 2
+  const rem = end & 3
+  if (rem === 1) throw new WebRTPayError('protocol', `Invalid ${what}: bad length`)
+  const out = new Uint8Array(full * 3 + (rem === 0 ? 0 : rem - 1))
+  const val = (i: number): number => {
+    const c = codeUnitAt(s, i)
+    const v = c < 128 ? rev[c] : -1
+    if (v < 0) throw new WebRTPayError('protocol', `Invalid ${what} character`)
+    return v
+  }
+  let o = 0
+  let i = 0
+  for (; i < full * 4; i += 4) {
+    const n = (val(i) << 18) | (val(i + 1) << 12) | (val(i + 2) << 6) | val(i + 3)
+    out[o++] = n >> 16
+    out[o++] = (n >> 8) & 255
+    out[o++] = n & 255
+  }
+  if (rem === 2) {
+    const n = (val(i) << 18) | (val(i + 1) << 12)
+    if ((n & 0xffff) !== 0) throw new WebRTPayError('protocol', `Invalid ${what}: trailing bits`)
+    out[o++] = n >> 16
+  } else if (rem === 3) {
+    const n = (val(i) << 18) | (val(i + 1) << 12) | (val(i + 2) << 6)
+    if ((n & 0xff) !== 0) throw new WebRTPayError('protocol', `Invalid ${what}: trailing bits`)
+    out[o++] = n >> 16
+    out[o++] = (n >> 8) & 255
+  }
+  return out
+}
+
+const oracleB64Rev = oracleReverseTable(B64_ALPHABET)
+const oracleB64UrlRev = oracleReverseTable(B64URL_ALPHABET)
+const oracleFromBase64 = (s: string): Uint8Array => oracleDecode(s, oracleB64Rev, true, 'base64')
+const oracleFromBase64Url = (s: string): Uint8Array =>
+  oracleDecode(s, oracleB64UrlRev, false, 'base64url')
+
+/** The bytes `decode(s)` returns, or the code and message of the `WebRTPayError` it throws. */
+function outcome(decode: (s: string) => Uint8Array, s: string): Uint8Array | string {
+  try {
+    return decode(s)
+  } catch (e) {
+    if (!(e instanceof WebRTPayError)) throw e
+    return `${e.code}: ${e.message}`
+  }
+}
+
+/** Non-ASCII text: Latin-1, BMP, an astral pair, and lone high and low surrogates. */
+const NON_ASCII = ['é', '\u0080', 'ÿ', 'Ā', '😀', '\uD83D', '\uDE00', '\uD800', '\uDFFF', 'Ａ', '￿']
+
+/** One UTF-16 code unit, a lone surrogate included. */
+const codeUnit = fc.integer({ min: 0, max: 0xffff }).map(c => String.fromCodePoint(c))
+
+/** Text that is mostly `alphabet` and `=`, with any other code units and code points mixed in. */
+function nearly(alphabet: string): fc.Arbitrary<string> {
+  return fc.string({
+    unit: fc.oneof(
+      { weight: 8, arbitrary: fc.constantFrom(...alphabet, '=') },
+      { weight: 1, arbitrary: fc.constantFrom(...NON_ASCII) },
+      { weight: 1, arbitrary: codeUnit },
+      { weight: 1, arbitrary: fc.string({ unit: 'binary', minLength: 1, maxLength: 1 }) }
+    ),
+    maxLength: 24
+  })
+}
+
+/** A valid encoding of random bytes with one character replaced by non-ASCII text. */
+function corrupted(encode: (b: Uint8Array) => string): fc.Arbitrary<string> {
+  return fc
+    .tuple(fc.uint8Array({ minLength: 1, maxLength: 12 }), fc.nat(), fc.constantFrom(...NON_ASCII))
+    .map(([bytes, at, ch]) => {
+      const s = encode(bytes)
+      const i = at % s.length
+      return s.slice(0, i) + ch + s.slice(i + 1)
+    })
+}
+
+describe('bytes: non-ASCII input to the hex and base64 decoders', () => {
+  it('is rejected with the same error as before', () => {
+    expect(outcome(fromHex, '😀')).toBe('protocol: Invalid hex character')
+    expect(outcome(fromHex, 'a\uD800')).toBe('protocol: Invalid hex character')
+    expect(outcome(fromHex, '\uDE00a')).toBe('protocol: Invalid hex character')
+    expect(outcome(fromHex, 'é')).toBe('protocol: Invalid hex: odd length')
+    expect(outcome(fromBase64, 'Zm😀')).toBe('protocol: Invalid base64 character')
+    expect(outcome(fromBase64, 'Zm9\uD83D')).toBe('protocol: Invalid base64 character')
+    expect(outcome(fromBase64, 'Zg=\uDE00')).toBe('protocol: Invalid base64 character')
+    expect(outcome(fromBase64, 'Zm9😀')).toBe('protocol: Invalid base64: bad length')
+    expect(outcome(fromBase64Url, 'Zm😀')).toBe('protocol: Invalid base64url character')
+    expect(outcome(fromBase64Url, '\uDFFFm9v')).toBe('protocol: Invalid base64url character')
+    for (const ch of NON_ASCII) {
+      for (const s of [`ab${ch}`, `${ch}ab`, `Zm9v${ch}`, `${ch}Zm9`, `Zg${ch}=`]) {
+        expect(outcome(fromHex, s)).toEqual(outcome(oracleFromHex, s))
+        expect(outcome(fromBase64, s)).toEqual(outcome(oracleFromBase64, s))
+        expect(outcome(fromBase64Url, s)).toEqual(outcome(oracleFromBase64Url, s))
+      }
+    }
+  })
+
+  it('decodes any string exactly as the decoders at bd8b26a36 did', () => {
+    fc.assert(
+      fc.property(fc.oneof(nearly('0123456789abcdefABCDEF'), corrupted(toHex)), s => {
+        expect(outcome(fromHex, s)).toEqual(outcome(oracleFromHex, s))
+      }),
+      { numRuns: 1000 }
+    )
+    fc.assert(
+      fc.property(fc.oneof(nearly(B64_ALPHABET), corrupted(toBase64)), s => {
+        expect(outcome(fromBase64, s)).toEqual(outcome(oracleFromBase64, s))
+      }),
+      { numRuns: 1000 }
+    )
+    fc.assert(
+      fc.property(fc.oneof(nearly(B64URL_ALPHABET), corrupted(toBase64Url)), s => {
+        expect(outcome(fromBase64Url, s)).toEqual(outcome(oracleFromBase64Url, s))
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  it('agrees with the oracle on valid encodings', () => {
+    fc.assert(
+      fc.property(fc.uint8Array({ maxLength: 40 }), bytes => {
+        expect(fromHex(toHex(bytes))).toEqual(oracleFromHex(toHex(bytes)))
+        expect(fromBase64(toBase64(bytes))).toEqual(oracleFromBase64(toBase64(bytes)))
+        expect(fromBase64Url(toBase64Url(bytes))).toEqual(oracleFromBase64Url(toBase64Url(bytes)))
+      })
+    )
+  })
+})
+
+/** `s` as big-endian UTF-16: byte order is then code unit order, lone surrogates kept. */
+function utf16be(s: string): Buffer {
+  return Buffer.from(s, 'utf16le').swap16()
+}
+
+/** Strings of any UTF-16 code units, including astral pairs and lone surrogates. */
+const anyText = fc.oneof(
+  fc.string({ unit: codeUnit, maxLength: 6 }),
+  fc.string({ unit: 'binary', maxLength: 6 }),
+  fc.string({
+    unit: fc.constantFrom('a', 'A', 'b', 'f', '0', '9', 'é', '😀', 'Ａ', '\uD800', '\uDFFF'),
+    maxLength: 4
+  })
+)
+
+describe('compareCodeUnits', () => {
+  it('orders samples as a sort without a comparator does, by UTF-16 code unit', () => {
+    const samples = [
+      'b',
+      'aa',
+      'Ａ',
+      'B',
+      '9',
+      '😀',
+      'é',
+      '',
+      'a',
+      '10',
+      'A',
+      'f',
+      '\uD800',
+      '\uDFFF',
+      'ff',
+      'F0'
+    ]
+    samples.sort(compareCodeUnits)
+    // The order `samples.sort()` gave: digits by character, upper case before lower,
+    // U+E000..U+FFFF after astral characters (whose high surrogate is smaller).
+    expect(samples).toEqual([
+      '',
+      '10',
+      '9',
+      'A',
+      'B',
+      'F0',
+      'a',
+      'aa',
+      'b',
+      'f',
+      'ff',
+      'é',
+      '\uD800',
+      '😀',
+      '\uDFFF',
+      'Ａ'
+    ])
+  })
+
+  it('returns -1, 0 or 1', () => {
+    expect(compareCodeUnits('a', 'b')).toBe(-1)
+    expect(compareCodeUnits('b', 'a')).toBe(1)
+    expect(compareCodeUnits('a', 'a')).toBe(0)
+    expect(compareCodeUnits('a', 'aa')).toBe(-1)
+    expect(compareCodeUnits('Z', 'a')).toBe(-1)
+  })
+
+  it('agrees with UTF-16 code unit order for any two strings', () => {
+    fc.assert(
+      fc.property(anyText, anyText, (a, b) => {
+        expect(compareCodeUnits(a, b)).toBe(Buffer.compare(utf16be(a), utf16be(b)))
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  it('sorts any array of strings exactly as a sort without a comparator does', () => {
+    fc.assert(
+      fc.property(fc.array(anyText, { maxLength: 20 }), xs => {
+        const sorted = [...xs]
+        sorted.sort(compareCodeUnits)
+        expect(sorted).toEqual([...xs].sort())
+      })
+    )
+  })
+})
+
 describe('bytes: randomBytes / concatBytes / equalBytes', () => {
   it('returns the requested number of bytes, also beyond the 64 KiB getRandomValues limit', () => {
     expect(randomBytes(0)).toEqual(new Uint8Array(0))
-    expect(randomBytes(32).length).toBe(32)
+    expect(randomBytes(32)).toHaveLength(32)
     const big = randomBytes(200000)
-    expect(big.length).toBe(200000)
+    expect(big).toHaveLength(200000)
     expect(big.some(v => v !== 0)).toBe(true)
     expect(big.subarray(70000, 70064).some(v => v !== 0)).toBe(true)
   })

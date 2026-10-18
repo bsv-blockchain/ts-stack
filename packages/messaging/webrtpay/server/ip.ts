@@ -76,8 +76,8 @@ function ipv6Groups(a: string): number[] {
   }
   const [head, rest] = s.split('::')
   const left = head === '' ? [] : head.split(':')
-  if (rest === undefined) return left.map(h => parseInt(h, 16))
+  if (rest === undefined) return left.map(h => Number.parseInt(h, 16))
   const right = rest === '' ? [] : rest.split(':')
   const zeros = Array.from({ length: 8 - left.length - right.length }, () => '0')
-  return [...left, ...zeros, ...right].map(h => parseInt(h, 16))
+  return [...left, ...zeros, ...right].map(h => Number.parseInt(h, 16))
 }

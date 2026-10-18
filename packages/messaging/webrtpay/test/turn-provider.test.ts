@@ -129,6 +129,13 @@ describe('turnIssuer: coturn REST', () => {
     expect((await issuer.issue('02ab')).expiresAt).toBe(T0 + 600_000)
   })
 
+  it('rejects, never throws, when credentials cannot be made', async () => {
+    const issuer = turnIssuer({ kind: 'coturn-rest', secret: 's', urls: ['turn:a.example:3478'] })
+    // A symbol cannot become part of the HMAC input; the relay chains `.then` on `issue`.
+    const issuing = issuer.issue(Symbol('key') as unknown as string)
+    await expect(issuing).rejects.toBeInstanceOf(TypeError)
+  })
+
   it('refuses a provider it cannot issue for when it is made', () => {
     const urls = ['turn:a.example:3478']
     expect(() => turnIssuer({ kind: 'coturn-rest', secret: '', urls })).toThrow(TypeError)

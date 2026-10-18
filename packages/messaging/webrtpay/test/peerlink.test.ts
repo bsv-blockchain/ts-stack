@@ -141,8 +141,8 @@ describe('PeerLink over loopback', () => {
     const atB = nextMessage(b, 30000)
     await a.send({ text })
     const got = (await atB) as { text: string }
-    expect(got.text.length).toBe(text.length)
-    expect(got.text === text).toBe(true)
+    expect(got.text).toHaveLength(text.length)
+    expect(got.text).toBe(text)
   })
 
   it('never hands the channel a frame while more than 1 MiB is queued', async () => {
@@ -253,7 +253,7 @@ describe('PeerLink over loopback', () => {
     b.setMaxMessageBytes(128 * 1024)
     const big = nextMessage(b)
     await a.send({ s: 'x'.repeat(64 * 1024) })
-    expect(((await big) as { s: string }).s.length).toBe(64 * 1024)
+    expect(((await big) as { s: string }).s).toHaveLength(64 * 1024)
 
     b.setMaxMessageBytes(1024)
     const bClosed = closeOf(b)
@@ -528,7 +528,7 @@ describe('PeerLink with a fake peer connection', () => {
 
     pc.channel.drain()
     await sending
-    expect(pc.channel.sent.length).toBe(3)
+    expect(pc.channel.sent).toHaveLength(3)
     const decoder = new FrameDecoder({ maxMessageBytes: 1 << 20 })
     expect(pc.channel.sent.map(f => decoder.push(f)).filter(m => m !== undefined)).toEqual([
       message

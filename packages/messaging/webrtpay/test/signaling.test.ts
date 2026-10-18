@@ -606,6 +606,14 @@ describe('MemoryHub', () => {
     })
   })
 
+  it('rejects, never throws, when send is given an envelope that is not one', async () => {
+    const hub = createMemoryHub()
+    const { stop } = await nextSignal(fn => hub.signaler(BOB).listen(fn))
+    const sending = hub.signaler(ALICE).send(BOB, null as unknown as SignalEnvelope)
+    await expect(sending).rejects.toBeInstanceOf(TypeError)
+    await stop()
+  })
+
   it('makes an identity unreachable when it goes offline or unsubscribes', async () => {
     const hub = createMemoryHub()
     const alice = hub.signaler(ALICE)

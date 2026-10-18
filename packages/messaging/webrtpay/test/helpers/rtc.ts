@@ -89,10 +89,22 @@ function nativeIceServers(server: RTCIceServer): Array<string | IceServer> {
     const tls = scheme.toLowerCase() === 'turns'
     return {
       hostname,
-      port: port === undefined ? (tls ? 5349 : 3478) : Number(port),
+      port: turnPort(port, tls),
       username: server.username,
       password: server.credential,
-      relayType: tls ? 'TurnTls' : transport?.toLowerCase() === 'tcp' ? 'TurnTcp' : 'TurnUdp'
+      relayType: turnRelayType(tls, transport)
     }
   })
+}
+
+/** The url's port, or the TURN default: 5349 for `turns:`, 3478 for `turn:`. */
+function turnPort(port: string | undefined, tls: boolean): number {
+  if (port !== undefined) return Number(port)
+  return tls ? 5349 : 3478
+}
+
+/** libdatachannel's relay type: TLS for `turns:`, else TCP or UDP by `?transport=`. */
+function turnRelayType(tls: boolean, transport: string | undefined): IceServer['relayType'] {
+  if (tls) return 'TurnTls'
+  return transport?.toLowerCase() === 'tcp' ? 'TurnTcp' : 'TurnUdp'
 }

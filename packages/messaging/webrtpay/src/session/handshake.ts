@@ -4,6 +4,7 @@ import type { Auth, Hello, WireMessage } from '../payments/wire.js'
 import { CHANNEL_PROTOCOL_ID, DEFAULTS } from '../types.js'
 import type { PubKeyHex, WalletLike } from '../types.js'
 import { fromHex, randomBytes, toBase64, toHex, utf8Encode } from '../util/bytes.js'
+import { compareCodeUnits } from '../util/compare.js'
 import { WebRTPayError } from '../util/errors.js'
 import { AuthenticatedPeer, MAX_BACKLOG } from './AuthenticatedPeer.js'
 
@@ -53,7 +54,8 @@ export interface BindingTranscriptInput {
  * - `signerFps` / `verifierFps`: every `a=fingerprint:` line of that side's own SDP
  *   (session or media level, any algorithm), each written `<alg> <hex>` with the algorithm
  *   in lower case and the hex in lower case without colons (`sdpFingerprints`), the list
- *   sorted by UTF-16 code unit (`Array.prototype.sort`) and joined by `,` with no spaces.
+ *   sorted by UTF-16 code unit (`Array.prototype.sort`'s order without a comparator, never
+ *   a locale's) and joined by `,` with no spaces.
  *   The signer's list comes from its local SDP, the verifier's from the remote SDP as the
  *   signer received it (and the other way round when checking).
  * - Nonces are the standard padded base64 from the two `hello` messages (32 bytes each);
@@ -70,8 +72,8 @@ export interface BindingTranscriptInput {
 export function bindingTranscript(a: BindingTranscriptInput): number[] {
   const text = [
     BINDING_LABEL,
-    [...a.signerFingerprints].sort().join(','),
-    [...a.verifierFingerprints].sort().join(','),
+    [...a.signerFingerprints].sort(compareCodeUnits).join(','),
+    [...a.verifierFingerprints].sort(compareCodeUnits).join(','),
     a.signerNonce,
     a.verifierNonce,
     a.signerKey,

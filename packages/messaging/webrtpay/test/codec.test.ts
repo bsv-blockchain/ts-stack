@@ -175,7 +175,7 @@ describe('encodeSdp / decodeSdp: compact form', () => {
   it('packs the Chromium offer into 130 bytes and rebuilds the same transport parameters', () => {
     const bytes = encodeSdp(CHROMIUM_OFFER)
     expect(bytes[0]).toBe(1)
-    expect(bytes.length).toBe(130)
+    expect(bytes).toHaveLength(130)
 
     const rebuilt = decodeSdp(bytes)
     expect(sdpFingerprints(rebuilt)).toEqual(sdpFingerprints(CHROMIUM_OFFER))
@@ -452,7 +452,7 @@ describe('offer and answer codes', () => {
     expect(body.subarray(21)).toEqual(sdpBytes)
     // An offer still names the payee.
     const offer = encodeOfferCode({ sid: SID, identityKey: IDENTITY_KEY, sdp: offerSdp })
-    expect(fromBase64Url(offer.slice(CODE_PREFIX.length)).length).toBe(body.length + 33)
+    expect(fromBase64Url(offer.slice(CODE_PREFIX.length))).toHaveLength(body.length + 33)
   })
 
   it('stores expiresAt with second precision, rounded down', () => {

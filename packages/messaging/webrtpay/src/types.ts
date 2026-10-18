@@ -1,8 +1,11 @@
 import { PublicKey } from '@bsv/sdk'
-import type { WalletInterface, WalletProtocol } from '@bsv/sdk'
+import type { PubKeyHex, WalletInterface, WalletProtocol } from '@bsv/sdk'
 
-/** A compressed secp256k1 public key as 66 lowercase hex characters. */
-export type PubKeyHex = string
+/**
+ * `@bsv/sdk`'s `PubKeyHex`: a public key in hex. Identity keys in this package are
+ * compressed secp256k1 keys, 66 lowercase hex characters (see {@link isIdentityKey}).
+ */
+export type { PubKeyHex } from '@bsv/sdk'
 
 /**
  * Atomic BEEF (BRC-95) transaction bytes as a plain number array: the form this package

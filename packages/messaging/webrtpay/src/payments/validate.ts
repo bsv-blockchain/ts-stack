@@ -120,8 +120,7 @@ export function tokenFields(v: unknown, fallbackOutputIndex?: unknown): TokenFie
 export function isByteArray(v: unknown): v is Uint8Array | number[] {
   if (v instanceof Uint8Array) return true
   if (!Array.isArray(v)) return false
-  for (let i = 0; i < v.length; i++) {
-    const b: unknown = v[i]
+  for (const b of v as unknown[]) {
     if (typeof b !== 'number' || (b & 255) !== b) return false
   }
   return true

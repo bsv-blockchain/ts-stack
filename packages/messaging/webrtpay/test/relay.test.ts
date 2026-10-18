@@ -3,13 +3,14 @@ import { createHmac } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import fc from 'fast-check'
 import { ProtoWallet } from '@bsv/sdk'
 import { DEFAULT_RELAY_LIMITS, createRelayServer, turnCredentials } from '../server/index.js'
 import type { CloudflareTurnProvider } from '../server/index.js'
 import { DEFAULT_HOST, relayOptionsFromEnv, relayUsage } from '../server/env.js'
 import { DEFAULT_RELAY_PORT, isLoopbackHost } from '../server/relay.js'
 import { DEFAULT_TURN_TTL_SECONDS } from '../server/turn.js'
-import { RelaySignaler, relayAuthData } from '../src/signaling/RelaySignaler.js'
+import { RelaySignaler, normalizeRelayUrl, relayAuthData } from '../src/signaling/RelaySignaler.js'
 import type { RelaySignalerOptions } from '../src/signaling/RelaySignaler.js'
 import {
   MAX_SIGNAL_CIPHERTEXT_CHARS,
@@ -126,6 +127,24 @@ describe('relay authentication signature', () => {
   it('signs the prefix, the url without trailing slashes and the nonce', () => {
     const text = new TextDecoder().decode(Uint8Array.from(relayAuthData('wss://r.example//', 'n1')))
     expect(text).toBe('webrtpay-relay/1|wss://r.example|n1')
+  })
+
+  it('drops exactly the trailing slashes of any url, astral characters and lone surrogates included', () => {
+    expect(normalizeRelayUrl('wss://r.example/😀//')).toBe('wss://r.example/😀')
+    expect(normalizeRelayUrl('wss://r.example/\uD83D/')).toBe('wss://r.example/\uD83D')
+    expect(normalizeRelayUrl('\uDE00//')).toBe('\uDE00')
+    expect(normalizeRelayUrl('///')).toBe('')
+    const piece = fc.oneof(
+      fc.constantFrom('/', 'a', '😀', '\uD83D', '\uDE00', '／'),
+      fc.integer({ min: 0, max: 0xffff }).map(c => String.fromCodePoint(c))
+    )
+    fc.assert(
+      fc.property(fc.string({ unit: piece, maxLength: 12 }), url => {
+        let expected = url
+        while (expected.endsWith('/')) expected = expected.slice(0, -1)
+        expect(normalizeRelayUrl(url)).toBe(expected)
+      })
+    )
   })
 })
 

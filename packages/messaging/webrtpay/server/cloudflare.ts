@@ -102,8 +102,7 @@ export function cloudflareTurnIssuer(p: CloudflareTurnProvider, ttlSeconds: numb
  * ones listed. Throws when no TURN url is left.
  */
 export function cloudflareIceServers(answer: unknown): RelayIceServer[] {
-  const listed = isRecord(answer) ? answer.iceServers : undefined
-  const entries: unknown[] = Array.isArray(listed) ? listed : isRecord(listed) ? [listed] : []
+  const entries = iceServerEntries(isRecord(answer) ? answer.iceServers : undefined)
   if (entries.length === 0) throw new CloudflareTurnError('the answer lists no ICE servers')
   const stun: string[] = []
   const turn: RelayIceServer[] = []
@@ -124,6 +123,12 @@ export function cloudflareIceServers(answer: unknown): RelayIceServer[] {
   }
   if (turn.length === 0) throw new CloudflareTurnError('the answer has no TURN server')
   return stun.length > 0 ? [{ urls: stun }, ...turn] : turn
+}
+
+/** The answer's `iceServers` as a list: a list as it is, one object as a list of one. */
+function iceServerEntries(listed: unknown): unknown[] {
+  if (Array.isArray(listed)) return listed
+  return isRecord(listed) ? [listed] : []
 }
 
 /**

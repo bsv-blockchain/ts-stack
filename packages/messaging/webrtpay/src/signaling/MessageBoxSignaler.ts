@@ -108,13 +108,14 @@ export class MessageBoxSignaler implements Signaler {
   }
 
   /** Subscribe; the first subscription polls at once and starts the loop. */
-  async listen(fn: (from: PubKeyHex, e: SignalEnvelope) => void): Promise<() => Promise<void>> {
+  listen(fn: (from: PubKeyHex, e: SignalEnvelope) => void): Promise<() => Promise<void>> {
     const sub: SignalSubscription = { fn }
     this.subs.add(sub)
     if (this.timer === undefined && !this.polling) this.poll()
-    return async () => {
+    return Promise.resolve(() => {
       if (this.subs.delete(sub) && this.subs.size === 0) this.clearTimer()
-    }
+      return Promise.resolve()
+    })
   }
 
   /** Poll every `activePollMs` while true (a dial is waiting for its answer). */

@@ -923,16 +923,18 @@ function displayHost(a: AddressInfo): string {
 }
 
 function parseJson(data: RawData): unknown {
-  const bytes = Array.isArray(data)
-    ? Buffer.concat(data)
-    : Buffer.isBuffer(data)
-      ? data
-      : Buffer.from(data)
+  const bytes = frameBytes(data)
   try {
     return JSON.parse(bytes.toString('utf8'))
   } catch {
     return undefined
   }
+}
+
+/** A websocket message's bytes, whichever of its forms `ws` delivered. */
+function frameBytes(data: RawData): Buffer {
+  if (Array.isArray(data)) return Buffer.concat(data)
+  return Buffer.isBuffer(data) ? data : Buffer.from(data)
 }
 
 function isRecord(x: unknown): x is Record<string, unknown> {

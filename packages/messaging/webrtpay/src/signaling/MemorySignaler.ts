@@ -23,17 +23,23 @@ export function createMemoryHub(): MemoryHub {
   return {
     signaler(identityKey: PubKeyHex): Signaler {
       return {
-        async send(to, e) {
-          const subs = listeners.get(to)
-          if (subs === undefined || subs.size === 0) {
-            throw new WebRTPayError('peer_unreachable', 'Peer is not listening')
+        send(to, e) {
+          // Any failure, a malformed envelope included, rejects rather than throws.
+          try {
+            const subs = listeners.get(to)
+            if (subs === undefined || subs.size === 0) {
+              throw new WebRTPayError('peer_unreachable', 'Peer is not listening')
+            }
+            const copy = { v: e.v, sid: e.sid, ciphertext: e.ciphertext }
+            // A resolved promise rather than a timer, so fake timers cannot hold delivery.
+            void Promise.resolve().then(() => dispatchSignal(subs, identityKey, copy))
+            return Promise.resolve()
+          } catch (error) {
+            return Promise.reject(error)
           }
-          const copy = { v: e.v, sid: e.sid, ciphertext: e.ciphertext }
-          // A resolved promise rather than a timer, so fake timers cannot hold delivery.
-          void Promise.resolve().then(() => dispatchSignal(subs, identityKey, copy))
         },
 
-        async listen(fn) {
+        listen(fn) {
           let subs = listeners.get(identityKey)
           if (subs === undefined) {
             subs = new Set()
@@ -42,10 +48,11 @@ export function createMemoryHub(): MemoryHub {
           const own = subs
           const sub: SignalSubscription = { fn }
           own.add(sub)
-          return async () => {
+          return Promise.resolve(() => {
             own.delete(sub)
             if (own.size === 0 && listeners.get(identityKey) === own) listeners.delete(identityKey)
-          }
+            return Promise.resolve()
+          })
         }
       }
     },

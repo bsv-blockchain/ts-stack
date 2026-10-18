@@ -349,6 +349,71 @@ describe('bindingTranscript', () => {
     )
     expect(transcript).toHaveLength(443)
   })
+
+  it('orders fingerprints by UTF-16 code unit whatever the locale, byte for byte as at bd8b26a36', () => {
+    // Entries a locale-aware order would arrange differently: case, digits, Latin-1, an
+    // astral character (high surrogate D83D) and a fullwidth letter (FF21).
+    const transcript = bindingTranscript({
+      signerFingerprints: [
+        'sha-256 Zz',
+        'sha-256 aa',
+        'SHA-1 ff',
+        'sha-256 é0',
+        'sha-256 😀',
+        'sha-256 Ａ',
+        'sha-256 10',
+        'sha-256 9'
+      ],
+      verifierFingerprints: ['sha-512 b', 'sha-512 B', 'sha-384 ä', 'sha-384 z'],
+      signerNonce: 'ERERERERERERERERERERERERERERERERERERERERERE=',
+      verifierNonce: 'IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=',
+      signerKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+      verifierKey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+    })
+    const lines = utf8Decode(Uint8Array.from(transcript)).split('\n')
+    expect(lines[1]).toBe(
+      'SHA-1 ff,sha-256 10,sha-256 9,sha-256 Zz,sha-256 aa,sha-256 é0,sha-256 😀,sha-256 Ａ'
+    )
+    expect(lines[2]).toBe('sha-384 z,sha-384 ä,sha-512 B,sha-512 b')
+    expect(toHex(Uint8Array.from(transcript))).toBe(
+      [
+        '77656272747061792f31206368616e6e656c2d62696e64696e670a5348412d31',
+        '2066662c7368612d3235362031302c7368612d32353620392c7368612d323536',
+        '205a7a2c7368612d3235362061612c7368612d32353620c3a9302c7368612d32',
+        '353620f09f98802c7368612d32353620efbca10a7368612d333834207a2c7368',
+        '612d33383420c3a42c7368612d35313220422c7368612d35313220620a455245',
+        '5245524552455245524552455245524552455245524552455245524552455245',
+        '52455245524552453d0a49694969496949694969496949694969496949694969',
+        '4969496949694969496949694969496949694969493d0a303237396265363637',
+        '6566396463626261633535613036323935636538373062303730323962666364',
+        '623264636532386439353966323831356231366638313739380a303263363034',
+        '3766393434316564376436643330343534303665393563303763643835633737',
+        '38653462386365663363613761626163303962393563373039656535'
+      ].join('')
+    )
+    expect(transcript).toHaveLength(380)
+  })
+
+  it('takes fingerprints from SDP in UTF-16 code unit order, as at bd8b26a36', () => {
+    const sdp = [
+      'v=0',
+      'a=fingerprint:sha-256 AB:CD',
+      'a=fingerprint:SHA-1 0A',
+      'a=fingerprint:sha-512 É:1',
+      'a=fingerprint:sha-256 😀',
+      'a=fingerprint:sha-256 Ａ',
+      'a=fingerprint:Sha-256 ab:cd:01',
+      ''
+    ].join('\r\n')
+    expect(sdpFingerprints(sdp)).toEqual([
+      'sha-1 0a',
+      'sha-256 abcd',
+      'sha-256 abcd01',
+      'sha-256 😀',
+      'sha-256 ａ',
+      'sha-512 é1'
+    ])
+  })
 })
 
 describe('authenticate over loopback', () => {

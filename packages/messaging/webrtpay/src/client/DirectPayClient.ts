@@ -31,6 +31,7 @@ import type {
   WalletLike
 } from '../types.js'
 import { equalBytes, randomBytes, toBase64Url } from '../util/bytes.js'
+import { compareCodeUnits } from '../util/compare.js'
 import { WebRTPayError } from '../util/errors.js'
 import { KeyedBuckets, TokenBucket } from './budget.js'
 import { DEFAULT_INBOUND_LIMITS, InboundLimiter } from './limits.js'
@@ -801,7 +802,7 @@ export class DirectPayClient {
       return
     }
     const dial = this.dials.get(p.sid)
-    if (dial !== undefined && dial.recipient === p.from) dial.reply(p)
+    if (dial?.recipient === p.from) dial.reply(p)
   }
 
   /** Answer an inbound offer, or refuse it without gathering ICE (no address disclosed). */
@@ -1168,7 +1169,8 @@ function mergeIceServers(base: RTCIceServer[], extra: RTCIceServer[]): RTCIceSer
   const byUrls = new Map<string, RTCIceServer>()
   for (const server of [...base, ...extra]) {
     const urls = typeof server.urls === 'string' ? [server.urls] : [...server.urls]
-    const key = JSON.stringify(urls.sort())
+    urls.sort(compareCodeUnits)
+    const key = JSON.stringify(urls)
     byUrls.delete(key)
     byUrls.set(key, server)
   }

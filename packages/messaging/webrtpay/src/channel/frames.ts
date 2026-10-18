@@ -209,7 +209,8 @@ export class FrameDecoder {
   /**
    * Accept one received frame.
    *
-   * @returns The parsed message when this frame completes one, otherwise `undefined`.
+   * @returns The parsed message when this frame completes one; `undefined` when the frame
+   * is a chunk of a message still incomplete.
    * @throws `WebRTPayError('protocol')` for a frame shorter than the header, an unknown
    * version or reserved flag bit, a sequence number other than the expected one (first
    * message 0, then +1; every chunk of a message repeats its number), text that is not
@@ -218,7 +219,7 @@ export class FrameDecoder {
    * rejected before parsing). `WebRTPayError('too_large')` when
    * the reassembled message would pass the cap, checked before the frame is buffered.
    */
-  push(frame: Uint8Array): unknown | undefined {
+  push(frame: Uint8Array): unknown {
     if (this.failure) throw this.failure
     try {
       return this.accept(frame)
@@ -231,7 +232,8 @@ export class FrameDecoder {
     }
   }
 
-  private accept(input: Uint8Array): unknown | undefined {
+  /** {@link push} without the failure latch: the message, or `undefined` mid-message. */
+  private accept(input: Uint8Array): unknown {
     if (!ArrayBuffer.isView(input)) throw protocolError('Frame is not binary')
     const frame = new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
     if (frame.length < FRAME_HEADER_BYTES) throw protocolError('Frame shorter than header')

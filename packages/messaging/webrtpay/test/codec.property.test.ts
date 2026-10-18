@@ -218,7 +218,7 @@ function decodesOrRejects(text: string): void {
   }
   expect(['offer', 'answer']).toContain(decoded.kind)
   expect(decoded.sid).toBeInstanceOf(Uint8Array)
-  expect(decoded.sid.length).toBe(16)
+  expect(decoded.sid).toHaveLength(16)
   if (decoded.kind === 'offer') expect(isIdentityKey(decoded.identityKey)).toBe(true)
   else expect(Object.keys(decoded).sort()).toEqual(['kind', 'sdp', 'sid'])
   expect(typeof decoded.sdp).toBe('string')

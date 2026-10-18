@@ -13,9 +13,9 @@ export interface TestWallet {
 
 /** A ProtoWallet (real keys, signatures and encryption) with a jest-mocked internalizeAction. */
 export async function makeWallet(): Promise<TestWallet> {
-  const internalizeAction = jest.fn<WalletLike['internalizeAction']>(async () => ({
-    accepted: true
-  }))
+  const internalizeAction = jest.fn<WalletLike['internalizeAction']>(() =>
+    Promise.resolve({ accepted: true })
+  )
   const wallet: WalletLike = Object.assign(new ProtoWallet(PrivateKey.fromRandom()), {
     internalizeAction
   })

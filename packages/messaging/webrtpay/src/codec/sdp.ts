@@ -22,6 +22,7 @@
  * something form 1 cannot carry, so encoding never fails.
  */
 import { toHex, utf8Decode, utf8Encode } from '../util/bytes.js'
+import { compareCodeUnits } from '../util/compare.js'
 import { WebRTPayError } from '../util/errors.js'
 
 const FORM_COMPACT = 1
@@ -51,8 +52,8 @@ const ICE_CHARS = /^[A-Za-z0-9+/]+$/
 /** A live (non-zero port) data-channel media section; port 0 would mean rejected. */
 const DATA_CHANNEL_MEDIA = /^m=application [1-9]\d* UDP\/DTLS\/SCTP webrtc-datachannel$/
 const SHA256_FINGERPRINT = /^sha-256 ([0-9a-f]{2}(?::[0-9a-f]{2}){31})$/i
-const IPV4_OCTET = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)'
-const IPV4 = new RegExp(`^${IPV4_OCTET}(?:\\.${IPV4_OCTET}){3}$`)
+const IPV4_OCTET = String.raw`(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)`
+const IPV4 = new RegExp(String.raw`^${IPV4_OCTET}(?:\.${IPV4_OCTET}){3}$`)
 const IPV6_GROUP = /^[0-9a-f]{1,4}$/i
 const MDNS_UUID = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})\.local$/i
 
@@ -81,16 +82,17 @@ function invalid(message: string, cause?: unknown): WebRTPayError {
 
 /**
  * Every `a=fingerprint:` line, session or media level, as `"<alg> <hex>"` with the
- * algorithm and hex lowercased and colons removed, sorted.
+ * algorithm and hex lowercased and colons removed, sorted by UTF-16 code unit.
  */
 export function sdpFingerprints(sdp: string): string[] {
   const out: string[] = []
   for (const line of sdp.split(/\r?\n/)) {
     if (!line.startsWith('a=fingerprint:')) continue
     const [alg, ...hex] = line.slice('a=fingerprint:'.length).trim().split(/\s+/)
-    out.push(`${alg.toLowerCase()} ${hex.join('').replace(/:/g, '').toLowerCase()}`)
+    out.push(`${alg.toLowerCase()} ${hex.join('').replaceAll(':', '').toLowerCase()}`)
   }
-  return out.sort()
+  out.sort(compareCodeUnits)
+  return out
 }
 
 /** Encode an SDP: compact form when it fits the data-channel template, raw text otherwise. */
@@ -104,8 +106,14 @@ export function encodeSdp(sdp: string): Uint8Array {
     return out
   }
   const out: number[] = [FORM_COMPACT, c.setup, c.sizeExponent]
-  out.push(c.ufrag.length, ...utf8Encode(c.ufrag), c.pwd.length, ...utf8Encode(c.pwd))
-  out.push(...c.fingerprint, c.candidates.length)
+  out.push(
+    c.ufrag.length,
+    ...utf8Encode(c.ufrag),
+    c.pwd.length,
+    ...utf8Encode(c.pwd),
+    ...c.fingerprint,
+    c.candidates.length
+  )
   for (const k of c.candidates) {
     out.push((k.type << 4) | k.kind, ...k.address, k.port >> 8, k.port & 0xff)
   }
@@ -171,12 +179,22 @@ export function decodeSdp(bytes: Uint8Array): string {
     const port = r.u16()
     // RFC 8445 §5.1.2.1: type preference, then local preference by order, component 1.
     const priority = TYPE_PREFERENCES[typeIndex] * 2 ** 24 + (65535 - i) * 2 ** 8 + (256 - 1)
-    const related = type === 'host' ? '' : ` raddr ${kind === KIND_IPV6 ? '::' : '0.0.0.0'} rport 0`
+    const related = relatedAddress(type, kind)
     lines.push(`a=candidate:${i + 1} 1 udp ${priority} ${address} ${port} typ ${type}${related}`)
   }
   if (!r.done()) throw invalid('Unexpected bytes after compact SDP')
   lines.push('a=end-of-candidates')
   return lines.join('\r\n') + '\r\n'
+}
+
+/**
+ * The `raddr`/`rport` part of a rebuilt candidate line: none for a host candidate, a
+ * placeholder unspecified address of the candidate's family and port 0 otherwise.
+ */
+function relatedAddress(type: string, kind: number): string {
+  if (type === 'host') return ''
+  const unspecified = kind === KIND_IPV6 ? '::' : '0.0.0.0'
+  return ` raddr ${unspecified} rport 0`
 }
 
 /** The compact fields of `sdp`, or undefined when the compact form cannot carry it. */
@@ -220,10 +238,10 @@ function parseCompact(sdp: string): CompactSdp | undefined {
   }
   if (candidates.length > MAX_U8) return undefined
 
-  const fingerprintHex = fingerprint[1].replace(/:/g, '')
+  const fingerprintHex = fingerprint[1].replaceAll(':', '')
   const fingerprintBytes = new Uint8Array(FINGERPRINT_BYTES)
   for (let i = 0; i < FINGERPRINT_BYTES; i++) {
-    fingerprintBytes[i] = parseInt(fingerprintHex.slice(2 * i, 2 * i + 2), 16)
+    fingerprintBytes[i] = Number.parseInt(fingerprintHex.slice(2 * i, 2 * i + 2), 16)
   }
   return { setup, sizeExponent, ufrag, pwd, fingerprint: fingerprintBytes, candidates }
 }
@@ -269,7 +287,9 @@ function parseAddress(text: string): { kind: number; bytes: Uint8Array } | undef
     const hex = uuid.slice(1).join('')
     return {
       kind: KIND_MDNS,
-      bytes: Uint8Array.from({ length: 16 }, (_, i) => parseInt(hex.slice(2 * i, 2 * i + 2), 16))
+      bytes: Uint8Array.from({ length: 16 }, (_, i) =>
+        Number.parseInt(hex.slice(2 * i, 2 * i + 2), 16)
+      )
     }
   }
   const ipv6 = parseIpv6(text)
@@ -292,7 +312,7 @@ function parseIpv6(text: string): Uint8Array | undefined {
   const out = new Uint8Array(16)
   for (let i = 0; i < 8; i++) {
     if (!IPV6_GROUP.test(groups[i])) return undefined
-    const g = parseInt(groups[i], 16)
+    const g = Number.parseInt(groups[i], 16)
     out[2 * i] = g >> 8
     out[2 * i + 1] = g & 0xff
   }
@@ -339,7 +359,7 @@ function formatIpv6(b: Uint8Array): string {
 
 /** An ice-ufrag or ice-pwd from compact bytes; only RFC 8839 ice-chars are accepted. */
 function iceCredential(b: Uint8Array, what: string): string {
-  const text = String.fromCharCode(...b)
+  const text = String.fromCodePoint(...b)
   if (!ICE_CHARS.test(text)) throw invalid(`Invalid ${what}`)
   return text
 }

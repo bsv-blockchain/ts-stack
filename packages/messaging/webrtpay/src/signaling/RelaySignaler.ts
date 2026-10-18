@@ -58,7 +58,7 @@ export type RelayServerFrame =
 /** `url` without trailing slashes, the form both ends sign and verify. */
 export function normalizeRelayUrl(url: string): string {
   let end = url.length
-  while (end > 0 && url.charCodeAt(end - 1) === 47) end--
+  while (end > 0 && url.codePointAt(end - 1) === 47) end--
   return url.slice(0, end)
 }
 
@@ -680,7 +680,7 @@ class RelayConnection {
 }
 
 function relayError(code: unknown): WebRTPayError {
-  if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(RELAY_ERRORS, code)) {
+  if (typeof code === 'string' && Object.hasOwn(RELAY_ERRORS, code)) {
     const [mapped, message] = RELAY_ERRORS[code as RelayErrorCode]
     return new WebRTPayError(mapped, message)
   }

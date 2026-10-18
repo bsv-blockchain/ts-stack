@@ -24,10 +24,20 @@ const HEX_DIGITS = '0123456789abcdef'
 /** Lowercase hex. */
 export function toHex(b: Uint8Array): string {
   let out = ''
-  for (let i = 0; i < b.length; i++) {
-    out += HEX_DIGITS[b[i] >> 4] + HEX_DIGITS[b[i] & 15]
+  for (const byte of b) {
+    out += HEX_DIGITS[byte >> 4] + HEX_DIGITS[byte & 15]
   }
   return out
+}
+
+/**
+ * The code of the character at `s[i]` if it is ASCII, otherwise -1 (also past the end). The
+ * hex and base64 decoders read through it: their alphabets are ASCII, so any other
+ * character, an astral one or a lone surrogate included, is rejected as outside the alphabet.
+ */
+function asciiAt(s: string, i: number): number {
+  const c = s.codePointAt(i) ?? -1
+  return c < 128 ? c : -1
 }
 
 function hexValue(c: number): number {
@@ -42,8 +52,8 @@ export function fromHex(s: string): Uint8Array {
   if (s.length % 2 !== 0) throw new WebRTPayError('protocol', 'Invalid hex: odd length')
   const out = new Uint8Array(s.length / 2)
   for (let i = 0; i < out.length; i++) {
-    const hi = hexValue(s.charCodeAt(2 * i))
-    const lo = hexValue(s.charCodeAt(2 * i + 1))
+    const hi = hexValue(asciiAt(s, 2 * i))
+    const lo = hexValue(asciiAt(s, 2 * i + 1))
     if (hi < 0 || lo < 0) throw new WebRTPayError('protocol', 'Invalid hex character')
     out[i] = (hi << 4) | lo
   }
@@ -55,7 +65,7 @@ const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_
 
 function reverseTable(alphabet: string): Int8Array {
   const table = new Int8Array(128).fill(-1)
-  for (let i = 0; i < alphabet.length; i++) table[alphabet.charCodeAt(i)] = i
+  for (let i = 0; i < alphabet.length; i++) table[asciiAt(alphabet, i)] = i
   return table
 }
 
@@ -94,19 +104,14 @@ function encode(b: Uint8Array, alphabet: string, pad: boolean): string {
  * zero trailing bits, so every byte string has exactly one accepted encoding.
  */
 function decode(s: string, rev: Int8Array, padded: boolean, what: string): Uint8Array {
-  let end = s.length
-  if (padded) {
-    if (s.length % 4 !== 0) throw new WebRTPayError('protocol', `Invalid ${what}: bad length`)
-    if (end > 0 && s.charCodeAt(end - 1) === 61) end--
-    if (end > 0 && s.charCodeAt(end - 1) === 61) end--
-  }
+  const end = padded ? unpaddedLength(s, what) : s.length
   const full = end >> 2
   const rem = end & 3
   if (rem === 1) throw new WebRTPayError('protocol', `Invalid ${what}: bad length`)
   const out = new Uint8Array(full * 3 + (rem === 0 ? 0 : rem - 1))
   const val = (i: number): number => {
-    const c = s.charCodeAt(i)
-    const v = c < 128 ? rev[c] : -1
+    const c = asciiAt(s, i)
+    const v = c < 0 ? -1 : rev[c]
     if (v < 0) throw new WebRTPayError('protocol', `Invalid ${what} character`)
     return v
   }
@@ -130,6 +135,18 @@ function decode(s: string, rev: Int8Array, padded: boolean, what: string): Uint8
   }
   // Any '=' left inside the counted region fails the alphabet lookup above.
   return out
+}
+
+/**
+ * The length of padded base64 `s` without its padding: one or two trailing `=` are not
+ * counted. Throws `WebRTPayError('protocol')` when the length is not a multiple of 4.
+ */
+function unpaddedLength(s: string, what: string): number {
+  if (s.length % 4 !== 0) throw new WebRTPayError('protocol', `Invalid ${what}: bad length`)
+  let end = s.length
+  if (end > 0 && s.codePointAt(end - 1) === 61) end--
+  if (end > 0 && s.codePointAt(end - 1) === 61) end--
+  return end
 }
 
 /** Standard base64 with padding (RFC 4648 section 4). */

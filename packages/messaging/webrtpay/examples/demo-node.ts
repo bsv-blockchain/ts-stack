@@ -39,13 +39,13 @@ import type { PaymentToken, PubKeyHex, RtcOptions, WalletLike } from '@bsv/webrt
  */
 function demoWallet(name: string): WalletLike {
   return Object.assign(new ProtoWallet(PrivateKey.fromRandom()), {
-    async internalizeAction(args: InternalizeActionArgs): Promise<InternalizeActionResult> {
+    internalizeAction(args: InternalizeActionArgs): Promise<InternalizeActionResult> {
       const [output] = args.outputs
       console.log(
         `[${name}] internalizeAction (stand-in): output ${output.outputIndex} as '${output.protocol}', ` +
           `labels ${JSON.stringify(args.labels)}`
       )
-      return { accepted: true }
+      return Promise.resolve({ accepted: true })
     }
   })
 }
@@ -133,7 +133,12 @@ await payee.startReceiving({
   async onPayment(p) {
     try {
       const { status, txid } = await acceptDirectPayment(payeeWallet, p, {
-        seen: { has: key => seen.has(key), add: key => void seen.add(key) }
+        seen: {
+          has: key => seen.has(key),
+          add: key => {
+            seen.add(key)
+          }
+        }
       })
       console.log(`[payee] ${status}: ${p.token.amount} sats from ${short(p.sender)} in ${txid}`)
       return 'accepted' // a duplicate is already in the wallet
