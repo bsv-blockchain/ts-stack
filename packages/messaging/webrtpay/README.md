@@ -210,7 +210,10 @@ anything, and a payer refuses an answer from another network before the channel 
 way `connect` rejects with `WebRTPayError` code `rejected` and
 `error.reason === 'wrong_network'` before anything is spent, so a UI can say "the recipient's
 wallet is on a different network". A client without `chain` names no network and checks none;
-clients with one refuse it, so set it on both sides.
+clients with one refuse it, so set it on both sides. The constructor throws `TypeError` for any
+other `chain` (`'Main'`, `'main-net'`, 17 characters), also on a client that only exchanges
+codes, although a code's own network field could hold any UTF-8 name: keep to short lower-case
+names such as `main` and `test`, so that codes and signals name a network the same way.
 
 ```ts
 // when connect rejects with e: show "The recipient's wallet is on a different network"

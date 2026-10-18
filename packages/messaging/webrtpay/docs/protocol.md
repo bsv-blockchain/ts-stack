@@ -728,7 +728,8 @@ payer                                    payee (receiving)
 
 - The payer's sid is 16 random bytes as base64url. The whole dial (answer, channel and
   handshake) has 30 s; no answer in time is `peer_unreachable`, an answer without a session in
-  time is `timeout`, a reject is `rejected` with its reason (truncated to 200 characters).
+  time is `timeout`, a reject is `rejected` with its reason (truncated to 200 characters;
+  `error.reason` is absent when the reject names none).
 - Once it has gathered, the payee must get its answer out within 30 s; the channel and
   handshake then have their own 30 s.
 - A client that is dialing but not receiving answers offers with `reject` `not_receiving`.

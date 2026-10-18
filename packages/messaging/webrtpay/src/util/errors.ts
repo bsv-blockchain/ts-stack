@@ -22,7 +22,8 @@ export class WebRTPayError extends Error {
   /**
    * Why the peer refused, on `rejected` errors from `DirectPayClient.connect`: `busy`,
    * `not_receiving` or `wrong_network` (the recipient's wallet is on another network), or
-   * whatever else the peer said, at most 200 characters. Absent on other errors.
+   * whatever else the peer said, at most 200 characters. Absent when the peer gave no
+   * reason, and on other errors.
    */
   declare readonly reason?: string
 

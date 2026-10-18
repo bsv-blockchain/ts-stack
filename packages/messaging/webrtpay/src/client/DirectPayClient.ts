@@ -98,7 +98,8 @@ export interface DirectPayClientOptions {
    * inbound offer that names another network or none is refused with a sealed `reject`
    * (`wrong_network`, no ICE gathered), and {@link DirectPayClient.connect} refuses an answer
    * that names another network or none before applying it. Without it, signals name no
-   * network and nothing is checked (peers that set one refuse this client).
+   * network and nothing is checked (peers that set one refuse this client). The constructor
+   * throws `TypeError` for anything else, on a client that only exchanges codes too.
    */
   chain?: string
   /** Inbound limits; unset fields keep {@link DEFAULT_INBOUND_LIMITS}. */
@@ -352,9 +353,10 @@ export class DirectPayClient {
    * @throws `WebRTPayError`: `unsupported` without a signaler; `peer_unreachable` when the
    * carrier cannot deliver or no answer arrives within `timeoutMs` (default `connectMs`,
    * 30 s); `rate_limited` when the carrier refuses for its limits; `rejected` when the
-   * recipient refused, with the reason (at most 200 characters) on `error.reason` and in the
-   * message: `busy`, `not_receiving`, or `wrong_network` when the recipient's wallet is on
-   * another network than this client's `chain` (or one of the two names none); `timeout`
+   * recipient refused, with its reason (at most 200 characters; none when it gave none) on
+   * `error.reason` and in the message: `busy`, `not_receiving`, or `wrong_network` when the
+   * recipient's wallet is on another network than this client's `chain` (or one of the two
+   * names none); `timeout`
    * when the answer came but the channel and handshake did not finish in time;
    * `auth_failed`, `closed` or `protocol` from the channel and handshake; `closed` when the
    * client closes first. `TypeError` for a recipient that is not an identity key,
@@ -410,10 +412,14 @@ export class DirectPayClient {
       await signaler.send(recipient, envelope)
       const p = await reply
       if (p.kind === 'reject') {
-        const reason = truncate(p.reason ?? 'no reason given', MAX_REJECT_REASON_CHARS)
-        throw new WebRTPayError('rejected', `Recipient refused the connection: ${reason}`, {
-          reason
-        })
+        // error.reason is only ever what the peer said
+        const reason =
+          p.reason === undefined ? undefined : truncate(p.reason, MAX_REJECT_REASON_CHARS)
+        throw new WebRTPayError(
+          'rejected',
+          `Recipient refused the connection: ${reason ?? 'no reason given'}`,
+          { reason }
+        )
       }
       if (p.sdp === undefined) throw new WebRTPayError('protocol', 'Answer carries no SDP')
       // Bound to a network: an answer from another one (or none) is never applied.
