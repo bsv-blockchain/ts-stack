@@ -498,7 +498,11 @@ describe('relay limits', () => {
   })
 
   describe('TURN issuance', () => {
-    const turn = { secret: 'turn-secret', urls: ['turn:127.0.0.1:3478'] }
+    const turn = {
+      kind: 'coturn-rest' as const,
+      secret: 'turn-secret',
+      urls: ['turn:127.0.0.1:3478']
+    }
     const stun = { urls: ['stun:127.0.0.1:3478'] }
 
     /** Deliver one signal from `c` to bob, who must be listening. */
@@ -532,6 +536,8 @@ describe('relay limits', () => {
       expect(Number(expiry)).toBeGreaterThanOrEqual(before + 600)
       expect(Number(expiry)).toBeLessThanOrEqual(after + 600)
       expect(servers[1].credential).toBe(hmacBase64(turn.secret, username))
+      // the frame says when they expire, as the username does
+      expect(reply.expiresAt).toBe(Number(expiry) * 1000)
     })
 
     it('hands RelaySignaler the full list on requestTurn and keeps it as iceServers()', async () => {

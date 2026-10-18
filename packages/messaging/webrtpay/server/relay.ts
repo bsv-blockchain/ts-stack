@@ -23,7 +23,8 @@ import type { PubKeyHex } from '../src/types.js'
 import { fromHex } from '../src/util/bytes.js'
 import { TokenBucket } from './bucket.js'
 import { addressGroup, headerAddress, ipv6Block48 } from './ip.js'
-import { turnCredentials } from './turn.js'
+import { turnIssuer } from './turn.js'
+import type { TurnProvider } from './turn.js'
 
 /** Per-socket, per-source and global limits; sizes in bytes, durations in milliseconds. */
 export interface RelayLimits {
@@ -123,9 +124,6 @@ export const DEFAULT_RELAY_LIMITS: Readonly<RelayLimits> = Object.freeze({
 /** Port the relay listens on when `port` is not given. */
 export const DEFAULT_RELAY_PORT = 8787
 
-/** Lifetime of TURN credentials the relay issues, in seconds, unless `turn.ttlSeconds` says otherwise. */
-export const DEFAULT_TURN_TTL_SECONDS = 600
-
 export interface RelayServerOptions {
   /** Port to listen on (0 picks a free one); default 8787. Ignored with `server`. */
   port?: number
@@ -176,15 +174,19 @@ export interface RelayServerOptions {
    */
   trustedIpHeader?: string
   /**
-   * Issue coturn REST credentials (see `turnCredentials`) for these TURN urls, valid
-   * for `ttlSeconds` (default 600). They go to an authenticated socket that asks with
-   * `{ t: 'turn' }`, within the per-source and global hourly budgets, and are never
-   * part of the `ice` frame sent after authentication. A first connection needs them
-   * before its offer is gathered, so asking does not wait for a delivered signal.
-   * Minted credentials cannot be revoked; rotating the secret is the only way to cut
-   * them off early.
+   * Where TURN credentials come from, valid for `ttlSeconds` (default 600):
+   * `{ kind: 'coturn-rest', secret, urls }` mints coturn REST credentials (see
+   * `turnCredentials`) for these urls, and `{ kind: 'cloudflare', keyId, apiToken }` asks
+   * Cloudflare Realtime TURN for each set (see `CloudflareTurnProvider`). They go to an
+   * authenticated socket that asks with `{ t: 'turn' }`, within the per-source and global
+   * hourly budgets, and are never part of the `ice` frame sent after authentication. A
+   * first connection needs them before its offer is gathered, so asking does not wait for
+   * a delivered signal. The answer carries `expiresAt`. When the provider fails (Cloudflare
+   * answers an error or not within 5 s) the socket gets `unavailable` and the failure is
+   * logged, without any secret. coturn REST credentials cannot be revoked; rotating the
+   * secret is the only way to cut them off early.
    */
-  turn?: { secret: string; urls: string[]; ttlSeconds?: number }
+  turn?: TurnProvider
   /** STUN urls handed to authenticated sockets. */
   stunUrls?: string[]
   limits?: Partial<RelayLimits>
@@ -217,6 +219,11 @@ interface Client {
   rate: TokenBucket
   /** Frames over the rate sent in a row. */
   overRate: number
+  /**
+   * Replies waiting, oldest first, behind one that is still being prepared (TURN
+   * credentials from a provider); empty otherwise. See `send`.
+   */
+  replies: Array<{ frame: RelayServerFrame | undefined }>
   /** Payload of the last ping sent; only a pong echoing it proves the socket is alive. */
   ping: Buffer | undefined
   alive: boolean
@@ -276,15 +283,8 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
   const pathPart = path === '/' ? '' : path
   const publicUrls = (o.publicUrls ?? []).map(normalizeRelayUrl)
   const stunUrls = [...(o.stunUrls ?? [])]
-  const turn = o.turn
-  const turnTtl = turn?.ttlSeconds ?? DEFAULT_TURN_TTL_SECONDS
-  if (turn !== undefined) {
-    if (!Array.isArray(turn.urls) || turn.urls.length === 0) {
-      throw new TypeError('turn.urls must list at least one TURN url')
-    }
-    // Validates the secret and ttl now rather than on the first request.
-    turnCredentials({ secret: turn.secret, identityKey: '', ttlSeconds: turnTtl })
-  }
+  // Validates the provider now rather than on the first request.
+  const turn = o.turn === undefined ? undefined : turnIssuer(o.turn)
   if (o.trustedIpHeader !== undefined && !isHeaderName(o.trustedIpHeader)) {
     throw new TypeError('trustedIpHeader must be an HTTP header name')
   }
@@ -406,6 +406,7 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
       group,
       rate: new TokenBucket(limits.rateMessages, limits.rateWindowMs),
       overRate: 0,
+      replies: [],
       ping: undefined,
       alive: true,
       authTimer: undefined
@@ -447,7 +448,9 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
     const allowed = client.rate.take()
     switch (client.stage) {
       case 'auth':
-        void authenticate(client, data, isBinary)
+        // Nothing awaits this, and an unhandled rejection ends a Node process. A failure no
+        // check above expects leaves the socket in no known state, so it is cut off.
+        authenticate(client, data, isBinary).catch(() => client.ws.terminate())
         return
       case 'verifying':
         refuseAuth(client)
@@ -606,10 +609,12 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
   }
 
   /**
-   * Answer `{ t: 'turn' }` with the STUN servers plus fresh TURN credentials. TURN
-   * relays traffic on our infrastructure and identities are free, so what limits it is
-   * an hourly budget per source address and one in total, short-lived credentials and
-   * a username coturn can count per identity (Ruling 27).
+   * Answer `{ t: 'turn' }` with the STUN servers plus fresh TURN credentials and when they
+   * expire. TURN relays traffic that we pay for and identities are free, so what limits it
+   * is an hourly budget per source address and one in total, spent before the provider is
+   * asked (a request it fails costs a credential too), short-lived credentials and, for
+   * coturn, a username it can count per identity (Ruling 27). A provider that fails gets
+   * the socket `unavailable`.
    */
   function vendTurn(client: Client): void {
     if (turn === undefined) {
@@ -628,23 +633,60 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
       return
     }
     for (const b of buckets) b.take(now)
-    const { username, credential } = turnCredentials({
-      secret: turn.secret,
-      // set when the socket authenticated, before any frame reaches here
-      identityKey: client.identityKey as PubKeyHex,
-      ttlSeconds: turnTtl,
-      now
-    })
-    const servers = [...stunServers(), { urls: [...turn.urls], username, credential }]
-    send(client, { t: 'ice', iceServers: servers })
+    const answer = replyLater(client)
+    // set when the socket authenticated, before any frame reaches here
+    turn
+      .issue(client.identityKey as PubKeyHex)
+      .then(
+        ({ iceServers, expiresAt }) => {
+          answer({ t: 'ice', iceServers: [...stunServers(), ...iceServers], expiresAt })
+        },
+        (err: unknown) => {
+          // The reply comes first: it fills the place the socket's later replies wait
+          // behind, so a log hook that throws cannot leave them waiting for ever.
+          answer({ t: 'error', code: 'unavailable' })
+          // issuers reject with messages that hold no secret (see TurnIssuer)
+          const why = err instanceof Error ? err.message : 'unknown error'
+          log(`webrtpay relay: could not get TURN credentials from ${turn.kind}: ${why}`)
+        }
+      )
+      // Nothing awaits this chain, and an unhandled rejection ends a Node process: whatever
+      // `answer` or the log hook throws stops here, on purpose. The reply has gone first, and
+      // a log hook that threw is no use for reporting this.
+      .catch(() => {})
   }
 
   function stunServers(): RelayIceServer[] {
     return stunUrls.length > 0 ? [{ urls: [...stunUrls] }] : []
   }
 
-  function send(client: Client, frame: RelayServerFrame): boolean {
-    return write(client, JSON.stringify(frame))
+  /**
+   * Send `frame` to `client`, after the replies it is waiting behind. Clients match
+   * replies to their frames in order, so while a reply is still being prepared (see
+   * `replyLater`) the replies to later frames wait for it; signals forwarded to the socket
+   * are not replies and do not wait.
+   */
+  function send(client: Client, frame: RelayServerFrame): void {
+    if (client.replies.length > 0) client.replies.push({ frame })
+    else write(client, JSON.stringify(frame))
+  }
+
+  /**
+   * Hold `client`'s place for a reply that is not ready yet: replies sent after this wait
+   * until the returned function sends this one.
+   */
+  function replyLater(client: Client): (frame: RelayServerFrame) => void {
+    const slot: { frame: RelayServerFrame | undefined } = { frame: undefined }
+    client.replies.push(slot)
+    return frame => {
+      slot.frame = frame
+      let head = client.replies[0]
+      while (head?.frame !== undefined) {
+        client.replies.shift()
+        write(client, JSON.stringify(head.frame))
+        head = client.replies[0]
+      }
+    }
   }
 
   /**
@@ -745,6 +787,9 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
         : ' (WARNING: no publicUrls, so clients sign a url built from the Host header; ' +
           'set publicUrls in production and whenever a proxy fronts this relay)')
   )
+  if (turn !== undefined) {
+    log(`webrtpay relay: TURN credentials from ${turn.kind}, valid ${turn.ttlSeconds} s`)
+  }
   // A relay with public urls usually sits behind a proxy, whose address every client then has.
   if (publicUrls.length > 0 && trustedIpHeader === undefined) {
     log(

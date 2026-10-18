@@ -1,4 +1,6 @@
 import { createHmac } from 'node:crypto'
+import type { RelayIceServer } from '../src/signaling/RelaySignaler.js'
+import { cloudflareTurnIssuer } from './cloudflare.js'
 
 /** Ephemeral TURN credentials in coturn's REST API (`use-auth-secret`) format. */
 export interface TurnCredentials {
@@ -10,8 +12,65 @@ export interface TurnCredentials {
   expiresAt: number
 }
 
+/**
+ * Credentials minted by the relay itself for a coturn configured with `use-auth-secret`
+ * and `static-auth-secret=<secret>` (see {@link turnCredentials}), for `urls`.
+ */
+export interface CoturnRestTurnProvider {
+  kind: 'coturn-rest'
+  secret: string
+  /** TURN urls the credentials are for, e.g. `turn:turn.example.com:3478`. */
+  urls: string[]
+  /** Lifetime of each set, in seconds; default 600. */
+  ttlSeconds?: number
+}
+
+/**
+ * Credentials from Cloudflare Realtime TURN, which the relay asks for with a TURN key
+ * (`keyId`, and `apiToken`, the key's API token) each time a client asks it for TURN.
+ * Cloudflare chooses the urls (`turn.cloudflare.com`).
+ */
+export interface CloudflareTurnProvider {
+  kind: 'cloudflare'
+  keyId: string
+  /** Never logged, and never sent anywhere but to Cloudflare. */
+  apiToken: string
+  /** Lifetime of each set, in seconds; default 600, at most 172800 (48 hours, Cloudflare's limit). */
+  ttlSeconds?: number
+  /** `fetch` to call Cloudflare with; defaults to the global one. */
+  fetch?: typeof fetch
+}
+
+/** Where the relay gets the TURN credentials it issues. */
+export type TurnProvider = CoturnRestTurnProvider | CloudflareTurnProvider
+
+/** One set of TURN credentials, as the relay hands it out. */
+export interface TurnIssue {
+  /** The provider's ICE servers: TURN, after any STUN it lists. */
+  iceServers: RelayIceServer[]
+  /** When the TURN credentials stop working, in Unix milliseconds. */
+  expiresAt: number
+}
+
+/** Issues TURN credentials from a {@link TurnProvider}. */
+export interface TurnIssuer {
+  readonly kind: TurnProvider['kind']
+  /** Lifetime of the credentials `issue` returns, in seconds. */
+  readonly ttlSeconds: number
+  /**
+   * Fresh credentials for `identityKey`. Rejects with an `Error` whose message says what
+   * went wrong and holds no secret, credential or url, so it may be logged.
+   */
+  issue(identityKey: string): Promise<TurnIssue>
+}
+
 /** Default lifetime of TURN credentials, in seconds. */
 const TURN_TTL_SECONDS = 3600
+/**
+ * Lifetime of the TURN credentials the relay issues, in seconds, unless `turn.ttlSeconds`
+ * says otherwise.
+ */
+export const DEFAULT_TURN_TTL_SECONDS = 600
 /** Domain separation for the username pseudonym. */
 const PSEUDONYM_PREFIX = 'webrtpay-turn-user|'
 /** Characters of the pseudonym kept: 132 bits of base64url. */
@@ -55,5 +114,47 @@ export function turnCredentials(o: {
     username,
     credential: createHmac('sha1', o.secret).update(username).digest('base64'),
     expiresAt: expiry * 1000
+  }
+}
+
+/**
+ * An issuer for `provider`. Throws `TypeError` or `RangeError` for a provider it could not
+ * issue for (no secret, no urls, a malformed key id or token, a bad ttl), without naming
+ * any secret; it calls nothing until the first `issue`.
+ */
+export function turnIssuer(provider: TurnProvider): TurnIssuer {
+  const ttl = provider.ttlSeconds ?? DEFAULT_TURN_TTL_SECONDS
+  if (!Number.isSafeInteger(ttl) || ttl <= 0) {
+    throw new RangeError('turn.ttlSeconds must be a positive whole number of seconds')
+  }
+  switch (provider.kind) {
+    case 'coturn-rest':
+      return coturnRestIssuer(provider, ttl)
+    case 'cloudflare':
+      return cloudflareTurnIssuer(provider, ttl)
+    default:
+      throw new TypeError("turn.kind must be 'coturn-rest' or 'cloudflare'")
+  }
+}
+
+function coturnRestIssuer(p: CoturnRestTurnProvider, ttlSeconds: number): TurnIssuer {
+  if (!Array.isArray(p.urls) || p.urls.length === 0) {
+    throw new TypeError('turn.urls must list at least one TURN url')
+  }
+  // Validates the secret now rather than on the first request.
+  turnCredentials({ secret: p.secret, identityKey: '', ttlSeconds })
+  const { secret } = p
+  const urls = [...p.urls]
+  return {
+    kind: 'coturn-rest',
+    ttlSeconds,
+    async issue(identityKey) {
+      const { username, credential, expiresAt } = turnCredentials({
+        secret,
+        identityKey,
+        ttlSeconds
+      })
+      return { iceServers: [{ urls: [...urls], username, credential }], expiresAt }
+    }
   }
 }

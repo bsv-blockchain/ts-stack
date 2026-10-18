@@ -90,7 +90,9 @@ const PRE_AUTH_BYTES = 65536
   })
 
   it('pays through RelaySignalers over TURN with RelaySignaler.turnProvider as iceServersProvider', async () => {
-    const relay = await fixtures.relay({ turn: { secret: SECRET, urls: [TURN_URL] } })
+    const relay = await fixtures.relay({
+      turn: { kind: 'coturn-rest', secret: SECRET, urls: [TURN_URL] }
+    })
     const { rtc, peers } = await turnRtc()
     let provided = 0
     const party = (w: TestWallet): DirectPayClient => {

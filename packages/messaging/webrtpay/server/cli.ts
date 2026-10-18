@@ -3,8 +3,10 @@ import { relayOptionsFromEnv, relayUsage } from './env.js'
 import { createRelayServer } from './relay.js'
 
 // webrtpay-relay: configured by environment variables (`--help` lists them; see
-// relayOptionsFromEnv). It refuses to start without PUBLIC_URLS unless HOST is a
-// loopback address. SIGTERM or SIGINT closes it.
+// relayOptionsFromEnv), among them TURN_PROVIDER (coturn: TURN_SECRET and TURN_URLS;
+// cloudflare: CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN). It refuses to start
+// without PUBLIC_URLS unless HOST is a loopback address, and with a half-configured TURN
+// provider. SIGTERM or SIGINT closes it.
 if (process.argv.slice(2).some(arg => arg === '--help' || arg === '-h')) {
   console.log(relayUsage())
   process.exit(0)

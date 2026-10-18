@@ -12,6 +12,8 @@ export type WebRTPayErrorCode =
   | 'rate_limited'
   | 'too_large'
   | 'unsupported'
+  /** A service it depends on (a relay's TURN provider) could not serve it just then. */
+  | 'unavailable'
 
 /**
  * The only error type this package throws or rejects with for expected failures

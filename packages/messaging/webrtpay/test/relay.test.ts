@@ -5,8 +5,10 @@ import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { ProtoWallet } from '@bsv/sdk'
 import { DEFAULT_RELAY_LIMITS, createRelayServer, turnCredentials } from '../server/index.js'
+import type { CloudflareTurnProvider } from '../server/index.js'
 import { DEFAULT_HOST, relayOptionsFromEnv, relayUsage } from '../server/env.js'
-import { DEFAULT_RELAY_PORT, DEFAULT_TURN_TTL_SECONDS, isLoopbackHost } from '../server/relay.js'
+import { DEFAULT_RELAY_PORT, isLoopbackHost } from '../server/relay.js'
+import { DEFAULT_TURN_TTL_SECONDS } from '../server/turn.js'
 import { RelaySignaler, relayAuthData } from '../src/signaling/RelaySignaler.js'
 import type { RelaySignalerOptions } from '../src/signaling/RelaySignaler.js'
 import {
@@ -454,7 +456,7 @@ describe('relay', () => {
     it('sends only the STUN urls in ice after authentication, even with TURN configured', async () => {
       const r = await relay({
         stunUrls: ['stun:127.0.0.1:3478'],
-        turn: { secret: 'turn-secret', urls: ['turn:127.0.0.1:3478'] }
+        turn: { kind: 'coturn-rest', secret: 'turn-secret', urls: ['turn:127.0.0.1:3478'] }
       })
       const a = rawAt(r.url)
       await authenticate(a, alice, r.url)
@@ -791,6 +793,8 @@ class FakeSocket {
   static turnServers: RTCIceServer[] = []
   /** When set, a `turn` request is answered with this error code instead. */
   static turnError: string | undefined
+  /** When set, the `ice` answering a `turn` request carries it as `expiresAt`. */
+  static turnExpiresAt: unknown
 
   readyState = 0
   readonly frames: Array<Record<string, unknown>> = []
@@ -832,7 +836,14 @@ class FakeSocket {
       } else if (frame.t === 'turn') {
         if (FakeSocket.turnError !== undefined) {
           this.message({ t: 'error', code: FakeSocket.turnError })
-        } else this.message({ t: 'ice', iceServers: FakeSocket.turnServers })
+        } else {
+          const expiresAt = FakeSocket.turnExpiresAt
+          this.message({
+            t: 'ice',
+            iceServers: FakeSocket.turnServers,
+            ...(expiresAt === undefined ? {} : { expiresAt })
+          })
+        }
       } else if (frame.t === 'signal' && FakeSocket.mode === 'confused') {
         this.message({ t: 'ice', iceServers: [] })
       } else if (frame.t === 'signal' && FakeSocket.mode !== 'mute') {
@@ -881,6 +892,7 @@ describe('RelaySignaler connection lifecycle', () => {
     FakeSocket.mode = 'up'
     FakeSocket.turnServers = []
     FakeSocket.turnError = undefined
+    FakeSocket.turnExpiresAt = undefined
     jest.useFakeTimers()
   })
 
@@ -1216,6 +1228,73 @@ describe('RelaySignaler connection lifecycle', () => {
       await s.close()
     })
 
+    /** TURN as Cloudflare issues it: hex credentials with no expiry inside. */
+    const opaque: RTCIceServer = {
+      urls: ['turn:turn.example:3478?transport=udp'],
+      username: 'ab'.repeat(48),
+      credential: 'cd'.repeat(48)
+    }
+
+    it('drops TURN servers 30 s before the expiresAt of the ice frame that listed them', async () => {
+      FakeSocket.turnServers = [stun, opaque]
+      FakeSocket.turnExpiresAt = T0 + 60_000
+      const s = fake()
+      await s.connect()
+      expect(await s.requestTurn()).toEqual(FakeSocket.turnServers)
+      expect(s.iceServers()).toEqual(FakeSocket.turnServers)
+
+      await jest.advanceTimersByTimeAsync(29_999)
+      expect(s.iceServers()).toEqual(FakeSocket.turnServers)
+      await jest.advanceTimersByTimeAsync(1)
+      expect(s.iceServers()).toEqual([stun])
+      await s.close()
+    })
+
+    it('turnProvider goes by expiresAt rather than the expiry in a coturn REST username', async () => {
+      // the username says an hour, the relay says a minute
+      FakeSocket.turnServers = [stun, turn(1_790_003_600)]
+      FakeSocket.turnExpiresAt = T0 + 60_000
+      const s = fake()
+      const provide = s.turnProvider()
+      expect(await provide()).toEqual(FakeSocket.turnServers)
+      await jest.advanceTimersByTimeAsync(29_999)
+      expect(await provide()).toEqual(FakeSocket.turnServers)
+      expect(turnRequests()).toBe(1)
+      await jest.advanceTimersByTimeAsync(1)
+      expect(s.iceServers()).toEqual([stun])
+      expect(await provide()).toEqual(FakeSocket.turnServers)
+      expect(turnRequests()).toBe(2)
+      await s.close()
+    })
+
+    it('refuses a turn answer whose expiresAt is not a time, and stays connected', async () => {
+      FakeSocket.turnServers = [stun, opaque]
+      const s = fake()
+      await s.connect()
+      for (const expiresAt of ['soon', -1, 0, 1.5, null, 2 ** 53]) {
+        FakeSocket.turnExpiresAt = expiresAt
+        await expect(s.requestTurn()).rejects.toMatchObject({ code: 'protocol' })
+      }
+      FakeSocket.turnExpiresAt = T0 + 60_000
+      expect(await s.requestTurn()).toEqual(FakeSocket.turnServers)
+      expect(FakeSocket.instances).toHaveLength(1)
+      await s.close()
+    })
+
+    it('rejects unavailable when the relay could not get TURN credentials, and stays connected', async () => {
+      FakeSocket.turnServers = [stun, opaque]
+      FakeSocket.turnError = 'unavailable'
+      const s = fake()
+      await s.connect()
+      const failed = s.requestTurn()
+      await expect(failed).rejects.toBeInstanceOf(WebRTPayError)
+      await expect(failed).rejects.toMatchObject({ code: 'unavailable' })
+      FakeSocket.turnError = undefined
+      expect(await s.requestTurn()).toEqual(FakeSocket.turnServers)
+      expect(FakeSocket.instances).toHaveLength(1)
+      await s.close()
+    })
+
     it('turnProvider asks again after a failed request, and rejects closed after close', async () => {
       FakeSocket.turnServers = [stun, turn(1_790_000_600)]
       FakeSocket.turnError = 'rate_limited'
@@ -1385,6 +1464,7 @@ describe('relayOptionsFromEnv', () => {
       trustedIpHeader: 'CF-Connecting-IP',
       stunUrls: ['stun:a.example:3478'],
       turn: {
+        kind: 'coturn-rest',
         secret: 'secret',
         urls: ['turn:a.example:3478', 'turns:a.example:5349'],
         ttlSeconds: 600
@@ -1497,6 +1577,138 @@ describe('relayOptionsFromEnv', () => {
     }
   })
 
+  it('reads a Cloudflare TURN provider from TURN_PROVIDER=cloudflare', () => {
+    const at = { HOST: '127.0.0.1' }
+    expect(
+      relayOptionsFromEnv({
+        ...at,
+        TURN_PROVIDER: ' cloudflare ',
+        CLOUDFLARE_TURN_KEY_ID: ' 0123abcd ',
+        // a secret mounted from a file often ends in a newline
+        CLOUDFLARE_TURN_API_TOKEN: 'token-value\n',
+        TURN_TTL: '900',
+        TURN_PER_IP_PER_HOUR: '12'
+      })
+    ).toEqual({
+      port: 8787,
+      host: '127.0.0.1',
+      turn: { kind: 'cloudflare', keyId: '0123abcd', apiToken: 'token-value', ttlSeconds: 900 },
+      limits: { turnPerIpPerHour: 12 }
+    })
+    expect(
+      relayOptionsFromEnv({
+        ...at,
+        TURN_PROVIDER: 'cloudflare',
+        CLOUDFLARE_TURN_KEY_ID: 'k',
+        CLOUDFLARE_TURN_API_TOKEN: 't'
+      }).turn
+    ).toEqual({ kind: 'cloudflare', keyId: 'k', apiToken: 't' })
+  })
+
+  it('uses coturn REST by default when TURN_SECRET is set, and with TURN_PROVIDER=coturn', () => {
+    const coturn = { HOST: '127.0.0.1', TURN_SECRET: 's', TURN_URLS: 'turn:a.example:3478' }
+    const expected = { kind: 'coturn-rest', secret: 's', urls: ['turn:a.example:3478'] }
+    expect(relayOptionsFromEnv(coturn).turn).toEqual(expected)
+    expect(relayOptionsFromEnv({ ...coturn, TURN_PROVIDER: 'coturn' }).turn).toEqual(expected)
+    expect(() => relayOptionsFromEnv({ HOST: '127.0.0.1', TURN_PROVIDER: 'coturn' })).toThrow(
+      'TURN_SECRET is required when TURN_PROVIDER is set'
+    )
+  })
+
+  it('refuses a half-configured or mixed TURN provider, naming no secret', () => {
+    const id = { CLOUDFLARE_TURN_KEY_ID: 'k' }
+    const token = { CLOUDFLARE_TURN_API_TOKEN: 'secret-token' }
+    const coturn = { TURN_SECRET: 'secret-token', TURN_URLS: 'turn:a.example:3478' }
+    const cases: Array<[Record<string, string>, string]> = [
+      [
+        { TURN_PROVIDER: 'cloudflare' },
+        'CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN are required when TURN_PROVIDER=cloudflare'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', ...id },
+        'CLOUDFLARE_TURN_API_TOKEN is required when TURN_PROVIDER=cloudflare'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', ...token },
+        'CLOUDFLARE_TURN_KEY_ID is required when TURN_PROVIDER=cloudflare'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', ...id, CLOUDFLARE_TURN_API_TOKEN: ' ' },
+        'CLOUDFLARE_TURN_API_TOKEN is required when TURN_PROVIDER=cloudflare'
+      ],
+      [
+        { ...id, ...token },
+        'TURN_PROVIDER=cloudflare is required when CLOUDFLARE_TURN_KEY_ID or CLOUDFLARE_TURN_API_TOKEN is set'
+      ],
+      [token, 'TURN_PROVIDER=cloudflare is required when CLOUDFLARE_TURN_API_TOKEN is set'],
+      [
+        { TURN_PROVIDER: 'coturn', ...coturn, ...id, ...token },
+        'TURN_PROVIDER=cloudflare is required when CLOUDFLARE_TURN_KEY_ID or'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', ...id, ...token, TURN_SECRET: 'secret-token' },
+        'TURN_SECRET is for TURN_PROVIDER=coturn'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', ...id, ...token, TURN_URLS: 'turn:a.example:3478' },
+        'TURN_URLS is for TURN_PROVIDER=coturn'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', ...id, ...token, ...coturn },
+        'TURN_SECRET and TURN_URLS are for TURN_PROVIDER=coturn'
+      ],
+      [{ TURN_PROVIDER: 'twilio' }, 'TURN_PROVIDER must be coturn or cloudflare'],
+      [
+        { TURN_PROVIDER: 'Cloudflare', ...id, ...token },
+        'TURN_PROVIDER must be coturn or cloudflare'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', ...id, ...token, TURN_TTL: '0' },
+        'TURN_TTL must be a whole number'
+      ],
+      [{ TURN_TTL: '600' }, 'or set TURN_PROVIDER=cloudflare']
+    ]
+    for (const [vars, message] of cases) {
+      let thrown: unknown
+      try {
+        relayOptionsFromEnv({ HOST: '127.0.0.1', ...vars })
+      } catch (e) {
+        thrown = e
+      }
+      expect([vars, (thrown as Error | undefined)?.message]).toEqual([
+        vars,
+        expect.stringContaining(message)
+      ])
+      expect((thrown as Error).message).not.toContain('secret-token')
+    }
+  })
+
+  it('starts a relay with a Cloudflare provider without asking Cloudflare anything', async () => {
+    const logs: string[] = []
+    const fetch = jest.fn<typeof globalThis.fetch>()
+    const options = relayOptionsFromEnv({
+      HOST: '127.0.0.1',
+      PORT: '0',
+      TURN_PROVIDER: 'cloudflare',
+      CLOUDFLARE_TURN_KEY_ID: '0123456789abcdef0123456789abcdef',
+      CLOUDFLARE_TURN_API_TOKEN: 'secret-token'
+    })
+    const r = await createRelayServer({
+      ...options,
+      turn: { ...(options.turn as CloudflareTurnProvider), fetch },
+      log: line => logs.push(line)
+    })
+    try {
+      expect(logs).toContainEqual(
+        expect.stringContaining('TURN credentials from cloudflare, valid 600 s')
+      )
+      expect(logs.join('\n')).not.toContain('secret-token')
+      expect(fetch).not.toHaveBeenCalled()
+    } finally {
+      await r.close()
+    }
+  })
+
   it('rejects an invalid port or ttl and TURN settings without their pair', () => {
     for (const PORT of ['abc', '-1', '65536', '1.5']) {
       expect(() => relayOptionsFromEnv({ PORT })).toThrow('PORT')
@@ -1530,10 +1742,33 @@ describe('relayUsage (webrtpay-relay --help)', () => {
 
   it('lists exactly the variables relayOptionsFromEnv reads', () => {
     const named = [...relayUsage().matchAll(/^ {2}([A-Z][A-Z0-9_]*)\b/gm)].map(m => m[1]).sort()
-    // with TURN configured, every variable is read, the TURN limits included
-    const read = variablesRead({ HOST: '127.0.0.1', TURN_SECRET: 's', TURN_URLS: 'turn:a:3478' })
-    expect(read).toContain('TURN_PER_HOUR')
-    expect(named).toEqual(read)
+    // with TURN configured, every variable is read, the TURN limits included, whichever
+    // provider it is
+    const coturn = variablesRead({ HOST: '127.0.0.1', TURN_SECRET: 's', TURN_URLS: 'turn:a:3478' })
+    const cloudflare = variablesRead({
+      HOST: '127.0.0.1',
+      TURN_PROVIDER: 'cloudflare',
+      CLOUDFLARE_TURN_KEY_ID: 'key-id',
+      CLOUDFLARE_TURN_API_TOKEN: 'token'
+    })
+    expect(coturn).toContain('TURN_PER_HOUR')
+    expect(coturn).toContain('CLOUDFLARE_TURN_API_TOKEN')
+    expect(named).toEqual(coturn)
+    expect(named).toEqual(cloudflare)
+  })
+
+  it('says what each TURN provider needs, and that the TURN limits need one of them', () => {
+    const usage = relayUsage()
+    const line = (name: string): string =>
+      usage.split('\n').find(l => l.startsWith(`  ${name} `)) ?? ''
+    expect(line('TURN_PROVIDER')).toMatch(/coturn.*cloudflare/)
+    expect(line('TURN_SECRET')).toContain('refused with TURN_PROVIDER=cloudflare')
+    expect(line('TURN_URLS')).toContain('refused with TURN_PROVIDER=cloudflare')
+    expect(line('CLOUDFLARE_TURN_KEY_ID')).toContain('requires TURN_PROVIDER=cloudflare')
+    expect(line('CLOUDFLARE_TURN_API_TOKEN')).toContain('requires TURN_PROVIDER=cloudflare')
+    for (const name of ['TURN_PER_IP_PER_HOUR', 'TURN_PER_48_PER_HOUR', 'TURN_PER_HOUR']) {
+      expect(line(name)).toMatch(/, requires a TURN provider$/)
+    }
   })
 
   it('gives the limit defaults of DEFAULT_RELAY_LIMITS and how to stop the relay', () => {

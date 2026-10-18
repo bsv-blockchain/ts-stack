@@ -829,11 +829,17 @@ Relay → client:
 ```json
 { "t": "challenge", "nonce": "<base64url of 32 random bytes, 43 characters>" }
 { "t": "ready", "identityKey": "<the authenticated key>" }
-{ "t": "ice", "iceServers": [{ "urls": ["stun:…"] }, { "urls": ["turn:…"], "username": "…", "credential": "…" }] }
+{ "t": "ice", "iceServers": [{ "urls": ["stun:…"] }] }
+{ "t": "ice", "iceServers": [{ "urls": ["stun:…"] }, { "urls": ["turn:…"], "username": "…", "credential": "…" }], "expiresAt": 1790000600000 }
 { "t": "signal", "from": "<sender key>", "envelope": { "v": 1, "sid": "…", "ciphertext": "…" } }
 { "t": "sent", "ref": "<sid>" }
 { "t": "error", "code": "offline", "ref": "<sid>" }
+{ "t": "error", "code": "unavailable" }
 ```
+
+`expiresAt` (Unix milliseconds, a positive whole number) is on every `ice` that lists TURN
+servers: their credentials stop working then. A client treats a present `expiresAt` that is
+not such a number as a malformed frame.
 
 Client → relay:
 
@@ -894,8 +900,14 @@ Each client frame gets exactly one reply, in the order the frames were sent.
 - Without TURN configured: `ice` with the STUN servers.
 - Otherwise, within the source's budget (6 an hour unless `TURN_PER_IP_PER_HOUR` says
   otherwise), for IPv6 its /48's (24 an hour), and the relay's (600 an hour): `ice` with the
-  STUN servers followed by `{ urls: TURN_URLS, username, credential }`; past any budget,
-  `rate_limited`.
+  STUN servers followed by the provider's servers (§8.7), and `expiresAt`; past any budget,
+  `rate_limited`. The budgets are spent before the provider is asked.
+- A provider that fails (Cloudflare answers other than 200 or 201, not within 5 s, with more
+  than 64 KiB, or with no TURN server) gets `{ "t": "error", "code": "unavailable" }`, without
+  `ref`: a `turn` frame carries no envelope. The socket stays open; the relay logs what
+  failed, never the API token or the credentials.
+- The answer can take up to 5 s. Signals the socket sends meanwhile are forwarded at once, but
+  their replies wait behind the `turn` reply, so replies stay in frame order.
 
 A frame over the socket's rate (20 per 10 s, refilled continuously) gets `rate_limited` and is
 dropped, as long as the socket has sent at most 20 such frames in a row; the next closes the
@@ -914,6 +926,7 @@ or not, is cut off.
 | `offline`      | `to` is not connected, no socket of `to` took the signal, or `to`'s total is spent | yes                              | `peer_unreachable`           |
 | `rate_limited` | the sender's share of `to`                                                         | yes                              | `rate_limited`               |
 | `rate_limited` | socket rate, 5 sockets per identity, TURN budgets                                  | no                               | `rate_limited`               |
+| `unavailable`  | the TURN provider could not issue credentials (§8.4)                               | no                               | `unavailable`                |
 
 Any other code maps to `protocol`. `offline` tells any authenticated key whether another key
 is connected right now; it is kept on purpose so a dial to a payee who is not listening fails
@@ -928,18 +941,46 @@ queued (also checked before each write). Pings from a client are answered only w
 
 ### 8.7 TURN credentials
 
-coturn REST credentials (`use-auth-secret`, `static-auth-secret=<TURN_SECRET>`):
+`TURN_PROVIDER` chooses where they come from: `coturn` (the default when `TURN_SECRET` is set)
+or `cloudflare`. The relay refuses to start with a half-configured or mixed provider. The TTL is
+600 s unless `TURN_TTL` says otherwise.
+
+**coturn REST** (`use-auth-secret`, `static-auth-secret=<TURN_SECRET>`), one entry with
+`TURN_URLS`:
 
 ```
 username   = "<expiry>:<pseudonym>"
 expiry     = floor(now / 1000) + ttl                     (Unix seconds)
 pseudonym  = first 22 characters of base64url(HMAC-SHA256(secret, "webrtpay-turn-user|" + identityKey))
 credential = base64(HMAC-SHA1(secret, username))
+expiresAt  = expiry × 1000
 ```
 
 The username never contains the identity key, but the pseudonym is the same for every expiry,
-so coturn's `--user-quota` still counts per identity. The relay's TTL is 600 s (`TURN_TTL`);
-`turnCredentials()` called directly defaults to 3600 s.
+so coturn's `--user-quota` still counts per identity. `turnCredentials()` called directly
+defaults to 3600 s.
+
+**Cloudflare Realtime TURN** (`CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`). For each
+`turn` request the relay sends:
+
+```
+POST https://rtc.live.cloudflare.com/v1/turn/keys/<key id>/credentials/generate-ice-servers
+Authorization: Bearer <API token>
+Content-Type: application/json
+
+{"ttl":<min(ttl, 172800)>}
+```
+
+It accepts `200` or `201` within 5 s, body included, and reads at most 64 KiB of the body (a
+larger `content-length`, or more bytes than that, counts as a failure). `iceServers` in the
+answer may be a list (today a STUN entry and a TURN entry; until 2025 one entry mixing both)
+or a single object. Every url on port 53 (blocked by browsers) and of a scheme other than
+`stun:`, `stuns:`, `turn:` or `turns:` is dropped; the STUN urls become one `{ urls }` entry,
+and each entry's TURN urls become `{ urls, username, credential }` when it has both. At most
+8 TURN urls are kept in all, the first listed. An answer without a TURN entry counts as a
+failure. The usernames are 96 hex characters with no expiry inside, and the answer carries
+no lifetime, so `expiresAt` = the time the relay sent the request + ttl × 1000. The identity
+key is never sent to Cloudflare.
 
 ### 8.8 Client behaviour (`RelaySignaler`)
 
@@ -958,11 +999,13 @@ so coturn's `--user-quota` still counts per identity. The relay's TTL is 600 s (
   connection or the attempt (for example `auth_failed` from the relay).
 - Runs the app's `onIceServers` and `onStateChange` callbacks so that a throw cannot stop the
   handshake or a `turn` request; what they throw goes to `onCallbackError`.
-- Treats a TURN server whose REST username (`<expiry>:…`) expires within 30 s as expired.
-  `iceServers()` is the list from the latest `ice` frame (a new connection's STUN-only frame
-  replaces an earlier TURN answer). `turnProvider()` keeps the last `turn` answer across
-  connections and sends a new `turn` only when that answer holds no TURN server with more than
-  30 s left; concurrent callers share one request, and a refused one is not kept.
+- Treats a TURN server as expired 30 s before its expiry: the `expiresAt` of the `ice` frame
+  that listed it or, in a frame without one, the expiry a REST username (`<expiry>:…`) starts
+  with; a server with neither never expires. `iceServers()` is the list from the latest `ice`
+  frame (a new connection's STUN-only frame replaces an earlier TURN answer). `turnProvider()`
+  keeps the last `turn` answer across connections and sends a new `turn` only when that answer
+  holds no TURN server with more than 30 s left; concurrent callers share one request, and a
+  refused one (`rate_limited`, `unavailable`) is not kept.
 
 ## 9. Timers and limits
 
@@ -999,6 +1042,8 @@ so coturn's `--user-quota` still counts per identity. The relay's TTL is 600 s (
 | Relay: signals to one identity from one sender / from all                       | 6 / 120 a minute                                |
 | Relay: queued bytes per socket / ping interval                                  | 1 MiB / 30 s                                    |
 | Relay: TURN credentials per source / per /48 / in total / lifetime              | 6 / 24 / 600 an hour / 600 s                    |
+| Relay: Cloudflare credentials request / longest lifetime                        | 5 s / 172800 s (48 h)                           |
+| Relay: Cloudflare answer read / TURN urls forwarded                             | 64 KiB / 8                                      |
 | `RelaySignaler`: TURN servers count as expired                                  | 30 s before their expiry                        |
 | `iceServersProvider` wait before gathering without it                           | 5 s                                             |
 
@@ -1020,3 +1065,4 @@ Every expected failure is a `WebRTPayError` with one of these `code`s:
 | `rate_limited`     | a limit was reached                                                                                                                    |
 | `too_large`        | a message, code, envelope or direct transaction over its size limit                                                                    |
 | `unsupported`      | a missing capability (no `RTCPeerConnection`, no signaler, no handlers)                                                                |
+| `unavailable`      | a service it depends on could not serve it just then: the relay's TURN provider (try again later)                                      |

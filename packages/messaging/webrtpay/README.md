@@ -311,9 +311,13 @@ while subscribed, while a send is in flight, or after `connect()`. Options: `url
 - The relay answers each frame in order; a reply that does not match ends the connection with
   `protocol` rather than being matched to a later frame.
 - `requestTurn()` asks for TURN credentials, spending one of this address's credentials, and
-  resolves with the full ICE server list. `iceServers()` returns the latest list without TURN
-  entries that expire within 30 s; every new connection resets it to the relay's STUN servers.
-  `turnProvider()` returns the `iceServersProvider` to give a `DirectPayClient` (below).
+  resolves with the full ICE server list. It rejects `rate_limited` when the relay's budget is
+  spent and `unavailable` when the relay's TURN provider (Cloudflare) could not issue
+  credentials just then. `iceServers()` returns the latest list without TURN entries that
+  expire within 30 s, going by the `expiresAt` the relay sends with them (or, from an older
+  relay, the expiry in a coturn REST username); every new connection resets it to the relay's
+  STUN servers. `turnProvider()` returns the `iceServersProvider` to give a `DirectPayClient`
+  (below).
 
 Anything with `send`, `listen` and optionally `setActive` can be a signaler; see `Signaler` in
 [`src/signaling/types.ts`](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/messaging/webrtpay/src/signaling/types.ts).
@@ -351,14 +355,17 @@ The provider's servers are merged with `rtc.iceServers`; an entry with the same 
 replaced by the provider's. A provider that throws, rejects, returns something other than an
 array or takes more than 5 s is passed over and the gather uses `rtc.iceServers` alone, so a
 dial never fails because of it. `onIceServersProviderError` is told why each time: what the
-provider threw or rejected with (`rate_limited` once the relay's budget is spent), a
-`TypeError` for a result that is not an array, or a `timeout` `WebRTPayError` after 5 s.
+provider threw or rejected with (`rate_limited` once the relay's budget is spent,
+`unavailable` when the relay's TURN provider failed), a `TypeError` for a result that is not
+an array, or a `timeout` `WebRTPayError` after 5 s.
 
 **Node with node-datachannel.** Its polyfill hands each TURN server to libdatachannel as a
 `turn:<username>:<credential>@host` url, which cuts a REST username (`<expiry>:<pseudonym>`)
 at its colon, so coturn refuses relay-issued credentials and relayed connections fail without
-an error. Give libdatachannel TURN servers as native `IceServer` objects instead, through the
-polyfill's `peerConnection` option (this is what the repository's TURN tests run):
+an error. (Cloudflare's usernames have no colon, but libdatachannel's ICE library uses at most
+two TURN servers, over UDP only.) Give libdatachannel TURN servers as native `IceServer`
+objects instead, through the polyfill's `peerConnection` option (this is what the repository's
+TURN tests run):
 
 ```ts
 import { PeerConnection } from 'node-datachannel'
@@ -464,9 +471,12 @@ Read this before enabling receiving for users.
   endpoint". Wallets should prompt other originators before signing under
   `[2, 'webrtpay channel']`, and a wallet that answers automatically should use its own admin
   originator.
-- **TURN.** Relay-issued TURN usernames are pseudonyms (`<expiry>:<HMAC of the identity key>`),
-  but they travel in the clear on `turn:` urls. Do not run coturn verbose or with its Redis
-  stats database, which log them.
+- **TURN.** The TURN service sees the address of each side that relays through it, the ports
+  and the timing, never the payment (DTLS-encrypted end to end). Relay-issued coturn usernames
+  are pseudonyms (`<expiry>:<HMAC of the identity key>`), but they travel in the clear on
+  `turn:` urls: do not run coturn verbose or with its Redis stats database, which log them.
+  With Cloudflare the usernames are random and the relay never sends Cloudflare the identity
+  key. See [TURN options](#turn-options).
 - **Known limitation: free identities can keep direct receive busy.** A few throwaway keys can
   each dial, complete the handshake and send any message (one the payee ignores) within the
   first-message window, then one a minute, holding every inbound slot. `maxSessionMs` (120 s)
@@ -478,11 +488,13 @@ Read this before enabling receiving for users.
 ## Relay server
 
 `@bsv/webrtpay/server` is a stateless WebSocket rendezvous: it authenticates sockets by
-identity key, forwards envelopes between them, and can issue ephemeral TURN credentials for a
-coturn server. It stores nothing and never logs payloads.
+identity key, forwards envelopes between them, and can issue ephemeral TURN credentials, from
+Cloudflare Realtime TURN or for a coturn server (see [TURN options](#turn-options)). It stores
+nothing and never logs payloads or secrets.
 
 ```sh
-PUBLIC_URLS=wss://relay.example.com TRUSTED_IP_HEADER=cf-connecting-ip npx webrtpay-relay
+PUBLIC_URLS=wss://relay.example.com TRUSTED_IP_HEADER=cf-connecting-ip \
+TURN_PROVIDER=cloudflare CLOUDFLARE_TURN_KEY_ID=… CLOUDFLARE_TURN_API_TOKEN=… npx webrtpay-relay
 ```
 
 Set `TRUSTED_IP_HEADER` only when the listener can be reached solely through the proxy that sets
@@ -490,32 +502,41 @@ it: keep it private (a ClusterIP Service behind the tunnel, a loopback or cluste
 address, a firewall or the proxy's own allow-list). A client that can reach the relay directly
 can send any value and choose its own per-source limits.
 
-| Variable                           | Default   | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                             | `8787`    | Port to listen on.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `HOST`                             | `0.0.0.0` | Address to listen on.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `PUBLIC_URLS`                      | —         | Comma-separated `wss://` urls clients dial; clients sign the one they use. **Required in production**: the relay refuses to start without it unless `HOST` is a loopback address, because otherwise clients sign a url built from the `Host` header, which the client chooses. Set it whenever a proxy fronts the relay, even on loopback.                                                                                                                                                                                                          |
-| `TRUSTED_IP_HEADER`                | —         | Header the outermost proxy sets to the client's single address, for the per-source limits: `cf-connecting-ip` behind Cloudflare. Without it every client behind a proxy shares the proxy's limits. `x-forwarded-for` is right only behind exactly one proxy that overwrites it. Set it only when every connection reaches the relay through that proxy (firewall it, or keep the listener private, e.g. a ClusterIP Service behind the tunnel); a client that can reach the relay directly can send any value and choose its own per-source limits. |
-| `STUN_URLS`                        | —         | Comma-separated STUN urls handed to every authenticated socket.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `TURN_SECRET`                      | —         | coturn `static-auth-secret`; requires `TURN_URLS`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `TURN_URLS`                        | —         | Comma-separated TURN urls to issue credentials for; requires `TURN_SECRET`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `TURN_TTL`                         | `600`     | Lifetime of issued TURN credentials, in seconds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `TURN_PER_IP_PER_HOUR`             | `6`       | TURN credential sets one source address may get per hour; requires `TURN_SECRET`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `TURN_PER_48_PER_HOUR`             | `24`      | The same for all the IPv6 sources of one /48 together; requires `TURN_SECRET`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `TURN_PER_HOUR`                    | `600`     | TURN credential sets the relay issues per hour in total; requires `TURN_SECRET`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `SOCKETS_PER_IP`                   | `20`      | Sockets one source address may hold.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `CONNECTIONS_PER_IP_PER_MINUTE`    | `30`      | New connections one source address may open a minute.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `SOCKETS_PER_48`                   | `80`      | Sockets all the IPv6 sources of one /48 may hold together.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `CONNECTIONS_PER_48_PER_MINUTE`    | `120`     | New connections all the IPv6 sources of one /48 may open a minute.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `MAX_SOCKETS`                      | `10000`   | Sockets the relay holds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `MAX_UNAUTHENTICATED_SOCKETS`      | `1000`    | Sockets not yet authenticated the relay holds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `SIGNALS_PER_PAIR_PER_MINUTE`      | `6`       | Signals all the identities behind one source address (an IPv4 address or an IPv6 /64) may send one recipient a minute, together.                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `SIGNALS_PER_RECIPIENT_PER_MINUTE` | `120`     | Signals one recipient may receive a minute from all senders.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `MAX_OVER_RATE_FRAMES`             | `20`      | Frames over the socket rate answered in a row before the socket is closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Variable                           | Default                            | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                             | `8787`                             | Port to listen on.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `HOST`                             | `0.0.0.0`                          | Address to listen on.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `PUBLIC_URLS`                      | —                                  | Comma-separated `wss://` urls clients dial; clients sign the one they use. **Required in production**: the relay refuses to start without it unless `HOST` is a loopback address, because otherwise clients sign a url built from the `Host` header, which the client chooses. Set it whenever a proxy fronts the relay, even on loopback.                                                                                                                                                                                                          |
+| `TRUSTED_IP_HEADER`                | —                                  | Header the outermost proxy sets to the client's single address, for the per-source limits: `cf-connecting-ip` behind Cloudflare. Without it every client behind a proxy shares the proxy's limits. `x-forwarded-for` is right only behind exactly one proxy that overwrites it. Set it only when every connection reaches the relay through that proxy (firewall it, or keep the listener private, e.g. a ClusterIP Service behind the tunnel); a client that can reach the relay directly can send any value and choose its own per-source limits. |
+| `STUN_URLS`                        | —                                  | Comma-separated STUN urls handed to every authenticated socket.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `TURN_PROVIDER`                    | — (coturn when TURN_SECRET is set) | Where TURN credentials come from: `coturn` (REST credentials the relay mints; what runs when `TURN_SECRET` is set and this is not) or `cloudflare` (Cloudflare Realtime TURN). Without it and without `TURN_SECRET` the relay issues no TURN. Enable `cloudflare` only once every client is on a package version that reads `ice.expiresAt` (see [TURN options](#turn-options)).                                                                                                                                                                    |
+| `TURN_SECRET`                      | —                                  | coturn `static-auth-secret`; requires `TURN_URLS`. Refused with `TURN_PROVIDER=cloudflare`.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `TURN_URLS`                        | —                                  | Comma-separated TURN urls to issue credentials for; requires `TURN_SECRET`. Refused with `TURN_PROVIDER=cloudflare`, which chooses its own.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `CLOUDFLARE_TURN_KEY_ID`           | —                                  | The Cloudflare TURN key's id; requires `TURN_PROVIDER=cloudflare` and `CLOUDFLARE_TURN_API_TOKEN`.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `CLOUDFLARE_TURN_API_TOKEN`        | —                                  | The TURN key's API token (a secret: never logged); requires `TURN_PROVIDER=cloudflare` and `CLOUDFLARE_TURN_KEY_ID`.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `TURN_TTL`                         | `600`                              | Lifetime of issued TURN credentials, in seconds; Cloudflare caps it at 172800 (48 hours).                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `TURN_PER_IP_PER_HOUR`             | `6`                                | TURN credential sets one source address may get per hour; requires a TURN provider.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `TURN_PER_48_PER_HOUR`             | `24`                               | The same for all the IPv6 sources of one /48 together; requires a TURN provider.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `TURN_PER_HOUR`                    | `600`                              | TURN credential sets the relay issues per hour in total; requires a TURN provider.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `SOCKETS_PER_IP`                   | `20`                               | Sockets one source address may hold.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `CONNECTIONS_PER_IP_PER_MINUTE`    | `30`                               | New connections one source address may open a minute.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `SOCKETS_PER_48`                   | `80`                               | Sockets all the IPv6 sources of one /48 may hold together.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `CONNECTIONS_PER_48_PER_MINUTE`    | `120`                              | New connections all the IPv6 sources of one /48 may open a minute.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `MAX_SOCKETS`                      | `10000`                            | Sockets the relay holds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `MAX_UNAUTHENTICATED_SOCKETS`      | `1000`                             | Sockets not yet authenticated the relay holds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `SIGNALS_PER_PAIR_PER_MINUTE`      | `6`                                | Signals all the identities behind one source address (an IPv4 address or an IPv6 /64) may send one recipient a minute, together.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `SIGNALS_PER_RECIPIENT_PER_MINUTE` | `120`                              | Signals one recipient may receive a minute from all senders.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `MAX_OVER_RATE_FRAMES`             | `20`                               | Frames over the socket rate answered in a row before the socket is closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 - `GET /health` answers `{"status":"ok"}`. `SIGTERM` or `SIGINT` closes every socket and exits.
-- At startup it warns when there are no public urls (development only) and when `PUBLIC_URLS`
-  is set without `TRUSTED_IP_HEADER`.
+- At startup it logs `TURN credentials from <provider>, valid <ttl> s`, naming the provider by
+  its `kind` in code: `coturn-rest` for `TURN_PROVIDER=coturn`, or `cloudflare`. It warns when
+  there are no public urls (development only) and when `PUBLIC_URLS` is set without
+  `TRUSTED_IP_HEADER`.
+  It refuses to start with a half-configured or mixed TURN provider (`TURN_URLS` without
+  `TURN_SECRET`, `TURN_PROVIDER=cloudflare` without both Cloudflare variables or with
+  `TURN_SECRET`, Cloudflare variables without `TURN_PROVIDER=cloudflare`) rather than run
+  without TURN.
 - Connections are admitted per source address before the WebSocket upgrade: more than 20
   sockets or 30 new connections a minute from one source get `HTTP 429`; more than 10000
   sockets, or 1000 not yet authenticated, get `HTTP 503`. IPv6 counts by its /64 and also by its
@@ -536,19 +557,87 @@ can send any value and choose its own per-source limits.
 - An envelope may be up to 24672 bytes, the largest a signal can produce (a 16384-character
   SDP fits).
 - TURN credentials are issued only on request (`{ t: 'turn' }`), at most 6 an hour per source
-  address (`TURN_PER_IP_PER_HOUR`) and 600 an hour in total, valid for `TURN_TTL`. The username
-  is `<expiry>:<pseudonym>` (`credential = base64(HMAC-SHA1(secret, username))`), so coturn
-  needs `use-auth-secret`.
+  address (`TURN_PER_IP_PER_HOUR`) and 600 an hour in total, valid for `TURN_TTL`, whichever
+  the provider. The budget is spent before the provider is asked, so a request Cloudflare fails
+  costs one too. The answer lists the relay's `STUN_URLS`, then the provider's servers, with
+  `expiresAt`. A provider that fails (Cloudflare answers an error, nothing within 5 s, or more
+  than 64 KiB) gets the client `{ t: 'error', code: 'unavailable' }` and one log line naming
+  what failed, never the token or credentials. Other frames from that socket are still
+  forwarded at once, and their replies follow the TURN reply in order.
+- coturn REST: the username is `<expiry>:<pseudonym>`
+  (`credential = base64(HMAC-SHA1(secret, username))`), so coturn needs `use-auth-secret`.
   Identities are free, so in production also give coturn its own quotas (`--total-quota`,
   `--max-bps`, `--denied-peer-ip` for private ranges); `--user-quota` alone does not stop
   fresh keys.
 
 In code, `createRelayServer(options)` takes the same settings (`port`, `host`, `publicUrls`,
-`trustedIpHeader`, `stunUrls`, `turn: { secret, urls, ttlSeconds }`, and `limits` for the limit
+`trustedIpHeader`, `stunUrls`, `turn` as `{ kind: 'coturn-rest', secret, urls, ttlSeconds }`
+or `{ kind: 'cloudflare', keyId, apiToken, ttlSeconds, fetch }`, and `limits` for the limit
 variables, e.g. `limits: { turnPerIpPerHour }` for `TURN_PER_IP_PER_HOUR`) plus `server`
 (attach to an existing HTTP server), `path`, the other `limits` (see `DEFAULT_RELAY_LIMITS`),
 `log` and, for development only, `trustHostHeader`. It resolves to `{ url, port, close(), stats() }`.
 `webrtpay-relay --help` lists the variables with their defaults.
+
+## TURN options
+
+Most connections need no TURN; it carries the (encrypted) payment only when neither side can
+reach the other directly, as on many mobile networks. The relay issues short-lived credentials
+for one of two providers.
+
+**Cloudflare Realtime TURN (`TURN_PROVIDER=cloudflare`; the default for production).**
+
+- Rollout: enable `TURN_PROVIDER=cloudflare` only after every client is on a package version
+  that reads `ice.expiresAt` (this version on). Older clients work out when TURN credentials
+  expire from the `<expiry>:<pseudonym>` username of coturn REST credentials, and treat
+  Cloudflare's opaque usernames as never expiring.
+- Setup: create a TURN key in the Cloudflare dashboard, or with
+  `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/calls/turn_keys` and an API
+  token with Calls Write permission. The key has an id (`uid`) and an API token (`key`); give
+  them to the relay as `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN`, from a secret
+  store. Use one key per environment.
+- For each `turn` request the relay calls
+  `POST https://rtc.live.cloudflare.com/v1/turn/keys/<key id>/credentials/generate-ice-servers`
+  with `{ "ttl": TURN_TTL }`. It passes on Cloudflare's STUN url and its TURN urls (UDP 3478
+  and 443, TCP 3478 and 80, TLS 5349 and 443, anycast to the nearest Cloudflare location),
+  picked by scheme rather than by position because the answer's shape has changed before, and
+  drops any url on port 53, which browsers block. It reads at most 64 KiB of the answer and
+  forwards at most 8 TURN urls (the first listed; Cloudflare lists 6). Cloudflare's answer
+  does not say when the credentials expire, so the relay sends `expiresAt` (request time +
+  ttl). The log line for a failed request says what failed in a few words (`HTTP 503`,
+  `no answer within 5 s`, `request failed (ECONNREFUSED)`), never the url or the token.
+- Cost: TURN is billed at $0.05 per GB sent from Cloudflare to TURN clients, after the first
+  1,000 GB a month, which are free and shared with Cloudflare's Realtime SFU; STUN is free. A
+  direct payment is about 100 KB, so even with every session relayed, 1,000 sessions a day
+  stay far inside the free tier.
+- Privacy: Cloudflare sees each relayed client's IP address, ports and timing, never the
+  payment (DTLS end to end), and never the identity key (the usernames are random). There is
+  no data-localization guarantee: Realtime TURN is not covered by Cloudflare's Data
+  Localization Suite, and an allocation is made at the client's nearest location.
+- Risks: Cloudflare's budget alerts are e-mail only and informational; nothing caps the spend
+  except the relay's own issuance limits (6 an hour per address, 600 an hour in total by
+  default) and the short ttl, so set a budget alert anyway. It is a third-party dependency
+  (maintenance can drop allocations; clients recover by connecting again), relays IPv4 only,
+  and refuses private and loopback peers. Credentials can be revoked through Cloudflare's API
+  (the relay does not do this itself).
+
+**Self-hosted coturn (`TURN_PROVIDER=coturn`, with `TURN_SECRET` and `TURN_URLS`).** The relay
+mints coturn REST credentials with the shared secret; nothing is asked of a third party, and
+only you see the addresses. It is what the [local stack](#running-the-local-stunturn-stack)
+runs. In production coturn needs:
+
+- a public address it can send from as well as receive on: `external-ip` set to it, every relay
+  port reachable on that address with the same port number, and its own first packets leaving
+  from it. A load balancer only answers flows that clients start, so coturn behind one, with
+  egress through a NAT gateway, fails whenever coturn has to send first; give it a host or
+  node with its own public IP and host networking instead;
+- a relay port range wide enough for the expected sessions (an allocation lives 10 minutes
+  after a client vanishes), UDP 3478 plus TCP 3478 and TLS 5349 or 443 for networks that block
+  UDP;
+- `denied-peer-ip` for private, loopback, link-local, IPv4-mapped IPv6 and NAT64 ranges, with
+  `allowed-peer-ip` for its own address so that two relayed peers on the same coturn can reach
+  each other, plus `--total-quota`, `--max-bps` and `--bps-capacity`;
+- a current release (4.18.0 removed `--no-dtls`) and secret rotation as the only way to cut
+  off issued credentials, which cannot be revoked.
 
 ## Running the local STUN/TURN stack
 
@@ -634,7 +723,7 @@ Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`pnpm test`: 722 tests at 0.1.0; `pnpm test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 768 tests at 0.1.0; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input
@@ -646,7 +735,9 @@ tests):
   and through a real relay over `ws`, and by code exchange: a 2 MiB transaction, acks, the
   payee dropping mid-payment, duplicate and concurrent delivery, offline and refusing payees,
   inbound limits and intake budgets, timeouts;
-- the relay: authentication and URL binding, limits, TURN issuance, admission, liveness;
+- the relay: authentication and URL binding, limits, TURN issuance from coturn REST and from
+  Cloudflare (against a mocked API: both answer shapes, failures, the 5 s timeout, no secret in
+  frames or logs), admission, liveness;
 - `MessageBoxSignaler` against a fake MessageBox client;
 - the relayed path through a real coturn 4.18.0 in Docker (`pnpm test:turn`);
 - the examples in `docs/protocol.md`, recomputed from the code (`test/protocol-doc.test.ts`);
@@ -668,7 +759,8 @@ Not verified:
 - React Native;
 - real networks: the test sandbox drops UDP to non-loopback addresses, so NAT traversal and
   Electron-to-Electron across networks are untested;
-- TURN in production (only the local coturn), and a real MessageBox server;
+- TURN in production: only the local coturn; no test calls Cloudflare's API or relays through
+  Cloudflare. A real MessageBox server is untested too;
 - real BRC-100 wallets other than `ProtoWallet` (`internalizeAction` is mocked in the tests).
 
 ## License

@@ -416,7 +416,8 @@ describe('WebRTPayError', () => {
       'invalid_signal',
       'rate_limited',
       'too_large',
-      'unsupported'
+      'unsupported',
+      'unavailable'
     ]
     for (const code of codes) expect(new WebRTPayError(code).code).toBe(code)
   })
