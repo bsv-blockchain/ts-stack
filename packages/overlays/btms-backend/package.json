@@ -38,15 +38,15 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
-    "@jest/globals": "^30.5.1",
+    "@jest/globals": "^30.5.2",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.5",
     "@typescript/native": "npm:typescript@7.0.2",
-    "fast-check": "^4.9.0",
-    "jest": "^30.5.1",
-    "mongodb-memory-server": "^11.2.0",
-    "oxlint": "^1.83.0",
-    "ts-jest": "^29.4.12",
+    "fast-check": "^4.10.2",
+    "jest": "^30.5.2",
+    "mongodb-memory-server": "^11.3.0",
+    "oxlint": "^1.87.0",
+    "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
@@ -55,7 +55,7 @@
   "dependencies": {
     "@bsv/overlay": "workspace:^",
     "@bsv/sdk": "workspace:^",
-    "mongodb": "^7.6.0"
+    "mongodb": "^7.7.0"
   },
   "repository": {
     "type": "git",
