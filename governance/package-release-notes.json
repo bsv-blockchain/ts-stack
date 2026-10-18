@@ -228,6 +228,13 @@
       "migration": "Chain gains the 'regtest' member, so a consumer with an exhaustive switch over Chain needs a case for it. Header validation helpers gain an optional trailing chain parameter; omitting it keeps the mainnet limit, and the 'tstn' chain is unchanged. No API or schema migration is required. Live sync now throws WERR_NETWORK_CHAIN on a reader/writer chain mismatch. Custom writers that populate ProcessSyncChunkResult.error are observed: WalletStorageManager throws that error and does not re-request the same chunk."
     },
     {
+      "name": "@bsv/webrtpay",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "First release: direct wallet-to-wallet BSV payments over WebRTC data channels. Both peers prove their BRC-100 identity keys bound to the DTLS session, and the payer hands over the same BRC-29 PaymentToken that PeerPay sends through MessageBox. Signaling runs through face-to-face offer and answer codes, MessageBox, or a relay, and the Node-only ./server subpath provides that relay with TURN credential issuance and the webrtpay-relay CLI.",
+      "migration": "No consumer migration required; first release."
+    },
+    {
       "name": "create-bsv-app",
       "publishedVersion": "1.1.2",
       "releaseType": "none",

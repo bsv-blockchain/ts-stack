@@ -386,6 +386,26 @@
       "minimumScore": 90,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "webrtpay-codes",
+      "manifest": "packages/messaging/webrtpay/package.json",
+      "propertyTest": "packages/messaging/webrtpay/test/codec.property.test.ts",
+      "risk": "high",
+      "boundary": "Offer and answer codes and compact SDPs scanned from QR codes or pasted by strangers",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "webrtpay-frames",
+      "manifest": "packages/messaging/webrtpay/package.json",
+      "propertyTest": "packages/messaging/webrtpay/test/frames.property.test.ts",
+      "risk": "critical",
+      "boundary": "Data channel frames from an unauthenticated or authenticated WebRTC peer",
+      "minimumScore": 83,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

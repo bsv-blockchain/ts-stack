@@ -541,6 +541,17 @@
       "release": "none"
     },
     {
+      "path": "packages/messaging/webrtpay",
+      "name": "@bsv/webrtpay",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
+    },
+    {
       "path": "packages/middleware/402-pay",
       "name": "@bsv/402-pay",
       "owner": "ts-stack-maintainers",

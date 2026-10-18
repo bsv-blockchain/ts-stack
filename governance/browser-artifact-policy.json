@@ -62,6 +62,13 @@
       "splittingDisposition": "Conditional exports select the browser-safe implementation and the composition gate rejects Node/server dependencies."
     },
     {
+      "name": "@bsv/webrtpay",
+      "path": "packages/messaging/webrtpay",
+      "budget": "packages/messaging/webrtpay/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "Browser entry only; the Node relay server is the separate ./server subpath and never enters the browser graph."
+    },
+    {
       "name": "@bsv/402-pay",
       "path": "packages/middleware/402-pay",
       "budget": "packages/middleware/402-pay/browser-budget.json",
