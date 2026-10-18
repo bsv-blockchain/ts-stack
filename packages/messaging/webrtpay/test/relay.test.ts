@@ -805,9 +805,10 @@ class FakeSocket {
   static instances: FakeSocket[] = []
   /**
    * up: full protocol; down: fails to connect; silent: never challenges; mute: never replies
-   * to signals; confused: answers signals with `ice`, the reply to a `turn`.
+   * to signals; confused: answers signals with `ice`, the reply to a `turn`; manual: never
+   * challenges or replies, so the test plays the relay's side.
    */
-  static mode: 'up' | 'down' | 'silent' | 'mute' | 'confused' = 'up'
+  static mode: 'up' | 'down' | 'silent' | 'mute' | 'confused' | 'manual' = 'up'
   /** The servers a `turn` request is answered with. */
   static turnServers: RTCIceServer[] = []
   /** When set, a `turn` request is answered with this error code instead. */
@@ -816,6 +817,7 @@ class FakeSocket {
   static turnExpiresAt: unknown
 
   readyState = 0
+  private readonly manual = FakeSocket.mode === 'manual'
   readonly frames: Array<Record<string, unknown>> = []
   private readonly listeners = new Map<string, Set<(ev: unknown) => void>>()
 
@@ -830,7 +832,7 @@ class FakeSocket {
       }
       this.readyState = 1
       this.fire('open', {})
-      if (mode !== 'silent')
+      if (mode !== 'silent' && mode !== 'manual')
         this.message({ t: 'challenge', nonce: `n${FakeSocket.instances.length}` })
     })
   }
@@ -848,6 +850,7 @@ class FakeSocket {
   send(data: string): void {
     const frame = JSON.parse(data) as Record<string, unknown>
     this.frames.push(frame)
+    if (this.manual) return
     void Promise.resolve().then(() => {
       if (frame.t === 'auth') {
         this.message({ t: 'ready', identityKey: frame.identityKey })
@@ -884,7 +887,12 @@ class FakeSocket {
 
   /** Deliver `frame` as if the relay had sent it. */
   message(frame: unknown): void {
-    if (this.readyState === 1) this.fire('message', { data: JSON.stringify(frame) })
+    this.messageData(JSON.stringify(frame))
+  }
+
+  /** Deliver `data` as the relay's message event, whatever it is. */
+  messageData(data: unknown): void {
+    if (this.readyState === 1) this.fire('message', { data })
   }
 
   private finish(code: number): void {
@@ -1384,6 +1392,112 @@ describe('RelaySignaler connection lifecycle', () => {
     await Promise.all([s.connect(), s.listen(() => {}), s.send(alice.key, env())])
     expect(FakeSocket.instances).toHaveLength(1)
     await s.close()
+  })
+
+  it('ignores relay frames that are not JSON objects or come out of turn during the handshake', async () => {
+    FakeSocket.mode = 'manual'
+    const s = fake()
+    const p = s.connect()
+    await jest.advanceTimersByTimeAsync(0)
+    const sock = last()
+    for (const data of ['not json', new Uint8Array([123, 125]), '[1]', '"challenge"', 'null']) {
+      sock.messageData(data)
+    }
+    // replies, signals and `ready`/`ice` before the challenge was answered are ignored
+    sock.message({ t: 'sent' })
+    sock.message({ t: 'signal', from: alice.key, envelope: env() })
+    sock.message({ t: 'ready', identityKey: alice.key })
+    sock.message({ t: 'ice', iceServers: [] })
+    sock.message({ t: 'challenge', nonce: 'n1' })
+    // a second challenge while the first is being signed is ignored too
+    sock.message({ t: 'challenge', nonce: 'n2' })
+    await waitForFake(() => sock.frames.length === 1)
+    expect(sock.frames[0]).toMatchObject({ t: 'auth', identityKey: alice.key })
+    // `ice` before `ready` is ignored
+    sock.message({ t: 'ice', iceServers: [{ urls: 'stun:early.test' }] })
+    sock.message({ t: 'ready', identityKey: alice.key })
+    sock.message({ t: 'ice', iceServers: [{ urls: 'stun:relay.test' }] })
+    await p
+    expect(s.iceServers()).toEqual([{ urls: 'stun:relay.test' }])
+    expect(sock.frames).toHaveLength(1)
+    await s.close()
+  })
+
+  it('fails the handshake with protocol on a malformed challenge', async () => {
+    FakeSocket.mode = 'manual'
+    for (const nonce of ['', 'x'.repeat(257), 7]) {
+      const s = fake()
+      const p = s.connect()
+      const settled = expect(p).rejects.toMatchObject({
+        code: 'protocol',
+        message: 'Relay sent a malformed challenge'
+      })
+      await jest.advanceTimersByTimeAsync(0)
+      last().message({ t: 'challenge', nonce })
+      await settled
+      expect(last().frames).toHaveLength(0)
+      await s.close()
+    }
+    // the longest nonce accepted is 256 characters
+    const s = fake()
+    const p = s.connect()
+    await jest.advanceTimersByTimeAsync(0)
+    last().message({ t: 'challenge', nonce: 'x'.repeat(256) })
+    await waitForFake(() => last().frames.length === 1)
+    last().message({ t: 'ready', identityKey: alice.key })
+    last().message({ t: 'ice', iceServers: [] })
+    await p
+    await s.close()
+  })
+
+  it('fails the handshake with protocol when the relay confirms a different identity', async () => {
+    FakeSocket.mode = 'manual'
+    const other = await party()
+    const s = fake()
+    const p = s.connect()
+    const settled = expect(p).rejects.toMatchObject({
+      code: 'protocol',
+      message: 'Relay confirmed a different identity'
+    })
+    await jest.advanceTimersByTimeAsync(0)
+    last().message({ t: 'challenge', nonce: 'n1' })
+    await waitForFake(() => last().frames.length === 1)
+    last().message({ t: 'ready', identityKey: other.key })
+    await settled
+    await jest.advanceTimersByTimeAsync(0)
+    expect(last().readyState).toBe(3)
+    await s.close()
+  })
+
+  it('fails the handshake with the mapped code when the relay sends an error, and protocol on bad ICE servers', async () => {
+    FakeSocket.mode = 'manual'
+    const s = fake()
+    const p = s.connect()
+    const refused = expect(p).rejects.toMatchObject({ code: 'rate_limited' })
+    await jest.advanceTimersByTimeAsync(0)
+    last().message({ t: 'error', code: 'rate_limited' })
+    await refused
+    await s.close()
+
+    for (const ice of [
+      { iceServers: 'stun:relay.test' },
+      { iceServers: [], expiresAt: 0 },
+      { iceServers: [], expiresAt: '1' }
+    ]) {
+      const t = fake()
+      const q = t.connect()
+      const bad = expect(q).rejects.toMatchObject({
+        code: 'protocol',
+        message: 'Relay sent bad ICE servers'
+      })
+      await jest.advanceTimersByTimeAsync(0)
+      last().message({ t: 'challenge', nonce: 'n1' })
+      await waitForFake(() => last().frames.length === 1)
+      last().message({ t: 'ready', identityKey: alice.key })
+      last().message({ t: 'ice', ...ice })
+      await bad
+      await t.close()
+    }
   })
 
   it('gives up on a relay that does not complete the handshake within 15 s', async () => {

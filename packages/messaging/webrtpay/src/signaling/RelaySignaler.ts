@@ -454,14 +454,15 @@ class RelayConnection {
     this.ready = new Promise<void>((resolve, reject) => {
       this.settle = err => (err === undefined ? resolve() : reject(err))
     })
-    // Rejections are delivered to whoever awaits `ready`; a reconnect may have no one.
-    this.ready.catch(() => {})
     this.socketClosed = new Promise<void>(resolve => {
       this.markSocketClosed = resolve
     })
   }
 
+  /** Connect and start the handshake; called once, right after construction. */
   open(): void {
+    // Rejections are delivered to whoever awaits `ready`; a reconnect may have no one.
+    this.ready.catch(() => {})
     this.handshakeTimer = setTimeout(
       () => this.end(new WebRTPayError('peer_unreachable', 'Relay handshake timed out')),
       CONNECT_TIMEOUT_MS
@@ -557,56 +558,70 @@ class RelayConnection {
         if (this.stage === 'challenge') this.answer(f.nonce)
         return
       case 'ready':
-        if (this.stage !== 'auth') return
-        if (f.identityKey !== this.identityKey) {
-          this.end(new WebRTPayError('protocol', 'Relay confirmed a different identity'))
-          return
-        }
-        this.stage = 'ice'
+        this.onReady(f)
         return
-      case 'ice': {
-        if (this.stage !== 'ice' && this.stage !== 'open') return
-        // after the handshake an `ice` only ever answers a `turn` request
-        if (this.stage === 'open' && !this.replyMatches('ice')) return
-        const servers = iceServersOf(f.iceServers)
-        const { expiresAt } = f
-        if (servers === undefined || (expiresAt !== undefined && !isTime(expiresAt))) {
-          // fails the handshake or the turn request it answers
-          const err = new WebRTPayError('protocol', 'Relay sent bad ICE servers')
-          if (this.stage === 'ice') this.end(err)
-          else this.pending.shift()?.reject(err)
-          return
-        }
-        const list: IceList = { servers, expiresAt }
-        this.h.onIce(list)
-        if (this.stage === 'open') {
-          this.pending.shift()?.resolve(list)
-          return
-        }
-        this.stage = 'open'
-        this.openedAt = Date.now()
-        clearTimeout(this.handshakeTimer)
-        this.h.onOpen()
-        this.settle()
+      case 'ice':
+        this.onIce(f)
         return
-      }
       case 'signal':
-        if (this.stage === 'open' && typeof f.from === 'string' && isSignalEnvelope(f.envelope)) {
-          this.h.onSignal(f.from, f.envelope)
-        }
+        this.onSignal(f)
         return
       case 'sent':
         if (this.stage === 'open' && this.replyMatches('sent')) {
           this.pending.shift()?.resolve(undefined)
         }
         return
-      case 'error': {
-        const err = relayError(f.code)
-        if (this.stage !== 'open') this.end(err)
-        else if (this.replyMatches('error')) this.pending.shift()?.reject(err)
+      case 'error':
+        this.onError(f)
         return
-      }
     }
+  }
+
+  private onReady(f: Record<string, unknown>): void {
+    if (this.stage !== 'auth') return
+    if (f.identityKey !== this.identityKey) {
+      this.end(new WebRTPayError('protocol', 'Relay confirmed a different identity'))
+      return
+    }
+    this.stage = 'ice'
+  }
+
+  /** The `ice` that completes the handshake, or that answers a `turn` request after it. */
+  private onIce(f: Record<string, unknown>): void {
+    if (this.stage !== 'ice' && this.stage !== 'open') return
+    // after the handshake an `ice` only ever answers a `turn` request
+    if (this.stage === 'open' && !this.replyMatches('ice')) return
+    const list = iceListOf(f)
+    if (list === undefined) {
+      // fails the handshake or the turn request it answers
+      const err = new WebRTPayError('protocol', 'Relay sent bad ICE servers')
+      if (this.stage === 'ice') this.end(err)
+      else this.pending.shift()?.reject(err)
+      return
+    }
+    this.h.onIce(list)
+    if (this.stage === 'open') {
+      this.pending.shift()?.resolve(list)
+      return
+    }
+    this.stage = 'open'
+    this.openedAt = Date.now()
+    clearTimeout(this.handshakeTimer)
+    this.h.onOpen()
+    this.settle()
+  }
+
+  private onSignal(f: Record<string, unknown>): void {
+    if (this.stage === 'open' && typeof f.from === 'string' && isSignalEnvelope(f.envelope)) {
+      this.h.onSignal(f.from, f.envelope)
+    }
+  }
+
+  /** An `error` fails the handshake, or the oldest frame waiting for a reply. */
+  private onError(f: Record<string, unknown>): void {
+    const err = relayError(f.code)
+    if (this.stage !== 'open') this.end(err)
+    else if (this.replyMatches('error')) this.pending.shift()?.reject(err)
   }
 
   /**
@@ -685,6 +700,14 @@ function relayError(code: unknown): WebRTPayError {
     return new WebRTPayError(mapped, message)
   }
   return new WebRTPayError('protocol', 'Relay sent an unknown error')
+}
+
+/** The ICE servers and expiry an `ice` frame carries, or undefined when either is malformed. */
+function iceListOf(f: Record<string, unknown>): IceList | undefined {
+  const servers = iceServersOf(f.iceServers)
+  const { expiresAt } = f
+  if (servers === undefined || (expiresAt !== undefined && !isTime(expiresAt))) return undefined
+  return { servers, expiresAt }
 }
 
 /** A sanitized copy of the relay's ICE server list, or undefined when it is malformed. */

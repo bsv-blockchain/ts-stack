@@ -133,23 +133,22 @@ export class MessageBoxSignaler implements Signaler {
     const stalled = new Promise<never>((_, reject) => {
       deadline = setTimeout(() => reject(new Error('Poll timed out')), POLL_DEADLINE_MS)
     })
-    Promise.race([this.pollOnce(run), stalled])
-      .then(
-        () => {
-          this.failures = 0
-        },
-        () => {
-          this.failures++
-        }
-      )
-      .then(() => {
-        clearTimeout(deadline)
-        // A stalled call may still return; it must not deliver or ack anything then.
-        this.current = undefined
-        this.polling = false
-        this.lastPollAt = Date.now()
-        this.schedule()
-      })
+    Promise.race([this.pollOnce(run), stalled]).then(
+      () => this.finishPoll(deadline, true),
+      () => this.finishPoll(deadline, false)
+    )
+  }
+
+  /** Count the poll's outcome, then schedule the next one. */
+  private finishPoll(deadline: ReturnType<typeof setTimeout> | undefined, ok: boolean): void {
+    if (ok) this.failures = 0
+    else this.failures++
+    clearTimeout(deadline)
+    // A stalled call may still return; it must not deliver or ack anything then.
+    this.current = undefined
+    this.polling = false
+    this.lastPollAt = Date.now()
+    this.schedule()
   }
 
   /** (Re)arm the timer for the next poll, measured from the end of the last one. */
@@ -187,42 +186,65 @@ export class MessageBoxSignaler implements Signaler {
     if (this.current !== run) return
     if (!Array.isArray(listed)) throw new TypeError('listMessages did not return an array')
 
-    const toAck = new Set<string>()
-    let handled = 0
+    const state: PollState = { handled: 0, toAck: new Set<string>() }
     for (const m of listed as unknown[]) {
       // Nobody is listening any more: leave the rest on the server for the next listener.
       if (this.subs.size === 0) break
-      if (typeof m !== 'object' || m === null) continue
-      const { messageId, sender, body } = m as Record<string, unknown>
-      if (typeof messageId !== 'string') continue
-      const acked = this.seen.get(messageId)
-      if (acked === undefined) {
-        // Over the per-poll budget: neither read nor acked, so a later poll handles it.
-        if (handled >= MAX_MESSAGES_PER_POLL) continue
-        handled++
-        this.seen.set(messageId, false)
-        const e = envelopeOf(body)
-        if (e !== undefined && typeof sender === 'string') dispatchSignal(this.subs, sender, e)
-      }
-      if (acked !== true) toAck.add(messageId)
+      this.take(m, state)
     }
-
-    const ids = [...toAck]
-    for (let i = 0; i < ids.length && this.current === run; i += MAX_ACK_IDS) {
-      const messageIds = ids.slice(i, i + MAX_ACK_IDS)
-      try {
-        await this.client.acknowledgeMessage(
-          this.host === undefined ? { messageIds } : { messageIds, host: this.host }
-        )
-      } catch {
-        continue // left unconfirmed: the next poll acks these again
-      }
-      for (const id of messageIds) this.seen.set(id, true)
-    }
+    await this.acknowledge([...state.toAck], 0, run)
     while (this.seen.size > MAX_SEEN_IDS) {
       this.seen.delete(this.seen.keys().next().value as string)
     }
   }
+
+  /**
+   * Deliver `m` if it is new and within the per-poll budget, and note its ID for acking
+   * unless the server has already confirmed that.
+   */
+  private take(m: unknown, state: PollState): void {
+    if (typeof m !== 'object' || m === null) return
+    const { messageId, sender, body } = m as Record<string, unknown>
+    if (typeof messageId !== 'string') return
+    const acked = this.seen.get(messageId)
+    if (acked === undefined) {
+      // Over the per-poll budget: neither read nor acked, so a later poll handles it.
+      if (state.handled >= MAX_MESSAGES_PER_POLL) return
+      state.handled++
+      this.seen.set(messageId, false)
+      const e = envelopeOf(body)
+      if (e !== undefined && typeof sender === 'string') dispatchSignal(this.subs, sender, e)
+    }
+    if (acked !== true) state.toAck.add(messageId)
+  }
+
+  /** Ack `ids` from `from` on, one batch at a time, while `run` is the current poll. */
+  private async acknowledge(ids: string[], from: number, run: object): Promise<void> {
+    if (from >= ids.length || this.current !== run) return
+    const messageIds = ids.slice(from, from + MAX_ACK_IDS)
+    if (await this.acknowledgeBatch(messageIds)) {
+      for (const id of messageIds) this.seen.set(id, true)
+    }
+    return this.acknowledge(ids, from + MAX_ACK_IDS, run)
+  }
+
+  /** Whether the server confirmed acking `messageIds`; a failed batch is acked again next poll. */
+  private async acknowledgeBatch(messageIds: string[]): Promise<boolean> {
+    try {
+      await this.client.acknowledgeMessage(
+        this.host === undefined ? { messageIds } : { messageIds, host: this.host }
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
+/** What one poll has read so far: new messages handled, and IDs to acknowledge. */
+interface PollState {
+  handled: number
+  toAck: Set<string>
 }
 
 /** The envelope in a message body (JSON text or an object the client already parsed). */

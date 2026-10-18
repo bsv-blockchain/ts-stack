@@ -412,21 +412,26 @@ export class PeerLink {
     this.send({ t: 'error', code: 'too_large', message: error.message }).then(linger, close)
   }
 
-  private async writeFrames(frames: Uint8Array[]): Promise<void> {
+  /**
+   * Write `frames` from `from` on, in order. Frames go out at once while the channel's
+   * buffer has room; when it is over {@link MAX_BUFFERED_BYTES} the rest wait for it to drain.
+   */
+  private writeFrames(frames: Uint8Array[], from = 0): Promise<void> {
     const channel = this.channel!
-    for (const frame of frames) {
-      while (!this.closed && channel.bufferedAmount > MAX_BUFFERED_BYTES) {
-        await this.drained(channel)
+    for (let i = from; i < frames.length; i++) {
+      if (!this.closed && channel.bufferedAmount > MAX_BUFFERED_BYTES) {
+        return this.drained(channel).then(() => this.writeFrames(frames, i))
       }
-      if (this.closed) throw this.closedError()
+      if (this.closed) return Promise.reject(this.closedError())
       try {
-        channel.send(frame as Uint8Array<ArrayBuffer>)
+        channel.send(frames[i] as Uint8Array<ArrayBuffer>)
       } catch (cause) {
         const error = new WebRTPayError('closed', 'Data channel send failed', { cause })
         this.close(error)
-        throw error
+        return Promise.reject(error)
       }
     }
+    return Promise.resolve()
   }
 
   /** Resolve on the next `bufferedamountlow`; reject if the link closes first. */

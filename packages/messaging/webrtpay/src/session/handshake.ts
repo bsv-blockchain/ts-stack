@@ -136,7 +136,9 @@ export function authenticate(link: PeerLink, o: AuthenticateOptions): Promise<Au
   if (!Number.isSafeInteger(cap) || cap < 0) {
     return Promise.reject(new RangeError(`Invalid message size cap: ${cap}`))
   }
-  return new Promise((resolve, reject) => new Handshake(link, o, cap, resolve, reject))
+  return new Promise((resolve, reject) => {
+    new Handshake(link, o, cap, resolve, reject).begin()
+  })
 }
 
 function authFailed(message: string, cause?: unknown): WebRTPayError {
@@ -183,8 +185,12 @@ class Handshake {
     this.offClose = link.onClose(reason => {
       this.fail(reason ?? new WebRTPayError('closed', 'Link closed during the handshake'))
     })
-    const timeoutMs = o.timeoutMs ?? DEFAULTS.handshakeTimeoutMs
-    if (o.startAfter === undefined) this.startTimer(timeoutMs)
+  }
+
+  /** Start the clock (unless `startAfter` defers it) and the setup; called once, right after construction. */
+  begin(): void {
+    const timeoutMs = this.o.timeoutMs ?? DEFAULTS.handshakeTimeoutMs
+    if (this.o.startAfter === undefined) this.startTimer(timeoutMs)
     this.run(this.start(timeoutMs))
   }
 

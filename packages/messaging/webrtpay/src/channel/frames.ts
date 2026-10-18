@@ -108,11 +108,12 @@ function assertBoundedObject(bytes: Uint8Array): void {
   if (i === bytes.length || bytes[i] !== 0x7b) throw protocolError('Message is not a JSON object')
 
   const counts = new StructureCounts()
-  for (; i < bytes.length; i++) {
+  while (i < bytes.length) {
     if (bytes[i] === 0x22) {
-      i = closingQuote(bytes, i)
+      i = closingQuote(bytes, i) + 1
     } else {
       counts.add(bytes[i])
+      i++
     }
   }
 }

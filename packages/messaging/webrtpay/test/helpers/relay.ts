@@ -40,16 +40,18 @@ export function inbox(): {
   const got: Array<[string, SignalEnvelope]> = []
   const waiters: Array<() => void> = []
   let read = 0
+  const next = async (): Promise<[string, SignalEnvelope]> => {
+    if (read < got.length) return got[read++]
+    await new Promise<void>(r => waiters.push(r))
+    return next()
+  }
   return {
     got,
     fn(from, e) {
       got.push([from, e])
       waiters.shift()?.()
     },
-    async next() {
-      while (read >= got.length) await new Promise<void>(r => waiters.push(r))
-      return got[read++]
-    }
+    next
   }
 }
 
@@ -57,12 +59,15 @@ export function inbox(): {
  * Resolve once `check()` holds, polling every 20 ms; reject after `timeoutMs`. It keeps time
  * with `performance.now()`, so a test that mocks `Date.now` cannot make it wait forever.
  */
-export async function waitFor(check: () => boolean, timeoutMs = 5000): Promise<void> {
-  const until = performance.now() + timeoutMs
-  while (!check()) {
-    if (performance.now() > until) throw new Error('condition not met in time')
-    await new Promise(r => setTimeout(r, 20))
-  }
+export function waitFor(check: () => boolean, timeoutMs = 5000): Promise<void> {
+  return pollUntil(check, performance.now() + timeoutMs)
+}
+
+async function pollUntil(check: () => boolean, until: number): Promise<void> {
+  if (check()) return
+  if (performance.now() > until) throw new Error('condition not met in time')
+  await new Promise(r => setTimeout(r, 20))
+  return pollUntil(check, until)
 }
 
 /** `p`, or a rejection naming `what` after `timeoutMs`, so a wait fails rather than hangs. */
@@ -101,12 +106,14 @@ export function raw(url: string, o: RawOptions = {}): Raw {
   })
   ws.on('error', () => {})
   const closed = new Promise<number>(resolve => ws.on('close', code => resolve(code)))
+  const next = async (): Promise<Record<string, unknown>> => {
+    if (frames.length > 0) return frames.shift() as Record<string, unknown>
+    await new Promise<void>(r => waiters.push(r))
+    return next()
+  }
   return {
     ws,
-    async next() {
-      while (frames.length === 0) await new Promise<void>(r => waiters.push(r))
-      return frames.shift() as Record<string, unknown>
-    },
+    next,
     send(frame) {
       ws.send(typeof frame === 'string' ? frame : JSON.stringify(frame))
     },
@@ -164,6 +171,12 @@ export function relayFixtures(): {
   cleanup(): Promise<void>
 } {
   const cleanups: Array<() => unknown> = []
+  const cleanup = async (): Promise<void> => {
+    const fn = cleanups.pop()
+    if (fn === undefined) return
+    await fn()
+    return cleanup()
+  }
   return {
     async relay(o = {}) {
       const r = await createRelayServer({ port: 0, host: '127.0.0.1', ...o })
@@ -187,8 +200,6 @@ export function relayFixtures(): {
     defer(fn) {
       cleanups.push(fn)
     },
-    async cleanup() {
-      while (cleanups.length > 0) await cleanups.pop()?.()
-    }
+    cleanup
   }
 }
