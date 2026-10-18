@@ -392,25 +392,42 @@ describe('DirectPayClient remote payments (MemoryHub, loopback WebRTC)', () => {
     expect(await sender.getIdentityKey()).toBe(payer.identityKey)
   })
 
-  it('creates every link at the 64 KiB pre-auth cap, and the payment still goes through', async () => {
+  it('creates every link at the 64 KiB pre-auth cap, and the payments still go through', async () => {
     const createOffer = jest.spyOn(PeerLink, 'createOffer')
     const acceptOffer = jest.spyOn(PeerLink, 'acceptOffer')
+    /** The options of the only link `spy` made since the last check. */
+    const onlyLink = (spy: typeof createOffer | typeof acceptOffer): unknown => {
+      expect(spy).toHaveBeenCalledTimes(1)
+      const call = spy.mock.calls[0]
+      spy.mockClear()
+      return call[call.length - 1]
+    }
+    // before authenticate() runs, a link accepts no more than a handshake needs
+    const preAuth = { maxMessageBytes: 65536 }
     try {
       const hub = createMemoryHub()
       const payer = await makeWallet()
       const payee = await makeWallet()
-      await hubClient(hub, payee).startReceiving(accepting(payee))
+      const receiver = hubClient(hub, payee)
+      await receiver.startReceiving(accepting(payee))
       const sender = hubClient(hub, payer)
-      const { token } = await makeToken(payer, payee.identityKey, 1000)
 
+      // a dial: the payer offers, the receiving payee answers
       const peer = await sender.connect(payee.identityKey)
-      // before authenticate() runs, a link accepts no more than a handshake needs
-      expect(createOffer).toHaveBeenCalledTimes(1)
-      expect(createOffer.mock.calls[0][0]).toMatchObject({ maxMessageBytes: 65536 })
-      expect(acceptOffer).toHaveBeenCalledTimes(1)
-      expect(acceptOffer.mock.calls[0][1]).toMatchObject({ maxMessageBytes: 65536 })
+      expect(onlyLink(createOffer)).toMatchObject(preAuth)
+      expect(onlyLink(acceptOffer)).toMatchObject(preAuth)
       // authentication raises the cap again
-      expect((await sender.sendPayment(peer, token)).status).toBe('accepted')
+      const dialed = await makeToken(payer, payee.identityKey, 1000)
+      expect((await sender.sendPayment(peer, dialed.token)).status).toBe('accepted')
+
+      // a code exchange: the payee's offer code, the payer's answer code
+      const offer = await receiver.createOfferCode({ chain: 'test' })
+      expect(onlyLink(createOffer)).toMatchObject(preAuth)
+      const answer = await sender.answerOfferCode(offer.code, { expectedChain: 'test' })
+      expect(onlyLink(acceptOffer)).toMatchObject(preAuth)
+      const [, payerSide] = await Promise.all([offer.complete(answer.answerCode), answer.connected])
+      const scanned = await makeToken(payer, payee.identityKey, 1000)
+      expect((await sender.sendPayment(payerSide, scanned.token)).status).toBe('accepted')
     } finally {
       createOffer.mockRestore()
       acceptOffer.mockRestore()
