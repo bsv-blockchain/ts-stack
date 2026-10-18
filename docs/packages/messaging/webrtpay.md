@@ -54,7 +54,7 @@ const client = new DirectPayClient({
 
 // Payer: dial and authenticate first, then build, broadcast and deliver the payment.
 const peer = await client.connect(payeeIdentityKey)
-const ack = await client.sendPayment(peer, token) // 'accepted' | 'received' | 'rejected'
+const ack = await client.sendPayment(peer, token) // ack.status: 'accepted' | 'received' | 'rejected'
 ```
 
 The payee calls `client.startReceiving({ onPayment })` and verifies each payment with
@@ -79,10 +79,12 @@ only while the payee is still connected, and deliver a token again after a lost 
 - `@bsv/webrtpay/server` (Node only): `createRelayServer`, `turnCredentials` and the
   `webrtpay-relay` CLI, a stateless WebSocket rendezvous that authenticates sockets by identity
   key and forwards encrypted envelopes; `webrtpay-relay --help` lists its settings
-- TURN credentials from the relay: short-lived, per-identity credentials minted from a coturn
-  `use-auth-secret` shared secret (`CoturnRestTurnProvider`) or requested from Cloudflare's
-  managed TURN service (`CloudflareTurnProvider`); the relay sends their expiry with them, and
-  `RelaySignaler.turnProvider()` reuses them until they are within 30 seconds of it
+- TURN credentials from the relay: short-lived credentials minted from a coturn
+  `use-auth-secret` shared secret (`CoturnRestTurnProvider`, with a per-identity pseudonymous
+  username) or requested from Cloudflare's managed TURN service (`CloudflareTurnProvider`,
+  random credentials per request; Cloudflare never receives the identity key); the relay sends
+  their expiry with them, and `RelaySignaler.turnProvider()` reuses them until they are within
+  30 seconds of it
 
 ## Security
 

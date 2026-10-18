@@ -494,7 +494,8 @@ nothing and never logs payloads or secrets.
 
 ```sh
 PUBLIC_URLS=wss://relay.example.com TRUSTED_IP_HEADER=cf-connecting-ip \
-TURN_PROVIDER=cloudflare CLOUDFLARE_TURN_KEY_ID=… CLOUDFLARE_TURN_API_TOKEN=… npx webrtpay-relay
+TURN_PROVIDER=cloudflare CLOUDFLARE_TURN_KEY_ID=… CLOUDFLARE_TURN_API_TOKEN=… \
+npx --package @bsv/webrtpay webrtpay-relay
 ```
 
 Set `TRUSTED_IP_HEADER` only when the listener can be reached solely through the proxy that sets
@@ -584,7 +585,8 @@ Most connections need no TURN; it carries the (encrypted) payment only when neit
 reach the other directly, as on many mobile networks. The relay issues short-lived credentials
 for one of two providers.
 
-**Cloudflare Realtime TURN (`TURN_PROVIDER=cloudflare`; the default for production).**
+**Cloudflare Realtime TURN (`TURN_PROVIDER=cloudflare`; recommended for production, and must be
+set explicitly).**
 
 - Rollout: enable `TURN_PROVIDER=cloudflare` only after every client is on a package version
   that reads `ice.expiresAt` (this version on). Older clients work out when TURN credentials
