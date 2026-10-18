@@ -5,8 +5,8 @@ import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { ProtoWallet } from '@bsv/sdk'
 import { DEFAULT_RELAY_LIMITS, createRelayServer, turnCredentials } from '../server/index.js'
-import { relayOptionsFromEnv, relayUsage } from '../server/env.js'
-import { isLoopbackHost } from '../server/relay.js'
+import { DEFAULT_HOST, relayOptionsFromEnv, relayUsage } from '../server/env.js'
+import { DEFAULT_RELAY_PORT, DEFAULT_TURN_TTL_SECONDS, isLoopbackHost } from '../server/relay.js'
 import { RelaySignaler, relayAuthData } from '../src/signaling/RelaySignaler.js'
 import type { RelaySignalerOptions } from '../src/signaling/RelaySignaler.js'
 import {
@@ -1345,17 +1345,24 @@ describe('relayOptionsFromEnv', () => {
     expect(() => relayOptionsFromEnv({ PUBLIC_URLS: ' , ' })).toThrow('PUBLIC_URLS is required')
   })
 
-  it('defaults to port 8787 on all interfaces when PUBLIC_URLS is set', () => {
+  it('keeps the documented defaults: port 8787, every IPv4 interface, TURN for 600 s', () => {
+    // README "Relay server" lists these values; the relay and --help take them from here
+    expect(DEFAULT_RELAY_PORT).toBe(8787)
+    expect(DEFAULT_HOST).toBe('0.0.0.0')
+    expect(DEFAULT_TURN_TTL_SECONDS).toBe(600)
+  })
+
+  it('defaults to DEFAULT_RELAY_PORT on DEFAULT_HOST when PUBLIC_URLS is set', () => {
     expect(relayOptionsFromEnv({ PUBLIC_URLS: 'wss://relay.example' })).toEqual({
-      port: 8787,
-      host: '0.0.0.0',
+      port: DEFAULT_RELAY_PORT,
+      host: DEFAULT_HOST,
       publicUrls: ['wss://relay.example']
     })
   })
 
   it('allows a loopback HOST without PUBLIC_URLS', () => {
     for (const HOST of ['127.0.0.1', 'localhost', '::1']) {
-      expect(relayOptionsFromEnv({ HOST })).toEqual({ port: 8787, host: HOST })
+      expect(relayOptionsFromEnv({ HOST })).toEqual({ port: DEFAULT_RELAY_PORT, host: HOST })
     }
   })
 
@@ -1539,5 +1546,16 @@ describe('relayUsage (webrtpay-relay --help)', () => {
       new RegExp(`^ {2}TURN_PER_IP_PER_HOUR +${DEFAULT_RELAY_LIMITS.turnPerIpPerHour}\\b`, 'm')
     )
     expect(usage).toContain('SIGTERM')
+  })
+
+  it('gives the PORT, HOST and TURN_TTL defaults from the constants the relay uses', () => {
+    const usage = relayUsage()
+    const shows = (name: string, value: number | string): void => {
+      const line = usage.split('\n').find(l => l.startsWith(`  ${name} `))
+      expect(line).toContain(`(default ${value})`)
+    }
+    shows('PORT', DEFAULT_RELAY_PORT)
+    shows('HOST', DEFAULT_HOST)
+    shows('TURN_TTL', DEFAULT_TURN_TTL_SECONDS)
   })
 })

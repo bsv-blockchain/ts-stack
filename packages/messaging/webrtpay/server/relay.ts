@@ -120,6 +120,12 @@ export const DEFAULT_RELAY_LIMITS: Readonly<RelayLimits> = Object.freeze({
   turnPerHour: 600
 })
 
+/** Port the relay listens on when `port` is not given. */
+export const DEFAULT_RELAY_PORT = 8787
+
+/** Lifetime of TURN credentials the relay issues, in seconds, unless `turn.ttlSeconds` says otherwise. */
+export const DEFAULT_TURN_TTL_SECONDS = 600
+
 export interface RelayServerOptions {
   /** Port to listen on (0 picks a free one); default 8787. Ignored with `server`. */
   port?: number
@@ -247,8 +253,6 @@ const CLOSE_WAIT_MS = 1000
 const LOOPBACK_V4 = /^127(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
 /** An HTTP header name (RFC 9110 token). */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
-/** Lifetime of TURN credentials the relay issues, in seconds, unless `turn.ttlSeconds` says otherwise. */
-const TURN_TTL_SECONDS = 600
 /** Bytes of random payload in each ping. */
 const PING_BYTES = 16
 const MINUTE_MS = 60000
@@ -273,7 +277,7 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
   const publicUrls = (o.publicUrls ?? []).map(normalizeRelayUrl)
   const stunUrls = [...(o.stunUrls ?? [])]
   const turn = o.turn
-  const turnTtl = turn?.ttlSeconds ?? TURN_TTL_SECONDS
+  const turnTtl = turn?.ttlSeconds ?? DEFAULT_TURN_TTL_SECONDS
   if (turn !== undefined) {
     if (!Array.isArray(turn.urls) || turn.urls.length === 0) {
       throw new TypeError('turn.urls must list at least one TURN url')
@@ -715,7 +719,7 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
 
   http.on('upgrade', onUpgrade)
   try {
-    await listening(http, owned ? { port: o.port ?? 8787, host: o.host } : undefined)
+    await listening(http, owned ? { port: o.port ?? DEFAULT_RELAY_PORT, host: o.host } : undefined)
     if (publicUrls.length === 0 && o.trustHostHeader !== true && !isLoopback(http.address())) {
       throw new Error(
         'publicUrls is required when the relay listens on a non-loopback address: without ' +

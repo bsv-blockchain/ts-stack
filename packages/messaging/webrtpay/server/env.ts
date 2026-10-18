@@ -1,5 +1,14 @@
-import { DEFAULT_RELAY_LIMITS, isHeaderName, isLoopbackHost } from './relay.js'
+import {
+  DEFAULT_RELAY_LIMITS,
+  DEFAULT_RELAY_PORT,
+  DEFAULT_TURN_TTL_SECONDS,
+  isHeaderName,
+  isLoopbackHost
+} from './relay.js'
 import type { RelayLimits, RelayServerOptions } from './relay.js'
+
+/** `HOST` when it is unset: every IPv4 interface. */
+export const DEFAULT_HOST = '0.0.0.0'
 
 /**
  * Limits read from the environment, each a whole number of at least 1 (see
@@ -21,13 +30,14 @@ const LIMIT_VARIABLES: ReadonlyArray<[string, keyof RelayLimits, { turn?: boolea
 ]
 
 /**
- * Relay options from environment variables: `PORT` (default 8787), `HOST`
- * (default 0.0.0.0), and comma-separated `PUBLIC_URLS`, `STUN_URLS` and
- * `TURN_URLS`; `TURN_SECRET` and `TURN_URLS` go together and `TURN_TTL` is in
- * seconds (default 600). `TRUSTED_IP_HEADER` names the header the outermost proxy
- * sets to the client's single address: `cf-connecting-ip` behind Cloudflare. A list
- * value is not used, so `x-forwarded-for` is right only behind exactly one proxy
- * that overwrites it (see `trustedIpHeader`). Empty variables count as unset.
+ * Relay options from environment variables: `PORT` (default `DEFAULT_RELAY_PORT`),
+ * `HOST` (default `DEFAULT_HOST`), and comma-separated `PUBLIC_URLS`, `STUN_URLS`
+ * and `TURN_URLS`; `TURN_SECRET` and `TURN_URLS` go together and `TURN_TTL` is in
+ * seconds (unset, the relay's `DEFAULT_TURN_TTL_SECONDS`). `TRUSTED_IP_HEADER` names
+ * the header the outermost proxy sets to the client's single address:
+ * `cf-connecting-ip` behind Cloudflare. A list value is not used, so
+ * `x-forwarded-for` is right only behind exactly one proxy that overwrites it (see
+ * `trustedIpHeader`). Empty variables count as unset.
  * `PUBLIC_URLS` is required unless `HOST` is a loopback address (`localhost`,
  * `127.x.x.x` or `::1`), because without it clients sign a url built from the Host
  * header they send.
@@ -41,9 +51,9 @@ const LIMIT_VARIABLES: ReadonlyArray<[string, keyof RelayLimits, { turn?: boolea
  * Throws `Error` naming the variable on an invalid or missing value.
  */
 export function relayOptionsFromEnv(env: Record<string, string | undefined>): RelayServerOptions {
-  const host = env.HOST?.trim() || '0.0.0.0'
+  const host = env.HOST?.trim() || DEFAULT_HOST
   const o: RelayServerOptions = {
-    port: env.PORT ? wholeNumber('PORT', env.PORT, 0, 65535) : 8787,
+    port: env.PORT ? wholeNumber('PORT', env.PORT, 0, 65535) : DEFAULT_RELAY_PORT,
     host
   }
   const publicUrls = list(env.PUBLIC_URLS)
@@ -94,14 +104,17 @@ export function relayOptionsFromEnv(env: Record<string, string | undefined>): Re
 
 /** The settings `relayOptionsFromEnv` reads besides the limits, as `--help` lists them. */
 const SETTING_VARIABLES: ReadonlyArray<[string, string]> = [
-  ['PORT', 'port to listen on (default 8787)'],
-  ['HOST', 'address to listen on (default 0.0.0.0)'],
+  ['PORT', `port to listen on (default ${DEFAULT_RELAY_PORT})`],
+  ['HOST', `address to listen on (default ${DEFAULT_HOST})`],
   ['PUBLIC_URLS', 'comma-separated wss:// urls clients dial; required unless HOST is loopback'],
   ['TRUSTED_IP_HEADER', "header the outermost proxy sets to the client's address"],
   ['STUN_URLS', 'comma-separated STUN urls handed to clients'],
   ['TURN_SECRET', 'coturn static-auth-secret; requires TURN_URLS'],
   ['TURN_URLS', 'comma-separated TURN urls to issue credentials for; requires TURN_SECRET'],
-  ['TURN_TTL', 'lifetime of issued TURN credentials in seconds (default 600)']
+  [
+    'TURN_TTL',
+    `lifetime of issued TURN credentials in seconds (default ${DEFAULT_TURN_TTL_SECONDS})`
+  ]
 ]
 
 /** What `webrtpay-relay --help` prints: every variable `relayOptionsFromEnv` reads. */
