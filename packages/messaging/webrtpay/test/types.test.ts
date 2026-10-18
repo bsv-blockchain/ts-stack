@@ -1,6 +1,6 @@
 /**
  * PaymentToken interop with @bsv/sdk and PeerPay (@bsv/message-box-client), checked by the
- * compiler: `npm run typecheck` fails when an assignment below stops compiling. The jest
+ * compiler: `pnpm typecheck` fails when an assignment below stops compiling. The jest
  * run only confirms the file loads; ts-jest does not type-check.
  */
 import { describe, expect, it } from '@jest/globals'
@@ -51,7 +51,7 @@ export function compileTimeChecks(
 }
 
 describe('PaymentToken interop types', () => {
-  it('is checked by the compiler (npm run typecheck)', () => {
+  it('is checked by the compiler (pnpm typecheck)', () => {
     expect(typeof compileTimeChecks).toBe('function')
   })
 })

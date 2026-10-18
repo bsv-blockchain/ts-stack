@@ -1054,17 +1054,20 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
     const hub = createMemoryHub()
     const payee = await makeWallet()
     const dialer = hubClient(hub, payee, { chain: 'main' })
-    // listening only for the answer to its own dial: nothing about it is disclosed
+    const payer = hubClient(hub, await makeWallet(), { chain: 'test' })
+    // listening only for the answer to its own dial: nothing about it is disclosed. Nobody
+    // answers that dial and its timeout outlasts the test, so the dialer is still listening
+    // however slowly the offer below arrives; closing the dialer ends the dial.
     const silent = await silentListener(hub)
     try {
-      const ownDial = failure(dialer.connect(silent.identityKey, { timeoutMs: 2000 }))
+      const ownDial = failure(dialer.connect(silent.identityKey, { timeoutMs: 60_000 }))
       await silent.heard
-      const refused = await failure(
-        hubClient(hub, await makeWallet(), { chain: 'test' }).connect(payee.identityKey)
-      )
+      const refused = await failure(payer.connect(payee.identityKey))
       expect(refused).toMatchObject({ code: 'rejected', reason: 'not_receiving' })
-      expect((await ownDial).code).toBe('peer_unreachable')
+      await dialer.close()
+      expect((await ownDial).code).toBe('closed')
     } finally {
+      await dialer.close()
       await silent.stop()
     }
   })
