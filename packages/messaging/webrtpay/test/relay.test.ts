@@ -1702,6 +1702,68 @@ describe('relayOptionsFromEnv', () => {
     }
   })
 
+  it('reports the first problem in the TURN settings, word for word', () => {
+    const ttl = 'TURN_TTL must be a whole number from 1 to 2147483647'
+    const cases: Array<[Record<string, string>, string]> = [
+      // the provider name, then TURN_TTL, before what either provider needs
+      [
+        { TURN_PROVIDER: 'twilio', TURN_TTL: '0', CLOUDFLARE_TURN_KEY_ID: 'k' },
+        'TURN_PROVIDER must be coturn or cloudflare'
+      ],
+      [{ TURN_PROVIDER: 'cloudflare', TURN_TTL: '0' }, ttl],
+      [{ TURN_TTL: 'x', CLOUDFLARE_TURN_KEY_ID: 'k' }, ttl],
+      [{ TURN_PROVIDER: 'coturn', TURN_TTL: '1.5' }, ttl],
+      // Cloudflare: coturn settings before missing Cloudflare ones
+      [
+        { TURN_PROVIDER: 'cloudflare', TURN_SECRET: 's' },
+        'TURN_SECRET is for TURN_PROVIDER=coturn; Cloudflare chooses its own urls, so unset ' +
+          'it with TURN_PROVIDER=cloudflare'
+      ],
+      [
+        { TURN_PROVIDER: 'cloudflare', TURN_SECRET: 's', TURN_URLS: 'turn:a:3478' },
+        'TURN_SECRET and TURN_URLS are for TURN_PROVIDER=coturn; Cloudflare chooses its own ' +
+          'urls, so unset them with TURN_PROVIDER=cloudflare'
+      ],
+      // coturn: Cloudflare settings before missing coturn ones
+      [
+        { TURN_SECRET: 's', CLOUDFLARE_TURN_API_TOKEN: 't' },
+        'TURN_PROVIDER=cloudflare is required when CLOUDFLARE_TURN_API_TOKEN is set'
+      ],
+      [
+        { TURN_TTL: '60', TURN_PER_HOUR: '5', TURN_PER_IP_PER_HOUR: '1' },
+        'TURN_SECRET is required when TURN_TTL or TURN_PER_IP_PER_HOUR or TURN_PER_HOUR is set ' +
+          '(or set TURN_PROVIDER=cloudflare with CLOUDFLARE_TURN_KEY_ID and ' +
+          'CLOUDFLARE_TURN_API_TOKEN)'
+      ],
+      // a TURN limit needs TURN before its own value is checked
+      [
+        { TURN_PER_IP_PER_HOUR: '0' },
+        'TURN_SECRET is required when TURN_PER_IP_PER_HOUR is set (or set ' +
+          'TURN_PROVIDER=cloudflare with CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN)'
+      ],
+      [
+        {
+          TURN_PROVIDER: 'coturn',
+          TURN_URLS: 'turn:a:3478',
+          TURN_TTL: '60',
+          TURN_PER_48_PER_HOUR: '2'
+        },
+        'TURN_SECRET is required when TURN_PROVIDER or TURN_URLS or TURN_TTL or ' +
+          'TURN_PER_48_PER_HOUR is set'
+      ],
+      [{ TURN_SECRET: 's', TURN_PER_HOUR: '0' }, 'TURN_URLS is required when TURN_SECRET is set']
+    ]
+    for (const [vars, message] of cases) {
+      let thrown: unknown
+      try {
+        relayOptionsFromEnv({ HOST: '127.0.0.1', ...vars })
+      } catch (e) {
+        thrown = e
+      }
+      expect([vars, (thrown as Error | undefined)?.message]).toEqual([vars, message])
+    }
+  })
+
   it('starts a relay with a Cloudflare provider without asking Cloudflare anything', async () => {
     const logs: string[] = []
     const fetch = jest.fn<typeof globalThis.fetch>()

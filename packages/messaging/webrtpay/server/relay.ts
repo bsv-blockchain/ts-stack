@@ -24,7 +24,7 @@ import { fromHex } from '../src/util/bytes.js'
 import { TokenBucket } from './bucket.js'
 import { addressGroup, headerAddress, ipv6Block48 } from './ip.js'
 import { turnIssuer } from './turn.js'
-import type { TurnProvider } from './turn.js'
+import type { TurnIssuer, TurnProvider } from './turn.js'
 
 /** Per-socket, per-source and global limits; sizes in bytes, durations in milliseconds. */
 export interface RelayLimits {
@@ -277,19 +277,8 @@ const HOUR_MS = 3600000
  * non-loopback address without `publicUrls` or `trustHostHeader`.
  */
 export async function createRelayServer(o: RelayServerOptions = {}): Promise<RelayServer> {
-  const limits = relayLimits(o.limits)
-  const path = trimPath(o.path ?? '/')
-  if (!path.startsWith('/')) throw new TypeError('path must start with "/"')
-  const pathPart = path === '/' ? '' : path
-  const publicUrls = (o.publicUrls ?? []).map(normalizeRelayUrl)
-  const stunUrls = [...(o.stunUrls ?? [])]
-  // Validates the provider now rather than on the first request.
-  const turn = o.turn === undefined ? undefined : turnIssuer(o.turn)
-  if (o.trustedIpHeader !== undefined && !isHeaderName(o.trustedIpHeader)) {
-    throw new TypeError('trustedIpHeader must be an HTTP header name')
-  }
-  // Node lowercases the names in req.headers.
-  const trustedIpHeader = o.trustedIpHeader?.toLowerCase()
+  const settings = relaySettings(o)
+  const { limits, path, pathPart, publicUrls, stunUrls, turn, trustedIpHeader } = settings
   const log = o.log ?? (() => {})
 
   const owned = o.server === undefined
@@ -573,31 +562,10 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
     const sender = client.identityKey as PubKeyHex
     const frame = JSON.stringify({ t: 'signal', from: sender, envelope: forward })
     const recipient = identities.get(f.to)
-    if (recipient !== undefined) {
-      // Each source address group has its own share of the recipient's budget, checked
-      // first, so one address cannot spend everyone's. It is the address and not the
-      // identity that is counted: identities cost nothing (Ruling 34). The total still
-      // bounds what many addresses can send together. Tokens go only for a signal
-      // delivered.
-      let pair = recipient.pairs.get(client.group)
-      if (pair === undefined) {
-        pair = new TokenBucket(limits.signalsPerPairPerMinute, MINUTE_MS)
-        recipient.pairs.set(client.group, pair)
-      }
-      if (!pair.ready()) {
-        sendError(client, 'rate_limited', ref)
-        return
-      }
-      if (recipient.budget.ready()) {
-        let delivered = 0
-        for (const peer of recipient.sockets) if (write(peer, frame)) delivered++
-        if (delivered > 0) {
-          pair.take()
-          recipient.budget.take()
-          send(client, { t: 'sent', ref })
-          return
-        }
-      }
+    const outcome = recipient === undefined ? 'offline' : deliverSignal(client, recipient, frame)
+    if (outcome === 'sent') {
+      send(client, { t: 'sent', ref })
+      return
     }
     // `offline` tells any authenticated key whether `to` is connected right now (and
     // within its budget): a presence oracle (audit F15). It is kept on purpose (Ruling
@@ -605,7 +573,46 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
     // after the 30 s connect budget. RelaySignaler holds a socket only while it listens,
     // sends or was told to connect, so the oracle shows when an identity has direct
     // receive on or is dialing.
-    sendError(client, 'offline', ref)
+    sendError(client, outcome, ref)
+  }
+
+  /**
+   * Forward `frame` to every socket of `recipient`: `sent` when at least one of them took
+   * it, `rate_limited` when the sender's share of the recipient's budget is spent, else
+   * `offline`. Each source address group has its own share, checked first, so one address
+   * cannot spend everyone's. It is the address and not the identity that is counted:
+   * identities cost nothing (Ruling 34). The total still bounds what many addresses can
+   * send together. Tokens go only for a signal delivered.
+   */
+  function deliverSignal(
+    client: Client,
+    recipient: Identity,
+    frame: string
+  ): 'sent' | 'rate_limited' | 'offline' {
+    const pair = pairShare(recipient, client.group)
+    if (!pair.ready()) return 'rate_limited'
+    if (!recipient.budget.ready()) return 'offline'
+    if (writeAll(recipient.sockets, frame) === 0) return 'offline'
+    pair.take()
+    recipient.budget.take()
+    return 'sent'
+  }
+
+  /** `group`'s share of `recipient`'s budget (see `Identity.pairs`), full when new. */
+  function pairShare(recipient: Identity, group: string): TokenBucket {
+    let pair = recipient.pairs.get(group)
+    if (pair === undefined) {
+      pair = new TokenBucket(limits.signalsPerPairPerMinute, MINUTE_MS)
+      recipient.pairs.set(group, pair)
+    }
+    return pair
+  }
+
+  /** Write `data` to each of `sockets` (see `write`); the number of sockets written to. */
+  function writeAll(sockets: Iterable<Client>, data: string): number {
+    let written = 0
+    for (const socket of sockets) if (write(socket, data)) written++
+    return written
   }
 
   /**
@@ -780,25 +787,7 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
 
   const address = http.address() as AddressInfo
   const url = `ws://${displayHost(address)}:${address.port}${pathPart}`
-  log(
-    `webrtpay relay listening on ${url}` +
-      (publicUrls.length > 0
-        ? ` (public: ${publicUrls.join(', ')})`
-        : ' (WARNING: no publicUrls, so clients sign a url built from the Host header; ' +
-          'set publicUrls in production and whenever a proxy fronts this relay)')
-  )
-  if (turn !== undefined) {
-    log(`webrtpay relay: TURN credentials from ${turn.kind}, valid ${turn.ttlSeconds} s`)
-  }
-  // A relay with public urls usually sits behind a proxy, whose address every client then has.
-  if (publicUrls.length > 0 && trustedIpHeader === undefined) {
-    log(
-      'webrtpay relay: WARNING: publicUrls is set but trustedIpHeader is not, so the ' +
-        'per-source limits count each socket under its peer address; behind a proxy every ' +
-        "client then shares the proxy's limits. Set trustedIpHeader to the header the " +
-        'outermost proxy sets (TRUSTED_IP_HEADER=cf-connecting-ip behind Cloudflare)'
-    )
-  }
+  logStarted(log, url, settings)
 
   let closing: Promise<void> | undefined
   async function shutdown(): Promise<void> {
@@ -840,6 +829,70 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
     stats() {
       return { sockets: clients.size, identities: identities.size }
     }
+  }
+}
+
+/** What `createRelayServer` takes from its options, checked before it binds anything. */
+interface RelaySettings {
+  limits: RelayLimits
+  /** The WebSocket endpoint's path, without trailing slashes. */
+  path: string
+  /** `path` as urls end in it: empty for `/`. */
+  pathPart: string
+  /** `publicUrls`, normalized (see `normalizeRelayUrl`). */
+  publicUrls: string[]
+  stunUrls: string[]
+  turn: TurnIssuer | undefined
+  /** `trustedIpHeader` in lower case, as Node names the headers in `req.headers`. */
+  trustedIpHeader: string | undefined
+}
+
+/**
+ * The settings in `o`, normalized and checked in this order: the limits, the path, the
+ * public urls, the TURN provider and the trusted address header. Throws on the first that
+ * is invalid.
+ */
+function relaySettings(o: RelayServerOptions): RelaySettings {
+  const limits = relayLimits(o.limits)
+  const path = trimPath(o.path ?? '/')
+  if (!path.startsWith('/')) throw new TypeError('path must start with "/"')
+  const pathPart = path === '/' ? '' : path
+  const publicUrls = (o.publicUrls ?? []).map(normalizeRelayUrl)
+  const stunUrls = [...(o.stunUrls ?? [])]
+  // Validates the provider now rather than on the first request.
+  const turn = o.turn === undefined ? undefined : turnIssuer(o.turn)
+  if (o.trustedIpHeader !== undefined && !isHeaderName(o.trustedIpHeader)) {
+    throw new TypeError('trustedIpHeader must be an HTTP header name')
+  }
+  // Node lowercases the names in req.headers.
+  const trustedIpHeader = o.trustedIpHeader?.toLowerCase()
+  return { limits, path, pathPart, publicUrls, stunUrls, turn, trustedIpHeader }
+}
+
+/**
+ * Log that the relay listens on `url`, where its TURN credentials come from, and the
+ * warnings its settings call for: no public urls, or public urls without a trusted
+ * address header.
+ */
+function logStarted(log: (msg: string) => void, url: string, s: RelaySettings): void {
+  log(
+    `webrtpay relay listening on ${url}` +
+      (s.publicUrls.length > 0
+        ? ` (public: ${s.publicUrls.join(', ')})`
+        : ' (WARNING: no publicUrls, so clients sign a url built from the Host header; ' +
+          'set publicUrls in production and whenever a proxy fronts this relay)')
+  )
+  if (s.turn !== undefined) {
+    log(`webrtpay relay: TURN credentials from ${s.turn.kind}, valid ${s.turn.ttlSeconds} s`)
+  }
+  // A relay with public urls usually sits behind a proxy, whose address every client then has.
+  if (s.publicUrls.length > 0 && s.trustedIpHeader === undefined) {
+    log(
+      'webrtpay relay: WARNING: publicUrls is set but trustedIpHeader is not, so the ' +
+        'per-source limits count each socket under its peer address; behind a proxy every ' +
+        "client then shares the proxy's limits. Set trustedIpHeader to the header the " +
+        'outermost proxy sets (TRUSTED_IP_HEADER=cf-connecting-ip behind Cloudflare)'
+    )
   }
 }
 

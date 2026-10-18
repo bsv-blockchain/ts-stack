@@ -1,7 +1,7 @@
 import { DEFAULT_RELAY_LIMITS, DEFAULT_RELAY_PORT, isHeaderName, isLoopbackHost } from './relay.js'
 import type { RelayLimits, RelayServerOptions } from './relay.js'
 import { DEFAULT_TURN_TTL_SECONDS } from './turn.js'
-import type { TurnProvider } from './turn.js'
+import type { CloudflareTurnProvider, CoturnRestTurnProvider, TurnProvider } from './turn.js'
 
 /** `HOST` when it is unset: every IPv4 interface. */
 export const DEFAULT_HOST = '0.0.0.0'
@@ -145,8 +145,30 @@ export function relayUsage(): string {
   ].join('\n')
 }
 
+/** The TURN variables, read and checked as far as every provider takes them. */
+interface TurnVariables {
+  /** `TURN_PROVIDER`: `coturn`, `cloudflare`, or empty when unset. */
+  provider: string
+  secret: string
+  turnUrls: string[]
+  keyId: string
+  apiToken: string
+  ttlSeconds: number | undefined
+}
+
 /** The TURN provider the variables configure (see `relayOptionsFromEnv`), if any. */
 function turnFromEnv(env: Record<string, string | undefined>): TurnProvider | undefined {
+  const turn = turnVariables(env)
+  if (turn.provider === 'cloudflare') return cloudflareFromEnv(turn)
+  return coturnFromEnv(turn, turnLimitsSet(env))
+}
+
+/**
+ * Every TURN variable, whichever provider is named, so that the other provider's settings
+ * can be refused. `TURN_PROVIDER` is checked first, then `TURN_TTL`, before anything that
+ * only one provider needs.
+ */
+function turnVariables(env: Record<string, string | undefined>): TurnVariables {
   const provider = env.TURN_PROVIDER?.trim() ?? ''
   if (provider !== '' && provider !== 'coturn' && provider !== 'cloudflare') {
     throw new Error('TURN_PROVIDER must be coturn or cloudflare')
@@ -157,71 +179,106 @@ function turnFromEnv(env: Record<string, string | undefined>): TurnProvider | un
   const apiToken = env.CLOUDFLARE_TURN_API_TOKEN?.trim() ?? ''
   const ttl = env.TURN_TTL?.trim() ?? ''
   const ttlSeconds = ttl === '' ? undefined : wholeNumber('TURN_TTL', ttl, 1, 2 ** 31 - 1)
-  const cloudflareSet = [
-    ...(keyId !== '' ? ['CLOUDFLARE_TURN_KEY_ID'] : []),
-    ...(apiToken !== '' ? ['CLOUDFLARE_TURN_API_TOKEN'] : [])
-  ]
+  return { provider, secret, turnUrls, keyId, apiToken, ttlSeconds }
+}
 
-  if (provider === 'cloudflare') {
-    const coturnSet = [
-      ...(secret !== '' ? ['TURN_SECRET'] : []),
-      ...(turnUrls.length > 0 ? ['TURN_URLS'] : [])
-    ]
-    if (coturnSet.length > 0) {
-      throw new Error(
-        `${coturnSet.join(' and ')} ${coturnSet.length > 1 ? 'are' : 'is'} for ` +
-          'TURN_PROVIDER=coturn; Cloudflare chooses its own urls, so unset ' +
-          `${coturnSet.length > 1 ? 'them' : 'it'} with TURN_PROVIDER=cloudflare`
-      )
-    }
-    const missing = ['CLOUDFLARE_TURN_KEY_ID', 'CLOUDFLARE_TURN_API_TOKEN'].filter(
-      name => !cloudflareSet.includes(name)
+/** The TURN limits set (see `LIMIT_VARIABLES`), in the order `--help` lists them. */
+function turnLimitsSet(env: Record<string, string | undefined>): string[] {
+  return LIMIT_VARIABLES.filter(([name, , o]) => o?.turn === true && env[name]?.trim()).map(
+    ([name]) => name
+  )
+}
+
+/** `TURN_PROVIDER=cloudflare`: the key id and API token, and no coturn settings. */
+function cloudflareFromEnv(turn: TurnVariables): CloudflareTurnProvider {
+  const coturnSet = namesSet([
+    ['TURN_SECRET', turn.secret !== ''],
+    ['TURN_URLS', turn.turnUrls.length > 0]
+  ])
+  if (coturnSet.length > 0) {
+    const several = coturnSet.length > 1
+    throw new Error(
+      `${coturnSet.join(' and ')} ${several ? 'are' : 'is'} for ` +
+        'TURN_PROVIDER=coturn; Cloudflare chooses its own urls, so unset ' +
+        `${several ? 'them' : 'it'} with TURN_PROVIDER=cloudflare`
     )
-    if (missing.length > 0) {
-      throw new Error(
-        `${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} required when ` +
-          'TURN_PROVIDER=cloudflare'
-      )
-    }
-    return {
-      kind: 'cloudflare',
-      keyId,
-      apiToken,
-      ...(ttlSeconds === undefined ? {} : { ttlSeconds })
-    }
   }
+  const missing = namesSet([
+    ['CLOUDFLARE_TURN_KEY_ID', turn.keyId === ''],
+    ['CLOUDFLARE_TURN_API_TOKEN', turn.apiToken === '']
+  ])
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} required when ` +
+        'TURN_PROVIDER=cloudflare'
+    )
+  }
+  return {
+    kind: 'cloudflare',
+    keyId: turn.keyId,
+    apiToken: turn.apiToken,
+    ...(turn.ttlSeconds === undefined ? {} : { ttlSeconds: turn.ttlSeconds })
+  }
+}
 
+/**
+ * `TURN_PROVIDER` unset or `coturn`: coturn REST from `TURN_SECRET` and `TURN_URLS`, or no
+ * TURN when neither they nor `TURN_PROVIDER`, `TURN_TTL` or a TURN limit (`turnLimits`, the
+ * names set) is set. No Cloudflare settings.
+ */
+function coturnFromEnv(
+  turn: TurnVariables,
+  turnLimits: string[]
+): CoturnRestTurnProvider | undefined {
+  const cloudflareSet = namesSet([
+    ['CLOUDFLARE_TURN_KEY_ID', turn.keyId !== ''],
+    ['CLOUDFLARE_TURN_API_TOKEN', turn.apiToken !== '']
+  ])
   if (cloudflareSet.length > 0) {
     throw new Error(
       `TURN_PROVIDER=cloudflare is required when ${cloudflareSet.join(' or ')} is set`
     )
   }
-  const turnLimits = LIMIT_VARIABLES.filter(([name, , o]) => o?.turn === true && env[name]?.trim())
-  if (provider === '' && secret === '' && turnUrls.length === 0) {
-    if (ttlSeconds === undefined && turnLimits.length === 0) return undefined
-    // only settings that every provider takes: name both ways to configure one
-    const set = [...(ttlSeconds !== undefined ? ['TURN_TTL'] : []), ...turnLimits.map(([n]) => n)]
-    throw new Error(
-      `TURN_SECRET is required when ${set.join(' or ')} is set (or set ` +
-        'TURN_PROVIDER=cloudflare with CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN)'
-    )
+  if (turn.provider === '' && turn.secret === '' && turn.turnUrls.length === 0) {
+    refuseTurnSettingsWithoutProvider(turn.ttlSeconds, turnLimits)
+    return undefined
   }
-  if (secret === '') {
-    const set = [
-      ...(provider === 'coturn' ? ['TURN_PROVIDER'] : []),
-      ...(turnUrls.length > 0 ? ['TURN_URLS'] : []),
-      ...(ttlSeconds !== undefined ? ['TURN_TTL'] : []),
-      ...turnLimits.map(([name]) => name)
-    ]
-    throw new Error(`TURN_SECRET is required when ${set.join(' or ')} is set`)
+  if (turn.secret === '') {
+    const set = namesSet([
+      ['TURN_PROVIDER', turn.provider === 'coturn'],
+      ['TURN_URLS', turn.turnUrls.length > 0],
+      ['TURN_TTL', turn.ttlSeconds !== undefined]
+    ])
+    throw new Error(`TURN_SECRET is required when ${[...set, ...turnLimits].join(' or ')} is set`)
   }
-  if (turnUrls.length === 0) throw new Error('TURN_URLS is required when TURN_SECRET is set')
+  if (turn.turnUrls.length === 0) throw new Error('TURN_URLS is required when TURN_SECRET is set')
   return {
     kind: 'coturn-rest',
-    secret,
-    urls: turnUrls,
-    ...(ttlSeconds === undefined ? {} : { ttlSeconds })
+    secret: turn.secret,
+    urls: turn.turnUrls,
+    ...(turn.ttlSeconds === undefined ? {} : { ttlSeconds: turn.ttlSeconds })
   }
+}
+
+/**
+ * With no provider configured, refuse `TURN_TTL` and the TURN limits (`turnLimits`, the
+ * names set), the settings every provider takes, naming both ways to configure one.
+ */
+function refuseTurnSettingsWithoutProvider(
+  ttlSeconds: number | undefined,
+  turnLimits: string[]
+): void {
+  const set = [...namesSet([['TURN_TTL', ttlSeconds !== undefined]]), ...turnLimits]
+  if (set.length === 0) return
+  throw new Error(
+    `TURN_SECRET is required when ${set.join(' or ')} is set (or set ` +
+      'TURN_PROVIDER=cloudflare with CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN)'
+  )
+}
+
+/** The names whose flag is true, in order. */
+function namesSet(flags: ReadonlyArray<[string, boolean]>): string[] {
+  return flags.filter(([, set]) => set).map(([name]) => name)
 }
 
 function list(v: string | undefined): string[] {

@@ -107,18 +107,13 @@ export function cloudflareIceServers(answer: unknown): RelayIceServer[] {
   const stun: string[] = []
   const turn: RelayIceServer[] = []
   let turnUrlCount = 0
-  for (const entry of entries) {
-    if (!isRecord(entry)) continue
-    const listedUrls: unknown[] = Array.isArray(entry.urls) ? entry.urls : [entry.urls]
-    const urls = listedUrls.filter((u): u is string => typeof u === 'string' && !PORT_53_RE.test(u))
-    for (const u of urls) if (STUN_URL_RE.test(u) && !stun.includes(u)) stun.push(u)
-    const turnUrls = urls
-      .filter(u => TURN_URL_RE.test(u))
-      .slice(0, CLOUDFLARE_MAX_TURN_URLS - turnUrlCount)
-    const { username, credential } = entry
-    if (turnUrls.length > 0 && nonEmpty(username) && nonEmpty(credential)) {
-      turn.push({ urls: turnUrls, username, credential })
-      turnUrlCount += turnUrls.length
+  for (const entry of entries.filter(isRecord)) {
+    const urls = entryUrls(entry)
+    addStunUrls(stun, urls)
+    const server = turnServer(entry, urls, CLOUDFLARE_MAX_TURN_URLS - turnUrlCount)
+    if (server !== undefined) {
+      turn.push(server)
+      turnUrlCount += server.urls.length
     }
   }
   if (turn.length === 0) throw new CloudflareTurnError('the answer has no TURN server')
@@ -129,6 +124,35 @@ export function cloudflareIceServers(answer: unknown): RelayIceServer[] {
 function iceServerEntries(listed: unknown): unknown[] {
   if (Array.isArray(listed)) return listed
   return isRecord(listed) ? [listed] : []
+}
+
+/** An entry's urls, a list or a single one, without those that are not strings or use port 53. */
+function entryUrls(entry: Record<string, unknown>): string[] {
+  const listed: unknown[] = Array.isArray(entry.urls) ? entry.urls : [entry.urls]
+  return listed.filter((u): u is string => typeof u === 'string' && !PORT_53_RE.test(u))
+}
+
+/** Add the STUN urls among `urls` to `stun`, each once. */
+function addStunUrls(stun: string[], urls: string[]): void {
+  for (const u of urls) if (STUN_URL_RE.test(u) && !stun.includes(u)) stun.push(u)
+}
+
+/**
+ * The entry's TURN server: the first `room` of its TURN urls, with its username and
+ * credential. Undefined when no TURN url fits, or the username or credential is missing or
+ * empty.
+ */
+function turnServer(
+  entry: Record<string, unknown>,
+  urls: string[],
+  room: number
+): { urls: string[]; username: string; credential: string } | undefined {
+  const turnUrls = urls.filter(u => TURN_URL_RE.test(u)).slice(0, room)
+  const { username, credential } = entry
+  if (turnUrls.length > 0 && nonEmpty(username) && nonEmpty(credential)) {
+    return { urls: turnUrls, username, credential }
+  }
+  return undefined
 }
 
 /**

@@ -495,6 +495,29 @@ describe('turnIssuer: Cloudflare', () => {
     expect((await turnIssuer(cloudflare(today.fetch)).issue('02ab')).iceServers).toEqual(ISSUED)
   })
 
+  it('skips entries that are not objects, lists each STUN url once, and caps only TURN urls it forwards', async () => {
+    const urls = (n: number, port: number): string[] =>
+      Array.from({ length: n }, (_, i) => `turn:turn.cloudflare.com:${port + i}?transport=udp`)
+    const { fetch } = mockFetch(() =>
+      json({
+        iceServers: [
+          null,
+          'turn:turn.cloudflare.com:3478',
+          42,
+          [CF_STUN],
+          { urls: CF_STUN },
+          // without credentials: dropped, and its urls do not count toward the 8
+          { urls: [CF_STUN, ...urls(6, 3000)] },
+          { urls: [CF_STUN, ...urls(8, 4000)], username: USERNAME, credential: CREDENTIAL }
+        ]
+      })
+    )
+    expect((await turnIssuer(cloudflare(fetch)).issue('02ab')).iceServers).toEqual([
+      { urls: [CF_STUN] },
+      { urls: urls(8, 4000), username: USERNAME, credential: CREDENTIAL }
+    ])
+  })
+
   it('refuses a provider it cannot issue for when it is made, naming no secret', () => {
     const { fetch } = mockFetch(() => json(CURRENT))
     const bad: Array<Partial<CloudflareTurnProvider>> = [

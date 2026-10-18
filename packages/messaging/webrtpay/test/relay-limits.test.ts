@@ -372,6 +372,23 @@ describe('relay limits', () => {
       expect(DEFAULT_RELAY_LIMITS.signalsPerRecipientPerMinute).toBe(120)
     })
 
+    it('checks the sender address share before the recipient total', async () => {
+      const r = await relay({
+        trustedIpHeader: 'x-client-ip',
+        limits: { signalsPerPairPerMinute: 1, signalsPerRecipientPerMinute: 1 }
+      })
+      const bobBox = inbox()
+      await signaler(r, bob).listen(bobBox.fn)
+      const a = await authed(r, alice, fromIp('203.0.113.1'))
+      expect((await deliver(a, bob)).t).toBe('sent')
+      // both are spent now: alice's address hears of its own share first
+      expect(await deliver(a, bob)).toMatchObject({ t: 'error', code: 'rate_limited' })
+      // another address still has its share, but bob's total is gone
+      const d = await authed(r, dave, fromIp('203.0.113.2'))
+      expect(await deliver(d, bob)).toMatchObject({ t: 'error', code: 'offline' })
+      await waitFor(() => bobBox.got.length === 1)
+    })
+
     it('lets one address at the default rate no longer lock other senders out (R4)', async () => {
       const r = await relay({ trustedIpHeader: 'x-client-ip' })
       const bobBox = inbox()
