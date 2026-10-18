@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from '@jest/globals'
+import { afterAll, beforeAll, describe, expect, it } from '@jest/globals'
 import { PrivateKey } from '@bsv/sdk'
 import { decodeCode, encodeAnswerCode, encodeOfferCode } from '../src/codec/codes.js'
 import type { AnswerCode, OfferCode } from '../src/codec/codes.js'
@@ -352,20 +352,45 @@ describe('encodeSdp / decodeSdp: raw fallback', () => {
 })
 
 describe('decodeSdp rejects malformed bytes', () => {
-  const compact = encodeSdp(CHROMIUM_OFFER)
-  const cases: [string, Uint8Array][] = [
-    ['empty input', new Uint8Array(0)],
-    ['an unknown form byte', Uint8Array.of(3, 1, 2)],
-    ['a truncated compact body', compact.subarray(0, compact.length - 1)],
-    ['trailing bytes', concatBytes(compact, Uint8Array.of(0))],
-    ['a setup index above 2', Uint8Array.of(1, 3, ...compact.subarray(2))],
-    ['a max-message-size exponent of 54', Uint8Array.of(1, 0, 54, ...compact.subarray(3))],
-    ['an empty ufrag', concatBytes(Uint8Array.of(1, 0, 18, 0), compact.subarray(8))],
-    ['malformed UTF-8 in the raw form', Uint8Array.of(2, 0xff)]
+  // Fixtures come from the codec, so they are built in the tests: one that threw while the
+  // file loads would fail the whole file rather than the tests that need it.
+  let compact: Uint8Array
+  beforeAll(() => {
+    compact = encodeSdp(CHROMIUM_OFFER)
+  })
+  /** The compact form with the first candidate's header set to `type` and address `kind`. */
+  const candidate = (type: number, kind?: number): Uint8Array => {
+    const bytes = compact.slice()
+    // [form][setup][size exponent][ufrag length][ufrag][pwd length][pwd][fingerprint 32][count]
+    const pwdAt = 4 + bytes[3]
+    const countAt = pwdAt + 1 + bytes[pwdAt] + 32
+    expect(bytes[countAt]).toBeGreaterThan(0)
+    // the header byte is [type index << 4 | address kind]
+    bytes[countAt + 1] = (type << 4) | (kind ?? bytes[countAt + 1] & 0x0f)
+    return bytes
+  }
+  const cases: [string, () => Uint8Array][] = [
+    ['empty input', () => new Uint8Array(0)],
+    ['an unknown form byte', () => Uint8Array.of(3, 1, 2)],
+    ['a truncated compact body', () => compact.subarray(0, compact.length - 1)],
+    ['trailing bytes', () => concatBytes(compact, Uint8Array.of(0))],
+    ['a setup index above 2', () => Uint8Array.of(1, 3, ...compact.subarray(2))],
+    ['a max-message-size exponent of 54', () => Uint8Array.of(1, 0, 54, ...compact.subarray(3))],
+    ['an empty ufrag', () => concatBytes(Uint8Array.of(1, 0, 18, 0), compact.subarray(8))],
+    ['an unknown candidate type', () => candidate(4)],
+    ['an unknown candidate address kind', () => candidate(0, 3)],
+    ['malformed UTF-8 in the raw form', () => Uint8Array.of(2, 0xff)]
   ]
 
-  it.each(cases)('throws invalid_code for %s', (_, bytes) => {
+  it.each(cases)('throws invalid_code for %s', (_, make) => {
+    const bytes = make()
     expectWebRTPayError(() => decodeSdp(bytes), 'invalid_code')
+  })
+
+  it('reads the last known candidate type and address kind, so only the next is refused', () => {
+    expect(decodeSdp(candidate(3))).toContain(' typ relay')
+    // kind 2 is an mDNS name: the first candidate is one already
+    expect(decodeSdp(candidate(0, 2))).toMatch(/ [0-9a-f-]{36}\.local \d+ typ host/)
   })
 
   it('rejects a ufrag that would inject an SDP line', () => {
@@ -376,7 +401,10 @@ describe('decodeSdp rejects malformed bytes', () => {
 })
 
 describe('offer and answer codes', () => {
-  const offerSdp = decodeSdp(encodeSdp(CHROMIUM_OFFER))
+  let offerSdp: string
+  beforeAll(() => {
+    offerSdp = decodeSdp(encodeSdp(CHROMIUM_OFFER))
+  })
 
   it('round trips an offer with every field', () => {
     const fields = {
@@ -481,20 +509,26 @@ describe('offer and answer codes', () => {
 })
 
 describe('decodeCode rejects', () => {
-  const offerSdp = decodeSdp(encodeSdp(CHROMIUM_OFFER))
-  const testOffer = encodeOfferCode({
-    sid: SID,
-    identityKey: IDENTITY_KEY,
-    chain: 'test',
-    sdp: offerSdp
+  let offerSdp: string
+  let testOffer: string
+  let header: Uint8Array
+  let sdpTlv: Uint8Array
+  beforeAll(() => {
+    offerSdp = decodeSdp(encodeSdp(CHROMIUM_OFFER))
+    testOffer = encodeOfferCode({
+      sid: SID,
+      identityKey: IDENTITY_KEY,
+      chain: 'test',
+      sdp: offerSdp
+    })
+    header = fromBase64Url(testOffer.slice(CODE_PREFIX.length)).subarray(0, 51)
+    const sdpBytes = encodeSdp(offerSdp)
+    // 130 bytes: a two-byte LEB128 length.
+    sdpTlv = concatBytes(
+      Uint8Array.of(0x10, (sdpBytes.length & 0x7f) | 0x80, sdpBytes.length >> 7),
+      sdpBytes
+    )
   })
-  const header = fromBase64Url(testOffer.slice(CODE_PREFIX.length)).subarray(0, 51)
-  const sdpBytes = encodeSdp(offerSdp)
-  // 130 bytes: a two-byte LEB128 length.
-  const sdpTlv = concatBytes(
-    Uint8Array.of(0x10, (sdpBytes.length & 0x7f) | 0x80, sdpBytes.length >> 7),
-    sdpBytes
-  )
   const code = (...parts: Uint8Array[]): string => CODE_PREFIX + toBase64Url(concatBytes(...parts))
 
   it('an offer for another chain (expectedChain mismatch)', () => {
@@ -556,6 +590,17 @@ describe('decodeCode rejects', () => {
     expectWebRTPayError(() => decodeCode(42 as unknown as string), 'invalid_code')
   })
 
+  it('an expiry past the largest safe millisecond time; the largest decodes', () => {
+    // LEB128 of floor((2^53 - 1) / 1000) seconds, and of one second more
+    const largest = Uint8Array.of(0x03, 7, 0xd4, 0xf1, 0xa5, 0xb7, 0x92, 0x86, 0x02)
+    const past = Uint8Array.of(0x03, 7, 0xd5, 0xf1, 0xa5, 0xb7, 0x92, 0x86, 0x02)
+    expect(decodeCode(code(header, largest, sdpTlv), { now: 0 })).toMatchObject({
+      kind: 'offer',
+      expiresAt: 9_007_199_254_740_000
+    })
+    expectWebRTPayError(() => decodeCode(code(header, past, sdpTlv), { now: 0 }), 'invalid_code')
+  })
+
   const cases: [string, () => string][] = [
     ['bad base64url', () => `${CODE_PREFIX}not*base64`],
     ['a truncated header', () => code(header.subarray(0, 50))],
@@ -572,6 +617,10 @@ describe('decodeCode rejects', () => {
     ['a non-minimal length varint', () => code(header, Uint8Array.of(0x02, 0x81, 0x00, 5), sdpTlv)],
     ['a non-minimal amount varint', () => code(header, Uint8Array.of(0x02, 2, 0x81, 0x00), sdpTlv)],
     ['an amount with trailing bytes', () => code(header, Uint8Array.of(0x02, 2, 5, 0), sdpTlv)],
+    [
+      'an amount varint longer than 8 bytes',
+      () => code(header, Uint8Array.of(0x02, 9, ...new Uint8Array(8).fill(0x80), 0x01), sdpTlv)
+    ],
     ['a zero amount', () => code(header, Uint8Array.of(0x02, 1, 0), sdpTlv)],
     [
       'an amount above 2^53 - 1',
@@ -599,18 +648,21 @@ describe('decodeCode rejects', () => {
 })
 
 describe('encodeOfferCode / encodeAnswerCode validate their input', () => {
-  const sdp = decodeSdp(encodeSdp(CHROMIUM_OFFER))
-  const base = { sid: SID, identityKey: IDENTITY_KEY, sdp }
+  let sdp: string
+  beforeAll(() => {
+    sdp = decodeSdp(encodeSdp(CHROMIUM_OFFER))
+  })
 
   it.each([
-    ['a 15-byte sid', { ...base, sid: new Uint8Array(15) }],
-    ['an uppercase identity key', { ...base, identityKey: IDENTITY_KEY.toUpperCase() }],
-    ['a zero amount', { ...base, amount: 0 }],
-    ['a fractional amount', { ...base, amount: 1.5 }],
-    ['an unsafe amount', { ...base, amount: 2 ** 53 }],
-    ['a negative expiresAt', { ...base, expiresAt: -1 }],
-    ['a non-finite expiresAt', { ...base, expiresAt: Infinity }]
-  ])('throws RangeError for %s', (_, fields) => {
+    ['a 15-byte sid', { sid: new Uint8Array(15) }],
+    ['an uppercase identity key', { identityKey: IDENTITY_KEY.toUpperCase() }],
+    ['a zero amount', { amount: 0 }],
+    ['a fractional amount', { amount: 1.5 }],
+    ['an unsafe amount', { amount: 2 ** 53 }],
+    ['a negative expiresAt', { expiresAt: -1 }],
+    ['a non-finite expiresAt', { expiresAt: Infinity }]
+  ])('throws RangeError for %s', (_, override) => {
+    const fields = { sid: SID, identityKey: IDENTITY_KEY, sdp, ...override }
     expect(() => encodeOfferCode(fields)).toThrow(RangeError)
   })
 

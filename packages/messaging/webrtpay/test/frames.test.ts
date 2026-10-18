@@ -343,6 +343,27 @@ describe('FrameDecoder', () => {
     expect(d.push(rawFrame(0, true, '1}'))).toEqual({ a: 1 })
   })
 
+  it('fails as protocol, keeping the cause, on a frame whose buffer was detached', () => {
+    const thrown = (fn: () => unknown): unknown => {
+      try {
+        fn()
+      } catch (e) {
+        return e
+      }
+      throw new Error('Expected a throw')
+    }
+    const frame = rawFrame(0, true, '{}')
+    structuredClone(frame.buffer, { transfer: [frame.buffer] }) // the caller gave it away
+    const d = decoder()
+    const error = thrown(() => d.push(frame))
+    expect(error).toBeInstanceOf(WebRTPayError)
+    expect(error).toMatchObject({ code: 'protocol', message: 'Frame could not be processed' })
+    // by name: the typed array realm's TypeError is not the test's
+    expect((error as WebRTPayError).cause).toHaveProperty('name', 'TypeError')
+    // the decoder stays failed with that same error
+    expect(thrown(() => d.push(rawFrame(0, true, '{}')))).toBe(error)
+  })
+
   it('rejects a frame that is not binary', () => {
     for (const frame of ['{}', null, undefined, 42, {}, [1, 0, 0, 0, 0, 0]]) {
       expect(codeOf(() => decoder().push(frame as unknown as Uint8Array))).toBe('protocol')
