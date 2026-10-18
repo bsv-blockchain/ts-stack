@@ -64,8 +64,8 @@ export interface TurnIssuer {
   issue(identityKey: string): Promise<TurnIssue>
 }
 
-/** Default lifetime of TURN credentials, in seconds. */
-const TURN_TTL_SECONDS = 3600
+/** Default lifetime of credentials minted by `turnCredentials`, in seconds. */
+const TURN_CREDENTIALS_DEFAULT_TTL_SECONDS = 3600
 /**
  * Lifetime of the TURN credentials the relay issues, in seconds, unless `turn.ttlSeconds`
  * says otherwise.
@@ -100,7 +100,7 @@ export function turnCredentials(o: {
   if (typeof o.secret !== 'string' || o.secret.length === 0) {
     throw new TypeError('TURN secret must be a non-empty string')
   }
-  const ttl = o.ttlSeconds ?? TURN_TTL_SECONDS
+  const ttl = o.ttlSeconds ?? TURN_CREDENTIALS_DEFAULT_TTL_SECONDS
   if (!Number.isSafeInteger(ttl) || ttl <= 0) {
     throw new RangeError('ttlSeconds must be a positive whole number of seconds')
   }

@@ -79,6 +79,10 @@ only while the payee is still connected, and deliver a token again after a lost 
 - `@bsv/webrtpay/server` (Node only): `createRelayServer`, `turnCredentials` and the
   `webrtpay-relay` CLI, a stateless WebSocket rendezvous that authenticates sockets by identity
   key and forwards encrypted envelopes; `webrtpay-relay --help` lists its settings
+- TURN credentials from the relay: short-lived, per-identity credentials minted from a coturn
+  `use-auth-secret` shared secret (`CoturnRestTurnProvider`) or requested from Cloudflare's
+  managed TURN service (`CloudflareTurnProvider`); the relay sends their expiry with them, and
+  `RelaySignaler.turnProvider()` reuses them until they are within 30 seconds of it
 
 ## Security
 

@@ -554,7 +554,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/messaging/webrtpay.md](../packages/messaging/webrtpay.md)
 - Source: [packages/messaging/webrtpay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay)
-- Release note: First release: direct wallet-to-wallet BSV payments over WebRTC data channels. Both peers prove their BRC-100 identity keys bound to the DTLS session, and the payer hands over the same BRC-29 PaymentToken that PeerPay sends through MessageBox. Signaling runs through face-to-face offer and answer codes, MessageBox, or a relay, and the Node-only ./server subpath provides that relay with TURN credential issuance and the webrtpay-relay CLI.
+- Release note: First release: direct wallet-to-wallet BSV payments over WebRTC data channels. Both peers prove their BRC-100 identity keys bound to the DTLS session, and the payer hands over the same BRC-29 PaymentToken that PeerPay sends through MessageBox. Signaling runs through face-to-face offer and answer codes, MessageBox, or a relay, and the Node-only ./server subpath provides that relay, with TURN credentials from a coturn shared secret or Cloudflare's managed TURN, and the webrtpay-relay CLI.
 - Migration: No consumer migration required; first release.
 
 CLI entry points: `{"webrtpay-relay":"dist/server/cli.js"}`.
