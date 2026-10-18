@@ -408,4 +408,67 @@ describe('frames: nesting limit', () => {
       })
     )
   })
+
+  // Which error, not just its code: an independent model of the checks in the order the
+  // decoder runs them. The top level must open with `{` after JSON whitespace; then, outside
+  // strings (a string runs to its closing quote or the end, `\` taking the next character
+  // with it), `{` `[` `,` `:` are tokens, `{` `[` open a container and `}` `]` close one,
+  // and the first character that passes a bound decides (at an opener the token bound
+  // first). Text within the bounds is up to JSON.parse.
+  const PIECES = /"(?:[^"\\]|\\[\s\S])*"?|[\s\S]/g
+
+  function firstBoundPassed(t: string): string | undefined {
+    let depth = 0
+    let tokens = 0
+    for (const [piece] of t.matchAll(PIECES)) {
+      const opens = piece === '{' || piece === '['
+      if (opens || piece === ',' || piece === ':') tokens++
+      if (tokens > MAX_JSON_TOKENS) {
+        return `Message has more than ${MAX_JSON_TOKENS} structural tokens`
+      }
+      if (opens) depth++
+      if (piece === '}' || piece === ']') depth--
+      if (depth > MAX_JSON_DEPTH) return `Message nests deeper than ${MAX_JSON_DEPTH} levels`
+      if (depth < 0) return 'Message has unbalanced brackets'
+    }
+    return undefined
+  }
+
+  function modelFailure(t: string): string | undefined {
+    if (!/^[ \t\n\r]*\{/.test(t)) return 'Message is not a JSON object'
+    const breach = firstBoundPassed(t)
+    if (breach !== undefined) return breach
+    try {
+      JSON.parse(t)
+    } catch {
+      return 'Message is not valid JSON'
+    }
+    return undefined
+  }
+
+  // Texts that cross the token, depth and balance bounds within a few characters of each
+  // other, so the order of the checks decides which error is reported.
+  const crowded = fc
+    .record({
+      commas: fc.integer({ min: MAX_JSON_TOKENS - 45, max: MAX_JSON_TOKENS - 25 }),
+      opens: fc.integer({ min: MAX_JSON_DEPTH - 4, max: MAX_JSON_DEPTH + 4 }),
+      closes: fc.nat({ max: MAX_JSON_DEPTH + 8 }),
+      tail: fc.constantFrom('', '}', ']}', ',', '"[', '"\\')
+    })
+    .map(
+      ({ commas, opens, closes, tail }) =>
+        '{"a":[' + '0,'.repeat(commas) + '['.repeat(opens) + ']'.repeat(closes) + tail
+    )
+
+  it('reports the error of the first bound a text passes, for any text', () => {
+    fc.assert(
+      fc.property(fc.oneof(anyText, crowded), chunkSize, (t, chunk) => {
+        const result = run(
+          new FrameDecoder({ maxMessageBytes: DEFAULTS.maxMessageBytes }),
+          rawFramesOf(t, 0, chunk)
+        )
+        expect(result.error?.message).toBe(modelFailure(t))
+      })
+    )
+  })
 })

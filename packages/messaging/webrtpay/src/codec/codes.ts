@@ -128,34 +128,8 @@ export function decodeCode(
   text: string,
   opts: { expectedChain?: string; now?: number } = {}
 ): OfferCode | AnswerCode {
-  if (typeof text !== 'string') throw invalid('Code must be a string')
-  if (text.length > MAX_CODE_LENGTH) {
-    throw invalid(`Code is longer than ${MAX_CODE_LENGTH} characters`)
-  }
-  const trimmed = text.trim()
-  if (!trimmed.startsWith(CODE_PREFIX)) throw invalid(`Code does not start with ${CODE_PREFIX}`)
-  let body: Uint8Array
-  try {
-    body = fromBase64Url(trimmed.slice(CODE_PREFIX.length))
-  } catch (cause) {
-    throw invalid('Code is not valid base64url', cause)
-  }
-
-  if (body.length < ANSWER_HEADER_BYTES) throw invalid('Code is truncated')
-  if (body[0] !== VERSION) throw invalid(`Unsupported code version ${body[0]}`)
-  const kind = body[1]
-  if (kind !== KIND_OFFER && kind !== KIND_ANSWER) throw invalid(`Unknown code kind ${kind}`)
-  const sid = body.slice(2, 2 + SID_BYTES)
-  // Only an offer names its sender (the payee); an answer's TLVs follow the sid.
-  let identityKey: PubKeyHex | undefined
-  let headerBytes = ANSWER_HEADER_BYTES
-  if (kind === KIND_OFFER) {
-    headerBytes = OFFER_HEADER_BYTES
-    if (body.length < headerBytes) throw invalid('Code is truncated')
-    identityKey = toHex(body.subarray(ANSWER_HEADER_BYTES, OFFER_HEADER_BYTES))
-    if (!isIdentityKey(identityKey)) throw invalid('Code carries an invalid identity key')
-  }
-
+  const body = codeBody(text)
+  const { sid, identityKey, headerBytes } = readHeader(body)
   const fields = readFields(body, headerBytes)
   const sdpBytes = fields.get(TAG_SDP)
   if (sdpBytes === undefined) throw invalid('Code has no SDP')
@@ -169,6 +143,61 @@ export function decodeCode(
   }
 
   const offer: OfferCode = { kind: 'offer', sid, identityKey, sdp }
+  readOfferFields(offer, fields)
+  assertOfferUsable(offer, opts)
+  return offer
+}
+
+/**
+ * The bytes a code's text carries. Checks, in order: the type, the length before trimming,
+ * the prefix, then the base64url after it.
+ */
+function codeBody(text: string): Uint8Array {
+  if (typeof text !== 'string') throw invalid('Code must be a string')
+  if (text.length > MAX_CODE_LENGTH) {
+    throw invalid(`Code is longer than ${MAX_CODE_LENGTH} characters`)
+  }
+  const trimmed = text.trim()
+  if (!trimmed.startsWith(CODE_PREFIX)) throw invalid(`Code does not start with ${CODE_PREFIX}`)
+  try {
+    return fromBase64Url(trimmed.slice(CODE_PREFIX.length))
+  } catch (cause) {
+    throw invalid('Code is not valid base64url', cause)
+  }
+}
+
+/** The part of a code before its TLVs. */
+interface CodeHeader {
+  sid: Uint8Array
+  /** The payee's identity key; only an offer carries one. */
+  identityKey?: PubKeyHex
+  /** Where the TLVs start. */
+  headerBytes: number
+}
+
+/**
+ * `[version][kind][sid]`, then an offer's identity key. Checks, in order: the length of
+ * the common part, the version, the kind, then an offer's length and key.
+ */
+function readHeader(body: Uint8Array): CodeHeader {
+  if (body.length < ANSWER_HEADER_BYTES) throw invalid('Code is truncated')
+  if (body[0] !== VERSION) throw invalid(`Unsupported code version ${body[0]}`)
+  const kind = body[1]
+  if (kind !== KIND_OFFER && kind !== KIND_ANSWER) throw invalid(`Unknown code kind ${kind}`)
+  const sid = body.slice(2, 2 + SID_BYTES)
+  // Only an offer names its sender (the payee); an answer's TLVs follow the sid.
+  if (kind === KIND_ANSWER) return { sid, headerBytes: ANSWER_HEADER_BYTES }
+  if (body.length < OFFER_HEADER_BYTES) throw invalid('Code is truncated')
+  const identityKey = toHex(body.subarray(ANSWER_HEADER_BYTES, OFFER_HEADER_BYTES))
+  if (!isIdentityKey(identityKey)) throw invalid('Code carries an invalid identity key')
+  return { sid, identityKey, headerBytes: OFFER_HEADER_BYTES }
+}
+
+/**
+ * Set the optional fields `fields` carries on `offer`: chain, then amount, then expiry. A
+ * malformed one throws, the first in that order whatever the order of the TLVs.
+ */
+function readOfferFields(offer: OfferCode, fields: Map<number, Uint8Array>): void {
   const chain = fields.get(TAG_CHAIN)
   if (chain !== undefined) {
     try {
@@ -188,7 +217,14 @@ export function decodeCode(
     if (seconds > MAX_EXPIRES_AT_SECONDS) throw invalid('Code expiry is out of range')
     offer.expiresAt = seconds * 1000
   }
+}
 
+/**
+ * Throw when `offer` has expired (`opts.now`, default `Date.now()`, is at or past its
+ * `expiresAt`), then when `opts.expectedChain` is given and the offer's chain is missing or
+ * different.
+ */
+function assertOfferUsable(offer: OfferCode, opts: { expectedChain?: string; now?: number }): void {
   if (offer.expiresAt !== undefined && (opts.now ?? Date.now()) >= offer.expiresAt) {
     throw invalid('Offer code has expired')
   }
@@ -199,7 +235,6 @@ export function decodeCode(
         : `Offer code is for a different network; expected ${opts.expectedChain}`
     )
   }
-  return offer
 }
 
 /** `[version][kind][sid]`, then `header` (the offer's key), then `fields` and the sdp TLV. */

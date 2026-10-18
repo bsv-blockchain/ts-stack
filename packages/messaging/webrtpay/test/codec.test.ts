@@ -118,10 +118,17 @@ function thrown(fn: () => unknown): unknown {
   throw new Error('expected the call to throw')
 }
 
-function expectWebRTPayError(fn: () => unknown, code: WebRTPayErrorCode): void {
+/** Expect `fn` to throw a `WebRTPayError` with `code` and, when given, exactly `message`. */
+function expectWebRTPayError(
+  fn: () => unknown,
+  code: WebRTPayErrorCode,
+  message?: string
+): WebRTPayError {
   const e = thrown(fn)
   expect(e).toBeInstanceOf(WebRTPayError)
   expect((e as WebRTPayError).code).toBe(code)
+  if (message !== undefined) expect((e as WebRTPayError).message).toBe(message)
+  return e as WebRTPayError
 }
 
 /** Resolve once ICE gathering completes (non-trickle), or reject after `ms`. */
@@ -345,6 +352,36 @@ describe('encodeSdp / decodeSdp: raw fallback', () => {
     expect(decodeSdp(bytes)).toBe(sdp)
   })
 
+  it('compacts up to 255 UDP candidates and falls back for 256', () => {
+    // CHROMIUM_OFFER has 4 candidates of its own.
+    const withHosts = (extra: number): string =>
+      insertAfter(
+        CHROMIUM_OFFER,
+        'c=IN IP4',
+        Array.from(
+          { length: extra },
+          (_, i) => `a=candidate:${i} 1 udp 1 10.0.${i >> 8}.${i & 255} 5000 typ host`
+        ).join('\r\n')
+      )
+    const most = encodeSdp(withHosts(251))
+    expect(most[0]).toBe(1)
+    expect(candidates(decodeSdp(most))).toHaveLength(255)
+    const tooMany = withHosts(252)
+    expect(encodeSdp(tooMany)[0]).toBe(2)
+    expect(decodeSdp(encodeSdp(tooMany))).toBe(tooMany)
+  })
+
+  it('compacts a 255-character ufrag or pwd and falls back for 256', () => {
+    for (const name of ['ice-ufrag', 'ice-pwd']) {
+      const withCredential = (length: number): string =>
+        replaceLine(CHROMIUM_OFFER, `a=${name}:`, `a=${name}:${'a'.repeat(length)}`)
+      const longest = encodeSdp(withCredential(255))
+      expect(longest[0]).toBe(1)
+      expect(attr(decodeSdp(longest), name)).toEqual(['a'.repeat(255)])
+      expect(encodeSdp(withCredential(256))[0]).toBe(2)
+    }
+  })
+
   it('never throws while encoding, even for text that is not SDP', () => {
     expect(decodeSdp(encodeSdp(''))).toBe('')
     expect(decodeSdp(encodeSdp('not sdp at all'))).toBe('not sdp at all')
@@ -369,22 +406,128 @@ describe('decodeSdp rejects malformed bytes', () => {
     bytes[countAt + 1] = (type << 4) | (kind ?? bytes[countAt + 1] & 0x0f)
     return bytes
   }
-  const cases: [string, () => Uint8Array][] = [
-    ['empty input', () => new Uint8Array(0)],
-    ['an unknown form byte', () => Uint8Array.of(3, 1, 2)],
-    ['a truncated compact body', () => compact.subarray(0, compact.length - 1)],
-    ['trailing bytes', () => concatBytes(compact, Uint8Array.of(0))],
-    ['a setup index above 2', () => Uint8Array.of(1, 3, ...compact.subarray(2))],
-    ['a max-message-size exponent of 54', () => Uint8Array.of(1, 0, 54, ...compact.subarray(3))],
-    ['an empty ufrag', () => concatBytes(Uint8Array.of(1, 0, 18, 0), compact.subarray(8))],
-    ['an unknown candidate type', () => candidate(4)],
-    ['an unknown candidate address kind', () => candidate(0, 3)],
-    ['malformed UTF-8 in the raw form', () => Uint8Array.of(2, 0xff)]
+  const cases: [string, () => Uint8Array, string][] = [
+    ['empty input', () => new Uint8Array(0), 'SDP is empty'],
+    ['an unknown form byte', () => Uint8Array.of(3, 1, 2), 'Unknown SDP form 3'],
+    [
+      'a truncated compact body',
+      () => compact.subarray(0, compact.length - 1),
+      'Compact SDP is truncated'
+    ],
+    [
+      'trailing bytes',
+      () => concatBytes(compact, Uint8Array.of(0)),
+      'Unexpected bytes after compact SDP'
+    ],
+    [
+      'a setup index above 2',
+      () => Uint8Array.of(1, 3, ...compact.subarray(2)),
+      'Unknown DTLS setup role'
+    ],
+    [
+      'a max-message-size exponent of 54',
+      () => Uint8Array.of(1, 0, 54, ...compact.subarray(3)),
+      'Invalid max-message-size'
+    ],
+    [
+      'an empty ufrag',
+      () => concatBytes(Uint8Array.of(1, 0, 18, 0), compact.subarray(8)),
+      'Invalid ice-ufrag'
+    ],
+    ['an unknown candidate type', () => candidate(4), 'Unknown candidate type'],
+    ['an unknown candidate address kind', () => candidate(0, 3), 'Unknown candidate address kind'],
+    ['malformed UTF-8 in the raw form', () => Uint8Array.of(2, 0xff), 'SDP is not valid UTF-8']
   ]
 
-  it.each(cases)('throws invalid_code for %s', (_, make) => {
+  it.each(cases)('throws invalid_code for %s', (_, make, message) => {
     const bytes = make()
-    expectWebRTPayError(() => decodeSdp(bytes), 'invalid_code')
+    expectWebRTPayError(() => decodeSdp(bytes), 'invalid_code', message)
+  })
+
+  it('keeps the UTF-8 decoder error as the cause of a malformed raw form, and only then', () => {
+    const malformed = expectWebRTPayError(() => decodeSdp(Uint8Array.of(2, 0xff)), 'invalid_code')
+    expect(malformed.cause).toBeInstanceOf(Error)
+    const empty = expectWebRTPayError(() => decodeSdp(Uint8Array.of()), 'invalid_code')
+    expect(empty).not.toHaveProperty('cause')
+  })
+
+  it('decodes a raw form byte for byte, the empty one included', () => {
+    expect(decodeSdp(Uint8Array.of(2))).toBe('')
+    expect(decodeSdp(Uint8Array.of(2, 0x76, 0x3d, 0x30))).toBe('v=0')
+  })
+
+  // Each input breaks two rules; the field read first is the one reported. A compact form
+  // is read front to back: setup, max-message-size, ufrag, pwd, fingerprint, the candidate
+  // count, then per candidate its type, address kind, address and port.
+  const ufragPwdFingerprint = (): Uint8Array =>
+    concatBytes(Uint8Array.of(1, 0, 18, 1, 0x61, 1, 0x61), new Uint8Array(32))
+  const firstProblemCases: [string, () => Uint8Array, string][] = [
+    ['form 0, not a compact one', () => Uint8Array.of(0, 9), 'Unknown SDP form 0'],
+    [
+      'a setup index of 3 and a size exponent of 54',
+      () => Uint8Array.of(1, 3, 54),
+      'Unknown DTLS setup role'
+    ],
+    [
+      'a size exponent of 54 and no ufrag',
+      () => Uint8Array.of(1, 0, 54),
+      'Invalid max-message-size'
+    ],
+    [
+      'a ufrag outside ice-chars and no pwd',
+      () => Uint8Array.of(1, 0, 18, 1, 0x2e),
+      'Invalid ice-ufrag'
+    ],
+    [
+      'a pwd outside ice-chars and no fingerprint',
+      () => Uint8Array.of(1, 0, 18, 1, 0x61, 1, 0x2e),
+      'Invalid ice-pwd'
+    ],
+    [
+      'a fingerprint one byte short',
+      () => ufragPwdFingerprint().subarray(0, 38),
+      'Compact SDP is truncated'
+    ],
+    ['no candidate count', () => ufragPwdFingerprint(), 'Compact SDP is truncated'],
+    [
+      'candidate type 4 with address kind 3',
+      () => concatBytes(ufragPwdFingerprint(), Uint8Array.of(1, 0x43)),
+      'Unknown candidate type'
+    ],
+    [
+      'address kind 3 and no address bytes',
+      () => concatBytes(ufragPwdFingerprint(), Uint8Array.of(1, 0x03)),
+      'Unknown candidate address kind'
+    ],
+    [
+      'two candidates counted and one present',
+      () => concatBytes(ufragPwdFingerprint(), Uint8Array.of(2, 0x00, 10, 0, 0, 1, 0x13, 0x88)),
+      'Compact SDP is truncated'
+    ],
+    [
+      'an unknown second candidate type after a valid first candidate',
+      () =>
+        concatBytes(ufragPwdFingerprint(), Uint8Array.of(2, 0x00, 10, 0, 0, 1, 0x13, 0x88, 0x40)),
+      'Unknown candidate type'
+    ],
+    [
+      'a byte after zero candidates',
+      () => concatBytes(ufragPwdFingerprint(), Uint8Array.of(0, 0)),
+      'Unexpected bytes after compact SDP'
+    ]
+  ]
+
+  it.each(firstProblemCases)('reports the first problem for %s', (_, make, message) => {
+    const bytes = make()
+    expectWebRTPayError(() => decodeSdp(bytes), 'invalid_code', message)
+  })
+
+  it('decodes the minimal compact form used by those cases', () => {
+    const sdp = decodeSdp(concatBytes(ufragPwdFingerprint(), Uint8Array.of(0)))
+    expect(attr(sdp, 'ice-ufrag')).toEqual(['a'])
+    expect(attr(sdp, 'ice-pwd')).toEqual(['a'])
+    expect(attr(sdp, 'candidate')).toEqual([])
+    expect(sdp).toMatch(/\r\na=end-of-candidates\r\n$/)
   })
 
   it('reads the last known candidate type and address kind, so only the next is refused', () => {
@@ -532,13 +675,21 @@ describe('decodeCode rejects', () => {
   const code = (...parts: Uint8Array[]): string => CODE_PREFIX + toBase64Url(concatBytes(...parts))
 
   it('an offer for another chain (expectedChain mismatch)', () => {
-    expectWebRTPayError(() => decodeCode(testOffer, { expectedChain: 'main' }), 'invalid_code')
+    expectWebRTPayError(
+      () => decodeCode(testOffer, { expectedChain: 'main' }),
+      'invalid_code',
+      'Offer code is for a different network; expected main'
+    )
     expect(decodeCode(testOffer, { expectedChain: 'test' }).kind).toBe('offer')
   })
 
   it('an offer without a chain when a chain is expected', () => {
     const noChain = encodeOfferCode({ sid: SID, identityKey: IDENTITY_KEY, sdp: offerSdp })
-    expectWebRTPayError(() => decodeCode(noChain, { expectedChain: 'main' }), 'invalid_code')
+    expectWebRTPayError(
+      () => decodeCode(noChain, { expectedChain: 'main' }),
+      'invalid_code',
+      'Offer code does not name a network; expected main'
+    )
   })
 
   it('an expired offer', () => {
@@ -549,15 +700,23 @@ describe('decodeCode rejects', () => {
       sdp: offerSdp
     })
     expect(decodeCode(expiring, { now: 1_699_999_999_999 }).kind).toBe('offer')
-    expectWebRTPayError(() => decodeCode(expiring, { now: 1_700_000_000_000 }), 'invalid_code')
-    expectWebRTPayError(() => decodeCode(expiring), 'invalid_code')
+    expectWebRTPayError(
+      () => decodeCode(expiring, { now: 1_700_000_000_000 }),
+      'invalid_code',
+      'Offer code has expired'
+    )
+    expectWebRTPayError(() => decodeCode(expiring), 'invalid_code', 'Offer code has expired')
   })
 
   it('a wrong prefix', () => {
     const body = testOffer.slice(CODE_PREFIX.length)
-    expectWebRTPayError(() => decodeCode(`webrtpay2:${body}`), 'invalid_code')
-    expectWebRTPayError(() => decodeCode(`WEBRTPAY1:${body}`), 'invalid_code')
-    expectWebRTPayError(() => decodeCode(body), 'invalid_code')
+    for (const text of [`webrtpay2:${body}`, `WEBRTPAY1:${body}`, body]) {
+      expectWebRTPayError(
+        () => decodeCode(text),
+        'invalid_code',
+        'Code does not start with webrtpay1:'
+      )
+    }
   })
 
   it('input longer than 4000 characters, even a valid code; exactly 4000 decodes (M11)', () => {
@@ -581,69 +740,279 @@ describe('decodeCode rejects', () => {
     expect(exact.kind).toBe('answer')
     expect(exact.sdp).toBe(offerSdp)
     for (const text of [padded(4001), CODE_PREFIX + 'A'.repeat(3991)]) {
-      expect(() => decodeCode(text)).toThrow(/longer than 4000 characters/)
-      expectWebRTPayError(() => decodeCode(text), 'invalid_code')
+      expectWebRTPayError(
+        () => decodeCode(text),
+        'invalid_code',
+        'Code is longer than 4000 characters'
+      )
     }
   })
 
   it('a non-string', () => {
-    expectWebRTPayError(() => decodeCode(42 as unknown as string), 'invalid_code')
+    expectWebRTPayError(
+      () => decodeCode(42 as unknown as string),
+      'invalid_code',
+      'Code must be a string'
+    )
   })
 
+  // LEB128 of floor((2^53 - 1) / 1000) seconds, and of one second more
+  const largestExpiry = Uint8Array.of(0x03, 7, 0xd4, 0xf1, 0xa5, 0xb7, 0x92, 0x86, 0x02)
+  const pastExpiry = Uint8Array.of(0x03, 7, 0xd5, 0xf1, 0xa5, 0xb7, 0x92, 0x86, 0x02)
+
   it('an expiry past the largest safe millisecond time; the largest decodes', () => {
-    // LEB128 of floor((2^53 - 1) / 1000) seconds, and of one second more
-    const largest = Uint8Array.of(0x03, 7, 0xd4, 0xf1, 0xa5, 0xb7, 0x92, 0x86, 0x02)
-    const past = Uint8Array.of(0x03, 7, 0xd5, 0xf1, 0xa5, 0xb7, 0x92, 0x86, 0x02)
-    expect(decodeCode(code(header, largest, sdpTlv), { now: 0 })).toMatchObject({
+    expect(decodeCode(code(header, largestExpiry, sdpTlv), { now: 0 })).toMatchObject({
       kind: 'offer',
       expiresAt: 9_007_199_254_740_000
     })
-    expectWebRTPayError(() => decodeCode(code(header, past, sdpTlv), { now: 0 }), 'invalid_code')
+    expectWebRTPayError(
+      () => decodeCode(code(header, pastExpiry, sdpTlv), { now: 0 }),
+      'invalid_code',
+      'Code expiry is out of range'
+    )
   })
 
-  const cases: [string, () => string][] = [
-    ['bad base64url', () => `${CODE_PREFIX}not*base64`],
-    ['a truncated header', () => code(header.subarray(0, 50))],
-    ['version 2', () => code(Uint8Array.of(2), header.subarray(1), sdpTlv)],
-    ['kind 3', () => code(Uint8Array.of(1, 3), header.subarray(2), sdpTlv)],
+  const cases: [string, () => string, string][] = [
+    ['bad base64url', () => `${CODE_PREFIX}not*base64`, 'Code is not valid base64url'],
+    ['a truncated header', () => code(header.subarray(0, 50)), 'Code is truncated'],
+    [
+      'version 2',
+      () => code(Uint8Array.of(2), header.subarray(1), sdpTlv),
+      'Unsupported code version 2'
+    ],
+    ['kind 3', () => code(Uint8Array.of(1, 3), header.subarray(2), sdpTlv), 'Unknown code kind 3'],
     [
       'an identity key that is not on the curve',
-      () => code(header.subarray(0, 18), Uint8Array.of(2, ...new Uint8Array(32).fill(0xff)), sdpTlv)
+      () =>
+        code(header.subarray(0, 18), Uint8Array.of(2, ...new Uint8Array(32).fill(0xff)), sdpTlv),
+      'Code carries an invalid identity key'
     ],
-    ['a missing sdp tag', () => code(header, Uint8Array.of(0x02, 1, 5))],
-    ['a duplicate tag', () => code(header, Uint8Array.of(0x02, 1, 5, 0x02, 1, 6), sdpTlv)],
-    ['a TLV running past the end', () => code(header, sdpTlv, Uint8Array.of(0x7f, 5, 1))],
-    ['a TLV with no length', () => code(header, sdpTlv, Uint8Array.of(0x7f))],
-    ['a non-minimal length varint', () => code(header, Uint8Array.of(0x02, 0x81, 0x00, 5), sdpTlv)],
-    ['a non-minimal amount varint', () => code(header, Uint8Array.of(0x02, 2, 0x81, 0x00), sdpTlv)],
-    ['an amount with trailing bytes', () => code(header, Uint8Array.of(0x02, 2, 5, 0), sdpTlv)],
+    ['a missing sdp tag', () => code(header, Uint8Array.of(0x02, 1, 5)), 'Code has no SDP'],
+    [
+      'a duplicate tag',
+      () => code(header, Uint8Array.of(0x02, 1, 5, 0x02, 1, 6), sdpTlv),
+      'Code repeats field 2'
+    ],
+    [
+      'a TLV running past the end',
+      () => code(header, sdpTlv, Uint8Array.of(0x7f, 5, 1)),
+      'Code field runs past the end'
+    ],
+    [
+      'a TLV with no length',
+      () => code(header, sdpTlv, Uint8Array.of(0x7f)),
+      'Code varint is truncated'
+    ],
+    [
+      'a non-minimal length varint',
+      () => code(header, Uint8Array.of(0x02, 0x81, 0x00, 5), sdpTlv),
+      'Code varint is not minimally encoded'
+    ],
+    [
+      'a non-minimal amount varint',
+      () => code(header, Uint8Array.of(0x02, 2, 0x81, 0x00), sdpTlv),
+      'Code varint is not minimally encoded'
+    ],
+    [
+      'an amount with trailing bytes',
+      () => code(header, Uint8Array.of(0x02, 2, 5, 0), sdpTlv),
+      'Code number has trailing bytes'
+    ],
     [
       'an amount varint longer than 8 bytes',
-      () => code(header, Uint8Array.of(0x02, 9, ...new Uint8Array(8).fill(0x80), 0x01), sdpTlv)
+      () => code(header, Uint8Array.of(0x02, 9, ...new Uint8Array(8).fill(0x80), 0x01), sdpTlv),
+      'Code varint is too long'
     ],
-    ['a zero amount', () => code(header, Uint8Array.of(0x02, 1, 0), sdpTlv)],
+    [
+      'a zero amount',
+      () => code(header, Uint8Array.of(0x02, 1, 0), sdpTlv),
+      'Code amount must be at least 1 satoshi'
+    ],
     [
       'an amount above 2^53 - 1',
       () =>
-        code(header, Uint8Array.of(0x02, 8, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x10), sdpTlv)
+        code(
+          header,
+          Uint8Array.of(0x02, 8, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x10),
+          sdpTlv
+        ),
+      'Code varint is too large'
     ],
-    ['malformed UTF-8 in chain', () => code(header, Uint8Array.of(0x01, 1, 0xff), sdpTlv)],
-    ['a truncated answer header', () => code(Uint8Array.of(1, 2), SID.subarray(0, 15))],
+    [
+      'malformed UTF-8 in chain',
+      () => code(header, Uint8Array.of(0x01, 1, 0xff), sdpTlv),
+      'Code chain is not valid UTF-8'
+    ],
+    ['an offer header and nothing after it', () => code(header), 'Code has no SDP'],
+    [
+      'an answer header and nothing after it',
+      () => code(Uint8Array.of(1, 2), SID),
+      'Code has no SDP'
+    ],
+    [
+      'a truncated answer header',
+      () => code(Uint8Array.of(1, 2), SID.subarray(0, 15)),
+      'Code is truncated'
+    ],
     [
       'an answer carrying offer-only fields',
-      () => code(Uint8Array.of(1, 2), SID, Uint8Array.of(0x02, 1, 5), sdpTlv)
+      () => code(Uint8Array.of(1, 2), SID, Uint8Array.of(0x02, 1, 5), sdpTlv),
+      'Answer code carries offer-only fields'
     ],
     // The old answer layout, with the payer's 33-byte key after the sid: its first byte (2 or
-    // 3) reads as an offer-only tag.
+    // 3) reads as an offer-only tag, whose length (the next key bytes) runs past the end.
     [
       'an answer in the old layout with an identity key',
-      () => code(Uint8Array.of(1, 2), SID, fromHex(IDENTITY_KEY), sdpTlv)
+      () => code(Uint8Array.of(1, 2), SID, fromHex(IDENTITY_KEY), sdpTlv),
+      'Code field runs past the end'
     ],
-    ['an sdp tag with malformed compact bytes', () => code(header, Uint8Array.of(0x10, 2, 1, 0))]
+    [
+      'an sdp tag with malformed compact bytes',
+      () => code(header, Uint8Array.of(0x10, 2, 1, 0)),
+      'Compact SDP is truncated'
+    ]
   ]
 
-  it.each(cases)('%s', (_, make) => {
-    expectWebRTPayError(() => decodeCode(make()), 'invalid_code')
+  it.each(cases)('%s', (_, make, message) => {
+    expectWebRTPayError(() => decodeCode(make()), 'invalid_code', message)
+  })
+
+  it('keeps the cause of bad base64url and bad UTF-8, and gives other errors none', () => {
+    const base64 = expectWebRTPayError(() => decodeCode(`${CODE_PREFIX}not*base64`), 'invalid_code')
+    expect(base64.cause).toBeInstanceOf(WebRTPayError)
+    const utf8 = expectWebRTPayError(
+      () => decodeCode(code(header, Uint8Array.of(0x01, 1, 0xff), sdpTlv)),
+      'invalid_code'
+    )
+    expect(utf8.cause).toBeInstanceOf(Error)
+    const truncated = expectWebRTPayError(() => decodeCode(code(header)), 'invalid_code')
+    expect(truncated).not.toHaveProperty('cause')
+  })
+
+  // Each code breaks two rules; the one checked first is the one reported. The order: the
+  // text (type, untrimmed length, prefix, base64url), the header (length, version, kind, an
+  // offer's key), every TLV's framing, the sdp field's presence, the SDP itself, then an
+  // answer's offer-only fields or an offer's chain, amount and expiry (in that order,
+  // whatever the TLV order), and last the offer's expiry time and network.
+  const twoProblemCases: [
+    string,
+    () => string,
+    string,
+    { expectedChain?: string; now?: number }
+  ][] = [
+    [
+      'over 4000 characters and the wrong prefix',
+      () => 'x'.repeat(4001),
+      'Code is longer than 4000 characters',
+      {}
+    ],
+    [
+      'a valid code with surrounding whitespace that takes it over 4000 characters',
+      () => `${' '.repeat(4000)}${code(header, sdpTlv)}`,
+      'Code is longer than 4000 characters',
+      {}
+    ],
+    [
+      'the wrong prefix and text that is not base64url',
+      () => 'webrtpay2:*',
+      'Code does not start with webrtpay1:',
+      {}
+    ],
+    [
+      'base64url of a bad length, too short for a header',
+      () => `${CODE_PREFIX}A`,
+      'Code is not valid base64url',
+      {}
+    ],
+    ['a short body with version 2', () => code(Uint8Array.of(2, 1)), 'Code is truncated', {}],
+    [
+      'version 2 and kind 3',
+      () => code(Uint8Array.of(2, 3), SID),
+      'Unsupported code version 2',
+      {}
+    ],
+    ['kind 3 and no TLVs at all', () => code(Uint8Array.of(1, 3), SID), 'Unknown code kind 3', {}],
+    [
+      'an offer key one byte short that is not a key',
+      () => code(Uint8Array.of(1, 1), SID, new Uint8Array(32).fill(0xff)),
+      'Code is truncated',
+      {}
+    ],
+    [
+      'an invalid identity key and a TLV with no length',
+      () => code(header.subarray(0, 18), new Uint8Array(33).fill(0xff), Uint8Array.of(0x7f)),
+      'Code carries an invalid identity key',
+      {}
+    ],
+    [
+      'a zero amount, repeated, and no sdp',
+      () => code(header, Uint8Array.of(0x02, 1, 0, 0x02, 1, 0)),
+      'Code repeats field 2',
+      {}
+    ],
+    [
+      'a zero amount, a TLV running past the end and no sdp',
+      () => code(header, Uint8Array.of(0x02, 1, 0, 0x7f, 5)),
+      'Code field runs past the end',
+      {}
+    ],
+    [
+      'no sdp in an answer carrying offer-only fields',
+      () => code(Uint8Array.of(1, 2), SID, Uint8Array.of(0x02, 1, 5)),
+      'Code has no SDP',
+      {}
+    ],
+    [
+      'malformed sdp bytes in an answer carrying offer-only fields',
+      () => code(Uint8Array.of(1, 2), SID, Uint8Array.of(0x02, 1, 5, 0x10, 2, 1, 0)),
+      'Compact SDP is truncated',
+      {}
+    ],
+    [
+      'malformed sdp bytes and malformed UTF-8 in chain',
+      () => code(header, Uint8Array.of(0x01, 1, 0xff, 0x10, 2, 1, 0)),
+      'Compact SDP is truncated',
+      {}
+    ],
+    [
+      'a zero amount before malformed UTF-8 in chain',
+      () => code(header, Uint8Array.of(0x02, 1, 0, 0x01, 1, 0xff), sdpTlv),
+      'Code chain is not valid UTF-8',
+      {}
+    ],
+    [
+      'an expiry out of range before a zero amount',
+      () => code(header, pastExpiry, Uint8Array.of(0x02, 1, 0), sdpTlv),
+      'Code amount must be at least 1 satoshi',
+      {}
+    ],
+    [
+      'an expiry out of range on an offer for another network',
+      () => code(header, Uint8Array.of(0x01, 4, 0x6d, 0x61, 0x69, 0x6e), pastExpiry, sdpTlv),
+      'Code expiry is out of range',
+      { expectedChain: 'test', now: 0 }
+    ],
+    [
+      'an expired offer for another network',
+      () => code(header, Uint8Array.of(0x01, 4, 0x6d, 0x61, 0x69, 0x6e, 0x03, 1, 1), sdpTlv),
+      'Offer code has expired',
+      { expectedChain: 'test', now: 1000 }
+    ]
+  ]
+
+  it.each(twoProblemCases)('reports the first problem for %s', (_, make, message, opts) => {
+    expectWebRTPayError(() => decodeCode(make(), opts), 'invalid_code', message)
+  })
+
+  it('accepts the offers those cases break once their second problem is gone', () => {
+    const mainChain = Uint8Array.of(0x01, 4, 0x6d, 0x61, 0x69, 0x6e)
+    expect(
+      decodeCode(code(header, mainChain, Uint8Array.of(0x03, 1, 1), sdpTlv), {
+        expectedChain: 'main',
+        now: 999
+      })
+    ).toMatchObject({ kind: 'offer', chain: 'main', expiresAt: 1000 })
+    expect(decodeCode(code(header, sdpTlv)).kind).toBe('offer')
   })
 })
 

@@ -127,16 +127,32 @@ export function encodeSdp(sdp: string): Uint8Array {
  */
 export function decodeSdp(bytes: Uint8Array): string {
   if (bytes.length === 0) throw invalid('SDP is empty')
-  if (bytes[0] === FORM_RAW) {
-    try {
-      return utf8Decode(bytes.subarray(1))
-    } catch (cause) {
-      throw invalid('SDP is not valid UTF-8', cause)
-    }
-  }
+  if (bytes[0] === FORM_RAW) return rawSdp(bytes)
   if (bytes[0] !== FORM_COMPACT) throw invalid(`Unknown SDP form ${bytes[0]}`)
 
   const r = new Reader(bytes, 1)
+  const lines = templateLines(r)
+  const count = r.u8()
+  for (let i = 0; i < count; i++) lines.push(candidateLine(r, i))
+  if (!r.done()) throw invalid('Unexpected bytes after compact SDP')
+  lines.push('a=end-of-candidates')
+  return lines.join('\r\n') + '\r\n'
+}
+
+/** The SDP text of the raw form: the UTF-8 after the form byte. */
+function rawSdp(bytes: Uint8Array): string {
+  try {
+    return utf8Decode(bytes.subarray(1))
+  } catch (cause) {
+    throw invalid('SDP is not valid UTF-8', cause)
+  }
+}
+
+/**
+ * The template's session and media lines, filled in from the compact fields `r` reads
+ * next: setup role, max-message-size, ufrag, pwd and fingerprint, each checked as it is read.
+ */
+function templateLines(r: Reader): string[] {
   const setup = SETUPS[r.u8()]
   if (setup === undefined) throw invalid('Unknown DTLS setup role')
   const exponent = r.u8()
@@ -150,7 +166,7 @@ export function decodeSdp(bytes: Uint8Array): string {
     .toUpperCase()
     .replace(/..(?!$)/g, '$&:')
 
-  const lines = [
+  return [
     'v=0',
     'o=- 0 0 IN IP4 127.0.0.1',
     's=-',
@@ -167,24 +183,25 @@ export function decodeSdp(bytes: Uint8Array): string {
     'a=sctp-port:5000',
     `a=max-message-size:${maxMessageSize}`
   ]
-  const count = r.u8()
-  for (let i = 0; i < count; i++) {
-    const header = r.u8()
-    const typeIndex = header >> 4
-    const kind = header & 0x0f
-    const type = CANDIDATE_TYPES[typeIndex]
-    if (type === undefined) throw invalid('Unknown candidate type')
-    if (kind > KIND_MDNS) throw invalid('Unknown candidate address kind')
-    const address = formatAddress(kind, r.bytes(ADDRESS_BYTES[kind]))
-    const port = r.u16()
-    // RFC 8445 §5.1.2.1: type preference, then local preference by order, component 1.
-    const priority = TYPE_PREFERENCES[typeIndex] * 2 ** 24 + (65535 - i) * 2 ** 8 + (256 - 1)
-    const related = relatedAddress(type, kind)
-    lines.push(`a=candidate:${i + 1} 1 udp ${priority} ${address} ${port} typ ${type}${related}`)
-  }
-  if (!r.done()) throw invalid('Unexpected bytes after compact SDP')
-  lines.push('a=end-of-candidates')
-  return lines.join('\r\n') + '\r\n'
+}
+
+/**
+ * The `a=candidate:` line of compact candidate `i` (0-based), read from `r`: its type is
+ * checked, then its address kind, before the address and port are read.
+ */
+function candidateLine(r: Reader, i: number): string {
+  const header = r.u8()
+  const typeIndex = header >> 4
+  const kind = header & 0x0f
+  const type = CANDIDATE_TYPES[typeIndex]
+  if (type === undefined) throw invalid('Unknown candidate type')
+  if (kind > KIND_MDNS) throw invalid('Unknown candidate address kind')
+  const address = formatAddress(kind, r.bytes(ADDRESS_BYTES[kind]))
+  const port = r.u16()
+  // RFC 8445 §5.1.2.1: type preference, then local preference by order, component 1.
+  const priority = TYPE_PREFERENCES[typeIndex] * 2 ** 24 + (65535 - i) * 2 ** 8 + (256 - 1)
+  const related = relatedAddress(type, kind)
+  return `a=candidate:${i + 1} 1 udp ${priority} ${address} ${port} typ ${type}${related}`
 }
 
 /**
@@ -199,20 +216,9 @@ function relatedAddress(type: string, kind: number): string {
 
 /** The compact fields of `sdp`, or undefined when the compact form cannot carry it. */
 function parseCompact(sdp: string): CompactSdp | undefined {
-  const attributes = new Map<string, string[]>()
-  let mediaSections = 0
-  for (const line of sdp.split(/\r?\n/)) {
-    if (line.startsWith('m=')) {
-      if (!DATA_CHANNEL_MEDIA.test(line)) return undefined
-      mediaSections++
-    } else if (line.startsWith('a=')) {
-      const colon = line.indexOf(':')
-      const name = colon < 0 ? line.slice(2) : line.slice(2, colon)
-      const values = attributes.get(name) ?? []
-      values.push(colon < 0 ? '' : line.slice(colon + 1))
-      attributes.set(name, values)
-    }
-  }
+  const lines = scanLines(sdp)
+  if (lines === undefined) return undefined
+  const { attributes, mediaSections } = lines
   const only = (name: string): string | undefined => {
     const values = attributes.get(name)
     return values?.length === 1 ? values[0] : undefined
@@ -230,20 +236,75 @@ function parseCompact(sdp: string): CompactSdp | undefined {
   if (setup < 0 || sizeExponent === undefined || fingerprint === null) return undefined
   if (!isIceCredential(ufrag) || !isIceCredential(pwd)) return undefined
 
+  const candidates = compactCandidates(attributes.get('candidate') ?? [])
+  if (candidates === undefined) return undefined
+  return {
+    setup,
+    sizeExponent,
+    ufrag,
+    pwd,
+    fingerprint: fingerprintBytes(fingerprint[1]),
+    candidates
+  }
+}
+
+/** What {@link parseCompact} needs from the lines of an SDP. */
+interface SdpLines {
+  /** Number of `m=` lines. */
+  mediaSections: number
+  /** Every `a=` value by attribute name, session and media level alike; `''` for a flag. */
+  attributes: Map<string, string[]>
+}
+
+/**
+ * The media sections and attributes of `sdp`; undefined at an `m=` line that is not a live
+ * data channel.
+ */
+function scanLines(sdp: string): SdpLines | undefined {
+  const attributes = new Map<string, string[]>()
+  let mediaSections = 0
+  for (const line of sdp.split(/\r?\n/)) {
+    if (line.startsWith('m=')) {
+      if (!DATA_CHANNEL_MEDIA.test(line)) return undefined
+      mediaSections++
+    } else if (line.startsWith('a=')) {
+      addAttribute(attributes, line)
+    }
+  }
+  return { mediaSections, attributes }
+}
+
+/** Record the value of an `a=<name>[:<value>]` line under its name; a flag's value is `''`. */
+function addAttribute(attributes: Map<string, string[]>, line: string): void {
+  const colon = line.indexOf(':')
+  const name = colon < 0 ? line.slice(2) : line.slice(2, colon)
+  const values = attributes.get(name) ?? []
+  values.push(colon < 0 ? '' : line.slice(colon + 1))
+  attributes.set(name, values)
+}
+
+/**
+ * The UDP candidates among `values` (`a=candidate:` values), TCP ones dropped; undefined
+ * when one cannot be carried or more than 255 remain.
+ */
+function compactCandidates(values: string[]): CompactCandidate[] | undefined {
   const candidates: CompactCandidate[] = []
-  for (const value of attributes.get('candidate') ?? []) {
+  for (const value of values) {
     const candidate = parseCandidate(value)
     if (candidate === undefined) return undefined
     if (candidate !== DROP) candidates.push(candidate)
   }
-  if (candidates.length > MAX_U8) return undefined
+  return candidates.length > MAX_U8 ? undefined : candidates
+}
 
-  const fingerprintHex = fingerprint[1].replaceAll(':', '')
-  const fingerprintBytes = new Uint8Array(FINGERPRINT_BYTES)
+/** The 32 bytes of a sha-256 fingerprint written as colon-separated hex pairs. */
+function fingerprintBytes(text: string): Uint8Array {
+  const hex = text.replaceAll(':', '')
+  const bytes = new Uint8Array(FINGERPRINT_BYTES)
   for (let i = 0; i < FINGERPRINT_BYTES; i++) {
-    fingerprintBytes[i] = Number.parseInt(fingerprintHex.slice(2 * i, 2 * i + 2), 16)
+    bytes[i] = Number.parseInt(hex.slice(2 * i, 2 * i + 2), 16)
   }
-  return { setup, sizeExponent, ufrag, pwd, fingerprint: fingerprintBytes, candidates }
+  return bytes
 }
 
 function isIceCredential(v: string | undefined): v is string {

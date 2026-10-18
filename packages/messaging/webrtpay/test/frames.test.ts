@@ -639,3 +639,81 @@ describe('FrameDecoder token limit', () => {
     expect(feed(decoder(4 * 1024 * 1024), encodeMessage(0, payment))).toEqual([payment])
   })
 })
+
+describe('FrameDecoder message checks report the first problem', () => {
+  const NOT_OBJECT = 'Message is not a JSON object'
+  const TOO_DEEP = 'Message nests deeper than 32 levels'
+  const TOO_MANY = 'Message has more than 4096 structural tokens'
+  const UNBALANCED = 'Message has unbalanced brackets'
+  const NOT_JSON = 'Message is not valid JSON'
+
+  /** The message of the protocol error that pushing `text` as one final frame throws. */
+  function failure(text: string): string {
+    let error: unknown
+    try {
+      decoder().push(rawFrame(0, true, text))
+    } catch (e) {
+      error = e
+    }
+    expect(error).toBeInstanceOf(WebRTPayError)
+    expect((error as WebRTPayError).code).toBe('protocol')
+    return (error as WebRTPayError).message
+  }
+
+  /**
+   * `{"a":[` then `commas` elements and `opens` more arrays: the last `[` is token
+   * 3 + commas + opens and opens container 2 + opens.
+   */
+  const crowded = (commas: number, opens: number): string =>
+    '{"a":[' + '0,'.repeat(commas) + '['.repeat(opens)
+
+  const cases: [string, string, string][] = [
+    ['an empty message', '', NOT_OBJECT],
+    ['only JSON whitespace', ' \t\n\r', NOT_OBJECT],
+    ['an array opening 40 more arrays', ' [' + '['.repeat(40), NOT_OBJECT],
+    ['a byte before the object', 'x{}', NOT_OBJECT],
+    ['an object that never closes', ' \n{"a":1', NOT_JSON],
+    ['an unclosed string full of brackets', '{"a":"' + '['.repeat(40), NOT_JSON],
+    ['a string ending in a backslash', '{"a":"\\', NOT_JSON],
+    [
+      'an escaped quote, so the brackets after it are string',
+      '{"a":"\\"' + '['.repeat(40),
+      NOT_JSON
+    ],
+    [
+      'an escaped backslash, so the quote after it closes',
+      '{"a":"\\\\"' + '['.repeat(40),
+      TOO_DEEP
+    ],
+    ['33 open containers before text that is not JSON', '{"a":' + '['.repeat(33) + 'x', TOO_DEEP],
+    ['32 open containers in text that is not JSON', '{' + '['.repeat(31), NOT_JSON],
+    ['33 open objects', '{' + '{'.repeat(32), TOO_DEEP],
+    ['33 open arrays', '{' + '['.repeat(32), TOO_DEEP],
+    ['4097 tokens of colons', '{' + ':'.repeat(4096), TOO_MANY],
+    ['4097 tokens of commas', '{' + ','.repeat(4096), TOO_MANY],
+    ['4096 tokens in text that is not JSON', '{' + ','.repeat(4095), NOT_JSON],
+    ['token 4097 opening container 33', crowded(4063, 31), TOO_MANY],
+    ['token 4096 opening container 33', crowded(4062, 31), TOO_DEEP],
+    ['an extra brace before 5000 commas', '{}}' + ','.repeat(5000), UNBALANCED],
+    ['an extra bracket before 40 openers', '{}]' + '['.repeat(40), UNBALANCED],
+    ['4097 tokens before extra brackets', crowded(4100, 0) + ']'.repeat(4), TOO_MANY],
+    ['33 open containers before extra brackets', '{' + '['.repeat(40) + ']'.repeat(50), TOO_DEEP]
+  ]
+
+  it.each(cases)('%s', (_, text, message) => {
+    expect(failure(text)).toBe(message)
+  })
+
+  it('keeps the parser error as the cause of invalid JSON, and no cause otherwise', () => {
+    const error = (text: string): WebRTPayError => {
+      try {
+        decoder().push(rawFrame(0, true, text))
+      } catch (e) {
+        return e as WebRTPayError
+      }
+      throw new Error('expected a throw')
+    }
+    expect(error('{"a":').cause).toBeInstanceOf(SyntaxError)
+    expect(error('[]')).not.toHaveProperty('cause')
+  })
+})

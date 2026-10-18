@@ -104,46 +104,75 @@ function protocolError(message: string, cause?: unknown): WebRTPayError {
  * parser builds is within the bounds.
  */
 function assertBoundedObject(bytes: Uint8Array): void {
-  const end = bytes.length
+  let i = skipJsonWhitespace(bytes)
+  if (i === bytes.length || bytes[i] !== 0x7b) throw protocolError('Message is not a JSON object')
+
+  const counts = new StructureCounts()
+  for (; i < bytes.length; i++) {
+    if (bytes[i] === 0x22) {
+      i = closingQuote(bytes, i)
+    } else {
+      counts.add(bytes[i])
+    }
+  }
+}
+
+/** The index of the first byte that is not JSON whitespace (space, tab, LF, CR), or the length. */
+function skipJsonWhitespace(bytes: Uint8Array): number {
   let i = 0
   while (
-    i < end &&
+    i < bytes.length &&
     (bytes[i] === 0x20 || bytes[i] === 0x09 || bytes[i] === 0x0a || bytes[i] === 0x0d)
   ) {
     i++
   }
-  if (i === end || bytes[i] !== 0x7b) throw protocolError('Message is not a JSON object')
+  return i
+}
 
-  let depth = 0
-  let tokens = 0
-  let inString = false
-  for (; i < end; i++) {
-    const b = bytes[i]
-    if (inString) {
-      if (b === 0x5c) {
-        i++ // the byte after a backslash is data, even a quote or another backslash
-      } else if (b === 0x22) {
-        inString = false
-      }
-    } else if (b === 0x22) {
-      inString = true
-    } else if (b === 0x2c || b === 0x3a) {
-      if (++tokens > MAX_JSON_TOKENS) throw tooManyTokens()
+/**
+ * The index of the quote that closes the string opened by the quote at `open`; the length or
+ * more when the string never closes. The byte after a backslash is data, even a quote or
+ * another backslash.
+ */
+function closingQuote(bytes: Uint8Array, open: number): number {
+  let i = open + 1
+  while (i < bytes.length && bytes[i] !== 0x22) {
+    i += bytes[i] === 0x5c ? 2 : 1
+  }
+  return i
+}
+
+/** The running counts of {@link assertBoundedObject}, fed every byte outside strings. */
+class StructureCounts {
+  /** Containers open now. */
+  private depth = 0
+  /** Structural tokens so far. */
+  private tokens = 0
+
+  /**
+   * Count byte `b`. An opener is a token first and a container second, so a byte that passes
+   * both bounds reports the token bound.
+   */
+  add(b: number): void {
+    if (b === 0x2c || b === 0x3a) {
+      this.token()
     } else if (b === 0x7b || b === 0x5b) {
-      if (++tokens > MAX_JSON_TOKENS) throw tooManyTokens()
-      if (++depth > MAX_JSON_DEPTH) {
+      this.token()
+      if (++this.depth > MAX_JSON_DEPTH) {
         throw protocolError(`Message nests deeper than ${MAX_JSON_DEPTH} levels`)
       }
     } else if (b === 0x7d || b === 0x5d) {
       // More closers than openers is never JSON, and must not let the count sink below
       // zero and hide the nesting that follows.
-      if (--depth < 0) throw protocolError('Message has unbalanced brackets')
+      if (--this.depth < 0) throw protocolError('Message has unbalanced brackets')
     }
   }
-}
 
-function tooManyTokens(): WebRTPayError {
-  return protocolError(`Message has more than ${MAX_JSON_TOKENS} structural tokens`)
+  private token(): void {
+    if (++this.tokens > MAX_JSON_TOKENS) {
+      throw protocolError(`Message has more than ${MAX_JSON_TOKENS} structural tokens`)
+    }
+  }
 }
 
 function checkCap(maxMessageBytes: number): number {
