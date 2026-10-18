@@ -1,8 +1,7 @@
 import { expect } from '@jest/globals'
-import { createHmac } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import { Hash, PrivateKey, ProtoWallet, Utils } from '@bsv/sdk'
 import { WebSocket as WsClient } from 'ws'
 import { createRelayServer } from '../../server/index.js'
 import type { RelayServer, RelayServerOptions } from '../../server/index.js'
@@ -155,8 +154,13 @@ export async function freePort(): Promise<number> {
   return port
 }
 
+/**
+ * base64(HMAC-SHA1(utf8(secret), utf8(s))), coturn's REST API password. The fixed vectors in
+ * relay.test.ts check it, and turnCredentials, against node:crypto's output.
+ */
 export function hmacBase64(secret: string, s: string): string {
-  return createHmac('sha1', secret).update(s).digest('base64')
+  const mac = new Hash.SHA1HMAC(Utils.toArray(secret, 'utf8'))
+  return Utils.toBase64(mac.update(Utils.toArray(s, 'utf8')).digest())
 }
 
 /**

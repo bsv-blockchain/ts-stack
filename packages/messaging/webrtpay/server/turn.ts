@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto'
+import { Hash, Utils } from '@bsv/sdk'
 import type { RelayIceServer } from '../src/signaling/RelaySignaler.js'
 import { cloudflareTurnIssuer } from './cloudflare.js'
 
@@ -6,7 +7,7 @@ import { cloudflareTurnIssuer } from './cloudflare.js'
 export interface TurnCredentials {
   /** `"<unix expiry seconds>:<pseudonym>"`; see {@link turnCredentials}. */
   username: string
-  /** Standard base64 of HMAC-SHA1(secret, username). */
+  /** Standard base64 of HMAC-SHA1(secret, username), as coturn's REST API requires. */
   credential: string
   /** When the credentials stop working, in Unix milliseconds. */
   expiresAt: number
@@ -112,9 +113,22 @@ export function turnCredentials(o: {
   const username = `${expiry}:${pseudonym}`
   return {
     username,
-    credential: createHmac('sha1', o.secret).update(username).digest('base64'),
+    credential: coturnRestCredential(o.secret, username),
     expiresAt: expiry * 1000
   }
+}
+
+/**
+ * coturn's REST API (`use-auth-secret`) checks the password as base64(HMAC-SHA1(secret,
+ * username)), so the algorithm is fixed by coturn. HMAC-SHA1 does not depend on SHA-1's
+ * collision resistance, and the username is sent in the clear anyway. Computed with
+ * `@bsv/sdk`'s `Hash.SHA1HMAC` over the UTF-8 bytes of both (its constructor reads a
+ * string key as hex, so the key is passed as bytes); the result is byte-identical to
+ * node:crypto's `createHmac('sha1', secret).update(username).digest('base64')`.
+ */
+function coturnRestCredential(secret: string, username: string): string {
+  const mac = new Hash.SHA1HMAC(Utils.toArray(secret, 'utf8'))
+  return Utils.toBase64(mac.update(Utils.toArray(username, 'utf8')).digest())
 }
 
 /**

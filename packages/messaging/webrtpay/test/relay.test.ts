@@ -60,6 +60,40 @@ describe('turnCredentials', () => {
     )
   })
 
+  it('matches fixed coturn REST vectors for UTF-8, hex-looking, block-sized and long secrets', () => {
+    // Expected values: base64(HMAC-SHA1(utf8(secret), utf8(username))), computed with
+    // node:crypto, which is what coturn's use-auth-secret check reproduces.
+    const vectors = [
+      [
+        'coturn-static-auth-secret',
+        '02ab',
+        '5SsuiQiML_xRe0sRbBQsGE',
+        'uCKYuYnffWSWlc+9BpjWOnRp+S0='
+      ],
+      // a secret that also parses as hex must still be taken as UTF-8 text
+      ['deadbeef', '02ab', 'vCJ6TX5ewasnc3xdwaVz_2', 't4Em3G6XG+arEt80qnFoebBp7ZE='],
+      ['sécret-✓', '02ab', '4gzRXwa7RpU4qfcSaTyZ_u', 'gxkF2/FcAtmmzAfG1jU68bdFUPU='],
+      // exactly one SHA-1 block, then longer than one (the key is hashed first)
+      ['k'.repeat(64), '02ab', 'owMnNg8DPApg3y9bX0UwOq', 'zJeuYeunJ894JnVDzjOd0ld4TXc='],
+      [
+        `${'x'.repeat(65)}-long-secret-past-the-sha1-block`,
+        '03cd',
+        '6_FnfmwhCRbRIi44gYbA5o',
+        'W1fBSgHLTrBM5udFFGokbeIPAko='
+      ]
+    ]
+    for (const [secret, identityKey, pseudonym, credential] of vectors) {
+      expect(
+        turnCredentials({ secret, identityKey, ttlSeconds: 600, now: 1_700_000_000_000 })
+      ).toEqual({
+        username: `1700000600:${pseudonym}`,
+        credential,
+        expiresAt: 1_700_000_600_000
+      })
+      expect(hmacBase64(secret, `1700000600:${pseudonym}`)).toBe(credential)
+    }
+  })
+
   it('keeps the identity key out of the username but gives each identity a stable pseudonym', async () => {
     const { key } = await party()
     const at = (now: number, identityKey = key, secret = 'k') =>
