@@ -2,7 +2,8 @@
  * Two wallets in one process pay each other over a real WebRTC data channel
  * (node-datachannel), with an in-memory hub carrying the signaling.
  *
- * From the package root, after `npm install` and `npm run build`:
+ * From packages/messaging/webrtpay in a ts-stack checkout, after `pnpm install` at the
+ * repository root and `pnpm build`:
  *
  *   node --experimental-strip-types examples/demo-node.ts
  *

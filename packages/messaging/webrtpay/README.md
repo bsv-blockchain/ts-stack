@@ -37,14 +37,12 @@ carrier. This package makes the carrier a plug-in:
 
 ## Install
 
-0.1.0 is not on npm yet. Build a tarball and install that:
-
 ```sh
-npm ci && npm run build && npm pack      # bsv-webrtpay-0.1.0.tgz
-npm install /path/to/bsv-webrtpay-0.1.0.tgz @bsv/sdk
+npm install @bsv/webrtpay @bsv/sdk
 ```
 
-Requirements: Node 22 or later, or a browser; `@bsv/sdk` `^2.8.6 || ^3.0.0`; a BRC-100 wallet
+Requirements: Node 22 or later, or a browser; `@bsv/sdk` `^2.8.6 || ^3.0.0`, a required peer
+dependency; a BRC-100 wallet
 (`WalletClient`, a wallet-toolbox `Wallet`, anything with the methods in `WalletLike`). In Node,
 inject a WebRTC implementation such as `node-datachannel/polyfill` through `rtc`.
 
@@ -122,7 +120,9 @@ internalizing fails for a passing reason, keep it, retry locally and return `'re
 about the payment, and keeping those would let anyone fill the store. Keep them in a store with
 a cap, and only for failures that pass: a wallet's argument or proof errors (a BEEF it cannot
 verify fails with `WERR_INVALID_PARAMETER`, say) do not. A handler that throws makes the ack
-`rejected`. `acceptDirectPayment` reports a payment the wallet took as `accepted` even when
+`rejected`, so once the store holds `MAX_KEPT` payments the payer gets `rejected` (with the
+`txid`): it keeps its token and delivers it again later, directly or through MessageBox.
+`acceptDirectPayment` reports a payment the wallet took as `accepted` even when
 `seen.add` fails afterwards (`onSeenError` hears about it). Receiving answers offers
 automatically within the inbound limits (3 sessions, 1 per sender, 10 offers a minute, 3 per
 sender); see [Security and privacy](#security-and-privacy) before turning it on for users.
@@ -179,7 +179,10 @@ validatePaymentToken(token) // what the payee checks short of its own key: inval
 
 // 3. Broadcast only while the payee is still there, then deliver and wait for its ack (45 s).
 //    If it hung up meanwhile, dial again first: nothing has been broadcast, so the same token
-//    still serves, and a dial that fails throws before anything goes out.
+//    still serves, and a dial that fails throws before anything goes out. The signed noSend
+//    transaction then stays in the wallet, unbroadcast, holding its inputs: abandon it with
+//    abortAction({ reference: txid }), or broadcast it later with sendWith and deliver the
+//    token another way (MessageBox).
 if (!peer.isOpen) peer = await client.connect(payeeKey)
 await wallet.createAction(
   { description: 'Direct payment', options: { sendWith: [txid!] } },
@@ -262,10 +265,12 @@ identity comes from the handshake.
 
 A runnable version of the remote flow is [examples/demo-node.ts](examples/demo-node.ts): two
 wallets in one process, a real WebRTC channel, an in-memory signaler. It uses node-datachannel,
-a development dependency, so run it from a clone of the repository:
+a development dependency, so run it in [`packages/messaging/webrtpay`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay) of a
+[ts-stack](https://github.com/bsv-blockchain/ts-stack) checkout, after `pnpm install` at the
+repository root:
 
 ```sh
-npm ci && npm run build && node --experimental-strip-types examples/demo-node.ts
+pnpm build && node --experimental-strip-types examples/demo-node.ts
 ```
 
 ## Signalers
@@ -311,7 +316,7 @@ while subscribed, while a send is in flight, or after `connect()`. Options: `url
   `turnProvider()` returns the `iceServersProvider` to give a `DirectPayClient` (below).
 
 Anything with `send`, `listen` and optionally `setActive` can be a signaler; see `Signaler` in
-`src/signaling/types.ts`.
+[`src/signaling/types.ts`](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/messaging/webrtpay/src/signaling/types.ts).
 
 ## ICE servers and TURN
 
@@ -607,19 +612,29 @@ Node builtins, `Buffer` or `process`, and imports nothing outside `src/`
 
 ## Development
 
-| Command                | What                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| `npm run build`        | Compile `src/` and `server/` to `dist/` (`dist/src/index.js`, `dist/server/cli.js`). |
-| `npm test`             | All tests (jest, ESM); the TURN suite is skipped.                                    |
-| `npm run test:turn`    | Also the TURN suite (needs the Docker stack).                                        |
-| `npm run typecheck`    | `tsc --noEmit` over `src/`, `server/`, `test/` and `examples/`.                      |
-| `npm run format:check` | Prettier (no semicolons, single quotes, width 100).                                  |
+The package lives in [`packages/messaging/webrtpay`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay) of
+[ts-stack](https://github.com/bsv-blockchain/ts-stack), whose
+[CONTRIBUTING.md](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md) applies.
+After `pnpm install` at the repository root, from the package directory:
+
+| Command              | What                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `pnpm build`         | Compile `src/` and `server/` to `dist/` (`dist/src/index.js`, `dist/server/cli.js`). |
+| `pnpm test`          | All tests (jest, ESM); the TURN suite is skipped.                                    |
+| `pnpm test:coverage` | The same with coverage and its thresholds.                                           |
+| `pnpm test:property` | The fast-check property suites only.                                                 |
+| `pnpm test:turn`     | Also the TURN suite (needs the local STUN/TURN stack).                               |
+| `pnpm typecheck`     | `tsc --noEmit` over `src/`, `server/`, `test/` and `examples/`.                      |
+| `pnpm lint`          | Oxlint over `src/`, `server/`, `test/` and `examples/`, warnings denied.             |
+| `pnpm format:check`  | Prettier with the repository's configuration.                                        |
+| `pnpm test:browser`  | Bundles the packed root entry for browsers, within `browser-budget.json`.            |
+| `pnpm pack:check`    | Checks the packed tarball, its exports and the `webrtpay-relay` executable.          |
 
 Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`npm test`: 700 tests at 0.1.0; `npm run test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 722 tests at 0.1.0; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input
@@ -633,16 +648,16 @@ tests):
   inbound limits and intake budgets, timeouts;
 - the relay: authentication and URL binding, limits, TURN issuance, admission, liveness;
 - `MessageBoxSignaler` against a fake MessageBox client;
-- the relayed path through a real coturn 4.18.0 in Docker (`npm run test:turn`);
+- the relayed path through a real coturn 4.18.0 in Docker (`pnpm test:turn`);
 - the examples in `docs/protocol.md`, recomputed from the code (`test/protocol-doc.test.ts`);
 - guards: nothing under `src/` uses Node (`test/browser-safety.test.ts`), no public IP address
   is published in tests or docs (`test/ip-literals.test.ts`), and the files the README links
   to are in the package (`test/package-files.test.ts`);
 - type-level interop: `PaymentToken` and `IncomingPayment` against `@bsv/sdk`'s
-  `CreateActionResult` and `@bsv/message-box-client` 2.6.0's types, both ways
-  (`test/types.test.ts`, checked by `npm run typecheck`).
+  `CreateActionResult` and `@bsv/message-box-client`'s types (the workspace packages), both
+  ways (`test/types.test.ts`, checked by `pnpm typecheck`).
 
-The demo, `examples/demo-node.ts`, is not part of `npm test`; run by hand, it pays through the
+The demo, `examples/demo-node.ts`, is not part of `pnpm test`; run by hand, it pays through the
 built package and prints an `accepted` ack.
 
 Not verified:
