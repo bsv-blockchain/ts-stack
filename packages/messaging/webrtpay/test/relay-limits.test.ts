@@ -10,7 +10,8 @@ import {
   party,
   relayFixtures,
   upgradeError,
-  waitFor
+  waitFor,
+  within
 } from './helpers/relay.js'
 import type { Party, Raw } from './helpers/relay.js'
 
@@ -32,7 +33,11 @@ describe('relay limits', () => {
     ])
   })
 
-  afterEach(cleanup)
+  afterEach(async () => {
+    // a test that mocks Date.now and fails must not leave the clock frozen for the next one
+    jest.restoreAllMocks()
+    await cleanup()
+  })
 
   /** A raw socket authenticated as `p`, past its `ready` and `ice` frames. */
   async function authed(r: RelayServer, p: Party, headers?: Record<string, string>): Promise<Raw> {
@@ -84,6 +89,12 @@ describe('relay limits', () => {
   }
 
   describe('frames over the rate (R3)', () => {
+    it('gives up a wait on time even while Date.now is frozen', async () => {
+      // the next test freezes the relay's clock; its waits must still fail, not hang
+      jest.spyOn(Date, 'now').mockReturnValue(0)
+      await expect(waitFor(() => false, 100)).rejects.toThrow('condition not met in time')
+    }, 3000)
+
     it('answers each frame over the rate until maxOverRateFrames in a row, then closes with 1008', async () => {
       const r = await relay({ limits: { rateMessages: 5, maxOverRateFrames: 3 } })
       const a = await authed(r, alice)
@@ -101,36 +112,28 @@ describe('relay limits', () => {
     it('counts only frames over the rate in a row', async () => {
       // The relay's clock is the test's, so only what the test advances refills a bucket and
       // no real delay can matter. One frame a second, 3 at most; the auth frame took one.
+      // afterEach restores Date.now; the waits keep real time, so a failure cannot hang.
       let now = Date.now()
-      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now)
-      try {
-        const r = await relay({
-          limits: { rateMessages: 3, rateWindowMs: 3000, maxOverRateFrames: 2 }
-        })
-        const a = await authed(r, alice)
-        const got = record(a)
-        const codes = async (n: number): Promise<unknown[]> => {
-          await waitFor(() => got.length >= n)
-          return got.splice(0, n).map(f => f.code)
-        }
-        for (let i = 0; i < 4; i++) a.send({})
-        expect(await codes(4)).toEqual([
-          'bad_request',
-          'bad_request',
-          'rate_limited',
-          'rate_limited'
-        ])
-        now += 1100
-        a.send({}) // within the rate again: the count starts over
-        a.send({})
-        a.send({})
-        expect(await codes(3)).toEqual(['bad_request', 'rate_limited', 'rate_limited'])
-        expect(a.ws.readyState).toBe(a.ws.OPEN)
-        a.send({})
-        expect(await a.closed).toBe(1008)
-      } finally {
-        clock.mockRestore()
+      jest.spyOn(Date, 'now').mockImplementation(() => now)
+      const r = await relay({
+        limits: { rateMessages: 3, rateWindowMs: 3000, maxOverRateFrames: 2 }
+      })
+      const a = await authed(r, alice)
+      const got = record(a)
+      const codes = async (n: number): Promise<unknown[]> => {
+        await waitFor(() => got.length >= n)
+        return got.splice(0, n).map(f => f.code)
       }
+      for (let i = 0; i < 4; i++) a.send({})
+      expect(await codes(4)).toEqual(['bad_request', 'bad_request', 'rate_limited', 'rate_limited'])
+      now += 1100
+      a.send({}) // within the rate again: the count starts over
+      a.send({})
+      a.send({})
+      expect(await codes(3)).toEqual(['bad_request', 'rate_limited', 'rate_limited'])
+      expect(a.ws.readyState).toBe(a.ws.OPEN)
+      a.send({})
+      expect(await within(a.closed, 'the close after the next frame over the rate')).toBe(1008)
     })
 
     it('charges pings to the rate: pongs within it, closes a socket that keeps pinging', async () => {
@@ -427,19 +430,32 @@ describe('relay limits', () => {
     })
 
     it('keeps an address group share when its sockets close and its source is swept (Ruling 34)', async () => {
+      // The relay sweeps on its ping timer: right after each ping round it forgets the sources
+      // that hold no socket and whose connection token is back (10 ms at 6000 a minute). A
+      // socket whose pong has not been read by the next round is dropped, and bob's shares
+      // with it, so rounds are 1 s apart: only an event-loop stall longer than that could drop
+      // bob's listener (200 ms rounds lost it to a 500 ms stall).
+      const pingIntervalMs = 1000
       const r = await relay({
         trustedIpHeader: 'x-client-ip',
-        // sources are swept as soon as they hold no socket and a connection token is back
-        limits: { signalsPerPairPerMinute: 2, pingIntervalMs: 200, connectionsPerIpPerMinute: 6000 }
+        limits: { signalsPerPairPerMinute: 2, pingIntervalMs, connectionsPerIpPerMinute: 6000 }
       })
       await signaler(r, bob).listen(inbox().fn)
       const a = await authed(r, alice, fromIp('203.0.113.1'))
       expect((await deliver(a, bob)).t).toBe('sent')
       expect((await deliver(a, bob)).t).toBe('sent')
       a.ws.close()
-      await a.closed
+      await within(a.closed, "alice's close")
       await waitFor(() => r.stats().sockets === 1)
-      await new Promise(resolve => setTimeout(resolve, 600))
+      await new Promise(resolve => setTimeout(resolve, 20)) // the connection token is back
+      // A socket that connects now gets its first ping from a round that starts later, which
+      // sweeps once it has pinged: by the time that ping arrives, the source is gone.
+      const probe = await authed(r, dave, fromIp('203.0.113.9'))
+      await within(
+        new Promise(resolve => probe.ws.once('ping', resolve)),
+        'a ping round after the source emptied',
+        3 * pingIntervalMs
+      )
       // a new identity from the same address finds the share still spent
       const c = await authed(r, carol, fromIp('203.0.113.1'))
       expect(await deliver(c, bob)).toMatchObject({ t: 'error', code: 'rate_limited' })

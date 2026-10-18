@@ -53,11 +53,28 @@ export function inbox(): {
   }
 }
 
+/**
+ * Resolve once `check()` holds, polling every 20 ms; reject after `timeoutMs`. It keeps time
+ * with `performance.now()`, so a test that mocks `Date.now` cannot make it wait forever.
+ */
 export async function waitFor(check: () => boolean, timeoutMs = 5000): Promise<void> {
-  const until = Date.now() + timeoutMs
+  const until = performance.now() + timeoutMs
   while (!check()) {
-    if (Date.now() > until) throw new Error('condition not met in time')
+    if (performance.now() > until) throw new Error('condition not met in time')
     await new Promise(r => setTimeout(r, 20))
+  }
+}
+
+/** `p`, or a rejection naming `what` after `timeoutMs`, so a wait fails rather than hangs. */
+export async function within<T>(p: Promise<T>, what: string, timeoutMs = 5000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what}: not in ${timeoutMs} ms`)), timeoutMs)
+  })
+  try {
+    return await Promise.race([p, late])
+  } finally {
+    clearTimeout(timer)
   }
 }
 
