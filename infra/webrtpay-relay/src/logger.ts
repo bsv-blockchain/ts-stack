@@ -8,38 +8,35 @@
  * here as well should a record ever carry them.
  */
 import pino from 'pino'
+import type { LoggerOptions } from 'pino'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
-  name: string
-  version: string
+/** Keys whose values never leave the process, at the top level and one or two levels down. */
+const SECRET_KEYS = ['secret', 'apiToken', 'token', 'authorization']
+const SECRET_ENV = ['TURN_SECRET', 'CLOUDFLARE_TURN_API_TOKEN']
+
+function redactPaths(): string[] {
+  const nested = SECRET_KEYS.flatMap(key => [`*.${key}`, `*.*.${key}`])
+  return [...SECRET_KEYS, ...SECRET_ENV, ...nested]
 }
 
-export const log = pino({
-  name: pkg.name,
-  level: process.env.LOG_LEVEL ?? 'info',
-  base: {
-    service: process.env.OTEL_SERVICE_NAME ?? pkg.name,
-    env: process.env.DEPLOY_ENV ?? process.env.NODE_ENV ?? 'development'
-  },
-  redact: {
-    paths: [
-      'secret',
-      'apiToken',
-      'token',
-      'authorization',
-      'TURN_SECRET',
-      'CLOUDFLARE_TURN_API_TOKEN',
-      '*.secret',
-      '*.apiToken',
-      '*.*.secret',
-      '*.*.apiToken',
-      '*.authorization'
-    ],
-    censor: '[redacted]'
-  },
-  formatters: {
-    level: label => ({ level: label })
+function packageName(): string {
+  const raw = readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+  return (JSON.parse(raw) as { name: string }).name
+}
+
+function loggerOptions(name: string, env: NodeJS.ProcessEnv): LoggerOptions {
+  return {
+    name,
+    level: env.LOG_LEVEL ?? 'info',
+    base: {
+      service: env.OTEL_SERVICE_NAME ?? name,
+      env: env.DEPLOY_ENV ?? env.NODE_ENV ?? 'development'
+    },
+    redact: { paths: redactPaths(), censor: '[redacted]' },
+    formatters: { level: label => ({ level: label }) }
   }
-})
+}
+
+export const log = pino(loggerOptions(packageName(), process.env))
