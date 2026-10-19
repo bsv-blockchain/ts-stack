@@ -220,15 +220,21 @@ export class MessageBoxSignaler implements Signaler {
     const sendLiveMessage = this.client.sendLiveMessage
     if (!this.live || sendLiveMessage === undefined) return 'skipped'
     let called = false
+    // Once the 1.5 s are up the caller sends over HTTP; a late host lookup must not then
+    // send live as well, or HTTP would meet a duplicate it was never told to expect.
+    let expired = false
     const attempt = (async (): Promise<LiveOutcome> => {
-      if (!(await this.reachableLive(message.recipient))) return 'skipped'
+      if (!(await this.reachableLive(message.recipient)) || expired) return 'skipped'
       called = true
       await sendLiveMessage.call(this.client, message, this.host)
       return 'sent'
     })()
     let timer: ReturnType<typeof setTimeout> | undefined
     const late = new Promise<undefined>(resolve => {
-      timer = setTimeout(() => resolve(undefined), LIVE_SEND_MS)
+      timer = setTimeout(() => {
+        expired = true
+        resolve(undefined)
+      }, LIVE_SEND_MS)
     })
     try {
       return (await Promise.race([attempt, late])) ?? (called ? 'tried' : 'skipped')

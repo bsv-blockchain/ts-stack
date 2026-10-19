@@ -806,6 +806,8 @@ class LiveFakeClient extends FakeClient {
   liveSentHosts: Array<string | undefined> = []
   resolves: string[] = []
   resolveFailure: Error | undefined
+  /** Milliseconds each host lookup takes. */
+  resolveDelayMs = 0
   private onLive: ((m: unknown) => void) | undefined
   private lastLive: unknown
 
@@ -819,6 +821,9 @@ class LiveFakeClient extends FakeClient {
   /** Hosts by identity, as advertised; everyone is on `https://mb.example` unless set. */
   async resolveHostForRecipient(identityKey: string): Promise<string> {
     this.resolves.push(identityKey)
+    if (this.resolveDelayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, this.resolveDelayMs))
+    }
     if (this.resolveFailure) throw this.resolveFailure
     return this.liveServer.hosts.get(identityKey) ?? 'https://mb.example'
   }
@@ -1488,6 +1493,18 @@ describe('MessageBoxSignaler', () => {
     await jest.advanceTimersByTimeAsync(1)
     await sending
     expect(a.sent).toHaveLength(1)
+  })
+
+  it('does not send live once a slow host lookup has run past the 1.5 s', async () => {
+    const server = new FakeMessageBox()
+    const a = server.liveClient(ALICE)
+    a.resolveDelayMs = 2000
+    const sending = new MessageBoxSignaler(a).send(BOB, ENV)
+    await jest.advanceTimersByTimeAsync(1500)
+    await sending
+    expect(a.sent).toHaveLength(1)
+    await jest.advanceTimersByTimeAsync(5000)
+    expect(a.liveSent).toEqual([])
   })
 
   it('counts a duplicate refusal after a live attempt as delivered, but not without one', async () => {
