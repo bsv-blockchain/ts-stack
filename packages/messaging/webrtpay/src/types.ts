@@ -183,8 +183,20 @@ export interface Defaults {
   readonly gatherTimeoutMs: number
   /** Time allowed for the identity handshake once the channel is open. */
   readonly handshakeTimeoutMs: number
-  /** Total budget for connect plus handshake when dialing. */
+  /**
+   * ICE gathering cap for a dial by identity key (the offer and the answer to it); code
+   * exchange keeps `gatherTimeoutMs`.
+   */
+  readonly dialGatherTimeoutMs: number
+  /**
+   * Total budget for connect plus handshake: an inbound session's, and the cap on a whole
+   * dial by identity key.
+   */
   readonly connectTimeoutMs: number
+  /** How long a dial waits for the recipient's first reply (ring, answer or reject). */
+  readonly presenceTimeoutMs: number
+  /** How long a dial has, from the recipient's first reply, to open and authenticate. */
+  readonly dialTimeoutMs: number
   /** How long a payer waits for the payee's ack. */
   readonly ackTimeoutMs: number
   /** Allowed clock skew either way on a signal envelope timestamp. */
@@ -200,8 +212,11 @@ export const DEFAULTS: Defaults = Object.freeze({
   maxMessageBytes: 32 * 1024 * 1024,
   inboundMaxMessageBytes: 16 * 1024 * 1024,
   gatherTimeoutMs: 5000,
+  dialGatherTimeoutMs: 1500,
   handshakeTimeoutMs: 15000,
   connectTimeoutMs: 30000,
+  presenceTimeoutMs: 2000,
+  dialTimeoutMs: 6000,
   ackTimeoutMs: 45000,
   signalMaxSkewMs: 120000,
   payeePollMs: 2500,

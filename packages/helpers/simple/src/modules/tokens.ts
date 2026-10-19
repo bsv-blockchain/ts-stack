@@ -291,7 +291,7 @@ async function validatedListOutputs(
   const result = validateWalletResult('listOutputs', await client.listOutputs(args), bindingRequest)
   const { totalOutputs } = result
   if (typeof totalOutputs !== 'number') {
-    throw new Error('Wallet returned a module balance where an output count was expected')
+    throw new TypeError('Wallet returned a module balance where an output count was expected')
   }
   return { ...result, totalOutputs }
 }

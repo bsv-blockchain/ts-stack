@@ -1,5 +1,5 @@
 const MODULE_BALANCE_BASKET = /^p [^ ]+ balance /
-const CANONICAL_DECIMAL = /^(?:0|[1-9][0-9]*)$/
+const CANONICAL_DECIMAL = /^(?:0|[1-9]\d*)$/
 
 /**
  * True for a BRC-112 module balance query, `p <module> balance <basket>`. Its

@@ -34,6 +34,8 @@ import { equalBytes, randomBytes, toBase64Url } from '../util/bytes.js'
 import { compareCodeUnits } from '../util/compare.js'
 import { WebRTPayError } from '../util/errors.js'
 import { KeyedBuckets, TokenBucket } from './budget.js'
+import { DialClock, DialSettler, ReplyQueue } from './dial.js'
+import type { DialTimeouts } from './dial.js'
 import { DEFAULT_INBOUND_LIMITS, InboundLimiter } from './limits.js'
 import type { InboundLimits } from './limits.js'
 
@@ -105,8 +107,13 @@ export interface DirectPayClientOptions {
   chain?: string
   /** Inbound limits; unset fields keep {@link DEFAULT_INBOUND_LIMITS}. */
   limits?: Partial<InboundLimits>
-  /** `connectMs`: connect plus handshake (30 s); `ackMs`: wait for a payment's ack (45 s). */
-  timeouts?: { connectMs?: number; ackMs?: number }
+  /**
+   * `connectMs`: an inbound session's connect plus handshake, and the cap on a whole dial
+   * (30 s); `presenceMs`: a dial's wait for the recipient's first reply (2 s); `dialMs`: a
+   * dial's time from that reply to an authenticated session (6 s); `ackMs`: wait for a
+   * payment's ack (45 s).
+   */
+  timeouts?: { connectMs?: number; ackMs?: number; presenceMs?: number; dialMs?: number }
   /** Largest message accepted from a peer this client pays; defaults to 32 MiB. */
   maxMessageBytes?: number
 }
@@ -171,6 +178,15 @@ const SENDER_INTAKE_PER_MINUTE = 10
 const SENDER_INTAKE_BURST = 10
 /** Each refusal costs an encryption and a send: at most one per second is answered. */
 const REJECTS_PER_SECOND = 1
+/**
+ * Rings answered per second, at most, with bursts as large: a budget of their own, so a
+ * refusal now and then cannot silence back-to-back dials.
+ */
+const RINGS_PER_SECOND = 20
+/** Longest wait for a payment an old session is still acknowledging before superseding it. */
+const SUPERSEDE_WAIT_MS = 1000
+/** Limiter check that lets a sender's new offer replace its own open session. */
+const SUPERSEDING = { superseding: true } as const
 /** Signals that could not be opened are reported to `onError` at most this often. */
 const UNOPENED_REPORT_MS = 10000
 /** Longest reject reason from a peer passed on in an error message. */
@@ -186,10 +202,62 @@ const NOT_PROCESSED = 'The payee could not process the payment'
 const MAX_TIMER_MS = 2 ** 31 - 1
 const SID_BYTES = 16
 
-/** One dial waiting for its answer, keyed by sid. */
+/** Options for {@link DirectPayClient.connect}. */
+export interface DialOptions {
+  /**
+   * Cap on the whole dial; defaults to the client's `connectMs` (30 s). Running out before
+   * the recipient replied is `peer_unreachable`, after it `timeout`.
+   */
+  timeoutMs?: number
+  /**
+   * Wait for the recipient's first reply, from the carrier taking the knock; defaults to the
+   * client's `presenceMs` (2 s).
+   */
+  presenceTimeoutMs?: number
+  /**
+   * Time from the recipient's first reply to an open, authenticated session; defaults to the
+   * client's `dialMs` (6 s).
+   */
+  dialTimeoutMs?: number
+  /** Cancels this dial (it rejects `closed`, `Dial cancelled`); nothing else is touched. */
+  signal?: AbortSignal
+}
+
+/** One dial in progress, as {@link DirectPayClient.connect} runs it. */
+interface DialRun {
+  sid: string
+  recipient: PubKeyHex
+  signaler: Signaler
+  timeouts: DialTimeouts
+  replies: ReplyQueue
+  /** Why the dial ended, once it has. */
+  failure: WebRTPayError | undefined
+  /** The dial's link, once gathered. */
+  link: PeerLink | undefined
+  /** End the dial now with `e` (does nothing once it has ended). */
+  fail(e: WebRTPayError): void
+  /** The carrier took the knock: presence starts. */
+  posted(): void
+}
+
+/** An admitted inbound offer's session, as a later offer from the same sender sees it. */
+interface InboundSession {
+  /** Its link, once created. */
+  link: PeerLink | undefined
+  /** Payments it is handling whose ack has not been sent yet. */
+  paying: number
+  /** Settles once the session has ended and its slot is back. */
+  ended: Promise<void>
+  /** True once its slot is back (it ended, or was superseded). */
+  released: boolean
+  /** Give its slot back (once). */
+  release(): void
+}
+
+/** One dial waiting for replies, keyed by sid. */
 interface Dial {
   recipient: PubKeyHex
-  /** The peer's answer or reject arrived. */
+  /** The peer's ring, answer or reject arrived. */
   reply(p: SignalPlaintext): void
   /** End the dial now (budget spent, client closed). */
   fail(e: WebRTPayError): void
@@ -229,6 +297,8 @@ export class DirectPayClient {
   private readonly limits: InboundLimits
   private readonly limiter: InboundLimiter
   private readonly connectMs: number
+  private readonly presenceMs: number
+  private readonly dialMs: number
   private readonly ackMs: number
   private readonly maxMessageBytes: number
   private readonly replay = new ReplayCache()
@@ -238,11 +308,14 @@ export class DirectPayClient {
     60000 / SENDER_INTAKE_PER_MINUTE
   )
   private readonly rejects = new TokenBucket(1, 1000 / REJECTS_PER_SECOND)
+  private readonly rings = new TokenBucket(RINGS_PER_SECOND, 1000 / RINGS_PER_SECOND)
   private readonly unopenedReports = new TokenBucket(1, UNOPENED_REPORT_MS)
   /** Payment decisions in progress by `paymentKey`, so concurrent deliveries share one. */
   private readonly deciding = new Map<string, Promise<PaymentDecision>>()
   private readonly dials = new Map<string, Dial>()
   private readonly links = new Set<PeerLink>()
+  /** Inbound sessions holding a slot, by the sender the carrier vouched for. */
+  private readonly inbound = new Map<PubKeyHex, InboundSession>()
   private identity: Promise<PubKeyHex> | undefined
   private handlers: ReceiveHandlers | undefined
   private dialCount = 0
@@ -269,6 +342,8 @@ export class DirectPayClient {
     this.limits = { ...DEFAULT_INBOUND_LIMITS, ...definedFields(o.limits) }
     this.limiter = new InboundLimiter(this.limits)
     this.connectMs = timerMs(o.timeouts?.connectMs, DEFAULTS.connectTimeoutMs, 'connectMs')
+    this.presenceMs = timerMs(o.timeouts?.presenceMs, DEFAULTS.presenceTimeoutMs, 'presenceMs')
+    this.dialMs = timerMs(o.timeouts?.dialMs, DEFAULTS.dialTimeoutMs, 'dialMs')
     this.ackMs = timerMs(o.timeouts?.ackMs, DEFAULTS.ackTimeoutMs, 'ackMs')
     this.maxMessageBytes = o.maxMessageBytes ?? DEFAULTS.maxMessageBytes
     if (!Number.isSafeInteger(this.maxMessageBytes) || this.maxMessageBytes < 1) {
@@ -299,9 +374,10 @@ export class DirectPayClient {
    * Answer offers from peers through the signaler, within the inbound limits, and serve
    * each session with `h`. Calling it again replaces the handlers for new sessions.
    *
-   * Offers beyond the limits get no ICE gathering (no address disclosed). One from a sender
-   * over its own limits (it has a session open, or has used its offers for the minute) gets
-   * no reply; with the client's `chain` set, one that names another network or none gets a
+   * Offers beyond the limits get no ICE gathering (no address disclosed). A sender has one
+   * session at a time: its new offer supersedes its open session (closed after up to 1 s if it
+   * is still acknowledging a payment). One from a sender that has used its offers for the
+   * minute gets no reply; with the client's `chain` set, one that names another network or none gets a
    * sealed `reject` (`wrong_network`); one refused because the payee is busy gets a sealed
    * `reject` (`busy`). Refusals are answered at most once a second and the rest go
    * unanswered. A session must open and authenticate within `connectMs` of its answer being
@@ -339,31 +415,40 @@ export class DirectPayClient {
   }
 
   /**
-   * Dial `recipient` through the signaler and authenticate it: send an encrypted offer,
-   * wait for the answer, open the channel and run the handshake pinned to `recipient`.
+   * Dial `recipient` through the signaler and authenticate it. A sealed `knock` goes out
+   * first, while the offer is gathered (for at most 1.5 s); a receiving peer replies `ring`
+   * at once, and only then is the offer sent, its answer applied, the channel opened and the
+   * handshake run pinned to `recipient`. A peer that is not there is known within
+   * `presenceTimeoutMs` (2 s) of the carrier taking the knock; one that replied has
+   * `dialTimeoutMs` (6 s) from its reply to finish. 0.1.0 peers do not answer knocks, so they
+   * look offline.
    *
    * The payee then waits for the first message only for its `firstMessageTimeoutMs` (60 s
    * by default) before it closes the session: create the transaction right after this
    * resolves, check `peer.isOpen` before broadcasting it, and send it at once (see
    * {@link sendPayment}).
    *
-   * With the client's `chain` set, the offer names it and an answer must name the same
-   * network: one that names another or none is refused before it is applied (`rejected`,
-   * `wrong_network`), as the payee refuses an offer from another network.
+   * With the client's `chain` set, the knock and offer name it and an answer must name the
+   * same network: one that names another or none is refused before it is applied
+   * (`rejected`, `wrong_network`), as the payee refuses a knock or offer from another
+   * network.
    *
-   * @throws `WebRTPayError`: `unsupported` without a signaler; `peer_unreachable` when the
-   * carrier cannot deliver or no answer arrives within `timeoutMs` (default `connectMs`,
-   * 30 s); `rate_limited` when the carrier refuses for its limits; `rejected` when the
-   * recipient refused, with its reason (at most 200 characters; none when it gave none) on
-   * `error.reason` and in the message: `busy`, `not_receiving`, or `wrong_network` when the
-   * recipient's wallet is on another network than this client's `chain` (or one of the two
-   * names none); `timeout`
-   * when the answer came but the channel and handshake did not finish in time;
-   * `auth_failed`, `closed` or `protocol` from the channel and handshake; `closed` when the
-   * client closes first. `TypeError` for a recipient that is not an identity key,
-   * `RangeError` for an invalid `timeoutMs`.
+   * @throws `WebRTPayError`: `unsupported` without a signaler; whatever the signaler's
+   * `send` rejects with when it cannot post the knock (`peer_unreachable` from the memory
+   * hub or a relay, `unavailable` from MessageBox, `rate_limited` when the carrier refuses
+   * for its limits); `peer_unreachable` when no reply arrives within `presenceTimeoutMs`
+   * (default `presenceMs`, 2 s) or `timeoutMs`; `rejected` when the recipient refused, with
+   * its reason (at most 200 characters; none when it gave none) on `error.reason` and in
+   * the message: `busy`, `not_receiving`, or `wrong_network` when the recipient's wallet is
+   * on another network than this client's `chain` (or one of the two names none); `timeout`
+   * when the recipient replied but the channel and handshake did not finish within
+   * `dialTimeoutMs` (default `dialMs`, 6 s) of its reply, or within `timeoutMs` (default
+   * `connectMs`, 30 s) of the start; `auth_failed`, `closed` or `protocol` from the channel
+   * and handshake; `closed` when `o.signal` aborts (`Dial cancelled`) or the client closes
+   * first. `TypeError` for a recipient that is not an identity key, `RangeError` for an
+   * invalid timeout.
    */
-  connect(recipient: PubKeyHex, o: { timeoutMs?: number } = {}): Promise<AuthenticatedPeer> {
+  connect(recipient: PubKeyHex, o: DialOptions = {}): Promise<AuthenticatedPeer> {
     if (this.closing !== undefined) return Promise.reject(closedError())
     const signaler = this.signaler
     if (signaler === undefined) {
@@ -374,116 +459,69 @@ export class DirectPayClient {
     if (!isIdentityKey(recipient)) {
       return Promise.reject(new TypeError('recipient must be an identity key'))
     }
-    let timeoutMs: number
+    let timeouts: DialTimeouts
     try {
-      timeoutMs = timerMs(o.timeoutMs, this.connectMs, 'timeoutMs')
+      timeouts = this.dialTimeouts(o)
     } catch (e) {
       return Promise.reject(e)
     }
-
-    const sid = newId()
-    const deadline = Date.now() + timeoutMs
-    let link: PeerLink | undefined
-    let answered = false
-    let failure: WebRTPayError | undefined
-    let deliver!: (p: SignalPlaintext) => void
-    let abandon!: (e: WebRTPayError) => void
-    const reply = new Promise<SignalPlaintext>((resolve, reject) => {
-      deliver = resolve
-      abandon = reject
-    })
-    reply.catch(noop)
-
-    const run = async (): Promise<AuthenticatedPeer> => {
-      await this.syncListening()
-      const me = await this.getIdentityKey()
-      // a dial that has already failed spends no TURN credentials
-      if (failure !== undefined) throw failure
-      const options = await this.linkOptions()
-      if (failure !== undefined) throw failure
-      const offered = await PeerLink.createOffer(options)
-      link = offered.link
-      this.adopt(link)
-      if (failure !== undefined) throw failure
-      const envelope = await this.seal('offer', sid, me, recipient, {
-        sdp: offered.sdp,
-        chain: this.chain
-      })
-      if (failure !== undefined) throw failure
-      await signaler.send(recipient, envelope)
-      const p = await reply
-      if (p.kind === 'reject') {
-        // error.reason is only ever what the peer said
-        const reason =
-          p.reason === undefined ? undefined : truncate(p.reason, MAX_REJECT_REASON_CHARS)
-        throw new WebRTPayError(
-          'rejected',
-          `Recipient refused the connection: ${reason ?? 'no reason given'}`,
-          { reason }
-        )
-      }
-      if (p.sdp === undefined) throw new WebRTPayError('protocol', 'Answer carries no SDP')
-      // Bound to a network: an answer from another one (or none) is never applied.
-      if (this.chain !== undefined && p.chain !== this.chain) {
-        throw wrongNetwork(this.chain, p.chain)
-      }
-      // Listen on the link before the channel can open, so the peer's hello is not missed.
-      const session = authenticate(link, {
-        wallet: this.wallet,
-        originator: this.originator,
-        expectedPeer: recipient,
-        timeoutMs: Math.max(1, deadline - Date.now()),
-        maxMessageBytes: this.maxMessageBytes
-      })
-      session.catch(noop)
-      await link.acceptAnswer(p.sdp)
-      return await session
-    }
-
-    return new Promise<AuthenticatedPeer>((resolve, reject) => {
-      let settled = false
-      const settle = (): boolean => {
-        if (settled) return false
-        settled = true
-        clearTimeout(timer)
-        this.dials.delete(sid)
-        this.endDial()
-        return true
-      }
-      const fail = (e: WebRTPayError): void => {
-        if (failure !== undefined) return
-        failure = e
-        abandon(e)
-        link?.close(e)
-        if (settle()) reject(e)
-      }
-      const timer = setTimeout(() => {
-        fail(
-          answered
-            ? new WebRTPayError('timeout', `Connection not established within ${timeoutMs} ms`)
-            : new WebRTPayError(
-                'peer_unreachable',
-                `No answer from the recipient in ${timeoutMs} ms`
-              )
-        )
-      }, timeoutMs)
-      this.dials.set(sid, {
+    if (o.signal?.aborted === true) return Promise.reject(cancelledError())
+    return this.startDial(
+      {
+        sid: newId(),
         recipient,
+        signaler,
+        timeouts,
+        replies: new ReplyQueue(),
+        failure: undefined,
+        link: undefined,
+        fail: noop,
+        posted: noop
+      },
+      o.signal
+    )
+  }
+
+  /** Run dial `d` under its clocks until it settles; `signal` cancels it. */
+  private startDial(d: DialRun, signal: AbortSignal | undefined): Promise<AuthenticatedPeer> {
+    return new Promise<AuthenticatedPeer>((resolve, reject) => {
+      const settler = new DialSettler<AuthenticatedPeer>(resolve, reject, () => {
+        clock.stop()
+        signal?.removeEventListener('abort', onAbort)
+        this.dials.delete(d.sid)
+        this.endDial()
+      })
+      const fail = (e: WebRTPayError): void => {
+        if (d.failure !== undefined) return
+        d.failure = e
+        d.replies.fail(e)
+        d.link?.close(e)
+        settler.reject(e)
+      }
+      const onAbort = (): void => fail(cancelledError())
+      const clock = new DialClock(d.timeouts, fail)
+      d.fail = fail
+      d.posted = () => clock.posted()
+      this.dials.set(d.sid, {
+        recipient: d.recipient,
         reply: p => {
-          answered = true
-          deliver(p)
+          clock.heard()
+          d.replies.push(p)
         },
         fail
       })
       this.beginDial()
-      run().then(
+      clock.start()
+      signal?.addEventListener('abort', onAbort, { once: true })
+      this.runDial(d).then(
         peer => {
-          if (settle()) resolve(peer)
-          else peer.close(failure)
+          if (!settler.resolve(peer)) peer.close(d.failure)
         },
         (e: unknown) => {
-          link?.close(asError(e))
-          if (settle()) reject(e)
+          // A link still being gathered is closed when it arrives.
+          d.failure ??= asError(e) ?? new WebRTPayError('closed', 'Dial failed')
+          d.link?.close(asError(e))
+          settler.reject(e)
         }
       )
     })
@@ -756,6 +794,76 @@ export class DirectPayClient {
     }
   }
 
+  /** The clocks of a dial: per-call options, else the client's, else the defaults. */
+  private dialTimeouts(o: DialOptions): DialTimeouts {
+    return {
+      presenceMs: timerMs(o.presenceTimeoutMs, this.presenceMs, 'presenceTimeoutMs'),
+      dialMs: timerMs(o.dialTimeoutMs, this.dialMs, 'dialTimeoutMs'),
+      totalMs: timerMs(o.timeoutMs, this.connectMs, 'timeoutMs')
+    }
+  }
+
+  /**
+   * One dial: knock while the offer is gathered (for at most `dialGatherTimeoutMs`), send
+   * the offer once the recipient rings, then apply its answer and authenticate it. A reject
+   * or an answer that arrives instead of the ring is acted on at once.
+   */
+  private async runDial(d: DialRun): Promise<AuthenticatedPeer> {
+    await this.syncListening()
+    const me = await this.getIdentityKey()
+    throwIfFailed(d)
+    const prepared = this.prepareDialLink(d)
+    // A link that cannot be made (no WebRTC, say) ends the dial at once, reply or not.
+    prepared.catch((e: unknown) => {
+      if (e instanceof WebRTPayError) d.fail(e)
+    })
+    const knock = await this.seal('knock', d.sid, me, d.recipient, { chain: this.chain })
+    throwIfFailed(d)
+    await d.signaler.send(d.recipient, knock)
+    d.posted()
+    let p = await d.replies.next()
+    if (p.kind === 'ring') {
+      const { sdp } = await prepared
+      const offer = await this.seal('offer', d.sid, me, d.recipient, { sdp, chain: this.chain })
+      throwIfFailed(d)
+      await d.signaler.send(d.recipient, offer)
+      p = await d.replies.next()
+    }
+    if (p.kind === 'reject') throw rejectedBy(p)
+    if (p.sdp === undefined) throw new WebRTPayError('protocol', 'Answer carries no SDP')
+    // Bound to a network: an answer from another one (or none) is never applied.
+    if (this.chain !== undefined && p.chain !== this.chain) {
+      throw wrongNetwork(this.chain, p.chain)
+    }
+    const { link } = await prepared
+    // Listen on the link before the channel can open, so the peer's hello is not missed.
+    const session = authenticate(link, {
+      wallet: this.wallet,
+      originator: this.originator,
+      expectedPeer: d.recipient,
+      timeoutMs: d.timeouts.dialMs,
+      maxMessageBytes: this.maxMessageBytes
+    })
+    session.catch(noop)
+    await link.acceptAnswer(p.sdp)
+    return await session
+  }
+
+  /** The dial's offer and link; a link that arrives after the dial ended is closed. */
+  private async prepareDialLink(d: DialRun): Promise<{ link: PeerLink; sdp: string }> {
+    const options = await this.linkOptions(DEFAULTS.dialGatherTimeoutMs)
+    // a dial that has already failed spends no TURN credentials
+    throwIfFailed(d)
+    const offered = await PeerLink.createOffer(options)
+    this.adopt(offered.link)
+    if (d.failure !== undefined) {
+      offered.link.close(d.failure)
+      throw d.failure
+    }
+    d.link = offered.link
+    return offered
+  }
+
   private onSignal(from: PubKeyHex, e: SignalEnvelope): void {
     if (this.closing !== undefined || !this.admitSignal(from, e)) return
     this.handleSignal(from, e).catch(error => this.report(this.handlers, error))
@@ -770,7 +878,8 @@ export class DirectPayClient {
    */
   private admitSignal(from: PubKeyHex, e: SignalEnvelope): boolean {
     if (this.dials.get(e.sid)?.recipient === from) return true
-    if (this.limiter.refusal(from) === 'sender') return false
+    // A sender with a session open may supersede it, so only its offer rate silences it here.
+    if (this.limiter.refusal(from, undefined, SUPERSEDING) === 'sender') return false
     // Spent overall: drop before keeping any per-sender state for it.
     if (!this.intake.has()) return false
     return this.senderIntake.take(from) && this.intake.take()
@@ -784,10 +893,10 @@ export class DirectPayClient {
         me,
         replay: this.replay,
         originator: this.originator,
-        // An answer or reject counts only for a dial in progress to its sender. Anything
+        // A ring, answer or reject counts only for a dial in progress to its sender. Anything
         // else must not record its sid: a forged answer with a sid seen in the clear would
         // otherwise make the genuine answer look like a replay.
-        wanted: s => s.kind === 'offer' || this.dials.get(s.sid)?.recipient === s.from
+        wanted: s => isInbound(s.kind) || this.dials.get(s.sid)?.recipient === s.from
       })
     } catch (error) {
       // Undecryptable, stale, replayed, misaddressed or unwanted: dropped. A wallet that
@@ -801,6 +910,10 @@ export class DirectPayClient {
       await this.answerOffer(p, me)
       return
     }
+    if (p.kind === 'knock') {
+      await this.answerKnock(p, me)
+      return
+    }
     const dial = this.dials.get(p.sid)
     if (dial?.recipient === p.from) dial.reply(p)
   }
@@ -810,27 +923,22 @@ export class DirectPayClient {
     const handlers = this.handlers
     if (handlers === undefined) return this.refuse(p, me, 'not_receiving')
     if (p.sdp === undefined) return
+    const entry = await this.admitOffer(p, me)
+    if (entry === undefined) return
     // The slot is the sender the carrier vouched for; the handshake runs without a pin.
     const sender = p.from
-    const refusal = this.limiter.refusal(sender)
-    // A sender over its own limits gets no answer, so it cannot spend the reject budget.
-    if (refusal === 'sender') return
-    // Bound to a network: an offer from another one (or none, fail closed) holds no slot.
-    if (this.chain !== undefined && p.chain !== this.chain) {
-      return this.refuse(p, me, 'wrong_network')
-    }
-    if (refusal === 'busy' || !this.limiter.tryAdmit(sender)) return this.refuse(p, me, 'busy')
-    let released = false
-    const release = (): void => {
-      if (released) return
-      released = true
-      this.limiter.release(sender)
-    }
-    let link: PeerLink | undefined
     try {
-      const accepted = await PeerLink.acceptOffer(p.sdp, await this.linkOptions())
-      link = accepted.link
-      this.adopt(link)
+      const accepted = await PeerLink.acceptOffer(
+        p.sdp,
+        await this.linkOptions(DEFAULTS.dialGatherTimeoutMs)
+      )
+      // Superseded while gathering: its slot is gone, so it must not answer or be served.
+      if (entry.released) {
+        accepted.link.close(supersededError())
+        return
+      }
+      entry.link = accepted.link
+      this.adopt(accepted.link)
       // The answer must go out within the connect budget; carriers like MessageBox can take
       // seconds, so open and handshake get a budget of their own once it has.
       const sent = withDeadline(
@@ -842,7 +950,7 @@ export class DirectPayClient {
       )
       sent.catch(noop)
       // Listen on the link before the answer goes out, so the peer's hello is not missed.
-      const session = authenticate(link, {
+      const session = authenticate(accepted.link, {
         wallet: this.wallet,
         originator: this.originator,
         timeoutMs: this.connectMs,
@@ -850,15 +958,90 @@ export class DirectPayClient {
         startAfter: sent
       })
       session.catch(noop)
-      this.serve(await session, handlers, release, {
+      const peer = await session
+      if (entry.released) {
+        peer.close(supersededError())
+        return
+      }
+      this.serve(peer, handlers, entry.release, {
         firstMessageMs: this.limits.firstMessageTimeoutMs,
-        lifetimeMs: this.limits.maxSessionMs
+        lifetimeMs: this.limits.maxSessionMs,
+        inbound: entry
       })
     } catch (e) {
-      link?.close(asError(e))
-      release()
-      this.report(handlers, e)
+      // A session closed because it was superseded is expected, not an error to report.
+      const superseded = entry.released
+      entry.link?.close(asError(e))
+      entry.release()
+      if (!superseded) this.report(handlers, e)
     }
+  }
+
+  /**
+   * Admit an offer and take its session slot, or refuse it (a sealed reject, or nothing for
+   * a sender over its own limits). An offer from a sender whose previous session is still
+   * open supersedes that session: the old one is ended and its slot released first, after
+   * waiting up to 1 s for a payment it is still acknowledging.
+   */
+  private async admitOffer(p: SignalPlaintext, me: PubKeyHex): Promise<InboundSession | undefined> {
+    const sender = p.from
+    const refusal = this.limiter.refusal(sender, undefined, SUPERSEDING)
+    // A sender over its own limits gets no answer, so it cannot spend the reject budget.
+    if (refusal === 'sender') return undefined
+    // Bound to a network: an offer from another one (or none, fail closed) holds no slot.
+    if (this.chain !== undefined && p.chain !== this.chain) {
+      await this.refuse(p, me, 'wrong_network')
+      return undefined
+    }
+    if (refusal !== 'busy') await this.supersede(sender)
+    if (refusal === 'busy' || !this.limiter.tryAdmit(sender)) {
+      await this.refuse(p, me, 'busy')
+      return undefined
+    }
+    const entry = inboundSession(() => {
+      this.limiter.release(sender)
+      if (this.inbound.get(sender) === entry) this.inbound.delete(sender)
+    })
+    this.inbound.set(sender, entry)
+    return entry
+  }
+
+  /**
+   * End `sender`'s open inbound session, if any, for a new one from the same sender. One
+   * still deciding a payment gets up to 1 s to ack it and hear the payer's bye.
+   */
+  private async supersede(sender: PubKeyHex): Promise<void> {
+    const old = this.inbound.get(sender)
+    if (old === undefined) return
+    if (old.paying > 0) {
+      await withDeadline(old.ended, SUPERSEDE_WAIT_MS, 'Payment still in progress').catch(noop)
+    }
+    // Ended meanwhile, or the payee filled up while waiting: leave the old session be (the
+    // new offer is then refused busy rather than costing the old one).
+    if (old.released || this.limiter.refusal(sender, undefined, SUPERSEDING) !== undefined) return
+    // Released first, so an old offer still gathering sees it and stops.
+    old.release()
+    old.link?.close(supersededError())
+  }
+
+  /**
+   * Answer a knock at once, before any ICE is gathered and without taking a session slot:
+   * `ring` when an offer from this sender would be considered, else the sealed refusal the
+   * offer would get (`not_receiving`, `wrong_network`, `busy`), or nothing for a sender over
+   * its own limits. Rings have a budget of their own, 20 a second.
+   */
+  private async answerKnock(p: SignalPlaintext, me: PubKeyHex): Promise<void> {
+    if (this.handlers === undefined) return this.refuse(p, me, 'not_receiving')
+    // A sender's own open session does not stop it ringing: its offer will supersede it.
+    const refusal = this.limiter.refusal(p.from, undefined, SUPERSEDING)
+    if (refusal === 'sender') return
+    if (this.chain !== undefined && p.chain !== this.chain) {
+      return this.refuse(p, me, 'wrong_network')
+    }
+    if (refusal === 'busy') return this.refuse(p, me, 'busy')
+    if (!this.rings.take()) return
+    const envelope = await this.seal('ring', p.sid, me, p.from, { chain: this.chain })
+    await this.signaler!.send(p.from, envelope)
   }
 
   /** Send a sealed reject, unless the reject budget is spent (then the sender hears nothing). */
@@ -894,7 +1077,7 @@ export class DirectPayClient {
     peer: AuthenticatedPeer,
     h: ReceiveHandlers,
     release: () => void,
-    o: { firstMessageMs?: number; lifetimeMs?: number } = {}
+    o: { firstMessageMs?: number; lifetimeMs?: number; inbound?: InboundSession } = {}
   ): void {
     const idleMs = this.limits.idleTimeoutMs
     let ended = false
@@ -936,11 +1119,13 @@ export class DirectPayClient {
         peer.close(new WebRTPayError('rate_limited', 'Peer sent too many messages at once'))
         return
       }
+      const handled = startPayment(o.inbound, m)
       queue = queue
         .then(() => this.handleMessage(peer, h, m))
         .catch(e => this.report(h, e))
         .then(() => {
           pending--
+          handled()
           touch()
         })
     })
@@ -1066,18 +1251,27 @@ export class DirectPayClient {
   // ------------------------------------------------------------ helpers
 
   /**
-   * Options for a new link: the RTC options with the provider's ICE servers merged in, and
+   * Options for a new link: the RTC options with the provider's ICE servers merged in, the
+   * gather capped at `gatherCapMs` when it is given (dials by identity key), and
    * messages capped at 64 KiB until the peer has authenticated. `authenticate`, which every
    * path runs before the peer can connect, applies the same cap first thing and raises it
    * when the peer's `auth` verifies; creating the link with it too leaves no moment between
    * the two when a link accepts more.
    */
-  private async linkOptions(): Promise<PeerLinkOptions> {
+  private async linkOptions(gatherCapMs?: number): Promise<PeerLinkOptions> {
     const provided = await this.providedIceServers()
     const rtc = this.rtc
     const iceServers =
       provided.length === 0 ? rtc.iceServers : mergeIceServers(rtc.iceServers ?? [], provided)
-    return { ...rtc, iceServers, maxMessageBytes: PRE_AUTH_MAX_MESSAGE_BYTES }
+    const options: PeerLinkOptions = {
+      ...rtc,
+      iceServers,
+      maxMessageBytes: PRE_AUTH_MAX_MESSAGE_BYTES
+    }
+    if (gatherCapMs !== undefined) {
+      options.gatherTimeoutMs = Math.min(rtc.gatherTimeoutMs ?? gatherCapMs, gatherCapMs)
+    }
+    return options
   }
 
   /**
@@ -1133,8 +1327,68 @@ export class DirectPayClient {
 
 function noop(): void {}
 
+/**
+ * Count a payment message as in progress on `s` until the returned function is called (its
+ * ack has been sent), so a new offer from the same peer waits briefly before superseding it.
+ */
+function startPayment(s: InboundSession | undefined, m: WireMessage): () => void {
+  if (s === undefined || m.t !== 'payment') return noop
+  s.paying++
+  return () => {
+    s.paying--
+  }
+}
+
+/** Kinds a peer sends unprompted: a dial's knock and offer. */
+function isInbound(kind: SignalKind): boolean {
+  return kind === 'offer' || kind === 'knock'
+}
+
 function closedError(): WebRTPayError {
   return new WebRTPayError('closed', 'Client is closed')
+}
+
+function supersededError(): WebRTPayError {
+  return new WebRTPayError('closed', 'Superseded by a new session from the same peer')
+}
+
+/** A new inbound session's state; `onRelease` runs once, on the first `release()`. */
+function inboundSession(onRelease: () => void): InboundSession {
+  let ended: () => void = noop
+  const s: InboundSession = {
+    link: undefined,
+    paying: 0,
+    ended: new Promise<void>(resolve => {
+      ended = resolve
+    }),
+    released: false,
+    release: () => {
+      if (s.released) return
+      s.released = true
+      onRelease()
+      ended()
+    }
+  }
+  return s
+}
+
+function cancelledError(): WebRTPayError {
+  return new WebRTPayError('closed', 'Dial cancelled')
+}
+
+/** Stop a dial's run once the dial has ended. */
+function throwIfFailed(d: DialRun): void {
+  if (d.failure !== undefined) throw d.failure
+}
+
+/** The dialer's error for a recipient's sealed reject; `reason` is only what the peer said. */
+function rejectedBy(p: SignalPlaintext): WebRTPayError {
+  const reason = p.reason === undefined ? undefined : truncate(p.reason, MAX_REJECT_REASON_CHARS)
+  return new WebRTPayError(
+    'rejected',
+    `Recipient refused the connection: ${reason ?? 'no reason given'}`,
+    { reason }
+  )
 }
 
 /** The dialer's refusal of an answer that names another network than `ours`, or none. */

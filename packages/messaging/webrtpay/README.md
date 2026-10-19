@@ -16,7 +16,7 @@ divert the funds: the payer connects before it creates the transaction.
   (node-datachannel in Node, react-native-webrtc in React Native).
 - `@bsv/sdk` is the only (peer) dependency of the root entry. `@bsv/webrtpay/server` (Node) adds
   a small relay and depends on `ws`.
-- Status: 0.1.0, experimental. The byte-level protocol is in [docs/protocol.md](docs/protocol.md).
+- Status: 0.2.0, experimental. The byte-level protocol is in [docs/protocol.md](docs/protocol.md).
 
 ## Why there is still a signaling step
 
@@ -124,10 +124,20 @@ verify fails with `WERR_INVALID_PARAMETER`, say) do not. A handler that throws m
 `txid`): it keeps its token and delivers it again later, directly or through MessageBox.
 `acceptDirectPayment` reports a payment the wallet took as `accepted` even when
 `seen.add` fails afterwards (`onSeenError` hears about it). Receiving answers offers
-automatically within the inbound limits (3 sessions, 1 per sender, 10 offers a minute, 3 per
-sender); see [Security and privacy](#security-and-privacy) before turning it on for users.
+automatically within the inbound limits (3 sessions, 1 per sender, a sender's new dial
+replacing its open session, 10 offers a minute, 3 per sender); see [Security and privacy](#security-and-privacy) before turning it on for users.
 
 ### Pay (payer)
+
+`connect` knocks first: a sealed `knock` goes to the payee before any ICE is gathered, and a
+receiving payee replies `ring` at once (or a sealed refusal). So an offline payee is known
+within `presenceTimeoutMs` (2 s) of the carrier taking the knock, and an online one has
+`dialTimeoutMs` (6 s) from its reply to open the channel and prove its identity; `timeoutMs` caps the whole dial (default `connectMs`,
+30 s). Set the defaults with the client's `timeouts: { presenceMs, dialMs, connectMs }` or per
+call. `signal` (an `AbortSignal`) cancels one dial: it rejects `closed` (`Dial cancelled`) and
+leaves receiving and other dials alone. Map `peer_unreachable` and `rejected`
+(`not_receiving`) to "isn't online", and `unavailable` (the carrier refused this side) to
+"check your connection". Payees on 0.1.0 do not answer knocks and look offline.
 
 Connect first, then create the transaction: if the payee cannot be reached, nothing is spent. A
 payee that answered the dial waits 60 s (its `firstMessageTimeoutMs`) for the payment before it
@@ -144,9 +154,13 @@ import type { PaymentTokenInput } from '@bsv/webrtpay'
 // `wallet` takes the originator on every call (a WalletInterface such as a wallet-toolbox
 // Wallet); a WalletClient takes it in its constructor instead, and one argument per method.
 
-// 1. Dial and authenticate (30 s budget). Rejects peer_unreachable, rejected (error.reason
-//    'busy', 'not_receiving' or 'wrong_network'), rate_limited, timeout or auth_failed.
-let peer = await client.connect(payeeKey)
+// 1. Dial and authenticate. Offline payees fail peer_unreachable within 2 s of the carrier
+//    taking the knock; it also rejects unavailable (MessageBox could not take the signal:
+//    this side's network), rejected
+//    (error.reason 'busy', 'not_receiving' or 'wrong_network'), rate_limited, timeout, closed
+//    (cancelled through `signal`) or auth_failed.
+const dial = new AbortController() // abort() from the Cancel button
+let peer = await client.connect(payeeKey, { signal: dial.signal })
 
 // 2. Build the payment as PeerPay does, P2PKH to the payee's BRC-29 key for a fresh
 //    derivation, and sign it without broadcasting it.
@@ -285,12 +299,22 @@ A `Signaler` carries already-encrypted envelopes between identity keys; it never
 | `createMemoryHub().signaler(key)`                    | none (one process)     | tests and demos                                |
 
 **`MessageBoxSignaler`** is typed structurally against the `MessageBoxClient` methods it uses
-(`sendMessage`, `listMessages`, `acknowledgeMessage`), so there is no dependency on
-`@bsv/message-box-client`; a `PeerPayClient` works too. It sends over HTTP to the recipient's
-own host, polls box `webrtpay_signals` every 2.5 s (1 s while dialing) and acknowledges every
-message as soon as it reads it. Options: `messageBox`, `idlePollMs`, `activePollMs`, and
-`host`, the MessageBox host to list and acknowledge on (sending always resolves the
-recipient's host, so payer and payee may use different servers).
+(`sendMessage`, `listMessages`, `acknowledgeMessage`, and optionally `sendLiveMessage`,
+`listenForLiveMessages`, `joinRoom`, `leaveRoom`, `resolveHostForRecipient` and
+`getIdentityKey`), so there is no dependency on `@bsv/message-box-client`; a `PeerPayClient`
+works too. A live websocket reaches only the host it is connected to, so the signaler sends
+live only to a recipient whose host (`resolveHostForRecipient`, remembered for 5 minutes) is
+this client's: `host` when given, else this client's own advertised host. Everyone else, and
+every live send that fails, goes over HTTP, which resolves the recipient's own host, so payer
+and payee may use different servers. A live send gets 1.5 s (host lookup included) before the
+HTTP send, and an HTTP `ERR_DUPLICATE_MESSAGE` after it means the live one got there. It
+receives signals live as they arrive; it also polls box `webrtpay_signals` every 2.5 s (1 s while dialing), as the
+safety net and the only path for clients without the websocket, and acknowledges every message
+it reads, once per `messageId` whichever path brought it. When neither send path gets a signal
+there, `send` rejects `unavailable` (it was `peer_unreachable` in 0.1.0). Options:
+`messageBox`, `idlePollMs`, `activePollMs`, `live` (default true; false polls only), and
+`host`, the MessageBox host to list, acknowledge and listen live on, and the host compared
+with a recipient's for live sends.
 
 **`RelaySignaler`** keeps one authenticated WebSocket to a relay, and only while it is needed:
 while subscribed, while a send is in flight, or after `connect()`. Options: `url` (`ws:` or
@@ -446,7 +470,7 @@ Read this before enabling receiving for users.
 
 - **What carriers learn.** The MessageBox host or relay, and Cloudflare or any proxy that
   terminates TLS in front of them, see both identity keys, both IP addresses, the timing and
-  the size of every offer, answer and reject. MessageBox stores each encrypted signal until it
+  the size of every knock, ring, offer, answer and reject. MessageBox stores each encrypted signal until it
   is acknowledged (the signaler acknowledges as soon as it reads); a receiving wallet polls it
   every 2.5 s, which shows when it is online. Carriers never see the payment.
 - **Receiving reveals your IP address and online status.** While receiving is on, any wallet
@@ -464,6 +488,10 @@ Read this before enabling receiving for users.
   payee who is not listening fails at once instead of after 30 s; `RelaySignaler` holds a
   socket only while receiving or dialing, so the oracle shows exactly that. A client that is
   dialing but not receiving answers offers with `not_receiving`, which also shows it is online.
+- **A ring is a presence reply.** Any wallet that knows a receiving payee's identity key can
+  knock and learn from the `ring` that it is online, without its IP address (no ICE is
+  gathered for a knock). Rings are capped at 20 a second, and knocks count against the intake
+  budgets like offers.
 - **The protocol IDs are ordinary BRC-43 protocols.** `[2, 'webrtpay channel']`,
   `[2, 'webrtpay signaling']` and `[2, 'webrtpay relay']` can be used by any originator the
   wallet allows. The channel binding therefore proves "an originator with signing permission
@@ -725,7 +753,7 @@ Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`pnpm test`: 768 tests at 0.1.0; `pnpm test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 914 at 0.2.0; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input
@@ -740,7 +768,8 @@ tests):
 - the relay: authentication and URL binding, limits, TURN issuance from coturn REST and from
   Cloudflare (against a mocked API: both answer shapes, failures, the 5 s timeout, no secret in
   frames or logs), admission, liveness;
-- `MessageBoxSignaler` against a fake MessageBox client;
+- `MessageBoxSignaler` against a fake MessageBox client, live websocket paths included;
+- presence: knocks and rings, the 2 s presence and 6 s dial clocks, and per-dial cancel;
 - the relayed path through a real coturn 4.18.0 in Docker (`pnpm test:turn`);
 - the examples in `docs/protocol.md`, recomputed from the code (`test/protocol-doc.test.ts`);
 - guards: nothing under `src/` uses Node (`test/browser-safety.test.ts`), no public IP address

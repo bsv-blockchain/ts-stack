@@ -333,8 +333,9 @@ webrtpay1:AQEAAQIDBAUGBwgJCgsMDQ4PAnm-Zn753LusVaBilc6HCwcCm_zbLc4o2VnygVsW-BeYAQ
   `webrtpay/1`, **ordered and fully reliable** (`maxRetransmits` and `maxPacketLifeTime` never
   set). The answerer adopts exactly that channel; a second channel, another label or an
   unreliable channel closes the link with `protocol`.
-- ICE is non-trickle: each side waits until gathering completes, or 5 s, then sends one complete
-  SDP. DTLS fingerprint verification is never disabled.
+- ICE is non-trickle: each side waits until gathering completes, or a cap, then sends one
+  complete SDP. The cap is 1.5 s for a dial by identity key (its offer and answer, §7.5) and
+  5 s for code exchange. DTLS fingerprint verification is never disabled.
 - Every SDP, the peer's offer or answer and a side's own, must carry exactly one
   `a=fingerprint:` line, a `sha-256` one of 32 bytes; any other is refused with `protocol` before
   the WebRTC stack applies it. The handshake signs the fingerprints (§5.3), and a stack may
@@ -650,8 +651,8 @@ wallet.internalizeAction({
 
 ## 7. Signaling envelopes
 
-To dial by identity key, an offer and its answer travel through a carrier (MessageBox, the
-relay, or anything implementing `Signaler`), encrypted end to end.
+To dial by identity key, a knock, a ring, an offer and its answer travel through a carrier
+(MessageBox, the relay, or anything implementing `Signaler`), encrypted end to end.
 
 ### 7.1 Envelope (what the carrier sees)
 
@@ -678,11 +679,13 @@ The `sid` travels in the clear because it is also the encryption key ID.
 ```
 
 - `kind`: `offer` and `answer` carry `sdp` (the full SDP text, at most 16384 characters);
-  `reject` carries `reason` instead: `busy`, `not_receiving` or `wrong_network`.
+  `reject` carries `reason` instead: `busy`, `not_receiving` or `wrong_network`. `knock` (the
+  payer asking whether the payee is there) and `ring` (the payee saying it is) carry neither
+  `sdp` nor `reason`; one that does is malformed. All the signals of one dial share its sid.
 - `ts` is the sender's clock in ms.
 - `chain` (optional): the network the sender's wallet is on, such as `main` or `test`, 1 to 16
   characters from `a-z` and `0-9`. A client that knows its network names it in its offers and
-  answers (§7.5); absent means unknown, which is what clients without a network, and those
+  answers, knocks and rings (§7.5); absent means unknown, which is what clients without a network, and those
   written before the field existed, send. Readers that do not know the field ignore it.
 
 ### 7.3 Encryption
@@ -700,14 +703,15 @@ in this order:
 1. the envelope is well formed (§7.1) and the carrier-asserted sender is an identity key;
 2. `decrypt` with `counterparty` = the carrier's sender succeeds and yields a JSON object with
    `v` 1, a known `kind`, string `sid`, `from` and `to`, a finite number `ts`, `purpose`
-   `payment`, string `sdp` and `reason` when present, and `chain` when present a string of 1
-   to 16 characters from `a-z` and `0-9`;
+   `payment`, string `sdp` and `reason` when present (neither in a `knock` or `ring`), and
+   `chain` when present a string of 1 to 16 characters from `a-z` and `0-9`;
 3. `from` equals the carrier's sender, `to` is this wallet, and `sid` equals the envelope's;
 4. `|now − ts| ≤ 120000`;
 5. `sdp` is at most 16384 characters;
-6. the signal is wanted: an offer, or an answer or reject to a dial in progress with that sid
-   to that sender (a forged answer cannot spend the genuine answer's sid);
-7. the sid has not been seen.
+6. the signal is wanted: a knock or an offer, or a ring, answer or reject to a dial in progress
+   with that sid to that sender (a forged answer cannot spend the genuine answer's sid);
+7. the sid has not been seen: for a `knock` or `ring` the pair (kind, sid), for the others the
+   sid alone, so a dial's knock and offer, or ring and answer, open once each.
 
 A seen sid is remembered until `max(seen, ts) + 180 s` (the freshness window plus a minute),
 and never dropped early, so no flood of signals can open a replay window.
@@ -716,28 +720,42 @@ and never dropped early, so no flood of signals can open a replay window.
 
 ```
 payer                                    payee (receiving)
-  gather ICE (≤ 5 s)
+  knock {chain} ───────── carrier ──────▶ would an offer be considered? (§7.6)
+  gather ICE (≤ 1.5 s)                      no: reject {busy | not_receiving |
+    meanwhile                                   wrong_network}, or nothing
+  ◀──────── carrier ──────── ring {chain}   yes (no ICE gathered, no slot taken)
   offer {sdp, chain} ──── carrier ──────▶ admit? (§7.6)
-                                            no: reject {busy | not_receiving |
-                                                wrong_network}, or nothing
-                                            yes: gather ICE (≤ 5 s)
+                                            no: reject {busy | ...}, or nothing
+                                            yes: gather ICE (≤ 1.5 s)
   ◀──────── carrier ──────── answer {sdp, chain}
   same chain? no: rejected (wrong_network)
   apply answer; channel opens; handshake (§5); payment (§6)
 ```
 
-- The payer's sid is 16 random bytes as base64url. The whole dial (answer, channel and
-  handshake) has 30 s; no answer in time is `peer_unreachable`, an answer without a session in
-  time is `timeout`, a reject is `rejected` with its reason (truncated to 200 characters;
-  `error.reason` is absent when the reject names none).
+- The payer's sid is 16 random bytes as base64url. The knock goes out before any ICE is
+  gathered, and the offer only once the payee rings; a reject (or an answer) that comes
+  instead of the ring is acted on at once.
+- Presence: no ring, answer or reject within 2 s of the carrier taking the knock is
+  `peer_unreachable` (counted from the post, so a slow carrier does not make a payee look
+  offline). The first
+  reply stops that clock; the channel and handshake then have 6 s from it, else `timeout`. The
+  whole dial is capped at 30 s (`connectMs`, or the call's `timeoutMs`): running out before a
+  reply is `peer_unreachable`, after one `timeout`. A reject is `rejected` with its reason
+  (truncated to 200 characters; `error.reason` is absent when the reject names none). A dial
+  can be cancelled with an `AbortSignal`: it then rejects `closed` and nothing else stops.
+- Failing to post the knock is the carrier's error (MessageBox: `unavailable`), not
+  `peer_unreachable`: the payer could not reach its carrier, which says nothing about the payee.
+- Payees from before the knock (0.1.0) ignore it, so dialing one ends `peer_unreachable`; a
+  0.2.0 payee still answers a bare offer.
 - Once it has gathered, the payee must get its answer out within 30 s; the channel and
   handshake then have their own 30 s.
-- A client that is dialing but not receiving answers offers with `reject` `not_receiving`.
+- A client that is dialing but not receiving answers knocks and offers with `reject`
+  `not_receiving`.
 
 **Network binding.** An identity key is the same on every network, so a dial names the
-network too. A client given a network (`chain`) puts it in its offers and answers. As payee it
-refuses an offer whose `chain` is absent or different with `reject` `wrong_network`, before it
-admits the offer (no session slot, no ICE gathered, within the reject budget of §7.6). As payer
+network too. A client given a network (`chain`) puts it in its knocks, rings, offers and
+answers. As payee it refuses a knock or an offer whose `chain` is absent or different with
+`reject` `wrong_network`, before it admits the offer (no session slot, no ICE gathered, within the reject budget of §7.6). As payer
 it checks the answer before applying it: an answer whose `chain` is absent or different ends
 the dial with `rejected`, reason `wrong_network`, and the channel is never opened, so nothing
 is spent on a payee whose wallet would refuse the transaction. Absent counts as different (fail
@@ -750,18 +768,30 @@ clients that have one refuse it. `DirectPayClient` reports both refusals as
 Before anything is decrypted, on the sender the carrier reports:
 
 - a reply to a dial in progress from that dial's recipient is always opened;
-- anything else is dropped unanswered when the sender is over its inbound limits (below), when
+- anything else is dropped unanswered when the sender is over its offer rate (below), when
   its own budget is spent (10 signals, refilled at 10 a minute) or when the overall budget is
   spent (40 signals, refilled at 20 a second).
 
-An offer is admitted when its sender has **no session open** and had fewer than 3 offers
-admitted in the last 60 s, and then when fewer than 3 inbound sessions are open and fewer than
-10 offers were admitted in the last 60 s. An admitted offer holds a session slot until its
+An offer is admitted when its sender had fewer than 3 offers admitted in the last 60 s, and
+then when fewer than 3 inbound sessions are open (not counting the sender's own) and fewer than
+10 offers were admitted in the last 60 s. A sender has **one session at a time**: an admitted
+offer from a sender (as the carrier vouches) whose previous session is still open supersedes
+it. The old session is closed and its slot released before the new offer takes one; if it is
+still deciding a payment (payment received, ack not yet sent), the new offer first waits up to
+1 s for that session to end (its ack and the payer's `bye`). No other sender can end a session. An admitted offer holds a session slot until its
 session ends or fails to connect. A refused offer counts against nothing and gathers no ICE (no
 address is disclosed): one over its sender's limits gets no reply; one from another network
 (§7.5) gets a `reject` `wrong_network`, even when the payee is busy; one refused because the
 payee is busy gets a `reject` `busy`. At most one reject a second is sent, and the rest go
 unanswered.
+
+A knock is answered the way its offer would be, but before the offer exists: a sender over its
+own limits gets no reply, another network `reject` `wrong_network`, a busy payee `reject`
+`busy`, otherwise a `ring`. Answering a knock takes no session slot, gathers no ICE and counts
+against no offer limit; rings have their own budget of 20 a second (burst 20), so refusals
+cannot silence back-to-back dials. The knock and the offer each count as a signal against the
+intake budgets above. A sender's own open session does not stop a ring: paying the same payee
+twice in a row rings, and the second offer supersedes the first session.
 
 Budgets and windows run on a monotonic clock (`performance.now()`), so a wall clock set back
 cannot hold them shut.
@@ -778,14 +808,26 @@ counterparties is possible future work.
 **MessageBox** (`MessageBoxSignaler`): the envelope's JSON text is the message `body` in box
 `webrtpay_signals`.
 
-- Sending: `sendMessage({ recipient, messageBox: 'webrtpay_signals', body })`, which resolves
-  the recipient's own host.
-- Listening:
+- Sending: `sendLiveMessage({ recipient, messageBox: 'webrtpay_signals', body }, host)` over
+  the live websocket when the client has it and the recipient's host
+  (`resolveHostForRecipient`, remembered 5 minutes, at most 256 recipients) has the same origin
+  as this client's (`host`, else its own advertised host); else, or when that fails, cannot be
+  decided, or has not answered within 1.5 s (host lookup included),
+  `sendMessage({ recipient, messageBox: 'webrtpay_signals', body })`, which resolves the
+  recipient's own host. After a live attempt, an HTTP refusal `ERR_DUPLICATE_MESSAGE` (the
+  slow live send got there; message ids are derived from the body) counts as sent. When nothing gets it there, `send` fails `unavailable`.
+- Live listening: the first subscription calls
+  `listenForLiveMessages({ messageBox, onMessage, overrideHost: host })` (and `joinRoom` after
+  a `leaveRoom`); envelopes are delivered as they arrive and acknowledged with the next poll.
+  A message that is not an envelope is left to polling. The last unsubscribe calls `leaveRoom`.
+  When live listening fails, polling carries on alone.
+- Polling:
   `listMessages({ messageBox, limit: 100, pageSize: 100, maxPages: 1, acceptPayments: false, host? })`
-  every 2.5 s, every 1 s while a dial waits. The `sender`
+  every 2.5 s, every 1 s while a dial waits, live or not. The `sender`
   MessageBox reports is the carrier's sender. Every message read is acknowledged
   (`acknowledgeMessage({ messageIds, host? })`, at most 100 ids a call), including bodies that
-  are not envelopes; message ids are deduplicated (the last 10000).
+  are not envelopes; message ids are deduplicated (the last 10000), across live delivery and
+  polling.
 - A poll is abandoned after 10 s; failures double the interval up to 30 s.
 
 **Relay** (`RelaySignaler`): §8.
@@ -1011,9 +1053,9 @@ key is never sent to Cloudflare.
 
 | What                                                                            | Value                                           |
 | ------------------------------------------------------------------------------- | ----------------------------------------------- |
-| ICE gathering before sending an SDP                                             | 5 s                                             |
+| ICE gathering before sending an SDP: dial by identity key / code exchange       | 1.5 s / 5 s                                     |
 | Handshake (`authenticate` default)                                              | 15 s                                            |
-| Dial: answer, channel and handshake                                             | 30 s                                            |
+| Dial: first reply (presence) / channel and handshake after it / whole dial      | 2 s / 6 s / 30 s                                |
 | Payee: get the answer out / then open and handshake                             | 30 s / 30 s                                     |
 | Payer waits for `payment.ack`                                                   | 45 s                                            |
 | Signal freshness                                                                | ±120 s                                          |
@@ -1031,7 +1073,8 @@ key is never sent to Cloudflare.
 | Inbound messages waiting                                                        | 8                                               |
 | Signals opened: overall / per sender                                            | 20 a second (burst 40) / 10 a minute (burst 10) |
 | Signals that cannot be opened, reported to `onError`                            | 1 every 10 s                                    |
-| Rejects sent                                                                    | 1 a second                                      |
+| Rejects sent / rings sent                                                       | 1 a second / 20 a second (burst 20)             |
+| Signals per dial: payer → payee / payee → payer                                 | 2 (knock, offer) / 2 (ring, answer or reject)   |
 | Signal sdp / sid / ciphertext                                                   | 16384 / 64 / 24576 characters                   |
 | MessageBox poll: idle / dialing / deadline / max backoff                        | 2.5 s / 1 s / 10 s / 30 s                       |
 | Relay envelope / WebSocket message                                              | 24672 / 98688 bytes                             |
@@ -1057,7 +1100,7 @@ Every expected failure is a `WebRTPayError` with one of these `code`s:
 | `closed`           | the link, session, signaler or client closed                                                                                           |
 | `protocol`         | the peer, relay or carrier broke the wire rules, or the WebRTC stack refused a configuration or SDP (the stack's error is the `cause`) |
 | `auth_failed`      | the identity handshake or relay authentication failed                                                                                  |
-| `peer_unreachable` | no carrier could reach the peer, or no answer came                                                                                     |
+| `peer_unreachable` | no carrier could reach the peer, or no reply came (a dial's presence clock)                                                            |
 | `rejected`         | the peer refused the connection, or answered from another network; `error.reason` says why (`busy`, `not_receiving`, `wrong_network`)  |
 | `invalid_code`     | a malformed, expired or wrong-network code                                                                                             |
 | `invalid_payment`  | a payment that is malformed or does not pay this wallet, or a token `sendPayment` refuses to send                                      |
@@ -1065,4 +1108,4 @@ Every expected failure is a `WebRTPayError` with one of these `code`s:
 | `rate_limited`     | a limit was reached                                                                                                                    |
 | `too_large`        | a message, code, envelope or direct transaction over its size limit                                                                    |
 | `unsupported`      | a missing capability (no `RTCPeerConnection`, no signaler, no handlers)                                                                |
-| `unavailable`      | a service it depends on could not serve it just then: the relay's TURN provider (try again later)                                      |
+| `unavailable`      | a service it depends on could not serve it just then: the relay's TURN provider, or MessageBox taking a signal (try again later)       |
