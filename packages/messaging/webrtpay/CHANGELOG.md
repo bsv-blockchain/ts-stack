@@ -53,6 +53,8 @@ MessageBox.
 - The replay cache remembers a `knock` or `ring` by kind and sid, so a dial's knock and offer
   (and ring and answer), which share a sid, each open once.
 
+- `VERSION` is `'0.2.0'`.
+
 ### Compatibility
 
 - 0.1.0 payees do not understand `knock` and drop it, so a 0.2.0 dial to one ends

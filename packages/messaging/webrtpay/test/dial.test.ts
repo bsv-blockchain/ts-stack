@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
-import { DialClock, ReplyQueue } from '../src/client/dial.js'
+import { DialClock, DialSettler, ReplyQueue } from '../src/client/dial.js'
 import type { SignalPlaintext } from '../src/signaling/types.js'
 import { WebRTPayError } from '../src/util/errors.js'
 
@@ -85,6 +85,17 @@ describe('DialClock', () => {
     c.stop()
   })
 
+  it('starts nothing once stopped', () => {
+    const { c, expired } = clock()
+    c.start()
+    c.stop()
+    c.posted()
+    c.heard()
+    jest.advanceTimersByTime(60000)
+    expect(expired).toEqual([])
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
   it('stops every timer', () => {
     const { c, expired } = clock()
     c.start()
@@ -122,5 +133,20 @@ describe('ReplyQueue', () => {
     const e = new WebRTPayError('timeout')
     q.fail(e)
     await expect(q.next()).rejects.toBe(e)
+  })
+})
+
+describe('DialSettler', () => {
+  it('settles once and cleans up once', () => {
+    const calls: string[] = []
+    const s = new DialSettler<number>(
+      v => calls.push(`resolve ${v}`),
+      e => calls.push(`reject ${String(e)}`),
+      () => calls.push('cleanup')
+    )
+    expect(s.resolve(1)).toBe(true)
+    expect(s.reject('late')).toBe(false)
+    expect(s.resolve(2)).toBe(false)
+    expect(calls).toEqual(['cleanup', 'resolve 1'])
   })
 })

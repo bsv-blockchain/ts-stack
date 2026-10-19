@@ -742,6 +742,7 @@ class FakeClient implements MessageBoxLike {
   ackFailures = 0
   sendFailure: Error | undefined
   listGate: Promise<void> | undefined
+  ackGate: Promise<void> | undefined
 
   constructor(
     private readonly server: FakeMessageBox,
@@ -778,6 +779,7 @@ class FakeClient implements MessageBoxLike {
   }
 
   async acknowledgeMessage(a: { messageIds: string[]; host?: string }): Promise<unknown> {
+    if (this.ackGate) await this.ackGate
     if (this.ackFailures > 0) {
       this.ackFailures--
       throw new Error('ack failed')
@@ -1584,10 +1586,9 @@ describe('MessageBoxSignaler', () => {
     const b = server.liveClient(BOB)
     b.liveListenFailure = new Error('no socket on this host')
     const { got, fn } = collect()
-    let stop = await new MessageBoxSignaler(b).listen(fn)
     const signaler = new MessageBoxSignaler(b)
+    let stop = await signaler.listen(fn)
     try {
-      stop = await signaler.listen(fn)
       await jest.advanceTimersByTimeAsync(0)
       server.deposit(BOB, ALICE, JSON.stringify(ENV))
       await jest.advanceTimersByTimeAsync(2500)
@@ -1597,7 +1598,76 @@ describe('MessageBoxSignaler', () => {
       b.liveListenFailure = undefined
       stop = await signaler.listen(fn)
       await jest.advanceTimersByTimeAsync(0)
-      expect(b.liveListens).toHaveLength(3)
+      expect(b.liveListens).toHaveLength(2)
+    } finally {
+      await stop()
+    }
+  })
+
+  it('survives a client whose live calls throw synchronously', async () => {
+    const server = new FakeMessageBox()
+    const b = server.liveClient(BOB)
+    const boom = (): never => {
+      throw new Error('sync')
+    }
+    Object.assign(b, { listenForLiveMessages: boom })
+    const signaler = new MessageBoxSignaler(b)
+    const stop = await signaler.listen(() => undefined)
+    await jest.advanceTimersByTimeAsync(0)
+    await stop()
+    // listening live never started, so a new subscription tries again, still safely
+    const again = await signaler.listen(() => undefined)
+    await jest.advanceTimersByTimeAsync(0)
+    await again()
+
+    const c = server.liveClient(BOB)
+    Object.assign(c, { leaveRoom: boom, joinRoom: boom })
+    const s2 = new MessageBoxSignaler(c)
+    const first = await s2.listen(() => undefined)
+    await jest.advanceTimersByTimeAsync(0)
+    await first()
+    const second = await s2.listen(() => undefined)
+    await jest.advanceTimersByTimeAsync(0)
+    await second()
+    expect(c.liveListens).toHaveLength(1)
+  })
+
+  it('does not leave a room it could not join again', async () => {
+    const server = new FakeMessageBox()
+    const b = server.liveClient(BOB)
+    Object.defineProperty(b, 'joinRoom', { value: undefined })
+    const signaler = new MessageBoxSignaler(b)
+    const first = await signaler.listen(() => undefined)
+    await jest.advanceTimersByTimeAsync(0)
+    await first()
+    const second = await signaler.listen(() => undefined)
+    await jest.advanceTimersByTimeAsync(0)
+    await second()
+    expect(b.left).toEqual([])
+    expect(b.liveListens).toHaveLength(1)
+  })
+
+  it('does not ack a live id twice when a poll confirmed it meanwhile', async () => {
+    const server = new FakeMessageBox()
+    const a = server.liveClient(ALICE)
+    const b = server.liveClient(BOB)
+    let open!: () => void
+    const { got, fn } = collect()
+    const stop = await new MessageBoxSignaler(b).listen(fn)
+    try {
+      await jest.advanceTimersByTimeAsync(0)
+      // a poll reads the message and is still acking it when the live copy arrives
+      server.deposit(BOB, ALICE, JSON.stringify(ENV))
+      b.ackGate = new Promise<void>(resolve => (open = resolve))
+      await jest.advanceTimersByTimeAsync(2500)
+      b.pushLive({ messageId: 'm1', sender: ALICE, body: JSON.stringify(ENV) })
+      b.ackGate = undefined
+      open()
+      await jest.advanceTimersByTimeAsync(0)
+      await jest.advanceTimersByTimeAsync(2500)
+      expect(got).toEqual([[ALICE, ENV]])
+      expect(server.acks.flatMap(x => x.messageIds)).toEqual(['m1'])
+      expect(a.sent).toEqual([])
     } finally {
       await stop()
     }

@@ -216,6 +216,17 @@ describe('DirectPayClient answers knocks (MemoryHub)', () => {
     expect(await hand.next(5000)).toMatchObject({ kind: 'answer', chain: 'main' })
   })
 
+  it('stays silent to knocks beyond the sender intake budget', async () => {
+    const hub = createMemoryHub()
+    const [payee, dialer] = await Promise.all([makeWallet(), makeWallet()])
+    await hubClient(hub, payee).startReceiving(accepting)
+    const hand = await handSignaler(hub, dialer)
+    // 10 signals a sender, then nothing is even opened
+    for (let i = 0; i < 11; i++) await hand.send('knock', payee.identityKey, newSid())
+    for (let i = 0; i < 10; i++) expect(await hand.next()).toMatchObject({ kind: 'ring' })
+    expect(await hand.next(500)).toBeUndefined()
+  })
+
   it('replies busy to a knock while every session slot is taken', async () => {
     const hub = createMemoryHub()
     const [payee, holder, dialer] = await Promise.all([makeWallet(), makeWallet(), makeWallet()])
@@ -403,6 +414,19 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
     expect(elapsed).toBeLessThan(3500)
     // the offer went out only after the ring
     expect(payee.received.map(p => p.kind)).toEqual(['knock', 'offer'])
+  })
+
+  it('cancels a dial after the ring', async () => {
+    const hub = createMemoryHub()
+    const payee = await ringOnly(hub, 0)
+    const sender = hubClient(hub, await makeWallet())
+    const controller = new AbortController()
+    const dial = failure(sender.connect(payee.identityKey, { signal: controller.signal }))
+    // wait for the offer, which goes out only after the ring
+    for (let i = 0; i < 50 && !payee.received.some(p => p.kind === 'offer'); i++) await sleep(20)
+    expect(payee.received.map(p => p.kind)).toEqual(['knock', 'offer'])
+    controller.abort()
+    expect(await dial).toMatchObject({ code: 'closed', message: 'Dial cancelled' })
   })
 
   it('still caps the whole dial with timeoutMs', async () => {

@@ -23,6 +23,7 @@ export interface DialTimeouts {
  */
 export class DialClock {
   private replied = false
+  private stopped = false
   private presence: ReturnType<typeof setTimeout> | undefined
   private dial: ReturnType<typeof setTimeout> | undefined
   private total: ReturnType<typeof setTimeout> | undefined
@@ -45,13 +46,13 @@ export class DialClock {
 
   /** The knock is posted: start the presence clock, unless the recipient has replied already. */
   posted(): void {
-    if (this.replied || this.presence !== undefined) return
+    if (this.stopped || this.replied || this.presence !== undefined) return
     this.presence = setTimeout(() => this.expire(unreachable(this.t.presenceMs)), this.t.presenceMs)
   }
 
   /** The recipient replied: stop presence and start the dial clock (once). */
   heard(): void {
-    if (this.replied) return
+    if (this.stopped || this.replied) return
     this.replied = true
     clearTimeout(this.presence)
     this.dial = setTimeout(() => {
@@ -64,10 +65,47 @@ export class DialClock {
     }, this.t.dialMs)
   }
 
+  /** Clear every timer; later calls start none. */
   stop(): void {
+    this.stopped = true
     clearTimeout(this.presence)
     clearTimeout(this.dial)
     clearTimeout(this.total)
+  }
+}
+
+/**
+ * Settles a dial's promise once: the first `resolve` or `reject` wins and runs `cleanup`
+ * before settling; later calls do nothing and return false.
+ */
+export class DialSettler<T> {
+  private settled = false
+
+  constructor(
+    private readonly onResolve: (v: T) => void,
+    private readonly onReject: (e: unknown) => void,
+    private readonly cleanup: () => void
+  ) {}
+
+  /** Resolve with `v`; false when the dial had already settled. */
+  resolve(v: T): boolean {
+    if (!this.settle()) return false
+    this.onResolve(v)
+    return true
+  }
+
+  /** Reject with `e`; false when the dial had already settled. */
+  reject(e: unknown): boolean {
+    if (!this.settle()) return false
+    this.onReject(e)
+    return true
+  }
+
+  private settle(): boolean {
+    if (this.settled) return false
+    this.settled = true
+    this.cleanup()
+    return true
   }
 }
 

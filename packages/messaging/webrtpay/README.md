@@ -154,8 +154,9 @@ import type { PaymentTokenInput } from '@bsv/webrtpay'
 // `wallet` takes the originator on every call (a WalletInterface such as a wallet-toolbox
 // Wallet); a WalletClient takes it in its constructor instead, and one argument per method.
 
-// 1. Dial and authenticate. Offline payees fail peer_unreachable within 2 s; it also rejects
-//    unavailable (MessageBox could not take the signal: this side's network), rejected
+// 1. Dial and authenticate. Offline payees fail peer_unreachable within 2 s of the carrier
+//    taking the knock; it also rejects unavailable (MessageBox could not take the signal:
+//    this side's network), rejected
 //    (error.reason 'busy', 'not_receiving' or 'wrong_network'), rate_limited, timeout, closed
 //    (cancelled through `signal`) or auth_failed.
 const dial = new AbortController() // abort() from the Cancel button
@@ -752,7 +753,7 @@ Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 896 at 0.2.0; `pnpm test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 914 at 0.2.0; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input

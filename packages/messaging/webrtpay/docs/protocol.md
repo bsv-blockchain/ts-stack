@@ -1074,6 +1074,7 @@ key is never sent to Cloudflare.
 | Signals opened: overall / per sender                                            | 20 a second (burst 40) / 10 a minute (burst 10) |
 | Signals that cannot be opened, reported to `onError`                            | 1 every 10 s                                    |
 | Rejects sent / rings sent                                                       | 1 a second / 20 a second (burst 20)             |
+| Signals per dial: payer → payee / payee → payer                                 | 2 (knock, offer) / 2 (ring, answer or reject)   |
 | Signal sdp / sid / ciphertext                                                   | 16384 / 64 / 24576 characters                   |
 | MessageBox poll: idle / dialing / deadline / max backoff                        | 2.5 s / 1 s / 10 s / 30 s                       |
 | Relay envelope / WebSocket message                                              | 24672 / 98688 bytes                             |

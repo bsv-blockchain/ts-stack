@@ -265,20 +265,26 @@ export class MessageBoxSignaler implements Signaler {
 
   /** Join the live room: listen the first time, rejoin after leaving. Never throws. */
   private startLive(): void {
-    if (!this.live || this.client.listenForLiveMessages === undefined) return
-    if (this.liveState === 'left' && this.client.joinRoom !== undefined) {
+    const client = this.client
+    const listen = client.listenForLiveMessages
+    if (!this.live || listen === undefined) return
+    const joinRoom = client.joinRoom
+    if (this.liveState === 'left' && joinRoom !== undefined) {
       this.liveState = 'on'
-      this.client.joinRoom(this.messageBox, this.host).catch(noop)
+      quietly(() => joinRoom.call(client, this.messageBox, this.host))
       return
     }
-    if (this.liveState === 'starting' || this.liveState === 'on') return
+    if (this.liveState !== 'off') return
     this.liveState = 'starting'
-    this.client
-      .listenForLiveMessages({
-        messageBox: this.messageBox,
-        onMessage: m => this.onLive(m),
-        overrideHost: this.host
-      })
+    // Called on a later tick, so even a client that throws synchronously cannot escape.
+    Promise.resolve()
+      .then(() =>
+        listen.call(client, {
+          messageBox: this.messageBox,
+          onMessage: m => this.onLive(m),
+          overrideHost: this.host
+        })
+      )
       .then(
         () => {
           this.liveState = 'on'
@@ -291,11 +297,18 @@ export class MessageBoxSignaler implements Signaler {
       )
   }
 
-  /** Leave the live room, if in it and the client can. Never throws. */
+  /**
+   * Leave the live room, if in it and the client can both leave and join again (so a later
+   * subscription never registers a second live handler). Never throws.
+   */
   private leaveLive(): void {
-    if (this.liveState !== 'on' || this.client.leaveRoom === undefined) return
+    const client = this.client
+    const leaveRoom = client.leaveRoom
+    if (this.liveState !== 'on' || leaveRoom === undefined || client.joinRoom === undefined) {
+      return
+    }
     this.liveState = 'left'
-    this.client.leaveRoom(this.messageBox).catch(noop)
+    quietly(() => leaveRoom.call(client, this.messageBox))
   }
 
   /**
@@ -370,7 +383,9 @@ export class MessageBoxSignaler implements Signaler {
     if (this.current !== run) return
     if (!Array.isArray(listed)) throw new TypeError('listMessages did not return an array')
 
-    const state: PollState = { handled: 0, toAck: new Set<string>(this.liveAcks) }
+    const state: PollState = { handled: 0, toAck: new Set<string>() }
+    // Live ids a poll has confirmed in the meantime are not acked twice.
+    for (const id of this.liveAcks) if (this.seen.get(id) !== true) state.toAck.add(id)
     this.liveAcks.clear()
     for (const m of listed as unknown[]) {
       // Nobody is listening any more: leave the rest on the server for the next listener.
@@ -446,6 +461,11 @@ function envelopeOf(body: unknown): SignalEnvelope | undefined {
 }
 
 function noop(): void {}
+
+/** Run `fn` on a later tick and ignore how it ends, synchronous throws included. */
+function quietly(fn: () => Promise<unknown>): void {
+  Promise.resolve().then(fn).catch(noop)
+}
 
 /** Whether `e` is MessageBox refusing a message it already holds (`ERR_DUPLICATE_MESSAGE`). */
 function isDuplicate(e: unknown): boolean {

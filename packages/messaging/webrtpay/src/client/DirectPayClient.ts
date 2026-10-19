@@ -34,7 +34,7 @@ import { equalBytes, randomBytes, toBase64Url } from '../util/bytes.js'
 import { compareCodeUnits } from '../util/compare.js'
 import { WebRTPayError } from '../util/errors.js'
 import { KeyedBuckets, TokenBucket } from './budget.js'
-import { DialClock, ReplyQueue } from './dial.js'
+import { DialClock, DialSettler, ReplyQueue } from './dial.js'
 import type { DialTimeouts } from './dial.js'
 import { DEFAULT_INBOUND_LIMITS, InboundLimiter } from './limits.js'
 import type { InboundLimits } from './limits.js'
@@ -485,22 +485,18 @@ export class DirectPayClient {
   /** Run dial `d` under its clocks until it settles; `signal` cancels it. */
   private startDial(d: DialRun, signal: AbortSignal | undefined): Promise<AuthenticatedPeer> {
     return new Promise<AuthenticatedPeer>((resolve, reject) => {
-      let settled = false
-      const settle = (): boolean => {
-        if (settled) return false
-        settled = true
+      const settler = new DialSettler<AuthenticatedPeer>(resolve, reject, () => {
         clock.stop()
         signal?.removeEventListener('abort', onAbort)
         this.dials.delete(d.sid)
         this.endDial()
-        return true
-      }
+      })
       const fail = (e: WebRTPayError): void => {
         if (d.failure !== undefined) return
         d.failure = e
         d.replies.fail(e)
         d.link?.close(e)
-        if (settle()) reject(e)
+        settler.reject(e)
       }
       const onAbort = (): void => fail(cancelledError())
       const clock = new DialClock(d.timeouts, fail)
@@ -519,14 +515,13 @@ export class DirectPayClient {
       signal?.addEventListener('abort', onAbort, { once: true })
       this.runDial(d).then(
         peer => {
-          if (settle()) resolve(peer)
-          else peer.close(d.failure)
+          if (!settler.resolve(peer)) peer.close(d.failure)
         },
         (e: unknown) => {
           // A link still being gathered is closed when it arrives.
           d.failure ??= asError(e) ?? new WebRTPayError('closed', 'Dial failed')
           d.link?.close(asError(e))
-          if (settle()) reject(e)
+          settler.reject(e)
         }
       )
     })
@@ -1021,6 +1016,9 @@ export class DirectPayClient {
     if (old.paying > 0) {
       await withDeadline(old.ended, SUPERSEDE_WAIT_MS, 'Payment still in progress').catch(noop)
     }
+    // Ended meanwhile, or the payee filled up while waiting: leave the old session be (the
+    // new offer is then refused busy rather than costing the old one).
+    if (old.released || this.limiter.refusal(sender, undefined, SUPERSEDING) !== undefined) return
     // Released first, so an old offer still gathering sees it and stops.
     old.release()
     old.link?.close(supersededError())

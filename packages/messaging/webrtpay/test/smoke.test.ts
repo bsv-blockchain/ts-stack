@@ -1,10 +1,16 @@
 import { describe, expect, it } from '@jest/globals'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import * as api from '../src/index.js'
 import { VERSION } from '../src/index.js'
 
 describe('package scaffold', () => {
   it('exports the package version', () => {
-    expect(VERSION).toBe('0.1.0')
+    expect(VERSION).toBe('0.2.0')
+    const pkg = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')
+    ) as { version: string }
+    expect(VERSION).toBe(pkg.version)
   })
 
   it('exports the public API of every module and no internal helpers', () => {
