@@ -29,6 +29,28 @@ export interface MessageBoxLike {
     acceptPayments?: boolean
   }): Promise<Array<{ messageId: string; sender: string; body: string | Record<string, unknown> }>>
   acknowledgeMessage(a: { messageIds: string[]; host?: string }): Promise<unknown>
+  /** Send over the live websocket (it may fall back to HTTP itself). Optional. */
+  sendLiveMessage?(
+    a: { recipient: string; messageBox: string; body: string },
+    overrideHost?: string
+  ): Promise<unknown>
+  /** Join the box's live room and hand each message that arrives to `onMessage`. Optional. */
+  listenForLiveMessages?(a: {
+    messageBox: string
+    onMessage: (m: LiveMessage) => void
+    overrideHost?: string
+  }): Promise<void>
+  /** Join the box's live room again after {@link leaveRoom}. Optional. */
+  joinRoom?(messageBox: string, overrideHost?: string): Promise<void>
+  /** Leave the box's live room; called when the last listener unsubscribes. Optional. */
+  leaveRoom?(messageBox: string): Promise<void>
+}
+
+/** A message as the live websocket hands it over (`PeerMessage`'s fields this uses). */
+export interface LiveMessage {
+  messageId: string
+  sender: string
+  body: string | Record<string, unknown>
 }
 
 export interface MessageBoxSignalerOptions {
@@ -43,7 +65,16 @@ export interface MessageBoxSignalerOptions {
    * recipient's own host, so payer and payee may use different servers.
    */
   host?: string
+  /**
+   * Use the MessageBox live websocket, when the client has it: send with
+   * `sendLiveMessage` (HTTP `sendMessage` if that fails) and receive with
+   * `listenForLiveMessages` alongside polling. Defaults to true.
+   */
+  live?: boolean
 }
+
+/** Where live listening stands: not started, starting, in the room, or left the room. */
+type LiveState = 'off' | 'starting' | 'on' | 'left'
 
 /** Longest wait between polls after consecutive errors. */
 const MAX_BACKOFF_MS = 30000
@@ -60,8 +91,13 @@ const POLL_DEADLINE_MS = 10000
 const MAX_SEEN_IDS = 10000
 
 /**
- * Carries signal envelopes through MessageBox. `send` posts over HTTP to the
- * recipient's host. Listening polls `listMessages` for one page of at most 100
+ * Carries signal envelopes through MessageBox. `send` uses the live websocket when the
+ * client has one (`sendLiveMessage`), else or on failure posts over HTTP to the recipient's
+ * host. With a live websocket, the first subscription also joins the box's live room and
+ * envelopes are delivered as they arrive, once each by `messageId` (a poll listing the
+ * same message later neither delivers it again nor acks it twice); live envelopes are
+ * acknowledged with the next poll, and on the last unsubscribe the room is left. If live
+ * listening fails, polling carries on alone. Listening polls `listMessages` for one page of at most 100
  * messages, delivers each new envelope once and acknowledges every message it reads,
  * including ones that are not envelopes, so nothing lingers on the server; at most 100
  * new messages are handled per poll, the rest wait for the next. Acks go in batches of
@@ -84,6 +120,10 @@ export class MessageBoxSignaler implements Signaler {
   private failures = 0
   private lastPollAt = 0
   private timer: ReturnType<typeof setTimeout> | undefined
+  private readonly live: boolean
+  private liveState: LiveState = 'off'
+  /** IDs of envelopes delivered live, acknowledged with the next poll. */
+  private readonly liveAcks = new Set<string>()
 
   constructor(
     private readonly client: MessageBoxLike,
@@ -93,27 +133,38 @@ export class MessageBoxSignaler implements Signaler {
     this.idlePollMs = pollInterval(o.idlePollMs, DEFAULTS.payeePollMs, 'idlePollMs')
     this.activePollMs = pollInterval(o.activePollMs, DEFAULTS.payerPollMs, 'activePollMs')
     this.host = o.host
+    this.live = o.live ?? true
   }
 
-  /** Post `e` to `to`'s box; any failure rejects `WebRTPayError('peer_unreachable')`. */
+  /**
+   * Post `e` to `to`'s box, live when possible, else over HTTP. When neither gets it there
+   * it rejects `WebRTPayError('unavailable')`: the sender could not reach MessageBox, which
+   * says nothing about whether the peer is online.
+   */
   async send(to: PubKeyHex, e: SignalEnvelope): Promise<void> {
     const body = JSON.stringify({ v: e.v, sid: e.sid, ciphertext: e.ciphertext })
+    const message = { recipient: to, messageBox: this.messageBox, body }
+    if (await this.sendLive(message)) return
     try {
-      await this.client.sendMessage({ recipient: to, messageBox: this.messageBox, body })
+      await this.client.sendMessage(message)
     } catch (cause) {
-      throw new WebRTPayError('peer_unreachable', 'MessageBox could not deliver the signal', {
+      throw new WebRTPayError('unavailable', 'MessageBox could not deliver the signal', {
         cause
       })
     }
   }
 
-  /** Subscribe; the first subscription polls at once and starts the loop. */
+  /** Subscribe; the first subscription polls at once, starts the loop and listens live. */
   listen(fn: (from: PubKeyHex, e: SignalEnvelope) => void): Promise<() => Promise<void>> {
     const sub: SignalSubscription = { fn }
     this.subs.add(sub)
+    if (this.subs.size === 1) this.startLive()
     if (this.timer === undefined && !this.polling) this.poll()
     return Promise.resolve(() => {
-      if (this.subs.delete(sub) && this.subs.size === 0) this.clearTimer()
+      if (this.subs.delete(sub) && this.subs.size === 0) {
+        this.clearTimer()
+        this.leaveLive()
+      }
       return Promise.resolve()
     })
   }
@@ -123,6 +174,67 @@ export class MessageBoxSignaler implements Signaler {
     if (this.active === active) return
     this.active = active
     this.schedule()
+  }
+
+  /** Whether `sendLiveMessage` took the message; false when there is none or it failed. */
+  private async sendLive(message: {
+    recipient: string
+    messageBox: string
+    body: string
+  }): Promise<boolean> {
+    if (!this.live || this.client.sendLiveMessage === undefined) return false
+    try {
+      await this.client.sendLiveMessage(message)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Join the live room: listen the first time, rejoin after leaving. Never throws. */
+  private startLive(): void {
+    if (!this.live || this.client.listenForLiveMessages === undefined) return
+    if (this.liveState === 'left' && this.client.joinRoom !== undefined) {
+      this.liveState = 'on'
+      this.client.joinRoom(this.messageBox, this.host).catch(noop)
+      return
+    }
+    if (this.liveState === 'starting' || this.liveState === 'on') return
+    this.liveState = 'starting'
+    this.client
+      .listenForLiveMessages({
+        messageBox: this.messageBox,
+        onMessage: m => this.onLive(m),
+        overrideHost: this.host
+      })
+      .then(
+        () => {
+          this.liveState = 'on'
+          if (this.subs.size === 0) this.leaveLive()
+        },
+        () => {
+          // Polling carries on; the next first subscription tries again.
+          this.liveState = 'off'
+        }
+      )
+  }
+
+  /** Leave the live room, if in it and the client can. Never throws. */
+  private leaveLive(): void {
+    if (this.liveState !== 'on' || this.client.leaveRoom === undefined) return
+    this.liveState = 'left'
+    this.client.leaveRoom(this.messageBox).catch(noop)
+  }
+
+  /**
+   * A message from the live room: delivered like a polled one if it is a new envelope, and
+   * acknowledged with the next poll. Anything else is left for polling to read.
+   */
+  private onLive(m: unknown): void {
+    if (this.subs.size === 0 || typeof m !== 'object' || m === null) return
+    if (envelopeOf((m as Record<string, unknown>).body) === undefined) return
+    const state: PollState = { handled: 0, toAck: this.liveAcks }
+    this.take(m, state)
   }
 
   private poll(): void {
@@ -186,7 +298,8 @@ export class MessageBoxSignaler implements Signaler {
     if (this.current !== run) return
     if (!Array.isArray(listed)) throw new TypeError('listMessages did not return an array')
 
-    const state: PollState = { handled: 0, toAck: new Set<string>() }
+    const state: PollState = { handled: 0, toAck: new Set<string>(this.liveAcks) }
+    this.liveAcks.clear()
     for (const m of listed as unknown[]) {
       // Nobody is listening any more: leave the rest on the server for the next listener.
       if (this.subs.size === 0) break
@@ -259,6 +372,8 @@ function envelopeOf(body: unknown): SignalEnvelope | undefined {
   }
   return isSignalEnvelope(value) ? value : undefined
 }
+
+function noop(): void {}
 
 function pollInterval(v: number | undefined, fallback: number, name: string): number {
   if (v === undefined) return fallback

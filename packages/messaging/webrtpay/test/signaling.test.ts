@@ -719,8 +719,15 @@ class FakeMessageBox {
     return messageId
   }
 
+  /** Live listeners by identity. */
+  live = new Map<string, LiveFakeClient>()
+
   client(identity: string): FakeClient {
     return new FakeClient(this, identity)
+  }
+
+  liveClient(identity: string): LiveFakeClient {
+    return new LiveFakeClient(this, identity)
   }
 }
 
@@ -778,6 +785,73 @@ class FakeClient implements MessageBoxLike {
       this.server.messages = this.server.messages.filter(m => !a.messageIds.includes(m.messageId))
     }
     return 'acknowledged'
+  }
+}
+
+/** A {@link FakeClient} with the live websocket methods; the server delivers live sends. */
+class LiveFakeClient extends FakeClient {
+  liveSent: unknown[] = []
+  liveSendFailure: Error | undefined
+  liveListenFailure: Error | undefined
+  liveGate: Promise<void> | undefined
+  liveListens: Array<{ messageBox: string; overrideHost: string | undefined }> = []
+  joined: string[] = []
+  left: string[] = []
+  private onLive: ((m: unknown) => void) | undefined
+  private lastLive: unknown
+
+  constructor(
+    private readonly liveServer: FakeMessageBox,
+    identity: string
+  ) {
+    super(liveServer, identity)
+  }
+
+  async sendLiveMessage(a: {
+    recipient: string
+    messageBox: string
+    body: string
+  }): Promise<unknown> {
+    this.liveSent.push(a)
+    if (this.liveSendFailure) throw this.liveSendFailure
+    const messageId = this.liveServer.deposit(a.recipient, this.identity, a.body, a.messageBox)
+    this.liveServer.live
+      .get(a.recipient)
+      ?.pushLive({ messageId, sender: this.identity, body: a.body })
+    return { status: 'success', messageId }
+  }
+
+  async listenForLiveMessages(a: {
+    messageBox: string
+    onMessage: (m: {
+      messageId: string
+      sender: string
+      body: string | Record<string, unknown>
+    }) => void
+    overrideHost?: string
+  }): Promise<void> {
+    this.liveListens.push({ messageBox: a.messageBox, overrideHost: a.overrideHost })
+    await (this.liveGate ?? Promise.resolve())
+    if (this.liveListenFailure) throw this.liveListenFailure
+    this.onLive = a.onMessage as (m: unknown) => void
+    this.liveServer.live.set(this.identity, this)
+  }
+
+  async joinRoom(messageBox: string): Promise<void> {
+    this.joined.push(messageBox)
+  }
+
+  async leaveRoom(messageBox: string): Promise<void> {
+    this.left.push(messageBox)
+  }
+
+  pushLive(m: unknown): void {
+    this.lastLive = m
+    this.onLive?.(m)
+  }
+
+  replayLive(): void {
+    this.onLive?.(this.lastLive)
   }
 }
 
@@ -1260,14 +1334,178 @@ describe('MessageBoxSignaler', () => {
     }
   })
 
-  it('rejects peer_unreachable when the message cannot be sent', async () => {
+  it('send failure is unavailable', async () => {
     const server = new FakeMessageBox()
     const a = server.client(ALICE)
     const cause = new Error('no host for recipient')
     a.sendFailure = cause
     const sending = new MessageBoxSignaler(a).send(BOB, ENV)
     await expect(sending).rejects.toBeInstanceOf(WebRTPayError)
-    await expect(sending).rejects.toMatchObject({ code: 'peer_unreachable', cause })
+    await expect(sending).rejects.toMatchObject({ code: 'unavailable', cause })
+
+    // live and HTTP both failing is unavailable too
+    const live = server.liveClient(ALICE)
+    live.sendFailure = cause
+    live.liveSendFailure = new Error('socket down')
+    await expect(new MessageBoxSignaler(live).send(BOB, ENV)).rejects.toMatchObject({
+      code: 'unavailable',
+      cause
+    })
+  })
+
+  it('sends live when available', async () => {
+    const server = new FakeMessageBox()
+    const a = server.liveClient(ALICE)
+    const b = server.liveClient(BOB)
+    const { got, fn } = collect()
+    const stop = await new MessageBoxSignaler(b).listen(fn)
+    try {
+      await jest.advanceTimersByTimeAsync(0)
+      expect(b.liveListens).toEqual([{ messageBox: 'webrtpay_signals', overrideHost: undefined }])
+      await new MessageBoxSignaler(a).send(BOB, ENV)
+      expect(a.liveSent).toEqual([
+        { recipient: BOB, messageBox: 'webrtpay_signals', body: JSON.stringify(ENV) }
+      ])
+      expect(a.sent).toEqual([])
+      // delivered as it arrives, before any poll
+      expect(got).toEqual([[ALICE, ENV]])
+      expect(server.acks).toEqual([])
+      // and acknowledged with the next poll
+      await jest.advanceTimersByTimeAsync(2500)
+      expect(server.acks).toEqual([{ identity: BOB, messageIds: ['m1'] }])
+    } finally {
+      await stop()
+    }
+  })
+
+  it('does not send live when told not to, nor with a client that cannot', async () => {
+    const server = new FakeMessageBox()
+    const a = server.liveClient(ALICE)
+    const b = server.liveClient(BOB)
+    const stop = await new MessageBoxSignaler(b, { live: false }).listen(() => undefined)
+    try {
+      await new MessageBoxSignaler(a, { live: false }).send(BOB, ENV)
+      expect(a.liveSent).toEqual([])
+      expect(a.sent).toHaveLength(1)
+      expect(b.liveListens).toEqual([])
+    } finally {
+      await stop()
+    }
+  })
+
+  it('falls back to http send when live send throws', async () => {
+    const server = new FakeMessageBox()
+    const a = server.liveClient(ALICE)
+    a.liveSendFailure = new Error('socket down')
+    await new MessageBoxSignaler(a).send(BOB, ENV)
+    expect(a.liveSent).toHaveLength(1)
+    expect(a.sent).toHaveLength(1)
+    expect(server.messages.map(m => m.recipient)).toEqual([BOB])
+  })
+
+  it('delivers a live message once even if a poll lists it again', async () => {
+    const server = new FakeMessageBox()
+    server.removeOnAck = false
+    const a = server.liveClient(ALICE)
+    const b = server.liveClient(BOB)
+    const { got, fn } = collect()
+    const stop = await new MessageBoxSignaler(b, { host: 'https://mb.example' }).listen(fn)
+    try {
+      await jest.advanceTimersByTimeAsync(0)
+      expect(b.liveListens).toEqual([
+        { messageBox: 'webrtpay_signals', overrideHost: 'https://mb.example' }
+      ])
+      await new MessageBoxSignaler(a).send(BOB, ENV)
+      // the socket hands the same message over twice
+      b.replayLive()
+      expect(got).toEqual([[ALICE, ENV]])
+      await jest.advanceTimersByTimeAsync(2500)
+      await jest.advanceTimersByTimeAsync(2500)
+      expect(got).toEqual([[ALICE, ENV]])
+      expect(server.acks).toEqual([
+        { identity: BOB, messageIds: ['m1'], host: 'https://mb.example' }
+      ])
+    } finally {
+      await stop()
+    }
+  })
+
+  it('leaves non-envelopes from the live room to polling', async () => {
+    const server = new FakeMessageBox()
+    const b = server.liveClient(BOB)
+    const { got, fn } = collect()
+    const stop = await new MessageBoxSignaler(b).listen(fn)
+    try {
+      await jest.advanceTimersByTimeAsync(0)
+      b.pushLive({ messageId: 'x1', sender: ALICE, body: '[Error: Failed to decrypt]' })
+      b.pushLive(null)
+      expect(got).toEqual([])
+      await jest.advanceTimersByTimeAsync(2500)
+      expect(server.acks).toEqual([])
+    } finally {
+      await stop()
+    }
+  })
+
+  it('keeps polling when live listen fails', async () => {
+    const server = new FakeMessageBox()
+    const b = server.liveClient(BOB)
+    b.liveListenFailure = new Error('no socket on this host')
+    const { got, fn } = collect()
+    let stop = await new MessageBoxSignaler(b).listen(fn)
+    const signaler = new MessageBoxSignaler(b)
+    try {
+      stop = await signaler.listen(fn)
+      await jest.advanceTimersByTimeAsync(0)
+      server.deposit(BOB, ALICE, JSON.stringify(ENV))
+      await jest.advanceTimersByTimeAsync(2500)
+      expect(got).toEqual([[ALICE, ENV]])
+      // a later first subscription tries live again
+      await stop()
+      b.liveListenFailure = undefined
+      stop = await signaler.listen(fn)
+      await jest.advanceTimersByTimeAsync(0)
+      expect(b.liveListens).toHaveLength(3)
+    } finally {
+      await stop()
+    }
+  })
+
+  it('leaves the live room on the last unsubscribe and joins it again on the next', async () => {
+    const server = new FakeMessageBox()
+    const b = server.liveClient(BOB)
+    const signaler = new MessageBoxSignaler(b)
+    const { got, fn } = collect()
+    const first = await signaler.listen(fn)
+    const second = await signaler.listen(fn)
+    await jest.advanceTimersByTimeAsync(0)
+    await first()
+    expect(b.left).toEqual([])
+    await second()
+    expect(b.left).toEqual(['webrtpay_signals'])
+    // nobody listening: a live message is left on the server
+    b.pushLive({ messageId: 'm9', sender: ALICE, body: JSON.stringify(ENV) })
+    expect(got).toEqual([])
+    const third = await signaler.listen(fn)
+    try {
+      expect(b.joined).toEqual(['webrtpay_signals'])
+      expect(b.liveListens).toHaveLength(1)
+    } finally {
+      await third()
+    }
+  })
+
+  it('leaves the live room once listening starts if everyone unsubscribed meanwhile', async () => {
+    const server = new FakeMessageBox()
+    const b = server.liveClient(BOB)
+    let open!: () => void
+    b.liveGate = new Promise<void>(resolve => (open = resolve))
+    const stop = await new MessageBoxSignaler(b).listen(() => undefined)
+    await stop()
+    expect(b.left).toEqual([])
+    open()
+    await jest.advanceTimersByTimeAsync(0)
+    expect(b.left).toEqual(['webrtpay_signals'])
   })
 
   it('refuses a poll interval that is not a positive number', () => {
