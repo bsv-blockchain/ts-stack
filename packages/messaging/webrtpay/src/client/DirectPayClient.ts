@@ -171,6 +171,11 @@ const SENDER_INTAKE_PER_MINUTE = 10
 const SENDER_INTAKE_BURST = 10
 /** Each refusal costs an encryption and a send: at most one per second is answered. */
 const REJECTS_PER_SECOND = 1
+/**
+ * Rings answered per second, at most, with bursts as large: a budget of their own, so a
+ * refusal now and then cannot silence back-to-back dials.
+ */
+const RINGS_PER_SECOND = 20
 /** Signals that could not be opened are reported to `onError` at most this often. */
 const UNOPENED_REPORT_MS = 10000
 /** Longest reject reason from a peer passed on in an error message. */
@@ -238,6 +243,7 @@ export class DirectPayClient {
     60000 / SENDER_INTAKE_PER_MINUTE
   )
   private readonly rejects = new TokenBucket(1, 1000 / REJECTS_PER_SECOND)
+  private readonly rings = new TokenBucket(RINGS_PER_SECOND, 1000 / RINGS_PER_SECOND)
   private readonly unopenedReports = new TokenBucket(1, UNOPENED_REPORT_MS)
   /** Payment decisions in progress by `paymentKey`, so concurrent deliveries share one. */
   private readonly deciding = new Map<string, Promise<PaymentDecision>>()
@@ -784,10 +790,10 @@ export class DirectPayClient {
         me,
         replay: this.replay,
         originator: this.originator,
-        // An answer or reject counts only for a dial in progress to its sender. Anything
+        // A ring, answer or reject counts only for a dial in progress to its sender. Anything
         // else must not record its sid: a forged answer with a sid seen in the clear would
         // otherwise make the genuine answer look like a replay.
-        wanted: s => s.kind === 'offer' || this.dials.get(s.sid)?.recipient === s.from
+        wanted: s => isInbound(s.kind) || this.dials.get(s.sid)?.recipient === s.from
       })
     } catch (error) {
       // Undecryptable, stale, replayed, misaddressed or unwanted: dropped. A wallet that
@@ -799,6 +805,10 @@ export class DirectPayClient {
     if (this.closing !== undefined) return
     if (p.kind === 'offer') {
       await this.answerOffer(p, me)
+      return
+    }
+    if (p.kind === 'knock') {
+      await this.answerKnock(p, me)
       return
     }
     const dial = this.dials.get(p.sid)
@@ -859,6 +869,25 @@ export class DirectPayClient {
       release()
       this.report(handlers, e)
     }
+  }
+
+  /**
+   * Answer a knock at once, before any ICE is gathered and without taking a session slot:
+   * `ring` when an offer from this sender would be considered, else the sealed refusal the
+   * offer would get (`not_receiving`, `wrong_network`, `busy`), or nothing for a sender over
+   * its own limits. Rings have a budget of their own, 20 a second.
+   */
+  private async answerKnock(p: SignalPlaintext, me: PubKeyHex): Promise<void> {
+    if (this.handlers === undefined) return this.refuse(p, me, 'not_receiving')
+    const refusal = this.limiter.refusal(p.from)
+    if (refusal === 'sender') return
+    if (this.chain !== undefined && p.chain !== this.chain) {
+      return this.refuse(p, me, 'wrong_network')
+    }
+    if (refusal === 'busy') return this.refuse(p, me, 'busy')
+    if (!this.rings.take()) return
+    const envelope = await this.seal('ring', p.sid, me, p.from, { chain: this.chain })
+    await this.signaler!.send(p.from, envelope)
   }
 
   /** Send a sealed reject, unless the reject budget is spent (then the sender hears nothing). */
@@ -1132,6 +1161,11 @@ export class DirectPayClient {
 }
 
 function noop(): void {}
+
+/** Kinds a peer sends unprompted: a dial's knock and offer. */
+function isInbound(kind: SignalKind): boolean {
+  return kind === 'offer' || kind === 'knock'
+}
 
 function closedError(): WebRTPayError {
   return new WebRTPayError('closed', 'Client is closed')
