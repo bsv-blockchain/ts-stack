@@ -119,6 +119,64 @@ describe('signal envelopes', () => {
     expect('sdp' in opened).toBe(false)
   })
 
+  it('seals and opens a knock', async () => {
+    const p = offer({ kind: 'knock', sdp: undefined, chain: 'main' })
+    delete p.sdp
+    const e = await sealSignal(alice.wallet, p)
+    const opened = await openSignal(bob.wallet, alice.key, e, {
+      me: bob.key,
+      now: NOW,
+      replay: new ReplayCache()
+    })
+    expect(opened).toEqual(p)
+  })
+
+  it('seals and opens a ring', async () => {
+    const p: SignalPlaintext = {
+      v: 1,
+      kind: 'ring',
+      sid: newSid(),
+      from: bob.key,
+      to: alice.key,
+      ts: NOW,
+      purpose: 'payment'
+    }
+    const e = await sealSignal(bob.wallet, p)
+    const opened = await openSignal(alice.wallet, bob.key, e, {
+      me: alice.key,
+      now: NOW,
+      replay: new ReplayCache()
+    })
+    expect(opened).toEqual(p)
+  })
+
+  it('rejects a knock that carries sdp, and a ring that carries a reason', async () => {
+    for (const body of [
+      { ...offer(), kind: 'knock' },
+      { ...offer(), kind: 'ring', sdp: undefined, reason: 'busy' }
+    ]) {
+      const e = await craft(alice, bob.key, body.sid, body)
+      await expectInvalid(
+        openSignal(bob.wallet, alice.key, e, { me: bob.key, now: NOW, replay: new ReplayCache() })
+      )
+    }
+  })
+
+  it('opens a knock and then an offer with the same sid once each', async () => {
+    const replay = new ReplayCache()
+    const sid = newSid()
+    const knock = offer({ kind: 'knock', sid })
+    delete knock.sdp
+    const k = await sealSignal(alice.wallet, knock)
+    const o = await sealSignal(alice.wallet, offer({ sid }))
+    const open = (e: SignalEnvelope): Promise<SignalPlaintext> =>
+      openSignal(bob.wallet, alice.key, e, { me: bob.key, now: NOW, replay })
+    expect((await open(k)).kind).toBe('knock')
+    expect((await open(o)).kind).toBe('offer')
+    await expectInvalid(open(k))
+    await expectInvalid(open(o))
+  })
+
   it('round trips the network a signal names, and leaves it out when there is none', async () => {
     const roundTrip = async (p: SignalPlaintext): Promise<SignalPlaintext> =>
       openSignal(bob.wallet, alice.key, await sealSignal(alice.wallet, p), {
