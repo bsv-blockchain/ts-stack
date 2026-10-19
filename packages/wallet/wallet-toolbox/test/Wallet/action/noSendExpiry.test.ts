@@ -972,7 +972,10 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       expect(need).toBeLessThan(reclaimFloorSatoshis(ctx))
       expect((await anchorOf(ctx, created.txid!)).satoshis).toBe(need)
 
-      expect((await processNoSendExpiryLifecycle(ctx.active)).reclaimActivated).toBe(0)
+      const statusSpy = jest.spyOn(services, 'getStatusForTxids')
+      await expect(processNoSendExpiryLifecycle(ctx.active)).resolves.toMatchObject({ inspected: 0 })
+      expect(statusSpy).not.toHaveBeenCalled()
+      statusSpy.mockRestore()
       await expect(ctx.wallet.abortAction({ reference: created.txid! })).rejects.toThrow('permanently sent')
       const after = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
       expect(after.noSendExpiryState).toBe('signed')
