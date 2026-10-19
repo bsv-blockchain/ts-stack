@@ -248,6 +248,8 @@ interface InboundSession {
   paying: number
   /** Settles once the session has ended and its slot is back. */
   ended: Promise<void>
+  /** True once its slot is back (it ended, or was superseded). */
+  released: boolean
   /** Give its slot back (once). */
   release(): void
 }
@@ -935,6 +937,11 @@ export class DirectPayClient {
         p.sdp,
         await this.linkOptions(DEFAULTS.dialGatherTimeoutMs)
       )
+      // Superseded while gathering: its slot is gone, so it must not answer or be served.
+      if (entry.released) {
+        accepted.link.close(supersededError())
+        return
+      }
       entry.link = accepted.link
       this.adopt(accepted.link)
       // The answer must go out within the connect budget; carriers like MessageBox can take
@@ -956,15 +963,22 @@ export class DirectPayClient {
         startAfter: sent
       })
       session.catch(noop)
-      this.serve(await session, handlers, entry.release, {
+      const peer = await session
+      if (entry.released) {
+        peer.close(supersededError())
+        return
+      }
+      this.serve(peer, handlers, entry.release, {
         firstMessageMs: this.limits.firstMessageTimeoutMs,
         lifetimeMs: this.limits.maxSessionMs,
         inbound: entry
       })
     } catch (e) {
+      // A session closed because it was superseded is expected, not an error to report.
+      const superseded = entry.released
       entry.link?.close(asError(e))
       entry.release()
-      this.report(handlers, e)
+      if (!superseded) this.report(handlers, e)
     }
   }
 
@@ -989,21 +1003,10 @@ export class DirectPayClient {
       await this.refuse(p, me, 'busy')
       return undefined
     }
-    let ended!: () => void
-    const entry: InboundSession = {
-      link: undefined,
-      paying: 0,
-      ended: new Promise<void>(resolve => (ended = resolve)),
-      release: noop
-    }
-    let released = false
-    entry.release = () => {
-      if (released) return
-      released = true
+    const entry = inboundSession(() => {
       this.limiter.release(sender)
       if (this.inbound.get(sender) === entry) this.inbound.delete(sender)
-      ended()
-    }
+    })
     this.inbound.set(sender, entry)
     return entry
   }
@@ -1018,8 +1021,9 @@ export class DirectPayClient {
     if (old.paying > 0) {
       await withDeadline(old.ended, SUPERSEDE_WAIT_MS, 'Payment still in progress').catch(noop)
     }
-    old.link?.close(new WebRTPayError('closed', 'Superseded by a new session from the same peer'))
+    // Released first, so an old offer still gathering sees it and stops.
     old.release()
+    old.link?.close(supersededError())
   }
 
   /**
@@ -1344,6 +1348,30 @@ function isInbound(kind: SignalKind): boolean {
 
 function closedError(): WebRTPayError {
   return new WebRTPayError('closed', 'Client is closed')
+}
+
+function supersededError(): WebRTPayError {
+  return new WebRTPayError('closed', 'Superseded by a new session from the same peer')
+}
+
+/** A new inbound session's state; `onRelease` runs once, on the first `release()`. */
+function inboundSession(onRelease: () => void): InboundSession {
+  let ended: () => void = noop
+  const s: InboundSession = {
+    link: undefined,
+    paying: 0,
+    ended: new Promise<void>(resolve => {
+      ended = resolve
+    }),
+    released: false,
+    release: () => {
+      if (s.released) return
+      s.released = true
+      onRelease()
+      ended()
+    }
+  }
+  return s
 }
 
 function cancelledError(): WebRTPayError {

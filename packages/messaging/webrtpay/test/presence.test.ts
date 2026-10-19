@@ -495,6 +495,39 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
     }
   })
 
+  it('serves one session when a second offer supersedes one still gathering', async () => {
+    const hub = createMemoryHub()
+    const [payee, dialer] = await Promise.all([makeWallet(), makeWallet()])
+    const sessions: string[] = []
+    const errors: unknown[] = []
+    const receiver = hubClient(hub, payee, {
+      iceServersProvider: async () => {
+        await sleep(300)
+        return []
+      }
+    })
+    await receiver.startReceiving({
+      ...accepting,
+      onSession: k => sessions.push(k),
+      onError: e => errors.push(e)
+    })
+    const hand = await handSignaler(hub, dialer)
+    const first = await PeerLink.createOffer({ ...rtc, maxMessageBytes: 65536 })
+    const second = await PeerLink.createOffer({ ...rtc, maxMessageBytes: 65536 })
+    rawLinks.push(first.link, second.link)
+    const [sid1, sid2] = [newSid(), newSid()]
+    await hand.send('offer', payee.identityKey, sid1, { sdp: first.sdp })
+    await hand.send('offer', payee.identityKey, sid2, { sdp: second.sdp })
+    const answer = await hand.next(5000)
+    expect(answer).toMatchObject({ kind: 'answer', sid: sid2 })
+    // the superseded offer never answers
+    expect(await hand.next(1000)).toBeUndefined()
+    expect(sessions).toHaveLength(0)
+    expect(errors).toEqual([])
+    const limiter = (receiver as unknown as { limiter: { active: number } }).limiter
+    expect(limiter.active).toBe(1)
+  })
+
   it('lets a payment in progress be acknowledged before a new dial supersedes it', async () => {
     const hub = createMemoryHub()
     const [payee, payer] = await Promise.all([makeWallet(), makeWallet()])

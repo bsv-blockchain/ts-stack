@@ -43,7 +43,7 @@ MessageBox.
 - A sender has one inbound session at a time, as before, but a new offer from the same sender
   (as the carrier vouches) now supersedes its open session instead of being ignored: the old
   session is closed and its slot released first, after waiting up to 1 s if it is still
-  acknowledging a payment. Knocks from a sender with an open session are rung. Paying the same
+  acknowledging a payment; an old offer still gathering ICE is dropped without answering. Knocks from a sender with an open session are rung. Paying the same
   payee twice in a row therefore works without the second dial looking offline.
 - A dial whose link cannot be made (no `RTCPeerConnection`, say) fails at once with that error,
   as before, without waiting for the payee's reply.
