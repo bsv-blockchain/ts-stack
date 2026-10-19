@@ -131,8 +131,8 @@ sender); see [Security and privacy](#security-and-privacy) before turning it on 
 
 `connect` knocks first: a sealed `knock` goes to the payee before any ICE is gathered, and a
 receiving payee replies `ring` at once (or a sealed refusal). So an offline payee is known
-within `presenceTimeoutMs` (2 s), and an online one has `dialTimeoutMs` (6 s) from its reply to
-open the channel and prove its identity; `timeoutMs` caps the whole dial (default `connectMs`,
+within `presenceTimeoutMs` (2 s) of the carrier taking the knock, and an online one has
+`dialTimeoutMs` (6 s) from its reply to open the channel and prove its identity; `timeoutMs` caps the whole dial (default `connectMs`,
 30 s). Set the defaults with the client's `timeouts: { presenceMs, dialMs, connectMs }` or per
 call. `signal` (an `AbortSignal`) cancels one dial: it rejects `closed` (`Dial cancelled`) and
 leaves receiving and other dials alone. Map `peer_unreachable` and `rejected`
@@ -747,7 +747,7 @@ Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 889 at 0.2.0; `pnpm test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 892 at 0.2.0; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input

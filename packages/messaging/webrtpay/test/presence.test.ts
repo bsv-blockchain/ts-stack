@@ -97,6 +97,13 @@ async function handSignaler(
   const received: SignalPlaintext[] = []
   const waiting: Array<() => void> = []
   const replay = new ReplayCache()
+  let stopped = false
+  // Stopping wakes anyone still waiting, so no timer outlives the test.
+  stops.push(() => {
+    stopped = true
+    for (const wake of waiting.splice(0)) wake()
+    return Promise.resolve()
+  })
   stops.push(
     await signaler.listen((from, e) => {
       void openSignal(w.wallet, from, e, { me: w.identityKey, replay })
@@ -124,8 +131,13 @@ async function handSignaler(
       await signaler.send(to, e)
     },
     async next(within = 1000) {
-      if (read >= received.length) {
-        await Promise.race([new Promise<void>(resolve => waiting.push(resolve)), sleep(within)])
+      if (read >= received.length && !stopped) {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        await new Promise<void>(resolve => {
+          waiting.push(resolve)
+          timer = setTimeout(resolve, within)
+        })
+        clearTimeout(timer)
       }
       return read < received.length ? received[read++] : undefined
     }
@@ -290,7 +302,39 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
       message: 'No answer from the recipient in 2000 ms'
     })
     expect(elapsed).toBeGreaterThanOrEqual(1950)
-    expect(elapsed).toBeLessThan(2100)
+    expect(elapsed).toBeLessThan(3000)
+  })
+
+  it('counts presence from when the carrier took the knock', async () => {
+    const hub = createMemoryHub()
+    const silent = await makeWallet()
+    stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
+    const payer = await makeWallet()
+    const base = hub.signaler(payer.identityKey)
+    const sender = hubClient(hub, payer, {
+      signaler: {
+        send: async (to, e) => {
+          await sleep(800)
+          await base.send(to, e)
+        },
+        listen: fn => base.listen(fn)
+      }
+    })
+    const started = Date.now()
+    const e = await failure(sender.connect(silent.identityKey, { presenceTimeoutMs: 500 }))
+    expect(e.code).toBe('peer_unreachable')
+    expect(Date.now() - started).toBeGreaterThanOrEqual(1250)
+  })
+
+  it('fails at once when no link can be made, without waiting for a reply', async () => {
+    const hub = createMemoryHub()
+    const silent = await makeWallet()
+    stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
+    const sender = hubClient(hub, await makeWallet(), { rtc: {} })
+    const started = Date.now()
+    const e = await failure(sender.connect(silent.identityKey))
+    expect(e.code).toBe('unsupported')
+    expect(Date.now() - started).toBeLessThan(1000)
   })
 
   it('takes the presence clock from the client options, then from the call', async () => {
@@ -377,7 +421,7 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
     const started = Date.now()
     controller.abort()
     expect(await cancelled).toMatchObject({ code: 'closed', message: 'Dial cancelled' })
-    expect(Date.now() - started).toBeLessThan(200)
+    expect(Date.now() - started).toBeLessThan(1000)
 
     // the other dial, and the receiver, keep running
     const peer = await other

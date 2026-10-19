@@ -735,7 +735,9 @@ payer                                    payee (receiving)
 - The payer's sid is 16 random bytes as base64url. The knock goes out before any ICE is
   gathered, and the offer only once the payee rings; a reject (or an answer) that comes
   instead of the ring is acted on at once.
-- Presence: no ring, answer or reject within 2 s of the start is `peer_unreachable`. The first
+- Presence: no ring, answer or reject within 2 s of the carrier taking the knock is
+  `peer_unreachable` (counted from the post, so a slow carrier does not make a payee look
+  offline). The first
   reply stops that clock; the channel and handshake then have 6 s from it, else `timeout`. The
   whole dial is capped at 30 s (`connectMs`, or the call's `timeoutMs`): running out before a
   reply is `peer_unreachable`, after one `timeout`. A reject is `rejected` with its reason

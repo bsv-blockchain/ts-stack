@@ -7,7 +7,7 @@ import { WebRTPayError } from '../util/errors.js'
 
 /** How long one dial may take, in milliseconds. */
 export interface DialTimeouts {
-  /** From the start of the dial to the recipient's first reply (ring, answer or reject). */
+  /** From the knock being posted to the recipient's first reply (ring, answer or reject). */
   presenceMs: number
   /** From the first reply to an open, authenticated session. */
   dialMs: number
@@ -16,9 +16,10 @@ export interface DialTimeouts {
 }
 
 /**
- * The timers of one dial. Before the recipient replies, presence and the total budget run
- * and either ends the dial `peer_unreachable`; the first reply stops presence and starts the
- * dial budget, and from then on running out ends it `timeout`.
+ * The timers of one dial. The total budget runs from the start; presence runs from when the
+ * carrier has taken the knock, so a slow carrier does not make an online peer look offline.
+ * Before the recipient replies, either ends the dial `peer_unreachable`; the first reply stops
+ * presence and starts the dial budget, and from then on running out ends it `timeout`.
  */
 export class DialClock {
   private replied = false
@@ -31,9 +32,8 @@ export class DialClock {
     private readonly expire: (e: WebRTPayError) => void
   ) {}
 
-  /** Start the presence and total clocks. */
+  /** Start the total clock. */
   start(): void {
-    this.presence = setTimeout(() => this.expire(unreachable(this.t.presenceMs)), this.t.presenceMs)
     this.total = setTimeout(() => {
       this.expire(
         this.replied
@@ -41,6 +41,12 @@ export class DialClock {
           : unreachable(this.t.totalMs)
       )
     }, this.t.totalMs)
+  }
+
+  /** The knock is posted: start the presence clock, unless the recipient has replied already. */
+  posted(): void {
+    if (this.replied || this.presence !== undefined) return
+    this.presence = setTimeout(() => this.expire(unreachable(this.t.presenceMs)), this.t.presenceMs)
   }
 
   /** The recipient replied: stop presence and start the dial clock (once). */

@@ -21,9 +21,13 @@ describe('DialClock', () => {
     return { c, expired }
   }
 
-  it('reports peer_unreachable when presence runs out', () => {
+  it('reports peer_unreachable when presence, counted from the post, runs out', () => {
     const { c, expired } = clock()
     c.start()
+    jest.advanceTimersByTime(5000)
+    expect(expired).toEqual([])
+    c.posted()
+    c.posted()
     jest.advanceTimersByTime(1999)
     expect(expired).toEqual([])
     jest.advanceTimersByTime(1)
@@ -37,6 +41,7 @@ describe('DialClock', () => {
   it('times the dial from the first reply, once', () => {
     const { c, expired } = clock()
     c.start()
+    c.posted()
     jest.advanceTimersByTime(1500)
     c.heard()
     jest.advanceTimersByTime(1000)
@@ -51,6 +56,7 @@ describe('DialClock', () => {
   it('caps the whole dial: unreachable before a reply, timeout after one', () => {
     const before = clock(1000)
     before.c.start()
+    before.c.posted()
     jest.advanceTimersByTime(1000)
     expect(before.expired[0]).toMatchObject({
       code: 'peer_unreachable',
@@ -69,9 +75,20 @@ describe('DialClock', () => {
     after.c.stop()
   })
 
+  it('starts no presence clock after a reply that beat the post', () => {
+    const { c, expired } = clock()
+    c.start()
+    c.heard()
+    c.posted()
+    jest.advanceTimersByTime(5999)
+    expect(expired).toEqual([])
+    c.stop()
+  })
+
   it('stops every timer', () => {
     const { c, expired } = clock()
     c.start()
+    c.posted()
     c.heard()
     c.stop()
     jest.advanceTimersByTime(60000)

@@ -205,7 +205,10 @@ export interface DialOptions {
    * the recipient replied is `peer_unreachable`, after it `timeout`.
    */
   timeoutMs?: number
-  /** Wait for the recipient's first reply; defaults to the client's `presenceMs` (2 s). */
+  /**
+   * Wait for the recipient's first reply, from the carrier taking the knock; defaults to the
+   * client's `presenceMs` (2 s).
+   */
   presenceTimeoutMs?: number
   /**
    * Time from the recipient's first reply to an open, authenticated session; defaults to the
@@ -227,6 +230,10 @@ interface DialRun {
   failure: WebRTPayError | undefined
   /** The dial's link, once gathered. */
   link: PeerLink | undefined
+  /** End the dial now with `e` (does nothing once it has ended). */
+  fail(e: WebRTPayError): void
+  /** The carrier took the knock: presence starts. */
+  posted(): void
 }
 
 /** One dial waiting for replies, keyed by sid. */
@@ -391,8 +398,9 @@ export class DirectPayClient {
    * first, while the offer is gathered (for at most 1.5 s); a receiving peer replies `ring`
    * at once, and only then is the offer sent, its answer applied, the channel opened and the
    * handshake run pinned to `recipient`. A peer that is not there is known within
-   * `presenceTimeoutMs` (2 s); one that replied has `dialTimeoutMs` (6 s) from its reply to
-   * finish. 0.1.0 peers do not answer knocks, so they look offline.
+   * `presenceTimeoutMs` (2 s) of the carrier taking the knock; one that replied has
+   * `dialTimeoutMs` (6 s) from its reply to finish. 0.1.0 peers do not answer knocks, so they
+   * look offline.
    *
    * The payee then waits for the first message only for its `firstMessageTimeoutMs` (60 s
    * by default) before it closes the session: create the transaction right after this
@@ -445,7 +453,9 @@ export class DirectPayClient {
         timeouts,
         replies: new ReplyQueue(),
         failure: undefined,
-        link: undefined
+        link: undefined,
+        fail: noop,
+        posted: noop
       },
       o.signal
     )
@@ -473,6 +483,8 @@ export class DirectPayClient {
       }
       const onAbort = (): void => fail(cancelledError())
       const clock = new DialClock(d.timeouts, fail)
+      d.fail = fail
+      d.posted = () => clock.posted()
       this.dials.set(d.sid, {
         recipient: d.recipient,
         reply: p => {
@@ -785,10 +797,14 @@ export class DirectPayClient {
     const me = await this.getIdentityKey()
     throwIfFailed(d)
     const prepared = this.prepareDialLink(d)
-    prepared.catch(noop)
+    // A link that cannot be made (no WebRTC, say) ends the dial at once, reply or not.
+    prepared.catch((e: unknown) => {
+      if (e instanceof WebRTPayError) d.fail(e)
+    })
     const knock = await this.seal('knock', d.sid, me, d.recipient, { chain: this.chain })
     throwIfFailed(d)
     await d.signaler.send(d.recipient, knock)
+    d.posted()
     let p = await d.replies.next()
     if (p.kind === 'ring') {
       const { sdp } = await prepared

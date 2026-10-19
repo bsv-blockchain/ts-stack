@@ -19,7 +19,7 @@ MessageBox.
   1-a-second reject budget.
 - Split dial timeouts: `connect` takes `presenceTimeoutMs`, `dialTimeoutMs`, `timeoutMs` and
   `signal`, and the client takes `timeouts: { presenceMs, dialMs }`. No ring, answer or reject within
-  `presenceMs` (default 2000 ms) is `peer_unreachable`; once the payee has replied, the channel
+  `presenceMs` (default 2000 ms) of the carrier taking the knock is `peer_unreachable`; once the payee has replied, the channel
   and handshake have `dialMs` (default 6000 ms) from that reply, else `timeout`. `timeoutMs`
   (default `connectMs`, 30 s) still caps the whole dial.
 - Per-dial cancel: an `AbortSignal` passed as `signal` ends that dial with `closed`
@@ -37,6 +37,8 @@ MessageBox.
 
 ### Changed
 
+- A dial whose link cannot be made (no `RTCPeerConnection`, say) fails at once with that error,
+  as before, without waiting for the payee's reply.
 - **Breaking:** `MessageBoxSignaler.send` rejects `unavailable` instead of `peer_unreachable`
   when MessageBox cannot take a signal, so "could not reach the carrier" is distinct from
   "the payee did not answer". `connect` passes the signaler's send error through.
