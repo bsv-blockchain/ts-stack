@@ -955,6 +955,61 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   })
 
+  test('never releases without a deadline or reclaim, funds only the action, and cannot be aborted once released', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction({
+        ...protectedArgs(3600),
+        labels: ['p nosend expiry never'],
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'Small protected recipient output' }]
+      })
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      expect(target.noSendExpiryMode).toBe('never')
+      expect(target.noSendExpiryState).toBe('signed')
+      expect(target.noSendExpiryDeadline ?? undefined).toBeUndefined()
+      expect(target.noSendExpiryReclaimRawTx ?? undefined).toBeUndefined()
+      const need = protectedActionNeed(ctx, [], [{ satoshis: 1, lockingScriptLength: 1 }])
+      expect(need).toBeLessThan(reclaimFloorSatoshis(ctx))
+      expect((await anchorOf(ctx, created.txid!)).satoshis).toBe(need)
+
+      expect((await processNoSendExpiryLifecycle(ctx.active)).reclaimActivated).toBe(0)
+      await expect(ctx.wallet.abortAction({ reference: created.txid! })).rejects.toThrow('permanently sent')
+      const after = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      expect(after.noSendExpiryState).toBe('signed')
+      expect(after.status).toBe('nosend')
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('never signs through signAction, and an unreleased never action can still be cancelled', async () => {
+    const ctx = await createHarness()
+    try {
+      const pending = await ctx.wallet.createAction({
+        ...protectedArgs(3600, false),
+        labels: ['p nosend expiry never']
+      })
+      const reference = pending.signableTransaction!.reference
+      expect(verifyOne(await ctx.active.findTransactions({ partial: { reference } })).noSendExpiryState).toBe(
+        'unsigned'
+      )
+      const signed = await ctx.wallet.signAction({ reference, spends: {} })
+      expect(verifyOne(await ctx.active.findTransactions({ partial: { txid: signed.txid } })).noSendExpiryState).toBe(
+        'signed'
+      )
+
+      const unreleased = await ctx.wallet.createAction({
+        ...protectedArgs(3600, false),
+        labels: ['p nosend expiry never']
+      })
+      await expect(ctx.wallet.abortAction({ reference: unreleased.signableTransaction!.reference })).resolves.toEqual({
+        aborted: true
+      })
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
   test('timestamp expiry remains the exact absolute deadline after pre-funding', async () => {
     const ctx = await createHarness()
     try {

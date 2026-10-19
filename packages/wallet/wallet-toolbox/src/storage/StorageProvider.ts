@@ -800,6 +800,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         if (tx.noSendExpiryState != null && auth.isActive !== true) {
           throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
         }
+        if (tx.noSendExpiryState === 'signed' && tx.noSendExpiryMode === 'never') {
+          throw new WERR_INVALID_OPERATION('A released BRC-177 never action is permanently sent and cannot be aborted')
+        }
         if (tx.noSendExpiryState === 'signed') {
           // A released BRC-177 transaction must never be invalidated locally: the
           // recipient may be broadcasting it at this instant. Make it due and let

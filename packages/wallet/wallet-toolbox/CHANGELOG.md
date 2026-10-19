@@ -29,6 +29,13 @@ attention to changes that materially alter behavior or extend functionality.
   sending it to a relative URL, which a browser resolves against the page's
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
+- BRC-177 `p nosend expiry never` is supported. The anchor funds the protected
+  action without a reclaim allowance, no reclaim transaction is built or
+  armed, and the action has no deadline, so the monitor never reclaims it. An
+  unreleased `never` action can still be aborted; aborting a released one
+  fails because its payment is permanently sent. `Brc177NoSendExpiryMode` gains
+  `never`, `Brc177NoSendExpiry.value` is `null` for it, and the activation
+  result's `deadline` is `null`.
 
 ## wallet-toolbox 2.14.10
 
