@@ -86,6 +86,12 @@ export interface MessageBoxSignalerOptions {
   live?: boolean
 }
 
+/** What a live send attempt came to (see `MessageBoxSignaler.sendLive`). */
+type LiveOutcome = 'sent' | 'tried' | 'skipped'
+
+/** Longest wait for the live websocket (host lookup included) before sending over HTTP. */
+const LIVE_SEND_MS = 1500
+
 /** Where live listening stands: not started, starting, in the room, or left the room. */
 type LiveState = 'off' | 'starting' | 'on' | 'left'
 
@@ -165,10 +171,13 @@ export class MessageBoxSignaler implements Signaler {
   async send(to: PubKeyHex, e: SignalEnvelope): Promise<void> {
     const body = JSON.stringify({ v: e.v, sid: e.sid, ciphertext: e.ciphertext })
     const message = { recipient: to, messageBox: this.messageBox, body }
-    if (await this.sendLive(message)) return
+    const live = await this.sendLive(message)
+    if (live === 'sent') return
     try {
       await this.client.sendMessage(message)
     } catch (cause) {
+      // A live send that was slow, not lost: the server already holds the same message.
+      if (live === 'tried' && isDuplicate(cause)) return
       throw new WebRTPayError('unavailable', 'MessageBox could not deliver the signal', {
         cause
       })
@@ -198,21 +207,36 @@ export class MessageBoxSignaler implements Signaler {
   }
 
   /**
-   * Whether `sendLiveMessage` took the message; false when there is none, the recipient is on
-   * another host (or its host cannot be found), or it failed.
+   * Try the live websocket, for at most 1.5 s: `sent` when `sendLiveMessage` took the
+   * message, `tried` when it was called but failed or did not answer in time (it may still
+   * deliver), `skipped` when it was not called (no live send, or the recipient is on another
+   * host or its host could not be found in time).
    */
   private async sendLive(message: {
     recipient: string
     messageBox: string
     body: string
-  }): Promise<boolean> {
-    if (!this.live || this.client.sendLiveMessage === undefined) return false
+  }): Promise<LiveOutcome> {
+    const sendLiveMessage = this.client.sendLiveMessage
+    if (!this.live || sendLiveMessage === undefined) return 'skipped'
+    let called = false
+    const attempt = (async (): Promise<LiveOutcome> => {
+      if (!(await this.reachableLive(message.recipient))) return 'skipped'
+      called = true
+      await sendLiveMessage.call(this.client, message, this.host)
+      return 'sent'
+    })()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const late = new Promise<undefined>(resolve => {
+      timer = setTimeout(() => resolve(undefined), LIVE_SEND_MS)
+    })
     try {
-      if (!(await this.reachableLive(message.recipient))) return false
-      await this.client.sendLiveMessage(message, this.host)
-      return true
+      return (await Promise.race([attempt, late])) ?? (called ? 'tried' : 'skipped')
     } catch {
-      return false
+      return called ? 'tried' : 'skipped'
+    } finally {
+      clearTimeout(timer)
+      attempt.catch(noop)
     }
   }
 
@@ -422,6 +446,16 @@ function envelopeOf(body: unknown): SignalEnvelope | undefined {
 }
 
 function noop(): void {}
+
+/** Whether `e` is MessageBox refusing a message it already holds (`ERR_DUPLICATE_MESSAGE`). */
+function isDuplicate(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false
+  const { code, message } = e as { code?: unknown; message?: unknown }
+  return (
+    code === 'ERR_DUPLICATE_MESSAGE' ||
+    (typeof message === 'string' && message.includes('ERR_DUPLICATE_MESSAGE'))
+  )
+}
 
 function pollInterval(v: number | undefined, fallback: number, name: string): number {
   if (v === undefined) return fallback

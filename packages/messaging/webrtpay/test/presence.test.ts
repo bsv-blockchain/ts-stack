@@ -7,6 +7,8 @@ import { DirectPayClient } from '../src/client/DirectPayClient.js'
 import type { DirectPayClientOptions, ReceiveHandlers } from '../src/client/DirectPayClient.js'
 import { ReplayCache, openSignal, sealSignal } from '../src/signaling/envelope.js'
 import { createMemoryHub } from '../src/signaling/MemorySignaler.js'
+import { MessageBoxSignaler } from '../src/signaling/MessageBoxSignaler.js'
+import type { MessageBoxLike } from '../src/signaling/MessageBoxSignaler.js'
 import type { MemoryHub } from '../src/signaling/MemorySignaler.js'
 import type { SignalKind, SignalPlaintext } from '../src/signaling/types.js'
 import { randomBytes, toBase64Url } from '../src/util/bytes.js'
@@ -312,6 +314,34 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
     const e = await failure(sender.connect(silent.identityKey, { presenceTimeoutMs: 500 }))
     expect(e.code).toBe('peer_unreachable')
     expect(Date.now() - started).toBeGreaterThanOrEqual(1250)
+  })
+
+  it('reports offline within budget over MessageBox when the live send never answers', async () => {
+    const host = 'https://mb.example'
+    const payer = await makeWallet()
+    const silent = await makeWallet()
+    const http: unknown[] = []
+    const client: MessageBoxLike = {
+      sendMessage: a => {
+        http.push(a)
+        return Promise.resolve({ status: 'success' })
+      },
+      listMessages: () => Promise.resolve([]),
+      acknowledgeMessage: () => Promise.resolve(),
+      resolveHostForRecipient: () => Promise.resolve(host),
+      getIdentityKey: () => Promise.resolve(payer.identityKey),
+      sendLiveMessage: () => new Promise(() => undefined)
+    }
+    const signaler = new MessageBoxSignaler(client)
+    const sender = hubClient(createMemoryHub(), payer, { signaler })
+    const started = Date.now()
+    const e = await failure(sender.connect(silent.identityKey))
+    const elapsed = Date.now() - started
+    expect(e.code).toBe('peer_unreachable')
+    // 1.5 s for the live attempt, then the knock goes over HTTP, then 2 s of presence
+    expect(http).toHaveLength(1)
+    expect(elapsed).toBeGreaterThanOrEqual(3400)
+    expect(elapsed).toBeLessThan(5000)
   })
 
   it('fails at once when no link can be made, without waiting for a reply', async () => {

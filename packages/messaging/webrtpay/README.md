@@ -305,7 +305,9 @@ works too. A live websocket reaches only the host it is connected to, so the sig
 live only to a recipient whose host (`resolveHostForRecipient`, remembered for 5 minutes) is
 this client's: `host` when given, else this client's own advertised host. Everyone else, and
 every live send that fails, goes over HTTP, which resolves the recipient's own host, so payer
-and payee may use different servers. It receives signals live as they arrive; it also polls box `webrtpay_signals` every 2.5 s (1 s while dialing), as the
+and payee may use different servers. A live send gets 1.5 s (host lookup included) before the
+HTTP send, and an HTTP `ERR_DUPLICATE_MESSAGE` after it means the live one got there. It
+receives signals live as they arrive; it also polls box `webrtpay_signals` every 2.5 s (1 s while dialing), as the
 safety net and the only path for clients without the websocket, and acknowledges every message
 it reads, once per `messageId` whichever path brought it. When neither send path gets a signal
 there, `send` rejects `unavailable` (it was `peer_unreachable` in 0.1.0). Options:

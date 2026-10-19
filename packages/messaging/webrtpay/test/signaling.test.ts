@@ -794,6 +794,8 @@ class FakeClient implements MessageBoxLike {
 class LiveFakeClient extends FakeClient {
   liveSent: unknown[] = []
   liveSendFailure: Error | undefined
+  /** A live send that never answers (its message is still delivered). */
+  liveSendHangs = false
   liveListenFailure: Error | undefined
   liveGate: Promise<void> | undefined
   liveListens: Array<{ messageBox: string; overrideHost: string | undefined }> = []
@@ -834,6 +836,10 @@ class LiveFakeClient extends FakeClient {
     this.liveSent.push(a)
     this.liveSentHosts.push(overrideHost)
     if (this.liveSendFailure) throw this.liveSendFailure
+    if (this.liveSendHangs) {
+      this.liveServer.deposit(a.recipient, this.identity, a.body, a.messageBox)
+      return new Promise(() => undefined)
+    }
     const messageId = this.liveServer.deposit(a.recipient, this.identity, a.body, a.messageBox)
     this.liveServer.live
       .get(a.recipient)
@@ -1466,6 +1472,57 @@ describe('MessageBoxSignaler', () => {
     await new MessageBoxSignaler(c).send(BOB, ENV)
     expect(c.liveSent).toEqual([])
     expect(server.messages.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('sends over HTTP when the live send has not answered in 1.5 s', async () => {
+    const server = new FakeMessageBox()
+    const a = server.liveClient(ALICE)
+    a.liveSendHangs = true
+    let done = false
+    const sending = new MessageBoxSignaler(a).send(BOB, ENV).then(() => (done = true))
+    await jest.advanceTimersByTimeAsync(1499)
+    expect(done).toBe(false)
+    expect(a.sent).toEqual([])
+    await jest.advanceTimersByTimeAsync(1)
+    await sending
+    expect(a.sent).toHaveLength(1)
+  })
+
+  it('counts a duplicate refusal after a live attempt as delivered, but not without one', async () => {
+    const server = new FakeMessageBox()
+    const duplicate = new Error('Message Box send failed with HTTP 400 (ERR_DUPLICATE_MESSAGE).')
+    const a = server.liveClient(ALICE)
+    a.liveSendHangs = true
+    a.sendFailure = duplicate
+    const sending = new MessageBoxSignaler(a).send(BOB, ENV)
+    await jest.advanceTimersByTimeAsync(1500)
+    await expect(sending).resolves.toBeUndefined()
+
+    const coded = server.liveClient(ALICE)
+    coded.liveSendFailure = new Error('socket down')
+    coded.sendFailure = Object.assign(new Error('HTTP 400'), { code: 'ERR_DUPLICATE_MESSAGE' })
+    await expect(new MessageBoxSignaler(coded).send(BOB, ENV)).resolves.toBeUndefined()
+
+    // without a live attempt (the recipient is elsewhere) a duplicate is not assumed delivered
+    server.hosts.set(BOB, 'https://other.example')
+    const http = server.liveClient(ALICE)
+    http.sendFailure = duplicate
+    await expect(new MessageBoxSignaler(http).send(BOB, ENV)).rejects.toMatchObject({
+      code: 'unavailable'
+    })
+    const plain = server.client(ALICE)
+    plain.sendFailure = duplicate
+    await expect(new MessageBoxSignaler(plain).send(BOB, ENV)).rejects.toMatchObject({
+      code: 'unavailable'
+    })
+    // nor is any other refusal after one
+    const other = server.liveClient(ALICE)
+    other.liveSendFailure = new Error('socket down')
+    other.sendFailure = Object.assign(new Error('HTTP 500'), { code: 'ERR_INTERNAL' })
+    server.hosts.delete(BOB)
+    await expect(new MessageBoxSignaler(other).send(BOB, ENV)).rejects.toMatchObject({
+      code: 'unavailable'
+    })
   })
 
   it('falls back to http send when live send throws', async () => {
