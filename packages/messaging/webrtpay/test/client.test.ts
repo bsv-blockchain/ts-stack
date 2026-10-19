@@ -119,14 +119,6 @@ async function eventually<T>(fn: () => Promise<T>, attempts = 20): Promise<T> {
   }
 }
 
-/**
- * Dial again right after a session with the same payee: until the payee has handled the
- * last session's bye it stays silent to this sender, so retry with a short presence clock.
- */
-function redial(sender: DirectPayClient, payeeKey: string): Promise<AuthenticatedPeer> {
-  return eventually(() => sender.connect(payeeKey, { presenceTimeoutMs: 300 }))
-}
-
 /** An identity that listens on `hub` and never answers; resolves `heard` on the first signal. */
 async function silentListener(hub: MemoryHub): Promise<{
   identityKey: string
@@ -229,6 +221,25 @@ describe('InboundLimiter', () => {
     expect(l.tryAdmit(A, T0)).toBe(false)
     l.release(A)
     expect(l.tryAdmit(A, T0)).toBe(true)
+  })
+
+  it("lets a sender's new offer supersede its own session, counting its slot as free", () => {
+    const l = new InboundLimiter({ ...DEFAULT_INBOUND_LIMITS, maxConcurrent: 1 })
+    expect(l.tryAdmit(A, T0)).toBe(true)
+    expect(l.refusal(A, T0, { superseding: true })).toBeUndefined()
+    // another sender cannot use it
+    expect(l.refusal(B, T0, { superseding: true })).toBe('busy')
+    // nor does it lift A's offer rate
+    l.release(A)
+    for (let i = 1; i < 3; i++) {
+      expect(l.tryAdmit(A, T0 + i)).toBe(true)
+      if (i < 2) l.release(A)
+    }
+    expect(l.refusal(A, T0 + 3, { superseding: true })).toBe('sender')
+    // a busy payee stays busy for a superseding sender beyond its own slot
+    const two = new InboundLimiter({ ...DEFAULT_INBOUND_LIMITS, maxConcurrent: 1 })
+    expect(two.tryAdmit(B, T0)).toBe(true)
+    expect(two.refusal(A, T0, { superseding: true })).toBe('busy')
   })
 
   it("checks a sender's own limits before the global ones", () => {
@@ -607,7 +618,7 @@ describe('DirectPayClient remote payments (MemoryHub, loopback WebRTC)', () => {
     const { token, txid } = await makeToken(payer, payee.identityKey, 2000)
 
     const first = await sender.sendPayment(await sender.connect(payee.identityKey), token)
-    const second = await sender.sendPayment(await redial(sender, payee.identityKey), token)
+    const second = await sender.sendPayment(await sender.connect(payee.identityKey), token)
 
     expect(first).toMatchObject({ status: 'accepted', txid })
     expect(second).toMatchObject({ status: 'accepted', txid })
@@ -649,7 +660,7 @@ describe('DirectPayClient remote payments (MemoryHub, loopback WebRTC)', () => {
     })
     const sender = hubClient(hub, payer)
     const pay = async (token: PaymentToken) =>
-      sender.sendPayment(await redial(sender, payee.identityKey), token)
+      sender.sendPayment(await sender.connect(payee.identityKey), token)
 
     // decodePayment refuses it before the handler sees it (sendPayment would refuse to send
     // it at all, so it goes out by hand)
@@ -1544,32 +1555,28 @@ describe('DirectPayClient over a relay (RelaySignaler, loopback WebRTC)', () => 
 // ---------------------------------------------------------------- audit hardening
 
 describe('DirectPayClient inbound limits (MemoryHub, loopback WebRTC)', () => {
-  it('gives a sender one session at a time; its extra offers get no reply and no budget', async () => {
-    const acceptOffer = jest.spyOn(PeerLink, 'acceptOffer')
-    try {
-      const hub = createMemoryHub()
-      const payee = await makeWallet()
-      await hubClient(hub, payee, { limits: { maxConcurrent: 1 } }).startReceiving(accepting(payee))
-      const a = hubClient(hub, await makeWallet())
-      const b = hubClient(hub, await makeWallet())
+  it('gives a sender one session at a time: its new dial supersedes the open one', async () => {
+    const hub = createMemoryHub()
+    const payee = await makeWallet()
+    await hubClient(hub, payee, { limits: { maxConcurrent: 1 } }).startReceiving(accepting(payee))
+    const a = hubClient(hub, await makeWallet())
+    const b = hubClient(hub, await makeWallet())
 
-      const first = await a.connect(payee.identityKey)
-      // A already has the only session: its second offer is dropped unanswered...
-      expect((await failure(a.connect(payee.identityKey, { timeoutMs: 1000 }))).code).toBe(
-        'peer_unreachable'
-      )
-      // ...without spending the reject budget, so B is still told the payee is busy
-      const busy = await failure(b.connect(payee.identityKey, { timeoutMs: 1000 }))
-      expect(busy.code).toBe('rejected')
-      expect(busy.message).toContain('busy')
-      expect(acceptOffer).toHaveBeenCalledTimes(1)
-
-      first.close()
-      await sleep(200)
-      expect((await a.connect(payee.identityKey)).peerIdentityKey).toBe(payee.identityKey)
-    } finally {
-      acceptOffer.mockRestore()
-    }
+    const first = await a.connect(payee.identityKey)
+    const firstClosed = closeOf(first)
+    // A holds the only slot, so B is told the payee is busy...
+    const busy = await failure(b.connect(payee.identityKey, { timeoutMs: 1000 }))
+    expect(busy.code).toBe('rejected')
+    expect(busy.message).toContain('busy')
+    // ...while A's new dial ends A's old session and takes its slot
+    const second = await a.connect(payee.identityKey)
+    expect(second.peerIdentityKey).toBe(payee.identityKey)
+    expect((await firstClosed)?.code).toBe('closed')
+    expect(second.isOpen).toBe(true)
+    // the slot is still counted once: B is still busy
+    await sleep(1100)
+    const stillBusy = await failure(b.connect(payee.identityKey, { timeoutMs: 1000 }))
+    expect(stillBusy.reason).toBe('busy')
   })
 
   it('answers refusals at most once a second and drops the rest unanswered', async () => {

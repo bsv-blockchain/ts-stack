@@ -768,13 +768,17 @@ clients that have one refuse it. `DirectPayClient` reports both refusals as
 Before anything is decrypted, on the sender the carrier reports:
 
 - a reply to a dial in progress from that dial's recipient is always opened;
-- anything else is dropped unanswered when the sender is over its inbound limits (below), when
+- anything else is dropped unanswered when the sender is over its offer rate (below), when
   its own budget is spent (10 signals, refilled at 10 a minute) or when the overall budget is
   spent (40 signals, refilled at 20 a second).
 
-An offer is admitted when its sender has **no session open** and had fewer than 3 offers
-admitted in the last 60 s, and then when fewer than 3 inbound sessions are open and fewer than
-10 offers were admitted in the last 60 s. An admitted offer holds a session slot until its
+An offer is admitted when its sender had fewer than 3 offers admitted in the last 60 s, and
+then when fewer than 3 inbound sessions are open (not counting the sender's own) and fewer than
+10 offers were admitted in the last 60 s. A sender has **one session at a time**: an admitted
+offer from a sender (as the carrier vouches) whose previous session is still open supersedes
+it. The old session is closed and its slot released before the new offer takes one; if it is
+still deciding a payment (payment received, ack not yet sent), the new offer first waits up to
+1 s for that session to end (its ack and the payer's `bye`). No other sender can end a session. An admitted offer holds a session slot until its
 session ends or fails to connect. A refused offer counts against nothing and gathers no ICE (no
 address is disclosed): one over its sender's limits gets no reply; one from another network
 (§7.5) gets a `reject` `wrong_network`, even when the payee is busy; one refused because the
@@ -786,8 +790,8 @@ own limits gets no reply, another network `reject` `wrong_network`, a busy payee
 `busy`, otherwise a `ring`. Answering a knock takes no session slot, gathers no ICE and counts
 against no offer limit; rings have their own budget of 20 a second (burst 20), so refusals
 cannot silence back-to-back dials. The knock and the offer each count as a signal against the
-intake budgets above. While a sender still has a session open (its last payment's `bye` not yet
-handled), its next knock is dropped unanswered and that dial ends `peer_unreachable`.
+intake budgets above. A sender's own open session does not stop a ring: paying the same payee
+twice in a row rings, and the second offer supersedes the first session.
 
 Budgets and windows run on a monotonic clock (`performance.now()`), so a wall clock set back
 cannot hold them shut.

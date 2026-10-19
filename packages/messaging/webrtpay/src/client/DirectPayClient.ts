@@ -183,6 +183,10 @@ const REJECTS_PER_SECOND = 1
  * refusal now and then cannot silence back-to-back dials.
  */
 const RINGS_PER_SECOND = 20
+/** Longest wait for a payment an old session is still acknowledging before superseding it. */
+const SUPERSEDE_WAIT_MS = 1000
+/** Limiter check that lets a sender's new offer replace its own open session. */
+const SUPERSEDING = { superseding: true } as const
 /** Signals that could not be opened are reported to `onError` at most this often. */
 const UNOPENED_REPORT_MS = 10000
 /** Longest reject reason from a peer passed on in an error message. */
@@ -234,6 +238,18 @@ interface DialRun {
   fail(e: WebRTPayError): void
   /** The carrier took the knock: presence starts. */
   posted(): void
+}
+
+/** An admitted inbound offer's session, as a later offer from the same sender sees it. */
+interface InboundSession {
+  /** Its link, once created. */
+  link: PeerLink | undefined
+  /** Payments it is handling whose ack has not been sent yet. */
+  paying: number
+  /** Settles once the session has ended and its slot is back. */
+  ended: Promise<void>
+  /** Give its slot back (once). */
+  release(): void
 }
 
 /** One dial waiting for replies, keyed by sid. */
@@ -296,6 +312,8 @@ export class DirectPayClient {
   private readonly deciding = new Map<string, Promise<PaymentDecision>>()
   private readonly dials = new Map<string, Dial>()
   private readonly links = new Set<PeerLink>()
+  /** Inbound sessions holding a slot, by the sender the carrier vouched for. */
+  private readonly inbound = new Map<PubKeyHex, InboundSession>()
   private identity: Promise<PubKeyHex> | undefined
   private handlers: ReceiveHandlers | undefined
   private dialCount = 0
@@ -354,9 +372,10 @@ export class DirectPayClient {
    * Answer offers from peers through the signaler, within the inbound limits, and serve
    * each session with `h`. Calling it again replaces the handlers for new sessions.
    *
-   * Offers beyond the limits get no ICE gathering (no address disclosed). One from a sender
-   * over its own limits (it has a session open, or has used its offers for the minute) gets
-   * no reply; with the client's `chain` set, one that names another network or none gets a
+   * Offers beyond the limits get no ICE gathering (no address disclosed). A sender has one
+   * session at a time: its new offer supersedes its open session (closed after up to 1 s if it
+   * is still acknowledging a payment). One from a sender that has used its offers for the
+   * minute gets no reply; with the client's `chain` set, one that names another network or none gets a
    * sealed `reject` (`wrong_network`); one refused because the payee is busy gets a sealed
    * `reject` (`busy`). Refusals are answered at most once a second and the rest go
    * unanswered. A session must open and authenticate within `connectMs` of its answer being
@@ -862,7 +881,8 @@ export class DirectPayClient {
    */
   private admitSignal(from: PubKeyHex, e: SignalEnvelope): boolean {
     if (this.dials.get(e.sid)?.recipient === from) return true
-    if (this.limiter.refusal(from) === 'sender') return false
+    // A sender with a session open may supersede it, so only its offer rate silences it here.
+    if (this.limiter.refusal(from, undefined, SUPERSEDING) === 'sender') return false
     // Spent overall: drop before keeping any per-sender state for it.
     if (!this.intake.has()) return false
     return this.senderIntake.take(from) && this.intake.take()
@@ -906,30 +926,17 @@ export class DirectPayClient {
     const handlers = this.handlers
     if (handlers === undefined) return this.refuse(p, me, 'not_receiving')
     if (p.sdp === undefined) return
+    const entry = await this.admitOffer(p, me)
+    if (entry === undefined) return
     // The slot is the sender the carrier vouched for; the handshake runs without a pin.
     const sender = p.from
-    const refusal = this.limiter.refusal(sender)
-    // A sender over its own limits gets no answer, so it cannot spend the reject budget.
-    if (refusal === 'sender') return
-    // Bound to a network: an offer from another one (or none, fail closed) holds no slot.
-    if (this.chain !== undefined && p.chain !== this.chain) {
-      return this.refuse(p, me, 'wrong_network')
-    }
-    if (refusal === 'busy' || !this.limiter.tryAdmit(sender)) return this.refuse(p, me, 'busy')
-    let released = false
-    const release = (): void => {
-      if (released) return
-      released = true
-      this.limiter.release(sender)
-    }
-    let link: PeerLink | undefined
     try {
       const accepted = await PeerLink.acceptOffer(
         p.sdp,
         await this.linkOptions(DEFAULTS.dialGatherTimeoutMs)
       )
-      link = accepted.link
-      this.adopt(link)
+      entry.link = accepted.link
+      this.adopt(accepted.link)
       // The answer must go out within the connect budget; carriers like MessageBox can take
       // seconds, so open and handshake get a budget of their own once it has.
       const sent = withDeadline(
@@ -941,7 +948,7 @@ export class DirectPayClient {
       )
       sent.catch(noop)
       // Listen on the link before the answer goes out, so the peer's hello is not missed.
-      const session = authenticate(link, {
+      const session = authenticate(accepted.link, {
         wallet: this.wallet,
         originator: this.originator,
         timeoutMs: this.connectMs,
@@ -949,15 +956,70 @@ export class DirectPayClient {
         startAfter: sent
       })
       session.catch(noop)
-      this.serve(await session, handlers, release, {
+      this.serve(await session, handlers, entry.release, {
         firstMessageMs: this.limits.firstMessageTimeoutMs,
-        lifetimeMs: this.limits.maxSessionMs
+        lifetimeMs: this.limits.maxSessionMs,
+        inbound: entry
       })
     } catch (e) {
-      link?.close(asError(e))
-      release()
+      entry.link?.close(asError(e))
+      entry.release()
       this.report(handlers, e)
     }
+  }
+
+  /**
+   * Admit an offer and take its session slot, or refuse it (a sealed reject, or nothing for
+   * a sender over its own limits). An offer from a sender whose previous session is still
+   * open supersedes that session: the old one is ended and its slot released first, after
+   * waiting up to 1 s for a payment it is still acknowledging.
+   */
+  private async admitOffer(p: SignalPlaintext, me: PubKeyHex): Promise<InboundSession | undefined> {
+    const sender = p.from
+    const refusal = this.limiter.refusal(sender, undefined, SUPERSEDING)
+    // A sender over its own limits gets no answer, so it cannot spend the reject budget.
+    if (refusal === 'sender') return undefined
+    // Bound to a network: an offer from another one (or none, fail closed) holds no slot.
+    if (this.chain !== undefined && p.chain !== this.chain) {
+      await this.refuse(p, me, 'wrong_network')
+      return undefined
+    }
+    if (refusal !== 'busy') await this.supersede(sender)
+    if (refusal === 'busy' || !this.limiter.tryAdmit(sender)) {
+      await this.refuse(p, me, 'busy')
+      return undefined
+    }
+    let ended!: () => void
+    const entry: InboundSession = {
+      link: undefined,
+      paying: 0,
+      ended: new Promise<void>(resolve => (ended = resolve)),
+      release: noop
+    }
+    let released = false
+    entry.release = () => {
+      if (released) return
+      released = true
+      this.limiter.release(sender)
+      if (this.inbound.get(sender) === entry) this.inbound.delete(sender)
+      ended()
+    }
+    this.inbound.set(sender, entry)
+    return entry
+  }
+
+  /**
+   * End `sender`'s open inbound session, if any, for a new one from the same sender. One
+   * still deciding a payment gets up to 1 s to ack it and hear the payer's bye.
+   */
+  private async supersede(sender: PubKeyHex): Promise<void> {
+    const old = this.inbound.get(sender)
+    if (old === undefined) return
+    if (old.paying > 0) {
+      await withDeadline(old.ended, SUPERSEDE_WAIT_MS, 'Payment still in progress').catch(noop)
+    }
+    old.link?.close(new WebRTPayError('closed', 'Superseded by a new session from the same peer'))
+    old.release()
   }
 
   /**
@@ -968,7 +1030,8 @@ export class DirectPayClient {
    */
   private async answerKnock(p: SignalPlaintext, me: PubKeyHex): Promise<void> {
     if (this.handlers === undefined) return this.refuse(p, me, 'not_receiving')
-    const refusal = this.limiter.refusal(p.from)
+    // A sender's own open session does not stop it ringing: its offer will supersede it.
+    const refusal = this.limiter.refusal(p.from, undefined, SUPERSEDING)
     if (refusal === 'sender') return
     if (this.chain !== undefined && p.chain !== this.chain) {
       return this.refuse(p, me, 'wrong_network')
@@ -1012,7 +1075,7 @@ export class DirectPayClient {
     peer: AuthenticatedPeer,
     h: ReceiveHandlers,
     release: () => void,
-    o: { firstMessageMs?: number; lifetimeMs?: number } = {}
+    o: { firstMessageMs?: number; lifetimeMs?: number; inbound?: InboundSession } = {}
   ): void {
     const idleMs = this.limits.idleTimeoutMs
     let ended = false
@@ -1054,11 +1117,13 @@ export class DirectPayClient {
         peer.close(new WebRTPayError('rate_limited', 'Peer sent too many messages at once'))
         return
       }
+      const handled = startPayment(o.inbound, m)
       queue = queue
         .then(() => this.handleMessage(peer, h, m))
         .catch(e => this.report(h, e))
         .then(() => {
           pending--
+          handled()
           touch()
         })
     })
@@ -1259,6 +1324,18 @@ export class DirectPayClient {
 }
 
 function noop(): void {}
+
+/**
+ * Count a payment message as in progress on `s` until the returned function is called (its
+ * ack has been sent), so a new offer from the same peer waits briefly before superseding it.
+ */
+function startPayment(s: InboundSession | undefined, m: WireMessage): () => void {
+  if (s === undefined || m.t !== 'payment') return noop
+  s.paying++
+  return () => {
+    s.paying--
+  }
+}
 
 /** Kinds a peer sends unprompted: a dial's knock and offer. */
 function isInbound(kind: SignalKind): boolean {

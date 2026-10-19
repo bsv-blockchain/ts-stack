@@ -124,8 +124,8 @@ verify fails with `WERR_INVALID_PARAMETER`, say) do not. A handler that throws m
 `txid`): it keeps its token and delivers it again later, directly or through MessageBox.
 `acceptDirectPayment` reports a payment the wallet took as `accepted` even when
 `seen.add` fails afterwards (`onSeenError` hears about it). Receiving answers offers
-automatically within the inbound limits (3 sessions, 1 per sender, 10 offers a minute, 3 per
-sender); see [Security and privacy](#security-and-privacy) before turning it on for users.
+automatically within the inbound limits (3 sessions, 1 per sender, a sender's new dial
+replacing its open session, 10 offers a minute, 3 per sender); see [Security and privacy](#security-and-privacy) before turning it on for users.
 
 ### Pay (payer)
 
@@ -747,7 +747,7 @@ Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 892 at 0.2.0; `pnpm test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 896 at 0.2.0; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input

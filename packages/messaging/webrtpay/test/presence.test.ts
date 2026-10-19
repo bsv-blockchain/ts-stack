@@ -65,18 +65,6 @@ function newSid(): string {
   return toBase64Url(randomBytes(16))
 }
 
-/** Retry `fn` every 100 ms until it resolves, up to 20 tries. */
-async function eventually<T>(fn: () => Promise<T>): Promise<T> {
-  for (let i = 1; ; i++) {
-    try {
-      return await fn()
-    } catch (e) {
-      if (i >= 20) throw e
-      await sleep(100)
-    }
-  }
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -427,9 +415,7 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
     const peer = await other
     expect(peer.peerIdentityKey).toBe(payee.identityKey)
     peer.close()
-    const again = await eventually(() =>
-      sender.connect(payee.identityKey, { presenceTimeoutMs: 300 })
-    )
+    const again = await sender.connect(payee.identityKey)
     expect(again.peerIdentityKey).toBe(payee.identityKey)
 
     // a signal that has already aborted refuses at once
@@ -465,6 +451,69 @@ describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => 
     } finally {
       spy.mockRestore()
     }
+  })
+
+  it('pays the same payee twice in a row with default presence', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer] = await Promise.all([makeWallet(), makeWallet()])
+    await hubClient(hub, payee).startReceiving(accepting)
+    const sender = hubClient(hub, payer)
+    for (const amount of [1000, 2000]) {
+      const { token } = await makeToken(payer, payee.identityKey, amount)
+      const peer = await sender.connect(payee.identityKey)
+      expect((await sender.sendPayment(peer, token)).status).toBe('accepted')
+    }
+  })
+
+  it('lets a payment in progress be acknowledged before a new dial supersedes it', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer] = await Promise.all([makeWallet(), makeWallet()])
+    let release!: () => void
+    const held = new Promise<void>(resolve => (release = resolve))
+    let deciding!: () => void
+    const decidingNow = new Promise<void>(resolve => (deciding = resolve))
+    let calls = 0
+    await hubClient(hub, payee).startReceiving({
+      onPayment: async () => {
+        if (++calls === 1) {
+          deciding()
+          await held
+        }
+        return 'accepted'
+      }
+    })
+    const sender = hubClient(hub, payer)
+    const { token } = await makeToken(payer, payee.identityKey, 1000)
+    const first = sender.sendPayment(await sender.connect(payee.identityKey), token)
+    await decidingNow
+    // a second dial arrives while the first payment is still being decided
+    const second = sender.connect(payee.identityKey)
+    await sleep(300)
+    release()
+    expect((await first).status).toBe('accepted')
+    expect((await second).peerIdentityKey).toBe(payee.identityKey)
+  })
+
+  it('supersedes a stuck payment after waiting 1 s for its ack', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer] = await Promise.all([makeWallet(), makeWallet()])
+    let deciding!: () => void
+    const decidingNow = new Promise<void>(resolve => (deciding = resolve))
+    await hubClient(hub, payee).startReceiving({
+      onPayment: () => {
+        deciding()
+        return new Promise(() => undefined)
+      }
+    })
+    const sender = hubClient(hub, payer)
+    const { token } = await makeToken(payer, payee.identityKey, 1000)
+    const first = failure(sender.sendPayment(await sender.connect(payee.identityKey), token))
+    await decidingNow
+    const started = Date.now()
+    const second = await sender.connect(payee.identityKey)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900)
+    expect(second.peerIdentityKey).toBe(payee.identityKey)
+    expect((await first).code).toBe('closed')
   })
 
   it('refuses invalid dial timeouts', async () => {
