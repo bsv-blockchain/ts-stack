@@ -1,6 +1,6 @@
 {
   "name": "@bsv/webrtpay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Direct wallet-to-wallet BSV payments over WebRTC data channels, authenticated with BRC-100 identity keys",
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",

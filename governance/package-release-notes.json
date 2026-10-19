@@ -231,8 +231,8 @@
       "name": "@bsv/webrtpay",
       "publishedVersion": "0.0.0",
       "releaseType": "minor",
-      "summary": "First release: direct wallet-to-wallet BSV payments over WebRTC data channels. Both peers prove their BRC-100 identity keys bound to the DTLS session, and the payer hands over the same BRC-29 PaymentToken that PeerPay sends through MessageBox. Signaling runs through face-to-face offer and answer codes, MessageBox, or a relay, and the Node-only ./server subpath provides that relay, with TURN credentials from a coturn shared secret or Cloudflare's managed TURN, and the webrtpay-relay CLI.",
-      "migration": "No consumer migration required; first release."
+      "summary": "First release: direct wallet-to-wallet BSV payments over WebRTC data channels. Both peers prove their BRC-100 identity keys bound to the DTLS session, and the payer hands over the same BRC-29 PaymentToken that PeerPay sends through MessageBox. Signaling runs through face-to-face offer and answer codes, MessageBox, or a relay, and the Node-only ./server subpath provides that relay, with TURN credentials from a coturn shared secret or Cloudflare's managed TURN, and the webrtpay-relay CLI. Dialing by identity key knocks first: a receiving payee rings back before any ICE is gathered, so an offline payee is known within 2 s and an online one has 6 s from its reply to connect, and each dial can be cancelled with an AbortSignal. The MessageBox signaler sends and receives over the live websocket when the client has it, with polling kept as the fallback.",
+      "migration": "No consumer migration required for npm consumers; first published release. Builds of the unpublished 0.1.0 source must expect MessageBoxSignaler.send failures as unavailable instead of peer_unreachable, and 0.1.0 peers do not answer the new knock, so dials to them end peer_unreachable."
     },
     {
       "name": "create-bsv-app",

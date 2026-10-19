@@ -3,7 +3,7 @@ id: pkg-webrtpay
 title: '@bsv/webrtpay'
 kind: package
 domain: messaging
-version: '0.1.0'
+version: '0.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-10-18'
 last_verified: '2026-10-18'
@@ -25,7 +25,7 @@ can read it. Both sides prove their identity key bound to the DTLS session, so w
 the signaling cannot read, change or redirect a payment. The payer connects before it creates
 the transaction, so an unreachable payee costs nothing.
 
-The 0.1.0 source candidate is experimental and declares SDK peer `^2.8.6 || ^3.0.0`. The
+The 0.2.0 source candidate is experimental and declares SDK peer `^2.8.6 || ^3.0.0`. The
 byte-level protocol is specified in the package's
 [docs/protocol.md](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/messaging/webrtpay/docs/protocol.md).
 
@@ -52,8 +52,9 @@ const client = new DirectPayClient({
   chain: 'main'
 })
 
-// Payer: dial and authenticate first, then build, broadcast and deliver the payment.
-const peer = await client.connect(payeeIdentityKey)
+// Payer: dial and authenticate first, then build, broadcast and deliver the payment. An
+// offline payee fails peer_unreachable within 2 s; `signal` cancels just this dial.
+const peer = await client.connect(payeeIdentityKey, { signal: cancel.signal })
 const ack = await client.sendPayment(peer, token) // ack.status: 'accepted' | 'received' | 'rejected'
 ```
 
@@ -67,10 +68,14 @@ only while the payee is still connected, and deliver a token again after a lost 
 
 - `DirectPayClient`: dial, authenticate and pay a payee by identity key, receive payments within
   inbound session and rate limits, and refuse offers from another network before anything is
-  spent
+  spent. A dial knocks first and the payee rings back before any ICE is gathered: an offline
+  payee is known within `presenceTimeoutMs` (2 s), an online one has `dialTimeoutMs` (6 s) from
+  its reply to connect, and an `AbortSignal` cancels one dial
 - face-to-face code exchange: `createOfferCode` and `answerOfferCode` produce compact
   `webrtpay1:` offer and answer codes for QR display, with no server involved
-- signalers: `MessageBoxSignaler` over an existing MessageBox, `RelaySignaler` over the package's
+- signalers: `MessageBoxSignaler` over an existing MessageBox (live websocket when the client
+  has one, polling as the fallback; a signal MessageBox cannot take fails `unavailable`),
+  `RelaySignaler` over the package's
   relay (which can also issue TURN credentials), and `createMemoryHub` for tests and demos
 - `PeerLink` and `authenticate`: the data channel with bounded framing, and the handshake that
   binds both identity keys to the DTLS fingerprints
@@ -95,7 +100,7 @@ only while the payee is still connected, and deliver a token again after a lost 
 - **Funds safety does not depend on the channel.** The payee accepts a payment only if the
   stated output pays its own BRC-29-derived key for the authenticated payer with exactly the
   stated amount.
-- **Encrypted signaling.** Offers, answers and rejects are BRC-2 encrypted to the recipient and
+- **Encrypted signaling.** Knocks, rings, offers, answers and rejects are BRC-2 encrypted to the recipient and
   accepted once per session id; a carrier sees only ciphertext, but can drop signals.
 - **Hostile input.** Codes, SDPs, frames, envelopes and messages are parsed with fixed size,
   depth and token bounds; a violation closes the session with an error code. Property tests

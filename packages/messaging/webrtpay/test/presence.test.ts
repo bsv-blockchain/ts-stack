@@ -203,6 +203,17 @@ describe('DirectPayClient answers knocks (MemoryHub)', () => {
     expect(await hand.next()).toMatchObject({ kind: 'reject', reason: 'wrong_network' })
   })
 
+  it('still answers a bare offer (a 0.1.0 payer), and refuses one from another network', async () => {
+    const hub = createMemoryHub()
+    const [payee, dialer] = await Promise.all([makeWallet(), makeWallet()])
+    await hubClient(hub, payee, { chain: 'main' }).startReceiving(accepting)
+    const hand = await handSignaler(hub, dialer)
+    await hand.send('offer', payee.identityKey, newSid(), { sdp: await offerSdp(), chain: 'test' })
+    expect(await hand.next()).toMatchObject({ kind: 'reject', reason: 'wrong_network' })
+    await hand.send('offer', payee.identityKey, newSid(), { sdp: await offerSdp(), chain: 'main' })
+    expect(await hand.next(5000)).toMatchObject({ kind: 'answer', chain: 'main' })
+  })
+
   it('replies busy to a knock while every session slot is taken', async () => {
     const hub = createMemoryHub()
     const [payee, holder, dialer] = await Promise.all([makeWallet(), makeWallet(), makeWallet()])
