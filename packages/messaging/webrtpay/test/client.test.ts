@@ -119,6 +119,14 @@ async function eventually<T>(fn: () => Promise<T>, attempts = 20): Promise<T> {
   }
 }
 
+/**
+ * Dial again right after a session with the same payee: until the payee has handled the
+ * last session's bye it stays silent to this sender, so retry with a short presence clock.
+ */
+function redial(sender: DirectPayClient, payeeKey: string): Promise<AuthenticatedPeer> {
+  return eventually(() => sender.connect(payeeKey, { presenceTimeoutMs: 300 }))
+}
+
 /** An identity that listens on `hub` and never answers; resolves `heard` on the first signal. */
 async function silentListener(hub: MemoryHub): Promise<{
   identityKey: string
@@ -444,14 +452,15 @@ describe('DirectPayClient remote payments (MemoryHub, loopback WebRTC)', () => {
     expect((await failure(sender.connect(key()))).code).toBe('peer_unreachable')
     expect(Date.now() - started).toBeLessThan(3000)
 
-    // the carrier takes the offer but nobody answers: the budget (connectMs 3000) runs out
+    // the carrier takes the knock but nobody answers: presence (2 s) runs out
     const silent = await silentListener(hub)
     started = Date.now()
     const e = await failure(sender.connect(silent.identityKey))
     const elapsed = Date.now() - started
     expect(e.code).toBe('peer_unreachable')
-    expect(elapsed).toBeGreaterThanOrEqual(2900)
-    expect(elapsed).toBeLessThan(4500)
+    expect(e.message).toBe('No answer from the recipient in 2000 ms')
+    expect(elapsed).toBeGreaterThanOrEqual(1900)
+    expect(elapsed).toBeLessThan(3000)
     await silent.stop()
   })
 
@@ -598,7 +607,7 @@ describe('DirectPayClient remote payments (MemoryHub, loopback WebRTC)', () => {
     const { token, txid } = await makeToken(payer, payee.identityKey, 2000)
 
     const first = await sender.sendPayment(await sender.connect(payee.identityKey), token)
-    const second = await sender.sendPayment(await sender.connect(payee.identityKey), token)
+    const second = await sender.sendPayment(await redial(sender, payee.identityKey), token)
 
     expect(first).toMatchObject({ status: 'accepted', txid })
     expect(second).toMatchObject({ status: 'accepted', txid })
@@ -640,7 +649,7 @@ describe('DirectPayClient remote payments (MemoryHub, loopback WebRTC)', () => {
     })
     const sender = hubClient(hub, payer)
     const pay = async (token: PaymentToken) =>
-      sender.sendPayment(await sender.connect(payee.identityKey), token)
+      sender.sendPayment(await redial(sender, payee.identityKey), token)
 
     // decodePayment refuses it before the handler sees it (sendPayment would refuse to send
     // it at all, so it goes out by hand)
@@ -1110,6 +1119,20 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
             replay: new ReplayCache()
           })
           offers.push(p)
+          if (p.kind === 'knock') {
+            const ring = await sealSignal(payee.wallet, {
+              v: 1,
+              kind: 'ring',
+              sid: p.sid,
+              from: payee.identityKey,
+              to: from,
+              ts: Date.now(),
+              purpose: 'payment',
+              chain: 'test'
+            })
+            await payeeSignaler.send(from, ring)
+            return
+          }
           const { link, sdp } = await PeerLink.acceptOffer(p.sdp!, rtc)
           rawLinks.push(link)
           const answer = await sealSignal(payee.wallet, {
@@ -1133,8 +1156,11 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
         expect(refused).toMatchObject({ code: 'rejected', reason: 'wrong_network' })
         expect(refused.message).toContain('test')
         expect(acceptAnswer).not.toHaveBeenCalled()
-        // the offer named the payer's network
-        expect(offers.map(p => [p.kind, p.chain])).toEqual([['offer', 'main']])
+        // the knock and the offer named the payer's network
+        expect(offers.map(p => [p.kind, p.chain])).toEqual([
+          ['knock', 'main'],
+          ['offer', 'main']
+        ])
       } finally {
         await stop()
       }
@@ -1159,12 +1185,18 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
     expect(await sender.sendPayment(peer, token)).toMatchObject({ status: 'accepted', txid })
     expect(payee.internalizeAction).toHaveBeenCalledTimes(1)
 
-    expect(payerSide.sent).toHaveLength(1)
-    expect(payeeSide.sent).toHaveLength(1)
-    const offer = await readSignal(payer, payee, payerSide.sent[0])
-    const answer = await readSignal(payee, payer, payeeSide.sent[0])
-    expect([offer.kind, offer.chain]).toEqual(['offer', 'main'])
-    expect([answer.kind, answer.chain]).toEqual(['answer', 'main'])
+    expect(payerSide.sent).toHaveLength(2)
+    expect(payeeSide.sent).toHaveLength(2)
+    const sent = await Promise.all(payerSide.sent.map(e => readSignal(payer, payee, e)))
+    const replies = await Promise.all(payeeSide.sent.map(e => readSignal(payee, payer, e)))
+    expect(sent.map(p => [p.kind, p.chain])).toEqual([
+      ['knock', 'main'],
+      ['offer', 'main']
+    ])
+    expect(replies.map(p => [p.kind, p.chain])).toEqual([
+      ['ring', 'main'],
+      ['answer', 'main']
+    ])
   })
 
   it('keeps the old behaviour when neither side names a network', async () => {
@@ -1180,14 +1212,13 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
     const peer = await sender.connect(payee.identityKey)
     expect((await sender.sendPayment(peer, token)).status).toBe('accepted')
 
-    expect(payerSide.sent).toHaveLength(1)
-    expect(payeeSide.sent).toHaveLength(1)
-    const offer = await readSignal(payer, payee, payerSide.sent[0])
-    const answer = await readSignal(payee, payer, payeeSide.sent[0])
-    expect(offer.kind).toBe('offer')
-    expect(answer.kind).toBe('answer')
-    expect('chain' in offer).toBe(false)
-    expect('chain' in answer).toBe(false)
+    expect(payerSide.sent).toHaveLength(2)
+    expect(payeeSide.sent).toHaveLength(2)
+    const sent = await Promise.all(payerSide.sent.map(e => readSignal(payer, payee, e)))
+    const replies = await Promise.all(payeeSide.sent.map(e => readSignal(payee, payer, e)))
+    expect(sent.map(p => p.kind)).toEqual(['knock', 'offer'])
+    expect(replies.map(p => p.kind)).toEqual(['ring', 'answer'])
+    for (const p of [...sent, ...replies]) expect('chain' in p).toBe(false)
   })
 
   it('takes a network of 1 to 16 characters from a-z and 0-9', async () => {
@@ -1712,7 +1743,8 @@ describe('DirectPayClient inbound limits (MemoryHub, loopback WebRTC)', () => {
         send: (to, e) => payerBase.send(to, e),
         listen: fn => payerBase.listen((from, e) => void setTimeout(() => fn(from, e), 1500))
       },
-      timeouts: { connectMs: 8000 }
+      // the ring, slow both ways, takes 2.5 s
+      timeouts: { connectMs: 8000, presenceMs: 5000 }
     })
 
     expect((await sender.connect(payee.identityKey)).peerIdentityKey).toBe(payee.identityKey)

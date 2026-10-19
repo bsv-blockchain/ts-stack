@@ -1,7 +1,7 @@
 /**
  * Presence: a dial's `knock` and the receiver's `ring`, and the dial timeouts built on them.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from '@jest/globals'
+import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from '@jest/globals'
 import { PeerLink } from '../src/channel/PeerLink.js'
 import { DirectPayClient } from '../src/client/DirectPayClient.js'
 import type { DirectPayClientOptions, ReceiveHandlers } from '../src/client/DirectPayClient.js'
@@ -63,6 +63,18 @@ async function failure(p: Promise<unknown>): Promise<WebRTPayError> {
 
 function newSid(): string {
   return toBase64Url(randomBytes(16))
+}
+
+/** Retry `fn` every 100 ms until it resolves, up to 20 tries. */
+async function eventually<T>(fn: () => Promise<T>): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (i >= 20) throw e
+      await sleep(100)
+    }
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -154,7 +166,7 @@ describe('DirectPayClient answers knocks (MemoryHub)', () => {
     const payeeClient = hubClient(hub, payee)
     // A dial in progress keeps the payee listening while it is not receiving.
     stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
-    const ownDial = failure(payeeClient.connect(silent.identityKey, { timeoutMs: 60000 }))
+    const ownDial = failure(payeeClient.connect(silent.identityKey, { presenceTimeoutMs: 60000 }))
     await sleep(50)
     const hand = await handSignaler(hub, dialer)
     const sid = newSid()
@@ -231,5 +243,188 @@ describe('DirectPayClient answers knocks (MemoryHub)', () => {
     const peer = await sender.connect(payee.identityKey)
     const { token } = await makeToken(payer, payee.identityKey, 1000)
     expect((await sender.sendPayment(peer, token)).status).toBe('accepted')
+  })
+})
+
+describe('DirectPayClient knock-first dial (MemoryHub, loopback WebRTC)', () => {
+  /** A hand-driven payee that rings `ringAfterMs` after each knock and then says nothing. */
+  async function ringOnly(
+    hub: MemoryHub,
+    ringAfterMs: number
+  ): Promise<{ identityKey: string; received: SignalPlaintext[] }> {
+    const w = await makeWallet()
+    const hand = await handSignaler(hub, w)
+    void (async () => {
+      for (;;) {
+        const p = await hand.next(60000)
+        if (p === undefined) return
+        if (p.kind !== 'knock') continue
+        await sleep(ringAfterMs)
+        await hand.send('ring', p.from, p.sid)
+      }
+    })().catch(() => undefined)
+    return { identityKey: w.identityKey, received: hand.received }
+  }
+
+  it('reports peer_unreachable within presence when nobody answers', async () => {
+    const hub = createMemoryHub()
+    const silent = await makeWallet()
+    stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
+    const sender = hubClient(hub, await makeWallet())
+    const started = Date.now()
+    const e = await failure(sender.connect(silent.identityKey))
+    const elapsed = Date.now() - started
+    expect(e).toMatchObject({
+      code: 'peer_unreachable',
+      message: 'No answer from the recipient in 2000 ms'
+    })
+    expect(elapsed).toBeGreaterThanOrEqual(1950)
+    expect(elapsed).toBeLessThan(2100)
+  })
+
+  it('takes the presence clock from the client options, then from the call', async () => {
+    const hub = createMemoryHub()
+    const silent = await makeWallet()
+    stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
+    const sender = hubClient(hub, await makeWallet(), {
+      timeouts: { connectMs: 10000, presenceMs: 300 }
+    })
+    let started = Date.now()
+    expect((await failure(sender.connect(silent.identityKey))).message).toContain('300 ms')
+    expect(Date.now() - started).toBeLessThan(1000)
+    started = Date.now()
+    const e = await failure(sender.connect(silent.identityKey, { presenceTimeoutMs: 600 }))
+    expect(e.message).toContain('600 ms')
+    expect(Date.now() - started).toBeGreaterThanOrEqual(550)
+  })
+
+  it('fails fast with rejected not_receiving', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer, silent] = await Promise.all([makeWallet(), makeWallet(), makeWallet()])
+    const receiver = hubClient(hub, payee)
+    stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
+    const ownDial = failure(receiver.connect(silent.identityKey, { presenceTimeoutMs: 60000 }))
+    await sleep(50)
+    const started = Date.now()
+    const e = await failure(hubClient(hub, payer).connect(payee.identityKey))
+    expect(e).toMatchObject({ code: 'rejected', reason: 'not_receiving' })
+    expect(Date.now() - started).toBeLessThan(500)
+    await receiver.close()
+    expect((await ownDial).code).toBe('closed')
+  })
+
+  it('times out from the ring, not from the start of the dial', async () => {
+    const hub = createMemoryHub()
+    const payee = await ringOnly(hub, 750)
+    const sender = hubClient(hub, await makeWallet())
+    const started = Date.now()
+    const e = await failure(
+      sender.connect(payee.identityKey, { presenceTimeoutMs: 1000, dialTimeoutMs: 2000 })
+    )
+    const elapsed = Date.now() - started
+    expect(e).toMatchObject({
+      code: 'timeout',
+      message: "Connection not established within 2000 ms of the recipient's reply"
+    })
+    expect(elapsed).toBeGreaterThanOrEqual(2700)
+    expect(elapsed).toBeLessThan(3500)
+    // the offer went out only after the ring
+    expect(payee.received.map(p => p.kind)).toEqual(['knock', 'offer'])
+  })
+
+  it('still caps the whole dial with timeoutMs', async () => {
+    const hub = createMemoryHub()
+    const payee = await ringOnly(hub, 0)
+    const sender = hubClient(hub, await makeWallet())
+    const e = await failure(sender.connect(payee.identityKey, { timeoutMs: 800 }))
+    expect(e).toMatchObject({
+      code: 'timeout',
+      message: 'Connection not established within 800 ms'
+    })
+    const silent = await makeWallet()
+    stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
+    const quiet = await failure(sender.connect(silent.identityKey, { timeoutMs: 500 }))
+    expect(quiet).toMatchObject({
+      code: 'peer_unreachable',
+      message: 'No answer from the recipient in 500 ms'
+    })
+  })
+
+  it('abort signal cancels only that dial', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer, silent] = await Promise.all([makeWallet(), makeWallet(), makeWallet()])
+    stops.push(await hub.signaler(silent.identityKey).listen(() => undefined))
+    await hubClient(hub, payee).startReceiving(accepting)
+    const sender = hubClient(hub, payer)
+
+    const controller = new AbortController()
+    const cancelled = failure(
+      sender.connect(silent.identityKey, { signal: controller.signal, presenceTimeoutMs: 60000 })
+    )
+    const other = sender.connect(payee.identityKey)
+    await sleep(50)
+    const started = Date.now()
+    controller.abort()
+    expect(await cancelled).toMatchObject({ code: 'closed', message: 'Dial cancelled' })
+    expect(Date.now() - started).toBeLessThan(200)
+
+    // the other dial, and the receiver, keep running
+    const peer = await other
+    expect(peer.peerIdentityKey).toBe(payee.identityKey)
+    peer.close()
+    const again = await eventually(() =>
+      sender.connect(payee.identityKey, { presenceTimeoutMs: 300 })
+    )
+    expect(again.peerIdentityKey).toBe(payee.identityKey)
+
+    // a signal that has already aborted refuses at once
+    expect(
+      await failure(sender.connect(payee.identityKey, { signal: AbortSignal.abort() }))
+    ).toMatchObject({ code: 'closed', message: 'Dial cancelled' })
+  })
+
+  it('closes a link gathered after the dial was refused', async () => {
+    const hub = createMemoryHub()
+    const [payee, payer] = await Promise.all([makeWallet(), makeWallet()])
+    const hand = await handSignaler(hub, payee)
+    const createOffer = PeerLink.createOffer.bind(PeerLink)
+    const links: PeerLink[] = []
+    const spy = jest.spyOn(PeerLink, 'createOffer').mockImplementation(async o => {
+      await sleep(300)
+      const made = await createOffer(o)
+      links.push(made.link)
+      return made
+    })
+    try {
+      const dial = failure(hubClient(hub, payer).connect(payee.identityKey))
+      const knock = await hand.next()
+      await hand.send('reject', payer.identityKey, knock!.sid, { reason: 'busy' })
+      expect(await dial).toMatchObject({ code: 'rejected', reason: 'busy' })
+      await sleep(400)
+      expect(links).toHaveLength(1)
+      const reason = await Promise.race([
+        new Promise<WebRTPayError | undefined>(resolve => links[0].onClose(resolve)),
+        sleep(1000).then(() => 'still open')
+      ])
+      expect(reason).toMatchObject({ code: 'rejected' })
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('refuses invalid dial timeouts', async () => {
+    const hub = createMemoryHub()
+    const w = await makeWallet()
+    const sender = hubClient(hub, w)
+    await expect(sender.connect(w.identityKey, { presenceTimeoutMs: 0 })).rejects.toThrow(
+      RangeError
+    )
+    await expect(sender.connect(w.identityKey, { dialTimeoutMs: -1 })).rejects.toThrow(RangeError)
+    expect(() => new DirectPayClient({ wallet: w.wallet, timeouts: { presenceMs: 0 } })).toThrow(
+      RangeError
+    )
+    expect(() => new DirectPayClient({ wallet: w.wallet, timeouts: { dialMs: NaN } })).toThrow(
+      RangeError
+    )
   })
 })
