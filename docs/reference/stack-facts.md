@@ -86,6 +86,7 @@ the separately released and verified image digest.
 | BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.55` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
 | Wallet Authentication Backend | `@bsv/wab-server` | `1.8.13` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
 | BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.52` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
+| BSV WebRTPay Signalling Relay | `@bsv/webrtpay-relay` | `0.2.0` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/webrtpay-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay) |
 
 ## Governed project and release inventory
 
@@ -95,7 +96,7 @@ the separately released and verified image digest.
 | Package-area projects | 37 |
 | Public npm packages | 34 |
 | Private package-area projects | 3 |
-| Standalone infrastructure projects | 7 |
+| Standalone infrastructure projects | 8 |
 
 Public packages use the `npm-oidc` release route. Other workspace projects are
 private packages or documentation/conformance tooling. Standalone infrastructure

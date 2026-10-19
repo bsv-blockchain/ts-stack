@@ -70,7 +70,7 @@ requires:
 The current governed inventory is 48 native compiler profiles plus one isolated
 codegen API profile. It also discovers all 130 tracked `tsconfig` files, resolves
 their complete `extends` chains, rejects missing or circular configurations,
-and requires every project to use one of nine approved runtime profiles. Seven
+and requires every project to use one of nine approved runtime profiles. Eight
 deployable services have self-contained `tsconfig` files because their npm and
 Docker build contexts intentionally contain only the service directory. The
 governance mapping assigns those configs to `node-service.json`, requires every

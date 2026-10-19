@@ -106,7 +106,8 @@
         "infra/uhrp-server-basic/src/telemetry.ts",
         "infra/uhrp-server-cloud-bucket/src/telemetry.ts",
         "infra/wallet-infra/src/telemetry.ts",
-        "infra/message-box-server/src/telemetry.ts"
+        "infra/message-box-server/src/telemetry.ts",
+        "infra/webrtpay-relay/src/telemetry.ts"
       ]
     },
     {

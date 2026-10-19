@@ -47,7 +47,8 @@ const STANDALONE_RUNTIME_PROFILES = new Map(
     'infra/uhrp-server-basic/tsconfig.json',
     'infra/uhrp-server-cloud-bucket/tsconfig.json',
     'infra/wab/tsconfig.json',
-    'infra/wallet-infra/tsconfig.json'
+    'infra/wallet-infra/tsconfig.json',
+    'infra/webrtpay-relay/tsconfig.json'
   ].map(relativePath => [relativePath, 'config/typescript/node-service.json'])
 )
 const REQUIRED_STRICT_OPTIONS = [

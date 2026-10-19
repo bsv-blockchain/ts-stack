@@ -1,0 +1,56 @@
+{
+  "name": "@bsv/webrtpay-relay",
+  "private": true,
+  "version": "0.2.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "description": "Container image for the @bsv/webrtpay WebRTC payment signalling relay.",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "infra/webrtpay-relay"
+  },
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "author": "BSV Association",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "oxlint src --deny-warnings",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/relay.test.ts",
+    "start": "node --import ./dist/telemetry.js dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "oxlint": "^1.83.0",
+    "tsx": "^4.23.13",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "dependencies": {
+    "@bsv/sdk": "^3.2.1",
+    "@bsv/webrtpay": "^0.2.1",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/api-logs": "^0.222.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.80.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.222.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/instrumentation-runtime-node": "^0.35.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-logs": "^0.222.0",
+    "@opentelemetry/sdk-metrics": "^2.11.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "pino": "^10.3.1"
+  }
+}
