@@ -41,7 +41,7 @@ carrier. This package makes the carrier a plug-in:
 npm install @bsv/webrtpay @bsv/sdk
 ```
 
-Requirements: Node 22 or later, or a browser; `@bsv/sdk` `^2.8.6 || ^3.0.0`, a required peer
+Requirements: Node 22 or later, or a browser; `@bsv/sdk` `^2.8.6 || ^3.0.0 || ^4.0.0`, a required peer
 dependency; a BRC-100 wallet
 (`WalletClient`, a wallet-toolbox `Wallet`, anything with the methods in `WalletLike`). In Node,
 inject a WebRTC implementation such as `node-datachannel/polyfill` through `rtc`.

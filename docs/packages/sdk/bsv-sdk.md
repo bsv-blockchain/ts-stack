@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '3.2.1'
+version: '4.0.0'
 npm: '@bsv/sdk'
-last_updated: '2026-10-07'
-last_verified: '2026-10-07'
+last_updated: '2026-10-19'
+last_verified: '2026-10-19'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -14,6 +14,15 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
+
+The 4.0.0 source candidate types `ListOutputsResult.totalOutputs` as
+`PositiveIntegerOrZero | DecimalString`. A BRC-112 module balance query
+(`p <module> balance <basket>`) returns the exact balance as decimal text with
+no outputs and no BEEF; every other query returns a count. The binary
+`listOutputs` response carries that text and each output's `spendable` byte, so
+both ends of a binary connection must update together. Code that uses
+`totalOutputs` as a number must check `typeof totalOutputs === 'number'` first.
+This candidate is not publication.
 
 The isolated SDK3 retirement candidate removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.

@@ -158,12 +158,14 @@ async function hasInternalizedFaucetOutput(
       { basket: 'default', includeLabels: true, limit: pageSize, offset },
       adminOriginator
     )
+    const totalOutputs = page.totalOutputs
     if (
       !Array.isArray(page.outputs) ||
-      !Number.isSafeInteger(page.totalOutputs) ||
-      page.totalOutputs < 0 ||
+      typeof totalOutputs !== 'number' ||
+      !Number.isSafeInteger(totalOutputs) ||
+      totalOutputs < 0 ||
       page.outputs.length > pageSize ||
-      offset + page.outputs.length > page.totalOutputs
+      offset + page.outputs.length > totalOutputs
     ) {
       throw new Error('Wallet returned invalid faucet payment outputs.')
     }
@@ -180,7 +182,7 @@ async function hasInternalizedFaucetOutput(
       return true
     }
     offset += page.outputs.length
-    if (offset >= page.totalOutputs) return false
+    if (offset >= totalOutputs) return false
     if (page.outputs.length === 0) throw new Error('Wallet returned an incomplete faucet output page.')
   }
 }

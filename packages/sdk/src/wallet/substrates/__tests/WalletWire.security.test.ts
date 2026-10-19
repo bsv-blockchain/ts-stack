@@ -387,6 +387,7 @@ describe('WalletWire strict binary framing', () => {
     resultWriter.writeVarIntNum(0) // output index
     resultWriter.writeVarIntNum(1) // satoshis
     resultWriter.writeVarIntNum(-1) // lockingScript
+    resultWriter.writeInt8(1) // spendable
     resultWriter.writeVarIntNum(-1) // customInstructions
     resultWriter.writeVarIntNum(100_001) // tags
     resultWriter.write(new Uint8Array(100_001)) // empty tag lengths

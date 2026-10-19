@@ -133,6 +133,7 @@ import {
 import { WalletServices } from './sdk/WalletServices.interfaces'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
+import { listOutputsCount } from './utility/listOutputsCount'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
@@ -1410,7 +1411,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
         r.utxos.push({ satoshis: o.satoshis, outpoint: o.outpoint })
       }
       offset += change.outputs.length
-      if (offset >= change.totalOutputs) break
+      if (offset >= listOutputsCount(change)) break
     }
     return r
   }
@@ -1426,8 +1427,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (args.basket !== specOpWalletBalance) {
       args.tags = [...(args.tags || []), specOpWalletBalance]
     }
-    const r = await this.listOutputs(args)
-    return r.totalOutputs
+    return listOutputsCount(await this.listOutputs(args))
   }
 
   /**

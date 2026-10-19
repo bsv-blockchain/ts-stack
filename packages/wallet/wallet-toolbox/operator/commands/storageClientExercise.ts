@@ -100,6 +100,7 @@ export const storageClientExerciseCommand: OperatorCommand = {
           include: 'entire transactions',
           limit: concurrency
         })
+        if (typeof outputs.totalOutputs !== 'number') throw new Error('Wallet returned a balance for the exercise basket')
         const missing = Math.max(0, concurrency - outputs.totalOutputs)
         if ((await wallet.balance()) < missing * 10_000) {
           throw new Error(`Wallet balance is insufficient to create ${missing} exercise outputs`)

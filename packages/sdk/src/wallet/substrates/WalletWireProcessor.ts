@@ -19,6 +19,7 @@ import {
   validateOriginator
 } from '../validationHelpers.js'
 import { validateWalletArgs } from '../WalletArgumentValidation.js'
+import { isModuleBalanceQuery } from '../moduleBalanceQuery.js'
 import { snapshotWalletResultRequest, validateWalletResult } from '../WalletResultValidation.js'
 import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
 
@@ -1272,6 +1273,16 @@ export default class WalletWireProcessor implements WalletWire {
               args,
               async () => await this.wallet.listOutputs(args, originator)
             )
+            if (isModuleBalanceQuery(args.basket)) {
+              const balanceWriter = new WriterUint8Array()
+              balanceWriter.writeUInt8(0) // errorByte = 0
+              // totalOutputs: the exact BRC-112 module balance as UTF-8 decimal text
+              const balanceBytes = UtilsToUint8Array(String(listOutputsResult.totalOutputs), 'utf8')
+              balanceWriter.writeVarIntNum(balanceBytes.length)
+              balanceWriter.write(balanceBytes)
+              balanceWriter.writeVarIntNum(-1) // no BEEF
+              return balanceWriter.toUint8ArrayZeroCopy()
+            }
             const outputsPage = this.#requirePageTotal(
               listOutputsResult.totalOutputs,
               listOutputsResult.outputs,
@@ -1311,6 +1322,9 @@ export default class WalletWireProcessor implements WalletWire {
                   resultWriter.writeVarIntNum(lockingScriptBytes.length)
                   resultWriter.write(lockingScriptBytes)
                 }
+
+                // spendable
+                resultWriter.writeInt8(output.spendable ? 1 : 0)
 
                 // customInstructions
                 if (output.customInstructions === undefined) {

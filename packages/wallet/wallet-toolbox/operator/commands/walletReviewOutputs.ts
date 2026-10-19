@@ -67,6 +67,7 @@ async function reviewUserOutputs(
     }
   )
   if (release) await verifyReleasedOutputs(storage, sdk, userId, result.outputs)
+  if (typeof result.totalOutputs !== 'number') throw new Error('Storage returned a balance for the invalid-change review')
   return {
     invalidOutputs: result.totalOutputs,
     invalidSatoshis: result.outputs.reduce((sum, output) => sum + output.satoshis, 0)

@@ -29,6 +29,11 @@ attention to changes that materially alter behavior or extend functionality.
   sending it to a relative URL, which a browser resolves against the page's
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
+- Callers that count `listOutputs` results narrow `totalOutputs` to a number,
+  following the `@bsv/sdk` change that lets BRC-112 module balance queries
+  return decimal text.
+- `@bsv/sdk` 4.0.0 is accepted as a peer alongside the existing 2.x and 3.x
+  ranges.
 
 ## wallet-toolbox 2.14.10
 

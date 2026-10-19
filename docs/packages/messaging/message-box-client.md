@@ -3,7 +3,7 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.6.0'
+version: '2.6.1'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-25'
 last_verified: '2026-09-25'
@@ -16,7 +16,7 @@ tags: [messaging, message-box, brc-103, brc-29]
 
 # @bsv/message-box-client
 
-This source candidate declares SDK peer `^2.8.6 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -37,7 +37,7 @@ npm install @bsv/message-box-client @bsv/sdk
 ```
 
 `@bsv/sdk` is a required peer. Node.js 22 or newer is supported.
-The current candidate requires `^2.8.6 || ^3.0.0`; use SDK2.8.6 or newer within
+The current candidate requires `^2.8.6 || ^3.0.0 || ^4.0.0`; use SDK2.8.6 or newer within
 the SDK2 family, or the proposed SDK3 candidate after the linked qualification. The package imports SDK validation modules first
 shipped in 2.8.0, and SDK 2.8.6 fixes BRC-29 payment acceptance. BRC-29 sends accept both historical `number[]` and
 binary Wallet Wire `Uint8Array` transaction results. Payment receipt also
