@@ -14,6 +14,7 @@ import {
 import { hash160 } from '@bsv/sdk/primitives/Hash'
 import { toArray } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
+import { maybeDecryptMetadata } from '@bsv/wallet-toolbox-client'
 import { ColorPlan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { assetBasket, assetTag, COLOR_KEY_ID, colorProtocolID } from '../identifiers.js'
@@ -333,6 +334,12 @@ describe('ColorPermissionModule', () => {
       expect(provider.submissions).toEqual([{ assetIds: [assetId], txid: split.id('hex') }])
       expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send', 'color_split'])
       expect(prompts[1].request).toMatchObject({ assetId, amount: '100', change: '200' })
+      const stored = wallet.outputs.get(`${split.id('hex')}.0`)?.customInstructions ?? ''
+      expect(stored.startsWith('{')).toBe(false)
+      expect(JSON.parse(await maybeDecryptMetadata(wallet.asWallet(), stored))).toMatchObject({
+        version: 1,
+        assetId
+      })
     })
 
     it('aborts the split when the user declines its fee', async () => {

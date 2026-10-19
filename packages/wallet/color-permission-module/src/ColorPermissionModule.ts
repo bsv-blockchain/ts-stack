@@ -25,6 +25,7 @@ import Random from '@bsv/sdk/primitives/Random'
 import { toArray, toBase64, toHex } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
 import {
+  encryptMetadata,
   maybeDecryptMetadata,
   sdk as toolbox,
   type PermissionsModule,
@@ -715,6 +716,17 @@ export class ColorPermissionModule implements PermissionsModule {
     const change = sumAmounts(selected) - amount
     const exact = await this.#newManagedOutput(assetId, amount, originator)
     const rest = await this.#newManagedOutput(assetId, change, originator)
+    // The split goes to the underlying wallet directly, so its custody is encrypted here.
+    const outputs = await Promise.all(
+      [exact.output, rest.output].map(async output => ({
+        ...output,
+        customInstructions: await encryptMetadata(
+          this.#wallet,
+          output.customInstructions as string,
+          originator
+        )
+      }))
+    )
     const created = await this.#wallet.createAction(
       {
         description: 'Split tokens for a handoff',
@@ -735,7 +747,7 @@ export class ColorPermissionModule implements PermissionsModule {
           unlockingScriptLength: UNLOCKING_SCRIPT_LENGTH,
           inputDescription: 'BRC-207 token input'
         })),
-        outputs: [exact.output, rest.output],
+        outputs,
         options: { randomizeOutputs: false, signAndProcess: false }
       },
       originator

@@ -436,6 +436,26 @@ const BASKET_MAP = {
 const METADATA_ENCRYPTION_PROTOCOL: [2, 'admin metadata encryption'] = [2, 'admin metadata encryption']
 
 /**
+ * Encrypts metadata through `wallet` as a permissions manager with `encryptWalletMetadata` does.
+ * Permission modules use this for metadata they store through the underlying wallet directly.
+ */
+export async function encryptMetadata(
+  wallet: WalletInterface,
+  plaintext: string,
+  originator?: string
+): Promise<Base64String> {
+  const { ciphertext } = await wallet.encrypt(
+    {
+      plaintext: toArray(plaintext, 'utf8'),
+      protocolID: METADATA_ENCRYPTION_PROTOCOL,
+      keyID: '1'
+    },
+    originator
+  )
+  return toBase64(ciphertext)
+}
+
+/**
  * Decrypts metadata that a permissions manager with `encryptWalletMetadata` stored through `wallet`.
  * A value that does not decrypt, such as metadata stored without encryption, is returned unchanged.
  * Permission modules use this to read metadata from their own baskets through the underlying wallet.
@@ -2897,15 +2917,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (!this.config.encryptWalletMetadata) {
       return plaintext
     }
-    const { ciphertext } = await this.underlying.encrypt(
-      {
-        plaintext: toArray(plaintext, 'utf8'),
-        protocolID: METADATA_ENCRYPTION_PROTOCOL,
-        keyID: '1'
-      },
-      this.adminOriginator
-    )
-    return toBase64(ciphertext)
+    return await encryptMetadata(this.underlying, plaintext, this.adminOriginator)
   }
 
   /**
@@ -4508,7 +4520,8 @@ export class WalletPermissionsManager implements WalletInterface {
         originalOutputDescriptions[i] = output.outputDescription
         output.outputDescription = await this.maybeEncryptMetadata(output.outputDescription)
       }
-      if (output.customInstructions) {
+      // P-basket custom instructions are encrypted after the permission modules run.
+      if (output.customInstructions && output.basket?.startsWith('p ') !== true) {
         output.customInstructions = await this.maybeEncryptMetadata(output.customInstructions)
       }
     })
@@ -4520,6 +4533,16 @@ export class WalletPermissionsManager implements WalletInterface {
       ...outputEncryptionTasks
     ])
     return { originalInputDescriptions, originalOutputDescriptions }
+  }
+
+  /** Encrypts P-basket output custom instructions as the permission modules left them. */
+  private async encryptCreateActionModuleMetadata(args: CreateActionArgs): Promise<void> {
+    await Promise.all(
+      (args.outputs ?? []).map(async output => {
+        if (!output.customInstructions || output.basket?.startsWith('p ') !== true) return
+        output.customInstructions = await this.maybeEncryptMetadata(output.customInstructions)
+      })
+    )
   }
 
   /** Calls underlying createAction, chaining P-module request/response transforms when needed. */
@@ -4538,6 +4561,7 @@ export class WalletPermissionsManager implements WalletInterface {
       })
       transformedArgs = transformed.args
     }
+    await this.encryptCreateActionModuleMetadata(transformedArgs as CreateActionArgs)
     let createResult = await this.underlying.createAction(transformedArgs as CreateActionArgs, originator)
     const locallyAuthorizedResult = createResult
     const exactWalletSpend = getExactActionSpend(createResult)

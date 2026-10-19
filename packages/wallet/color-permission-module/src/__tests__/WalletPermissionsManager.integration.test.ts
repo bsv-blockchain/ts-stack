@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 import { Transaction } from '@bsv/sdk'
 import { OneColor } from '@bsv/templates'
-import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
+import { maybeDecryptMetadata, WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
 import { ColorPlan } from '../ColorPlan.js'
 import { assetBasket, assetTag } from '../identifiers.js'
 import {
@@ -91,6 +91,13 @@ describe('color module registered on a WalletPermissionsManager', () => {
     ])
     expect(provider.submissions.map(submission => submission.txid)).toEqual([tx.id('hex')])
     expect(prompts).toEqual(['color_send'])
+    // The manager encrypts the change custody tuple the module adds.
+    const change = wallet.outputs.get(`${tx.id('hex')}.1`)?.customInstructions ?? ''
+    expect(change.startsWith('{')).toBe(false)
+    expect(JSON.parse(await maybeDecryptMetadata(wallet.asWallet(), change))).toMatchObject({
+      version: 1,
+      assetId
+    })
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
     ).resolves.toEqual({ totalOutputs: '180', outputs: [] })

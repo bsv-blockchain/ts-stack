@@ -36,10 +36,15 @@ attention to changes that materially alter behavior or extend functionality.
   for inputs they supplied. A module request failure aborts the action; a
   module response failure is thrown without aborting the signed action. A
   module that rejects unknown methods must accept `signAction`.
-- `maybeDecryptMetadata(wallet, value, originator?)` is exported. It decrypts
-  metadata that a permissions manager with `encryptWalletMetadata` stored, so a
-  permission module can read its own baskets' custom instructions through the
-  underlying wallet. The manager uses the same function.
+- `encryptMetadata(wallet, plaintext, originator?)` and
+  `maybeDecryptMetadata(wallet, value, originator?)` are exported. They encrypt
+  and decrypt metadata as a permissions manager with `encryptWalletMetadata`
+  does, so a permission module can store and read its own baskets' custom
+  instructions through the underlying wallet. The manager uses the same
+  functions.
+- `createAction` encrypts P-basket output custom instructions after the
+  permission modules run, as `internalizeAction` already does, so instructions a
+  module adds or replaces are stored encrypted.
 - New `listOutputs` special operation `specOpBasketPrefixOutputs`: with a
   basket namespace such as `p color` in tag 0, it lists outputs from every
   basket in that namespace that are unspent or reserved as an input of a

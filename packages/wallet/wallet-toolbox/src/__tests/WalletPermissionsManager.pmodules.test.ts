@@ -5,6 +5,7 @@ import {
   PermissionsModule,
   PermissionsModuleRequest
 } from '../WalletPermissionsManager'
+import { Utils, type CreateActionArgs } from '@bsv/sdk'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
@@ -742,6 +743,68 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       // Verify P-module was invoked
       expect(testModule.onRequest).toHaveBeenCalled()
       expect(testModule.onResponse).toHaveBeenCalled()
+    })
+
+    it('encrypts P-basket custom instructions once, after the module chain', async () => {
+      const seen: Array<string | undefined> = []
+      const testModule: PermissionsModule = {
+        onRequest: jest.fn(async req => {
+          const args = req.args as CreateActionArgs
+          seen.push(...(args.outputs ?? []).map(output => output.customInstructions))
+          return {
+            args: {
+              ...args,
+              outputs: [
+                ...(args.outputs ?? []),
+                {
+                  lockingScript: 'ef',
+                  satoshis: 1,
+                  basket: 'p bottle change',
+                  customInstructions: 'module',
+                  outputDescription: 'Module output'
+                }
+              ]
+            }
+          }
+        }),
+        onResponse: jest.fn(async res => res)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {
+        permissionModules: { bottle: testModule },
+        seekSpendingPermissions: false,
+        seekBasketInsertionPermissions: false,
+        encryptWalletMetadata: true
+      })
+      const encrypted = (text: string): string => Utils.toBase64([0xee, ...Utils.toArray(text, 'utf8')])
+      underlying.encrypt.mockImplementation(async ({ plaintext }: { plaintext: number[] }) => ({
+        ciphertext: [0xee, ...plaintext]
+      }))
+      underlying.createAction.mockResolvedValue({ txid: 'abc123', tx: [] })
+
+      await manager.createAction(
+        {
+          description: 'Test action',
+          outputs: [
+            {
+              lockingScript: 'ab',
+              satoshis: 1,
+              basket: 'p bottle token-data',
+              customInstructions: 'caller',
+              outputDescription: 'Caller output'
+            },
+            { lockingScript: 'cd', satoshis: 1, customInstructions: 'plain', outputDescription: 'Plain output' }
+          ]
+        },
+        'app.com'
+      )
+
+      expect(seen).toEqual(['caller', encrypted('plain')])
+      const sent = underlying.createAction.mock.calls[0][0] as CreateActionArgs
+      expect(sent.outputs?.map(output => output.customInstructions)).toEqual([
+        encrypted('caller'),
+        encrypted('plain'),
+        encrypted('module')
+      ])
     })
 
     it('should chain multiple P-modules in correct order: req1->req2->req3 then res3->res2->res1', async () => {
