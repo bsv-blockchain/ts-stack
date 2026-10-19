@@ -4893,16 +4893,11 @@ export class WalletPermissionsManager implements WalletInterface {
     args: SignActionArgs,
     originator?: string
   ): Promise<SignActionArgs> {
-    let transformedArgs: object = args
-    for (const module of pModules) {
-      const transformed = await module.onRequest({
-        method: 'signAction',
-        args: transformedArgs,
-        originator: originator!
-      })
-      transformedArgs = transformed.args
-    }
-    return transformedArgs as SignActionArgs
+    return (await pModules.reduce<Promise<object>>(
+      async (previous, module) =>
+        (await module.onRequest({ method: 'signAction', args: await previous, originator: originator! })).args,
+      Promise.resolve(args)
+    )) as SignActionArgs
   }
 
   /** Passes a signAction result back through the same P-modules in reverse order. */
@@ -4911,10 +4906,11 @@ export class WalletPermissionsManager implements WalletInterface {
     result: SignActionResult,
     originator?: string
   ): Promise<SignActionResult> {
-    for (let i = pModules.length - 1; i >= 0; i--) {
-      result = await pModules[i].onResponse(result, { method: 'signAction', originator: originator! })
-    }
-    return result
+    return await pModules.reduceRight<Promise<SignActionResult>>(
+      async (previous, module) =>
+        await module.onResponse(await previous, { method: 'signAction', originator: originator! }),
+      Promise.resolve(result)
+    )
   }
 
   public async signAction(
@@ -5119,24 +5115,17 @@ export class WalletPermissionsManager implements WalletInterface {
     originator: string,
     modules: PermissionsModule[]
   ): Promise<Awaited<ReturnType<WalletInterface['internalizeAction']>>> {
-    let transformedArgs: object = requestArgs
-    for (const module of modules) {
-      const transformed = await module.onRequest({
-        method: 'internalizeAction',
-        args: transformedArgs,
-        originator
-      })
-      transformedArgs = transformed.args
-    }
+    const transformedArgs = await modules.reduce<Promise<object>>(
+      async (previous, module) =>
+        (await module.onRequest({ method: 'internalizeAction', args: await previous, originator })).args,
+      Promise.resolve(requestArgs)
+    )
     await this.encryptInternalizeActionModuleMetadata(transformedArgs as InternalizeActionArgs)
-    let result = await this.underlying.internalizeAction(transformedArgs as InternalizeActionArgs, originator)
-    for (let index = modules.length - 1; index >= 0; index--) {
-      result = await modules[index].onResponse(result, {
-        method: 'internalizeAction',
-        originator
-      })
-    }
-    return result
+    const result = await this.underlying.internalizeAction(transformedArgs as InternalizeActionArgs, originator)
+    return await modules.reduceRight<Promise<Awaited<ReturnType<WalletInterface['internalizeAction']>>>>(
+      async (previous, module) => await module.onResponse(await previous, { method: 'internalizeAction', originator }),
+      Promise.resolve(result)
+    )
   }
 
   public async internalizeAction(

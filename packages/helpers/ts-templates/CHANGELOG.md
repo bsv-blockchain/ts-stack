@@ -10,6 +10,19 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.1.0 candidate
+
+### Added
+
+- `OneColor`, the BRC-162 1Color template: the same prefix rules as
+  `Bsv21Binary`, plus 36-byte token ids (txid ‖ little-endian vout) for assets
+  first deployed under BRC-161 at a nonzero output. A 36-byte id with vout 0 is
+  rejected. `OneColor.tokenIdFromString` and `OneColor.tokenIdToString` convert
+  `<txid>_<vout>` ids. `OneColorError`, `OneColorDecoded` and `OneColorRole`
+  name the shared error class and types.
+- `Bsv21Binary` is unchanged; `decodeTokenScript` and `lockTokenScript` in
+  `src/Bsv21Binary.ts` hold the prefix code both templates share.
+
 ### 2.0.0 candidate — BRC-162 (breaking)
 
 ### Removed

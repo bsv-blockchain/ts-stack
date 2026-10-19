@@ -20,7 +20,7 @@ import {
 import { hash160 } from '@bsv/sdk/primitives/Hash'
 import Random from '@bsv/sdk/primitives/Random'
 import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
-import { Bsv21Binary } from '@bsv/templates'
+import { OneColor } from '@bsv/templates'
 import { sdk as toolbox } from '@bsv/wallet-toolbox-client'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { assetBasket, COLOR_KEY_ID, colorProtocolID, colorTopic, ISSUE } from '../identifiers.js'
@@ -270,12 +270,7 @@ export async function deployAsset(
   })
   const tx = new Transaction()
   tx.addOutput({
-    lockingScript: new Bsv21Binary().lock(
-      null,
-      amount,
-      hash160(toArray(publicKey, 'hex')),
-      payload
-    ),
+    lockingScript: new OneColor().lock(null, amount, hash160(toArray(publicKey, 'hex')), payload),
     satoshis: 1000
   })
   const assetId = `${tx.id('hex')}_0`
@@ -310,7 +305,7 @@ export async function tokenPayment(
   })
   const tx = new Transaction()
   tx.addOutput({
-    lockingScript: new Bsv21Binary().lock(assetId, amount, hash160(toArray(publicKey, 'hex'))),
+    lockingScript: new OneColor().lock(assetId, amount, hash160(toArray(publicKey, 'hex'))),
     satoshis: 1000
   })
   return { tx, customInstructions: JSON.stringify(custody) }

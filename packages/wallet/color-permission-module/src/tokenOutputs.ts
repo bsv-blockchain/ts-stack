@@ -1,5 +1,5 @@
 import type { LockingScript } from '@bsv/sdk'
-import { Bsv21Binary, isTokenShaped, tokenIdToString } from '@bsv/templates'
+import { Bsv21Token, isTokenShaped, OneColor } from '@bsv/templates'
 import { type Outpoint, type TokenRole } from './identifiers.js'
 
 export interface TokenOutput {
@@ -171,9 +171,9 @@ export function readTokenOutput(
   outpoint: Outpoint
 ): TokenOutput | undefined {
   if (!isTokenShaped(lockingScript)) return undefined
-  let decoded: ReturnType<typeof Bsv21Binary.decode>
+  let decoded: ReturnType<typeof OneColor.decode>
   try {
-    decoded = Bsv21Binary.decode(lockingScript)
+    decoded = OneColor.decode(lockingScript)
   } catch (error) {
     throw new Error(
       `BRC-207: ${outpoint.txid}.${outpoint.vout} is not a supported BRC-162 output (${(error as Error).message})`
@@ -183,10 +183,24 @@ export function readTokenOutput(
   const deploy = decoded.role === 'deploy'
   if (deploy && outpoint.vout !== 0) throw new Error('BRC-207: a BRC-162 deploy must be output 0')
   return {
-    assetId: deploy ? `${outpoint.txid}_0` : tokenIdToString(decoded.tokenId!),
+    assetId: deploy ? `${outpoint.txid}_0` : OneColor.tokenIdToString(decoded.tokenId!),
     role: decoded.amount === 0n ? 'authority' : 'value',
     amount: decoded.amount,
     deploy,
     pubKeyHash: decoded.restPubKeyHash
+  }
+}
+
+/**
+ * True when the script is an asset's deploy: a BRC-162 binary deploy, whose `req` must be
+ * empty here, or a BRC-161 JSON deploy+mint, which carries no processing profiles.
+ */
+export function isDeployOutput(lockingScript: LockingScript, outpoint: Outpoint): boolean {
+  const binary = readTokenOutput(lockingScript, outpoint)
+  if (binary !== undefined) return binary.deploy
+  try {
+    return Bsv21Token.decode(lockingScript).isMint
+  } catch {
+    return false
   }
 }

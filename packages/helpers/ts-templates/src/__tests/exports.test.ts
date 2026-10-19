@@ -22,6 +22,11 @@ describe('@bsv/templates 2.0.0 public surface', () => {
     }
   })
 
+  it('exports the 1Color template', () => {
+    expect(typeof mod.OneColor.decode).toBe('function')
+    expect(mod.OneColorError).toBe(mod.Bsv21BinaryError)
+  })
+
   it('no longer exports the Mandala templates', () => {
     for (const name of ['MandalaToken', 'MandalaAdmin', 'ADMIN_PROTOCOL']) {
       expect(name in mod).toBe(false)

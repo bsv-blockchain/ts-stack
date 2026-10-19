@@ -3,7 +3,7 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '2.0.1'
+version: '2.1.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-10-01'
 last_verified: '2026-10-01'

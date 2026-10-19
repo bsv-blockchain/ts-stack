@@ -184,6 +184,52 @@ const roleOf = (tokenId: number[] | undefined, amount: bigint): Bsv21Role => {
   return amount === 0n ? 'authority' : 'value'
 }
 
+/** Decodes a token-shaped locking script, reading the token id push with `readTokenId`. */
+export function decodeTokenScript(
+  script: LockingScript,
+  readTokenId: (chunk: ScriptChunk) => number[] | undefined
+): Bsv21BinaryDecoded {
+  if (!isTokenShaped(script)) fail('not a BRC-162 token output')
+  const c = script.chunks
+  if (c.some(chunk => chunk.invalidLength === true)) fail('truncated push')
+  const tokenId = readTokenId(c[0])
+  const amount = decodeAmountChunk(c[1])
+  const { payload, payloadCanonical, rest } = splitPayload(c.slice(3))
+  return {
+    role: roleOf(tokenId, amount),
+    tokenId,
+    amount,
+    payload,
+    payloadCanonical,
+    restChunks: rest,
+    restPubKeyHash: p2pkhHash(rest)
+  }
+}
+
+/** Builds `<id|OP_0> <amount> OP_2DROP [<payload> OP_DROP]` + P2PKH from wire token-id bytes. */
+export function lockTokenScript(
+  tokenId: readonly number[] | null,
+  amount: bigint,
+  pubKeyHash: readonly number[],
+  payload?: readonly number[]
+): LockingScript {
+  if (pubKeyHash.length !== PKH_BYTES) fail('pubKeyHash must be 20 bytes')
+  const chunks: ScriptChunk[] = [
+    tokenId === null ? { op: OP.OP_0 } : { op: tokenId.length, data: [...tokenId] },
+    encodeAmountChunk(amount),
+    { op: OP.OP_2DROP }
+  ]
+  if (payload !== undefined) chunks.push(payloadChunk(payload), { op: OP.OP_DROP })
+  chunks.push(
+    { op: OP.OP_DUP },
+    { op: OP.OP_HASH160 },
+    { op: PKH_BYTES, data: [...pubKeyHash] },
+    { op: OP.OP_EQUALVERIFY },
+    { op: OP.OP_CHECKSIG }
+  )
+  return new LockingScript(chunks)
+}
+
 export class Bsv21Binary implements ScriptTemplate {
   readonly wallet?: WalletInterface
   readonly originator?: string
@@ -195,21 +241,7 @@ export class Bsv21Binary implements ScriptTemplate {
 
   /** Decodes a token-shaped locking script; throws Bsv21BinaryError on any non-canonical prefix. */
   static decode(script: LockingScript): Bsv21BinaryDecoded {
-    if (!isTokenShaped(script)) fail('not a BRC-162 token output')
-    const c = script.chunks
-    if (c.some(chunk => chunk.invalidLength === true)) fail('truncated push')
-    const tokenId = decodeTokenId(c[0])
-    const amount = decodeAmountChunk(c[1])
-    const { payload, payloadCanonical, rest } = splitPayload(c.slice(3))
-    return {
-      role: roleOf(tokenId, amount),
-      tokenId,
-      amount,
-      payload,
-      payloadCanonical,
-      restChunks: rest,
-      restPubKeyHash: p2pkhHash(rest)
-    }
+    return decodeTokenScript(script, decodeTokenId)
   }
 
   /** Builds `<id|OP_0> <amount> OP_2DROP [<payload> OP_DROP]` + P2PKH; `tokenId` null is a deploy. */
@@ -220,20 +252,12 @@ export class Bsv21Binary implements ScriptTemplate {
     payload?: readonly number[]
   ): LockingScript {
     if (pubKeyHash.length !== PKH_BYTES) fail('pubKeyHash must be 20 bytes')
-    const chunks: ScriptChunk[] = [
-      tokenId === null ? { op: OP.OP_0 } : { op: TOKEN_ID_BYTES, data: tokenIdFromString(tokenId) },
-      encodeAmountChunk(amount),
-      { op: OP.OP_2DROP }
-    ]
-    if (payload !== undefined) chunks.push(payloadChunk(payload), { op: OP.OP_DROP })
-    chunks.push(
-      { op: OP.OP_DUP },
-      { op: OP.OP_HASH160 },
-      { op: PKH_BYTES, data: [...pubKeyHash] },
-      { op: OP.OP_EQUALVERIFY },
-      { op: OP.OP_CHECKSIG }
+    return lockTokenScript(
+      tokenId === null ? null : tokenIdFromString(tokenId),
+      amount,
+      pubKeyHash,
+      payload
     )
-    return new LockingScript(chunks)
   }
 
   /** `lock` to hash160 of the wallet-derived (BRC-29 style) public key. */

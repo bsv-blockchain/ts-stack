@@ -9,7 +9,7 @@ export interface JsonObject {
 const MAX_DEPTH = 64
 const UINT32_MAX = 0xffffffff
 const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
-const NUMBER = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y
+const NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
 const ESCAPES: Record<string, string> = {
   '"': '"',
   '\\': '\\',
@@ -87,30 +87,27 @@ class Parser {
       if (char === undefined) this.fail('unterminated string')
       if (char === '"') return result
       if (char < ' ') this.fail('control character in string')
-      if (char !== '\\') {
-        result += char
-        continue
-      }
-      const escape = this.text[this.position++]
-      if (escape !== 'u') {
-        const decoded = ESCAPES[escape]
-        if (decoded === undefined) this.fail('invalid escape')
-        result += decoded
-        continue
-      }
-      const unit = this.hex4()
-      if (unit >= 0xdc00 && unit <= 0xdfff) this.fail('unpaired surrogate')
-      if (unit < 0xd800 || unit > 0xdbff) {
-        result += String.fromCharCode(unit)
-        continue
-      }
-      if (this.text.slice(this.position, this.position + 2) !== '\\u')
-        this.fail('unpaired surrogate')
-      this.position += 2
-      const low = this.hex4()
-      if (low < 0xdc00 || low > 0xdfff) this.fail('unpaired surrogate')
-      result += String.fromCharCode(unit, low)
+      result += char === '\\' ? this.escape() : char
     }
+  }
+
+  /** Decodes the escape after a backslash; a surrogate pair decodes to its one code point. */
+  private escape(): string {
+    const escape = this.text[this.position++]
+    if (escape !== 'u') {
+      const decoded = ESCAPES[escape]
+      if (decoded === undefined) this.fail('invalid escape')
+      return decoded
+    }
+    const unit = this.hex4()
+    if (unit >= 0xdc00 && unit <= 0xdfff) this.fail('unpaired surrogate')
+    if (unit < 0xd800 || unit > 0xdbff) return String.fromCodePoint(unit)
+    if (this.text.slice(this.position, this.position + 2) !== String.raw`\u`)
+      this.fail('unpaired surrogate')
+    this.position += 2
+    const low = this.hex4()
+    if (low < 0xdc00 || low > 0xdfff) this.fail('unpaired surrogate')
+    return String.fromCodePoint(0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00))
   }
 
   private array(depth: number): JsonValue[] {

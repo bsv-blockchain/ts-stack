@@ -27,7 +27,7 @@ export const COLOR_PLAN_LABEL_PREFIX = 'p color plan '
 const CHUNK_HEX_LENGTH = 200
 const MAX_PLAN_BYTES = 16 * 1024 * 1024
 const MAX_PLAN_PARTS = Math.ceil((MAX_PLAN_BYTES * 2) / CHUNK_HEX_LENGTH)
-const PLAN_LABEL = /^p color plan (0|[1-9][0-9]{0,9}) ([1-9][0-9]{0,9}) ([0-9a-f]+)$/
+const PLAN_LABEL = /^p color plan (0|[1-9]\d{0,9}) ([1-9]\d{0,9}) ([0-9a-f]+)$/
 
 export const COLOR_OPERATIONS = [
   'transfer',
@@ -283,6 +283,14 @@ function parsePlan(value: JsonValue): ColorPlan {
 }
 
 /** Encodes and decodes BRC-207 action plans as `p color plan` labels. */
+/** Every chunk is whole hex bytes; every chunk but the last fills its label. */
+function assertPlanChunk(hex: string, index: number, count: number): void {
+  if (hex.length % 2 !== 0 || hex.length > CHUNK_HEX_LENGTH)
+    throw new Error('BRC-207: invalid plan chunk')
+  if (index < count - 1 && hex.length !== CHUNK_HEX_LENGTH)
+    throw new Error('BRC-207: short nonfinal plan chunk')
+}
+
 export const ColorPlan = {
   /** Splits a plan into `p color plan <i> <n> <hex>` labels after validating it. */
   toLabels(plan: ColorPlan): string[] {
@@ -316,10 +324,7 @@ export const ColorPlan = {
       count = partCount
       if (index >= partCount) throw new Error('BRC-207: plan part index out of range')
       if (chunks[index] !== undefined) throw new Error('BRC-207: duplicate plan part')
-      if (hex.length % 2 !== 0 || hex.length > CHUNK_HEX_LENGTH)
-        throw new Error('BRC-207: invalid plan chunk')
-      if (index < partCount - 1 && hex.length !== CHUNK_HEX_LENGTH)
-        throw new Error('BRC-207: short nonfinal plan chunk')
+      assertPlanChunk(hex, index, partCount)
       chunks[index] = hex
     }
     if (count === undefined || parts.length !== count) throw new Error('BRC-207: missing plan part')

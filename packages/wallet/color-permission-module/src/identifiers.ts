@@ -15,9 +15,9 @@ export const COLOR_BASKET_NAMESPACE = 'p color'
 
 export type TokenRole = 'value' | 'authority'
 
-const ASSET_ID = /^([0-9a-f]{64})_(0|[1-9][0-9]{0,9})$/
-const ASSET_TAG = /^([0-9a-f]{64})v(0|[1-9][0-9]{0,9})$/
-const OUTPOINT = /^([0-9a-f]{64})\.(0|[1-9][0-9]{0,9})$/
+const ASSET_ID = /^([0-9a-f]{64})_(0|[1-9]\d{0,9})$/
+const ASSET_TAG = /^([0-9a-f]{64})v(0|[1-9]\d{0,9})$/
+const OUTPOINT = /^([0-9a-f]{64})\.(0|[1-9]\d{0,9})$/
 const HEX_TAG = /^(?:[0-9a-f]{2})+$/
 const IDENTITY_KEY = /^0[23][0-9a-f]{64}$/
 const WHITESPACE = /\s/u

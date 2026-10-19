@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 import { Transaction } from '@bsv/sdk'
-import { Bsv21Binary } from '@bsv/templates'
+import { OneColor } from '@bsv/templates'
 import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
 import { ColorPlan } from '../ColorPlan.js'
 import { assetBasket, assetTag } from '../identifiers.js'
@@ -85,7 +85,7 @@ describe('color module registered on a WalletPermissionsManager', () => {
     const tx = Transaction.fromAtomicBEEF(sent.tx!)
     expect(sent.signableTransaction).toBeUndefined()
     expect(validInput(tx, 0)).toBe(true)
-    expect(tx.outputs.map(output => Bsv21Binary.decode(output.lockingScript).amount)).toEqual([
+    expect(tx.outputs.map(output => OneColor.decode(output.lockingScript).amount)).toEqual([
       120n,
       180n
     ])

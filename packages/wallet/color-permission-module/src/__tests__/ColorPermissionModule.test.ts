@@ -13,7 +13,7 @@ import {
 } from '@bsv/sdk'
 import { hash160 } from '@bsv/sdk/primitives/Hash'
 import { toArray } from '@bsv/sdk/primitives/utils'
-import { Bsv21Binary } from '@bsv/templates'
+import { OneColor } from '@bsv/templates'
 import { ColorPlan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { assetBasket, assetTag, COLOR_KEY_ID, colorProtocolID } from '../identifiers.js'
@@ -188,7 +188,7 @@ describe('ColorPermissionModule', () => {
       const tx = Transaction.fromAtomicBEEF(result.tx!)
       expect(tx.inputs).toHaveLength(1)
       expect(validInput(tx, 0)).toBe(true)
-      expect(tx.outputs.map(output => Bsv21Binary.decode(output.lockingScript).amount)).toEqual([
+      expect(tx.outputs.map(output => OneColor.decode(output.lockingScript).amount)).toEqual([
         100n,
         200n
       ])
@@ -326,7 +326,7 @@ describe('ColorPermissionModule', () => {
       expect(handoff.inputs).toHaveLength(1)
       expect(handoff.outputs).toHaveLength(1)
       expect(validInput(handoff, 0)).toBe(true)
-      expect(split.outputs.map(output => Bsv21Binary.decode(output.lockingScript).amount)).toEqual([
+      expect(split.outputs.map(output => OneColor.decode(output.lockingScript).amount)).toEqual([
         100n,
         200n
       ])
@@ -548,7 +548,7 @@ describe('ColorPermissionModule', () => {
       })
       const authority = new Transaction()
       authority.addOutput({
-        lockingScript: new Bsv21Binary().lock(assetId, 0n, hash160(toArray(publicKey, 'hex'))),
+        lockingScript: new OneColor().lock(assetId, 0n, hash160(toArray(publicKey, 'hex'))),
         satoshis: 1
       })
       provider.admit(assetId, authority, 0)

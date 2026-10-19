@@ -22,6 +22,11 @@ const LISTED_OUTPUT_TX_STATUSES: TransactionStatus[] = ['completed', 'unproven',
 /** Statuses of a spending action under which its inputs are reserved rather than spent. */
 const RESERVING_TX_STATUSES: TransactionStatus[] = ['unsigned', 'unprocessed', 'nosend', 'sending']
 
+function byOutpoint(a: TableOutput, b: TableOutput): number {
+  if (a.txid === b.txid) return a.vout - b.vout
+  return (a.txid ?? '') < (b.txid ?? '') ? -1 : 1
+}
+
 async function hydrateBasketPrefixOutput(
   s: StorageProvider,
   output: TableOutput,
@@ -67,35 +72,46 @@ async function listBasketPrefixOutputs(
       .map(basket => basket.basketId)
   )
   const noScript = !vargs.includeLockingScripts
-  const outputs: TableOutput[] = []
-  for (const basketId of basketIds) {
-    outputs.push(
-      ...(await s.findOutputs({
-        partial: { userId, basketId, spendable: true },
-        txStatus: LISTED_OUTPUT_TX_STATUSES,
-        noScript
-      }))
+  const unspent = await Promise.all(
+    [...basketIds].map(
+      async basketId =>
+        await s.findOutputs({
+          partial: { userId, basketId, spendable: true },
+          txStatus: LISTED_OUTPUT_TX_STATUSES,
+          noScript
+        })
     )
-  }
-  for (const spender of await s.findTransactions({
+  )
+  const spenders = await s.findTransactions({
     partial: { userId },
     status: RESERVING_TX_STATUSES,
     noRawTx: true
-  })) {
-    const reserved = await s.findOutputs({
-      partial: { userId, spentBy: spender.transactionId },
-      txStatus: LISTED_OUTPUT_TX_STATUSES,
-      noScript
-    })
-    outputs.push(...reserved.filter(output => output.basketId != null && basketIds.has(output.basketId)))
-  }
+  })
+  const reserved = await Promise.all(
+    spenders.map(
+      async spender =>
+        await s.findOutputs({
+          partial: { userId, spentBy: spender.transactionId },
+          txStatus: LISTED_OUTPUT_TX_STATUSES,
+          noScript
+        })
+    )
+  )
+  const outputs: TableOutput[] = [
+    ...unspent.flat(),
+    ...reserved.flat().filter(output => output.basketId != null && basketIds.has(output.basketId))
+  ]
   if (outputs.length > MAX_UTXO_REVIEW_CANDIDATES) {
     throw new WERR_INVALID_OPERATION(`basketPrefixOutputs is limited to ${MAX_UTXO_REVIEW_CANDIDATES} outputs.`)
   }
-  outputs.sort((a, b) => (a.txid === b.txid ? a.vout - b.vout : (a.txid ?? '') < (b.txid ?? '') ? -1 : 1))
+  outputs.sort(byOutpoint)
   const beef = new Beef()
   const result: ListOutputsResult = { totalOutputs: outputs.length, outputs: [] }
-  for (const output of outputs) result.outputs.push(await hydrateBasketPrefixOutput(s, output, vargs, beef))
+  // Outputs hydrate one at a time because they share the BEEF they add transactions to.
+  await outputs.reduce<Promise<void>>(async (previous, output) => {
+    await previous
+    result.outputs.push(await hydrateBasketPrefixOutput(s, output, vargs, beef))
+  }, Promise.resolve())
   if (vargs.includeTransactions) result.BEEF = beef.toBinary()
   return result
 }

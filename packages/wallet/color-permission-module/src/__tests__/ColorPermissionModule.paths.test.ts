@@ -8,8 +8,8 @@ import {
   type ListOutputsResult
 } from '@bsv/sdk'
 import { hash160 } from '@bsv/sdk/primitives/Hash'
-import { toArray } from '@bsv/sdk/primitives/utils'
-import { Bsv21Binary } from '@bsv/templates'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
+import { OneColor } from '@bsv/templates'
 import { ColorPlan, type ColorPlan as Plan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { createColorModule } from '../index.js'
@@ -78,7 +78,7 @@ describe('ColorPermissionModule boundaries', () => {
       counterparty: wallet.identityKey,
       forSelf: true
     })
-    const lockingScript = new Bsv21Binary()
+    const lockingScript = new OneColor()
       .lock(assetId, amount, hash160(toArray(publicKey, 'hex')))
       .toHex()
     return { custody, output: { lockingScript, satoshis: 1, outputDescription: 'To myself' } }
@@ -249,7 +249,7 @@ describe('ColorPermissionModule boundaries', () => {
       async () => ({
         outputs: [
           {
-            lockingScript: new Bsv21Binary().lock(null, 5n, Array(20).fill(0)).toHex(),
+            lockingScript: new OneColor().lock(null, 5n, Array(20).fill(0)).toHex(),
             satoshis: 1,
             outputDescription: 'Deploy'
           }
@@ -262,7 +262,7 @@ describe('ColorPermissionModule boundaries', () => {
       async () => ({
         outputs: [
           {
-            lockingScript: new Bsv21Binary().lock(assetId, 0n, Array(20).fill(0)).toHex(),
+            lockingScript: new OneColor().lock(assetId, 0n, Array(20).fill(0)).toHex(),
             satoshis: 1,
             outputDescription: 'Authority'
           }
@@ -275,7 +275,7 @@ describe('ColorPermissionModule boundaries', () => {
       async () => ({
         outputs: [
           {
-            lockingScript: new Bsv21Binary()
+            lockingScript: new OneColor()
               .lock(`${'ee'.repeat(32)}_0`, 5n, Array(20).fill(0))
               .toHex(),
             satoshis: 1,
@@ -359,7 +359,7 @@ describe('ColorPermissionModule boundaries', () => {
     })
     const deploy = new Transaction()
     deploy.addOutput({
-      lockingScript: new Bsv21Binary().lock(null, 9n, hash160(toArray(publicKey, 'hex'))),
+      lockingScript: new OneColor().lock(null, 9n, hash160(toArray(publicKey, 'hex'))),
       satoshis: 1
     })
     const deployed = `${deploy.id('hex')}_0`
@@ -529,6 +529,36 @@ describe('ColorPermissionModule boundaries', () => {
     expect(next).not.toHaveBeenCalled()
   })
 
+  it('accepts binary outputs of an asset first deployed as BRC-161 JSON', async () => {
+    const pushUtf8 = (text: string): string => {
+      const bytes = toArray(text, 'utf8')
+      return bytes.length.toString(16).padStart(2, '0') + toHex(bytes)
+    }
+    const deploy = new Transaction()
+    deploy.addOutput({
+      lockingScript: LockingScript.fromHex(
+        '0063' +
+          pushUtf8('ord') +
+          '51' +
+          pushUtf8('application/bsv-20') +
+          '00' +
+          pushUtf8('{"p":"bsv-20","op":"deploy+mint","amt":"1000","dec":"0"}') +
+          '68' +
+          '76a914' +
+          '11'.repeat(20) +
+          '88ac'
+      ),
+      satoshis: 1
+    })
+    const legacyId = `${deploy.id('hex')}_0`
+    provider.admit(legacyId, deploy, 0)
+    const payment = await tokenPayment(new FakeWallet(), wallet, legacyId, 5n)
+    provider.admit(legacyId, payment.tx, 0)
+    await expect(
+      receive(payment.customInstructions, payment.tx, 0, assetBasket(legacyId, 'value'))
+    ).resolves.toEqual({ args: expect.anything() })
+  })
+
   it('rejects assets it cannot authenticate and overlay answers that do not match the wallet', async () => {
     await expect(
       module.handleRequest(
@@ -553,7 +583,7 @@ describe('ColorPermissionModule boundaries', () => {
     provider.admit(notDeployed, spoof.tx, 0)
     await expect(
       receive(spoof.customInstructions, spoof.tx, 0, assetBasket(notDeployed, 'value'))
-    ).rejects.toThrow('not a BRC-162 deploy')
+    ).rejects.toThrow('is not a token deploy')
     await holdTokens(wallet, provider, assetId, [50n])
     const misreporting = Object.create(wallet) as FakeWallet
     misreporting.listOutputs = async args => {

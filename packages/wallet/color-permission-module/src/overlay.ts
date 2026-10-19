@@ -30,7 +30,7 @@ export function readOutputList(
     const output = Number.isSafeInteger(item.outputIndex)
       ? transaction.outputs[item.outputIndex]
       : undefined
-    if (output == null || output.satoshis === undefined)
+    if (output?.satoshis === undefined)
       throw new Error('BRC-207: overlay answer names a missing output')
     const outpoint = `${transaction.id('hex')}.${item.outputIndex}`
     if (!queried.includes(outpoint))

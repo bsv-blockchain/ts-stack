@@ -5,6 +5,7 @@ export { P2MSKH } from './src/P2MSKH.js'
 export {
   Bsv21Binary,
   Bsv21BinaryError,
+  Bsv21BinaryError as OneColorError,
   BSV21_MAX_AMOUNT,
   encodeAmountChunk,
   decodeAmountChunk,
@@ -12,7 +13,9 @@ export {
   tokenIdFromString,
   isTokenShaped
 } from './src/Bsv21Binary.js'
-export type { Bsv21BinaryDecoded, Bsv21Role } from './src/Bsv21Binary.js'
+export type { Bsv21BinaryDecoded, Bsv21Role, Bsv21Role as OneColorRole } from './src/Bsv21Binary.js'
+export { OneColor } from './src/OneColor.js'
+export type { OneColorDecoded } from './src/OneColor.js'
 export {
   encodeStrictCbor,
   decodeStrictCbor,

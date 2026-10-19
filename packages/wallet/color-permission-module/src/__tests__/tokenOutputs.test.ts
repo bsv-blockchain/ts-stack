@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 import { LockingScript } from '@bsv/sdk'
 import { toArray } from '@bsv/sdk/primitives/utils'
-import { Bsv21Binary } from '@bsv/templates'
+import { OneColor } from '@bsv/templates'
 import { assertNoRequiredProfiles, readTokenOutput } from '../tokenOutputs.js'
 
 const TXID = 'cd'.repeat(32)
@@ -37,7 +37,7 @@ const DISPLAY_ONLY = [
 
 describe('BRC-162 token outputs', () => {
   it('reads value, authority and deploy roles with their asset IDs', () => {
-    const template = new Bsv21Binary()
+    const template = new OneColor()
     expect(
       readTokenOutput(template.lock(`${TXID}_0`, 500n, PKH), { txid: '00'.repeat(32), vout: 3 })
     ).toEqual({
@@ -81,7 +81,7 @@ describe('BRC-162 token outputs', () => {
     expect(() => assertNoRequiredProfiles(DECLARED_REQ)).toThrow('requires processing profiles')
     expect(() => assertNoRequiredProfiles([0xa1, ...text('req'), 0x05])).toThrow('malformed req')
     expect(() =>
-      readTokenOutput(new Bsv21Binary().lock(null, 9n, PKH, DECLARED_REQ), { txid: TXID, vout: 0 })
+      readTokenOutput(new OneColor().lock(null, 9n, PKH, DECLARED_REQ), { txid: TXID, vout: 0 })
     ).toThrow('requires processing profiles')
   })
 
