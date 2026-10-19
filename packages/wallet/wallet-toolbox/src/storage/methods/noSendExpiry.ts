@@ -123,8 +123,7 @@ function reclaimValues(
 async function estimateAnchorSatoshis(
   storage: StorageProvider,
   userId: number,
-  target: ValidCreateActionArgs,
-  reclaimable: boolean
+  target: ValidCreateActionArgs
 ): Promise<number> {
   const { xinputs } = await validateRequiredInputs(storage, userId, target)
   const xoutputs = validateRequiredOutputs(storage, userId, target)
@@ -138,8 +137,6 @@ async function estimateAnchorSatoshis(
   if (!Number.isSafeInteger(actionSatoshis) || actionSatoshis <= 0) {
     throw new WERR_INVALID_PARAMETER('inputs', 'a BRC-177 action requiring a positive, exactly sized revocation anchor')
   }
-  // A `never` anchor is never reclaimed, so it needs no reclaim-fee allowance.
-  if (!reclaimable) return actionSatoshis
   // BRC-177 Prefunding step 2: the anchor MUST both fund the protected action
   // and be reclaimable net of the reclaim fee. When the reclaim floor is the
   // larger need (e.g. a value-neutral token transfer), that MUST outweighs the
@@ -168,11 +165,8 @@ export async function prepareNoSendExpiry(
     throw new WERR_INVALID_PARAMETER('labels', 'a BRC-177 blockheight later than the current best-chain height')
   }
   const userId = verifyId(auth.userId)
-  const reclaimable = expiry.mode !== 'never'
-  const anchorSatoshis = await estimateAnchorSatoshis(storage, userId, target, reclaimable)
-  const { reclaimFee, reclaimSatoshis } = reclaimable
-    ? reclaimValues(storage, anchorSatoshis)
-    : { reclaimFee: 0, reclaimSatoshis: 0 }
+  const anchorSatoshis = await estimateAnchorSatoshis(storage, userId, target)
+  const { reclaimFee, reclaimSatoshis } = reclaimValues(storage, anchorSatoshis)
   const fundingArgs = makeNoSendExpiryFundingArgs(anchorSatoshis, target.labels)
   fundingArgs.includeAllSourceTransactions = target.includeAllSourceTransactions
   const funding = await createAction(storage, auth, fundingArgs)
@@ -189,8 +183,7 @@ export async function prepareNoSendExpiry(
 async function resolveDeadline(
   storage: StorageProvider,
   expiry: NonNullable<ReturnType<typeof parseBrc177NoSendExpiryLabels>>
-): Promise<number | null> {
-  if (expiry.mode === 'never') return null
+): Promise<number> {
   if (expiry.mode === 'blockheight') {
     const height = await storage.getServices().getHeight()
     if (expiry.value <= height) {
@@ -237,12 +230,11 @@ export async function activateNoSendExpiry(
     throw new WERR_INVALID_OPERATION('BRC-177 revocation anchor is not available managed change')
   }
 
-  const reclaimable = expiry.mode !== 'never'
-  const expectedAnchor = await estimateAnchorSatoshis(storage, userId, args.target, reclaimable)
+  const expectedAnchor = await estimateAnchorSatoshis(storage, userId, args.target)
   if (Number(anchor.satoshis) !== expectedAnchor) {
     throw new WERR_INVALID_OPERATION('BRC-177 revocation anchor no longer exactly funds the protected action')
   }
-  if (reclaimable) reclaimValues(storage, expectedAnchor)
+  reclaimValues(storage, expectedAnchor)
   const deadline = await resolveDeadline(storage, expiry)
   const target = {
     ...args.target,

@@ -258,17 +258,15 @@ export async function createNoSendExpiryAction(
 
   try {
     target = pendingFromPlan(wallet, targetArgs, activated.action)
-    if (activated.expiry.mode !== 'never') {
-      const reclaim = await makeReclaim(
-        wallet,
-        funding.tx,
-        target,
-        activated.anchorTxid,
-        activated.anchorVout,
-        prepared.reclaimSatoshis
-      )
-      await armReclaim(wallet, target, completedFunding.beef, reclaim, prepared.reclaimSatoshis)
-    }
+    const reclaim = await makeReclaim(
+      wallet,
+      funding.tx,
+      target,
+      activated.anchorTxid,
+      activated.anchorVout,
+      prepared.reclaimSatoshis
+    )
+    await armReclaim(wallet, target, completedFunding.beef, reclaim, prepared.reclaimSatoshis)
   } catch (error) {
     await wallet.storage.abortAction({ reference: activated.action.reference }).catch(() => undefined)
     throw error
