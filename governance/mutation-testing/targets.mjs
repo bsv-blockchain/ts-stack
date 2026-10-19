@@ -624,6 +624,20 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'color-permission': {
+      packageDirectory: 'packages/wallet/color-permission-module',
+      manifest: 'packages/wallet/color-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/color-permission-module/src/__tests__/ColorPlan.property.test.ts',
+      mutate: [
+        'src/ColorPlan.ts',
+        'src/strictJson.ts',
+        'src/identifiers.ts',
+        'src/tokenOutputs.ts',
+        'src/overlay.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], { esm: true })
+    },
     'ecpm-permission': {
       packageDirectory: 'packages/wallet/ecpm-permission-module',
       manifest: 'packages/wallet/ecpm-permission-module/package.json',

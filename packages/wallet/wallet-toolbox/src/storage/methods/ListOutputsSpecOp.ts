@@ -1,17 +1,104 @@
 import { type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
-import { ListOutputsResult } from '@bsv/sdk'
+import { Beef, ListOutputsResult, WalletOutput } from '@bsv/sdk'
 import { StorageProvider } from '../StorageProvider'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { TableOutput } from '../schema/tables/TableOutput'
 import {
+  specOpBasketPrefixOutputs,
   specOpInvalidChange,
   specOpSetWalletChangeParams,
   specOpWalletBalance,
-  specOpWalletManagedUtxos
+  specOpWalletManagedUtxos,
+  TransactionStatus
 } from '../../sdk/types'
 import { verifyId, verifyInteger, verifyOne } from '../../utility/utilityHelpers'
-import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { MAX_UTXO_REVIEW_CANDIDATES, reviewUtxoOutputs } from './reviewUtxoOutputs'
+
+/** Statuses of an output's creating transaction under which `listOutputs` lists it. */
+const LISTED_OUTPUT_TX_STATUSES: TransactionStatus[] = ['completed', 'unproven', 'nosend', 'sending']
+
+/** Statuses of a spending action under which its inputs are reserved rather than spent. */
+const RESERVING_TX_STATUSES: TransactionStatus[] = ['unsigned', 'unprocessed', 'nosend', 'sending']
+
+async function hydrateBasketPrefixOutput(
+  s: StorageProvider,
+  output: TableOutput,
+  vargs: ValidListOutputsArgs,
+  beef: Beef
+): Promise<WalletOutput> {
+  const walletOutput: WalletOutput = {
+    satoshis: Number(output.satoshis),
+    spendable: !!output.spendable,
+    outpoint: `${output.txid}.${output.vout}`
+  }
+  if (vargs.includeCustomInstructions && output.customInstructions) {
+    walletOutput.customInstructions = output.customInstructions
+  }
+  if (vargs.includeLabels) {
+    walletOutput.labels = (await s.getLabelsForTransactionId(output.transactionId)).map(label => label.label)
+  }
+  if (vargs.includeTags) {
+    walletOutput.tags = (await s.getTagsForOutputId(output.outputId)).map(tag => tag.tag)
+  }
+  if (vargs.includeLockingScripts) {
+    await s.validateOutputScript(output)
+    if (output.lockingScript != null) walletOutput.lockingScript = asString(output.lockingScript)
+  }
+  if (vargs.includeTransactions && output.txid != null && beef.findTxid(output.txid) == null) {
+    await s.getValidBeefForKnownTxid(output.txid, beef, undefined, vargs.knownTxids)
+  }
+  return walletOutput
+}
+
+async function listBasketPrefixOutputs(
+  s: StorageProvider,
+  auth: AuthId,
+  vargs: ValidListOutputsArgs,
+  specOpTags: string[]
+): Promise<ListOutputsResult> {
+  const namespace = specOpTags[0]
+  if (!namespace) throw new WERR_INVALID_PARAMETER('tags', 'a basket namespace as the first tag')
+  const userId = verifyId(auth.userId)
+  const basketIds = new Set(
+    (await s.findOutputBaskets({ partial: { userId, isDeleted: false } }))
+      .filter(basket => basket.name.startsWith(`${namespace} `))
+      .map(basket => basket.basketId)
+  )
+  const noScript = !vargs.includeLockingScripts
+  const outputs: TableOutput[] = []
+  for (const basketId of basketIds) {
+    outputs.push(
+      ...(await s.findOutputs({
+        partial: { userId, basketId, spendable: true },
+        txStatus: LISTED_OUTPUT_TX_STATUSES,
+        noScript
+      }))
+    )
+  }
+  for (const spender of await s.findTransactions({
+    partial: { userId },
+    status: RESERVING_TX_STATUSES,
+    noRawTx: true
+  })) {
+    const reserved = await s.findOutputs({
+      partial: { userId, spentBy: spender.transactionId },
+      txStatus: LISTED_OUTPUT_TX_STATUSES,
+      noScript
+    })
+    outputs.push(...reserved.filter(output => output.basketId != null && basketIds.has(output.basketId)))
+  }
+  if (outputs.length > MAX_UTXO_REVIEW_CANDIDATES) {
+    throw new WERR_INVALID_OPERATION(`basketPrefixOutputs is limited to ${MAX_UTXO_REVIEW_CANDIDATES} outputs.`)
+  }
+  outputs.sort((a, b) => (a.txid === b.txid ? a.vout - b.vout : (a.txid ?? '') < (b.txid ?? '') ? -1 : 1))
+  const beef = new Beef()
+  const result: ListOutputsResult = { totalOutputs: outputs.length, outputs: [] }
+  for (const output of outputs) result.outputs.push(await hydrateBasketPrefixOutput(s, output, vargs, beef))
+  if (vargs.includeTransactions) result.BEEF = beef.toBinary()
+  return result
+}
 
 export interface ListOutputsSpecOp {
   name: string
@@ -129,6 +216,11 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         })
         return { totalOutputs: 0, outputs: [] }
       }
+    },
+    [specOpBasketPrefixOutputs]: {
+      name: 'basketPrefixOutputs',
+      tagsParamsCount: 1,
+      resultFromTags: listBasketPrefixOutputs
     }
   }
 }

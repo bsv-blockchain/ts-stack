@@ -1621,6 +1621,49 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  packages/wallet/color-permission-module:
+    dependencies:
+      '@bsv/templates':
+        specifier: workspace:^
+        version: link:../../helpers/ts-templates
+    devDependencies:
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
+      '@bsv/wallet-toolbox-client':
+        specifier: workspace:^
+        version: link:../wallet-toolbox/client
+      '@jest/globals':
+        specifier: ^30.5.1
+        version: 30.5.1
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      '@types/node':
+        specifier: ^26.6.1
+        version: 26.6.1
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.10.1
+      jest:
+        specifier: ^30.5.1
+        version: 30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2))
+      oxlint:
+        specifier: ^1.83.0
+        version: 1.83.0
+      ts-jest:
+        specifier: ^29.4.12
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.5.1)(@jest/types@30.5.1)(@typescript/typescript6@6.0.2)(babel-jest@30.5.1(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2)))
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.24)(tsx@4.23.13)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   packages/wallet/ecpm-permission-module:
     devDependencies:
       '@bsv/sdk':

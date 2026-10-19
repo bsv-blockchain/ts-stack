@@ -42,6 +42,7 @@
       "packages/overlays/btms-backend/package.json",
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
+      "packages/wallet/color-permission-module/package.json",
       "packages/network/chirp/package.json",
       "packages/content/lch/package.json",
       "packages/messaging/webrtpay/package.json"
@@ -440,6 +441,17 @@
         "invariants": [
           "Applying and then removing one module-derived scalar returns every generated finite input point exactly.",
           "Neither randomized root material nor the corresponding derived scalar is exposed in the wallet result."
+        ]
+      },
+      {
+        "path": "packages/wallet/color-permission-module/src/__tests__/ColorPlan.property.test.ts",
+        "manifest": "packages/wallet/color-permission-module/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted application plans, signature envelopes and receipt instructions that select and sign module-held token inputs",
+        "target": "BRC-207 plan label encoding and the strict JSON reader for every plan, envelope and receipt",
+        "invariants": [
+          "Every valid plan round-trips through its labels in any order among unrelated labels.",
+          "The strict JSON reader returns the same value as JSON.parse for every serialized JSON value."
         ]
       },
       {

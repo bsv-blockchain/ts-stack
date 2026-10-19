@@ -318,6 +318,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "color-permission",
+      "manifest": "packages/wallet/color-permission-module/package.json",
+      "propertyTest": "packages/wallet/color-permission-module/src/__tests__/ColorPlan.property.test.ts",
+      "risk": "critical",
+      "boundary": "Untrusted application plans, signature envelopes and receipt instructions that select and sign module-held token inputs",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "ecpm-permission",
       "manifest": "packages/wallet/ecpm-permission-module/package.json",
       "propertyTest": "packages/wallet/ecpm-permission-module/src/__tests__/EcpmPermissionModule.property.test.ts",

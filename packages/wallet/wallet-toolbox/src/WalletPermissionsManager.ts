@@ -20,6 +20,8 @@ import {
   GetPublicKeyArgs,
   CreateActionArgs,
   CreateActionResult,
+  SignActionArgs,
+  SignActionResult,
   SendWithResult,
   WERR_REVIEW_ACTIONS as SDK_WERR_REVIEW_ACTIONS,
   ListOutputsResult,
@@ -44,6 +46,7 @@ import {
 } from './utility/exactActionSpend'
 import { copyActionOutputAuthorizations } from './utility/actionOutputAuthorizations'
 import { WERR_REVIEW_ACTIONS, WERR_UNAUTHORIZED } from './sdk/WERR_errors'
+import { specOpBasketPrefixOutputs } from './sdk/types'
 // Imported from the leaf module directly (not generateChange.ts, which
 // transitively imports StorageProvider.ts and the full signer/create-action
 // module graph) to avoid an unrelated circular-import edge from this file.
@@ -191,6 +194,10 @@ export type PermissionsModuleNext = (args: object) => Promise<unknown>
 /**
  * A permissions module handles request/response transformation for a specific P-protocol or P-basket scheme under BRC-98/99.
  * Modules are registered in the config mapped by their scheme ID.
+ *
+ * Modules that handled a `createAction` returning a signable transaction also receive that action's
+ * `signAction` through `onRequest` and `onResponse`, with method `signAction`. A module may add `spends`
+ * for inputs it supplied.
  */
 export interface PermissionsModule {
   /**
@@ -420,6 +427,38 @@ const BASKET_MAP = {
   basket: 'admin basket-access',
   certificate: 'admin certificate-access',
   spending: 'admin spending-authorization'
+}
+
+/**
+ * Preserves the confidentiality of transaction descriptions, input/output descriptions and
+ * custom instructions from lower storage layers. Always used with `keyID="1"` and `counterparty="self"`.
+ */
+const METADATA_ENCRYPTION_PROTOCOL: [2, 'admin metadata encryption'] = [2, 'admin metadata encryption']
+
+/**
+ * Decrypts metadata that a permissions manager with `encryptWalletMetadata` stored through `wallet`.
+ * A value that does not decrypt, such as metadata stored without encryption, is returned unchanged.
+ * Permission modules use this to read metadata from their own baskets through the underlying wallet.
+ */
+export async function maybeDecryptMetadata(
+  wallet: WalletInterface,
+  ciphertext: Base64String,
+  originator?: string
+): Promise<string> {
+  try {
+    const { plaintext } = await wallet.decrypt(
+      {
+        ciphertext: toArray(ciphertext, 'base64'),
+        protocolID: METADATA_ENCRYPTION_PROTOCOL,
+        keyID: '1'
+      },
+      originator
+    )
+    return toUTF8(plaintext)
+  } catch {
+    // Decryption failed (e.g. wrong key, unencrypted legacy value) — return original string unchanged
+    return ciphertext
+  }
 }
 
 /**
@@ -682,6 +721,8 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly blockedActionReferences: Set<string> = new Set()
   /** Pending references whose action was created with `noSend`. */
   private readonly pendingNoSendReferences: Set<string> = new Set()
+  /** P-modules that handled each pending action's createAction, in request order. */
+  private readonly pendingActionModules: Map<string, PermissionsModule[]> = new Map()
   /**
    * Originator binding for signed no-send actions, keyed by lowercase txid.
    * Signing drops the pending reference, so without this a non-admin caller
@@ -794,6 +835,8 @@ export class WalletPermissionsManager implements WalletInterface {
         // BRC-177 is a built-in reserved BRC-111 module in every Toolbox wallet.
         nosend: {
           onRequest: async req => {
+            // Signing an action this module already authorized at createAction needs nothing further.
+            if (req.method === 'signAction') return { args: req.args }
             const labels = (req.args as { labels?: string[] }).labels
             parseBrc177NoSendExpiryLabels(labels)
             if (req.method !== 'createAction' && req.method !== 'listActions') {
@@ -2713,15 +2756,6 @@ export class WalletPermissionsManager implements WalletInterface {
     'admin permission token encryption'
   ]
 
-  /**
-   * Similarly, we will use a "metadata encryption" protocol to preserve the confidentiality
-   * of transaction descriptions and input/output descriptions from lower storage layers.
-   */
-  private static readonly METADATA_ENCRYPTION_PROTOCOL: [2, 'admin metadata encryption'] = [
-    2,
-    'admin metadata encryption'
-  ]
-
   /** We always use `keyID="1"` and `counterparty="self"` for these encryption ops. */
   private async encryptPermissionTokenField(plaintext: string | number[]): Promise<number[]> {
     const data = typeof plaintext === 'string' ? toArray(plaintext, 'utf8') : plaintext
@@ -2866,7 +2900,7 @@ export class WalletPermissionsManager implements WalletInterface {
     const { ciphertext } = await this.underlying.encrypt(
       {
         plaintext: toArray(plaintext, 'utf8'),
-        protocolID: WalletPermissionsManager.METADATA_ENCRYPTION_PROTOCOL,
+        protocolID: METADATA_ENCRYPTION_PROTOCOL,
         keyID: '1'
       },
       this.adminOriginator
@@ -2880,20 +2914,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * @returns The decrypted metadata. If decryption fails, returns the original value instead.
    */
   private async maybeDecryptMetadata(ciphertext: Base64String): Promise<string> {
-    try {
-      const { plaintext } = await this.underlying.decrypt(
-        {
-          ciphertext: toArray(ciphertext, 'base64'),
-          protocolID: WalletPermissionsManager.METADATA_ENCRYPTION_PROTOCOL,
-          keyID: '1'
-        },
-        this.adminOriginator
-      )
-      return toUTF8(plaintext)
-    } catch {
-      // Decryption failed (e.g. wrong key, unencrypted legacy value) — return original string unchanged
-      return ciphertext
-    }
+    return await maybeDecryptMetadata(this.underlying, ciphertext, this.adminOriginator)
   }
 
   /** Helper to see if a token's expiry is in the past. */
@@ -4348,7 +4369,8 @@ export class WalletPermissionsManager implements WalletInterface {
     // data. This ensures malformed BEEF is still aborted and cannot leave an
     // untracked action that may later be signed under another originator.
     const reference = createResult.signableTransaction.reference
-    this.bindPendingAction(reference, originator, vargs.isNoSend)
+    const pModules = Array.from(pModulesByScheme.values())
+    this.bindPendingAction(reference, originator, vargs.isNoSend, pModules)
 
     // 7a) Parse the signable tx to determine net spend, then gate on spending
     // authorization. SECURITY (GHSA-36f9-7rg5-cpf8) defense-in-depth: confirm every
@@ -4405,8 +4427,10 @@ export class WalletPermissionsManager implements WalletInterface {
     // 9) Finalize or return the signable transaction based on whether more signatures are needed.
     if (vargs.isSignAction) return createResult
 
+    let signResult: SignActionResult
     try {
-      const signResult = await this.underlying.signAction(
+      const signArgs = await this.signActionArgsThroughPModules(
+        pModules,
         {
           reference,
           spends: {},
@@ -4414,22 +4438,24 @@ export class WalletPermissionsManager implements WalletInterface {
         },
         originator
       )
-      this.assertAuthorizedSignResult(reference, {}, signResult)
+      signResult = await this.underlying.signAction(signArgs, originator)
+      this.assertAuthorizedSignResult(reference, signArgs.spends, signResult)
       this.clearPendingAction(reference)
       if (vargs.isNoSend && signResult.txid != null) {
         this.recordNoSendAction(signResult.txid, originator)
       }
       this.forgetSentNoSendActions(signResult.sendWithResults)
-      return {
-        ...createResult,
-        ...signResult,
-        noSendChange: noSendChangeOnSignedTransaction(createResult.noSendChange, signResult.txid),
-        signableTransaction: undefined
-      }
     } catch (error) {
       this.forgetSentNoSendActionsInError(error)
       await this.blockAndAbortAction(reference)
       throw error
+    }
+    signResult = await this.signActionResultThroughPModules(pModules, signResult, originator)
+    return {
+      ...createResult,
+      ...signResult,
+      noSendChange: noSendChangeOnSignedTransaction(createResult.noSendChange, signResult.txid),
+      signableTransaction: undefined
     }
   }
 
@@ -4802,12 +4828,18 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
-  private bindPendingAction(reference: string, originator: string | undefined, noSend: boolean): void {
+  private bindPendingAction(
+    reference: string,
+    originator: string | undefined,
+    noSend: boolean,
+    pModules: PermissionsModule[]
+  ): void {
     if (this.pendingActionOriginators.has(reference)) {
       throw new WERR_UNAUTHORIZED('The action reference is already pending.')
     }
     this.pendingActionOriginators.set(reference, originator ?? '')
     if (noSend) this.pendingNoSendReferences.add(reference)
+    if (pModules.length > 0) this.pendingActionModules.set(reference, pModules)
   }
 
   private clearPendingAction(reference: string): void {
@@ -4815,6 +4847,7 @@ export class WalletPermissionsManager implements WalletInterface {
     this.pendingActionTemplates.delete(reference)
     this.blockedActionReferences.delete(reference)
     this.pendingNoSendReferences.delete(reference)
+    this.pendingActionModules.delete(reference)
   }
 
   /** Lets the originator that created a signed no-send action, and only it, abort it. */
@@ -4854,6 +4887,36 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
+  /** Passes signAction args through the P-modules that handled the action's createAction, in request order. */
+  private async signActionArgsThroughPModules(
+    pModules: PermissionsModule[],
+    args: SignActionArgs,
+    originator?: string
+  ): Promise<SignActionArgs> {
+    let transformedArgs: object = args
+    for (const module of pModules) {
+      const transformed = await module.onRequest({
+        method: 'signAction',
+        args: transformedArgs,
+        originator: originator!
+      })
+      transformedArgs = transformed.args
+    }
+    return transformedArgs as SignActionArgs
+  }
+
+  /** Passes a signAction result back through the same P-modules in reverse order. */
+  private async signActionResultThroughPModules(
+    pModules: PermissionsModule[],
+    result: SignActionResult,
+    originator?: string
+  ): Promise<SignActionResult> {
+    for (let i = pModules.length - 1; i >= 0; i--) {
+      result = await pModules[i].onResponse(result, { method: 'signAction', originator: originator! })
+    }
+    return result
+  }
+
   public async signAction(
     ...args: Parameters<WalletInterface['signAction']>
   ): ReturnType<WalletInterface['signAction']> {
@@ -4861,26 +4924,30 @@ export class WalletPermissionsManager implements WalletInterface {
     this.assertPendingActionOriginator(requestArgs.reference, originator, false)
     // The wallet takes noSend from signAction's options, else from createAction's.
     const noSend = (requestArgs.options?.noSend ?? this.pendingNoSendReferences.has(requestArgs.reference)) === true
+    const pModules = this.pendingActionModules.get(requestArgs.reference) ?? []
+    let result: SignActionResult
     try {
-      const result = await this.underlying.signAction(
+      const signArgs = await this.signActionArgsThroughPModules(
+        pModules,
         {
           ...requestArgs,
           options: { ...requestArgs.options, returnTXIDOnly: false }
         },
         originator
       )
-      this.assertAuthorizedSignResult(requestArgs.reference, requestArgs.spends, result)
+      result = await this.underlying.signAction(signArgs, originator)
+      this.assertAuthorizedSignResult(requestArgs.reference, signArgs.spends, result)
       this.clearPendingAction(requestArgs.reference)
       if (noSend && result.txid != null) {
         this.recordNoSendAction(result.txid, originator, requestArgs.reference)
       }
       this.forgetSentNoSendActions(result.sendWithResults)
-      return result
     } catch (error) {
       this.forgetSentNoSendActionsInError(error)
       await this.blockAndAbortAction(requestArgs.reference)
       throw error
     }
+    return await this.signActionResultThroughPModules(pModules, result, originator)
   }
 
   public async abortAction(
@@ -5636,6 +5703,8 @@ export class WalletPermissionsManager implements WalletInterface {
   private isAdminBasket(basket: string): boolean {
     if (basket === 'default') return true
     if (basket.startsWith('admin')) return true
+    // Lists P-basket outputs past their permission modules.
+    if (basket === specOpBasketPrefixOutputs) return true
     return false
   }
 

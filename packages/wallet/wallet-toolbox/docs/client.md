@@ -6573,6 +6573,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 A permissions module handles request/response transformation for a specific P-protocol or P-basket scheme under BRC-98/99.
 Modules are registered in the config mapped by their scheme ID.
 
+Modules that handled a `createAction` returning a signable transaction also receive that action's
+`signAction` through `onRequest` and `onResponse`, with method `signAction`. A module may add `spends`
+for inputs it supplied.
+
 ```ts
 export interface PermissionsModule {
     handleRequest?: (req: PermissionsModuleRequest, next: PermissionsModuleNext) => Promise<unknown>;

@@ -178,7 +178,7 @@ test('required mutation targets add their built dependencies without widening pa
     'btms-permission'
   ])
   assert.deepEqual(names, ['@bsv/amountinator', '@bsv/btms-permission-module'])
-  const scope = selectWorkspaceScope(realProjects, ['packages/helpers/ts-templates/package.json'])
+  const scope = selectWorkspaceScope(realProjects, ['packages/overlays/topics/package.json'])
   assert.equal(scope.affected.includes('@bsv/amountinator'), false)
   assert.equal(scope.build.includes('@bsv/wallet-toolbox-client'), false)
   assert.equal(scope.build.includes('@bsv/btms'), false)

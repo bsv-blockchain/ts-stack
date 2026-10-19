@@ -29,11 +29,34 @@ attention to changes that materially alter behavior or extend functionality.
   sending it to a relative URL, which a browser resolves against the page's
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
+- `WalletPermissionsManager` passes `signAction` through the permission modules
+  that handled the action's `createAction`, both for a caller's `signAction`
+  and for the signing step of a one-call `createAction`. Modules receive it via
+  `onRequest` and `onResponse` with method `signAction` and may add `spends`
+  for inputs they supplied. A module request failure aborts the action; a
+  module response failure is thrown without aborting the signed action. A
+  module that rejects unknown methods must accept `signAction`.
+- `maybeDecryptMetadata(wallet, value, originator?)` is exported. It decrypts
+  metadata that a permissions manager with `encryptWalletMetadata` stored, so a
+  permission module can read its own baskets' custom instructions through the
+  underlying wallet. The manager uses the same function.
+- New `listOutputs` special operation `specOpBasketPrefixOutputs`: with a
+  basket namespace such as `p color` in tag 0, it lists outputs from every
+  basket in that namespace that are unspent or reserved as an input of a
+  pending action (`spendable` false), ordered by txid and vout. Spent outputs
+  are excluded. The permissions manager reserves it for the admin originator.
 - Callers that count `listOutputs` results narrow `totalOutputs` to a number,
   following the `@bsv/sdk` change that lets BRC-112 module balance queries
   return decimal text.
 - `@bsv/sdk` 4.0.0 is accepted as a peer alongside the existing 2.x and 3.x
   ranges.
+- BRC-177 `p nosend expiry never` is supported. The anchor funds the protected
+  action without a reclaim allowance, no reclaim transaction is built or
+  armed, and the action has no deadline, so the monitor never reclaims it. An
+  unreleased `never` action can still be aborted; aborting a released one
+  fails because its payment is permanently sent. `Brc177NoSendExpiryMode` gains
+  `never`, `Brc177NoSendExpiry.value` is `null` for it, and the activation
+  result's `deadline` is `null`.
 
 ## wallet-toolbox 2.14.10
 
