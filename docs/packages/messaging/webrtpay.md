@@ -3,10 +3,10 @@ id: pkg-webrtpay
 title: '@bsv/webrtpay'
 kind: package
 domain: messaging
-version: '0.2.0'
+version: '0.2.1'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-10-18'
-last_verified: '2026-10-18'
+last_updated: '2026-10-19'
+last_verified: '2026-10-19'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/webrtpay'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay'
@@ -83,7 +83,11 @@ only while the payee is still connected, and deliver a token again after a lost 
   and idempotent internalization against a caller-supplied seen store
 - `@bsv/webrtpay/server` (Node only): `createRelayServer`, `turnCredentials` and the
   `webrtpay-relay` CLI, a stateless WebSocket rendezvous that authenticates sockets by identity
-  key and forwards encrypted envelopes; `webrtpay-relay --help` lists its settings
+  key and forwards encrypted envelopes; `webrtpay-relay --help` lists its settings, and
+  `relayOptionsFromEnv` and `relayUsage` give a wrapper the CLI's environment parser and help
+  text. A relay that creates its own server answers `GET /health` (liveness) and `GET /ready`
+  (readiness, 503 once closing) with `Access-Control-Allow-Origin: *`, and `OPTIONS` on either
+  with a 204 CORS preflight
 - TURN credentials from the relay: short-lived credentials minted from a coturn
   `use-auth-secret` shared secret (`CoturnRestTurnProvider`, with a per-identity pseudonymous
   username) or requested from Cloudflare's managed TURN service (`CloudflareTurnProvider`,

@@ -272,9 +272,11 @@ const HOUR_MS = 3600000
  * authenticated key as `from` to every socket of the recipient, and `turn` frames
  * (see `turn`). Connections are admitted per source address before the WebSocket
  * upgrade (see `limits` and `trustedIpHeader`). Nothing is stored and payloads are
- * never logged. `GET /health` answers `{"status":"ok"}` on a server the relay
- * created. Rejects, releasing any port it bound, when it would listen on a
- * non-loopback address without `publicUrls` or `trustHostHeader`.
+ * never logged. On a server the relay created, `GET /health` answers `{"status":"ok"}`,
+ * `GET /ready` answers `{"status":"ready"}` (503 `{"status":"closing"}` once `close()` is
+ * called), both with `Access-Control-Allow-Origin: *`, and `OPTIONS` on either path answers
+ * a CORS preflight with 204. Rejects, releasing any port it bound, when it would listen on
+ * a non-loopback address without `publicUrls` or `trustHostHeader`.
  */
 export async function createRelayServer(o: RelayServerOptions = {}): Promise<RelayServer> {
   const settings = relaySettings(o)
@@ -282,7 +284,9 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
   const log = o.log ?? (() => {})
 
   const owned = o.server === undefined
-  const http = o.server ?? createServer(health)
+  /** Whether `close()` has been called, so `/ready` answers 503. */
+  let shuttingDown = false
+  const http = o.server ?? createServer((req, res) => answerHttp(req, res, !shuttingDown))
   // Pings are answered by onPing, within the socket's rate (autoPong would answer them all).
   const wss = new WebSocketServer({
     noServer: true,
@@ -791,6 +795,7 @@ export async function createRelayServer(o: RelayServerOptions = {}): Promise<Rel
 
   let closing: Promise<void> | undefined
   async function shutdown(): Promise<void> {
+    shuttingDown = true
     clearInterval(pinger)
     http.off('upgrade', onUpgrade)
     await Promise.all([...clients].map(closeForShutdown))
@@ -906,14 +911,79 @@ function relayLimits(partial: Partial<RelayLimits> = {}): RelayLimits {
   return limits
 }
 
-function health(req: IncomingMessage, res: ServerResponse): void {
-  if ((req.method === 'GET' || req.method === 'HEAD') && requestPath(req) === '/health') {
-    res.writeHead(200, { 'content-type': 'application/json' })
-    res.end('{"status":"ok"}')
+/** The plain-HTTP probes a relay-created server answers, by path. */
+type Probe = 'health' | 'ready'
+
+/** Methods the probe paths accept, as `Access-Control-Allow-Methods` lists them. */
+const PROBE_METHODS = 'GET, HEAD, OPTIONS'
+/** Request headers every probe preflight allows, before those the browser asks for. */
+const PROBE_HEADERS = ['Content-Type']
+/** Seconds a browser may cache a probe preflight. */
+const PREFLIGHT_MAX_AGE_SECONDS = 600
+
+/**
+ * Answer a plain HTTP request on a server the relay created: `GET|HEAD /health` (200),
+ * `GET|HEAD /ready` (200 while `ready`, else 503) and `OPTIONS` on either (204), all with
+ * wildcard CORS and no credentials. Anything else is 404.
+ */
+function answerHttp(req: IncomingMessage, res: ServerResponse, ready: boolean): void {
+  const probe = probeOf(requestPath(req))
+  if (probe !== undefined && req.method === 'OPTIONS') {
+    answerPreflight(req, res)
+    return
+  }
+  if (probe !== undefined && (req.method === 'GET' || req.method === 'HEAD')) {
+    answerProbe(res, probe, ready)
     return
   }
   res.writeHead(404)
   res.end()
+}
+
+function probeOf(path: string): Probe | undefined {
+  if (path === '/health') return 'health'
+  if (path === '/ready') return 'ready'
+  return undefined
+}
+
+function answerProbe(res: ServerResponse, probe: Probe, ready: boolean): void {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Content-Type', 'application/json')
+  if (probe === 'health') {
+    res.writeHead(200)
+    res.end('{"status":"ok"}')
+  } else if (ready) {
+    res.writeHead(200)
+    res.end('{"status":"ready"}')
+  } else {
+    res.writeHead(503)
+    res.end('{"status":"closing"}')
+  }
+}
+
+/**
+ * A CORS preflight: wildcard origin, the probe methods, and the default headers plus every
+ * well-formed header the browser asks for (the probes read no request headers, so any may
+ * be sent).
+ */
+function answerPreflight(req: IncomingMessage, res: ServerResponse): void {
+  res.writeHead(204, {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': PROBE_METHODS,
+    'Access-Control-Allow-Headers': allowedHeaders(req.headers['access-control-request-headers']),
+    'Access-Control-Max-Age': String(PREFLIGHT_MAX_AGE_SECONDS),
+    Vary: 'Access-Control-Request-Headers'
+  })
+  res.end()
+}
+
+/** {@link PROBE_HEADERS} and the well-formed names in `requested`, each once, ignoring case. */
+function allowedHeaders(requested: string | undefined): string {
+  const names = new Map(PROBE_HEADERS.map(name => [name.toLowerCase(), name]))
+  for (const name of (requested ?? '').split(',').map(n => n.trim())) {
+    if (isHeaderName(name) && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name)
+  }
+  return [...names.values()].join(', ')
 }
 
 function requestPath(req: IncomingMessage): string {
