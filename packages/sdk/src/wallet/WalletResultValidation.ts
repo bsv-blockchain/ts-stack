@@ -2085,7 +2085,7 @@ function validateListOutputs(result: UnknownRecord, call: string, request?: unkn
       invalid(call, 'totalOutputs', 'canonical decimal text for a module balance query')
     }
     const balanceOutputs = optionalArray(result.outputs, call, 'outputs')
-    if (balanceOutputs == null || balanceOutputs.length !== 0) {
+    if (balanceOutputs?.length !== 0) {
       invalid(call, 'outputs', 'an empty array for a module balance query')
     }
     if (result.BEEF !== undefined) invalid(call, 'BEEF', 'absent for a module balance query')
