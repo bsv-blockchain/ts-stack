@@ -25,7 +25,6 @@ WebSocket protocol all belong to the package.
 ```sh
 docker run --rm -p 8787:8787 \
   -e PUBLIC_URLS=wss://relay.example.com \
-  -e TRUSTED_IP_HEADER=cf-connecting-ip \
   ghcr.io/bsv-blockchain/webrtpay-relay:v0.2.0
 ```
 
@@ -33,6 +32,14 @@ docker run --rm -p 8787:8787 \
 start without it, because clients would otherwise sign a url built from the
 `Host` header they chose. Terminate TLS in front of the container (a load
 balancer, Cloudflare tunnel or ingress) and list the `wss://` urls clients dial.
+
+### Behind a Cloudflare tunnel
+
+Add `-e TRUSTED_IP_HEADER=cf-connecting-ip` only when the listener cannot be
+reached except through the tunnel: do not publish the port (`-p`), or bind it to
+loopback or a cluster-internal Service. A client that can reach the relay
+directly can send any `cf-connecting-ip` value and choose its own per-source
+admission and TURN limits.
 
 `docker run --rm ghcr.io/bsv-blockchain/webrtpay-relay:v0.2.0 node dist/index.js --help`
 prints every variable with its default.
@@ -62,7 +69,8 @@ container at startup with a message naming the variable.
 ## Probes
 
 - `GET /health`: liveness, `{"status":"ok"}`.
-- `GET /ready`: readiness; the image `HEALTHCHECK` uses it.
+- `GET /ready`: readiness; the image `HEALTHCHECK` uses it. It answers 503 as
+  soon as shutdown starts.
 
 Both answer with credential-free wildcard CORS. `SIGTERM` closes every socket
 and exits 0.

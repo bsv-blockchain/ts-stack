@@ -6,11 +6,12 @@
  * adds structured logging and telemetry around it.
  */
 import { createRelayServer, relayOptionsFromEnv, relayUsage } from '@bsv/webrtpay/server'
-import type { RelayServer } from '@bsv/webrtpay/server'
+import type { RelayServer, RelayServerOptions } from '@bsv/webrtpay/server'
 
 /** The pino methods the relay wrapper uses. */
 export interface RelayLogger {
   info: (fields: Record<string, unknown>, message: string) => void
+  warn: (fields: Record<string, unknown>, message: string) => void
   error: (fields: Record<string, unknown>, message: string) => void
 }
 
@@ -18,18 +19,26 @@ export interface RelayLogger {
 export const usage = (): string => relayUsage()
 
 /**
- * Parse `env` and start listening. Rejects, naming the variable, on invalid or
+ * Parse `env` into relay options. Throws, naming the variable, on invalid or
  * missing configuration (for example `PUBLIC_URLS` on a non-loopback `HOST`).
  */
+export const readRelayOptions = (env: Record<string, string | undefined>): RelayServerOptions =>
+  relayOptionsFromEnv(env)
+
+/** Start listening with `options`; rejects when the relay cannot bind. */
 export async function startRelay(
-  env: Record<string, string | undefined>,
+  options: RelayServerOptions,
   log: RelayLogger
 ): Promise<RelayServer> {
-  const options = relayOptionsFromEnv(env)
   const started = Date.now()
   const relay = await createRelayServer({
     ...options,
-    log: message => log.info({ operation: 'relay.event' }, message)
+    // The package prefixes its operator warnings (no TRUSTED_IP_HEADER, no
+    // PUBLIC_URLS) with "WARNING:"; everything else is informational.
+    log: message =>
+      message.includes('WARNING')
+        ? log.warn({ operation: 'relay.event' }, message)
+        : log.info({ operation: 'relay.event' }, message)
   })
   log.info(
     {

@@ -48,8 +48,10 @@ Apps that signal through MessageBox (`MessageBoxSignaler`) or face to face
 
 `ghcr.io/bsv-blockchain/webrtpay-relay:v<version>`, linux/amd64, built from
 `infra/webrtpay-relay` by the Infra Release workflow, signed, with an SPDX SBOM
-and build provenance. The image version tracks the `@bsv/webrtpay` release it
-runs.
+and build provenance. The image version is the component's own version
+(`infra/webrtpay-relay/package.json`); the release infra-sync patch-bumps it
+whenever its locked dependencies move. The bundled `@bsv/webrtpay` version is
+recorded in `package-lock.json` and the image SBOM.
 
 ## Configuration (env vars)
 
@@ -105,15 +107,22 @@ nothing to back up or migrate.
 Each replica is an independent rendezvous: two clients find each other only
 when they are connected to the same replica. Run one replica per public url;
 scale vertically (the limit variables) rather than horizontally. Per-source
-limits are per replica.
+limits are per replica. On Kubernetes that means `replicas: 1` with
+`strategy: Recreate`: a RollingUpdate surge briefly runs two independent
+rendezvous behind one url and splits clients between them.
 
 ## Health checks
 
 - `GET /health`: liveness, `{"status":"ok"}`.
-- `GET /ready`: readiness, used by the image `HEALTHCHECK`.
+- `GET /ready`: readiness, used by the image `HEALTHCHECK`. It answers 503 as
+  soon as shutdown starts.
 
 Both are public, non-sensitive, and answer with credential-free wildcard CORS.
 `SIGTERM` closes every socket and exits 0.
+
+The relay has no CORS allowlist setting (no `WEBRTPAY_RELAY_CORS_*` variables):
+its probe CORS is fixed credential-free wildcard, and the `corsPrefixes` value in
+`governance/service-operations.json` is only a registry placeholder.
 
 ## Telemetry
 

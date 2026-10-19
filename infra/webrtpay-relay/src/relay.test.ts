@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { startRelay, stopRelay, usage } from './relay.js'
+import { readRelayOptions, startRelay, stopRelay, usage } from './relay.js'
 import type { RelayLogger } from './relay.js'
 
 interface LogRecord {
-  level: 'info' | 'error'
+  level: 'info' | 'warn' | 'error'
   fields: Record<string, unknown>
   message: string
 }
@@ -15,6 +15,7 @@ function recordingLogger(): { log: RelayLogger; records: LogRecord[] } {
     records,
     log: {
       info: (fields, message) => records.push({ level: 'info', fields, message }),
+      warn: (fields, message) => records.push({ level: 'warn', fields, message }),
       error: (fields, message) => records.push({ level: 'error', fields, message })
     }
   }
@@ -27,24 +28,31 @@ test('usage lists the relay environment variables', () => {
   }
 })
 
-test('refuses a non-loopback HOST without PUBLIC_URLS', async () => {
-  const { log, records } = recordingLogger()
-  await assert.rejects(startRelay({ HOST: '0.0.0.0', PORT: '0' }, log), /PUBLIC_URLS/)
-  assert.deepEqual(records, [])
+test('refuses a non-loopback HOST without PUBLIC_URLS', () => {
+  assert.throws(() => readRelayOptions({ HOST: '0.0.0.0', PORT: '0' }), /PUBLIC_URLS/)
 })
 
-test('refuses an invalid PORT', async () => {
-  const { log } = recordingLogger()
-  await assert.rejects(
-    startRelay({ HOST: '127.0.0.1', PORT: 'invalid' }, log),
+test('refuses an invalid PORT', () => {
+  assert.throws(
+    () => readRelayOptions({ HOST: '127.0.0.1', PORT: 'invalid' }),
     /PORT must be a whole number/
   )
+})
+
+test('logs the package operator warnings at warn level', async () => {
+  const { log, records } = recordingLogger()
+  const relay = await startRelay(readRelayOptions({ HOST: '127.0.0.1', PORT: '0' }), log)
+  await stopRelay(relay, 'SIGTERM', log)
+  const warnings = records.filter(record => record.level === 'warn')
+  assert.ok(warnings.length > 0)
+  assert.ok(warnings.every(record => record.message.includes('WARNING')))
+  assert.ok(warnings.every(record => record.fields.operation === 'relay.event'))
 })
 
 test('serves public health and readiness probes, then closes on request', async () => {
   const { log, records } = recordingLogger()
   const relay = await startRelay(
-    { HOST: '127.0.0.1', PORT: '0', PUBLIC_URLS: 'wss://relay.example' },
+    readRelayOptions({ HOST: '127.0.0.1', PORT: '0', PUBLIC_URLS: 'wss://relay.example' }),
     log
   )
   try {

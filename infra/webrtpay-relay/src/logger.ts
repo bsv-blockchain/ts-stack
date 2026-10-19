@@ -33,6 +33,8 @@ export const log = pino({
       'CLOUDFLARE_TURN_API_TOKEN',
       '*.secret',
       '*.apiToken',
+      '*.*.secret',
+      '*.*.apiToken',
       '*.authorization'
     ],
     censor: '[redacted]'

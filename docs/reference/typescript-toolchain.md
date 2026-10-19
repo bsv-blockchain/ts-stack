@@ -67,7 +67,7 @@ requires:
 - the independently locked TypeScript 5.9.3 codegen boundary; and
 - repository-wide fan-out when the toolchain policy or checker changes.
 
-The current governed inventory is 48 native compiler profiles plus one isolated
+The current governed inventory is 49 native compiler profiles plus one isolated
 codegen API profile. It also discovers all 130 tracked `tsconfig` files, resolves
 their complete `extends` chains, rejects missing or circular configurations,
 and requires every project to use one of nine approved runtime profiles. Eight
