@@ -721,6 +721,8 @@ class FakeMessageBox {
 
   /** Live listeners by identity. */
   live = new Map<string, LiveFakeClient>()
+  /** Advertised hosts by identity (default `https://mb.example`). */
+  hosts = new Map<string, string>()
 
   client(identity: string): FakeClient {
     return new FakeClient(this, identity)
@@ -797,6 +799,9 @@ class LiveFakeClient extends FakeClient {
   liveListens: Array<{ messageBox: string; overrideHost: string | undefined }> = []
   joined: string[] = []
   left: string[] = []
+  liveSentHosts: Array<string | undefined> = []
+  resolves: string[] = []
+  resolveFailure: Error | undefined
   private onLive: ((m: unknown) => void) | undefined
   private lastLive: unknown
 
@@ -807,12 +812,27 @@ class LiveFakeClient extends FakeClient {
     super(liveServer, identity)
   }
 
-  async sendLiveMessage(a: {
-    recipient: string
-    messageBox: string
-    body: string
-  }): Promise<unknown> {
+  /** Hosts by identity, as advertised; everyone is on `https://mb.example` unless set. */
+  async resolveHostForRecipient(identityKey: string): Promise<string> {
+    this.resolves.push(identityKey)
+    if (this.resolveFailure) throw this.resolveFailure
+    return this.liveServer.hosts.get(identityKey) ?? 'https://mb.example'
+  }
+
+  async getIdentityKey(): Promise<string> {
+    return this.identity
+  }
+
+  async sendLiveMessage(
+    a: {
+      recipient: string
+      messageBox: string
+      body: string
+    },
+    overrideHost?: string
+  ): Promise<unknown> {
     this.liveSent.push(a)
+    this.liveSentHosts.push(overrideHost)
     if (this.liveSendFailure) throw this.liveSendFailure
     const messageId = this.liveServer.deposit(a.recipient, this.identity, a.body, a.messageBox)
     this.liveServer.live
@@ -1391,6 +1411,61 @@ describe('MessageBoxSignaler', () => {
     } finally {
       await stop()
     }
+  })
+
+  it('sends over HTTP to a recipient on another host', async () => {
+    const server = new FakeMessageBox()
+    server.hosts.set(BOB, 'https://other.example')
+    const a = server.liveClient(ALICE)
+    const signaler = new MessageBoxSignaler(a)
+    await signaler.send(BOB, ENV)
+    await signaler.send(BOB, ENV2)
+    expect(a.liveSent).toEqual([])
+    expect(a.sent).toHaveLength(2)
+    // the recipient's host is looked up once and remembered
+    expect(a.resolves.filter(k => k === BOB)).toHaveLength(1)
+  })
+
+  it('compares the recipient host with the configured host, and sends live through it', async () => {
+    const server = new FakeMessageBox()
+    server.hosts.set(BOB, 'https://mb.example/')
+    server.hosts.set(ALICE, 'https://elsewhere.example')
+    const a = server.liveClient(ALICE)
+    await new MessageBoxSignaler(a, { host: 'https://mb.example' }).send(BOB, ENV)
+    expect(a.liveSent).toHaveLength(1)
+    expect(a.liveSentHosts).toEqual(['https://mb.example'])
+    expect(a.resolves).toEqual([BOB])
+    // without the option, its own advertised host decides
+    const b = server.liveClient(ALICE)
+    await new MessageBoxSignaler(b).send(BOB, ENV)
+    expect(b.liveSent).toEqual([])
+    expect(b.sent).toHaveLength(1)
+  })
+
+  it('sends over HTTP when a host cannot be resolved, or cannot be', async () => {
+    const server = new FakeMessageBox()
+    const a = server.liveClient(ALICE)
+    a.resolveFailure = new Error('overlay down')
+    const signaler = new MessageBoxSignaler(a)
+    await signaler.send(BOB, ENV)
+    expect(a.liveSent).toEqual([])
+    expect(a.sent).toHaveLength(1)
+    // a failed lookup is not remembered
+    a.resolveFailure = undefined
+    await signaler.send(BOB, ENV2)
+    expect(a.liveSent).toHaveLength(1)
+
+    // a client that cannot resolve hosts never sends live
+    const b = server.liveClient(ALICE)
+    Object.defineProperty(b, 'resolveHostForRecipient', { value: undefined })
+    await new MessageBoxSignaler(b).send(BOB, ENV)
+    expect(b.liveSent).toEqual([])
+    // nor one that cannot tell its own host
+    const c = server.liveClient(ALICE)
+    Object.defineProperty(c, 'getIdentityKey', { value: undefined })
+    await new MessageBoxSignaler(c).send(BOB, ENV)
+    expect(c.liveSent).toEqual([])
+    expect(server.messages.length).toBeGreaterThanOrEqual(4)
   })
 
   it('falls back to http send when live send throws', async () => {

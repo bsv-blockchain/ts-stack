@@ -4,6 +4,7 @@ import { WebRTPayError } from '../util/errors.js'
 import { dispatchSignal } from './dispatch.js'
 import type { SignalSubscription } from './dispatch.js'
 import { isSignalEnvelope } from './envelope.js'
+import { RecipientHosts, sameOrigin } from './hosts.js'
 import type { SignalEnvelope, Signaler } from './types.js'
 
 /**
@@ -29,7 +30,18 @@ export interface MessageBoxLike {
     acceptPayments?: boolean
   }): Promise<Array<{ messageId: string; sender: string; body: string | Record<string, unknown> }>>
   acknowledgeMessage(a: { messageIds: string[]; host?: string }): Promise<unknown>
-  /** Send over the live websocket (it may fall back to HTTP itself). Optional. */
+  /**
+   * The MessageBox host `identityKey` receives on (its advertised host, else the client's
+   * own). Optional; without it nothing is sent live, since the socket reaches only the
+   * client's own host.
+   */
+  resolveHostForRecipient?(identityKey: string): Promise<string>
+  /** This client's identity key, to find its own host when the signaler has no `host`. */
+  getIdentityKey?(): Promise<string>
+  /**
+   * Send over the live websocket, which reaches only the host the socket is connected to (it
+   * may fall back to HTTP itself). Optional.
+   */
   sendLiveMessage?(
     a: { recipient: string; messageBox: string; body: string },
     overrideHost?: string
@@ -67,8 +79,9 @@ export interface MessageBoxSignalerOptions {
   host?: string
   /**
    * Use the MessageBox live websocket, when the client has it: send with
-   * `sendLiveMessage` (HTTP `sendMessage` if that fails) and receive with
-   * `listenForLiveMessages` alongside polling. Defaults to true.
+   * `sendLiveMessage` to recipients on this client's own host (HTTP `sendMessage` otherwise,
+   * or if that fails) and receive with `listenForLiveMessages` alongside polling. Defaults to
+   * true.
    */
   live?: boolean
 }
@@ -91,9 +104,11 @@ const POLL_DEADLINE_MS = 10000
 const MAX_SEEN_IDS = 10000
 
 /**
- * Carries signal envelopes through MessageBox. `send` uses the live websocket when the
- * client has one (`sendLiveMessage`), else or on failure posts over HTTP to the recipient's
- * host. With a live websocket, the first subscription also joins the box's live room and
+ * Carries signal envelopes through MessageBox. `send` uses the live websocket
+ * (`sendLiveMessage`) when the recipient's host (`resolveHostForRecipient`, remembered for 5
+ * minutes) is the one this client's socket is on: the signaler's `host`, else the client's
+ * own advertised host. Otherwise, or when the live send fails, it posts over HTTP, which
+ * resolves the recipient's own host, so payer and payee may use different servers. With a live websocket, the first subscription also joins the box's live room and
  * envelopes are delivered as they arrive, once each by `messageId` (a poll listing the
  * same message later neither delivers it again nor acks it twice); live envelopes are
  * acknowledged with the next poll, and on the last unsubscribe the room is left. If live
@@ -124,6 +139,9 @@ export class MessageBoxSignaler implements Signaler {
   private liveState: LiveState = 'off'
   /** IDs of envelopes delivered live, acknowledged with the next poll. */
   private readonly liveAcks = new Set<string>()
+  private readonly hosts: RecipientHosts | undefined
+  /** This client's own host, once looked up (no `host` option). */
+  private ownHost: Promise<string> | undefined
 
   constructor(
     private readonly client: MessageBoxLike,
@@ -134,6 +152,9 @@ export class MessageBoxSignaler implements Signaler {
     this.activePollMs = pollInterval(o.activePollMs, DEFAULTS.payerPollMs, 'activePollMs')
     this.host = o.host
     this.live = o.live ?? true
+    const resolve = client.resolveHostForRecipient
+    this.hosts =
+      resolve === undefined ? undefined : new RecipientHosts(k => resolve.call(client, k))
   }
 
   /**
@@ -176,7 +197,10 @@ export class MessageBoxSignaler implements Signaler {
     this.schedule()
   }
 
-  /** Whether `sendLiveMessage` took the message; false when there is none or it failed. */
+  /**
+   * Whether `sendLiveMessage` took the message; false when there is none, the recipient is on
+   * another host (or its host cannot be found), or it failed.
+   */
   private async sendLive(message: {
     recipient: string
     messageBox: string
@@ -184,11 +208,35 @@ export class MessageBoxSignaler implements Signaler {
   }): Promise<boolean> {
     if (!this.live || this.client.sendLiveMessage === undefined) return false
     try {
-      await this.client.sendLiveMessage(message)
+      if (!(await this.reachableLive(message.recipient))) return false
+      await this.client.sendLiveMessage(message, this.host)
       return true
     } catch {
       return false
     }
+  }
+
+  /** Whether `recipient` receives on the host this client's socket is on. */
+  private async reachableLive(recipient: string): Promise<boolean> {
+    if (this.hosts === undefined) return false
+    const mine = await this.ownHostOf(this.hosts)
+    if (mine === undefined) return false
+    return sameOrigin(mine, await this.hosts.of(recipient))
+  }
+
+  /** The `host` option, else this client's own advertised host; undefined when unknown. */
+  private ownHostOf(hosts: RecipientHosts): Promise<string | undefined> {
+    if (this.host !== undefined) return Promise.resolve(this.host)
+    const getIdentityKey = this.client.getIdentityKey
+    if (getIdentityKey === undefined) return Promise.resolve(undefined)
+    if (this.ownHost === undefined) {
+      const lookup = getIdentityKey.call(this.client).then(k => hosts.of(k))
+      this.ownHost = lookup
+      lookup.catch(() => {
+        if (this.ownHost === lookup) this.ownHost = undefined
+      })
+    }
+    return this.ownHost
   }
 
   /** Join the live room: listen the first time, rejoin after leaving. Never throws. */

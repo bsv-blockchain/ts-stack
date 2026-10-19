@@ -299,16 +299,19 @@ A `Signaler` carries already-encrypted envelopes between identity keys; it never
 
 **`MessageBoxSignaler`** is typed structurally against the `MessageBoxClient` methods it uses
 (`sendMessage`, `listMessages`, `acknowledgeMessage`, and optionally `sendLiveMessage`,
-`listenForLiveMessages`, `joinRoom` and `leaveRoom`), so there is no dependency on
-`@bsv/message-box-client`; a `PeerPayClient` works too. With a client that has the live
-websocket it sends live (falling back to HTTP to the recipient's own host) and receives signals
-as they arrive; it also polls box `webrtpay_signals` every 2.5 s (1 s while dialing), as the
+`listenForLiveMessages`, `joinRoom`, `leaveRoom`, `resolveHostForRecipient` and
+`getIdentityKey`), so there is no dependency on `@bsv/message-box-client`; a `PeerPayClient`
+works too. A live websocket reaches only the host it is connected to, so the signaler sends
+live only to a recipient whose host (`resolveHostForRecipient`, remembered for 5 minutes) is
+this client's: `host` when given, else this client's own advertised host. Everyone else, and
+every live send that fails, goes over HTTP, which resolves the recipient's own host, so payer
+and payee may use different servers. It receives signals live as they arrive; it also polls box `webrtpay_signals` every 2.5 s (1 s while dialing), as the
 safety net and the only path for clients without the websocket, and acknowledges every message
 it reads, once per `messageId` whichever path brought it. When neither send path gets a signal
 there, `send` rejects `unavailable` (it was `peer_unreachable` in 0.1.0). Options:
 `messageBox`, `idlePollMs`, `activePollMs`, `live` (default true; false polls only), and
-`host`, the MessageBox host to list, acknowledge and listen live on (sending always resolves
-the recipient's host, so payer and payee may use different servers).
+`host`, the MessageBox host to list, acknowledge and listen live on, and the host compared
+with a recipient's for live sends.
 
 **`RelaySignaler`** keeps one authenticated WebSocket to a relay, and only while it is needed:
 while subscribed, while a send is in flight, or after `connect()`. Options: `url` (`ws:` or

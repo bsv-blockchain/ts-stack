@@ -808,10 +808,12 @@ counterparties is possible future work.
 **MessageBox** (`MessageBoxSignaler`): the envelope's JSON text is the message `body` in box
 `webrtpay_signals`.
 
-- Sending: `sendLiveMessage({ recipient, messageBox: 'webrtpay_signals', body })` over the
-  live websocket when the client has it, else or when that fails
-  `sendMessage({ recipient, messageBox: 'webrtpay_signals', body })`, which resolves the
-  recipient's own host. When nothing gets it there, `send` fails `unavailable`.
+- Sending: `sendLiveMessage({ recipient, messageBox: 'webrtpay_signals', body }, host)` over
+  the live websocket when the client has it and the recipient's host
+  (`resolveHostForRecipient`, remembered 5 minutes, at most 256 recipients) has the same origin
+  as this client's (`host`, else its own advertised host); else, or when that fails or cannot
+  be decided, `sendMessage({ recipient, messageBox: 'webrtpay_signals', body })`, which
+  resolves the recipient's own host. When nothing gets it there, `send` fails `unavailable`.
 - Live listening: the first subscription calls
   `listenForLiveMessages({ messageBox, onMessage, overrideHost: host })` (and `joinRoom` after
   a `leaveRoom`); envelopes are delivered as they arrive and acknowledged with the next poll.

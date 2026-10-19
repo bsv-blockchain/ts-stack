@@ -28,9 +28,11 @@ MessageBox.
   `DEFAULTS.dialGatherTimeoutMs` (1500). Dials by identity key, the offer and the answer to it,
   gather ICE for at most 1.5 s; code exchange keeps `gatherTimeoutMs` (5 s).
 - Live MessageBox signaling. `MessageBoxLike` gains optional `sendLiveMessage`,
-  `listenForLiveMessages`, `joinRoom` and `leaveRoom`, and `MessageBoxSignalerOptions.live`
-  (default true). With a client that has them, `send` goes over the live websocket and falls
-  back to HTTP `sendMessage`; the first `listen` also joins the live room, envelopes are
+  `listenForLiveMessages`, `joinRoom`, `leaveRoom`, `resolveHostForRecipient` and
+  `getIdentityKey`, and `MessageBoxSignalerOptions.live` (default true). With a client that has
+  them, `send` goes over the live websocket to recipients on this client's own host (the
+  recipient's host is looked up once per 5 minutes) and over HTTP `sendMessage` to everyone
+  else, or when the live send fails; the first `listen` also joins the live room, envelopes are
   delivered as they arrive and acknowledged with the next poll, once per `messageId` whichever
   path brought them; the last unsubscribe leaves the room. Polling keeps running as the safety
   net, and carries on alone when live listening fails.
