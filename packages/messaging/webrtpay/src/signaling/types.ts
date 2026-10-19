@@ -11,14 +11,22 @@ export interface SignalEnvelope {
   ciphertext: string
 }
 
-/** The kind of signal: an SDP offer, the SDP answer to it, or a refusal to answer. */
-export type SignalKind = 'offer' | 'answer' | 'reject'
+/**
+ * The kind of signal: an SDP offer, the SDP answer to it, or a refusal to answer; a
+ * `knock` asks whether the recipient is there before any ICE is gathered, and `ring` is the
+ * recipient's reply that it is and will take the offer. `knock` and `ring` carry no `sdp`
+ * and no `reason`.
+ */
+export type SignalKind = 'offer' | 'answer' | 'reject' | 'knock' | 'ring'
 
 /** The decrypted content of a {@link SignalEnvelope}. */
 export interface SignalPlaintext {
   v: 1
   kind: SignalKind
-  /** Session ID shared by an offer and its answer or reject; 16 random bytes, base64url. */
+  /**
+   * Session ID shared by a dial's knock, ring, offer and answer or reject; 16 random bytes,
+   * base64url.
+   */
   sid: string
   from: PubKeyHex
   to: PubKeyHex

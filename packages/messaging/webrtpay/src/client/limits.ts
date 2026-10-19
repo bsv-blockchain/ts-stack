@@ -28,10 +28,11 @@ export interface InboundLimits {
 }
 
 /**
- * 3 sessions (1 per sender), 10 offers a minute (3 per sender), 16 MiB messages, 60 s idle
- * timeout, 60 s for the first message, 2 minutes per session. The first-message window is
- * that long because a payer connects before it spends: creating and broadcasting the
- * transaction (permission prompts included) happens inside it (Ruling 33).
+ * 3 sessions (1 per sender; a sender's new offer may supersede its own), 10 offers a minute
+ * (3 per sender), 16 MiB messages, 60 s idle timeout, 60 s for the first message, 2 minutes
+ * per session. The first-message window is that long because a payer connects before it
+ * spends: creating and broadcasting the transaction (permission prompts included) happens
+ * inside it (Ruling 33).
  */
 export const DEFAULT_INBOUND_LIMITS: Readonly<InboundLimits> = Object.freeze({
   maxConcurrent: 3,
@@ -97,17 +98,28 @@ export class InboundLimiter {
     this.clock = clock
   }
 
-  /** Why an offer from `sender` at `now` (on the clock) would be refused, or `undefined`. */
-  refusal(sender: PubKeyHex, now: number = this.clock()): InboundRefusal | undefined {
+  /**
+   * Why an offer from `sender` at `now` (on the clock) would be refused, or `undefined`. With
+   * `o.superseding`, the sender's own open session does not count: it is about to be ended
+   * for the new one, so it neither refuses the sender nor holds a slot.
+   */
+  refusal(
+    sender: PubKeyHex,
+    now: number = this.clock(),
+    o: { superseding?: boolean } = {}
+  ): InboundRefusal | undefined {
     this.prune(now)
+    const own = this.sessions.has(sender)
+    const replaced = own && o.superseding === true
     if (
-      this.sessions.has(sender) ||
+      (own && !replaced) ||
       (this.bySender.get(sender)?.length ?? 0) >= this.limits.offersPerMinutePerSender
     ) {
       return 'sender'
     }
+    const active = replaced ? this.active - 1 : this.active
     if (
-      this.active >= this.limits.maxConcurrent ||
+      active >= this.limits.maxConcurrent ||
       this.admitted.length >= this.limits.offersPerMinute
     ) {
       return 'busy'

@@ -223,6 +223,25 @@ describe('InboundLimiter', () => {
     expect(l.tryAdmit(A, T0)).toBe(true)
   })
 
+  it("lets a sender's new offer supersede its own session, counting its slot as free", () => {
+    const l = new InboundLimiter({ ...DEFAULT_INBOUND_LIMITS, maxConcurrent: 1 })
+    expect(l.tryAdmit(A, T0)).toBe(true)
+    expect(l.refusal(A, T0, { superseding: true })).toBeUndefined()
+    // another sender cannot use it
+    expect(l.refusal(B, T0, { superseding: true })).toBe('busy')
+    // nor does it lift A's offer rate
+    l.release(A)
+    for (let i = 1; i < 3; i++) {
+      expect(l.tryAdmit(A, T0 + i)).toBe(true)
+      if (i < 2) l.release(A)
+    }
+    expect(l.refusal(A, T0 + 3, { superseding: true })).toBe('sender')
+    // a busy payee stays busy for a superseding sender beyond its own slot
+    const two = new InboundLimiter({ ...DEFAULT_INBOUND_LIMITS, maxConcurrent: 1 })
+    expect(two.tryAdmit(B, T0)).toBe(true)
+    expect(two.refusal(A, T0, { superseding: true })).toBe('busy')
+  })
+
   it("checks a sender's own limits before the global ones", () => {
     const l = new InboundLimiter({ ...DEFAULT_INBOUND_LIMITS, maxConcurrent: 1 })
     expect(l.tryAdmit(A, T0)).toBe(true)
@@ -444,14 +463,15 @@ describe('DirectPayClient remote payments (MemoryHub, loopback WebRTC)', () => {
     expect((await failure(sender.connect(key()))).code).toBe('peer_unreachable')
     expect(Date.now() - started).toBeLessThan(3000)
 
-    // the carrier takes the offer but nobody answers: the budget (connectMs 3000) runs out
+    // the carrier takes the knock but nobody answers: presence (2 s) runs out
     const silent = await silentListener(hub)
     started = Date.now()
     const e = await failure(sender.connect(silent.identityKey))
     const elapsed = Date.now() - started
     expect(e.code).toBe('peer_unreachable')
-    expect(elapsed).toBeGreaterThanOrEqual(2900)
-    expect(elapsed).toBeLessThan(4500)
+    expect(e.message).toBe('No answer from the recipient in 2000 ms')
+    expect(elapsed).toBeGreaterThanOrEqual(1900)
+    expect(elapsed).toBeLessThan(3000)
     await silent.stop()
   })
 
@@ -1110,6 +1130,20 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
             replay: new ReplayCache()
           })
           offers.push(p)
+          if (p.kind === 'knock') {
+            const ring = await sealSignal(payee.wallet, {
+              v: 1,
+              kind: 'ring',
+              sid: p.sid,
+              from: payee.identityKey,
+              to: from,
+              ts: Date.now(),
+              purpose: 'payment',
+              chain: 'test'
+            })
+            await payeeSignaler.send(from, ring)
+            return
+          }
           const { link, sdp } = await PeerLink.acceptOffer(p.sdp!, rtc)
           rawLinks.push(link)
           const answer = await sealSignal(payee.wallet, {
@@ -1133,8 +1167,11 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
         expect(refused).toMatchObject({ code: 'rejected', reason: 'wrong_network' })
         expect(refused.message).toContain('test')
         expect(acceptAnswer).not.toHaveBeenCalled()
-        // the offer named the payer's network
-        expect(offers.map(p => [p.kind, p.chain])).toEqual([['offer', 'main']])
+        // the knock and the offer named the payer's network
+        expect(offers.map(p => [p.kind, p.chain])).toEqual([
+          ['knock', 'main'],
+          ['offer', 'main']
+        ])
       } finally {
         await stop()
       }
@@ -1159,12 +1196,18 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
     expect(await sender.sendPayment(peer, token)).toMatchObject({ status: 'accepted', txid })
     expect(payee.internalizeAction).toHaveBeenCalledTimes(1)
 
-    expect(payerSide.sent).toHaveLength(1)
-    expect(payeeSide.sent).toHaveLength(1)
-    const offer = await readSignal(payer, payee, payerSide.sent[0])
-    const answer = await readSignal(payee, payer, payeeSide.sent[0])
-    expect([offer.kind, offer.chain]).toEqual(['offer', 'main'])
-    expect([answer.kind, answer.chain]).toEqual(['answer', 'main'])
+    expect(payerSide.sent).toHaveLength(2)
+    expect(payeeSide.sent).toHaveLength(2)
+    const sent = await Promise.all(payerSide.sent.map(e => readSignal(payer, payee, e)))
+    const replies = await Promise.all(payeeSide.sent.map(e => readSignal(payee, payer, e)))
+    expect(sent.map(p => [p.kind, p.chain])).toEqual([
+      ['knock', 'main'],
+      ['offer', 'main']
+    ])
+    expect(replies.map(p => [p.kind, p.chain])).toEqual([
+      ['ring', 'main'],
+      ['answer', 'main']
+    ])
   })
 
   it('keeps the old behaviour when neither side names a network', async () => {
@@ -1180,14 +1223,13 @@ describe('DirectPayClient network binding (chain, MemoryHub, loopback WebRTC)', 
     const peer = await sender.connect(payee.identityKey)
     expect((await sender.sendPayment(peer, token)).status).toBe('accepted')
 
-    expect(payerSide.sent).toHaveLength(1)
-    expect(payeeSide.sent).toHaveLength(1)
-    const offer = await readSignal(payer, payee, payerSide.sent[0])
-    const answer = await readSignal(payee, payer, payeeSide.sent[0])
-    expect(offer.kind).toBe('offer')
-    expect(answer.kind).toBe('answer')
-    expect('chain' in offer).toBe(false)
-    expect('chain' in answer).toBe(false)
+    expect(payerSide.sent).toHaveLength(2)
+    expect(payeeSide.sent).toHaveLength(2)
+    const sent = await Promise.all(payerSide.sent.map(e => readSignal(payer, payee, e)))
+    const replies = await Promise.all(payeeSide.sent.map(e => readSignal(payee, payer, e)))
+    expect(sent.map(p => p.kind)).toEqual(['knock', 'offer'])
+    expect(replies.map(p => p.kind)).toEqual(['ring', 'answer'])
+    for (const p of [...sent, ...replies]) expect('chain' in p).toBe(false)
   })
 
   it('takes a network of 1 to 16 characters from a-z and 0-9', async () => {
@@ -1513,32 +1555,28 @@ describe('DirectPayClient over a relay (RelaySignaler, loopback WebRTC)', () => 
 // ---------------------------------------------------------------- audit hardening
 
 describe('DirectPayClient inbound limits (MemoryHub, loopback WebRTC)', () => {
-  it('gives a sender one session at a time; its extra offers get no reply and no budget', async () => {
-    const acceptOffer = jest.spyOn(PeerLink, 'acceptOffer')
-    try {
-      const hub = createMemoryHub()
-      const payee = await makeWallet()
-      await hubClient(hub, payee, { limits: { maxConcurrent: 1 } }).startReceiving(accepting(payee))
-      const a = hubClient(hub, await makeWallet())
-      const b = hubClient(hub, await makeWallet())
+  it('gives a sender one session at a time: its new dial supersedes the open one', async () => {
+    const hub = createMemoryHub()
+    const payee = await makeWallet()
+    await hubClient(hub, payee, { limits: { maxConcurrent: 1 } }).startReceiving(accepting(payee))
+    const a = hubClient(hub, await makeWallet())
+    const b = hubClient(hub, await makeWallet())
 
-      const first = await a.connect(payee.identityKey)
-      // A already has the only session: its second offer is dropped unanswered...
-      expect((await failure(a.connect(payee.identityKey, { timeoutMs: 1000 }))).code).toBe(
-        'peer_unreachable'
-      )
-      // ...without spending the reject budget, so B is still told the payee is busy
-      const busy = await failure(b.connect(payee.identityKey, { timeoutMs: 1000 }))
-      expect(busy.code).toBe('rejected')
-      expect(busy.message).toContain('busy')
-      expect(acceptOffer).toHaveBeenCalledTimes(1)
-
-      first.close()
-      await sleep(200)
-      expect((await a.connect(payee.identityKey)).peerIdentityKey).toBe(payee.identityKey)
-    } finally {
-      acceptOffer.mockRestore()
-    }
+    const first = await a.connect(payee.identityKey)
+    const firstClosed = closeOf(first)
+    // A holds the only slot, so B is told the payee is busy...
+    const busy = await failure(b.connect(payee.identityKey, { timeoutMs: 1000 }))
+    expect(busy.code).toBe('rejected')
+    expect(busy.message).toContain('busy')
+    // ...while A's new dial ends A's old session and takes its slot
+    const second = await a.connect(payee.identityKey)
+    expect(second.peerIdentityKey).toBe(payee.identityKey)
+    expect((await firstClosed)?.code).toBe('closed')
+    expect(second.isOpen).toBe(true)
+    // the slot is still counted once: B is still busy
+    await sleep(1100)
+    const stillBusy = await failure(b.connect(payee.identityKey, { timeoutMs: 1000 }))
+    expect(stillBusy.reason).toBe('busy')
   })
 
   it('answers refusals at most once a second and drops the rest unanswered', async () => {
@@ -1712,7 +1750,8 @@ describe('DirectPayClient inbound limits (MemoryHub, loopback WebRTC)', () => {
         send: (to, e) => payerBase.send(to, e),
         listen: fn => payerBase.listen((from, e) => void setTimeout(() => fn(from, e), 1500))
       },
-      timeouts: { connectMs: 8000 }
+      // the ring, slow both ways, takes 2.5 s
+      timeouts: { connectMs: 8000, presenceMs: 5000 }
     })
 
     expect((await sender.connect(payee.identityKey)).peerIdentityKey).toBe(payee.identityKey)

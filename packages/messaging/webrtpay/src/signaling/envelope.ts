@@ -15,7 +15,15 @@ export const MAX_SIGNAL_SID_CHARS = 64
  */
 export const MAX_SIGNAL_CIPHERTEXT_CHARS = 24576
 
-const KINDS: ReadonlySet<SignalKind> = new Set<SignalKind>(['offer', 'answer', 'reject'])
+const KINDS: ReadonlySet<SignalKind> = new Set<SignalKind>([
+  'offer',
+  'answer',
+  'reject',
+  'knock',
+  'ring'
+])
+/** Kinds that carry neither `sdp` nor `reason`. */
+const BARE_KINDS: ReadonlySet<SignalKind> = new Set<SignalKind>(['knock', 'ring'])
 
 /** A network name a signal may carry: 1 to 16 characters from `a-z` and `0-9`. */
 const CHAIN = /^[a-z0-9]{1,16}$/
@@ -138,8 +146,9 @@ export async function sealSignal(
  * {@link MAX_SIGNAL_CIPHERTEXT_CHARS} characters, checked before decrypting); the
  * plaintext must name the same sender, be addressed to `me`, carry the envelope's sid, be
  * within ±120 s of `now`, have an sdp of at most 16384 characters, pass `wanted` when it
- * is given, and carry a sid not seen before. The sid is recorded only when every other
- * check passes. Any failure rejects with `WebRTPayError('invalid_signal')`.
+ * is given, and carry a sid not seen before (a `knock` or `ring` carries no `sdp` or
+ * `reason`, and its sid is remembered apart from the offer, answer or reject that share it).
+ * The sid is recorded only when every other check passes. Any failure rejects with `WebRTPayError('invalid_signal')`.
  *
  * @param o.wanted - Called last, before the sid is recorded: false rejects the signal and
  * leaves its sid unrecorded, so a signal the caller has no use for (an answer to a dial it
@@ -188,8 +197,16 @@ export async function openSignal(
     throw invalid('Signal sdp is too long')
   }
   if (o.wanted !== undefined && !o.wanted(p)) throw invalid('Signal is not wanted')
-  if (!o.replay.check(p.sid, now, p.ts)) throw invalid('Signal was replayed')
+  if (!o.replay.check(replayKey(p), now, p.ts)) throw invalid('Signal was replayed')
   return p
+}
+
+/**
+ * What the replay cache remembers a signal by: its sid, or for a `knock` or `ring` its kind
+ * and sid, so the offer and answer of the same dial still open once each.
+ */
+function replayKey(p: SignalPlaintext): string {
+  return BARE_KINDS.has(p.kind) ? `${p.kind} ${p.sid}` : p.sid
 }
 
 /** The known fields of a decrypted signal, or undefined when it is not one. */
@@ -209,6 +226,9 @@ function toPlaintext(x: unknown): SignalPlaintext | undefined {
     (r.reason !== undefined && typeof r.reason !== 'string') ||
     (r.chain !== undefined && !isSignalChain(r.chain))
   ) {
+    return undefined
+  }
+  if (BARE_KINDS.has(r.kind as SignalKind) && (r.sdp !== undefined || r.reason !== undefined)) {
     return undefined
   }
   const p: SignalPlaintext = {

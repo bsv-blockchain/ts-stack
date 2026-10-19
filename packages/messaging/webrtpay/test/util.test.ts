@@ -758,8 +758,11 @@ describe('constants', () => {
       maxMessageBytes: 32 * 1024 * 1024,
       inboundMaxMessageBytes: 16 * 1024 * 1024,
       gatherTimeoutMs: 5000,
+      dialGatherTimeoutMs: 1500,
       handshakeTimeoutMs: 15000,
       connectTimeoutMs: 30000,
+      presenceTimeoutMs: 2000,
+      dialTimeoutMs: 6000,
       ackTimeoutMs: 45000,
       signalMaxSkewMs: 120000,
       payeePollMs: 2500,
@@ -838,7 +841,7 @@ describe('types', () => {
 
 describe('root entry', () => {
   it('re-exports the shared types, constants and utilities', () => {
-    expect(barrel.VERSION).toBe('0.1.0')
+    expect(barrel.VERSION).toBe('0.2.0')
     expect(barrel.WebRTPayError).toBe(WebRTPayError)
     expect(barrel.Emitter).toBe(Emitter)
     expect(barrel.isIdentityKey).toBe(isIdentityKey)
