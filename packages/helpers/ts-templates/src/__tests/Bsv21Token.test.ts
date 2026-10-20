@@ -107,6 +107,24 @@ describe('Bsv21Token.decode', () => {
     )
   })
 
+  it('decodes auth and deploy+auth, which carry no amount', () => {
+    const id = `${'cd'.repeat(32)}_0`
+    expect(Bsv21Token.decode(bsv21Script({ p: 'bsv-20', op: 'auth', id }))).toMatchObject({
+      id,
+      amt: '0',
+      op: 'auth',
+      isMint: false
+    })
+    expect(Bsv21Token.decode(bsv21Script({ p: 'bsv-20', op: 'deploy+auth' }))).toMatchObject({
+      id: '',
+      amt: '0',
+      op: 'deploy+auth'
+    })
+    expect(() => Bsv21Token.decode(bsv21Script({ p: 'bsv-20', op: 'auth', id, amt: '1' }))).toThrow(
+      'carries no amount'
+    )
+  })
+
   it('exposes the op, payload and spend condition', () => {
     const d = Bsv21Token.decode(bsv21Script(PAYLOAD))
     expect(d.op).toBe('transfer')

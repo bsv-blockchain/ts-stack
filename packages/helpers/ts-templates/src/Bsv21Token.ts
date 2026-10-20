@@ -31,7 +31,7 @@ const BODY_FIELD = 0
 export interface Bsv21TokenDecoded {
   /** Token id `<txid>_<vout>` of the deploy+mint (empty for the mint output itself). */
   id: string
-  /** Raw token amount as a stringified bigint. */
+  /** Raw token amount as a stringified bigint; '0' for `auth` and `deploy+auth`, which carry none. */
   amt: string
   /** Decimals (deploy+mint only). */
   dec?: number
@@ -177,12 +177,16 @@ export class Bsv21Token {
     const payload = parsed as Record<string, unknown>
     if (payload.p !== 'bsv-20') throw malformed('not bsv-20')
 
-    const amt = payload.amt
+    const op = typeof payload.op === 'string' ? payload.op : ''
+    const authority = op === 'auth' || op === 'deploy+auth'
+    const amt = authority ? '0' : payload.amt
+    if (authority && payload.amt !== undefined)
+      throw malformed('an authority output carries no amount')
     if (typeof amt !== 'string' || !/^\d+$/.test(amt)) throw malformed('bad amount')
 
-    const op = typeof payload.op === 'string' ? payload.op : ''
     const isMint = op === 'deploy+mint'
-    const id = !isMint && typeof payload.id === 'string' ? payload.id : ''
+    const deploy = isMint || op === 'deploy+auth'
+    const id = !deploy && typeof payload.id === 'string' ? payload.id : ''
     const owner = p2pkhHash(envelope.lockingScript.chunks)
 
     return {

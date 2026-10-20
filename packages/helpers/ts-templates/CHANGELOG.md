@@ -34,7 +34,8 @@ All notable changes to this project will be documented in this file. The format 
   `<envelope> OP_CODESEPARATOR <locking script>`; a field may repeat (the last
   value wins) and single-byte `0x00`/`0x01` pushes alias `OP_0`/`OP_1` tags.
   The spend condition may be any script: `ownerHash160` is empty, rather than
-  an error, when it is not P2PKH.
+  an error, when it is not P2PKH. `auth` and `deploy+auth` outputs, which carry
+  no `amt`, decode with `amt` `'0'`.
 
 ### 2.0.0 candidate — BRC-162 (breaking)
 
