@@ -63,7 +63,7 @@ signature request and inventory read, and returns true to approve.
 ## Limits
 
 This version supports transfers only. It rejects issuance, minting, burns,
-authority operations, BRC-161 JSON outputs, legacy nonzero-index asset IDs,
-assets with required processing profiles, token proofs and plan position
+authority operations, BRC-161 JSON outputs, assets with required processing
+profiles, token proofs and plan position
 constraints, and does not yet record exposure for signatures released through
 `createSignature`.

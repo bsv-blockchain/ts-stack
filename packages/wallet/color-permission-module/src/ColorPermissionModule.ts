@@ -1306,17 +1306,13 @@ export class ColorPermissionModule implements PermissionsModule {
     if (check === undefined) {
       check = (async () => {
         const { txid, vout } = parseAssetId(assetId)
-        if (vout !== 0)
-          throw new Error(
-            'BRC-207: legacy nonzero-index assets are not supported by this module version'
-          )
-        const outpoint = outpointString(txid, 0)
+        const outpoint = outpointString(txid, vout)
         const deploy = readOutputList(await this.#provider.admission(assetId, [outpoint]), [
           outpoint
         ]).get(outpoint)
         if (deploy === undefined)
           throw new Error(`BRC-207: the overlay has no admitted deploy for ${assetId}`)
-        if (!isDeployOutput(deploy.lockingScript, { txid, vout: 0 })) {
+        if (!isDeployOutput(deploy.lockingScript, { txid, vout })) {
           throw new Error(`BRC-207: ${assetId} is not a token deploy`)
         }
       })()

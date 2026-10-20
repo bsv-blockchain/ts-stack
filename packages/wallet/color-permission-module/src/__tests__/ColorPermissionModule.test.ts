@@ -28,6 +28,7 @@ import {
   FakeProvider,
   FakeWallet,
   holdTokens,
+  legacyDeploy,
   remittanceString,
   tokenPayment,
   validInput
@@ -601,6 +602,63 @@ describe('ColorPermissionModule', () => {
       await expect(
         module.handleRequest({ method: 'encrypt', args: {}, originator: APP }, async () => ({}))
       ).rejects.toThrow('not available in the p color namespace')
+    })
+  })
+
+  describe('legacy asset deployed at a nonzero output', () => {
+    it('receives, sends and reports the balance of a BRC-161 asset deployed at output 1', async () => {
+      const legacyId = legacyDeploy(provider, 1)
+      const { tx, customInstructions } = await tokenPayment(
+        new FakeWallet(),
+        wallet,
+        legacyId,
+        300n
+      )
+      provider.admit(legacyId, tx, 0)
+      const basket = assetBasket(legacyId, 'value')
+      await expect(
+        module.onRequest({
+          method: 'internalizeAction',
+          args: {
+            tx: tx.toAtomicBEEF(),
+            description: 'Receive tokens',
+            outputs: [
+              {
+                outputIndex: 0,
+                protocol: 'basket insertion',
+                insertionRemittance: { basket, customInstructions }
+              }
+            ]
+          },
+          originator: APP
+        })
+      ).resolves.toEqual(expect.objectContaining({ args: expect.anything() }))
+      wallet.store(tx, 0, basket, customInstructions)
+
+      const result = await send({
+        labels: transferPlan(legacyId),
+        outputs: [await recipientOutput(wallet, new FakeWallet(), legacyId, 100n)]
+      })
+      const sent = Transaction.fromAtomicBEEF(result.tx!)
+      expect(validInput(sent, 0)).toBe(true)
+      const decoded = sent.outputs.map(output => OneColor.decode(output.lockingScript))
+      expect(decoded.map(output => output.amount)).toEqual([100n, 200n])
+      expect(decoded.map(output => OneColor.tokenIdToString(output.tokenId!))).toEqual([
+        legacyId,
+        legacyId
+      ])
+      await expect(
+        module.handleRequest(
+          {
+            method: 'listOutputs',
+            args: { basket: `p color balance ${assetTag(legacyId)}` },
+            originator: APP
+          },
+          async () => {
+            throw new Error('not forwarded')
+          }
+        )
+      ).resolves.toEqual({ totalOutputs: '200', outputs: [] })
     })
   })
 

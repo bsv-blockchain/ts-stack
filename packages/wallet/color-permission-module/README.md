@@ -70,7 +70,8 @@ Call `color.dispose()` when the host tears down the wallet.
 The module fails explicitly, rather than falling back, on:
 
 - issuance, minting, burns and authority operations;
-- BRC-161 JSON outputs and assets with legacy nonzero-index IDs;
+- BRC-161 JSON outputs (assets first deployed as BRC-161, at any output index, are
+  supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
 - `tokenProofs`, `profileData` entries, plan position constraints and
   signature-type overrides;

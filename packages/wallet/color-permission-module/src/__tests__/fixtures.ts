@@ -19,7 +19,7 @@ import {
 } from '@bsv/sdk'
 import { hash160 } from '@bsv/sdk/primitives/Hash'
 import Random from '@bsv/sdk/primitives/Random'
-import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
+import { toArray, toBase64, toHex } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
 import { sdk as toolbox } from '@bsv/wallet-toolbox-client'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
@@ -285,6 +285,31 @@ export async function deployAsset(
 }
 
 /** A transaction paying `amount` of an asset to `recipient`, keyed by `sender` as BRC-207 specifies. */
+/** A BRC-161 JSON deploy+mint at output `vout`, admitted to its asset's overlay. */
+export function legacyDeploy(provider: FakeProvider, vout: number): string {
+  const push = (bytes: number[]): string =>
+    bytes.length.toString(16).padStart(2, '0') + toHex(bytes)
+  const json = toArray('{"p":"bsv-20","op":"deploy+mint","amt":"1000","dec":"0"}', 'utf8')
+  const script =
+    '0063' +
+    push(toArray('ord', 'utf8')) +
+    '51' +
+    push(toArray('application/bsv-20', 'utf8')) +
+    '00' +
+    push(json) +
+    '68' +
+    '76a914' +
+    '11'.repeat(20) +
+    '88ac'
+  const tx = new Transaction()
+  for (let i = 0; i < vout; i++)
+    tx.addOutput({ lockingScript: LockingScript.fromHex('51'), satoshis: 1 })
+  tx.addOutput({ lockingScript: LockingScript.fromHex(script), satoshis: 1 })
+  const assetId = `${tx.id('hex')}_${vout}`
+  provider.admit(assetId, tx, vout)
+  return assetId
+}
+
 export async function tokenPayment(
   sender: FakeWallet,
   recipient: FakeWallet,

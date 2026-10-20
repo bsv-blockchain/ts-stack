@@ -587,7 +587,7 @@ describe('ColorPermissionModule boundaries', () => {
         },
         next
       )
-    ).rejects.toThrow('legacy nonzero-index assets')
+    ).rejects.toThrow('no admitted deploy')
     const unknown = `${'ee'.repeat(32)}_0`
     const missing = await tokenPayment(new FakeWallet(), wallet, unknown, 5n)
     provider.admit(unknown, missing.tx, 0)

@@ -70,7 +70,7 @@
       "name": "@bsv/color-permission-module",
       "publishedVersion": "0.0.0",
       "releaseType": "minor",
-      "summary": "Introduces the BRC-207 color wallet module for BRC-162 fungible tokens: receipt verification against the asset overlay, token sends funded from per-asset baskets with token change and signed during signAction, BRC-177 handoffs with an exact-amount split, createSignature for app-built transactions, and the p color assets and p color balance views. Issuance, minting, burns, authority operations, BRC-161 JSON outputs and required processing profiles fail explicitly in this version.",
+      "summary": "Introduces the BRC-207 color wallet module for BRC-162 fungible tokens: receipt verification against the asset overlay, token sends funded from per-asset baskets with token change and signed during signAction, BRC-177 handoffs with an exact-amount split, createSignature for app-built transactions, and the p color assets and p color balance views. Assets first deployed as BRC-161 JSON, at any output index, are handled in BRC-162 form. Issuance, minting, burns, authority operations, BRC-161 JSON outputs and required processing profiles fail explicitly in this version.",
       "migration": "No existing consumer migration is required; this is the first release. Wallet hosts register the module under the color scheme with the underlying wallet, a ColorOverlayProvider and a prompt callback."
     },
     {
