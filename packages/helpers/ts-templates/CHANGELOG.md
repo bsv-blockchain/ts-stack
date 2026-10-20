@@ -22,6 +22,19 @@ All notable changes to this project will be documented in this file. The format 
   name the shared error class and types.
 - `Bsv21Binary` is unchanged; `src/Bsv21Binary.ts` exports the prefix helpers
   `OneColor` reuses (`payloadChunk`, `splitPayload`, `p2pkhHash`, `roleOf`).
+- `Bsv21Token.envelope` locates a BRC-160 `ord` envelope anywhere in a script
+  and returns its fields, content type, body and the remaining locking script
+  (`Bsv21Envelope`). `Bsv21TokenDecoded` gains `op`, `payload` and
+  `lockingScript`.
+
+### Fixed
+
+- `Bsv21Token.decode` reads the envelope per BRC-160 wherever it sits:
+  `<locking script> <envelope>`, `<envelope> <locking script>` and
+  `<envelope> OP_CODESEPARATOR <locking script>`; a field may repeat (the last
+  value wins) and single-byte `0x00`/`0x01` pushes alias `OP_0`/`OP_1` tags.
+  The spend condition may be any script: `ownerHash160` is empty, rather than
+  an error, when it is not P2PKH.
 
 ### 2.0.0 candidate — BRC-162 (breaking)
 
