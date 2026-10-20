@@ -182,16 +182,16 @@ describe('ColorPermissionModule boundaries', () => {
     ).rejects.toThrow('not admitted and unspent')
   })
 
-  it('drops p color proof labels unread before the wallet stores the action', async () => {
+  it('rejects a p color label that is not a plan label, and keeps other labels', async () => {
     await holdTokens(wallet, provider, assetId, [300n])
     const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 100n)).tx.outputs[0]
-    const labels = [...plan(), 'p color proof 0 1 00', 'invoice']
-    const funded = await createAction({
-      labels,
-      outputs: [
-        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
-      ]
-    })
+    const outputs = [
+      { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+    ]
+    await expect(
+      createAction({ labels: [...plan(), 'p color proof 0 1 00', 'invoice'], outputs })
+    ).rejects.toThrow('unknown p color label')
+    const funded = await createAction({ labels: [...plan(), 'invoice'], outputs })
     expect(funded.labels).toEqual([...plan(), 'invoice'])
   })
 
@@ -611,14 +611,21 @@ describe('ColorPermissionModule boundaries', () => {
         originator: APP
       })
     ).rejects.toThrow('no meaning in internalizeAction')
+    await expect(
+      module.onRequest({
+        method: 'internalizeAction',
+        args: {
+          tx: tx.toAtomicBEEF(),
+          outputs,
+          description: 'Receive tokens',
+          labels: ['p color proof 0 1 00', 'invoice']
+        },
+        originator: APP
+      })
+    ).rejects.toThrow('no meaning in internalizeAction')
     const received = await module.onRequest({
       method: 'internalizeAction',
-      args: {
-        tx: tx.toAtomicBEEF(),
-        outputs,
-        description: 'Receive tokens',
-        labels: ['p color proof 0 1 00', 'invoice']
-      },
+      args: { tx: tx.toAtomicBEEF(), outputs, description: 'Receive tokens', labels: ['invoice'] },
       originator: APP
     })
     expect((received.args as { labels: string[] }).labels).toEqual(['invoice'])

@@ -40,7 +40,8 @@ import {
   type ColorOperationName,
   parseProfileData,
   parseRemittances,
-  type ColorRemittance
+  type ColorRemittance,
+  COLOR_PLAN_LABEL_PREFIX
 } from './ColorPlan.js'
 import {
   ASSETS_SELECTOR,
@@ -92,7 +93,6 @@ const MAX_RECEIPT_INSTRUCTION_BYTES = 1000
 const LIST_PAGE_LIMIT = 10_000
 const SUBMIT_ATTEMPTS = 3
 const NOSEND_EXPIRY_LABEL_PREFIX = 'p nosend expiry '
-const PROOF_LABEL_PREFIX = 'p color proof '
 const STATE_TAG_PREFIX = 'color_state_'
 const UTF8_ENCODER = new TextEncoder()
 
@@ -143,15 +143,6 @@ function inputOutpoint(input: Transaction['inputs'][number]): string {
   const txid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
   if (txid === undefined) throw new Error('BRC-207: transaction input has no source transaction ID')
   return outpointString(txid, input.sourceOutputIndex)
-}
-
-/**
- * Drops `p color proof` labels unread. They carry BRC-176 lineage packets for modules that
- * validate them and are never stored. This module relies on overlay admission and spendability
- * instead; a wallet that wants BRC-176 supplies its own color module.
- */
-function withoutProofLabels(labels: readonly string[]): string[] {
-  return labels.filter(label => !label.startsWith(PROOF_LABEL_PREFIX))
 }
 
 function custodyOf(remittance: ColorRemittance): Custody {
@@ -896,7 +887,7 @@ export class ColorPermissionModule implements PermissionsModule {
       case 'internalizeAction': {
         const args = req.args as InternalizeActionArgs
         await this.internalizeAction(args, req.originator)
-        return { args: { ...args, labels: withoutProofLabels(args.labels ?? []) } }
+        return { args }
       }
       case 'listActions': {
         const args = req.args as ListActionsArgs
@@ -977,14 +968,8 @@ export class ColorPermissionModule implements PermissionsModule {
     args: InternalizeActionArgs,
     originator: string
   ): Promise<void> {
-    if (
-      withoutProofLabels(args.labels ?? []).some(label =>
-        label.startsWith(`${COLOR_BASKET_NAMESPACE} `)
-      )
-    ) {
-      throw new Error(
-        'BRC-207: p color labels other than proof labels have no meaning in internalizeAction'
-      )
+    if ((args.labels ?? []).some(label => label.startsWith(`${COLOR_BASKET_NAMESPACE} `))) {
+      throw new Error('BRC-207: p color labels have no meaning in internalizeAction')
     }
     const tx = parsed('the received transaction', () => Transaction.fromAtomicBEEF(args.tx))
     const receipts = args.outputs.flatMap(output => {
@@ -1066,6 +1051,15 @@ export class ColorPermissionModule implements PermissionsModule {
     const plan = ColorPlan.fromLabels(labels)
     if (plan === undefined)
       throw new Error('BRC-207: a p color createAction requires a p color plan')
+    // Plan labels are the only p color labels; BRC-176 proof transport is not part of BRC-207.
+    if (
+      labels.some(
+        label =>
+          label.startsWith(`${COLOR_BASKET_NAMESPACE} `) &&
+          !label.startsWith(COLOR_PLAN_LABEL_PREFIX)
+      )
+    )
+      throw new Error('BRC-207: unknown p color label')
     const handoff = labels.some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX))
     assertPlanSupported(plan, args)
     const { planned, outputs } = await this.planOutputs(plan, args, originator)
@@ -1087,7 +1081,6 @@ export class ColorPermissionModule implements PermissionsModule {
       sighashScopes(plan, new Set([...explicit.managed, ...inputs].map(input => input.outpoint)))
       return {
         ...args,
-        labels: withoutProofLabels(labels),
         inputs: orderInputs(explicit.inputs, tokenInputs(inputs), plan.inputPositions),
         outputs: placeChange(outputs, changes, plan.changePositions)
       }

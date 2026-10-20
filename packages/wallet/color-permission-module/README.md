@@ -121,10 +121,11 @@ them. An input missing from `inputBEEF` is resolved by the wallet and checked
 in `signAction`. `inputPositions` and token `changePositions` are honored; change
 positions follow the requested outputs.
 
-The module does not validate BRC-176 lineage: `p color proof` labels on
-`createAction` and `internalizeAction` are dropped before the wallet stores the
-action. It relies on overlay admission and spendability. Plans, signature
-envelopes and receipt instructions have no `tokenProofs` member.
+The module does not validate BRC-176 lineage: proof transport is not part of
+BRC-207, and a separate module will feed lineage packets to a wallet-local
+overlay before this one runs. It relies on overlay admission and spendability.
+Plans, signature envelopes and receipt instructions have no `tokenProofs`
+member, and a `p color` label other than a plan label is rejected.
 
 Signatures released through `createSignature` are not yet recorded as BRC-207
 exposure. BRC-207's non-final transaction rules are not implemented; such
