@@ -63,6 +63,7 @@ import {
   validateRemittanceString,
   type TokenRole
 } from './identifiers.js'
+import { eachInOrder, mapInOrder } from './inOrder.js'
 import { readOutputList } from './overlay.js'
 import {
   exactMembers,
@@ -711,6 +712,27 @@ export function assertPlanAssets(plan: ColorPlan, involved: ReadonlySet<string>)
 }
 
 /** Largest amount first. */
+/**
+ * Chooses unrejected candidates, in their order, until they cover `target`: units for value, a count
+ * for authority. Undefined when they cannot.
+ */
+function chooseCandidates(
+  candidates: readonly Candidate[],
+  rejected: ReadonlySet<string>,
+  role: TokenRole,
+  target: bigint
+): Candidate[] | undefined {
+  const chosen: Candidate[] = []
+  let total = 0n
+  for (const candidate of candidates) {
+    if (total >= target) break
+    if (rejected.has(candidate.outpoint)) continue
+    chosen.push(candidate)
+    total += role === 'value' ? candidate.amount : 1n
+  }
+  return total < target ? undefined : chosen
+}
+
 function byAmountDescending(a: { amount: bigint }, b: { amount: bigint }): number {
   if (a.amount === b.amount) return 0
   return a.amount > b.amount ? -1 : 1
@@ -983,8 +1005,9 @@ export class ColorPermissionModule implements PermissionsModule {
     })
     if (receipts.length === 0) return
     await this.assertCompletedTransaction(tx)
-    for (const { outputIndex, remittance } of receipts)
+    await eachInOrder(receipts, async ({ outputIndex, remittance }) => {
       await this.verifyReceipt(tx, outputIndex, remittance, originator)
+    })
   }
 
   /**
@@ -995,8 +1018,14 @@ export class ColorPermissionModule implements PermissionsModule {
   protected async assertCompletedTransaction(tx: Transaction): Promise<void> {
     for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
     const { inputs, outputs } = transactionTokens(tx)
-    for (const assetId of new Set([...inputs.keys(), ...outputs.keys()]))
+    await this.assertSupportedAssets([...inputs.keys(), ...outputs.keys()])
+  }
+
+  /** Checks each distinct asset in order, so the first unsupported one is the one reported. */
+  protected async assertSupportedAssets(assetIds: Iterable<string>): Promise<void> {
+    await eachInOrder(new Set(assetIds), async assetId => {
       await this.assertSupportedAsset(assetId)
+    })
   }
 
   /** One receipt: its custody, its output's asset, owner and basket, and overlay admission. */
@@ -1137,31 +1166,37 @@ export class ColorPermissionModule implements PermissionsModule {
       args.inputBEEF === undefined
         ? undefined
         : parsed('inputBEEF', () => Beef.fromBinary(args.inputBEEF as number[]))
-    for (const input of inputs) {
+    await eachInOrder(inputs, async input => {
       const output = own.get(input.outpoint)
-      if (output === undefined) {
-        await this.foreignInput(explicit, beef, input.outpoint)
-        continue
-      }
-      if (!output.spendable)
-        throw new Error('BRC-207: an explicit p color input is reserved by another action')
-      const managed = await this.managedInput(output, originator)
-      if (managed === undefined)
-        throw new Error('BRC-207: an explicit p color input is not a managed token output')
-      await this.assertSupportedAsset(managed.assetId)
-      if (
-        !(await this.spendable(managed.assetId, [managed])).has(managed.outpoint) &&
-        !(await this.resubmitHeld(managed.assetId, managed.role, [managed], originator)).has(
-          managed.outpoint
-        )
-      )
-        throw new Error('BRC-207: an explicit p color input is not admitted and unspent')
-      explicit.managed.push(managed)
-      const totals = holding(explicit.holdings, managed.assetId, emptyExplicitHolding)
-      if (managed.role === 'value') totals.value += managed.amount
-      else totals.authority += 1
-    }
+      if (output === undefined) await this.foreignInput(explicit, beef, input.outpoint)
+      else await this.ownInput(explicit, output, originator)
+    })
     return explicit
+  }
+
+  /** Counts one of this wallet's `p color` outputs once it is managed, admitted and unspent. */
+  protected async ownInput(
+    explicit: ExplicitInputs,
+    output: WalletOutput,
+    originator: string
+  ): Promise<void> {
+    if (!output.spendable)
+      throw new Error('BRC-207: an explicit p color input is reserved by another action')
+    const managed = await this.managedInput(output, originator)
+    if (managed === undefined)
+      throw new Error('BRC-207: an explicit p color input is not a managed token output')
+    await this.assertSupportedAsset(managed.assetId)
+    if (
+      !(await this.spendable(managed.assetId, [managed])).has(managed.outpoint) &&
+      !(await this.resubmitHeld(managed.assetId, managed.role, [managed], originator)).has(
+        managed.outpoint
+      )
+    )
+      throw new Error('BRC-207: an explicit p color input is not admitted and unspent')
+    explicit.managed.push(managed)
+    const totals = holding(explicit.holdings, managed.assetId, emptyExplicitHolding)
+    if (managed.role === 'value') totals.value += managed.amount
+    else totals.authority += 1
   }
 
   /** Counts a foreign token input once its overlay admits it; other foreign inputs add nothing. */
@@ -1204,12 +1239,11 @@ export class ColorPermissionModule implements PermissionsModule {
     }
     const owned = new Map(plan.ownedOutputs.map(remittance => [remittance.outputIndex, remittance]))
     const planned: PlannedOutputs = { holdings: new Map(), destinations: [] }
-    const outputs: CreateActionOutput[] = []
-    for (const [index, output] of requested.entries()) {
-      outputs.push(
+    const outputs = await mapInOrder(
+      requested,
+      async (output, index) =>
         await this.planOutput(plan, args, index, output, owned.get(index), planned, originator)
-      )
-    }
+    )
     return { planned, outputs }
   }
 
@@ -1372,38 +1406,59 @@ export class ColorPermissionModule implements PermissionsModule {
     ])
     assertPlanAssets(plan, new Set([...assetIds, ...(planned.deploy === undefined ? [] : [ISSUE])]))
     if (planned.deploy !== undefined) assertOperations(plan, ISSUE, [planned.deploy.operation])
-    const funding: AssetFunding[] = []
-    for (const assetId of assetIds) {
+    const funding = await mapInOrder(assetIds, async assetId => {
       await this.assertSupportedAsset(assetId)
-      funding.push(
-        await this.fundAsset(
+      return await this.fundAsset(
+        reserved,
+        plan,
+        assetId,
+        planned.holdings.get(assetId) ?? emptyHolding(),
+        explicit.holdings.get(assetId) ?? emptyExplicitHolding(),
+        originator
+      )
+    })
+    const settled = await mapInOrder(
+      funding,
+      async asset =>
+        await this.settleFunding(
           reserved,
-          plan,
-          assetId,
-          planned.holdings.get(assetId) ?? emptyHolding(),
-          explicit.holdings.get(assetId) ?? emptyExplicitHolding(),
+          asset,
+          explicit.holdings.get(asset.assetId)?.value ?? 0n,
+          handoff,
           originator
         )
-      )
+    )
+    return {
+      inputs: settled.flatMap(asset => asset.inputs),
+      changes: settled.flatMap(asset => asset.change)
     }
-    const inputs: ManagedInput[] = []
-    const changes: Array<{ assetId: string; output: CreateActionOutput }> = []
-    for (const asset of funding) {
+  }
+
+  /**
+   * One funded asset's inputs and change: a handoff with change splits off an exact output instead,
+   * so the recipient receives no change; otherwise any change becomes a new managed output.
+   */
+  protected async settleFunding(
+    reserved: Set<string>,
+    asset: AssetFunding,
+    explicitValue: bigint,
+    handoff: boolean,
+    originator: string
+  ): Promise<{
+    inputs: ManagedInput[]
+    change: Array<{ assetId: string; output: CreateActionOutput }>
+  }> {
+    if (asset.change <= 0n) return { inputs: asset.selected, change: [] }
+    if (handoff) {
       const value = asset.selected.filter(input => input.role === 'value')
-      const needed =
-        asset.outputs.value - asset.change - (explicit.holdings.get(asset.assetId)?.value ?? 0n)
-      const split =
-        handoff && asset.change > 0n
-          ? await this.splitExact(reserved, asset.assetId, value, needed, originator)
-          : undefined
-      inputs.push(...(split ?? asset.selected))
-      if (split === undefined && asset.change > 0n)
-        changes.push({
-          assetId: asset.assetId,
-          output: (await this.newManagedOutput(asset.assetId, asset.change, originator)).output
-        })
+      const needed = asset.outputs.value - asset.change - explicitValue
+      return {
+        inputs: await this.splitExact(reserved, asset.assetId, value, needed, originator),
+        change: []
+      }
     }
-    return { inputs, changes }
+    const { output } = await this.newManagedOutput(asset.assetId, asset.change, originator)
+    return { inputs: asset.selected, change: [{ assetId: asset.assetId, output }] }
   }
 
   /**
@@ -1488,41 +1543,53 @@ export class ColorPermissionModule implements PermissionsModule {
     target: bigint,
     originator: string
   ): Promise<ManagedInput[]> {
-    const weight = (candidate: Candidate): bigint => (role === 'value' ? candidate.amount : 1n)
     const candidates = (await this.candidates(assetId, role, originator)).sort(byAmountDescending)
     const rejected = new Set<string>()
     for (;;) {
-      const chosen: Candidate[] = []
-      let total = 0n
-      for (const candidate of candidates) {
-        if (total >= target) break
-        if (rejected.has(candidate.outpoint)) continue
-        chosen.push(candidate)
-        total += weight(candidate)
-      }
-      if (total < target)
+      const chosen = chooseCandidates(candidates, rejected, role, target)
+      if (chosen === undefined)
         throw new Error(
           `BRC-207: insufficient spendable ${role === 'value' ? 'balance' : 'authority'} of ${assetId}`
         )
-      // Chosen outputs are held while they are checked, so a concurrent action cannot choose them.
-      this.reserve(reserved, chosen)
-      // Custody is read only for chosen outputs; an unreadable record is skipped, not fatal.
-      const inputs = await Promise.all(
-        chosen.map(async candidate => await this.readableInput(candidate, originator))
-      )
-      const unreadable = chosen.filter((_, index) => inputs[index] === undefined)
+      const selected = await this.checkChosen(reserved, assetId, role, chosen, rejected, originator)
+      if (selected !== undefined) return selected
+    }
+  }
+
+  /**
+   * Holds the chosen outputs and checks them: each must have readable custody and be admitted and
+   * unspent, after resubmission if needed. Returns them as inputs, still held, when all pass;
+   * otherwise rejects and releases the ones that failed and returns undefined.
+   */
+  protected async checkChosen(
+    reserved: Set<string>,
+    assetId: string,
+    role: TokenRole,
+    chosen: Candidate[],
+    rejected: Set<string>,
+    originator: string
+  ): Promise<ManagedInput[] | undefined> {
+    // Chosen outputs are held while they are checked, so a concurrent action cannot choose them.
+    this.reserve(reserved, chosen)
+    // Custody is read only for chosen outputs; an unreadable record is skipped, not fatal.
+    const inputs = await Promise.all(
+      chosen.map(async candidate => await this.readableInput(candidate, originator))
+    )
+    const unreadable = chosen.filter((_, index) => inputs[index] === undefined)
+    if (unreadable.length > 0) {
       for (const candidate of unreadable) rejected.add(candidate.outpoint)
       this.release(reserved, unreadable)
-      if (unreadable.length > 0) continue
-      const selected = inputs as ManagedInput[]
-      const admitted = await this.spendable(assetId, selected)
-      const unlisted = selected.filter(input => !admitted.has(input.outpoint))
-      const recovered = await this.resubmitHeld(assetId, role, unlisted, originator)
-      const missing = unlisted.filter(input => !recovered.has(input.outpoint))
-      if (missing.length === 0) return selected
-      for (const input of missing) rejected.add(input.outpoint)
-      this.release(reserved, missing)
+      return undefined
     }
+    const selected = inputs as ManagedInput[]
+    const admitted = await this.spendable(assetId, selected)
+    const unlisted = selected.filter(input => !admitted.has(input.outpoint))
+    const recovered = await this.resubmitHeld(assetId, role, unlisted, originator)
+    const missing = unlisted.filter(input => !recovered.has(input.outpoint))
+    if (missing.length === 0) return selected
+    for (const input of missing) rejected.add(input.outpoint)
+    this.release(reserved, missing)
+    return undefined
   }
 
   /**
@@ -1552,15 +1619,15 @@ export class ColorPermissionModule implements PermissionsModule {
       offset += page.outputs.length
       if (page.outputs.length < LIST_PAGE_LIMIT) break
     }
-    for (const txid of txids) {
-      if (beef.findTxid(txid) === undefined) continue
+    await eachInOrder(txids, async txid => {
+      if (beef.findTxid(txid) === undefined) return
       const atomic = beef.toBinaryAtomic(txid)
       const { assetIds, deploy } = submissionAssets(Transaction.fromAtomicBEEF(atomic))
       // A refused resubmission leaves the output unlisted; the spendability check decides.
       await this.provider
         .submit([...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)], atomic)
         .catch(() => undefined)
-    }
+    })
     return await this.spendable(assetId, outputs)
   }
 
@@ -1753,12 +1820,12 @@ export class ColorPermissionModule implements PermissionsModule {
     assertTransactionOperations(plan, tokens)
     const managed = await this.actionInputs(tx, originator)
     const scopes = sighashScopes(plan, new Set(managed.map(input => input.outpoint)))
-    for (const assetId of new Set(tokens.consumed.map(input => input.assetId))) {
+    await eachInOrder(new Set(tokens.consumed.map(input => input.assetId)), async assetId => {
       const assetInputs = tokens.consumed.filter(input => input.assetId === assetId)
       const admitted = await this.spendable(assetId, assetInputs)
       if (assetInputs.some(input => !admitted.has(input.outpoint)))
         throw new Error(`BRC-207: a ${assetId} input is no longer spendable`)
-    }
+    })
     await this.approve(originator, actionConsent(plan, createArgs, tx, tokens, managed, scopes))
     return {
       ...args,
@@ -1895,12 +1962,11 @@ export class ColorPermissionModule implements PermissionsModule {
     // input authenticated from its source, every asset's legs and supply change derived, and
     // every token input admitted and unspent in its overlay.
     const tokens = transactionTokens(tx, true)
-    for (const assetId of new Set([
+    await this.assertSupportedAssets([
       token.assetId,
       ...tokens.inputs.keys(),
       ...tokens.outputs.keys()
-    ]))
-      await this.assertSupportedAsset(assetId)
+    ])
     await Promise.all(
       ownedOutputs.map(async remittance => {
         const output = tx.outputs[remittance.outputIndex]
@@ -1919,14 +1985,14 @@ export class ColorPermissionModule implements PermissionsModule {
     )
     const outpoint = outpointString(sourceTXID, input.sourceOutputIndex)
     const signed = { outpoint, lockingScript: source.lockingScript, satoshis: source.satoshis }
-    for (const assetId of new Set(tokens.consumed.map(consumed => consumed.assetId))) {
+    await eachInOrder(new Set(tokens.consumed.map(consumed => consumed.assetId)), async assetId => {
       const assetInputs = tokens.consumed.filter(consumed => consumed.assetId === assetId)
       const admitted = await this.spendable(assetId, assetInputs)
       if (!admitted.has(outpoint) && assetId === token.assetId)
         throw new Error('BRC-207: the signed input is not admitted and unspent in its overlay')
       if (assetInputs.some(consumed => !admitted.has(consumed.outpoint)))
         throw new Error(`BRC-207: a ${assetId} input is not admitted and unspent in its overlay`)
-    }
+    })
     const preimage = this.preimage(tx, inputIndex, signed, sighashType)
     const kept = (vout: number): boolean =>
       ownedOutputs.some(remittance => remittance.outputIndex === vout)
