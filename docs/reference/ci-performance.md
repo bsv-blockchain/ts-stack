@@ -60,6 +60,27 @@ pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
 
+## Planned coverage shards
+
+The `coverage-other` lane runs each shard's packages serially, so a shard lasts
+as long as the sum of its packages and the lane lasts as long as its slowest
+shard. It previously used one shard for one package and two otherwise,
+assigning packages round-robin by name. On one long-running branch the first
+shard ran 855–1,503 seconds while the second finished in 117–211.
+
+`scripts/ci-shard-plan.mjs` now plans the matrix from
+`governance/ci-lane-durations.json`. The shard count is the larger of the
+estimated total divided by the per-shard target and the package count divided
+by six, capped at six shards. Packages are assigned longest first to the
+least-loaded shard that has not reached its even share of packages, so one
+package that becomes slow in a pull request shares its shard with only a few
+others. Planning decides only which shard runs a package; every selected
+package still runs exactly once and serially.
+
+Each shard prints `coverage-other-duration <package> <seconds>s` and a summary
+table. Refresh the lane durations from those hosted values; the initial
+weights are a local serial measurement of `main` at 9262cac66.
+
 ## Execution ledger across outcomes and attempts
 
 The weekly trend also writes `ci-execution-ledger.json`. This separate ledger

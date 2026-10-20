@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "description": "Measured test:coverage seconds per package for serial CI lanes. Used only to decide which shard runs a package, never whether it runs. Refresh from the coverage-other-duration lines that each hosted coverage shard prints.",
+  "lanes": {
+    "coverage-other": {
+      "source": "Local serial measurement on main 9262cac66 (2026-10-20), as relative weights until hosted durations replace them.",
+      "plan": {
+        "targetSeconds": 300,
+        "maxPackagesPerShard": 6,
+        "maxShards": 6,
+        "defaultSeconds": 30
+      },
+      "seconds": {
+        "@bsv/402-pay": 6,
+        "@bsv/air-gap": 11,
+        "@bsv/amountinator": 6,
+        "@bsv/auth": 4,
+        "@bsv/auth-express-middleware": 22,
+        "@bsv/authsocket": 6,
+        "@bsv/authsocket-client": 4,
+        "@bsv/btms": 6,
+        "@bsv/btms-backend": 5,
+        "@bsv/btms-permission-module": 4,
+        "@bsv/chirp": 36,
+        "@bsv/ecpm-permission-module": 7,
+        "@bsv/fund-wallet": 5,
+        "@bsv/gasp": 3,
+        "@bsv/lch": 11,
+        "@bsv/message-box-client": 8,
+        "@bsv/overlay": 170,
+        "@bsv/overlay-discovery-services": 8,
+        "@bsv/overlay-express": 9,
+        "@bsv/overlay-topics": 221,
+        "@bsv/paymail": 12,
+        "@bsv/payment-express-middleware": 4,
+        "@bsv/simple": 26,
+        "@bsv/templates": 10,
+        "@bsv/teranode-listener": 7,
+        "@bsv/wallet-helper": 5,
+        "@bsv/wallet-relay": 38,
+        "@bsv/wallet-toolbox-client": 11,
+        "@bsv/wallet-toolbox-examples": 9,
+        "@bsv/wallet-toolbox-mobile": 5,
+        "@bsv/webrtpay": 90,
+        "create-bsv-app": 8
+      }
+    }
+  }
+}

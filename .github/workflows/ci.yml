@@ -316,9 +316,12 @@ jobs:
             --projects-json .ci-direct-packages.json \
             --mode coverage-other)
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
-          COVERAGE_OTHER_MATRIX=$(jq -c \
-            'if length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
-            <<<"$COVERAGE_OTHER_PACKAGES")
+          # Packages run serially inside a shard, so plan shards from measured
+          # durations rather than package count.
+          COVERAGE_OTHER_MATRIX=$(node scripts/ci-shard-plan.mjs \
+            --packages-json "$COVERAGE_OTHER_PACKAGES" \
+            --durations governance/ci-lane-durations.json \
+            --lane coverage-other)
           echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
           BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \
             --projects-json .ci-affected-packages.json \
@@ -1172,36 +1175,39 @@ jobs:
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Generate coverage for other affected packages
         env:
-          COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
+          SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
           PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
-          index=0
           while IFS= read -r package; do
-            if [ $((index % ${{ matrix.total }} + 1)) -eq "${{ matrix.shard }}" ]; then
-              packages+=("$package")
-            fi
-            index=$((index + 1))
-          done < <(jq -r '.[]' <<<"$COVERAGE_OTHER_PACKAGES")
+            packages+=("$package")
+          done < <(jq -r '.[]' <<<"$SHARD_PACKAGES")
 
-          filters=()
           echo "Coverage shard ${{ matrix.shard }}/${{ matrix.total }}:"
           for package in "${packages[@]}"; do
             echo "  - $package"
-            filters+=(--filter "$package")
           done
           if printf '%s\n' "${packages[@]}" | grep -Fxq '@bsv/overlay-topics'; then
             pnpm --filter @bsv/overlay-topics exec node --input-type=module -e \
               "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
           fi
-          if [ "${#filters[@]}" -gt 0 ]; then
-            pnpm -r --workspace-concurrency=1 --no-sort "${filters[@]}" exec node \
-              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
-              --script test:coverage
-          else
+          if [ "${#packages[@]}" -eq 0 ]; then
             echo "No affected coverage packages in this shard."
           fi
+          # Serial, one package at a time, timed so the lane durations can be
+          # refreshed from hosted runs (governance/ci-lane-durations.json).
+          echo '| Package | Seconds |' >> "$GITHUB_STEP_SUMMARY"
+          echo '| --- | --- |' >> "$GITHUB_STEP_SUMMARY"
+          for package in "${packages[@]}"; do
+            started=$SECONDS
+            pnpm --filter "$package" exec node \
+              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+              --script test:coverage
+            elapsed=$((SECONDS - started))
+            echo "coverage-other-duration $package ${elapsed}s"
+            echo "| \`$package\` | $elapsed |" >> "$GITHUB_STEP_SUMMARY"
+          done
 
           while IFS= read -r report; do
             package_dir="${report%/coverage/lcov.info}"
