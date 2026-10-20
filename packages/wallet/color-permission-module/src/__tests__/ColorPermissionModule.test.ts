@@ -477,10 +477,16 @@ describe('ColorPermissionModule', () => {
       expect(validInput(Transaction.fromAtomicBEEF(result.tx!), 0)).toBe(true)
     })
 
-    it('signs a noSend action without submitting it', async () => {
+    it('refuses a noSend action without a BRC-177 handoff label, and signs one with it unsubmitted', async () => {
       await holdTokens(wallet, provider, assetId, [100n])
+      const outputs = [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      await expect(send({ outputs, options: { noSend: true } })).rejects.toThrow(
+        'noSend token actions require a BRC-177 p nosend expiry label'
+      )
+      expect(wallet.pending.size).toBe(0)
       const result = await send({
-        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+        labels: ['p nosend expiry seconds 30', ...transferPlan(assetId)],
+        outputs,
         options: { noSend: true }
       })
       expect(validInput(Transaction.fromAtomicBEEF(result.tx!), 0)).toBe(true)

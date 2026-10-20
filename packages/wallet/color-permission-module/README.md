@@ -76,7 +76,9 @@ Call `color.dispose()` when the host tears down the wallet.
   then submitted to `tm_color`; it stays pending in the inventory until
   `tm_color_<assetId>` admits it. A deploy cannot be a `noSend` action.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
-  `noSend`. When the inputs exceed the amount, the module first broadcasts a
+  `noSend`; this is the only `noSend` token action, since a plain `noSend`
+  sent later with `sendWith` would never reach the token overlay. When the
+  inputs exceed the amount, the module first broadcasts a
   split to the exact amount. The split pays the wallet itself and, like
   BRC-177's revocation anchor, gets no separate consent.
 - **Receive**: `internalizeAction` with `basket insertion` into the asset's

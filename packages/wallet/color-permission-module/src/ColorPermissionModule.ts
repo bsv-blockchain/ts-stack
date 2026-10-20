@@ -470,14 +470,17 @@ function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs): void {
   if (Object.keys(plan.profileData ?? {}).length > 0) {
     throw new Error('BRC-207: plan.profileData is not supported')
   }
+  const handoff = (args.labels ?? []).some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX))
   // A signed deploy is filed in its asset basket through internalizeAction, which would end a
   // noSend transaction's lifecycle; the deploy is a broadcast action.
-  if (
-    plan.assets.includes(ISSUE) &&
-    (args.options?.noSend === true ||
-      (args.labels ?? []).some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX)))
-  ) {
+  if (plan.assets.includes(ISSUE) && (args.options?.noSend === true || handoff)) {
     throw new Error('BRC-207: a deploy cannot be a noSend action')
+  }
+  // As in BTMS, a token action completes with its overlay submission. The one deferred flow is
+  // the BRC-177 handoff, whose receiver submits; a plain noSend action later sent with sendWith
+  // would never reach the token overlay, as the manager gives modules no sendWith hook.
+  if (args.options?.noSend === true && !handoff) {
+    throw new Error('BRC-207: noSend token actions require a BRC-177 p nosend expiry label')
   }
   // Storage adds satoshi change while funding, after this module returns: it appends the requested
   // outputs, then any storage commission output, then change, and reports neither position.
@@ -906,7 +909,8 @@ export class ColorPermissionModule implements PermissionsModule {
   ): Promise<unknown> {
     if (context.method === 'signAction' && context.action !== undefined) {
       await this.fileDeploy(res as SignActionResult, context.action, context.originator)
-      // A noSend action is a handoff: its receiver submits it.
+      // A noSend action is always a BRC-177 handoff (createAction refuses any other): its
+      // receiver submits it.
       if (!context.action.noSend)
         await this.submitSigned(res as SignActionResult, context.action.transaction)
     }
