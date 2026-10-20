@@ -70,8 +70,9 @@ Call `color.dispose()` when the host tears down the wallet.
 - **Deploy**: a BRC-162 deploy at output 0 with `ISSUE` in `plan.assets` and
   its remittance in `plan.ownedOutputs`.
   Once signed, an owned deploy is filed in its asset's value or authority
-  basket (keeping its `ISSUE` key), then submitted to `tm_color`; it stays
-  pending in the inventory until `tm_color_<assetId>` admits it.
+  basket (keeping its `ISSUE` key) through the wallet's `internalizeAction`,
+  then submitted to `tm_color`; it stays pending in the inventory until
+  `tm_color_<assetId>` admits it. A deploy cannot be a `noSend` action.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
   `noSend`. When the inputs exceed the amount, the module first broadcasts a
   split to the exact amount. The split pays the wallet itself and, like

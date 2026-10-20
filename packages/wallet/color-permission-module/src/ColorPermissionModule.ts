@@ -469,6 +469,15 @@ function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs): void {
   if (Object.keys(plan.profileData ?? {}).length > 0) {
     throw new Error('BRC-207: plan.profileData is not supported')
   }
+  // A signed deploy is filed in its asset basket through internalizeAction, which would end a
+  // noSend transaction's lifecycle; the deploy is a broadcast action.
+  if (
+    plan.assets.includes(ISSUE) &&
+    (args.options?.noSend === true ||
+      (args.labels ?? []).some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX)))
+  ) {
+    throw new Error('BRC-207: a deploy cannot be a noSend action')
+  }
   // Storage adds satoshi change while funding, after this module returns: it appends the requested
   // outputs, then any storage commission output, then change, and reports neither position.
   if (plan.changePositions.some(position => position.assetId === null)) {
@@ -918,10 +927,23 @@ export class ColorPermissionModule implements PermissionsModule {
       remittance => remittance.outputIndex === 0 && remittance.assetId === ISSUE
     )
     if (deploy?.deploy !== true || owned !== true) return
-    await this.wallet.listOutputs(
+    // The underlying wallet merges the insertion into its own signed transaction: the basket and
+    // the custody (encrypted at createAction) are assigned and the transaction's status is kept.
+    const customInstructions = action.createArgs?.outputs?.[0]?.customInstructions
+    await this.wallet.internalizeAction(
       {
-        basket: toolbox.specOpSetOutputBasket,
-        tags: [outpointString(txid, 0), assetBasket(deploy.assetId, deploy.role)]
+        tx: result.tx,
+        description: 'File the deployed asset',
+        outputs: [
+          {
+            outputIndex: 0,
+            protocol: 'basket insertion',
+            insertionRemittance: {
+              basket: assetBasket(deploy.assetId, deploy.role),
+              ...(customInstructions === undefined ? {} : { customInstructions })
+            }
+          }
+        ]
       },
       originator
     )

@@ -100,14 +100,6 @@ export class FakeWallet {
   }
 
   async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult> {
-    if (args.basket === toolbox.specOpSetOutputBasket) {
-      const [outpoint, basket] = args.tags ?? []
-      const output = this.outputs.get(outpoint)
-      if (output === undefined || output.basket !== undefined)
-        throw new Error(`${outpoint} is not an output without a basket`)
-      output.basket = basket
-      return { totalOutputs: 0, outputs: [] }
-    }
     const inventory = args.basket === toolbox.specOpBasketPrefixOutputs
     const records = [...this.outputs.entries()]
       .filter(([, output]) =>

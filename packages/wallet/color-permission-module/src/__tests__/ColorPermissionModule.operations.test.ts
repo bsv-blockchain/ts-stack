@@ -629,21 +629,20 @@ describe('ColorPermissionModule token operations', () => {
       ])
     })
 
-    it('files a noSend deploy without submitting it', async () => {
+    it('rejects a noSend deploy', async () => {
       const deploy = await owned('', ISSUE, 7n, 0)
-      const tx = await run({
-        labels: labels(
-          [ISSUE],
-          [{ assetId: ISSUE, operation: 'deploy-fixed' }],
-          [deploy.remittance]
-        ),
-        outputs: deploy.output,
-        options: { randomizeOutputs: false, noSend: true }
-      })
-      expect(wallet.outputs.get(`${tx.id('hex')}.0`)?.basket).toBe(
-        assetBasket(`${tx.id('hex')}_0`, 'value')
+      const plan = labels(
+        [ISSUE],
+        [{ assetId: ISSUE, operation: 'deploy-fixed' }],
+        [deploy.remittance]
       )
-      expect(provider.submissions).toEqual([])
+      await expect(
+        createAction({ labels: plan, outputs: deploy.output, options: { noSend: true } })
+      ).rejects.toThrow('a deploy cannot be a noSend action')
+      await expect(
+        createAction({ labels: ['p nosend expiry seconds 30', ...plan], outputs: deploy.output })
+      ).rejects.toThrow('a deploy cannot be a noSend action')
+      expect(wallet.pending.size).toBe(0)
     })
 
     it('rejects a deploy with the wrong operation, order or basket', async () => {
