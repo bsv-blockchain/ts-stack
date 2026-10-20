@@ -20,7 +20,6 @@ describe('package exports', () => {
       'assetBasket',
       'assetTag',
       'authorityOperation',
-      'colorLookupService',
       'colorProtocolID',
       'colorTopic',
       'createColorModule',
@@ -43,6 +42,5 @@ describe('package exports', () => {
     ])
     for (const value of Object.values(api)) expect(value).toBeDefined()
     expect(api.colorTopic(`${'ab'.repeat(32)}_0`)).toBe(`tm_color_${'ab'.repeat(32)}_0`)
-    expect(api.colorLookupService(`${'ab'.repeat(32)}_0`)).toBe(`ls_color_${'ab'.repeat(32)}_0`)
   })
 })

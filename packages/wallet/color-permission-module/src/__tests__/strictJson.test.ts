@@ -12,10 +12,10 @@ import {
 describe('strict JSON', () => {
   it('parses the RFC 8259 grammar into prototype-free objects', () => {
     const value = parseStrictJson(
-      ' {"a":[1,-2.5e3,true,false,null,"\\"\\\\\\/\\b\\f\\n\\r\\t\\u00e9\\ud83d\\ude00"],"b":{},"c":[]} ',
+      ' {"a":[1,-2.5e-1,true,false,null,"\\"\\\\\\/\\b\\f\\n\\r\\t\\u00e9\\ud83d\\ude00"],"b":{},"c":[]} ',
       'test'
     )
-    expect(value).toEqual({ a: [1, -2500, true, false, null, '"\\/\b\f\n\r\té😀'], b: {}, c: [] })
+    expect(value).toEqual({ a: [1, -0.25, true, false, null, '"\\/\b\f\n\r\té😀'], b: {}, c: [] })
     expect(Object.getPrototypeOf(value)).toBeNull()
     expect(parseStrictJson('{"__proto__":1}', 'test')).toEqual(
       Object.assign(Object.create(null), { ['__proto__']: 1 })
@@ -26,6 +26,16 @@ describe('strict JSON', () => {
     ['a duplicate member', '{"a":1,"a":2}', 'duplicate member a'],
     ['trailing data', '{} {}', 'trailing data'],
     ['a leading-zero number', '01', 'trailing data'],
+    [
+      'an integer written as a fraction',
+      '{"a":1.0}',
+      'an integer written as a fraction or exponent'
+    ],
+    [
+      'an integer written with an exponent',
+      '[1e0]',
+      'an integer written as a fraction or exponent'
+    ],
     ['a bare minus', '-', 'invalid value'],
     ['an unterminated string', '"abc', 'unterminated string'],
     ['a raw control character', '"a\nb"', 'control character'],

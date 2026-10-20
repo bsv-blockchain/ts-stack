@@ -23,7 +23,7 @@ const IDENTITY_KEY = /^0[23][0-9a-f]{64}$/
 const WHITESPACE = /\s/u
 const UINT32_MAX = 0xffffffff
 const MAX_PROTOCOL_NAME_LENGTH = 280
-const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 export interface Outpoint {
   txid: string
@@ -83,7 +83,7 @@ export function validateRemittanceString(value: unknown, name: string): string {
     throw new Error(`BRC-207: ${name} must be a nonempty string without whitespace`)
   }
   // Lone surrogates are not strict UTF-8; encoding replaces them, so the round trip differs.
-  if (UTF8.decode(new TextEncoder().encode(value)) !== value) {
+  if (UTF8_DECODER.decode(new TextEncoder().encode(value)) !== value) {
     throw new Error(`BRC-207: ${name} must be strict UTF-8`)
   }
   return value
@@ -94,7 +94,11 @@ export function validateIdentityKey(value: unknown, name: string): string {
   if (typeof value !== 'string' || !IDENTITY_KEY.test(value)) {
     throw new Error(`BRC-207: ${name} must be a compressed public key in lowercase hex`)
   }
-  PublicKey.fromString(value)
+  try {
+    PublicKey.fromString(value)
+  } catch (error) {
+    throw new Error(`BRC-207: ${name} is not a valid public key (${(error as Error).message})`)
+  }
   return value
 }
 
@@ -140,11 +144,11 @@ export function parseColorProtocolID(protocolID: unknown): {
     throw new Error('BRC-207: invalid p color remittance tags')
   }
   const derivationPrefix = validateRemittanceString(
-    UTF8.decode(new Uint8Array(toArray(prefixTag, 'hex'))),
+    UTF8_DECODER.decode(new Uint8Array(toArray(prefixTag, 'hex'))),
     'derivationPrefix'
   )
   const derivationSuffix = validateRemittanceString(
-    UTF8.decode(new Uint8Array(toArray(suffixTag, 'hex'))),
+    UTF8_DECODER.decode(new Uint8Array(toArray(suffixTag, 'hex'))),
     'derivationSuffix'
   )
   return { assetId: assetIdFromTag(tag), derivationPrefix, derivationSuffix }
@@ -187,8 +191,4 @@ export const DISCOVERY_TOPIC = 'tm_color'
 
 export function colorTopic(assetId: string): string {
   return `tm_color_${assetId}`
-}
-
-export function colorLookupService(assetId: string): string {
-  return `ls_color_${assetId}`
 }

@@ -19,6 +19,7 @@ export function readOutputList(
     throw new Error('BRC-207: overlay answer is not an output list')
   }
   const listed = new Map<string, ListedOutput>()
+  const wanted = new Set(queried)
   for (const item of answer.outputs) {
     let transaction: Transaction
     try {
@@ -32,7 +33,7 @@ export function readOutputList(
     if (output?.satoshis === undefined)
       throw new Error('BRC-207: overlay answer names a missing output')
     const outpoint = `${transaction.id('hex')}.${item.outputIndex}`
-    if (!queried.includes(outpoint))
+    if (!wanted.has(outpoint))
       throw new Error(`BRC-207: overlay answered an unrelated output ${outpoint}`)
     if (listed.has(outpoint)) throw new Error(`BRC-207: overlay answered ${outpoint} twice`)
     listed.set(outpoint, {

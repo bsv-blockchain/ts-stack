@@ -25,6 +25,7 @@ export const COLOR_PLAN_LABEL_PREFIX = 'p color plan '
 
 const CHUNK_HEX_LENGTH = 200
 const MAX_PLAN_BYTES = 16 * 1024 * 1024
+// Bounds the label count before reassembly; the joined hex is then bounded exactly.
 const MAX_PLAN_PARTS = Math.ceil((MAX_PLAN_BYTES * 2) / CHUNK_HEX_LENGTH)
 const PLAN_LABEL = /^p color plan (0|[1-9]\d{0,9}) ([1-9]\d{0,9}) ([0-9a-f]+)$/
 
@@ -287,6 +288,8 @@ export const ColorPlan = {
       chunks[index] = hex
     }
     if (count === undefined || parts.length !== count) throw new Error('BRC-207: missing plan part')
-    return parsePlan(parseStrictJsonBytes(toArray(chunks.join(''), 'hex'), 'plan'))
+    const hex = chunks.join('')
+    if (hex.length > MAX_PLAN_BYTES * 2) throw new Error('BRC-207: plan exceeds 16 MiB')
+    return parsePlan(parseStrictJsonBytes(toArray(hex, 'hex'), 'plan'))
   }
 }

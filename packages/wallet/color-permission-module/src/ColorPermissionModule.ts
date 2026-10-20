@@ -62,7 +62,6 @@ import {
   validateRemittanceString,
   type TokenRole
 } from './identifiers.js'
-import { eachInOrder } from './inOrder.js'
 import { readOutputList } from './overlay.js'
 import {
   exactMembers,
@@ -95,7 +94,7 @@ const SUBMIT_ATTEMPTS = 3
 const NOSEND_EXPIRY_LABEL_PREFIX = 'p nosend expiry '
 const PROOF_LABEL_PREFIX = 'p color proof '
 const STATE_TAG_PREFIX = 'color_state_'
-const UTF8 = new TextEncoder()
+const UTF8_ENCODER = new TextEncoder()
 
 /** The derivation tuple a managed output's key was created with; `assetId` is `ISSUE` for a deploy. */
 export interface Custody {
@@ -126,6 +125,15 @@ export interface ManagedInput extends SourceOutput {
 }
 
 type InventoryState = 'available' | 'reserved'
+
+/** Runs an SDK parser on untrusted input, prefixing its failure as a BRC-207 error. */
+function parsed<T>(label: string, parse: () => T): T {
+  try {
+    return parse()
+  } catch (error) {
+    throw new Error(`BRC-207: ${label} is invalid (${(error as Error).message})`)
+  }
+}
 
 function sumAmounts(inputs: ReadonlyArray<{ amount: bigint }>): bigint {
   return inputs.reduce((total, input) => total + input.amount, 0n)
@@ -165,7 +173,7 @@ function custodyInstructions(custody: Custody): string {
 
 /** Parses the receipt-format custody JSON stored in, or supplied as, an output's custom instructions. */
 function parseCustody(text: string, maxBytes: number | undefined, label: string): Custody {
-  const bytes = UTF8.encode(text)
+  const bytes = UTF8_ENCODER.encode(text)
   if (maxBytes !== undefined && bytes.length > maxBytes)
     throw new Error(`BRC-207: ${label} exceeds ${maxBytes} bytes`)
   const object = jsonObject(parseStrictJsonBytes(bytes, label), label)
@@ -840,6 +848,7 @@ export class ColorPermissionModule implements PermissionsModule {
   dispose(): void {
     this.selected.clear()
     this.supportedAssets.clear()
+    this.identityKey = undefined
   }
 
   /** Protocol- and basket-routed calls: key and signature operations and the read views. */
@@ -977,7 +986,7 @@ export class ColorPermissionModule implements PermissionsModule {
         'BRC-207: p color labels other than proof labels have no meaning in internalizeAction'
       )
     }
-    const tx = Transaction.fromAtomicBEEF(args.tx)
+    const tx = parsed('the received transaction', () => Transaction.fromAtomicBEEF(args.tx))
     const receipts = args.outputs.flatMap(output => {
       const remittance = output.insertionRemittance
       return output.protocol === 'basket insertion' &&
@@ -987,9 +996,8 @@ export class ColorPermissionModule implements PermissionsModule {
     })
     if (receipts.length === 0) return
     await this.assertCompletedTransaction(tx)
-    await eachInOrder(receipts, async ({ outputIndex, remittance }) => {
+    for (const { outputIndex, remittance } of receipts)
       await this.verifyReceipt(tx, outputIndex, remittance, originator)
-    })
   }
 
   /**
@@ -1000,9 +1008,8 @@ export class ColorPermissionModule implements PermissionsModule {
   protected async assertCompletedTransaction(tx: Transaction): Promise<void> {
     for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
     const { inputs, outputs } = transactionTokens(tx)
-    await eachInOrder(new Set([...inputs.keys(), ...outputs.keys()]), async assetId => {
+    for (const assetId of new Set([...inputs.keys(), ...outputs.keys()]))
       await this.assertSupportedAsset(assetId)
-    })
   }
 
   /** One receipt: its custody, its output's asset, owner and basket, and overlay admission. */
@@ -1131,10 +1138,16 @@ export class ColorPermissionModule implements PermissionsModule {
         .filter(output => outpoints.has(output.outpoint))
         .map(output => [output.outpoint, output])
     )
-    const beef = args.inputBEEF === undefined ? undefined : Beef.fromBinary(args.inputBEEF)
-    await eachInOrder(inputs, async input => {
+    const beef =
+      args.inputBEEF === undefined
+        ? undefined
+        : parsed('inputBEEF', () => Beef.fromBinary(args.inputBEEF as number[]))
+    for (const input of inputs) {
       const output = own.get(input.outpoint)
-      if (output === undefined) return await this.foreignInput(explicit, beef, input.outpoint)
+      if (output === undefined) {
+        await this.foreignInput(explicit, beef, input.outpoint)
+        continue
+      }
       if (!output.spendable)
         throw new Error('BRC-207: an explicit p color input is reserved by another action')
       const managed = await this.managedInput(output, originator)
@@ -1152,7 +1165,7 @@ export class ColorPermissionModule implements PermissionsModule {
       const totals = holding(explicit.holdings, managed.assetId, emptyExplicitHolding)
       if (managed.role === 'value') totals.value += managed.amount
       else totals.authority += 1
-    })
+    }
     return explicit
   }
 
@@ -1197,11 +1210,11 @@ export class ColorPermissionModule implements PermissionsModule {
     const owned = new Map(plan.ownedOutputs.map(remittance => [remittance.outputIndex, remittance]))
     const planned: PlannedOutputs = { holdings: new Map(), destinations: [] }
     const outputs: CreateActionOutput[] = []
-    await eachInOrder(requested.entries(), async ([index, output]) => {
+    for (const [index, output] of requested.entries()) {
       outputs.push(
         await this.planOutput(plan, args, index, output, owned.get(index), planned, originator)
       )
-    })
+    }
     return { planned, outputs }
   }
 
@@ -1215,7 +1228,9 @@ export class ColorPermissionModule implements PermissionsModule {
     planned: PlannedOutputs,
     originator: string
   ): Promise<CreateActionOutput> {
-    const lockingScript = LockingScript.fromHex(output.lockingScript)
+    const lockingScript = parsed(`output ${index} locking script`, () =>
+      LockingScript.fromHex(output.lockingScript)
+    )
     const placeholder = { txid: '00'.repeat(32), vout: index }
     const token = readTokenOutput(lockingScript, placeholder)
     if (token === undefined) {
@@ -1363,7 +1378,7 @@ export class ColorPermissionModule implements PermissionsModule {
     assertPlanAssets(plan, new Set([...assetIds, ...(planned.deploy === undefined ? [] : [ISSUE])]))
     if (planned.deploy !== undefined) assertOperations(plan, ISSUE, [planned.deploy.operation])
     const funding: AssetFunding[] = []
-    await eachInOrder(assetIds, async assetId => {
+    for (const assetId of assetIds) {
       await this.assertSupportedAsset(assetId)
       funding.push(
         await this.fundAsset(
@@ -1375,10 +1390,10 @@ export class ColorPermissionModule implements PermissionsModule {
           originator
         )
       )
-    })
+    }
     const inputs: ManagedInput[] = []
     const changes: Array<{ assetId: string; output: CreateActionOutput }> = []
-    await eachInOrder(funding, async asset => {
+    for (const asset of funding) {
       const value = asset.selected.filter(input => input.role === 'value')
       const needed =
         asset.outputs.value - asset.change - (explicit.holdings.get(asset.assetId)?.value ?? 0n)
@@ -1392,7 +1407,7 @@ export class ColorPermissionModule implements PermissionsModule {
           assetId: asset.assetId,
           output: (await this.newManagedOutput(asset.assetId, asset.change, originator)).output
         })
-    })
+    }
     return { inputs, changes }
   }
 
@@ -1542,15 +1557,15 @@ export class ColorPermissionModule implements PermissionsModule {
       offset += page.outputs.length
       if (page.outputs.length < LIST_PAGE_LIMIT) break
     }
-    await eachInOrder(txids, async txid => {
-      if (beef.findTxid(txid) === undefined) return
+    for (const txid of txids) {
+      if (beef.findTxid(txid) === undefined) continue
       const atomic = beef.toBinaryAtomic(txid)
       const { assetIds, deploy } = submissionAssets(Transaction.fromAtomicBEEF(atomic))
       // A refused resubmission leaves the output unlisted; the spendability check decides.
       await this.provider
         .submit([...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)], atomic)
         .catch(() => undefined)
-    })
+    }
     return await this.spendable(assetId, outputs)
   }
 
@@ -1743,12 +1758,12 @@ export class ColorPermissionModule implements PermissionsModule {
     assertTransactionOperations(plan, tokens)
     const managed = await this.actionInputs(tx, originator)
     const scopes = sighashScopes(plan, new Set(managed.map(input => input.outpoint)))
-    await eachInOrder(new Set(tokens.consumed.map(input => input.assetId)), async assetId => {
+    for (const assetId of new Set(tokens.consumed.map(input => input.assetId))) {
       const assetInputs = tokens.consumed.filter(input => input.assetId === assetId)
       const admitted = await this.spendable(assetId, assetInputs)
       if (assetInputs.some(input => !admitted.has(input.outpoint)))
         throw new Error(`BRC-207: a ${assetId} input is no longer spendable`)
-    })
+    }
     await this.approve(originator, actionConsent(plan, createArgs, tx, tokens, managed, scopes))
     return {
       ...args,
@@ -1855,8 +1870,10 @@ export class ColorPermissionModule implements PermissionsModule {
         'BRC-207: signature envelope profileData names a profile the asset does not require'
       )
     }
-    const tx = Transaction.fromAtomicBEEF(
-      jsonByteArray(envelope.tx, 'signature envelope tx', MAX_ENVELOPE_BYTES)
+    const tx = parsed('the signature envelope tx', () =>
+      Transaction.fromAtomicBEEF(
+        jsonByteArray(envelope.tx, 'signature envelope tx', MAX_ENVELOPE_BYTES)
+      )
     )
     const inputIndex = jsonUint32(envelope.inputIndex, 'signature envelope inputIndex')
     const sighashType = jsonUint32(envelope.sighashType, 'signature envelope sighashType')
@@ -1883,10 +1900,12 @@ export class ColorPermissionModule implements PermissionsModule {
     // input authenticated from its source, every asset's legs and supply change derived, and
     // every token input admitted and unspent in its overlay.
     const tokens = transactionTokens(tx, true)
-    await eachInOrder(
-      new Set([token.assetId, ...tokens.inputs.keys(), ...tokens.outputs.keys()]),
-      async assetId => await this.assertSupportedAsset(assetId)
-    )
+    for (const assetId of new Set([
+      token.assetId,
+      ...tokens.inputs.keys(),
+      ...tokens.outputs.keys()
+    ]))
+      await this.assertSupportedAsset(assetId)
     await Promise.all(
       ownedOutputs.map(async remittance => {
         const output = tx.outputs[remittance.outputIndex]
@@ -1905,14 +1924,14 @@ export class ColorPermissionModule implements PermissionsModule {
     )
     const outpoint = outpointString(sourceTXID, input.sourceOutputIndex)
     const signed = { outpoint, lockingScript: source.lockingScript, satoshis: source.satoshis }
-    await eachInOrder(new Set(tokens.consumed.map(consumed => consumed.assetId)), async assetId => {
+    for (const assetId of new Set(tokens.consumed.map(consumed => consumed.assetId))) {
       const assetInputs = tokens.consumed.filter(consumed => consumed.assetId === assetId)
       const admitted = await this.spendable(assetId, assetInputs)
       if (!admitted.has(outpoint) && assetId === token.assetId)
         throw new Error('BRC-207: the signed input is not admitted and unspent in its overlay')
       if (assetInputs.some(consumed => !admitted.has(consumed.outpoint)))
         throw new Error(`BRC-207: a ${assetId} input is not admitted and unspent in its overlay`)
-    })
+    }
     const preimage = this.preimage(tx, inputIndex, signed, sighashType)
     const kept = (vout: number): boolean =>
       ownedOutputs.some(remittance => remittance.outputIndex === vout)
@@ -2061,9 +2080,16 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   protected async identity(): Promise<string> {
-    this.identityKey ??= this.wallet
-      .getPublicKey({ identityKey: true })
-      .then(({ publicKey }) => publicKey)
+    if (this.identityKey === undefined) {
+      const pending = this.wallet
+        .getPublicKey({ identityKey: true })
+        .then(({ publicKey }) => publicKey)
+      this.identityKey = pending
+      // A rejected lookup is not cached; the next call asks the wallet again.
+      pending.catch(() => {
+        if (this.identityKey === pending) this.identityKey = undefined
+      })
+    }
     return await this.identityKey
   }
 

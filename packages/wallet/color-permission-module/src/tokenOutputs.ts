@@ -121,7 +121,7 @@ export function readTokenOutput(
 const BSV20_CONTENT_TYPE = 'application/bsv-20'
 const MAX_UINT64 = (1n << 64n) - 1n
 const VALUE_OPERATIONS = new Set<string>(['transfer', 'mint', 'deploy+mint'])
-const AUTHORITY_OPERATIONS = new Set<string>(['auth', 'deploy+auth'])
+const JSON_AUTHORITY_OPERATIONS = new Set<string>(['auth', 'deploy+auth'])
 
 /**
  * Reads a BRC-161 JSON token output: a BRC-160 `ord` inscription of type `application/bsv-20`
@@ -154,7 +154,7 @@ export function readJsonTokenOutput(
   const op = decoded.op
   if (op === 'burn')
     throw new Error(`BRC-207: BRC-161 ${op} is an operation this module does not support`)
-  const authority = AUTHORITY_OPERATIONS.has(op)
+  const authority = JSON_AUTHORITY_OPERATIONS.has(op)
   if (!authority && !VALUE_OPERATIONS.has(op)) throw malformed('unknown op')
   const jsonOperation = op as JsonOperation
   const amount = BigInt(decoded.amt)

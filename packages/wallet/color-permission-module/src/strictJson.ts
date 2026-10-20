@@ -8,7 +8,7 @@ export interface JsonObject {
 
 const MAX_DEPTH = 64
 const UINT32_MAX = 0xffffffff
-const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
 const ESCAPES: Record<string, string> = {
   '"': '"',
@@ -69,7 +69,13 @@ class Parser {
     const match = NUMBER.exec(this.text)
     if (match == null) this.fail('invalid value')
     this.position += match[0].length
-    return Number(match[0])
+    const value = Number(match[0])
+    // BRC-207 integer fields are integers, not fractions: 1.0 and 1e0 are not the integer 1.
+    // JSON.stringify writes every integer below 1e21 as plain digits, so only a literal in that
+    // range can be a non-integer spelling of an integer.
+    if (Number.isInteger(value) && Math.abs(value) < 1e21 && /[.eE]/.test(match[0]))
+      this.fail('an integer written as a fraction or exponent')
+    return value
   }
 
   private hex4(): number {
@@ -163,7 +169,7 @@ export function parseStrictJsonBytes(
 ): JsonValue {
   let text: string
   try {
-    text = UTF8.decode(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+    text = UTF8_DECODER.decode(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
   } catch {
     throw new Error(`BRC-207: ${label} is not strict UTF-8`)
   }

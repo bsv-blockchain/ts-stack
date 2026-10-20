@@ -43,7 +43,6 @@ export {
   ISSUE,
   assetBasket,
   assetTag,
-  colorLookupService,
   colorProtocolID,
   colorTopic,
   parseAssetBasket,

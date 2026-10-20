@@ -195,6 +195,10 @@ describe('ColorPlan', () => {
 
   it('bounds part indices and counts before reassembly', () => {
     expect(() => ColorPlan.fromLabels(['p color plan 1 1 00'])).toThrow('out of range')
+    for (const version of ['1.0', '1e0', '10E-1']) {
+      const text = JSON.stringify(plan()).replace('"version":1', `"version":${version}`)
+      expect(() => ColorPlan.fromLabels(labelsFor(text))).toThrow('fraction or exponent')
+    }
     expect(() => ColorPlan.fromLabels(['p color plan 0 999999 00'])).toThrow('16 MiB')
     expect(() => ColorPlan.fromLabels(['p color plan 0 1 0'])).toThrow('invalid plan chunk')
     expect(() => ColorPlan.fromLabels(['p color plan x'])).toThrow('invalid p color plan label')
