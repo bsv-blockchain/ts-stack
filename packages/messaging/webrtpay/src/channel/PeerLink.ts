@@ -342,7 +342,9 @@ export class PeerLink {
   private adopt(channel: RTCDataChannel): void {
     if (this.closed) return
     const reliable =
-      channel.ordered && channel.maxRetransmits == null && channel.maxPacketLifeTime == null
+      channel.ordered &&
+      isUnsetLimit(channel.maxRetransmits) &&
+      isUnsetLimit(channel.maxPacketLifeTime)
     if (this.role !== 'answerer' || this.channel || channel.label !== CHANNEL_LABEL || !reliable) {
       this.close(new WebRTPayError('protocol', `Unexpected data channel '${channel.label}'`))
       return
@@ -449,6 +451,21 @@ export class PeerLink {
       channel.addEventListener('bufferedamountlow', onLow)
     })
   }
+}
+
+/**
+ * Numbers a channel reports for `maxRetransmits` or `maxPacketLifeTime` when its opener set no
+ * limit. The DOM says `null`, but react-native-webrtc cannot: on Android it reports -1 for a
+ * channel the peer opened, and on iOS it passes on libwebrtc's `uint16_t`, where unset is -1
+ * read as 65535. That is also the largest limit a peer can set, so a channel limited to
+ * exactly 65535 is read as unlimited: far above what a payment exchange reaches, and the price
+ * of accepting React Native.
+ */
+const UNSET_LIMITS: ReadonlySet<number> = new Set([-1, 65535])
+
+/** Whether a channel's `maxRetransmits` or `maxPacketLifeTime` says it has no such limit. */
+function isUnsetLimit(limit: number | null | undefined): boolean {
+  return limit == null || UNSET_LIMITS.has(limit)
 }
 
 /** `extraConfig` fields that are dropped rather than passed to the peer connection. */
