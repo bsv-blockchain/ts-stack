@@ -53,6 +53,10 @@ attention to changes that materially alter behavior or extend functionality.
   basket in that namespace that are unspent or reserved as an input of a
   pending action (`spendable` false), ordered by txid and vout. Spent outputs
   are excluded. The permissions manager reserves it for the admin originator.
+- `listOutputs` rejects a `balance p <module> <basket>` query with
+  `WERR_INVALID_PARAMETER`, as BRC-112 requires: the satoshi sum of a BRC-99
+  module basket is never reported past its module. `balance <basket>` on other
+  baskets is unchanged, and a module may offer `p <module> balance <basket>`.
 - `createAction` locks the known inputs it marks spent on MySQL and Postgres,
   so of two concurrent actions spending the same input, the second sees it spent
   and fails with the existing double-spend or unspendable-input error instead of

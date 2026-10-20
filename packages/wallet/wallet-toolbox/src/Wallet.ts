@@ -1591,6 +1591,14 @@ function validateListOutputsArgs(args: ListOutputsArgs): ValidListOutputsArgs {
   const balancePrefix = 'balance '
   if (vargs.basket.startsWith(balancePrefix)) {
     vargs.basket = vargs.basket.slice(balancePrefix.length)
+    // BRC-112: `balance p <module> <basket>` is never allowed; a module may offer
+    // `p <module> balance <basket>` instead.
+    if (vargs.basket.startsWith('p ')) {
+      throw new WERR_INVALID_PARAMETER(
+        'basket',
+        `not a BRC-99 module basket: BRC-112 rejects \`balance p <module> <basket>\`; use \`p <module> balance <basket>\` if the module offers it.`
+      )
+    }
     vargs.tags = [...vargs.tags, specOpWalletBalance]
   }
   return vargs
