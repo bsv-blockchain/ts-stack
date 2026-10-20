@@ -95,6 +95,16 @@
       "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra",
       "release": "ghcr-keyless"
+    },
+    {
+      "name": "webrtpay-relay",
+      "path": "infra/webrtpay-relay",
+      "title": "BSV WebRTPay Signalling Relay",
+      "description": "Signalling relay and TURN credential issuer for direct WebRTC payments between BSV wallets",
+      "license": "LicenseRef-Open-BSV-License-6",
+      "licenseNoticePath": "/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md",
+      "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay",
+      "release": "ghcr-keyless"
     }
   ]
 }

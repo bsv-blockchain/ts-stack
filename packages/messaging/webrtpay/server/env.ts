@@ -134,6 +134,7 @@ export function relayUsage(): string {
     '',
     'Runs the @bsv/webrtpay signaling relay, configured by environment variables.',
     'Empty variables count as unset. SIGTERM or SIGINT closes it.',
+    'GET /health answers 200 while it runs; GET /ready answers 200, then 503 once closing.',
     '',
     ...SETTING_VARIABLES.map(([name, what]) => `  ${name.padEnd(width)}${what}`),
     '',

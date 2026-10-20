@@ -16,7 +16,7 @@ divert the funds: the payer connects before it creates the transaction.
   (node-datachannel in Node, react-native-webrtc in React Native).
 - `@bsv/sdk` is the only (peer) dependency of the root entry. `@bsv/webrtpay/server` (Node) adds
   a small relay and depends on `ws`.
-- Status: 0.2.0, experimental. The byte-level protocol is in [docs/protocol.md](docs/protocol.md).
+- Status: 0.2.1, experimental. The byte-level protocol is in [docs/protocol.md](docs/protocol.md).
 
 ## Why there is still a signaling step
 
@@ -557,7 +557,13 @@ can send any value and choose its own per-source limits.
 | `SIGNALS_PER_RECIPIENT_PER_MINUTE` | `120`                              | Signals one recipient may receive a minute from all senders.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `MAX_OVER_RATE_FRAMES`             | `20`                               | Frames over the socket rate answered in a row before the socket is closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-- `GET /health` answers `{"status":"ok"}`. `SIGTERM` or `SIGINT` closes every socket and exits.
+- `GET /health` answers `200 {"status":"ok"}` (liveness). `GET /ready` answers
+  `200 {"status":"ready"}` while the relay accepts connections and `503 {"status":"closing"}` once
+  it is closing (readiness). Both take `HEAD` and send `Access-Control-Allow-Origin: *` (never
+  with credentials); `OPTIONS` on either answers a CORS preflight with `204`,
+  `Access-Control-Allow-Methods: GET, HEAD, OPTIONS` and `Access-Control-Allow-Headers` listing
+  `Content-Type` plus every well-formed header asked for. Other paths answer `404`. `SIGTERM` or
+  `SIGINT` closes every socket and exits 0; an invalid setting exits 1.
 - At startup it logs `TURN credentials from <provider>, valid <ttl> s`, naming the provider by
   its `kind` in code: `coturn-rest` for `TURN_PROVIDER=coturn`, or `cloudflare`. It warns when
   there are no public urls (development only) and when `PUBLIC_URLS` is set without
@@ -605,7 +611,28 @@ or `{ kind: 'cloudflare', keyId, apiToken, ttlSeconds, fetch }`, and `limits` fo
 variables, e.g. `limits: { turnPerIpPerHour }` for `TURN_PER_IP_PER_HOUR`) plus `server`
 (attach to an existing HTTP server), `path`, the other `limits` (see `DEFAULT_RELAY_LIMITS`),
 `log` and, for development only, `trustHostHeader`. It resolves to `{ url, port, close(), stats() }`.
-`webrtpay-relay --help` lists the variables with their defaults.
+`webrtpay-relay --help` lists the variables with their defaults. Attached to your own server
+(`server`), the relay handles only WebSocket upgrades on `path`: `/health`, `/ready` and CORS are
+then your server's.
+
+To start the relay exactly as the CLI does, for example from a container entrypoint that adds
+its own logging, use the CLI's environment parser and help text from the same entry:
+
+```ts
+import { createRelayServer, relayOptionsFromEnv, relayUsage } from '@bsv/webrtpay/server'
+
+if (process.argv.includes('--help')) {
+  console.log(relayUsage())
+} else {
+  const relay = await createRelayServer({ ...relayOptionsFromEnv(process.env), log: console.log })
+  process.once('SIGTERM', () => {
+    relay.close().then(() => process.exit(0))
+  })
+}
+```
+
+`relayOptionsFromEnv(env)` throws an `Error` naming the variable on an invalid or missing value;
+`DEFAULT_HOST` (`0.0.0.0`) and `DEFAULT_RELAY_PORT` (`8787`) are exported too.
 
 ## TURN options
 
@@ -753,7 +780,7 @@ Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 914 at 0.2.0; `pnpm test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 914 at 0.2.0, 925 at 0.2.1; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input

@@ -67,7 +67,7 @@ test('workspace discovery exactly matches the 43-project registry', () => {
 test('every checked-in first-party package manifest uses the current Association name', () => {
   const manifests = discoverPackageManifests()
 
-  assert.equal(manifests.length, 52)
+  assert.equal(manifests.length, 53)
   assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
   assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
 

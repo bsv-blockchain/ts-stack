@@ -859,7 +859,17 @@ README.
 
 A connection token is spent only for a connection that is admitted.
 
-On a server the relay created, `GET /health` (or `HEAD`) answers `200 {"status":"ok"}`.
+On a server the relay created, plain HTTP requests (not upgrades) get:
+
+| Request                         | Answer                                                                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET` or `HEAD` `/health`       | `200 {"status":"ok"}` until the server stops (liveness)                                                                                                                        |
+| `GET` or `HEAD` `/ready`        | `200 {"status":"ready"}` while it accepts connections; `503 {"status":"closing"}` once it is closing (readiness)                                                               |
+| `OPTIONS` `/health` or `/ready` | `204`, `Access-Control-Allow-Methods: GET, HEAD, OPTIONS`, `Access-Control-Allow-Headers: Content-Type` plus every well-formed requested header, `Access-Control-Max-Age: 600` |
+| anything else                   | `404`, without CORS headers                                                                                                                                                    |
+
+The `/health` and `/ready` answers carry `Access-Control-Allow-Origin: *` and never
+`Access-Control-Allow-Credentials`. A relay attached to an app's server answers none of these.
 
 ### 8.2 Frames
 

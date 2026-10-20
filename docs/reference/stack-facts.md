@@ -50,7 +50,7 @@ authorized release action.
 | messaging | `@bsv/authsocket-client` | `2.1.9` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/messaging/authsocket-client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client) |
 | messaging | `@bsv/message-box-client` | `2.6.1` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/messaging/message-box-client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client) |
 | messaging | `@bsv/paymail` | `2.4.11` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/messaging/ts-paymail](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail) |
-| messaging | `@bsv/webrtpay` | `0.2.0` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/messaging/webrtpay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay) |
+| messaging | `@bsv/webrtpay` | `0.2.1` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/messaging/webrtpay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay) |
 | middleware | `@bsv/402-pay` | `0.3.4` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/middleware/402-pay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/402-pay) |
 | middleware | `@bsv/auth` | `0.1.7` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth) |
 | middleware | `@bsv/auth-express-middleware` | `2.2.10` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/auth-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware) |
@@ -87,6 +87,7 @@ the separately released and verified image digest.
 | BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.55` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
 | Wallet Authentication Backend | `@bsv/wab-server` | `1.8.13` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
 | BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.52` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
+| BSV WebRTPay Signalling Relay | `@bsv/webrtpay-relay` | `0.2.0` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/webrtpay-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/webrtpay-relay) |
 
 ## Governed project and release inventory
 
@@ -96,7 +97,7 @@ the separately released and verified image digest.
 | Package-area projects | 38 |
 | Public npm packages | 35 |
 | Private package-area projects | 3 |
-| Standalone infrastructure projects | 7 |
+| Standalone infrastructure projects | 8 |
 
 Public packages use the `npm-oidc` release route. Other workspace projects are
 private packages or documentation/conformance tooling. Standalone infrastructure

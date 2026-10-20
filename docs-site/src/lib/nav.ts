@@ -126,7 +126,8 @@ export const NAV: NavSection[] = [
       { label: 'uhrp-server-cloud-bucket', href: '/infrastructure/uhrp-server-cloud-bucket/' },
       { label: 'wab', href: '/infrastructure/wab/' },
       { label: 'wallet-infra', href: '/infrastructure/wallet-infra/' },
-      { label: 'chaintracks-server', href: '/infrastructure/chaintracks-server/' }
+      { label: 'chaintracks-server', href: '/infrastructure/chaintracks-server/' },
+      { label: 'webrtpay-relay', href: '/infrastructure/webrtpay-relay/' }
     ]
   },
   {

@@ -116,7 +116,7 @@ test('infrastructure scope never rebuilds unrelated images for workflow-only cha
     selectInfraComponents(['infra/message-box-server/src/index.ts']).map(entry => entry.component),
     ['message-box-server']
   )
-  assert.equal(selectInfraComponents(['governance/container-images.json']).length, 8)
+  assert.equal(selectInfraComponents(['governance/container-images.json']).length, 9)
 })
 
 test('runtime image scope follows component contexts and wallet-image consumers', () => {
@@ -138,7 +138,7 @@ test('runtime image scope follows component contexts and wallet-image consumers'
       'wallet-infra'
     ]
   )
-  assert.equal(selectRuntimeComponents(['scripts/container-runtime-contract.mjs']).length, 7)
+  assert.equal(selectRuntimeComponents(['scripts/container-runtime-contract.mjs']).length, 8)
   assert.deepEqual(selectInfraComponents(['scripts/container-runtime-contract.mjs']), [])
   assert.deepEqual(selectRuntimeComponents(['governance/container-images.json']), [])
   assert.deepEqual(selectRuntimeComponents(['packages/wallet/wallet-toolbox/src/index.ts']), [])
@@ -155,7 +155,7 @@ test('shared CI execution and result gates select the complete governed workspac
   for (const file of ['.github/workflows/ci.yml', 'scripts/ci-result-gate.mjs']) {
     assert.equal(selectWorkspaceScope(projects, [file]).direct.length, 4)
   }
-  assert.equal(selectInfraComponents(['.github/workflows/ci.yml']).length, 8)
+  assert.equal(selectInfraComponents(['.github/workflows/ci.yml']).length, 9)
 })
 
 test('required mutation targets add their built dependencies without widening package tests', () => {
