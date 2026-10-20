@@ -202,7 +202,7 @@ function selectsAsset(selector: string, token: TokenOutput): boolean {
 export interface Holding {
   value: bigint
   authority: number
-  /** The part of `value` in BRC-161 JSON outputs, which only value inputs can fund. */
+  /** The part of `value` in BRC-161 transfer outputs, which only value inputs can fund. */
   jsonValue?: bigint
 }
 
@@ -614,7 +614,8 @@ function addToken(totals: Map<string, Holding>, token: TokenOutput): void {
   const entry = holding(totals, token.assetId, emptyHolding)
   if (token.role === 'value') entry.value += token.amount
   else entry.authority += 1
-  if (token.encoding === 'brc161') entry.jsonValue = (entry.jsonValue ?? 0n) + token.amount
+  if (token.encoding === 'brc161' && token.jsonOperation !== 'mint')
+    entry.jsonValue = (entry.jsonValue ?? 0n) + token.amount
 }
 
 /** A foreign input's source output from the caller's inputBEEF, if it is there. */
@@ -1230,7 +1231,7 @@ export class ColorPermissionModule implements PermissionsModule {
       throw new Error('BRC-207: an output asset is missing from plan.assets')
     const totals = holding(planned.holdings, token.assetId, emptyHolding)
     totals.value += token.amount
-    totals.jsonValue = (totals.jsonValue ?? 0n) + token.amount
+    if (token.jsonOperation !== 'mint') totals.jsonValue = (totals.jsonValue ?? 0n) + token.amount
     planned.destinations.push({
       outputIndex: index,
       assetId: token.assetId,

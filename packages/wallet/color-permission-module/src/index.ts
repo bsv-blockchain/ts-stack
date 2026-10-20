@@ -34,7 +34,7 @@ export {
   readJsonTokenOutput,
   readTokenOutput
 } from './tokenOutputs.js'
-export type { TokenOutput } from './tokenOutputs.js'
+export type { JsonOperation, TokenOutput } from './tokenOutputs.js'
 export { ColorPlan, COLOR_PLAN_LABEL_PREFIX, COLOR_OPERATIONS } from './ColorPlan.js'
 export type { ColorOperation, ColorOperationName, ColorRemittance } from './ColorPlan.js'
 export {

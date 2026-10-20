@@ -93,12 +93,13 @@ Call `color.dispose()` when the host tears down the wallet.
 
 The module fails explicitly, rather than falling back, on:
 
-- holding, creating or filing BRC-161 JSON outputs, and the BRC-161 `mint`,
-  `auth` and `deploy+auth` operations. BRC-161 JSON `transfer` and `deploy+mint`
-  outputs are read as inputs and as outputs to other parties, with the same
-  overlay checks as any foreign token input; a `burn` output carries no value,
-  and only value inputs can fund JSON outputs. Assets first deployed as BRC-161,
-  at any output index, are supported in BRC-162 form;
+- holding, creating or filing BRC-161 JSON outputs, and the BRC-161 `auth`,
+  `deploy+auth` and `burn` operations. BRC-161 JSON `transfer`, `mint` and
+  `deploy+mint` outputs are read as value, as inputs and as outputs to other
+  parties, with the same overlay checks as any foreign token input; the
+  envelope may sit anywhere in the script (BRC-160). Only value inputs can fund
+  JSON transfer outputs; a JSON mint needs an authority input. Assets first
+  deployed as BRC-161, at any output index, are supported in BRC-162 form;
 - assets whose deploy declares required processing profiles;
 - `profileData` entries;
 - satoshi change positions (`changePositions` with a null `assetId`): wallet-toolbox

@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals'
-import { LockingScript } from '@bsv/sdk'
+import { LockingScript, OP } from '@bsv/sdk'
 import { toArray } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
 import {
@@ -178,7 +178,14 @@ describe('BRC-161 JSON token outputs', () => {
         jsonTokenScript({ p: 'bsv-20', op: 'transfer', id: ASSET, amt: '25' }),
         at
       )
-    ).toEqual({ assetId: ASSET, role: 'value', amount: 25n, deploy: false, encoding: 'brc161' })
+    ).toEqual({
+      assetId: ASSET,
+      role: 'value',
+      amount: 25n,
+      deploy: false,
+      encoding: 'brc161',
+      jsonOperation: 'transfer'
+    })
     const deploy = jsonTokenScript({ p: 'bsv-20', op: 'deploy+mint', amt: '1000', sym: 'OLD' })
     expect(readJsonTokenOutput(deploy, at)).toMatchObject({
       assetId: `${at.txid}_2`,
@@ -188,17 +195,37 @@ describe('BRC-161 JSON token outputs', () => {
     expect(isDeployOutput(deploy, at)).toBe(true)
   })
 
-  it('reads a burn as carrying no value and a non-inscription as no JSON token', () => {
+  it('reads an envelope placed after the lock, and a mint as value', () => {
+    const p2pkh = LockingScript.fromHex(`76a914${'ab'.repeat(20)}88ac`)
     expect(
-      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'burn', id: ASSET, amt: '5' }), at)
-    ).toBeUndefined()
-    expect(readJsonTokenOutput(LockingScript.fromASM('OP_TRUE'), at)).toBeUndefined()
+      readJsonTokenOutput(
+        jsonTokenScript({ p: 'bsv-20', op: 'transfer', id: ASSET, amt: '25' }, p2pkh, false),
+        at
+      )
+    ).toMatchObject({ assetId: ASSET, amount: 25n })
+    expect(
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'mint', id: ASSET, amt: '5' }), at)
+    ).toMatchObject({ role: 'value', amount: 5n, deploy: false, jsonOperation: 'mint' })
   })
 
-  it.each(['mint', 'auth', 'deploy+auth'])('refuses the %s authority operation', op => {
+  it('reads a non-inscription and a non-bsv-20 inscription as no JSON token', () => {
+    expect(readJsonTokenOutput(LockingScript.fromASM('OP_TRUE'), at)).toBeUndefined()
+    const text = new LockingScript()
+      .writeOpCode(OP.OP_FALSE)
+      .writeOpCode(OP.OP_IF)
+      .writeBin(toArray('ord', 'utf8'))
+      .writeOpCode(OP.OP_1)
+      .writeBin(toArray('text/plain', 'utf8'))
+      .writeOpCode(OP.OP_FALSE)
+      .writeBin(toArray('hello', 'utf8'))
+      .writeOpCode(OP.OP_ENDIF)
+    expect(readJsonTokenOutput(text, at)).toBeUndefined()
+  })
+
+  it.each(['auth', 'deploy+auth', 'burn'])('refuses the %s operation', op => {
     expect(() =>
       readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op, id: ASSET, amt: '5' }), at)
-    ).toThrow('authority operation this module does not support')
+    ).toThrow(`BRC-161 ${op} is an operation this module does not support`)
   })
 
   it.each([

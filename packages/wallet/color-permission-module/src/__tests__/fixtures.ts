@@ -278,7 +278,8 @@ export class FakeProvider {
  */
 export function jsonTokenScript(
   payload: object,
-  rest = LockingScript.fromASM('OP_TRUE')
+  rest = LockingScript.fromASM('OP_TRUE'),
+  envelopeFirst = true
 ): LockingScript {
   const script = new LockingScript()
     .writeOpCode(OP.OP_FALSE)
@@ -289,7 +290,9 @@ export function jsonTokenScript(
     .writeOpCode(OP.OP_FALSE)
     .writeBin(toArray(JSON.stringify(payload), 'utf8'))
     .writeOpCode(OP.OP_ENDIF)
-  return new LockingScript([...script.chunks, ...rest.chunks])
+  return new LockingScript(
+    envelopeFirst ? [...script.chunks, ...rest.chunks] : [...rest.chunks, ...script.chunks]
+  )
 }
 
 export function remittanceString(): string {

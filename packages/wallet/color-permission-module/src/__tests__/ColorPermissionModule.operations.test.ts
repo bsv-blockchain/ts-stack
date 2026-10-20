@@ -310,15 +310,19 @@ describe('ColorPermissionModule token operations', () => {
     let inputBEEF: number[]
 
     /** This wallet holds a JSON transfer of `amount`, outside any p color basket. */
-    function holdJson(amount: bigint, admitted = true): void {
+    function holdJson(
+      amount: bigint,
+      admitted = true,
+      op: 'transfer' | 'mint' = 'transfer',
+      envelopeFirst = true
+    ): void {
       held = new Transaction()
       held.addOutput({
-        lockingScript: jsonTokenScript({
-          p: 'bsv-20',
-          op: 'transfer',
-          id: assetId,
-          amt: `${amount}`
-        }),
+        lockingScript: jsonTokenScript(
+          { p: 'bsv-20', op, id: assetId, amt: `${amount}` },
+          undefined,
+          envelopeFirst
+        ),
         satoshis: 1
       })
       if (admitted) provider.admit(assetId, held, 0)
@@ -362,6 +366,68 @@ describe('ColorPermissionModule token operations', () => {
           outputs: mine.output
         })
       ).rejects.toThrow('not admitted and unspent')
+    })
+
+    it('reads an input whose envelope follows its lock, and a mint input as value', async () => {
+      holdJson(100n, true, 'mint', false)
+      const mine = await owned(assetId, assetId, 100n, 0)
+      const tx = await run({
+        labels: labels([assetId], [{ assetId, operation: 'transfer' }], [mine.remittance]),
+        inputBEEF,
+        inputs: input,
+        outputs: mine.output
+      })
+      expect(tx.outputs).toHaveLength(1)
+      expect(prompts[0]).toMatchObject({
+        assets: [{ assetId, operations: ['transfer'], foreignAmount: '100', keptAmount: '100' }]
+      })
+    })
+
+    it('refuses a burn output, and a mint output without an authority input', async () => {
+      holdJson(100n)
+      const burn = jsonTokenScript({ p: 'bsv-20', op: 'burn', id: assetId, amt: '40' })
+      await expect(
+        createAction({
+          labels: labels(
+            [assetId],
+            [
+              { assetId, operation: 'transfer' },
+              { assetId, operation: 'burn' }
+            ]
+          ),
+          inputBEEF,
+          inputs: input,
+          outputs: [{ lockingScript: burn.toHex(), satoshis: 1, outputDescription: 'Burn' }]
+        })
+      ).rejects.toThrow('BRC-161 burn is an operation this module does not support')
+      const mint = jsonTokenScript({ p: 'bsv-20', op: 'mint', id: assetId, amt: '5' })
+      await expect(
+        createAction({
+          labels: labels([assetId], [{ assetId, operation: 'mint' }]),
+          outputs: [{ lockingScript: mint.toHex(), satoshis: 1, outputDescription: 'Mint' }]
+        })
+      ).rejects.toThrow('exceed the authenticated input balance')
+    })
+
+    it('mints a JSON output with an authority input', async () => {
+      await deployAsset(wallet, provider, 0n)
+      const authority = [...wallet.outputs.values()].find(o => o.basket?.endsWith('authority'))!
+      const authorityId = `${authority.tx.id('hex')}_0`
+      const mint = jsonTokenScript({ p: 'bsv-20', op: 'mint', id: authorityId, amt: '5' })
+      const tx = await run({
+        labels: labels(
+          [authorityId],
+          [
+            { assetId: authorityId, operation: 'mint' },
+            { assetId: authorityId, operation: 'authority-end' }
+          ]
+        ),
+        outputs: [{ lockingScript: mint.toHex(), satoshis: 1, outputDescription: 'Mint' }]
+      })
+      expect(tx.outputs).toHaveLength(1)
+      expect(prompts[0]).toMatchObject({
+        assets: [{ assetId: authorityId, operations: ['mint', 'authority-end'], minted: '5' }]
+      })
     })
 
     it('counts JSON change to the counterparty as a transfer, not a burn', async () => {
