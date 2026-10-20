@@ -75,6 +75,7 @@ import {
   readAnyTokenOutput,
   readJsonTokenOutput,
   readTokenOutput,
+  UnsupportedProfileError,
   type TokenOutput
 } from './tokenOutputs.js'
 import type {
@@ -724,7 +725,12 @@ function inventoryRecords(outputs: WalletOutput[], beef: Beef | undefined): Inve
         ? LockingScript.fromHex(output.lockingScript ?? '')
         : beef.findTxid(outpoint.txid)?.tx?.outputs[outpoint.vout]?.lockingScript
     if (lockingScript === undefined) continue
-    const token = tryReadTokenOutput(lockingScript, outpoint)
+    let token: TokenOutput | undefined
+    try {
+      token = tryReadTokenOutput(lockingScript, outpoint)
+    } catch {
+      continue // an unsupported asset's outputs are left out of the inventory
+    }
     if (token === undefined) continue
     records.push({
       output,
@@ -741,13 +747,19 @@ function inventoryState(record: InventoryRecord, admitted: ReadonlySet<string>):
   return admitted.has(record.output.outpoint) ? 'available' : 'pending'
 }
 
+/**
+ * A BRC-162 token output, or undefined for a script that is not one. A token-shaped script that
+ * does not decode is an ordinary satoshi output; a valid output of an asset that requires
+ * processing profiles is a token this wallet cannot evaluate, and fails (BRC-207 L92-95).
+ */
 function tryReadTokenOutput(
   lockingScript: LockingScript,
   outpoint: ReturnType<typeof parseOutpoint>
 ): TokenOutput | undefined {
   try {
     return readTokenOutput(lockingScript, outpoint)
-  } catch {
+  } catch (error) {
+    if (error instanceof UnsupportedProfileError) throw error
     return undefined
   }
 }

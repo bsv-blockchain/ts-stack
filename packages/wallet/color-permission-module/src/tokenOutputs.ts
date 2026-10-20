@@ -156,14 +156,24 @@ function readPayloadMaps(payload: number[] | undefined): {
 }
 
 /**
+ * A valid BRC-162 output of an asset that requires processing profiles. BRC-207 has an
+ * unsupported profile fail, never fall back, so readers that otherwise treat an unreadable
+ * script as plain satoshis let this error through.
+ */
+export class UnsupportedProfileError extends Error {
+  constructor() {
+    super('BRC-207: the asset requires processing profiles this wallet does not support')
+    this.name = 'UnsupportedProfileError'
+  }
+}
+
+/**
  * Fails unless a payload declares no required processing profiles. This module supports
  * none, so a deploy `req` with entries, or a later output repeating a nonempty `req`, fails.
  */
 export function assertNoRequiredProfiles(payload: number[] | undefined): void {
   const { req } = readPayloadMaps(payload)
-  if (req !== undefined && req.size > 0) {
-    throw new Error('BRC-207: the asset requires processing profiles this wallet does not support')
-  }
+  if (req !== undefined && req.size > 0) throw new UnsupportedProfileError()
 }
 
 /**

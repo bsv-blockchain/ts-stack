@@ -7,7 +7,8 @@ import {
   isDeployOutput,
   readAnyTokenOutput,
   readJsonTokenOutput,
-  readTokenOutput
+  readTokenOutput,
+  UnsupportedProfileError
 } from '../tokenOutputs.js'
 import { jsonTokenScript } from './fixtures.js'
 
@@ -86,6 +87,7 @@ describe('BRC-162 token outputs', () => {
   })
 
   it('fails an asset that requires a processing profile, or a malformed req', () => {
+    expect(() => assertNoRequiredProfiles(DECLARED_REQ)).toThrow(UnsupportedProfileError)
     expect(() => assertNoRequiredProfiles(DECLARED_REQ)).toThrow('requires processing profiles')
     expect(() => assertNoRequiredProfiles([0xa1, ...text('req'), 0x05])).toThrow('malformed req')
     expect(() =>

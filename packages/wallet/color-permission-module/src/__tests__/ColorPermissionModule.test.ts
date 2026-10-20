@@ -756,6 +756,51 @@ describe('ColorPermissionModule', () => {
       expect(next).not.toHaveBeenCalled()
     })
 
+    it('fails when another input is a valid output of an asset that requires a profile', async () => {
+      const text = (value: string): number[] => [0x60 + value.length, ...toArray(value, 'utf8')]
+      const requiresProfile = [0xa1, ...text('req'), 0xa1, ...text('x:y'), 0xf6]
+      const profiled = await deployAsset(new FakeWallet(), provider, 10n, requiresProfile)
+      // A valid BRC-162 output repeating the asset's req: a token this wallet cannot evaluate.
+      const held = new Transaction()
+      held.addOutput({
+        lockingScript: new OneColor().lock(
+          profiled.assetId,
+          5n,
+          Array(20).fill(0),
+          requiresProfile
+        ),
+        satoshis: 1000
+      })
+      const { args } = await appBuiltSpend()
+      const envelope = JSON.parse(new TextDecoder().decode(new Uint8Array(args.data)))
+      const tx = Transaction.fromAtomicBEEF(envelope.tx)
+      // Were the input taken for satoshis, its 5 tokens would be destroyed by the signature.
+      tx.addInput({
+        sourceTransaction: held,
+        sourceOutputIndex: 0,
+        unlockingScript: new UnlockingScript()
+      })
+      const next = jest.fn(async () => ({ signature: [] }))
+      await expect(
+        module.handleRequest(
+          {
+            method: 'createSignature',
+            args: {
+              ...args,
+              data: toArray(
+                JSON.stringify({ ...envelope, tx: Array.from(tx.toAtomicBEEF()) }),
+                'utf8'
+              )
+            },
+            originator: APP
+          },
+          next
+        )
+      ).rejects.toThrow('requires processing profiles')
+      expect(next).not.toHaveBeenCalled()
+      expect(prompts).toEqual([])
+    })
+
     it('rejects cryptographic operations other than signing in the p color namespace', async () => {
       await expect(
         module.handleRequest({ method: 'encrypt', args: {}, originator: APP }, async () => ({}))
