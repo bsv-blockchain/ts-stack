@@ -460,6 +460,11 @@ function transactionConsent(
 
 /** Plan and action features this module version does not implement. */
 function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs): void {
+  // A plan's ownedOutputs, inputPositions and changePositions, and the facts the user approves,
+  // all name requested output indices; storage shuffles them when randomizeOutputs is true.
+  if (args.options?.randomizeOutputs !== false) {
+    throw new Error('BRC-207: a p color plan requires options.randomizeOutputs false')
+  }
   if (Object.keys(plan.profileData ?? {}).length > 0) {
     throw new Error('BRC-207: plan.profileData is not supported')
   }
@@ -469,9 +474,6 @@ function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs): void {
     throw new Error(
       'BRC-207: satoshi change positions are not supported: the wallet does not position satoshi change'
     )
-  }
-  if (plan.changePositions.length > 0 && args.options?.randomizeOutputs !== false) {
-    throw new Error('BRC-207: plan.changePositions requires options.randomizeOutputs false')
   }
 }
 
@@ -1229,8 +1231,6 @@ export class ColorPermissionModule implements PermissionsModule {
     planned: PlannedOutputs,
     originator: string
   ): Promise<CreateActionOutput> {
-    if (args.options?.randomizeOutputs !== false)
-      throw new Error('BRC-207: a deploy requires options.randomizeOutputs false')
     if (output.basket !== undefined)
       throw new Error(
         "BRC-207: a deploy output's basket is assigned once its transaction is signed"

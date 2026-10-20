@@ -115,7 +115,11 @@ describe('ColorPermissionModule token operations', () => {
     return (
       await module.onRequest({
         method: 'createAction',
-        args: { description: 'Token operation', ...args },
+        args: {
+          description: 'Token operation',
+          ...args,
+          options: { randomizeOutputs: false, ...args.options }
+        },
         originator: APP
       })
     ).args as CreateActionArgs
@@ -510,9 +514,9 @@ describe('ColorPermissionModule token operations', () => {
       await expect(
         createAction({ labels: plan, outputs: deploy.output, options: { randomizeOutputs: false } })
       ).rejects.toThrow('requires the operations [deploy-fixed]')
-      await expect(createAction({ labels: plan, outputs: deploy.output })).rejects.toThrow(
-        'randomizeOutputs false'
-      )
+      await expect(
+        createAction({ labels: plan, outputs: deploy.output, options: { randomizeOutputs: true } })
+      ).rejects.toThrow('a p color plan requires options.randomizeOutputs false')
       await expect(
         createAction({
           labels: plan,

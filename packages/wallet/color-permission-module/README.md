@@ -49,8 +49,10 @@ Call `color.dispose()` when the host tears down the wallet.
 
 ## Application calls
 
-- **Send**: `createAction` with the recipient's BRC-162 output and a plan in
-  `p color plan` labels, built with `ColorPlan.toLabels`. The module selects
+- **Send**: `createAction` with the recipient's BRC-162 output, a plan in
+  `p color plan` labels, built with `ColorPlan.toLabels`, and
+  `options.randomizeOutputs: false` (every plan requires it: the plan's output
+  indices and the approved facts name the requested outputs). The module selects
   admitted token inputs and adds token change in `createAction`. In
   `signAction` it checks the funded transaction against the plan, asks the user
   to approve it (`color_send`: every asset leg, satoshi totals and fee, the
@@ -63,8 +65,8 @@ Call `color.dispose()` when the host tears down the wallet.
   `authority-split`, `-combine`, `-transfer`, `-end`). Authority inputs are
   selected from the authority basket when the caller supplies none; mints and
   burns use only the caller's value inputs and get no change.
-- **Deploy**: a BRC-162 deploy at output 0 with `options.randomizeOutputs:
-false`, `ISSUE` in `plan.assets` and its remittance in `plan.ownedOutputs`.
+- **Deploy**: a BRC-162 deploy at output 0 with `ISSUE` in `plan.assets` and
+  its remittance in `plan.ownedOutputs`.
   Once signed, an owned deploy is filed in its asset's value or authority
   basket (keeping its `ISSUE` key), then submitted to `tm_color`; the call
   fails while `tm_color_<assetId>` has not admitted it, and the deploy stays
@@ -106,7 +108,7 @@ Explicit inputs are supported: this wallet's `p color` outputs are signed by the
 module, and foreign token inputs count only once their asset's overlay admits
 them. An input missing from `inputBEEF` is resolved by the wallet and checked
 in `signAction`. `inputPositions` and token `changePositions` are honored; change
-positions follow the requested outputs and need `options.randomizeOutputs: false`.
+positions follow the requested outputs.
 
 The module does not validate BRC-176 lineage: `p color proof` labels on
 `createAction` and `internalizeAction` are dropped before the wallet stores the

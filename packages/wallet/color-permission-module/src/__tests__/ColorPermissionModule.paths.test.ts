@@ -59,7 +59,12 @@ describe('ColorPermissionModule boundaries', () => {
     return (
       await module.onRequest({
         method: 'createAction',
-        args: { description: 'Send tokens', labels: plan(), ...args },
+        args: {
+          description: 'Send tokens',
+          labels: plan(),
+          ...args,
+          options: { randomizeOutputs: false, ...args.options }
+        },
         originator: APP
       })
     ).args as CreateActionArgs
@@ -222,11 +227,15 @@ describe('ColorPermissionModule boundaries', () => {
       })
     ).rejects.toThrow('cannot be satisfied')
     await expect(
-      createAction({
-        labels: plan({ changePositions: [{ assetId, index: 1 }] }),
-        outputs: [output]
+      createAction({ outputs: [output], options: { randomizeOutputs: true } })
+    ).rejects.toThrow('a p color plan requires options.randomizeOutputs false')
+    await expect(
+      module.onRequest({
+        method: 'createAction',
+        args: { description: 'Send tokens', labels: plan(), outputs: [output] },
+        originator: APP
       })
-    ).rejects.toThrow('randomizeOutputs false')
+    ).rejects.toThrow('a p color plan requires options.randomizeOutputs false')
   })
 
   /** The signAction hook call for a funded action, as the permissions manager makes it. */
@@ -501,7 +510,7 @@ describe('ColorPermissionModule boundaries', () => {
       'wrong p color basket'
     ],
     [
-      'issuance',
+      'issuance the plan does not declare',
       async () => ({
         outputs: [
           {
@@ -511,7 +520,7 @@ describe('ColorPermissionModule boundaries', () => {
           }
         ]
       }),
-      'randomizeOutputs false'
+      'plan.assets'
     ],
     [
       'authority outputs',
@@ -863,7 +872,8 @@ describe('ColorPermissionModule boundaries', () => {
               satoshis: 1,
               outputDescription: 'Token payment'
             }
-          ]
+          ],
+          options: { randomizeOutputs: false }
         },
         originator: APP
       })

@@ -77,7 +77,8 @@ describe('color module registered on a WalletPermissionsManager', () => {
             satoshis: 1,
             outputDescription: 'Token payment'
           }
-        ]
+        ],
+        options: { randomizeOutputs: false }
       },
       APP
     )

@@ -97,7 +97,12 @@ describe('ColorPermissionModule', () => {
     const funded = (
       await module.onRequest({
         method: 'createAction',
-        args: { description: 'Send tokens', labels: transferPlan(assetId), ...args },
+        args: {
+          description: 'Send tokens',
+          labels: transferPlan(assetId),
+          ...args,
+          options: { randomizeOutputs: false, ...args.options }
+        },
         originator: APP
       })
     ).args as CreateActionArgs
@@ -367,7 +372,8 @@ describe('ColorPermissionModule', () => {
           args: {
             description: 'Send tokens',
             labels: transferPlan(assetId),
-            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+            options: { randomizeOutputs: false }
           },
           originator: APP
         })
@@ -410,7 +416,8 @@ describe('ColorPermissionModule', () => {
           args: {
             description: 'Send tokens',
             labels: transferPlan(assetId),
-            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+            options: { randomizeOutputs: false }
           },
           originator: APP
         })
@@ -429,7 +436,8 @@ describe('ColorPermissionModule', () => {
           args: {
             description: 'Send tokens',
             labels: transferPlan(assetId),
-            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+            options: { randomizeOutputs: false }
           },
           originator: APP
         })
@@ -467,7 +475,12 @@ describe('ColorPermissionModule', () => {
       await expect(
         module.onRequest({
           method: 'createAction',
-          args: { description: 'Send tokens', labels: burn, outputs: [output] },
+          args: {
+            description: 'Send tokens',
+            labels: burn,
+            outputs: [output],
+            options: { randomizeOutputs: false }
+          },
           originator: APP
         })
       ).rejects.toThrow('exceed the authenticated input balance')
@@ -533,7 +546,7 @@ describe('ColorPermissionModule', () => {
           inputBEEF: inputBEEF.toBinary(),
           inputs: [explicitInput(foreign)],
           outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
-          options: { noSend: true }
+          options: { noSend: true, randomizeOutputs: false }
         },
         originator: APP
       })
@@ -581,7 +594,7 @@ describe('ColorPermissionModule', () => {
             description: 'Send tokens',
             labels: ['p nosend expiry seconds 30', ...transferPlan(assetId)],
             outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
-            options: { noSend: true }
+            options: { noSend: true, randomizeOutputs: false }
           },
           originator: APP
         })

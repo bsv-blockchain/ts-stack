@@ -51,15 +51,15 @@ signature request and inventory read, and returns true to approve.
 
 ## Application calls
 
-| Operation                     | Call                                                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Send tokens                   | `createAction` with the BRC-162 recipient output and `p color plan` labels from `ColorPlan.toLabels`       |
-| Deploy, mint, burn, authority | The same call with the plan declaring the BRC-207 operations the transaction performs                      |
-| Hand off under BRC-177        | The same call with a `p nosend expiry` label and `noSend`                                                  |
-| Receive tokens                | `internalizeAction` with `basket insertion` into `p color <assetTag>` and the BRC-207 receipt instructions |
-| Sign an app-built transaction | `createSignature` with a `p color` protocol ID and a BRC-207 signature envelope                            |
-| Discover holdings             | `listOutputs` on `p color assets`                                                                          |
-| Exact balance                 | `listOutputs` on `p color balance <assetTag>`; `totalOutputs` is a decimal string                          |
+| Operation                     | Call                                                                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Send tokens                   | `createAction` with the BRC-162 recipient output, `p color plan` labels from `ColorPlan.toLabels` and `options.randomizeOutputs: false` (every plan requires it) |
+| Deploy, mint, burn, authority | The same call with the plan declaring the BRC-207 operations the transaction performs                                                                            |
+| Hand off under BRC-177        | The same call with a `p nosend expiry` label and `noSend`                                                                                                        |
+| Receive tokens                | `internalizeAction` with `basket insertion` into `p color <assetTag>` and the BRC-207 receipt instructions                                                       |
+| Sign an app-built transaction | `createSignature` with a `p color` protocol ID and a BRC-207 signature envelope                                                                                  |
+| Discover holdings             | `listOutputs` on `p color assets`                                                                                                                                |
+| Exact balance                 | `listOutputs` on `p color balance <assetTag>`; `totalOutputs` is a decimal string                                                                                |
 
 ## Limits
 
