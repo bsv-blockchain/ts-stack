@@ -213,7 +213,69 @@ export type PermissionsModuleNext = (args: object) => Promise<unknown>
  * signed. A module may add `spends`
  * for inputs it supplied.
  */
+// BRC-205 attribute grammar: key = lower *( lower / DIGIT / "-" ); value = 1*( unreserved / pct-encoded ).
+const BRC205_KEY = /^[a-z][a-z0-9-]*$/
+const BRC205_VALUE = /^(?:[A-Za-z0-9._~-]|%[0-9A-F]{2})+$/
+const BRC205_MAX_KEY_BYTES = 64
+const BRC205_MAX_VALUE_BYTES = 256
+const BRC205_MAX_ATTRIBUTES = 24
+const BRC205_MAX_BYTES = 2048
+
+/**
+ * Appends the BRC-205 capability attributes of `modules` to a wallet version string:
+ * `base; key=value; key2=value2;`, one space after every nonterminal semicolon, no spaces around
+ * `=`, a trailing semicolon when attributes are present. Modules are visited by scheme id and
+ * their keys in order, so the result is deterministic. Attributes the underlying string already
+ * carries are kept and their keys are not repeated; an invalid key or value, or one that would
+ * exceed BRC-205's limits, is left out. With nothing to add the string is returned unchanged.
+ */
+export function withBrc205Capabilities(version: string, modules: Readonly<Record<string, PermissionsModule>>): string {
+  const separator = version.indexOf(';')
+  const base = separator === -1 ? version : version.slice(0, separator)
+  const attributes =
+    separator === -1
+      ? []
+      : version
+          .slice(separator + 1)
+          .split(';')
+          .map(attribute => attribute.trim())
+          .filter(attribute => attribute !== '')
+  const keys = new Set(attributes.map(attribute => attribute.split('=')[0]))
+  let added = 0
+  for (const scheme of Object.keys(modules).sort()) {
+    const capabilities = modules[scheme]?.capabilities ?? {}
+    for (const key of Object.keys(capabilities).sort()) {
+      const value = capabilities[key]
+      if (
+        !BRC205_KEY.test(key) ||
+        key.length > BRC205_MAX_KEY_BYTES ||
+        typeof value !== 'string' ||
+        !BRC205_VALUE.test(value) ||
+        value.length > BRC205_MAX_VALUE_BYTES ||
+        keys.has(key) ||
+        attributes.length >= BRC205_MAX_ATTRIBUTES
+      ) {
+        continue
+      }
+      const candidate = `${base}; ${[...attributes, `${key}=${value}`].join('; ')};`
+      if (candidate.length > BRC205_MAX_BYTES) continue
+      keys.add(key)
+      attributes.push(`${key}=${value}`)
+      added++
+    }
+  }
+  if (added === 0) return version
+  return `${base}; ${attributes.join('; ')};`
+}
+
 export interface PermissionsModule {
+  /**
+   * BRC-205 capability attributes the module advertises through `getVersion`, as attribute key to
+   * value. A key is a lowercase `brc<number>-<suffix>` (`[a-z][a-z0-9-]*`, 1-64 bytes); a value is
+   * 1-256 bytes of unreserved or percent-encoded characters. Invalid entries are left out.
+   */
+  capabilities?: Readonly<Record<string, string>>
+
   /**
    * Optionally owns the complete execution of a P-module request.
    *
@@ -871,6 +933,8 @@ export class WalletPermissionsManager implements WalletInterface {
         ...config.permissionModules,
         // BRC-177 is a built-in reserved BRC-111 module in every Toolbox wallet.
         nosend: {
+          // BRC-177 L365: this revision, including batches and `never`.
+          capabilities: { 'brc177-nosend': '2' },
           onRequest: async req => {
             // Signing an action this module already authorized at createAction needs nothing further.
             if (req.method === 'signAction') return { args: req.args }
@@ -5709,10 +5773,18 @@ export class WalletPermissionsManager implements WalletInterface {
     return await this.underlying.getNetwork(...args)
   }
 
+  /**
+   * The underlying wallet's version string with the BRC-205 capability attributes of every
+   * configured permission module appended (see `withBrc205Capabilities`).
+   */
   public async getVersion(
     ...args: Parameters<WalletInterface['getVersion']>
   ): ReturnType<WalletInterface['getVersion']> {
-    return await this.underlying.getVersion(...args)
+    const result = await this.underlying.getVersion(...args)
+    return {
+      ...result,
+      version: withBrc205Capabilities(result.version, this.config.permissionModules ?? {})
+    }
   }
 
   /* ---------------------------------------------------------------------

@@ -57,6 +57,13 @@ attention to changes that materially alter behavior or extend functionality.
   `WERR_INVALID_PARAMETER`, as BRC-112 requires: the satoshi sum of a BRC-99
   module basket is never reported past its module. `balance <basket>` on other
   baskets is unchanged, and a module may offer `p <module> balance <basket>`.
+- `WalletPermissionsManager.getVersion` advertises the BRC-205 capability
+  attributes of the configured permission modules: a `PermissionsModule` may
+  declare `capabilities` (attribute key to value), appended to the underlying
+  version string as `base; key=value;` in scheme-id and key order, merged with
+  attributes the wallet already reports and never repeating a key. The built-in
+  BRC-177 module advertises `brc177-nosend=2`. `withBrc205Capabilities` is
+  exported.
 - `createAction` locks the known inputs it marks spent on MySQL and Postgres,
   so of two concurrent actions spending the same input, the second sees it spent
   and fails with the existing double-spend or unspendable-input error instead of
