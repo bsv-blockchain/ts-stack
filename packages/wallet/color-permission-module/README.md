@@ -119,6 +119,17 @@ Signatures released through `createSignature` are not yet recorded as BRC-207
 exposure. BRC-207's non-final transaction rules are not implemented; such
 transactions follow the wallet's existing behavior.
 
+## Extending the module
+
+A wallet with its own token policy can subclass `ColorPermissionModule`: its
+members are `protected`, so a derivative can override, for example, `approve`
+(the consent prompt), `assertSupportedAsset` (which assets it handles),
+`selectInputs` (coin selection) or `spendable` (the overlay query). The helpers
+the module evaluates transactions with are exported too: the token readers
+(`readTokenOutput`, `tryReadTokenOutput`, `readSentToken`), `transactionTokens`,
+`requiredOperations`, `supplyChange`, and the consent builders `actionConsent`
+and `transactionConsent`.
+
 ## Verification
 
 ```bash

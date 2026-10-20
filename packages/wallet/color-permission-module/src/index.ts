@@ -1,7 +1,40 @@
 import { ColorPermissionModule } from './ColorPermissionModule.js'
 import type { ColorPermissionModuleOptions } from './types.js'
 
-export { ColorPermissionModule } from './ColorPermissionModule.js'
+export {
+  ColorPermissionModule,
+  actionConsent,
+  assertPlanAssets,
+  assertTransactionOperations,
+  assertUnlocks,
+  authorityOperation,
+  deployOperation,
+  readSentToken,
+  requiredOperations,
+  sighashScopes,
+  submissionAssets,
+  supplyChange,
+  tokenSources,
+  transactionConsent,
+  transactionTokens,
+  tryReadTokenOutput
+} from './ColorPermissionModule.js'
+export type {
+  Custody,
+  Holding,
+  ManagedInput,
+  ReleasedSignature,
+  SourceOutput,
+  TransactionTokens
+} from './ColorPermissionModule.js'
+export {
+  UnsupportedProfileError,
+  assertNoRequiredProfiles,
+  readAnyTokenOutput,
+  readJsonTokenOutput,
+  readTokenOutput
+} from './tokenOutputs.js'
+export type { TokenOutput } from './tokenOutputs.js'
 export { ColorPlan, COLOR_PLAN_LABEL_PREFIX, COLOR_OPERATIONS } from './ColorPlan.js'
 export type { ColorOperation, ColorOperationName, ColorRemittance } from './ColorPlan.js'
 export {

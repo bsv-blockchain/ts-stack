@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals'
 import * as api from '../index.js'
 
 describe('package exports', () => {
-  it('exposes the module, plan codec and identifier helpers', () => {
+  it('exposes the module, plan codec, identifier helpers and evaluation helpers', () => {
     expect(Object.keys(api).sort()).toEqual([
       'ASSETS_SELECTOR',
       'COLOR_KEY_ID',
@@ -11,15 +11,35 @@ describe('package exports', () => {
       'ColorPermissionModule',
       'ColorPlan',
       'ISSUE',
+      'UnsupportedProfileError',
+      'actionConsent',
+      'assertNoRequiredProfiles',
+      'assertPlanAssets',
+      'assertTransactionOperations',
+      'assertUnlocks',
       'assetBasket',
       'assetTag',
+      'authorityOperation',
       'colorLookupService',
       'colorProtocolID',
       'colorTopic',
       'createColorModule',
+      'deployOperation',
       'parseAssetBasket',
       'parseBalanceSelector',
-      'parseColorProtocolID'
+      'parseColorProtocolID',
+      'readAnyTokenOutput',
+      'readJsonTokenOutput',
+      'readSentToken',
+      'readTokenOutput',
+      'requiredOperations',
+      'sighashScopes',
+      'submissionAssets',
+      'supplyChange',
+      'tokenSources',
+      'transactionConsent',
+      'transactionTokens',
+      'tryReadTokenOutput'
     ])
     for (const value of Object.values(api)) expect(value).toBeDefined()
     expect(api.colorTopic(`${'ab'.repeat(32)}_0`)).toBe(`tm_color_${'ab'.repeat(32)}_0`)

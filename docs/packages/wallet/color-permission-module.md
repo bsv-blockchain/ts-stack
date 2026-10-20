@@ -72,3 +72,7 @@ implemented; such transactions follow the wallet's existing behavior. A send is 
 the funded transaction; a `createSignature` request is approved against the whole
 app-built transaction, after every token input is found admitted and unspent. A receipt relies on its overlay's admission of the received output
 for the transaction's token amounts; the module does not re-evaluate them.
+
+Derivative modules subclass `ColorPermissionModule`, whose members are
+`protected`, and use its exported evaluation helpers (`transactionTokens`,
+`requiredOperations`, `actionConsent`, the token readers).
