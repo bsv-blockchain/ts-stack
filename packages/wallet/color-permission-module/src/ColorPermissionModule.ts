@@ -1,4 +1,5 @@
 import {
+  Beef,
   LockingScript,
   Signature,
   Transaction,
@@ -6,8 +7,8 @@ import {
   UnlockingScript,
   type AtomicBEEF,
   type BasketInsertion,
-  type BEEF,
   type CreateActionArgs,
+  type CreateActionInput,
   type CreateActionOutput,
   type CreateSignatureArgs,
   type InternalizeActionArgs,
@@ -124,6 +125,19 @@ function inputOutpoint(input: Transaction['inputs'][number]): string {
   return outpointString(txid, input.sourceOutputIndex)
 }
 
+function custodyOf(remittance: ColorRemittance): Custody {
+  const { assetId, derivationPrefix, derivationSuffix, senderIdentityKey } = remittance
+  return { assetId, derivationPrefix, derivationSuffix, senderIdentityKey }
+}
+
+function tokenInputs(inputs: readonly ManagedInput[]): CreateActionInput[] {
+  return inputs.map(input => ({
+    outpoint: input.outpoint,
+    unlockingScriptLength: UNLOCKING_SCRIPT_LENGTH,
+    inputDescription: 'BRC-207 token input'
+  }))
+}
+
 function custodyInstructions(custody: Custody): string {
   return JSON.stringify({ version: 1, ...custody })
 }
@@ -215,7 +229,6 @@ function assertPlanAssets(plan: ColorPlan, required: ReadonlyMap<string, bigint>
     plan.operations.map(operation => `${operation.assetId} ${operation.operation}`)
   )
   if (
-    declared.size !== plan.operations.length ||
     declared.size !== required.size ||
     [...required.keys()].some(assetId => !declared.has(`${assetId} transfer`))
   ) {
@@ -232,7 +245,6 @@ function byAmountDescending(a: { amount: bigint }, b: { amount: bigint }): numbe
 interface InventoryRecord {
   output: WalletOutput
   assetId: string
-  state?: InventoryState
   source: SourceOutput
 }
 
@@ -242,25 +254,31 @@ interface InventoryView {
   tags: string[]
 }
 
-/** The token outputs of a namespace listing; reserved outputs are already classified. */
-function inventoryRecords(outputs: WalletOutput[], beef: BEEF | undefined): InventoryRecord[] {
+/** The token outputs of a namespace listing. */
+function inventoryRecords(outputs: WalletOutput[], beef: Beef | undefined): InventoryRecord[] {
   const records: InventoryRecord[] = []
   for (const output of outputs) {
     const outpoint = parseOutpoint(output.outpoint)
     const lockingScript =
       beef === undefined
         ? LockingScript.fromHex(output.lockingScript ?? '')
-        : Transaction.fromBEEF(beef, outpoint.txid).outputs[outpoint.vout].lockingScript
+        : beef.findTxid(outpoint.txid)?.tx?.outputs[outpoint.vout]?.lockingScript
+    if (lockingScript === undefined) continue
     const token = tryReadTokenOutput(lockingScript, outpoint)
     if (token === undefined) continue
     records.push({
       output,
       assetId: token.assetId,
-      state: output.spendable ? undefined : 'reserved',
       source: { outpoint: output.outpoint, lockingScript, satoshis: output.satoshis }
     })
   }
   return records
+}
+
+/** Reserved by a pending action, else available when its overlay admits it, else pending. */
+function inventoryState(record: InventoryRecord, admitted: ReadonlySet<string>): InventoryState {
+  if (!record.output.spendable) return 'reserved'
+  return admitted.has(record.output.outpoint) ? 'available' : 'pending'
 }
 
 function tryReadTokenOutput(
@@ -274,14 +292,24 @@ function tryReadTokenOutput(
   }
 }
 
-/** A classified record with its stored tags and the computed state tag in place of any stored one. */
-function inventoryView(record: InventoryRecord): InventoryView {
-  const state = record.state as InventoryState
+/** A record with its stored tags and the computed state tag in place of any stored one. */
+function inventoryView(record: InventoryRecord, admitted: ReadonlySet<string>): InventoryView {
+  const state = inventoryState(record, admitted)
   const tags = [
     ...(record.output.tags ?? []).filter(tag => !tag.startsWith(STATE_TAG_PREFIX)),
     `${STATE_TAG_PREFIX}${state}`
   ]
   return { record, state, tags }
+}
+
+/** A BEEF holding only the transactions of the returned page. */
+function pageBeef(beef: Beef, page: readonly InventoryView[]): number[] {
+  const result = new Beef()
+  for (const txid of new Set(page.map(view => parseOutpoint(view.record.output.outpoint).txid))) {
+    const tx = beef.findAtomicTransaction(txid)
+    if (tx !== undefined) result.mergeTransaction(tx)
+  }
+  return result.toBinary()
 }
 
 function matchesTags(
@@ -477,11 +505,7 @@ export class ColorPermissionModule implements PermissionsModule {
       const { inputs, changeOutputs } = await this.#fund(reserved, sends, handoff, originator)
       return {
         ...args,
-        inputs: inputs.map(input => ({
-          outpoint: input.outpoint,
-          unlockingScriptLength: UNLOCKING_SCRIPT_LENGTH,
-          inputDescription: 'BRC-207 token input'
-        })),
+        inputs: tokenInputs(inputs),
         outputs: [...outputs, ...changeOutputs]
       }
     } finally {
@@ -581,7 +605,7 @@ export class ColorPermissionModule implements PermissionsModule {
     return {
       ...output,
       basket,
-      customInstructions: custodyInstructions(this.#custody(remittance))
+      customInstructions: custodyInstructions(custodyOf(remittance))
     }
   }
 
@@ -659,12 +683,14 @@ export class ColorPermissionModule implements PermissionsModule {
     const rejected = new Set<string>()
     for (;;) {
       const chosen: Candidate[] = []
+      let total = 0n
       for (const candidate of candidates) {
-        if (sumAmounts(chosen) >= amount) break
-        if (!rejected.has(candidate.outpoint)) chosen.push(candidate)
+        if (total >= amount) break
+        if (rejected.has(candidate.outpoint)) continue
+        chosen.push(candidate)
+        total += candidate.amount
       }
-      if (sumAmounts(chosen) < amount)
-        throw new Error(`BRC-207: insufficient spendable balance of ${assetId}`)
+      if (total < amount) throw new Error(`BRC-207: insufficient spendable balance of ${assetId}`)
       // Custody is read only for chosen outputs; an unreadable record is skipped, not fatal.
       const inputs = await Promise.all(
         chosen.map(async candidate => await this.#readableInput(candidate, originator))
@@ -776,11 +802,7 @@ export class ColorPermissionModule implements PermissionsModule {
           changePositions: [],
           sighashTypes: []
         }),
-        inputs: selected.map(input => ({
-          outpoint: input.outpoint,
-          unlockingScriptLength: UNLOCKING_SCRIPT_LENGTH,
-          inputDescription: 'BRC-207 token input'
-        })),
+        inputs: tokenInputs(selected),
         outputs,
         options: { randomizeOutputs: false, signAndProcess: false }
       },
@@ -877,17 +899,16 @@ export class ColorPermissionModule implements PermissionsModule {
     const inputs = await this.#actionInputs(action.transaction, originator)
     if (inputs.length === 0) return args
     const assetIds = [...new Set(inputs.map(input => input.assetId))]
-    const stale = await Promise.all(
-      assetIds.map(async assetId => {
-        const assetInputs = inputs.filter(input => input.assetId === assetId)
-        const admitted = await this.#spendable(assetId, assetInputs)
-        return assetInputs.some(input => !admitted.has(input.outpoint))
-      })
-    )
-    const staleIndex = stale.indexOf(true)
-    if (staleIndex >= 0) {
-      throw new Error(`BRC-207: a ${assetIds[staleIndex]} input is no longer spendable`)
-    }
+    const stale = (
+      await Promise.all(
+        assetIds.map(async assetId => {
+          const assetInputs = inputs.filter(input => input.assetId === assetId)
+          const admitted = await this.#spendable(assetId, assetInputs)
+          return assetInputs.some(input => !admitted.has(input.outpoint)) ? assetId : undefined
+        })
+      )
+    ).find(assetId => assetId !== undefined)
+    if (stale !== undefined) throw new Error(`BRC-207: a ${stale} input is no longer spendable`)
     return {
       ...args,
       spends: {
@@ -911,8 +932,7 @@ export class ColorPermissionModule implements PermissionsModule {
         basket: toolbox.specOpBasketPrefixOutputs,
         tags: [COLOR_BASKET_NAMESPACE],
         include: 'locking scripts',
-        includeCustomInstructions: true,
-        limit: LIST_PAGE_LIMIT
+        includeCustomInstructions: true
       },
       originator
     )
@@ -1046,17 +1066,11 @@ export class ColorPermissionModule implements PermissionsModule {
       })
     )
     const outpoint = outpointString(sourceTXID, input.sourceOutputIndex)
-    const admitted = await this.#spendable(token.assetId, [
-      { outpoint, lockingScript: source.lockingScript, satoshis: source.satoshis }
-    ])
+    const signed = { outpoint, lockingScript: source.lockingScript, satoshis: source.satoshis }
+    const admitted = await this.#spendable(token.assetId, [signed])
     if (!admitted.has(outpoint))
       throw new Error('BRC-207: the signed input is not admitted and unspent in its overlay')
-    const preimage = this.#preimage(
-      tx,
-      inputIndex,
-      { outpoint, lockingScript: source.lockingScript, satoshis: source.satoshis },
-      sighashType
-    )
+    const preimage = this.#preimage(tx, inputIndex, signed, sighashType)
     await this.#approve(originator, {
       type: 'color_signature',
       assetId: token.assetId,
@@ -1137,62 +1151,68 @@ export class ColorPermissionModule implements PermissionsModule {
         include: entireTransactions ? 'entire transactions' : 'locking scripts',
         includeCustomInstructions: args.includeCustomInstructions,
         includeTags: true,
-        includeLabels: args.includeLabels,
-        limit: LIST_PAGE_LIMIT
+        includeLabels: args.includeLabels
       },
       originator
     )
-    const beef = entireTransactions ? listed.BEEF : undefined
+    const beef =
+      entireTransactions && listed.BEEF !== undefined ? Beef.fromBinary(listed.BEEF) : undefined
     const records = inventoryRecords(listed.outputs, beef)
-    const supported = await this.#classifyInventory(records)
+    const admitted = await this.#admittedByAsset(records)
     const views = records
-      .filter(record => supported.has(record.assetId))
-      .map(record => inventoryView(record))
+      .flatMap(record => {
+        const assetAdmitted = admitted.get(record.assetId)
+        return assetAdmitted === undefined ? [] : [inventoryView(record, assetAdmitted)]
+      })
       .filter(view => matchesTags(view.tags, args.tags ?? [], args.tagQueryMode))
     const limit = args.limit ?? 10
     const offset = args.offset ?? 0
     const ordered = offset < 0 ? [...views].reverse() : views
     const start = offset < 0 ? -offset - 1 : offset
-    // Only the returned page is decrypted.
+    const page = ordered.slice(start, start + limit)
+    // Only the returned page is decrypted and carried in the BEEF.
     const result: ListOutputsResult = {
       totalOutputs: views.length,
       outputs: await Promise.all(
-        ordered
-          .slice(start, start + limit)
-          .map(async view => await this.#inventoryOutput(view, args, originator))
+        page.map(async view => await this.#inventoryOutput(view, args, originator))
       )
     }
-    if (beef !== undefined) result.BEEF = beef
+    if (beef !== undefined) result.BEEF = pageBeef(beef, page)
     return result
   }
 
-  /** Authenticates each held asset and states its unreserved outputs; returns the supported assets. */
-  async #classifyInventory(records: InventoryRecord[]): Promise<Set<string>> {
+  /** The outputs each supported asset's overlay admits; unsupported assets are absent. */
+  async #admittedByAsset(records: InventoryRecord[]): Promise<Map<string, Set<string>>> {
     const assetIds = [...new Set(records.map(record => record.assetId))]
-    const supported = await Promise.all(
-      assetIds.map(async assetId => await this.#classifyAsset(assetId, records))
+    const admitted = await Promise.all(
+      assetIds.map(async assetId => await this.#admittedFor(assetId, records))
     )
-    return new Set(assetIds.filter((_, index) => supported[index]))
+    return new Map(
+      assetIds.flatMap((assetId, index) => {
+        const set = admitted[index]
+        return set === undefined ? [] : [[assetId, set] as const]
+      })
+    )
   }
 
-  async #classifyAsset(assetId: string, records: InventoryRecord[]): Promise<boolean> {
+  async #admittedFor(
+    assetId: string,
+    records: InventoryRecord[]
+  ): Promise<Set<string> | undefined> {
     try {
       await this.#assertSupportedAsset(assetId)
     } catch {
       // An unsupported or unauthenticated asset is not a validated holding.
-      return false
+      return undefined
     }
-    const unclassified = records.filter(
-      record => record.assetId === assetId && record.state === undefined
+    const unreserved = records.filter(
+      record => record.assetId === assetId && record.output.spendable
     )
-    if (unclassified.length === 0) return true
-    const admitted = await this.#spendable(
+    if (unreserved.length === 0) return new Set()
+    return await this.#spendable(
       assetId,
-      unclassified.map(record => record.source)
+      unreserved.map(record => record.source)
     )
-    for (const record of unclassified)
-      record.state = admitted.has(record.output.outpoint) ? 'available' : 'pending'
-    return true
   }
 
   /** One inventory record as a BRC-100 output with the fields the caller asked for. */
@@ -1232,15 +1252,6 @@ export class ColorPermissionModule implements PermissionsModule {
   }): ReturnType<typeof parseColorProtocolID> {
     if (args.keyID !== COLOR_KEY_ID) throw new Error('BRC-207: p color keys use keyID "color"')
     return parseColorProtocolID(args.protocolID)
-  }
-
-  #custody(remittance: ColorRemittance): Custody {
-    return {
-      assetId: remittance.assetId,
-      derivationPrefix: remittance.derivationPrefix,
-      derivationSuffix: remittance.derivationSuffix,
-      senderIdentityKey: remittance.senderIdentityKey
-    }
   }
 
   async #identity(): Promise<string> {

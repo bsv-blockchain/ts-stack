@@ -282,7 +282,6 @@ function parsePlan(value: JsonValue): ColorPlan {
   return plan
 }
 
-/** Encodes and decodes BRC-207 action plans as `p color plan` labels. */
 /** Every chunk is whole hex bytes; every chunk but the last fills its label. */
 function assertPlanChunk(hex: string, index: number, count: number): void {
   if (hex.length % 2 !== 0 || hex.length > CHUNK_HEX_LENGTH)
@@ -291,6 +290,7 @@ function assertPlanChunk(hex: string, index: number, count: number): void {
     throw new Error('BRC-207: short nonfinal plan chunk')
 }
 
+/** Encodes and decodes BRC-207 action plans as `p color plan` labels. */
 export const ColorPlan = {
   /** Splits a plan into `p color plan <i> <n> <hex>` labels after validating it. */
   toLabels(plan: ColorPlan): string[] {
