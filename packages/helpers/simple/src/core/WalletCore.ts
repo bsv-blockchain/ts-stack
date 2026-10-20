@@ -136,7 +136,7 @@ export abstract class WalletCore {
     )
     const { totalOutputs } = result
     if (typeof totalOutputs !== 'number') {
-      throw new TypeError('Wallet returned a module balance where an output count was expected.')
+      throw new TypeError('Wallet returned a module balance where an output count was expected')
     }
     return { ...result, totalOutputs }
   }

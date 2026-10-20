@@ -1276,11 +1276,13 @@ export default class WalletWireProcessor implements WalletWire {
             if (isModuleBalanceQuery(args.basket)) {
               const balanceWriter = new WriterUint8Array()
               balanceWriter.writeUInt8(0) // errorByte = 0
-              // totalOutputs: the exact BRC-112 module balance as UTF-8 decimal text
-              const balanceBytes = UtilsToUint8Array(String(listOutputsResult.totalOutputs), 'utf8')
+              // totalOutputs: the exact BRC-112 module balance as UTF-8 decimal text, and nothing else
+              const balance = listOutputsResult.totalOutputs
+              if (typeof balance !== 'string')
+                throw new Error('listOutputs module balance must be text')
+              const balanceBytes = UtilsToUint8Array(balance, 'utf8')
               balanceWriter.writeVarIntNum(balanceBytes.length)
               balanceWriter.write(balanceBytes)
-              balanceWriter.writeVarIntNum(-1) // no BEEF
               return balanceWriter.toUint8ArrayZeroCopy()
             }
             const outputsPage = this.#requirePageTotal(
