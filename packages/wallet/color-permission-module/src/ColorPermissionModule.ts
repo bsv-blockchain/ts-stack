@@ -1352,7 +1352,7 @@ export class ColorPermissionModule implements PermissionsModule {
         asset.outputs.value - asset.change - (explicit.holdings.get(asset.assetId)?.value ?? 0n)
       const split =
         handoff && asset.change > 0n
-          ? await this.splitExact(reserved, asset.assetId, value, needed, planned, originator)
+          ? await this.splitExact(reserved, asset.assetId, value, needed, originator)
           : undefined
       inputs.push(...(split ?? asset.selected))
       if (split === undefined && asset.change > 0n)
@@ -1427,16 +1427,9 @@ export class ColorPermissionModule implements PermissionsModule {
     assetId: string,
     selected: ManagedInput[],
     amount: bigint,
-    planned: PlannedOutputs,
     originator: string
   ): Promise<ManagedInput[]> {
-    const exact = await this.split(
-      assetId,
-      selected,
-      amount,
-      planned.destinations.filter(destination => destination.assetId === assetId),
-      originator
-    )
+    const exact = await this.split(assetId, selected, amount, originator)
     this.release(reserved, selected)
     this.reserve(reserved, [exact])
     return [exact]
@@ -1592,14 +1585,14 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /**
-   * Before a handoff, splits the selected inputs into an output of exactly `amount`
-   * and token change, broadcast and submitted with the user's approval of its fee.
+   * Before a handoff, splits the selected inputs into an output of exactly `amount` and token
+   * change, broadcast and submitted. The split pays this wallet and, like BRC-177's revocation
+   * anchor, needs no separate consent; the user approves the handoff itself in signAction.
    */
   protected async split(
     assetId: string,
     selected: ManagedInput[],
     amount: bigint,
-    destinations: unknown[],
     originator: string
   ): Promise<ManagedInput> {
     const change = sumAmounts(selected) - amount
@@ -1640,28 +1633,6 @@ export class ColorPermissionModule implements PermissionsModule {
     const signable = created.signableTransaction
     if (signable == null) throw new Error('BRC-207: the split action was not returned for signing')
     const template = Transaction.fromAtomicBEEF(signable.tx)
-    let fee: number
-    try {
-      fee = template.getFee()
-    } catch (error) {
-      await this.wallet.abortAction({ reference: signable.reference }, originator)
-      throw error
-    }
-    const approved = await this.requestTokenAccess(
-      originator,
-      JSON.stringify({
-        type: 'color_split',
-        assetId,
-        amount: amount.toString(),
-        change: change.toString(),
-        destinations,
-        fee
-      })
-    )
-    if (approved !== true) {
-      await this.wallet.abortAction({ reference: signable.reference }, originator)
-      throw new Error('BRC-207: the user declined the token split')
-    }
     let signed: SignActionResult
     try {
       const spends = await this.signInputs(

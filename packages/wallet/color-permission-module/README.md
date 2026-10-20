@@ -40,7 +40,7 @@ which overlays it trusts:
 | `submit(topics, beef)`             | Submits to each topic: `tm_color_<assetId>` per asset, `tm_color` for a deploy |
 
 `requestTokenAccess` receives a JSON message whose `type` is `color_send`,
-`color_split`, `color_signature`, `color_access` (a read) or `color_relinquish`,
+`color_signature`, `color_access` (a read) or `color_relinquish`,
 and returns true to approve. The module asks on every operation and keeps no
 grants; the host decides whether an existing grant covers a request and when to
 prompt the user.
@@ -74,7 +74,8 @@ Call `color.dispose()` when the host tears down the wallet.
   pending in the inventory until `tm_color_<assetId>` admits it.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
   `noSend`. When the inputs exceed the amount, the module first broadcasts a
-  split to the exact amount, after a separate prompt that shows its fee.
+  split to the exact amount. The split pays the wallet itself and, like
+  BRC-177's revocation anchor, gets no separate consent.
 - **Receive**: `internalizeAction` with `basket insertion` into the asset's
   value or authority basket and the BRC-207 receipt instructions. The caller
   must already have submitted the transaction; the received output must be

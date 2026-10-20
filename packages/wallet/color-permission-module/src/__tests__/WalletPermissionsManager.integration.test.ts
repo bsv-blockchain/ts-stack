@@ -9,6 +9,7 @@ import {
   deployAsset,
   FakeProvider,
   FakeWallet,
+  holdTokens,
   tokenPayment,
   validInput
 } from './fixtures.js'
@@ -102,5 +103,58 @@ describe('color module registered on a WalletPermissionsManager', () => {
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
     ).resolves.toEqual({ totalOutputs: '180', outputs: [] })
+  })
+
+  it('aborts a declined send, so the inputs it reserved are spendable again', async () => {
+    const wallet = new FakeWallet()
+    const provider = new FakeProvider()
+    // Declines the send; the balance read afterwards is approved.
+    const color = createModule(
+      wallet,
+      provider,
+      async (_app, message) => JSON.parse(message).type !== 'color_send'
+    )
+    const manager = new WalletPermissionsManager(wallet.asWallet(), ADMIN, {
+      permissionModules: { color },
+      seekSpendingPermissions: false,
+      encryptWalletMetadata: true
+    })
+    const { assetId } = await deployAsset(new FakeWallet(), provider, 1_000n)
+    const [held] = await holdTokens(wallet, provider, assetId, [300n])
+    const recipient = (await tokenPayment(wallet, new FakeWallet(), assetId, 120n)).tx.outputs[0]
+    await expect(
+      manager.createAction(
+        {
+          description: 'Send tokens',
+          labels: ColorPlan.toLabels({
+            version: 1,
+            assets: [assetId],
+            ownedOutputs: [],
+            operations: [{ assetId, operation: 'transfer' }],
+            inputPositions: [],
+            changePositions: [],
+            sighashTypes: []
+          }),
+          outputs: [
+            {
+              lockingScript: recipient.lockingScript.toHex(),
+              satoshis: 1,
+              outputDescription: 'Token payment'
+            }
+          ],
+          options: { randomizeOutputs: false }
+        },
+        APP
+      )
+    ).rejects.toThrow('declined the color_send request')
+    expect(provider.submissions).toEqual([])
+    expect(wallet.pending.size).toBe(0)
+    expect(wallet.outputs.get(`${held.id('hex')}.0`)).toMatchObject({
+      spent: false,
+      reservedBy: undefined
+    })
+    await expect(
+      manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
+    ).resolves.toEqual({ totalOutputs: '300', outputs: [] })
   })
 })

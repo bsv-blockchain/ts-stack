@@ -542,8 +542,7 @@ describe('ColorPermissionModule', () => {
       expect(provider.submissions).toEqual([
         { topics: [colorTopic(assetId)], txid: split.id('hex') }
       ])
-      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_split', 'color_send'])
-      expect(prompts[0].request).toMatchObject({ assetId, amount: '100', change: '200' })
+      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send'])
       const stored = wallet.outputs.get(`${split.id('hex')}.0`)?.customInstructions ?? ''
       expect(stored.startsWith('{')).toBe(false)
       expect(JSON.parse(await maybeDecryptMetadata(wallet.asWallet(), stored))).toMatchObject({
@@ -611,23 +610,25 @@ describe('ColorPermissionModule', () => {
       expect(prompts).toEqual([])
     })
 
-    it('aborts the split when the user declines its fee', async () => {
-      await holdTokens(wallet, provider, assetId, [300n])
-      const declining = createModule(wallet, provider, async () => false)
+    it('builds and submits the split without a prompt, even when the user declines the handoff', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      const declined: string[] = []
+      module = createModule(wallet, provider, async (_app, message) => {
+        declined.push(JSON.parse(message).type)
+        return false
+      })
       await expect(
-        declining.onRequest({
-          method: 'createAction',
-          args: {
-            description: 'Send tokens',
-            labels: ['p nosend expiry seconds 30', ...transferPlan(assetId)],
-            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
-            options: { noSend: true, randomizeOutputs: false }
-          },
-          originator: APP
+        send({
+          labels: ['p nosend expiry seconds 30', ...transferPlan(assetId)],
+          outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+          options: { noSend: true }
         })
-      ).rejects.toThrow('declined the token split')
-      expect(wallet.pending.size).toBe(0)
-      expect(provider.submissions).toEqual([])
+      ).rejects.toThrow('declined the color_send request')
+      expect(declined).toEqual(['color_send'])
+      expect(provider.submissions).toHaveLength(1)
+      const split = wallet.outputs.get(`${provider.submissions[0].txid}.0`)!
+      expect(OneColor.decode(split.tx.outputs[0].lockingScript).amount).toBe(100n)
+      expect(wallet.outputs.get(`${held.id('hex')}.0`)?.spent).toBe(true)
     })
 
     it('aborts the split when signing it fails', async () => {

@@ -15,7 +15,7 @@ export interface ColorOverlayProvider {
 
 /**
  * Approves a token operation described by `message`, a JSON object with a `type` of
- * `color_send`, `color_split`, `color_signature`, `color_access` (a read) or
+ * `color_send`, `color_signature`, `color_access` (a read) or
  * `color_relinquish`. Resolves true only when approved.
  *
  * The module asks on every operation and keeps no grants. The host decides whether an

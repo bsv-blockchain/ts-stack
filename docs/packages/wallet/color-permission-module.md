@@ -46,7 +46,7 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 `wallet` is the underlying wallet the permissions manager wraps. `provider`
 answers the BRC-207 `color-spendability` and `color-admission` queries and
 submits transactions to `tm_color_<assetId>`; the host decides which overlays
-it trusts. `requestTokenAccess` shows the user each token send, handoff split,
+it trusts. `requestTokenAccess` shows the user each token send,
 signature request and inventory read, and returns true to approve.
 
 ## Application calls
