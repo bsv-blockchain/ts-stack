@@ -1529,7 +1529,11 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const action = {
         reference: created.signableTransaction!.reference,
         transaction: expect.anything(),
-        noSend: false
+        noSend: false,
+        createArgs: expect.objectContaining({
+          labels: expect.arrayContaining(['p first plan', 'p second plan']),
+          outputs: [expect.objectContaining({ lockingScript: '51' })]
+        })
       }
       expect(second.onRequest).toHaveBeenLastCalledWith({
         method: 'signAction',

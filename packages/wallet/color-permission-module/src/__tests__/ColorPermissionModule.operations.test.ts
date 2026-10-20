@@ -124,7 +124,8 @@ describe('ColorPermissionModule token operations', () => {
     const action: PermissionsModuleAction = {
       reference: signable.reference,
       transaction: Transaction.fromAtomicBEEF(signable.tx),
-      noSend: false
+      noSend: false,
+      createArgs: wallet.pending.get(signable.reference)!.args
     }
     const signArgs = (
       await module.onRequest({
@@ -186,7 +187,9 @@ describe('ColorPermissionModule token operations', () => {
             operations: ['mint', 'authority-transfer'],
             minted: '2500',
             authorityInputs: 1,
-            authorityOutputs: 1
+            keptAmount: '2500',
+            keptAuthorities: 1,
+            outgoingAmount: '0'
           }
         ]
       })
@@ -259,7 +262,7 @@ describe('ColorPermissionModule token operations', () => {
       expect(tx.outputs).toHaveLength(1)
       expect(validInput(tx, 0)).toBe(true)
       expect(prompts[0]).toMatchObject({
-        assets: [{ assetId, operations: ['burn'], burned: '1000', change: '0' }]
+        assets: [{ assetId, operations: ['burn'], burned: '1000', keptAmount: '0' }]
       })
     })
 
@@ -309,10 +312,7 @@ describe('ColorPermissionModule token operations', () => {
       expect(JSON.parse(await maybeDecryptMetadata(wallet.asWallet(), stored))).toMatchObject({
         assetId: ISSUE
       })
-      expect(prompts[0]).toMatchObject({
-        deploy: { operation: 'deploy-fixed', amount: '1000000', owned: true },
-        assets: []
-      })
+      expect(prompts).toEqual([])
 
       const tx = await run({
         labels: labels(
@@ -324,6 +324,10 @@ describe('ColorPermissionModule token operations', () => {
         options: { randomizeOutputs: false }
       })
       expect(provider.submissions).toEqual([{ topics: [DISCOVERY_TOPIC], txid: tx.id('hex') }])
+      expect(prompts[0]).toMatchObject({
+        deploy: { operation: 'deploy-fixed', amount: '1000000', owned: true },
+        assets: []
+      })
     })
 
     it('reports a deploy its asset overlay has not admitted yet', async () => {

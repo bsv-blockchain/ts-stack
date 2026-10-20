@@ -3,6 +3,7 @@ import {
   Beef,
   LockingScript,
   Transaction,
+  TransactionSignature,
   UnlockingScript,
   type CreateActionArgs,
   type ListOutputsResult
@@ -138,7 +139,8 @@ describe('ColorPermissionModule boundaries', () => {
     const action = {
       reference: signable.reference,
       transaction: Transaction.fromAtomicBEEF(signable.tx),
-      noSend: false
+      noSend: false,
+      createArgs: funded
     }
     const signed = (
       await module.onRequest({
@@ -212,6 +214,96 @@ describe('ColorPermissionModule boundaries', () => {
         outputs: [output]
       })
     ).rejects.toThrow('randomizeOutputs false')
+  })
+
+  /** The signAction hook call for a funded action, as the permissions manager makes it. */
+  async function signAction(funded: CreateActionArgs, extraOutput?: number) {
+    const created = await wallet.createAction(funded)
+    const signable = created.signableTransaction!
+    const pending = wallet.pending.get(signable.reference)!
+    // Storage appends satoshi change after the module's outputs.
+    if (extraOutput !== undefined)
+      pending.tx.addOutput({ lockingScript: LockingScript.fromHex('51'), satoshis: extraOutput })
+    const action = {
+      reference: signable.reference,
+      transaction: Transaction.fromAtomicBEEF(pending.tx.toAtomicBEEF()),
+      noSend: false,
+      createArgs: funded
+    }
+    const signed = (
+      await module.onRequest({
+        method: 'signAction',
+        args: { reference: signable.reference, spends: {} },
+        originator: APP,
+        action
+      })
+    ).args as { reference: string; spends: Record<number, { unlockingScript: string }> }
+    return { signed, tx: pending.tx }
+  }
+
+  it('places satoshi change after the module outputs and checks it exists before signing', async () => {
+    // The refused action keeps its input reserved, so the second action spends the other output.
+    await holdTokens(wallet, provider, assetId, [300n, 300n])
+    const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 100n)).tx.outputs[0]
+    const args = (index: number): Partial<CreateActionArgs> => ({
+      labels: plan({ changePositions: [{ assetId: null, index }] }),
+      outputs: [
+        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+      ],
+      options: { randomizeOutputs: false }
+    })
+    await expect(createAction(args(1))).rejects.toThrow('conflict with the requested outputs')
+    await expect(createAction(args(3))).rejects.toThrow('cannot be satisfied')
+    await expect(signAction(await createAction(args(2)))).rejects.toThrow('no satoshi change')
+    const { signed } = await signAction(await createAction(args(2)), 5)
+    expect(Object.keys(signed.spends)).toEqual(['0'])
+  })
+
+  it('signs a managed input with its sighash override', async () => {
+    const [held] = await holdTokens(wallet, provider, assetId, [300n])
+    const outpoint = `${held.id('hex')}.0`
+    const scope =
+      TransactionSignature.SIGHASH_SINGLE |
+      TransactionSignature.SIGHASH_ANYONECANPAY |
+      TransactionSignature.SIGHASH_FORKID
+    const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 300n)).tx.outputs[0]
+    const args = (overrides: Plan['sighashTypes']): Partial<CreateActionArgs> => ({
+      labels: plan({ sighashTypes: overrides }),
+      inputs: [{ outpoint, unlockingScriptLength: 108, inputDescription: 'Mine' }],
+      outputs: [
+        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+      ]
+    })
+    await expect(
+      createAction(args([{ outpoint: `${'ab'.repeat(32)}.0`, sighashType: scope }]))
+    ).rejects.toThrow('does not sign')
+    const { signed } = await signAction(
+      await createAction(args([{ outpoint, sighashType: scope }]))
+    )
+    const unlocking = UnlockingScript.fromHex(signed.spends[0].unlockingScript)
+    const checksig = unlocking.chunks[0].data!
+    expect(checksig[checksig.length - 1]).toBe(scope)
+    await expect(wallet.signAction(signed)).resolves.toMatchObject({ txid: expect.any(String) })
+  })
+
+  it('checks at signAction a token input the wallet resolved without inputBEEF', async () => {
+    await holdTokens(wallet, provider, assetId, [300n])
+    const extra = (await tokenPayment(new FakeWallet(), wallet, assetId, 50n)).tx
+    provider.admit(assetId, extra, 0)
+    wallet.store(extra, 0, 'elsewhere')
+    const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 100n)).tx.outputs[0]
+    const funded = await createAction({
+      inputs: [
+        { outpoint: `${extra.id('hex')}.0`, unlockingScriptLength: 1, inputDescription: 'Known' }
+      ],
+      outputs: [
+        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+      ]
+    })
+    expect(funded.inputs![0].outpoint).toBe(`${extra.id('hex')}.0`)
+    await expect(signAction(funded)).rejects.toThrow(
+      'requires the operations [transfer, burn] but the plan declares [transfer]'
+    )
   })
 
   it('is constructed only with its dependencies', () => {
@@ -327,24 +419,6 @@ describe('ColorPermissionModule boundaries', () => {
   })
 
   it.each([
-    [
-      'a foreign input without its source transaction',
-      async () => ({
-        inputs: [
-          {
-            outpoint: `${'ab'.repeat(32)}.0`,
-            unlockingScriptLength: 1,
-            inputDescription: 'Explicit input'
-          }
-        ]
-      }),
-      'inputBEEF'
-    ],
-    [
-      'plan constraints',
-      async () => ({ labels: plan({ changePositions: [{ assetId: null, index: 0 }] }) }),
-      'not supported'
-    ],
     [
       'a remittance for a missing output',
       async () => ({

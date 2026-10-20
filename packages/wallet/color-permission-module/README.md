@@ -51,8 +51,11 @@ Call `color.dispose()` when the host tears down the wallet.
 
 - **Send**: `createAction` with the recipient's BRC-162 output and a plan in
   `p color plan` labels, built with `ColorPlan.toLabels`. The module selects
-  admitted token inputs, adds token change, prompts, signs the token inputs in
-  `signAction` and submits the processed transaction to each asset topic.
+  admitted token inputs and adds token change in `createAction`. In
+  `signAction` it checks the funded transaction against the plan, asks the user
+  to approve it (`color_send`: every asset leg, satoshi totals and fee, the
+  signatures it releases), signs the token inputs with any `sighashTypes`
+  override and submits the processed transaction to each asset topic.
 - **Mint, burn and authority operations**: the plan declares exactly the
   operations BRC-207 derives from the transaction (`mint`, `burn`,
   `authority-split`, `-combine`, `-transfer`, `-end`). Authority inputs are
@@ -83,15 +86,15 @@ The module fails explicitly, rather than falling back, on:
 - BRC-161 JSON outputs (assets first deployed as BRC-161, at any output index, are
   supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
-- `tokenProofs`, `profileData` entries, `sighashTypes` overrides and
-  satoshi change positions (`changePositions` with a null `assetId`);
+- `tokenProofs` and `profileData` entries;
 - explicit inputs together with a BRC-177 handoff.
 
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
-module, and foreign token inputs (with their source in `inputBEEF`) count only
-once their asset's overlay admits them. `inputPositions` and token
-`changePositions` are honored; change positions follow the requested outputs and
-need `options.randomizeOutputs: false`.
+module, and foreign token inputs count only once their asset's overlay admits
+them. An input missing from `inputBEEF` is resolved by the wallet and checked
+in `signAction`. `inputPositions` and `changePositions` are honored; change
+positions follow the requested outputs, satoshi change comes after the token
+change, and both need `options.randomizeOutputs: false`.
 
 Signatures released through `createSignature` are not yet recorded as BRC-207
 exposure.

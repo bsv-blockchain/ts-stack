@@ -64,7 +64,6 @@ signature request and inventory read, and returns true to approve.
 ## Limits
 
 This version rejects BRC-161 JSON outputs, assets with required processing
-profiles, token proofs, `sighashTypes` overrides and satoshi change positions,
-and does not yet record exposure for signatures released through
-`createSignature`. Explicit inputs, `inputPositions` and token
-`changePositions` are supported.
+profiles and token proofs, and does not yet record exposure for signatures
+released through `createSignature`. A send is approved in `signAction`, against
+the funded transaction.

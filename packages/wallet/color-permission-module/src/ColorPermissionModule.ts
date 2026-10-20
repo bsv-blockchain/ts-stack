@@ -214,7 +214,7 @@ interface ExplicitInputs {
 /** The requested outputs' token totals per existing asset, the deploy, and the outputs that leave the wallet. */
 interface PlannedOutputs {
   holdings: Map<string, Holding>
-  deploy?: { operation: ColorOperationName; amount: bigint; owned: boolean }
+  deploy?: { operation: ColorOperationName }
   destinations: Array<{
     outputIndex: number
     assetId: string
@@ -224,13 +224,11 @@ interface PlannedOutputs {
   }>
 }
 
-/** One existing asset's funding: its selected inputs, token change and complete operation set. */
+/** One existing asset's funding: its selected inputs, token change and resulting outputs. */
 interface AssetFunding {
   assetId: string
   selected: ManagedInput[]
   change: bigint
-  operations: ColorOperationName[]
-  inputs: Holding
   outputs: Holding
 }
 
@@ -319,24 +317,99 @@ function supplyChange(
   }
 }
 
-/** What the user approves for one asset of an action. */
-function consentFacts(asset: AssetFunding, explicit: ExplicitHolding | undefined) {
-  const foreignValue = explicit?.foreignValue ?? 0n
-  const foreignAuthority = explicit?.foreignAuthority ?? 0
-  const { transferred, burned, minted } = supplyChange(asset.inputs, asset.outputs)
+/**
+ * What the user approves for a funded action: every asset leg, with this wallet's and foreign
+ * inputs, kept and outgoing outputs and the supply change; satoshi totals and fee; the
+ * signatures the module releases; and the lock time.
+ */
+function actionConsent(
+  plan: ColorPlan,
+  createArgs: CreateActionArgs,
+  tx: Transaction,
+  tokens: TransactionTokens,
+  managed: readonly ManagedInput[],
+  scopes: ReadonlyMap<string, number>
+): Record<string, unknown> {
+  const requested = createArgs.outputs ?? []
+  const kept = (index: number): boolean =>
+    requested[index]?.basket?.startsWith(`${COLOR_BASKET_NAMESPACE} `) === true ||
+    plan.ownedOutputs.some(remittance => remittance.outputIndex === index)
+  const txid = tx.id('hex')
+  const outputs = tx.outputs.map((output, vout) => ({
+    vout,
+    token: readTokenOutput(output.lockingScript, { txid, vout }),
+    satoshis: output.satoshis ?? 0
+  }))
+  const assets = [...new Set([...tokens.inputs.keys(), ...tokens.outputs.keys()])].map(assetId => {
+    const own = managed.filter(input => input.assetId === assetId)
+    const inputs = tokens.inputs.get(assetId) ?? emptyHolding()
+    const all = tokens.outputs.get(assetId) ?? emptyHolding()
+    const keptOutputs = outputs.filter(
+      output => output.token?.assetId === assetId && !output.token.deploy && kept(output.vout)
+    )
+    const { transferred, burned, minted } = supplyChange(inputs, all)
+    return {
+      assetId,
+      operations: requiredOperations(inputs, all),
+      inputAmount: sumAmounts(own).toString(),
+      foreignAmount: (inputs.value - sumAmounts(own)).toString(),
+      authorityInputs: own.filter(input => input.role === 'authority').length,
+      foreignAuthorityInputs:
+        inputs.authority - own.filter(input => input.role === 'authority').length,
+      keptAmount: sumAmounts(keptOutputs.map(output => output.token!)).toString(),
+      keptAuthorities: keptOutputs.filter(output => output.token!.role === 'authority').length,
+      outgoingAmount: (all.value - sumAmounts(keptOutputs.map(output => output.token!))).toString(),
+      outgoingAuthorities:
+        all.authority - keptOutputs.filter(output => output.token!.role === 'authority').length,
+      transferred: transferred.toString(),
+      burned: burned.toString(),
+      minted: minted.toString()
+    }
+  })
+  const inputSatoshis = tx.inputs.reduce(
+    (total, input) =>
+      total + (input.sourceTransaction!.outputs[input.sourceOutputIndex].satoshis ?? 0),
+    0
+  )
+  const outputSatoshis = outputs.reduce((total, output) => total + output.satoshis, 0)
   return {
-    assetId: asset.assetId,
-    operations: asset.operations,
-    amount: (asset.outputs.value - asset.change).toString(),
-    inputAmount: (asset.inputs.value - foreignValue).toString(),
-    foreignAmount: foreignValue.toString(),
-    change: asset.change.toString(),
-    transferred: transferred.toString(),
-    burned: burned.toString(),
-    minted: minted.toString(),
-    authorityInputs: asset.inputs.authority - foreignAuthority,
-    foreignAuthorityInputs: foreignAuthority,
-    authorityOutputs: asset.outputs.authority
+    type: 'color_send',
+    handoff: (createArgs.labels ?? []).some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX)),
+    ...(tokens.deploy === undefined
+      ? {}
+      : {
+          deploy: {
+            operation: deployOperation(tokens.deploy),
+            amount: tokens.deploy.amount.toString(),
+            owned: plan.ownedOutputs.some(remittance => remittance.outputIndex === 0)
+          }
+        }),
+    assets,
+    destinations: outputs
+      .filter(output => output.vout < requested.length && !kept(output.vout))
+      .map(output => ({
+        outputIndex: output.vout,
+        satoshis: output.satoshis,
+        lockingScript: tx.outputs[output.vout].lockingScript.toHex(),
+        ...(output.token === undefined
+          ? {}
+          : {
+              assetId: output.token.deploy ? ISSUE : output.token.assetId,
+              role: output.token.role,
+              amount: output.token.amount.toString()
+            })
+      })),
+    satoshis: {
+      inputs: inputSatoshis,
+      outputs: outputSatoshis,
+      fee: inputSatoshis - outputSatoshis
+    },
+    signatures: managed.map(input => ({
+      outpoint: input.outpoint,
+      inputIndex: tx.inputs.findIndex(candidate => inputOutpoint(candidate) === input.outpoint),
+      sighashType: scopes.get(input.outpoint) ?? DEFAULT_SIGHASH
+    })),
+    lockTime: tx.lockTime
   }
 }
 
@@ -344,12 +417,6 @@ function consentFacts(asset: AssetFunding, explicit: ExplicitHolding | undefined
 function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs, handoff: boolean): void {
   if ((plan.tokenProofs ?? []).length > 0 || Object.keys(plan.profileData ?? {}).length > 0) {
     throw new Error('BRC-207: token proofs and profile data are not supported')
-  }
-  if (
-    plan.sighashTypes.length > 0 ||
-    plan.changePositions.some(position => position.assetId === null)
-  ) {
-    throw new Error('BRC-207: sighash overrides and satoshi change positions are not supported')
   }
   if (handoff && (args.inputs ?? []).length > 0) {
     throw new Error('BRC-207: explicit inputs are not supported with a BRC-177 handoff')
@@ -462,13 +529,82 @@ function addToken(totals: Map<string, Holding>, token: TokenOutput): void {
   else entry.authority += 1
 }
 
-/** A foreign input's source output, from the caller's inputBEEF. */
-function foreignSource(beef: Beef | undefined, outpoint: string): SourceOutput {
+/** A foreign input's source output from the caller's inputBEEF, if it is there. */
+function foreignSource(beef: Beef | undefined, outpoint: string): SourceOutput | undefined {
   const { txid, vout } = parseOutpoint(outpoint)
   const output = beef?.findTxid(txid)?.tx?.outputs[vout]
-  if (output?.satoshis === undefined)
-    throw new Error('BRC-207: a foreign input needs its source transaction in inputBEEF')
+  if (output?.satoshis === undefined) return undefined
   return { outpoint, lockingScript: output.lockingScript, satoshis: output.satoshis }
+}
+
+/** A transaction's token inputs and outputs per existing asset, and its deploy output. */
+interface TransactionTokens {
+  consumed: Array<SourceOutput & { assetId: string; token: TokenOutput }>
+  inputs: Map<string, Holding>
+  outputs: Map<string, Holding>
+  deploy?: TokenOutput
+}
+
+/** Reads every input's source and every output; an input without its source fails. */
+function transactionTokens(tx: Transaction): TransactionTokens {
+  tx.inputs.forEach((input, index) => {
+    if (input.sourceTransaction === undefined)
+      throw new Error(`BRC-207: input ${index} has no source transaction to authenticate`)
+  })
+  const txid = tx.id('hex')
+  const consumed = tokenSources(tx, new Set())
+  const inputs = new Map<string, Holding>()
+  for (const source of consumed) addToken(inputs, source.token)
+  const outputs = new Map<string, Holding>()
+  let deploy: TokenOutput | undefined
+  tx.outputs.forEach((output, vout) => {
+    const token = readTokenOutput(output.lockingScript, { txid, vout })
+    if (token?.deploy === true) deploy = token
+    else if (token !== undefined) addToken(outputs, token)
+  })
+  return { consumed, inputs, outputs, deploy }
+}
+
+function deployOperation(token: TokenOutput): ColorOperationName {
+  return token.amount > 0n ? 'deploy-fixed' : 'deploy-authority'
+}
+
+/** Fails unless the plan's operations and assets are exactly what the transaction performs. */
+function assertTransactionOperations(plan: ColorPlan, tokens: TransactionTokens): void {
+  const assetIds = new Set([...tokens.inputs.keys(), ...tokens.outputs.keys()])
+  assertPlanAssets(plan, new Set([...assetIds, ...(tokens.deploy === undefined ? [] : [ISSUE])]))
+  if (tokens.deploy !== undefined) assertOperations(plan, ISSUE, [deployOperation(tokens.deploy)])
+  for (const assetId of assetIds)
+    assertOperations(
+      plan,
+      assetId,
+      requiredOperations(
+        tokens.inputs.get(assetId) ?? emptyHolding(),
+        tokens.outputs.get(assetId) ?? emptyHolding()
+      )
+    )
+}
+
+/** Satoshi change comes after every module-placed output, where the wallet appends it. */
+function assertSatoshiChangePosition(plan: ColorPlan, outputCount: number): void {
+  const pinned = plan.changePositions.find(position => position.assetId === null)
+  if (pinned === undefined || pinned.index === outputCount) return
+  throw new Error(
+    pinned.index < outputCount
+      ? 'BRC-207: plan.changePositions conflict with the requested outputs'
+      : 'BRC-207: plan.changePositions cannot be satisfied'
+  )
+}
+
+/** The sighash type for each managed input; an override must name one the module signs. */
+function sighashScopes(plan: ColorPlan, managed: ReadonlySet<string>): Map<string, number> {
+  const scopes = new Map<string, number>()
+  for (const { outpoint, sighashType } of plan.sighashTypes) {
+    if (!managed.has(outpoint))
+      throw new Error('BRC-207: plan.sighashTypes names an input this wallet does not sign')
+    scopes.set(outpoint, sighashType)
+  }
+  return scopes
 }
 
 /** The plan names exactly the assets among the action's token inputs and outputs. */
@@ -693,15 +829,7 @@ export class ColorPermissionModule implements PermissionsModule {
    */
   async #assertCompletedTransaction(tx: Transaction): Promise<void> {
     for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
-    const txid = tx.id('hex')
-    const consumed = tokenSources(tx, new Set())
-    const inputs = new Map<string, Holding>()
-    for (const source of consumed) addToken(inputs, source.token)
-    const outputs = new Map<string, Holding>()
-    tx.outputs.forEach((output, vout) => {
-      const token = readTokenOutput(output.lockingScript, { txid, vout })
-      if (token !== undefined && !token.deploy) addToken(outputs, token)
-    })
+    const { consumed, inputs, outputs } = transactionTokens(tx)
     await eachInOrder(new Set([...inputs.keys(), ...outputs.keys()]), async assetId => {
       await this.#assertSupportedAsset(assetId)
       const sources = consumed.filter(source => source.assetId === assetId)
@@ -784,24 +912,31 @@ export class ColorPermissionModule implements PermissionsModule {
         handoff,
         originator
       )
+      sighashScopes(plan, new Set([...explicit.managed, ...inputs].map(input => input.outpoint)))
+      const placed = placeChange(
+        outputs,
+        changes,
+        plan.changePositions.filter(position => position.assetId !== null)
+      )
+      assertSatoshiChangePosition(plan, placed.length)
       return {
         ...args,
         inputs: orderInputs(explicit.inputs, tokenInputs(inputs), plan.inputPositions),
-        outputs: placeChange(outputs, changes, plan.changePositions)
+        outputs: placed
       }
     } finally {
       for (const outpoint of reserved) this.#selected.delete(outpoint)
     }
   }
 
-  #reserve(reserved: Set<string>, inputs: readonly ManagedInput[]): void {
+  #reserve(reserved: Set<string>, inputs: ReadonlyArray<{ outpoint: string }>): void {
     for (const input of inputs) {
       this.#selected.add(input.outpoint)
       reserved.add(input.outpoint)
     }
   }
 
-  #release(reserved: Set<string>, inputs: readonly ManagedInput[]): void {
+  #release(reserved: Set<string>, inputs: ReadonlyArray<{ outpoint: string }>): void {
     for (const input of inputs) {
       this.#selected.delete(input.outpoint)
       reserved.delete(input.outpoint)
@@ -859,11 +994,15 @@ export class ColorPermissionModule implements PermissionsModule {
     beef: Beef | undefined,
     outpoint: string
   ): Promise<void> {
+    // A source missing from inputBEEF is resolved from the wallet and checked at signAction.
     const source = foreignSource(beef, outpoint)
-    const token = readTokenOutput(source.lockingScript, parseOutpoint(outpoint))
+    const token =
+      source === undefined
+        ? undefined
+        : readTokenOutput(source.lockingScript, parseOutpoint(outpoint))
     if (token === undefined) return
     await this.#assertSupportedAsset(token.assetId)
-    if (!(await this.#spendable(token.assetId, [source])).has(outpoint))
+    if (!(await this.#spendable(token.assetId, [source!])).has(outpoint))
       throw new Error('BRC-207: a foreign token input is not admitted and unspent in its overlay')
     const totals = holding(explicit.holdings, token.assetId, emptyExplicitHolding)
     if (token.role === 'value') {
@@ -960,11 +1099,7 @@ export class ColorPermissionModule implements PermissionsModule {
       throw new Error(
         "BRC-207: a deploy output's basket is assigned once its transaction is signed"
       )
-    planned.deploy = {
-      operation: token.amount > 0n ? 'deploy-fixed' : 'deploy-authority',
-      amount: token.amount,
-      owned: remittance !== undefined
-    }
+    planned.deploy = { operation: deployOperation(token) }
     if (remittance === undefined) {
       planned.destinations.push({
         outputIndex: 0,
@@ -1011,8 +1146,8 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /**
-   * Funds each asset the plan involves, checks its operations, asks the user to approve the
-   * action, splits for a handoff, and returns the selected inputs and token change.
+   * Funds each asset the plan involves, checks its operations, splits for a handoff, and returns
+   * the selected inputs and token change. The user approves the funded action at signAction.
    */
   async #fund(
     reserved: Set<string>,
@@ -1047,21 +1182,6 @@ export class ColorPermissionModule implements PermissionsModule {
           originator
         )
       )
-    })
-    await this.#approve(originator, {
-      type: 'color_send',
-      handoff,
-      ...(planned.deploy === undefined
-        ? {}
-        : {
-            deploy: {
-              operation: planned.deploy.operation,
-              amount: planned.deploy.amount.toString(),
-              owned: planned.deploy.owned
-            }
-          }),
-      assets: funding.map(asset => consentFacts(asset, explicit.holdings.get(asset.assetId))),
-      destinations: planned.destinations
     })
     const inputs: ManagedInput[] = []
     const changes: Array<{ assetId: string; output: CreateActionOutput }> = []
@@ -1102,13 +1222,13 @@ export class ColorPermissionModule implements PermissionsModule {
     if (automatic && requested.value > explicit.value) {
       selected.push(
         ...(await this.#selectInputs(
+          reserved,
           assetId,
           'value',
           requested.value - explicit.value,
           originator
         ))
       )
-      this.#reserve(reserved, selected)
     }
     const authorityOperation = AUTHORITY_OPERATIONS.find(operation => declared.has(operation))
     const authorityCount =
@@ -1116,14 +1236,15 @@ export class ColorPermissionModule implements PermissionsModule {
         ? 0
         : authorityInputsFor(authorityOperation, requested.authority)
     if (authorityCount > 0) {
-      const authorities = await this.#selectInputs(
-        assetId,
-        'authority',
-        BigInt(authorityCount),
-        originator
+      selected.push(
+        ...(await this.#selectInputs(
+          reserved,
+          assetId,
+          'authority',
+          BigInt(authorityCount),
+          originator
+        ))
       )
-      this.#reserve(reserved, authorities)
-      selected.push(...authorities)
     }
     const selectedValue = sumAmounts(selected)
     const value = explicit.value + selectedValue
@@ -1131,9 +1252,8 @@ export class ColorPermissionModule implements PermissionsModule {
     const change = selectedValue > 0n ? value - requested.value : 0n
     const inputs = { value, authority: explicit.authority + authorityCount }
     const outputs = { value: requested.value + change, authority: requested.authority }
-    const operations = requiredOperations(inputs, outputs)
-    assertOperations(plan, assetId, operations)
-    return { assetId, selected, change, operations, inputs, outputs }
+    assertOperations(plan, assetId, requiredOperations(inputs, outputs))
+    return { assetId, selected, change, outputs }
   }
 
   /** Replaces a handoff's value inputs with one split output of exactly `amount`, which it reserves. */
@@ -1162,6 +1282,7 @@ export class ColorPermissionModule implements PermissionsModule {
    * covering `target` units, largest first, or `target` authority outputs.
    */
   async #selectInputs(
+    reserved: Set<string>,
     assetId: string,
     role: TokenRole,
     target: bigint,
@@ -1183,18 +1304,22 @@ export class ColorPermissionModule implements PermissionsModule {
         throw new Error(
           `BRC-207: insufficient spendable ${role === 'value' ? 'balance' : 'authority'} of ${assetId}`
         )
+      // Chosen outputs are held while they are checked, so a concurrent action cannot choose them.
+      this.#reserve(reserved, chosen)
       // Custody is read only for chosen outputs; an unreadable record is skipped, not fatal.
       const inputs = await Promise.all(
         chosen.map(async candidate => await this.#readableInput(candidate, originator))
       )
       const unreadable = chosen.filter((_, index) => inputs[index] === undefined)
       for (const candidate of unreadable) rejected.add(candidate.outpoint)
+      this.#release(reserved, unreadable)
       if (unreadable.length > 0) continue
       const selected = inputs as ManagedInput[]
       const admitted = await this.#spendable(assetId, selected)
       const missing = selected.filter(input => !admitted.has(input.outpoint))
       if (missing.length === 0) return selected
       for (const input of missing) rejected.add(input.outpoint)
+      this.#release(reserved, missing)
     }
   }
 
@@ -1329,6 +1454,7 @@ export class ColorPermissionModule implements PermissionsModule {
       const spends = await this.#signInputs(
         template,
         selected,
+        new Map(),
         originator,
         'BRC-207: the split transaction omits a token input'
       )
@@ -1381,38 +1507,44 @@ export class ColorPermissionModule implements PermissionsModule {
     }
   }
 
-  /** Signs the action's inputs that spend this wallet's `p color` outputs, after a fresh spendability check. */
+  /**
+   * Checks the funded action against its plan, rechecks every token input's spendability, asks
+   * the user to approve the final layout, and signs the inputs that spend this wallet's
+   * `p color` outputs.
+   */
   async #signAction(
     args: SignActionArgs,
     action: PermissionsModuleAction | undefined,
     originator: string
   ): Promise<SignActionArgs> {
     if (action === undefined) return args
-    const inputs = await this.#actionInputs(action.transaction, originator)
-    // Foreign token inputs are rechecked too; only the module's own inputs are signed.
-    const checked = [
-      ...inputs,
-      ...tokenSources(action.transaction, new Set(inputs.map(input => input.outpoint)))
-    ]
-    if (checked.length === 0) return args
-    const assetIds = [...new Set(checked.map(input => input.assetId))]
-    const stale = (
-      await Promise.all(
-        assetIds.map(async assetId => {
-          const assetInputs = checked.filter(input => input.assetId === assetId)
-          const admitted = await this.#spendable(assetId, assetInputs)
-          return assetInputs.some(input => !admitted.has(input.outpoint)) ? assetId : undefined
-        })
-      )
-    ).find(assetId => assetId !== undefined)
-    if (stale !== undefined) throw new Error(`BRC-207: a ${stale} input is no longer spendable`)
+    const createArgs = action.createArgs
+    const plan = ColorPlan.fromLabels(createArgs?.labels)
+    if (createArgs === undefined || plan === undefined)
+      throw new Error("BRC-207: signAction needs the action's p color createAction arguments")
+    const tx = action.transaction
+    const tokens = transactionTokens(tx)
+    assertTransactionOperations(plan, tokens)
+    const satoshiChange = plan.changePositions.find(position => position.assetId === null)
+    if (satoshiChange !== undefined && satoshiChange.index >= tx.outputs.length)
+      throw new Error('BRC-207: the funded action has no satoshi change for plan.changePositions')
+    const managed = await this.#actionInputs(tx, originator)
+    const scopes = sighashScopes(plan, new Set(managed.map(input => input.outpoint)))
+    await eachInOrder(new Set(tokens.consumed.map(input => input.assetId)), async assetId => {
+      const assetInputs = tokens.consumed.filter(input => input.assetId === assetId)
+      const admitted = await this.#spendable(assetId, assetInputs)
+      if (assetInputs.some(input => !admitted.has(input.outpoint)))
+        throw new Error(`BRC-207: a ${assetId} input is no longer spendable`)
+    })
+    await this.#approve(originator, actionConsent(plan, createArgs, tx, tokens, managed, scopes))
     return {
       ...args,
       spends: {
         ...args.spends,
         ...(await this.#signInputs(
-          action.transaction,
-          inputs,
+          tx,
+          managed,
+          scopes,
           originator,
           'BRC-207: the signable transaction omits a token input'
         ))
@@ -1929,6 +2061,7 @@ export class ColorPermissionModule implements PermissionsModule {
   async #signInputs(
     template: Transaction,
     inputs: readonly ManagedInput[],
+    scopes: ReadonlyMap<string, number>,
     originator: string,
     missing: string
   ): Promise<Record<number, { unlockingScript: string }>> {
@@ -1941,7 +2074,14 @@ export class ColorPermissionModule implements PermissionsModule {
     })
     const scripts = await Promise.all(
       indexed.map(
-        async ({ index, input }) => await this.#unlock(template, index, input, originator)
+        async ({ index, input }) =>
+          await this.#unlock(
+            template,
+            index,
+            input,
+            scopes.get(input.outpoint) ?? DEFAULT_SIGHASH,
+            originator
+          )
       )
     )
     return Object.fromEntries(
@@ -1954,6 +2094,7 @@ export class ColorPermissionModule implements PermissionsModule {
     tx: Transaction,
     inputIndex: number,
     input: ManagedInput,
+    scope: number,
     originator: string
   ): Promise<string> {
     const protocolID = colorProtocolID(
@@ -1967,12 +2108,12 @@ export class ColorPermissionModule implements PermissionsModule {
         protocolID,
         keyID: COLOR_KEY_ID,
         counterparty,
-        hashToDirectlySign: hash256(this.#preimage(tx, inputIndex, input, DEFAULT_SIGHASH))
+        hashToDirectlySign: hash256(this.#preimage(tx, inputIndex, input, scope))
       },
       originator
     )
     const der = Signature.fromDER(signature)
-    const checksig = new TransactionSignature(der.r, der.s, DEFAULT_SIGHASH).toChecksigFormat()
+    const checksig = new TransactionSignature(der.r, der.s, scope).toChecksigFormat()
     const publicKey = toArray(await this.#publicKey(input.custody, counterparty, originator), 'hex')
     return new UnlockingScript([
       { op: checksig.length, data: checksig },

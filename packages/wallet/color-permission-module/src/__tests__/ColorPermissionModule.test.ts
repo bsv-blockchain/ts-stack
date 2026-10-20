@@ -86,7 +86,8 @@ describe('ColorPermissionModule', () => {
     return {
       reference: signable.reference,
       transaction: Transaction.fromAtomicBEEF(signable.tx),
-      noSend
+      noSend,
+      createArgs: wallet.pending.get(signable.reference)!.args
     }
   }
 
@@ -233,8 +234,9 @@ describe('ColorPermissionModule', () => {
       expect(provider.submissions).toEqual([{ topics: [colorTopic(assetId)], txid: tx.id('hex') }])
       expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send'])
       expect(prompts[0].request).toMatchObject({
-        assets: [{ assetId, amount: '100', inputAmount: '300' }],
-        destinations: [{ outputIndex: 0, assetId, amount: '100' }]
+        assets: [{ assetId, inputAmount: '300', keptAmount: '200', outgoingAmount: '100' }],
+        destinations: [{ outputIndex: 0, assetId, amount: '100' }],
+        signatures: [{ inputIndex: 0, sighashType: 0x41 }]
       })
       const balance = (await module.handleRequest(
         {
@@ -249,17 +251,13 @@ describe('ColorPermissionModule', () => {
       expect(balance).toEqual({ totalOutputs: '260', outputs: [] })
     })
 
-    it('releases its selection when the user declines', async () => {
+    it('asks for approval of the funded action and signs nothing when declined', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
-      const answers = [false, true]
-      const sender = createModule(wallet, provider, async () => answers.shift()!)
-      const output = await recipientOutput(wallet, new FakeWallet(), assetId, 100n)
-      const args = { description: 'Send tokens', labels: transferPlan(assetId), outputs: [output] }
+      module = createModule(wallet, provider, async () => false)
       await expect(
-        sender.onRequest({ method: 'createAction', args, originator: APP })
-      ).rejects.toThrow('declined')
-      const retried = await sender.onRequest({ method: 'createAction', args, originator: APP })
-      expect((retried.args as CreateActionArgs).inputs).toHaveLength(1)
+        send({ outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)] })
+      ).rejects.toThrow('declined the color_send request')
+      expect(provider.submissions).toEqual([])
     })
 
     it('reads custody only for the outputs it selects, and skips an unreadable one', async () => {
@@ -343,16 +341,16 @@ describe('ColorPermissionModule', () => {
       ).rejects.toThrow('needs reconciliation')
     })
 
-    it('keeps its selection through a slow approval, so a concurrent send cannot take it', async () => {
+    it('holds the outputs it chose while checking them, so a concurrent send cannot take them', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
-      let approve: ((approved: boolean) => void) | undefined
-      const gated = createModule(
-        wallet,
-        provider,
-        async () => await new Promise<boolean>(resolve => (approve = resolve))
-      )
+      let approve: (() => void) | undefined
+      const spendability = provider.spendability
+      provider.spendability = async (asset, outpoints) => {
+        if (approve === undefined) await new Promise<void>(resolve => (approve = resolve))
+        return await spendability(asset, outpoints)
+      }
       const request = async () =>
-        await gated.onRequest({
+        await module.onRequest({
           method: 'createAction',
           args: {
             description: 'Send tokens',
@@ -364,7 +362,7 @@ describe('ColorPermissionModule', () => {
       const first = request()
       while (approve === undefined) await new Promise(resolve => setImmediate(resolve))
       await expect(request()).rejects.toThrow('insufficient spendable balance')
-      approve(true)
+      approve()
       expect(((await first).args as CreateActionArgs).inputs).toHaveLength(1)
     })
 
@@ -449,8 +447,8 @@ describe('ColorPermissionModule', () => {
       expect(provider.submissions).toEqual([
         { topics: [colorTopic(assetId)], txid: split.id('hex') }
       ])
-      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send', 'color_split'])
-      expect(prompts[1].request).toMatchObject({ assetId, amount: '100', change: '200' })
+      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_split', 'color_send'])
+      expect(prompts[0].request).toMatchObject({ assetId, amount: '100', change: '200' })
       const stored = wallet.outputs.get(`${split.id('hex')}.0`)?.customInstructions ?? ''
       expect(stored.startsWith('{')).toBe(false)
       expect(JSON.parse(await maybeDecryptMetadata(wallet.asWallet(), stored))).toMatchObject({
@@ -461,8 +459,7 @@ describe('ColorPermissionModule', () => {
 
     it('aborts the split when the user declines its fee', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
-      const replies = [true, false]
-      const declining = createModule(wallet, provider, async () => replies.shift()!)
+      const declining = createModule(wallet, provider, async () => false)
       await expect(
         declining.onRequest({
           method: 'createAction',

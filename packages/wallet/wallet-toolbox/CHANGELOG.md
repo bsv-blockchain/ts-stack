@@ -34,7 +34,8 @@ attention to changes that materially alter behavior or extend functionality.
   and for the signing step of a one-call `createAction`. Modules receive it via
   `onRequest` and `onResponse` with method `signAction` and may add `spends`
   for inputs they supplied. Both calls carry `action` (`reference`, the
-  signable `transaction` and `noSend`), so a module keeps no state between
+  signable `transaction`, `noSend` and `createArgs`, the `createAction`
+  arguments as the modules returned them), so a module keeps no state between
   `createAction` and `signAction`. A module request failure aborts the action; a
   module response failure is thrown without aborting the signed action. A
   module that rejects unknown methods must accept `signAction`.

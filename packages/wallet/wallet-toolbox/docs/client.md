@@ -6646,7 +6646,16 @@ export interface PermissionsModuleAction {
     reference: string;
     transaction: Transaction;
     noSend: boolean;
+    createArgs?: CreateActionArgs;
 }
+```
+
+###### Property createArgs
+
+The `createAction` arguments as the permission modules returned them, before metadata encryption.
+
+```ts
+createArgs?: CreateActionArgs
 ```
 
 ###### Property noSend

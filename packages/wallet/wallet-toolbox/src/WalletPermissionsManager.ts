@@ -185,6 +185,8 @@ export interface PermissionsModuleAction {
   transaction: Transaction
   /** True when the signed transaction is not broadcast. */
   noSend: boolean
+  /** The `createAction` arguments as the permission modules returned them, before metadata encryption. */
+  createArgs?: CreateActionArgs
 }
 
 /** A wallet request routed to a BRC-98/99/111 permission module. */
@@ -756,6 +758,8 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly pendingNoSendReferences: Set<string> = new Set()
   /** P-modules that handled each pending action's createAction, in request order. */
   private readonly pendingActionModules: Map<string, PermissionsModule[]> = new Map()
+  /** The createAction arguments those P-modules returned, for their signAction hooks. */
+  private readonly pendingActionCreateArgs: Map<string, CreateActionArgs> = new Map()
   /**
    * Originator binding for signed no-send actions, keyed by lowercase txid.
    * Signing drops the pending reference, so without this a non-admin caller
@@ -4380,8 +4384,9 @@ export class WalletPermissionsManager implements WalletInterface {
       labels: [...(args.labels || []), `admin originator ${originator}`, `admin month ${this.getCurrentMonthYearUTC()}`]
     }
     let createResult: CreateActionResult
+    let moduleArgs: CreateActionArgs
     try {
-      createResult = await this.callCreateActionWithPModules(finalArgs, pModulesByScheme, originator)
+      ;({ createResult, moduleArgs } = await this.callCreateActionWithPModules(finalArgs, pModulesByScheme, originator))
     } catch (error) {
       this.forgetSentNoSendActionsInError(error)
       throw error
@@ -4395,7 +4400,7 @@ export class WalletPermissionsManager implements WalletInterface {
     // untracked action that may later be signed under another originator.
     const reference = createResult.signableTransaction.reference
     const pModules = Array.from(pModulesByScheme.values())
-    this.bindPendingAction(reference, originator, vargs.isNoSend, pModules)
+    this.bindPendingAction(reference, originator, vargs.isNoSend, pModules, moduleArgs)
 
     // 7a) Parse the signable tx to determine net spend, then gate on spending
     // authorization. SECURITY (GHSA-36f9-7rg5-cpf8) defense-in-depth: confirm every
@@ -4551,13 +4556,16 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   /** Encrypts P-basket output custom instructions as the permission modules left them. */
-  private async encryptCreateActionModuleMetadata(args: CreateActionArgs): Promise<void> {
-    await Promise.all(
-      (args.outputs ?? []).map(async output => {
-        if (!output.customInstructions || output.basket?.startsWith('p ') !== true) return
-        output.customInstructions = await this.maybeEncryptMetadata(output.customInstructions)
-      })
+  private async encryptCreateActionModuleMetadata(args: CreateActionArgs): Promise<CreateActionArgs> {
+    if (args.outputs === undefined) return args
+    const outputs = await Promise.all(
+      args.outputs.map(async output =>
+        !output.customInstructions || output.basket?.startsWith('p ') !== true
+          ? output
+          : { ...output, customInstructions: await this.maybeEncryptMetadata(output.customInstructions) }
+      )
     )
+    return { ...args, outputs }
   }
 
   /** Calls underlying createAction, chaining P-module request/response transforms when needed. */
@@ -4565,7 +4573,7 @@ export class WalletPermissionsManager implements WalletInterface {
     finalArgs: CreateActionArgs & { labels: string[] },
     pModulesByScheme: Map<string, PermissionsModule>,
     originator?: string
-  ): Promise<Awaited<ReturnType<WalletInterface['createAction']>>> {
+  ): Promise<{ createResult: CreateActionResult; moduleArgs: CreateActionArgs }> {
     const pModules = Array.from(pModulesByScheme.values())
     let transformedArgs: object = finalArgs
     for (const module of pModules) {
@@ -4576,8 +4584,11 @@ export class WalletPermissionsManager implements WalletInterface {
       })
       transformedArgs = transformed.args
     }
-    await this.encryptCreateActionModuleMetadata(transformedArgs as CreateActionArgs)
-    let createResult = await this.underlying.createAction(transformedArgs as CreateActionArgs, originator)
+    const moduleArgs = transformedArgs as CreateActionArgs
+    let createResult = await this.underlying.createAction(
+      await this.encryptCreateActionModuleMetadata(moduleArgs),
+      originator
+    )
     const locallyAuthorizedResult = createResult
     const exactWalletSpend = getExactActionSpend(createResult)
     for (let i = pModules.length - 1; i >= 0; i--) {
@@ -4591,7 +4602,7 @@ export class WalletPermissionsManager implements WalletInterface {
       setExactActionSpend(publicResult, exactWalletSpend)
     }
     copyActionOutputAuthorizations(locallyAuthorizedResult, publicResult)
-    return publicResult
+    return { createResult: publicResult, moduleArgs }
   }
 
   /**
@@ -4871,14 +4882,18 @@ export class WalletPermissionsManager implements WalletInterface {
     reference: string,
     originator: string | undefined,
     noSend: boolean,
-    pModules: PermissionsModule[]
+    pModules: PermissionsModule[],
+    createArgs: CreateActionArgs
   ): void {
     if (this.pendingActionOriginators.has(reference)) {
       throw new WERR_UNAUTHORIZED('The action reference is already pending.')
     }
     this.pendingActionOriginators.set(reference, originator ?? '')
     if (noSend) this.pendingNoSendReferences.add(reference)
-    if (pModules.length > 0) this.pendingActionModules.set(reference, pModules)
+    if (pModules.length > 0) {
+      this.pendingActionModules.set(reference, pModules)
+      this.pendingActionCreateArgs.set(reference, createArgs)
+    }
   }
 
   private clearPendingAction(reference: string): void {
@@ -4887,6 +4902,7 @@ export class WalletPermissionsManager implements WalletInterface {
     this.blockedActionReferences.delete(reference)
     this.pendingNoSendReferences.delete(reference)
     this.pendingActionModules.delete(reference)
+    this.pendingActionCreateArgs.delete(reference)
   }
 
   /** Lets the originator that created a signed no-send action, and only it, abort it. */
@@ -4929,7 +4945,11 @@ export class WalletPermissionsManager implements WalletInterface {
   /** The action a signAction hook call signs, from the template bound at createAction. */
   private signingAction(reference: string, noSend: boolean): PermissionsModuleAction | undefined {
     const transaction = this.pendingActionTemplates.get(reference)
-    return transaction === undefined ? undefined : { reference, transaction, noSend }
+    if (transaction === undefined) return undefined
+    const createArgs = this.pendingActionCreateArgs.get(reference)
+    return createArgs === undefined
+      ? { reference, transaction, noSend }
+      : { reference, transaction, noSend, createArgs }
   }
 
   /** Passes signAction args through the P-modules that handled the action's createAction, in request order. */
