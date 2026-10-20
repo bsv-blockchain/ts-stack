@@ -90,8 +90,7 @@ The module fails explicitly, rather than falling back, on:
 - BRC-161 JSON outputs (assets first deployed as BRC-161, at any output index, are
   supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
-- `profileData` entries;
-- explicit inputs together with a BRC-177 handoff.
+- `profileData` entries.
 
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
 module, and foreign token inputs count only once their asset's overlay admits

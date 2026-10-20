@@ -413,12 +413,9 @@ function actionConsent(
 }
 
 /** Plan and action features this module version does not implement. */
-function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs, handoff: boolean): void {
+function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs): void {
   if (Object.keys(plan.profileData ?? {}).length > 0) {
     throw new Error('BRC-207: plan.profileData is not supported')
-  }
-  if (handoff && (args.inputs ?? []).length > 0) {
-    throw new Error('BRC-207: explicit inputs are not supported with a BRC-177 handoff')
   }
   if (plan.changePositions.length > 0 && args.options?.randomizeOutputs !== false) {
     throw new Error('BRC-207: plan.changePositions requires options.randomizeOutputs false')
@@ -953,7 +950,7 @@ export class ColorPermissionModule implements PermissionsModule {
     if (plan === undefined)
       throw new Error('BRC-207: a p color createAction requires a p color plan')
     const handoff = labels.some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX))
-    assertPlanSupported(plan, args, handoff)
+    assertPlanSupported(plan, args)
     const { planned, outputs } = await this.#planOutputs(plan, args, originator)
     // The hold keeps concurrent sends in this module from choosing the same outputs while it plans.
     // It ends when this handler returns; storage then rejects a second action that tries to spend

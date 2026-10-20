@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import {
+  Beef,
   LockingScript,
   Signature,
   Transaction,
@@ -491,6 +492,65 @@ describe('ColorPermissionModule', () => {
         version: 1,
         assetId
       })
+    })
+
+    const handoffLabels = (): string[] => ['p nosend expiry seconds 30', ...transferPlan(assetId)]
+    const explicitInput = (tx: Transaction) => ({
+      outpoint: `${tx.id('hex')}.0`,
+      unlockingScriptLength: 108,
+      inputDescription: 'Explicit token input'
+    })
+
+    it('uses a foreign explicit input as given in a handoff', async () => {
+      const { tx: foreign } = await tokenPayment(new FakeWallet(), new FakeWallet(), assetId, 100n)
+      provider.admit(assetId, foreign, 0)
+      wallet.store(foreign, 0, 'foreign')
+      const inputBEEF = new Beef()
+      inputBEEF.mergeTransaction(foreign)
+      const created = await module.onRequest({
+        method: 'createAction',
+        args: {
+          description: 'Send tokens',
+          labels: handoffLabels(),
+          inputBEEF: inputBEEF.toBinary(),
+          inputs: [explicitInput(foreign)],
+          outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+          options: { noSend: true }
+        },
+        originator: APP
+      })
+      expect((created.args as CreateActionArgs).inputs).toEqual([explicitInput(foreign)])
+      expect((created.args as CreateActionArgs).outputs).toHaveLength(1)
+      expect(prompts).toEqual([])
+    })
+
+    it('spends an exact-amount explicit input of this wallet in a handoff without a split', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [100n])
+      const result = await send({
+        labels: handoffLabels(),
+        inputs: [explicitInput(held)],
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+        options: { noSend: true }
+      })
+      const handoff = Transaction.fromAtomicBEEF(result.tx!)
+      expect(handoff.inputs[0].sourceTransaction!.id('hex')).toBe(held.id('hex'))
+      expect(handoff.outputs).toHaveLength(1)
+      expect(validInput(handoff, 0)).toBe(true)
+      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send'])
+      expect(provider.submissions).toEqual([])
+    })
+
+    it('treats excess explicit value in a handoff as an undeclared burn', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      await expect(
+        send({
+          labels: handoffLabels(),
+          inputs: [explicitInput(held)],
+          outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+          options: { noSend: true }
+        })
+      ).rejects.toThrow('requires the operations [transfer, burn] but the plan declares [transfer]')
+      expect(prompts).toEqual([])
     })
 
     it('aborts the split when the user declines its fee', async () => {
