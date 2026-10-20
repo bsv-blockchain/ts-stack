@@ -66,20 +66,20 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket#readme",
   "dependencies": {
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.5",
     "@typescript/native": "npm:typescript@7.0.2",
-    "fast-check": "^4.9.0",
-    "jest": "^30.5.1",
-    "oxlint": "^1.83.0",
-    "socket.io-client": "^4.8.3",
-    "ts-jest": "^29.4.12",
+    "fast-check": "^4.10.2",
+    "jest": "^30.5.2",
+    "oxlint": "^1.87.0",
+    "socket.io-client": "^4.8.4",
+    "ts-jest": "^29.4.14",
     "ts2md": "^0.2.8",
-    "tsdown": "0.23.0",
+    "tsdown": "0.23.1",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
